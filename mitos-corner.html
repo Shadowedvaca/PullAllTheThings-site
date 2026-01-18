@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mito's Corner — Pull All The Things</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0b;
+            --bg-card: #141416;
+            --bg-input: #1e1e22;
+            --text-primary: #e8e8e8;
+            --text-secondary: #888;
+            --text-muted: #555;
+            --accent-gold: #d4a84b;
+            --accent-gold-dim: rgba(212, 168, 75, 0.15);
+            --success: #4ade80;
+            --success-dim: rgba(74, 222, 128, 0.15);
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --danger-dim: rgba(248, 113, 113, 0.15);
+            --healer: #4ade80;
+            --border: #2a2a2e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Source Sans Pro', -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            color: var(--healer);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 15px;
+            color: var(--accent-gold);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 15px 20px;
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            border-color: var(--healer);
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            background: var(--success-dim);
+            border-color: var(--healer);
+            color: var(--healer);
+        }
+
+        /* Sections */
+        .section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .section-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.2rem;
+            color: var(--healer);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Form Elements - BIG and DRUNK-FRIENDLY */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 15px;
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1.1rem;
+            resize: vertical;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--healer);
+        }
+
+        textarea {
+            min-height: 100px;
+        }
+
+        /* BIG BUTTONS */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 150px;
+        }
+
+        .btn-primary {
+            background: var(--healer);
+            color: var(--bg-dark);
+        }
+
+        .btn-primary:hover {
+            background: #5ce992;
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #f98888;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--healer);
+        }
+
+        .btn-small {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            min-width: auto;
+        }
+
+        /* Item List */
+        .item-list {
+            margin-top: 20px;
+        }
+
+        .item {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            background: var(--bg-input);
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .item-number {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            background: var(--healer);
+            color: var(--bg-dark);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .item-content {
+            flex: 1;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .item-btn {
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .item-btn:hover {
+            border-color: var(--healer);
+            color: var(--healer);
+        }
+
+        .item-btn.delete:hover {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        /* Edit Mode */
+        .item.editing {
+            background: var(--accent-gold-dim);
+            border: 2px solid var(--accent-gold);
+        }
+
+        .item.editing .item-content {
+            display: none;
+        }
+
+        .edit-input {
+            flex: 1;
+            padding: 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        /* Status Messages */
+        .status {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 1rem;
+            display: none;
+        }
+
+        .status.success {
+            display: block;
+            background: var(--success-dim);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .status.error {
+            display: block;
+            background: var(--danger-dim);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state .emoji {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        /* Preview */
+        .preview-box {
+            background: var(--bg-input);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .preview-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .preview-quote {
+            font-style: italic;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .preview-title {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--healer);
+        }
+
+        /* Mobile */
+        @media (max-width: 500px) {
+            .tabs {
+                flex-direction: column;
+            }
+
+            .item {
+                flex-direction: column;
+            }
+
+            .item-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💚 Mito's Corner</h1>
+            <p class="subtitle">Manage your quotes and titles. Keep it simple, keep it legendary.</p>
+            <a href="index.html" class="back-link">← Back to Main Site</a>
+        </header>
+
+        <!-- Status Message -->
+        <div id="statusMessage" class="status"></div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="quotes">📜 Quotes</button>
+            <button class="tab-btn" data-tab="titles">🏆 Titles</button>
+            <button class="tab-btn" data-tab="preview">👀 Preview</button>
+        </div>
+
+        <!-- Quotes Section -->
+        <section id="quotes-section" class="section active">
+            <h2 class="section-title">📜 Your Legendary Quotes</h2>
+            
+            <div class="form-group">
+                <label for="newQuote">Add a new quote:</label>
+                <textarea id="newQuote" placeholder="Type your wisdom here, Mito..."></textarea>
+            </div>
+            
+            <button class="btn btn-primary" id="addQuoteBtn">
+                ➕ Add Quote
+            </button>
+
+            <div class="item-list" id="quotesList">
+                <div class="loading">Loading your quotes</div>
+            </div>
+        </section>
+
+        <!-- Titles Section -->
+        <section id="titles-section" class="section">
+            <h2 class="section-title">🏆 Your Glorious Titles</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                These appear after "Mito," on the main page. Go wild!
+            </p>
+            
+            <div class="form-group">
+                <label for="newTitle">Add a new title:</label>
+                <input type="text" id="newTitle" placeholder="e.g., Bubble Hearth Champion">
+            </div>
+            
+            <button class="btn btn-primary" id="addTitleBtn">
+                ➕ Add Title
+            </button>
+
+            <div class="item-list" id="titlesList">
+                <div class="loading">Loading your titles</div>
+            </div>
+        </section>
+
+        <!-- Preview Section -->
+        <section id="preview-section" class="section">
+            <h2 class="section-title">👀 Preview (Randomized)</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                This is what visitors will see. Refresh to see different combos!
+            </p>
+
+            <div class="preview-box">
+                <div class="preview-label">Quote of the Day:</div>
+                <div class="preview-quote" id="previewQuote">Loading...</div>
+                <div class="preview-title">— Mito, <span id="previewTitle">Loading...</span></div>
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 20px;" onclick="loadPreview()">
+                🔄 Shuffle Again
+            </button>
+        </section>
+    </div>
+
+    <script>
+        // ===========================================
+        // CONFIGURATION
+        // ===========================================
+        let CONFIG = null;
+        let quotesData = [];
+        let titlesData = [];
+
+        // ===========================================
+        // INITIALIZATION
+        // ===========================================
+        async function init() {
+            // Load config
+            try {
+                const response = await fetch('patt-config.json');
+                if (!response.ok) throw new Error('Config not found');
+                CONFIG = await response.json();
+            } catch (error) {
+                showStatus('Could not load config. Make sure patt-config.json exists!', 'error');
+                return;
+            }
+
+            // Load data
+            await loadData();
+
+            // Set up tabs
+            setupTabs();
+
+            // Set up add buttons
+            document.getElementById('addQuoteBtn').addEventListener('click', addQuote);
+            document.getElementById('addTitleBtn').addEventListener('click', addTitle);
+
+            // Enter key support
+            document.getElementById('newQuote').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && e.ctrlKey) addQuote();
+            });
+            document.getElementById('newTitle').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') addTitle();
+            });
+        }
+
+        // ===========================================
+        // TAB NAVIGATION
+        // ===========================================
+        function setupTabs() {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Update active tab
+                    tabBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // Show correct section
+                    const tabName = btn.dataset.tab;
+                    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+                    document.getElementById(`${tabName}-section`).classList.add('active');
+
+                    // Load preview if needed
+                    if (tabName === 'preview') loadPreview();
+                });
+            });
+        }
+
+        // ===========================================
+        // DATA LOADING
+        // ===========================================
+        async function loadData() {
+            try {
+                const response = await fetch(CONFIG.scriptUrl);
+                const data = await response.json();
+
+                if (data.success) {
+                    quotesData = data.mitoQuotes || [];
+                    titlesData = data.mitoTitles || [];
+                }
+
+                renderQuotes();
+                renderTitles();
+            } catch (error) {
+                showStatus('Could not load data: ' + error.message, 'error');
+                document.getElementById('quotesList').innerHTML = '<div class="empty-state"><div class="emoji">😵</div>Could not load quotes</div>';
+                document.getElementById('titlesList').innerHTML = '<div class="empty-state"><div class="emoji">😵</div>Could not load titles</div>';
+            }
+        }
+
+        // ===========================================
+        // RENDER LISTS
+        // ===========================================
+        function renderQuotes() {
+            const container = document.getElementById('quotesList');
+            
+            if (quotesData.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="emoji">📜</div>No quotes yet. Add your first legendary quote!</div>';
+                return;
+            }
+
+            container.innerHTML = quotesData.map((quote, i) => `
+                <div class="item" data-index="${i}">
+                    <div class="item-number">${i + 1}</div>
+                    <div class="item-content">${escapeHtml(quote)}</div>
+                    <input type="text" class="edit-input" style="display:none" value="${escapeHtml(quote)}">
+                    <div class="item-actions">
+                        <button class="item-btn edit" onclick="editQuote(${i})" title="Edit">✏️</button>
+                        <button class="item-btn save" style="display:none" onclick="saveQuote(${i})" title="Save">💾</button>
+                        <button class="item-btn cancel" style="display:none" onclick="cancelEdit(${i}, 'quote')" title="Cancel">❌</button>
+                        <button class="item-btn delete" onclick="deleteQuote(${i})" title="Delete">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTitles() {
+            const container = document.getElementById('titlesList');
+            
+            if (titlesData.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="emoji">🏆</div>No titles yet. What should people call you?</div>';
+                return;
+            }
+
+            container.innerHTML = titlesData.map((title, i) => `
+                <div class="item" data-index="${i}">
+                    <div class="item-number">${i + 1}</div>
+                    <div class="item-content">${escapeHtml(title)}</div>
+                    <input type="text" class="edit-input" style="display:none" value="${escapeHtml(title)}">
+                    <div class="item-actions">
+                        <button class="item-btn edit" onclick="editTitle(${i})" title="Edit">✏️</button>
+                        <button class="item-btn save" style="display:none" onclick="saveTitle(${i})" title="Save">💾</button>
+                        <button class="item-btn cancel" style="display:none" onclick="cancelEdit(${i}, 'title')" title="Cancel">❌</button>
+                        <button class="item-btn delete" onclick="deleteTitle(${i})" title="Delete">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ===========================================
+        // ADD ITEMS
+        // ===========================================
+        async function addQuote() {
+            const input = document.getElementById('newQuote');
+            const text = input.value.trim();
+            
+            if (!text) {
+                showStatus('Type something first!', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('addQuoteBtn');
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+
+            try {
+                await sendToSheet('addMitoQuote', { quote: text });
+                quotesData.push(text);
+                renderQuotes();
+                input.value = '';
+                showStatus('Quote added! 🎉', 'success');
+            } catch (error) {
+                showStatus('Failed to add quote: ' + error.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '➕ Add Quote';
+        }
+
+        async function addTitle() {
+            const input = document.getElementById('newTitle');
+            const text = input.value.trim();
+            
+            if (!text) {
+                showStatus('Type something first!', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('addTitleBtn');
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+
+            try {
+                await sendToSheet('addMitoTitle', { title: text });
+                titlesData.push(text);
+                renderTitles();
+                input.value = '';
+                showStatus('Title added! 🏆', 'success');
+            } catch (error) {
+                showStatus('Failed to add title: ' + error.message, 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '➕ Add Title';
+        }
+
+        // ===========================================
+        // EDIT ITEMS
+        // ===========================================
+        function editQuote(index) {
+            const item = document.querySelector(`#quotesList .item[data-index="${index}"]`);
+            item.classList.add('editing');
+            item.querySelector('.item-content').style.display = 'none';
+            item.querySelector('.edit-input').style.display = 'block';
+            item.querySelector('.edit').style.display = 'none';
+            item.querySelector('.save').style.display = 'inline-block';
+            item.querySelector('.cancel').style.display = 'inline-block';
+            item.querySelector('.edit-input').focus();
+        }
+
+        function editTitle(index) {
+            const item = document.querySelector(`#titlesList .item[data-index="${index}"]`);
+            item.classList.add('editing');
+            item.querySelector('.item-content').style.display = 'none';
+            item.querySelector('.edit-input').style.display = 'block';
+            item.querySelector('.edit').style.display = 'none';
+            item.querySelector('.save').style.display = 'inline-block';
+            item.querySelector('.cancel').style.display = 'inline-block';
+            item.querySelector('.edit-input').focus();
+        }
+
+        async function saveQuote(index) {
+            const item = document.querySelector(`#quotesList .item[data-index="${index}"]`);
+            const newText = item.querySelector('.edit-input').value.trim();
+            
+            if (!newText) {
+                showStatus('Quote cannot be empty!', 'error');
+                return;
+            }
+
+            try {
+                await sendToSheet('updateMitoQuote', { index: index, quote: newText });
+                quotesData[index] = newText;
+                renderQuotes();
+                showStatus('Quote updated! ✨', 'success');
+            } catch (error) {
+                showStatus('Failed to update: ' + error.message, 'error');
+            }
+        }
+
+        async function saveTitle(index) {
+            const item = document.querySelector(`#titlesList .item[data-index="${index}"]`);
+            const newText = item.querySelector('.edit-input').value.trim();
+            
+            if (!newText) {
+                showStatus('Title cannot be empty!', 'error');
+                return;
+            }
+
+            try {
+                await sendToSheet('updateMitoTitle', { index: index, title: newText });
+                titlesData[index] = newText;
+                renderTitles();
+                showStatus('Title updated! ✨', 'success');
+            } catch (error) {
+                showStatus('Failed to update: ' + error.message, 'error');
+            }
+        }
+
+        function cancelEdit(index, type) {
+            if (type === 'quote') renderQuotes();
+            else renderTitles();
+        }
+
+        // ===========================================
+        // DELETE ITEMS
+        // ===========================================
+        async function deleteQuote(index) {
+            if (!confirm('Delete this quote? This cannot be undone!')) return;
+
+            try {
+                await sendToSheet('deleteMitoQuote', { index: index });
+                quotesData.splice(index, 1);
+                renderQuotes();
+                showStatus('Quote deleted! 🗑️', 'success');
+            } catch (error) {
+                showStatus('Failed to delete: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteTitle(index) {
+            if (!confirm('Delete this title? This cannot be undone!')) return;
+
+            try {
+                await sendToSheet('deleteMitoTitle', { index: index });
+                titlesData.splice(index, 1);
+                renderTitles();
+                showStatus('Title deleted! 🗑️', 'success');
+            } catch (error) {
+                showStatus('Failed to delete: ' + error.message, 'error');
+            }
+        }
+
+        // ===========================================
+        // PREVIEW
+        // ===========================================
+        function loadPreview() {
+            const quoteEl = document.getElementById('previewQuote');
+            const titleEl = document.getElementById('previewTitle');
+
+            if (quotesData.length > 0) {
+                const randomQuote = quotesData[Math.floor(Math.random() * quotesData.length)];
+                quoteEl.textContent = randomQuote;
+            } else {
+                quoteEl.textContent = 'No quotes yet. Add some!';
+            }
+
+            if (titlesData.length > 0) {
+                const randomTitle = titlesData[Math.floor(Math.random() * titlesData.length)];
+                titleEl.textContent = randomTitle;
+            } else {
+                titleEl.textContent = 'Healer Extraordinaire';
+            }
+        }
+
+        // ===========================================
+        // HELPERS
+        // ===========================================
+        async function sendToSheet(action, data) {
+            const response = await fetch(CONFIG.scriptUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, ...data })
+            });
+            // no-cors means we can't read the response, but it should work
+            return true;
+        }
+
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `status ${type}`;
+            
+            // Auto-hide success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    el.className = 'status';
+                }, 3000);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Start!
+        init();
+    </script>
+</body>
+</html>

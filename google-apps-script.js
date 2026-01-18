@@ -1,12 +1,15 @@
 // ============================================
-// PULL ALL THE THINGS - GUILD ROSTER v2
+// PULL ALL THE THINGS - GUILD ROSTER v3
 // Google Apps Script Backend with Discord Validation
+// + Mito's Corner (Quotes & Titles)
 // ============================================
 //
-// This script manages three sheets:
+// This script manages five sheets:
 // 1. Availability - One row per Discord user (1:1 relationship)
 // 2. Characters - Multiple rows per Discord user (1:many relationship)
 // 3. DiscordIDs - Maps Discord names to Discord User IDs (for API integration)
+// 4. MitoQuotes - Mito's legendary quotes for the landing page
+// 5. MitoTitles - Mito's glorious titles/nicknames
 //
 // SETUP INSTRUCTIONS:
 // 1. Create a new Google Sheet
@@ -23,6 +26,8 @@
 const AVAILABILITY_SHEET = 'Availability';
 const CHARACTERS_SHEET = 'Characters';
 const DISCORD_IDS_SHEET = 'DiscordIDs';
+const MITO_QUOTES_SHEET = 'MitoQuotes';
+const MITO_TITLES_SHEET = 'MitoTitles';
 
 // ============================================
 // MAIN HANDLERS
@@ -60,6 +65,32 @@ function doPost(e) {
     if (data.action === 'addRaidSignups') {
       return handleAddRaidSignups(data);
     }
+    
+    // === MITO'S CORNER HANDLERS ===
+    if (data.action === 'addMitoQuote') {
+      return handleAddMitoQuote(data);
+    }
+    
+    if (data.action === 'updateMitoQuote') {
+      return handleUpdateMitoQuote(data);
+    }
+    
+    if (data.action === 'deleteMitoQuote') {
+      return handleDeleteMitoQuote(data);
+    }
+    
+    if (data.action === 'addMitoTitle') {
+      return handleAddMitoTitle(data);
+    }
+    
+    if (data.action === 'updateMitoTitle') {
+      return handleUpdateMitoTitle(data);
+    }
+    
+    if (data.action === 'deleteMitoTitle') {
+      return handleDeleteMitoTitle(data);
+    }
+    // === END MITO'S CORNER HANDLERS ===
     
     // Default: roster submission
     updateAvailability(data);
@@ -210,6 +241,8 @@ function doGet(e) {
     const characters = getCharactersData();
     const discordIds = getDiscordIdsData();
     const validationIssues = getValidationIssues();
+    const mitoQuotes = getMitoQuotes();
+    const mitoTitles = getMitoTitles();
     
     return ContentService
       .createTextOutput(JSON.stringify({ 
@@ -217,7 +250,9 @@ function doGet(e) {
         availability: availability,
         characters: characters,
         discordIds: discordIds,
-        validationIssues: validationIssues
+        validationIssues: validationIssues,
+        mitoQuotes: mitoQuotes,
+        mitoTitles: mitoTitles
       }))
       .setMimeType(ContentService.MimeType.JSON);
       
@@ -551,6 +586,197 @@ function handleDiscordIdUpdate(data) {
   return ContentService
     .createTextOutput(JSON.stringify({ success: true }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================
+// MITO'S QUOTES FUNCTIONS
+// ============================================
+
+function getOrCreateMitoQuotesSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(MITO_QUOTES_SHEET);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(MITO_QUOTES_SHEET);
+    const headers = ['Quote'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // Add starter quotes
+    const starterQuotes = [
+      ["Hello, raiders, look at yourself, now back to me, now back at yourself, now back to me. Sadly, you aren't me, but if you joined Pull All the Things you could raid like you're me."],
+      ["Look down, back up, where are you? You're in a raid with the Paladin your main could raid like."],
+      ["What's in your hand? Back at me. I have it, it's a vault with guaranteed mythics for that slot you need. Look again, the mythics are now 6/6."],
+      ["Anything is possible when your character raids like a Paladin. I'm on a charger."],
+      ["TWW was a great expansion with Pull All The Things, AotC every season and had a blast doing it."],
+      ["Casual Heroic is that a thing? Yes, yes it is! Real life exists and this guild gets it."],
+      ["Standards? Yes. Friendly? Yes. We want to enjoy the game but we want to progress through the challenge too!"]
+    ];
+    
+    sheet.getRange(2, 1, starterQuotes.length, 1).setValues(starterQuotes);
+    formatHeaderRow(sheet, 1);
+  }
+  
+  return sheet;
+}
+
+function getMitoQuotes() {
+  const sheet = getOrCreateMitoQuotesSheet();
+  const data = sheet.getDataRange().getValues();
+  
+  if (data.length <= 1) return [];
+  
+  const quotes = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][0].toString().trim() !== '') {
+      quotes.push(data[i][0].toString().trim());
+    }
+  }
+  
+  return quotes;
+}
+
+function handleAddMitoQuote(data) {
+  try {
+    const sheet = getOrCreateMitoQuotesSheet();
+    sheet.appendRow([data.quote]);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleUpdateMitoQuote(data) {
+  try {
+    const sheet = getOrCreateMitoQuotesSheet();
+    const rowIndex = data.index + 2; // +1 for header, +1 for 0-index
+    sheet.getRange(rowIndex, 1).setValue(data.quote);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleDeleteMitoQuote(data) {
+  try {
+    const sheet = getOrCreateMitoQuotesSheet();
+    const rowIndex = data.index + 2; // +1 for header, +1 for 0-index
+    sheet.deleteRow(rowIndex);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ============================================
+// MITO'S TITLES FUNCTIONS
+// ============================================
+
+function getOrCreateMitoTitlesSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(MITO_TITLES_SHEET);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet(MITO_TITLES_SHEET);
+    const headers = ['Title'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // Add starter titles
+    const starterTitles = [
+      ["Healer Extraordinaire"],
+      ["Paladin Philosopher"],
+      ["Old Spice Spokesman"],
+      ["The Man Your Main Could Raid Like"],
+      ["Charger Enthusiast"],
+      ["Bubble Hearth Champion"],
+      ["Professional Stand-In-Fire Survivor"],
+      ["Lord of the Lay on Hands"],
+      ["Beacon of Wisdom"],
+      ["The Unkillable"]
+    ];
+    
+    sheet.getRange(2, 1, starterTitles.length, 1).setValues(starterTitles);
+    formatHeaderRow(sheet, 1);
+  }
+  
+  return sheet;
+}
+
+function getMitoTitles() {
+  const sheet = getOrCreateMitoTitlesSheet();
+  const data = sheet.getDataRange().getValues();
+  
+  if (data.length <= 1) return [];
+  
+  const titles = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][0].toString().trim() !== '') {
+      titles.push(data[i][0].toString().trim());
+    }
+  }
+  
+  return titles;
+}
+
+function handleAddMitoTitle(data) {
+  try {
+    const sheet = getOrCreateMitoTitlesSheet();
+    sheet.appendRow([data.title]);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleUpdateMitoTitle(data) {
+  try {
+    const sheet = getOrCreateMitoTitlesSheet();
+    const rowIndex = data.index + 2; // +1 for header, +1 for 0-index
+    sheet.getRange(rowIndex, 1).setValue(data.title);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleDeleteMitoTitle(data) {
+  try {
+    const sheet = getOrCreateMitoTitlesSheet();
+    const rowIndex = data.index + 2; // +1 for header, +1 for 0-index
+    sheet.deleteRow(rowIndex);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // ============================================

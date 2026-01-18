@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pull All The Things — WoW Guild</title>
+    <meta name="description" content="Casual Heroic raiding guild with real-life balance and immaculate vibes. Established since BC.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Source+Sans+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0b;
+            --bg-card: #141416;
+            --bg-card-hover: #1a1a1e;
+            --bg-input: #1e1e22;
+            --text-primary: #e8e8e8;
+            --text-secondary: #888;
+            --text-muted: #555;
+            --accent-gold: #d4a84b;
+            --accent-gold-bright: #f0c866;
+            --accent-gold-dim: rgba(212, 168, 75, 0.15);
+            --success: #4ade80;
+            --tank: #60a5fa;
+            --healer: #4ade80;
+            --dps: #f87171;
+            --border: #2a2a2e;
+            --glow: 0 0 20px rgba(212, 168, 75, 0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Source Sans Pro', -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.7;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 80px 20px 60px;
+            background: linear-gradient(180deg, rgba(212, 168, 75, 0.08) 0%, transparent 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .guild-name {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(2.2rem, 6vw, 3.5rem);
+            font-weight: 900;
+            color: var(--accent-gold);
+            text-shadow: var(--glow);
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .tagline {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 25px;
+        }
+
+        .faction-badges {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .badge-gold {
+            border-color: var(--accent-gold);
+            color: var(--accent-gold);
+        }
+
+        .badge-horde {
+            font-size: 0.935rem;
+            padding: 7px 15px;
+            border-color: #8b0000;
+            color: #ff4444;
+        }
+
+        .realm-info {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        /* Container */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.5rem;
+            color: var(--accent-gold);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--border), transparent);
+        }
+
+        /* About Section */
+        .about-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 30px;
+        }
+
+        .about-content p {
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .about-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .highlight {
+            color: var(--accent-gold);
+            font-weight: 600;
+        }
+
+        /* Values Grid */
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .value-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            background: var(--bg-input);
+            border-radius: 8px;
+        }
+
+        .value-icon {
+            font-size: 1.3rem;
+        }
+
+        .value-text {
+            font-size: 0.95rem;
+        }
+
+        /* Schedule */
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .schedule-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .schedule-day {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            color: var(--accent-gold);
+            margin-bottom: 5px;
+        }
+
+        .schedule-time {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .schedule-desc {
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+
+        /* Links Section */
+        .links-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .links-grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 500px) {
+            .links-grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .link-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding: 25px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
+
+        .link-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-gold);
+            transform: translateY(-2px);
+            box-shadow: var(--glow);
+        }
+
+        .link-icon {
+            font-size: 2rem;
+        }
+
+        .link-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            color: var(--accent-gold);
+        }
+
+        .link-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Leadership Section */
+        .leadership-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .leader-card {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        .leader-card.guild-leader {
+            border-color: var(--accent-gold);
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--accent-gold-dim) 100%);
+        }
+
+        .leader-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            overflow: hidden;
+        }
+
+        .leader-card.guild-leader .leader-avatar {
+            border-color: var(--accent-gold);
+        }
+
+        .leader-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .leader-info {
+            flex: 1;
+        }
+
+        .leader-name {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .leader-rank {
+            font-size: 0.85rem;
+            color: var(--accent-gold);
+            margin-bottom: 4px;
+        }
+
+        .leader-character {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .leader-character a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .leader-character a:hover {
+            color: var(--accent-gold);
+        }
+
+        /* Officers Grid */
+        .officers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .officer-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+
+        .officer-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--bg-input);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            overflow: hidden;
+        }
+
+        .officer-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .officer-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .officer-character {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .officer-character a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .officer-character a:hover {
+            color: var(--accent-gold);
+        }
+
+        /* Role colors */
+        .role-tank { color: var(--tank); }
+        .role-healer { color: var(--healer); }
+        .role-dps { color: var(--dps); }
+
+        /* Mito's Quote Section */
+        .quote-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 30px;
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        .quote-character {
+            flex-shrink: 0;
+            text-align: center;
+        }
+
+        .quote-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--healer) 0%, #2d8a4d 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+
+        .quote-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .quote-name {
+            font-family: 'Cinzel', serif;
+            font-size: 0.9rem;
+            color: var(--healer);
+        }
+
+        .quote-bubble {
+            flex: 1;
+            position: relative;
+            background: var(--bg-input);
+            border-radius: 12px;
+            padding: 20px 25px;
+        }
+
+        .quote-bubble::before {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 25px;
+            width: 0;
+            height: 0;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            border-right: 10px solid var(--bg-input);
+        }
+
+        .quote-text {
+            font-size: 1.05rem;
+            font-style: italic;
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .quote-label {
+            margin-top: 12px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Recruitment Needs */
+        .needs-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+        }
+
+        .needs-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.1rem;
+            color: var(--accent-gold);
+            margin-bottom: 15px;
+        }
+
+        .needs-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            text-align: center;
+        }
+
+        .need-item {
+            padding: 15px;
+            background: var(--bg-input);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .need-item.fulfilled {
+            opacity: 0.5;
+        }
+
+        .need-item.high-need {
+            border: 1px solid var(--accent-gold);
+            background: var(--accent-gold-dim);
+        }
+
+        .need-role {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 5px;
+        }
+
+        .need-count {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .needs-note {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 15px;
+        }
+
+        /* Footer */
+        .members-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 25px;
+        }
+
+        .members-note {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 20px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: var(--accent-gold);
+            text-decoration: none;
+        }
+
+        .footer-tagline {
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            .hero {
+                padding: 50px 20px 40px;
+            }
+
+            .quote-section {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .quote-bubble::before {
+                display: none;
+            }
+
+            .needs-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .faction-badges {
+                flex-wrap: wrap;
+            }
+        }
+
+        /* Loading state */
+        .loading {
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1 class="guild-name">Pull All The Things</h1>
+        <p class="tagline">Casual Heroic Raiding with Real-Life Balance & Immaculate Vibes</p>
+        <div class="faction-badges">
+            <span class="badge badge-horde">🔥 Horde</span>
+            <span class="badge">⚔️ Alliance</span>
+            <span class="badge badge-gold">🏰 Est. BC</span>
+        </div>
+        <p class="realm-info">Based on Sen'jin • Cross-Realm Welcome</p>
+    </section>
+
+    <div class="container">
+        <!-- About Section -->
+        <section class="section">
+            <h2 class="section-title">Who We Are</h2>
+            <div class="about-content">
+                <p>
+                    <span class="highlight">Tired of pug chaos?</span> Want a guild that values progression 
+                    <em>and</em> your IRL commitments? Come pull all the things with us.
+                </p>
+                <p>
+                    Pull All The Things is a tight-knit guild run by adult gamers who log in to make progress 
+                    and most importantly enjoy downtime. We raid Heroic content weekly, push Mythic+ keys, 
+                    go on mount runs, knock out achievements, and chill in Discord with all of the memes.
+                </p>
+                <p>
+                    But honestly? <span class="highlight">We care more about people who mesh with our group than class/spec.</span>
+                </p>
+
+                <div class="values-grid">
+                    <div class="value-item">
+                        <span class="value-icon">🏠</span>
+                        <span class="value-text"><strong>Real-Life First</strong> — Life happens, we get it</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-icon">🤝</span>
+                        <span class="value-text"><strong>Inclusive</strong> — Any role, any skill level</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-icon">💚</span>
+                        <span class="value-text"><strong>Community</strong> — M+, crafting, achievements</span>
+                    </div>
+                    <div class="value-item">
+                        <span class="value-icon">✨</span>
+                        <span class="value-text"><strong>Zero Toxicity</strong> — Good vibes only</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Current Needs -->
+        <section class="section">
+            <h2 class="section-title">Currently Recruiting</h2>
+            <div class="needs-section">
+                <div class="needs-grid" id="needsGrid">
+                    <div class="need-item" id="need-tank">
+                        <div class="need-role role-tank">🛡️ Tank</div>
+                        <div class="need-count" id="need-tank-count">Loading...</div>
+                    </div>
+                    <div class="need-item" id="need-healer">
+                        <div class="need-role role-healer">💚 Healer</div>
+                        <div class="need-count" id="need-healer-count">Loading...</div>
+                    </div>
+                    <div class="need-item" id="need-melee">
+                        <div class="need-role role-dps">⚔️ Melee DPS</div>
+                        <div class="need-count" id="need-melee-count">Loading...</div>
+                    </div>
+                    <div class="need-item" id="need-ranged">
+                        <div class="need-role role-dps">🏹 Ranged DPS</div>
+                        <div class="need-count" id="need-ranged-count">Loading...</div>
+                    </div>
+                </div>
+                <p class="needs-note" id="needsNote">Targeting 20-player roster</p>
+            </div>
+        </section>
+
+        <!-- Schedule Section -->
+        <section class="section">
+            <h2 class="section-title">Weekly Schedule</h2>
+            <div class="schedule-grid">
+                <div class="schedule-item">
+                    <div class="schedule-day">Thursday</div>
+                    <div class="schedule-time">6:00 PM – 8:00 PM PST</div>
+                    <div class="schedule-desc">Heroic Raid Night</div>
+                </div>
+                <div class="schedule-item">
+                    <div class="schedule-day">Friday</div>
+                    <div class="schedule-time">6:00 PM – 8:00 PM PST</div>
+                    <div class="schedule-desc">Heroic Raid Night</div>
+                </div>
+                <div class="schedule-item">
+                    <div class="schedule-day">Sunday</div>
+                    <div class="schedule-time">Flexible</div>
+                    <div class="schedule-desc">Achievement Runs</div>
+                </div>
+                <div class="schedule-item">
+                    <div class="schedule-day">Weeknights</div>
+                    <div class="schedule-time">Various</div>
+                    <div class="schedule-desc">Mythic+ / Delves / PvP</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Links Section -->
+        <section class="section">
+            <h2 class="section-title">Join Us</h2>
+            <div class="links-grid links-grid-2">
+                <a href="https://discord.gg/jgSSRBvjHM" target="_blank" class="link-card">
+                    <span class="link-icon">💬</span>
+                    <span class="link-title">Discord</span>
+                    <span class="link-desc">Hop in, grab a guest role, and say hi!</span>
+                </a>
+                <a href="https://us.forums.blizzard.com/en/wow/t/ah-pull-all-the-things-recruiting-casual-heroic-raiding-with-real-life-balance-immaculate-vibes/2060891" target="_blank" class="link-card">
+                    <span class="link-icon">📜</span>
+                    <span class="link-title">Forum Post</span>
+                    <span class="link-desc">Our official recruitment thread</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- Leadership Section -->
+        <section class="section">
+            <h2 class="section-title">Leadership</h2>
+            <div class="leadership-grid">
+                <!-- Guild Leader -->
+                <div class="leader-card guild-leader">
+                    <div class="leader-avatar">👑</div>
+                    <div class="leader-info">
+                        <div class="leader-rank">Guild Leader</div>
+                        <div class="leader-name">Trog</div>
+                        <div class="leader-character">
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/trogboom" target="_blank" class="role-dps">
+                                Trogboom — Balance Druid
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Officers -->
+            <div class="officers-grid" id="officersGrid">
+                <div class="officer-card">
+                    <div class="officer-avatar">🛡️</div>
+                    <div class="officer-info">
+                        <div class="officer-name">Shodoom</div>
+                        <div class="officer-character">
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/bleeding-hollow/shodoom" target="_blank" class="role-tank">
+                                Shodoom — Prot Paladin
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="officer-card">
+                    <div class="officer-avatar">💚</div>
+                    <div class="officer-info">
+                        <div class="officer-name">Mito</div>
+                        <div class="officer-character">
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/alterac-mountains/bloodvalor" target="_blank" class="role-healer">
+                                Bloodvalor — Holy Paladin
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="officer-card">
+                    <div class="officer-avatar">⚔️</div>
+                    <div class="officer-info">
+                        <div class="officer-name">Rocket</div>
+                        <div class="officer-character">
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/zatanna" target="_blank" class="role-dps">
+                                Zatanna — Demo Warlock
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="officer-card">
+                    <div class="officer-avatar">⚔️</div>
+                    <div class="officer-info">
+                        <div class="officer-name">Skate</div>
+                        <div class="officer-character">
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/skatefarm" target="_blank" class="role-dps">
+                                Skatefarm — Feral Druid
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Mito's Quote of the Day -->
+        <section class="section">
+            <h2 class="section-title">Mito's Quote of the Day</h2>
+            <div class="quote-section">
+                <div class="quote-character">
+                    <div class="quote-avatar">💚</div>
+                    <div class="quote-name">Mito</div>
+                </div>
+                <div class="quote-bubble">
+                    <div class="quote-text" id="mitoQuote">
+                        Loading wisdom...
+                    </div>
+                    <div class="quote-label">— Mito, <span id="mitoTitle">Healer Extraordinaire</span></div>
+                </div>
+            </div>
+        </section>
+        <!-- Members Only Section -->
+        <section class="section">
+            <h2 class="section-title">🔒 Members Only</h2>
+            <div class="members-section">
+                <p class="members-note">Guild tools for PATT members. If you're not in the guild yet, hop into Discord first!</p>
+                <div class="links-grid links-grid-2">
+                    <a href="roster.html" class="link-card">
+                        <span class="link-icon">📝</span>
+                        <span class="link-title">Join Roster</span>
+                        <span class="link-desc">Sign up for the raid roster</span>
+                    </a>
+                    <a href="roster-view.html" class="link-card">
+                        <span class="link-icon">👥</span>
+                        <span class="link-title">View Roster</span>
+                        <span class="link-desc">See who's on the team</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p class="footer-tagline">Don't just pull trash — pull all the things, with us!</p>
+        <p>© 2025 Pull All The Things • <a href="https://discord.gg/jgSSRBvjHM">Discord</a></p>
+    </footer>
+
+    <script>
+        // ===========================================
+        // CONFIGURATION
+        // ===========================================
+        let CONFIG = null;
+
+        // Raid composition targets (20-man)
+        const RAID_TARGETS = {
+            tank: 2,
+            healer: 4,
+            melee: 7,
+            ranged: 7
+        };
+
+        // Fallback Mito Quotes (used if sheet not available)
+        const MITO_QUOTES = [
+            "Hello, raiders, look at yourself, now back to me, now back at yourself, now back to me. Sadly, you aren't me, but if you joined Pull All the Things you could raid like you're me.",
+            "Look down, back up, where are you? You're in a raid with the Paladin your main could raid like.",
+            "What's in your hand? Back at me. I have it, it's a vault with guaranteed mythics for that slot you need. Look again, the mythics are now 6/6.",
+            "Anything is possible when your character raids like a Paladin. I'm on a charger.",
+            "TWW was a great expansion with Pull All The Things, AotC every season and had a blast doing it.",
+            "Casual Heroic is that a thing? Yes, yes it is! Real life exists and this guild gets it.",
+            "Standards? Yes. Friendly? Yes. We want to enjoy the game but we want to progress through the challenge too!"
+        ];
+
+        // Fallback Mito Titles
+        const MITO_TITLES = [
+            "Healer Extraordinaire",
+            "Paladin Philosopher",
+            "Old Spice Spokesman",
+            "The Man Your Main Could Raid Like",
+            "Charger Enthusiast",
+            "Bubble Hearth Champion",
+            "Professional Stand-In-Fire Survivor"
+        ];
+
+        // Melee specs for role classification
+        const MELEE_SPECS = [
+            'Fury', 'Arms', 'Protection', // Warrior
+            'Retribution',                 // Paladin (Prot is tank)
+            'Feral', 'Guardian',          // Druid (Guardian is tank)
+            'Windwalker', 'Brewmaster',   // Monk (Brewmaster is tank)
+            'Assassination', 'Outlaw', 'Subtlety', // Rogue
+            'Enhancement',                 // Shaman
+            'Unholy', 'Frost', 'Blood',   // DK (Blood is tank)
+            'Havoc', 'Vengeance',         // DH (Vengeance is tank)
+            'Survival'                     // Hunter (melee spec)
+        ];
+
+        const TANK_SPECS = ['Protection', 'Guardian', 'Brewmaster', 'Blood', 'Vengeance'];
+        const HEALER_SPECS = ['Holy', 'Discipline', 'Restoration', 'Mistweaver', 'Preservation'];
+
+        // ===========================================
+        // INITIALIZATION
+        // ===========================================
+        async function init() {
+            try {
+                const response = await fetch('patt-config.json');
+                if (!response.ok) throw new Error('Config file not found');
+                CONFIG = await response.json();
+                console.log('Config loaded successfully');
+            } catch (error) {
+                console.warn('Could not load patt-config.json:', error.message);
+            }
+
+            // Load everything
+            await Promise.all([
+                loadMitoContent(),
+                loadRecruitingNeeds()
+            ]);
+        }
+
+        // ===========================================
+        // MITO'S CORNER
+        // ===========================================
+        async function loadMitoContent() {
+            let quotes = MITO_QUOTES;
+            let titles = MITO_TITLES;
+
+            // Try to load from Google Sheets
+            if (CONFIG?.scriptUrl) {
+                try {
+                    const response = await fetch(CONFIG.scriptUrl);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        if (data.mitoQuotes && data.mitoQuotes.length > 0) {
+                            quotes = data.mitoQuotes;
+                        }
+                        if (data.mitoTitles && data.mitoTitles.length > 0) {
+                            titles = data.mitoTitles;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Could not load Mito content from sheet:', error);
+                }
+            }
+
+            // Display random quote and title
+            displayRandom('mitoQuote', quotes, "Something profound about Paladins...");
+            displayRandom('mitoTitle', titles, "Healer Extraordinaire");
+        }
+
+        function displayRandom(elementId, items, fallback) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            if (items && items.length > 0) {
+                const randomIndex = Math.floor(Math.random() * items.length);
+                element.textContent = items[randomIndex];
+            } else {
+                element.textContent = fallback;
+            }
+        }
+
+        // ===========================================
+        // RECRUITING NEEDS CALCULATOR
+        // ===========================================
+        async function loadRecruitingNeeds() {
+            // Set loading state
+            const roles = ['tank', 'healer', 'melee', 'ranged'];
+            
+            if (!CONFIG?.scriptUrl) {
+                // No config, show defaults
+                showDefaultNeeds();
+                return;
+            }
+
+            try {
+                const response = await fetch(CONFIG.scriptUrl);
+                const data = await response.json();
+
+                if (!data.success || !data.characters) {
+                    showDefaultNeeds();
+                    return;
+                }
+
+                // Count mains by role
+                const counts = { tank: 0, healer: 0, melee: 0, ranged: 0 };
+                
+                data.characters.forEach(char => {
+                    // Only count mains
+                    if (char.mainalt !== 'Main') return;
+                    
+                    const spec = char.spec || '';
+                    const role = char.role || '';
+                    
+                    // Classify by role
+                    if (role === 'Tank' || TANK_SPECS.includes(spec)) {
+                        counts.tank++;
+                    } else if (role === 'Healer' || HEALER_SPECS.includes(spec)) {
+                        counts.healer++;
+                    } else if (role === 'Melee' || MELEE_SPECS.includes(spec)) {
+                        counts.melee++;
+                    } else {
+                        // Default to ranged for DPS
+                        counts.ranged++;
+                    }
+                });
+
+                // Update the display
+                updateNeedsDisplay(counts);
+
+            } catch (error) {
+                console.warn('Could not load roster for recruiting needs:', error);
+                showDefaultNeeds();
+            }
+        }
+
+        function updateNeedsDisplay(counts) {
+            const roles = ['tank', 'healer', 'melee', 'ranged'];
+            
+            roles.forEach(role => {
+                const target = RAID_TARGETS[role];
+                const current = counts[role];
+                const needed = Math.max(0, target - current);
+                
+                const countEl = document.getElementById(`need-${role}-count`);
+                const itemEl = document.getElementById(`need-${role}`);
+                
+                if (countEl) {
+                    if (needed === 0) {
+                        countEl.textContent = `✓ Full (${current}/${target})`;
+                        if (itemEl) itemEl.classList.add('fulfilled');
+                    } else {
+                        countEl.textContent = `${needed} needed (${current}/${target})`;
+                        if (itemEl) itemEl.classList.remove('fulfilled');
+                        // Highlight high need roles
+                        if (needed >= 3 && itemEl) {
+                            itemEl.classList.add('high-need');
+                        }
+                    }
+                }
+            });
+
+            // Update note with total
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
+            const noteEl = document.getElementById('needsNote');
+            if (noteEl) {
+                noteEl.textContent = `Current roster: ${total}/20 • Updated live from roster`;
+            }
+        }
+
+        function showDefaultNeeds() {
+            document.getElementById('need-tank-count').textContent = '1 needed';
+            document.getElementById('need-healer-count').textContent = '1-2 needed';
+            document.getElementById('need-melee-count').textContent = '3-4 needed';
+            document.getElementById('need-ranged-count').textContent = '3-4 needed';
+            
+            const noteEl = document.getElementById('needsNote');
+            if (noteEl) {
+                noteEl.textContent = 'Targeting 20-player roster';
+            }
+        }
+
+        // Start everything
+        init();
+    </script>
+</body>
+</html>
