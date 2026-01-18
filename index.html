@@ -717,7 +717,7 @@
 
         <!-- Leadership Section -->
         <section class="section">
-            <h2 class="section-title">Leadership</h2>
+            <h2 class="section-title">Guild Officers</h2>
             <div class="leadership-grid">
                 <!-- Guild Leader -->
                 <div class="leader-card guild-leader">
@@ -726,8 +726,8 @@
                         <div class="leader-rank">Guild Leader</div>
                         <div class="leader-name">Trog</div>
                         <div class="leader-character">
-                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/trogboom" target="_blank" class="role-dps">
-                                Trogboom — Balance Druid
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/trogmoon" target="_blank" class="role-dps">
+                                Trogmoon — Balance Druid
                             </a>
                         </div>
                     </div>
@@ -763,8 +763,8 @@
                     <div class="officer-info">
                         <div class="officer-name">Rocket</div>
                         <div class="officer-character">
-                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/zatanna" target="_blank" class="role-dps">
-                                Zatanna — Demo Warlock
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/sargeras/Zatan%C3%B1a" target="_blank" class="role-dps">
+                                Zatañña — Demo Warlock
                             </a>
                         </div>
                     </div>
@@ -774,7 +774,7 @@
                     <div class="officer-info">
                         <div class="officer-name">Skate</div>
                         <div class="officer-character">
-                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/skatefarm" target="_blank" class="role-dps">
+                            <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/tichondrius/skatefarm" target="_blank" class="role-dps">
                                 Skatefarm — Feral Druid
                             </a>
                         </div>
@@ -950,15 +950,20 @@
             
             if (!CONFIG?.scriptUrl) {
                 // No config, show defaults
+                console.log('No scriptUrl configured, showing defaults');
                 showDefaultNeeds();
                 return;
             }
 
             try {
+                console.log('Fetching roster from:', CONFIG.scriptUrl);
                 const response = await fetch(CONFIG.scriptUrl);
                 const data = await response.json();
+                
+                console.log('Roster data received:', data);
 
                 if (!data.success || !data.characters) {
+                    console.warn('No characters data in response');
                     showDefaultNeeds();
                     return;
                 }
@@ -967,13 +972,14 @@
                 const counts = { tank: 0, healer: 0, melee: 0, ranged: 0 };
                 
                 data.characters.forEach(char => {
-                    // Only count mains
-                    if (char.mainalt !== 'Main') return;
+                    // Only count mains (check both cases for safety)
+                    const isMain = char.mainAlt === 'Main' || char.mainalt === 'Main';
+                    if (!isMain) return;
                     
                     const spec = char.spec || '';
                     const role = char.role || '';
                     
-                    // Classify by role
+                    // Classify by role field first, then by spec
                     if (role === 'Tank' || TANK_SPECS.includes(spec)) {
                         counts.tank++;
                     } else if (role === 'Healer' || HEALER_SPECS.includes(spec)) {
@@ -981,16 +987,18 @@
                     } else if (role === 'Melee' || MELEE_SPECS.includes(spec)) {
                         counts.melee++;
                     } else {
-                        // Default to ranged for DPS
+                        // Ranged DPS or default
                         counts.ranged++;
                     }
                 });
+                
+                console.log('Role counts:', counts);
 
                 // Update the display
                 updateNeedsDisplay(counts);
 
             } catch (error) {
-                console.warn('Could not load roster for recruiting needs:', error);
+                console.error('Could not load roster for recruiting needs:', error);
                 showDefaultNeeds();
             }
         }
