@@ -1,0 +1,2147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PATT Raid Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Source+Sans+Pro:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0a0a0b;
+            --bg-card: #141416;
+            --bg-card-hover: #1a1a1d;
+            --bg-input: #1e1e22;
+            --text-primary: #e8e8e8;
+            --text-secondary: #888;
+            --text-muted: #555;
+            --accent-gold: #d4a84b;
+            --accent-gold-dim: #8a6f1a;
+            --accent-gold-glow: rgba(212, 168, 75, 0.15);
+            --success: #4ade80;
+            --success-dim: rgba(74, 222, 128, 0.15);
+            --warning: #fbbf24;
+            --warning-dim: rgba(251, 191, 36, 0.15);
+            --danger: #f87171;
+            --danger-dim: rgba(248, 113, 113, 0.15);
+            --tank: #60a5fa;
+            --healer: #4ade80;
+            --dps: #f87171;
+            --melee: #f97316;
+            --ranged: #a855f7;
+            --border: #2a2a2e;
+            --border-light: #3a3a3e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Source Sans Pro', -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* Layout */
+        .app-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        @media (max-width: 900px) {
+            .app-container {
+                grid-template-columns: 1fr;
+            }
+            .sidebar {
+                display: none;
+            }
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .logo {
+            font-family: 'Cinzel', serif;
+            font-size: 1.4rem;
+            color: var(--accent-gold);
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-sub {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+
+        .nav-section {
+            margin-bottom: 25px;
+        }
+
+        .nav-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background: var(--accent-gold-glow);
+            color: var(--accent-gold);
+        }
+
+        .nav-item .icon {
+            width: 18px;
+            text-align: center;
+        }
+
+        /* Status indicator */
+        .status-card {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: auto;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .status-dot.connected { background: var(--success); }
+
+        /* Main content */
+        .main-content {
+            padding: 30px;
+            max-width: 1200px;
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1.8rem;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            font-family: 'Cinzel', serif;
+            font-size: 1rem;
+            color: var(--accent-gold);
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Availability Grid */
+        .availability-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+        }
+
+        .day-card {
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .day-card:hover {
+            border-color: var(--border-light);
+            transform: translateY(-2px);
+        }
+
+        .day-card.recommended {
+            border-color: var(--accent-gold);
+            background: var(--accent-gold-glow);
+        }
+
+        .day-card.selected {
+            border-color: var(--success);
+            background: var(--success-dim);
+        }
+
+        .day-card .rank {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            background: var(--accent-gold);
+            color: var(--bg-dark);
+            border-radius: 50%;
+            font-size: 0.75rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .day-card .day-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .day-card .day-date {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .day-card .availability-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .day-card .availability-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), var(--accent-gold));
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .day-card .availability-count {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .day-card .availability-count strong {
+            color: var(--text-primary);
+        }
+
+        /* Roster Table */
+        .roster-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .roster-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .roster-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        .roster-table tr:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .roster-table .discord-name {
+            font-weight: 500;
+        }
+
+        .roster-table .character {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .role-badge.tank { background: rgba(96, 165, 250, 0.2); color: var(--tank); }
+        .role-badge.healer { background: rgba(74, 222, 128, 0.2); color: var(--healer); }
+        .role-badge.melee { background: rgba(249, 115, 22, 0.2); color: var(--melee); }
+        .role-badge.ranged { background: rgba(168, 85, 247, 0.2); color: var(--ranged); }
+        .role-badge.dps { background: rgba(248, 113, 113, 0.2); color: var(--dps); }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .status-badge.available { background: var(--success-dim); color: var(--success); }
+        .status-badge.unavailable { background: var(--danger-dim); color: var(--danger); }
+        .status-badge.unknown { background: var(--warning-dim); color: var(--warning); }
+
+        /* Command Output */
+        .command-section {
+            margin-top: 20px;
+        }
+
+        .command-box {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-bottom: 10px;
+        }
+
+        .command-box:hover {
+            border-color: var(--accent-gold);
+        }
+
+        .command-box.copied {
+            border-color: var(--success);
+        }
+
+        .command-box .copy-hint {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-family: 'Source Sans Pro', sans-serif;
+        }
+
+        .command-box.copied .copy-hint {
+            color: var(--success);
+        }
+
+        .command-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .form-row { grid-template-columns: 1fr; }
+        }
+
+        label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: border-color 0.15s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+        }
+
+        .help-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-primary {
+            background: var(--accent-gold);
+            color: var(--bg-dark);
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-gold);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* Alerts */
+        .alert {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-warning {
+            background: var(--warning-dim);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .alert-warning .alert-icon { color: var(--warning); }
+
+        .alert-success {
+            background: var(--success-dim);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .alert-success .alert-icon { color: var(--success); }
+
+        .alert-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .alert-content h4 {
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .alert-content p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Flags List */
+        .flags-list {
+            list-style: none;
+        }
+
+        .flag-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: var(--bg-input);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .flag-item .name {
+            font-weight: 500;
+        }
+
+        .flag-item .issue {
+            font-size: 0.85rem;
+            color: var(--warning);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: all 0.15s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            color: var(--accent-gold);
+            border-bottom-color: var(--accent-gold);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent-gold);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Responsive grid */
+        @media (max-width: 768px) {
+            .availability-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+            .availability-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .main-content {
+                padding: 15px;
+            }
+        }
+
+        /* Section divider */
+        .section-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 25px 0;
+        }
+
+        /* Roster summary */
+        .roster-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-stat {
+            background: var(--bg-input);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .summary-stat .value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .summary-stat .label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .summary-stat.tanks .value { color: var(--tank); }
+        .summary-stat.healers .value { color: var(--healer); }
+        .summary-stat.melee .value { color: var(--melee); }
+        .summary-stat.ranged .value { color: var(--ranged); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">⚔️ PATT Admin</div>
+            <div class="logo-sub">Pull All The Things</div>
+
+            <nav>
+                <div class="nav-section">
+                    <div class="nav-label">Raid Planning</div>
+                    <div class="nav-item active" data-page="schedule">
+                        <span class="icon">📅</span>
+                        <span>Schedule Raid</span>
+                    </div>
+                    <div class="nav-item" data-page="roster">
+                        <span class="icon">👥</span>
+                        <span>Roster Status</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-label">Configuration</div>
+                    <div class="nav-item" data-page="settings">
+                        <span class="icon">⚙️</span>
+                        <span>Settings</span>
+                    </div>
+                    <div class="nav-item" data-page="discord">
+                        <span class="icon">🔗</span>
+                        <span>Discord IDs</span>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="status-card">
+                <div class="status-row">
+                    <div class="status-dot" id="connectionStatus"></div>
+                    <span id="connectionText">Not connected</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Schedule Page -->
+            <div id="page-schedule" class="page active">
+                <div class="page-header">
+                    <h1 class="page-title">Schedule Raid</h1>
+                    <p class="page-subtitle">Select a day based on roster availability</p>
+                </div>
+
+                <div id="flagsAlert" class="alert alert-warning" style="display: none;">
+                    <span class="alert-icon">⚠️</span>
+                    <div class="alert-content">
+                        <h4>Discord Name Issues Detected</h4>
+                        <p><span id="flagCount">0</span> roster members have unknown Discord IDs. <a href="#" onclick="showPage('discord'); return false;" style="color: var(--warning);">Review and fix →</a></p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Next Week's Availability</span>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshData()">↻ Refresh</button>
+                    </div>
+
+                    <div id="availabilityLoading" class="loading">
+                        <div class="spinner"></div>
+                        Loading roster data...
+                    </div>
+
+                    <div id="availabilityGrid" class="availability-grid" style="display: none;">
+                        <!-- Generated by JS -->
+                    </div>
+
+                    <div class="section-divider"></div>
+
+                    <div id="selectedDayInfo" style="display: none;">
+                        <h3 style="margin-bottom: 15px; color: var(--text-primary);">
+                            <span id="selectedDayName">Friday</span> Raid — <span id="selectedDayDate">Jan 24</span>
+                        </h3>
+
+                        <div class="roster-summary">
+                            <div class="summary-stat tanks">
+                                <div class="value" id="tankCount">0</div>
+                                <div class="label">Tanks</div>
+                            </div>
+                            <div class="summary-stat healers">
+                                <div class="value" id="healerCount">0</div>
+                                <div class="label">Healers</div>
+                            </div>
+                            <div class="summary-stat melee">
+                                <div class="value" id="meleeCount">0</div>
+                                <div class="label">Melee</div>
+                            </div>
+                            <div class="summary-stat ranged">
+                                <div class="value" id="rangedCount">0</div>
+                                <div class="label">Ranged</div>
+                            </div>
+                        </div>
+
+                        <div class="tabs">
+                            <button class="tab active" data-tab="available">Available (<span id="availableCount">0</span>)</button>
+                            <button class="tab" data-tab="unavailable">Unavailable (<span id="unavailableCount">0</span>)</button>
+                        </div>
+
+                        <div id="tab-available" class="tab-content active">
+                            <table class="roster-table">
+                                <thead>
+                                    <tr>
+                                        <th>Discord</th>
+                                        <th>Character</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="availableRoster"></tbody>
+                            </table>
+                        </div>
+
+                        <div id="tab-unavailable" class="tab-content">
+                            <table class="roster-table">
+                                <thead>
+                                    <tr>
+                                        <th>Discord</th>
+                                        <th>Character</th>
+                                        <th>Role</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="unavailableRoster"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="commandsSection" class="card" style="display: none;">
+                    <div class="card-header">
+                        <span class="card-title">Create Raid Event</span>
+                    </div>
+
+                    <!-- Event Preview -->
+                    <div id="eventPreview" class="command-section" style="background: var(--bg-input); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div style="font-weight: bold; margin-bottom: 10px;">📋 Event Preview</div>
+                        <table style="width: 100%; font-size: 0.9rem;">
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Title:</td><td id="previewTitle"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Date:</td><td id="previewDate"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Time:</td><td id="previewTime"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Template:</td><td id="previewTemplate"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Channel:</td><td id="previewChannel"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Voice:</td><td id="previewVoice"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">Available:</td><td id="previewAvailable"></td></tr>
+                            <tr><td style="padding: 4px 10px 4px 0; color: var(--text-secondary);">With Discord IDs:</td><td id="previewWithIds"></td></tr>
+                        </table>
+                    </div>
+
+                    <div class="command-section">
+                        <!-- API Create Button -->
+                        <div style="margin-bottom: 20px;">
+                            <button class="btn btn-primary" id="createEventBtn" onclick="createEventViaAPI()" style="width: 100%; padding: 15px; font-size: 1.1rem;">
+                                🚀 Create Event in Discord
+                            </button>
+                            <p id="createEventStatus" style="margin-top: 10px; text-align: center; display: none;"></p>
+                        </div>
+
+                        <div class="section-divider"></div>
+
+                        <details style="margin-top: 15px;">
+                            <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9rem;">
+                                Manual fallback (if API doesn't work)
+                            </summary>
+                            <div style="margin-top: 15px;">
+                                <div class="command-label">1. Create the event (paste in Discord)</div>
+                                <div class="command-box" id="createCommand" onclick="copyCommand(this)">
+                                    <span class="copy-hint">Click to copy</span>
+                                </div>
+
+                                <div class="command-label" style="margin-top: 15px;">2. After event is created, add signups</div>
+                                <div class="command-box" id="signupCommands" onclick="copyCommand(this)" style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">
+                                    <span class="copy-hint">Click to copy</span>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- Quick Commands for Top 3 Days -->
+                <div class="card" id="quickCommandsCard" style="display: none;">
+                    <div class="card-header">
+                        <span class="card-title">Quick Commands — Top 3 Days</span>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        Based on availability, here are your best options:
+                    </p>
+                    <div id="quickCommands"></div>
+                </div>
+            </div>
+
+            <!-- Roster Page -->
+            <div id="page-roster" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Roster Status</h1>
+                    <p class="page-subtitle">Current roster members and their availability</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Full Roster</span>
+                        <div class="card-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="refreshData()">↻ Refresh</button>
+                        </div>
+                    </div>
+
+                    <div id="rosterLoading" class="loading">
+                        <div class="spinner"></div>
+                        Loading roster...
+                    </div>
+
+                    <table class="roster-table" id="fullRosterTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>Discord</th>
+                                <th>Character</th>
+                                <th>Class</th>
+                                <th>Role</th>
+                                <th>Main/Alt</th>
+                                <th>Auto-Signup</th>
+                                <th>Reminders</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fullRosterBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Settings</h1>
+                    <p class="page-subtitle">Configure your raid defaults</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Roster Data Source</div>
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>Google Apps Script URL</label>
+                        <input type="text" id="rosterUrl" placeholder="https://script.google.com/macros/s/.../exec">
+                        <p class="help-text">URL from your PATT roster Google Apps Script deployment</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Raid Defaults</div>
+                    <div class="form-row" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label>Default Title</label>
+                            <input type="text" id="defaultTitle" value="PATT Prog Raid">
+                        </div>
+                        <div class="form-group">
+                            <label>Start Time</label>
+                            <input type="time" id="defaultTime" value="21:00">
+                            <p class="help-text">21:00 = 9:00 PM</p>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Duration (minutes)</label>
+                            <input type="number" id="defaultDuration" value="120" min="30" max="480">
+                        </div>
+                        <div class="form-group">
+                            <label>Template ID</label>
+                            <input type="text" id="defaultTemplate" placeholder="e.g., wowretail2">
+                            <p class="help-text">Common: wowretail2, ffxiv, basic, 1, 2, 3</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Raid-Helper API (Optional)</div>
+                    <p style="color: var(--text-secondary); margin: 10px 0;">
+                        Only needed if you want to use API-based signup pre-population.
+                    </p>
+                    <div class="form-row" style="margin-top: 15px;">
+                        <div class="form-group">
+                            <label>API Key</label>
+                            <input type="password" id="apiKey" placeholder="Your Raid-Helper API key">
+                            <p class="help-text">Run /apikey create in Discord to get this</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Server ID</label>
+                            <input type="text" id="serverId" placeholder="e.g., 123456789012345678">
+                            <p class="help-text">Right-click server icon → Copy ID</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Your Discord User ID (Event Creator)</label>
+                        <input type="text" id="leaderId" placeholder="e.g., 123456789012345678">
+                        <p class="help-text">Right-click yourself → Copy ID. Events will be created as you.</p>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Signup Channel ID</label>
+                            <input type="text" id="channelId" placeholder="Main channel for raid signups">
+                            <p class="help-text">Where the event embed gets posted</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Voice Channel ID</label>
+                            <input type="text" id="voiceChannelId" placeholder="Raid voice channel">
+                            <p class="help-text">Links event to voice room</p>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Announcement Channel ID</label>
+                            <input type="text" id="announcementChannelId" placeholder="Guild general channel">
+                            <p class="help-text">Where @everyone ping goes when event is created</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Pug Channel ID</label>
+                            <input type="text" id="pugChannelId" placeholder="Pug channel for visibility">
+                            <p class="help-text">Secondary channel to show signups</p>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Notification Channel ID</label>
+                        <input type="text" id="notificationChannelId" placeholder="spam spam spam channel">
+                        <p class="help-text">Where signup notifications get posted</p>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                    <button class="btn btn-secondary" onclick="resetSettings()" style="margin-left: 10px;">Reset to Config File Defaults</button>
+                    <button class="btn btn-secondary" onclick="loadSettings()">Reset</button>
+                </div>
+            </div>
+
+            <!-- Discord IDs Page -->
+            <div id="page-discord" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Discord ID Management</h1>
+                    <p class="page-subtitle">Validate and fix Discord name issues</p>
+                </div>
+
+                <div id="noIssuesAlert" class="alert alert-success" style="display: none;">
+                    <span class="alert-icon">✓</span>
+                    <div class="alert-content">
+                        <h4>All Discord Names Valid</h4>
+                        <p>No issues detected with roster Discord names.</p>
+                    </div>
+                </div>
+
+                <div class="card" id="issuesCard">
+                    <div class="card-header">
+                        <span class="card-title">Flagged Names</span>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshData()">↻ Refresh</button>
+                    </div>
+                    <p style="color: var(--text-secondary); margin-bottom: 15px;">
+                        These Discord names couldn't be validated. They may be typos, old usernames, or people who haven't set up their Discord ID.
+                    </p>
+                    <ul class="flags-list" id="flagsList"></ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Discord ID Mapping</div>
+                    <p style="color: var(--text-secondary); margin: 10px 0 15px;">
+                        Add Discord user IDs for roster members. This enables automatic signup pre-population.
+                    </p>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 15px;">
+                        To get a Discord User ID: Enable Developer Mode in Discord settings, then right-click the user → Copy User ID
+                    </p>
+                    <div id="discordMapping"></div>
+                    <button class="btn btn-primary" style="margin-top: 15px;" onclick="saveDiscordMapping()">Save Mapping</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // STATE
+        // ==========================================
+        const STORAGE_KEY = 'patt_admin_config';
+        let rosterData = { availability: [], characters: [] };
+        let selectedDay = null;
+        let discordIdMapping = {}; // discord_name -> discord_user_id
+
+        // ==========================================
+        // LOAD CONFIG FROM FILE (then override with localStorage)
+        // ==========================================
+        async function loadConfigFromFile() {
+            try {
+                const response = await fetch('patt-config.json');
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.warn('Could not load patt-config.json:', error.message);
+                return null;
+            }
+        }
+
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+        async function loadSettings() {
+            // First try to load from config file
+            const fileConfig = await loadConfigFromFile();
+            
+            // Then load from localStorage (overrides file config)
+            const saved = localStorage.getItem(STORAGE_KEY);
+            const localConfig = saved ? JSON.parse(saved) : {};
+            
+            // Merge: localStorage wins, but file provides defaults
+            const config = {
+                rosterUrl: localConfig.rosterUrl || fileConfig?.scriptUrl || '',
+                defaultTitle: localConfig.defaultTitle || fileConfig?.raidDefaults?.title || 'PATT Prog Raid',
+                defaultTime: localConfig.defaultTime || fileConfig?.raidDefaults?.time || '21:00',
+                defaultDuration: localConfig.defaultDuration || fileConfig?.raidDefaults?.duration || '120',
+                defaultTemplate: localConfig.defaultTemplate || fileConfig?.raidDefaults?.template || 'wowretail2',
+                apiKey: localConfig.apiKey || '',
+                serverId: localConfig.serverId || fileConfig?.serverId || '',
+                leaderId: localConfig.leaderId || fileConfig?.leaderId || '',
+                channelId: localConfig.channelId || fileConfig?.channels?.signup || '',
+                voiceChannelId: localConfig.voiceChannelId || fileConfig?.channels?.voice || '',
+                announcementChannelId: localConfig.announcementChannelId || fileConfig?.channels?.announcement || '',
+                pugChannelId: localConfig.pugChannelId || fileConfig?.channels?.pug || '',
+                notificationChannelId: localConfig.notificationChannelId || fileConfig?.channels?.notification || '',
+                discordIdMapping: localConfig.discordIdMapping || {}
+            };
+            
+            // Apply to form
+            document.getElementById('rosterUrl').value = config.rosterUrl;
+            document.getElementById('defaultTitle').value = config.defaultTitle;
+            document.getElementById('defaultTime').value = config.defaultTime;
+            document.getElementById('defaultDuration').value = config.defaultDuration;
+            document.getElementById('defaultTemplate').value = config.defaultTemplate;
+            document.getElementById('apiKey').value = config.apiKey;
+            document.getElementById('serverId').value = config.serverId;
+            document.getElementById('leaderId').value = config.leaderId;
+            document.getElementById('channelId').value = config.channelId;
+            document.getElementById('voiceChannelId').value = config.voiceChannelId;
+            document.getElementById('announcementChannelId').value = config.announcementChannelId;
+            document.getElementById('pugChannelId').value = config.pugChannelId;
+            document.getElementById('notificationChannelId').value = config.notificationChannelId;
+            discordIdMapping = config.discordIdMapping;
+            
+            updateConnectionStatus();
+            
+            // Auto-load data if we have a roster URL
+            if (config.rosterUrl && config.rosterUrl !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                refreshData();
+            }
+        }
+
+        function saveSettings() {
+            const config = {
+                rosterUrl: document.getElementById('rosterUrl').value,
+                defaultTitle: document.getElementById('defaultTitle').value,
+                defaultTime: document.getElementById('defaultTime').value,
+                defaultDuration: document.getElementById('defaultDuration').value,
+                defaultTemplate: document.getElementById('defaultTemplate').value,
+                apiKey: document.getElementById('apiKey').value,
+                serverId: document.getElementById('serverId').value,
+                leaderId: document.getElementById('leaderId').value,
+                channelId: document.getElementById('channelId').value,
+                voiceChannelId: document.getElementById('voiceChannelId').value,
+                announcementChannelId: document.getElementById('announcementChannelId').value,
+                pugChannelId: document.getElementById('pugChannelId').value,
+                notificationChannelId: document.getElementById('notificationChannelId').value,
+                discordIdMapping: discordIdMapping
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+            updateConnectionStatus();
+            alert('Settings saved!');
+        }
+
+        async function resetSettings() {
+            if (!confirm('This will reset all settings to the defaults from patt-config.json. Your API key will be cleared. Continue?')) {
+                return;
+            }
+            
+            // Keep only the Discord ID mappings
+            const currentConfig = getConfig();
+            const mappingsToKeep = currentConfig.discordIdMapping || {};
+            
+            // Clear localStorage
+            localStorage.removeItem(STORAGE_KEY);
+            
+            // Reload settings from config file
+            await loadSettings();
+            
+            // Restore Discord ID mappings
+            discordIdMapping = mappingsToKeep;
+            
+            // Update the mapping display if on that tab
+            renderDiscordIdTable();
+            
+            alert('Settings reset to config file defaults. Discord ID mappings preserved.');
+        }
+
+        function getConfig() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            return saved ? JSON.parse(saved) : {};
+        }
+
+        function updateConnectionStatus() {
+            const config = getConfig();
+            const dot = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+            
+            if (config.rosterUrl) {
+                dot.classList.add('connected');
+                text.textContent = 'Roster connected';
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Not connected';
+            }
+        }
+
+        // ==========================================
+        // DATA LOADING
+        // ==========================================
+        async function refreshData() {
+            const config = getConfig();
+            if (!config.rosterUrl || config.rosterUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                alert('Please configure your roster URL in Settings first.');
+                showPage('settings');
+                return;
+            }
+
+            // Show loading states
+            document.getElementById('availabilityLoading').style.display = 'flex';
+            document.getElementById('availabilityGrid').style.display = 'none';
+            document.getElementById('rosterLoading').style.display = 'flex';
+            document.getElementById('fullRosterTable').style.display = 'none';
+
+            try {
+                const response = await fetch(config.rosterUrl);
+                const data = await response.json();
+
+                if (data.success) {
+                    rosterData = {
+                        availability: data.availability || [],
+                        characters: data.characters || []
+                    };
+                    
+                    // Load Discord IDs from sheet (merge with localStorage, sheet wins)
+                    if (data.discordIds && Object.keys(data.discordIds).length > 0) {
+                        discordIdMapping = { ...discordIdMapping, ...data.discordIds };
+                        // Save merged data back to localStorage
+                        const localConfig = getConfig();
+                        localConfig.discordIdMapping = discordIdMapping;
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(localConfig));
+                        console.log('Loaded', Object.keys(data.discordIds).length, 'Discord ID mappings from sheet');
+                    }
+                    
+                    processAndDisplayData();
+                } else {
+                    alert('Failed to load roster data: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error loading roster: ' + error.message);
+            }
+
+            document.getElementById('availabilityLoading').style.display = 'none';
+            document.getElementById('rosterLoading').style.display = 'none';
+        }
+
+        function processAndDisplayData() {
+            // Check for Discord name issues
+            checkDiscordNames();
+            
+            // Calculate availability by day
+            const dayAvailability = calculateDayAvailability();
+            
+            // Render availability grid
+            renderAvailabilityGrid(dayAvailability);
+            
+            // Render full roster
+            renderFullRoster();
+            
+            // Generate quick commands for top 3 days
+            generateQuickCommands(dayAvailability);
+        }
+
+        function checkDiscordNames() {
+            const flagged = [];
+            const knownNames = new Set();
+            
+            // Build list of known Discord names from mapping
+            Object.keys(discordIdMapping).forEach(name => knownNames.add(name.toLowerCase()));
+            
+            // Check each character's discord name
+            rosterData.characters.forEach(char => {
+                const discordName = char.discord?.trim();
+                if (!discordName) {
+                    flagged.push({ name: '(empty)', character: char.character, issue: 'No Discord name entered' });
+                } else if (!isValidDiscordName(discordName)) {
+                    flagged.push({ name: discordName, character: char.character, issue: 'Invalid format' });
+                }
+            });
+
+            // Update UI
+            if (flagged.length > 0) {
+                document.getElementById('flagsAlert').style.display = 'flex';
+                document.getElementById('flagCount').textContent = flagged.length;
+                document.getElementById('noIssuesAlert').style.display = 'none';
+                document.getElementById('issuesCard').style.display = 'block';
+                
+                const list = document.getElementById('flagsList');
+                list.innerHTML = flagged.map(f => `
+                    <li class="flag-item">
+                        <div>
+                            <span class="name">${f.name}</span>
+                            <span style="color: var(--text-secondary);"> — ${f.character}</span>
+                        </div>
+                        <span class="issue">${f.issue}</span>
+                    </li>
+                `).join('');
+            } else {
+                document.getElementById('flagsAlert').style.display = 'none';
+                document.getElementById('noIssuesAlert').style.display = 'flex';
+                document.getElementById('issuesCard').style.display = 'none';
+            }
+
+            // Render Discord mapping editor
+            renderDiscordMapping();
+        }
+
+        function isValidDiscordName(name) {
+            // Discord usernames: 2-32 chars, lowercase, alphanumeric, underscores, periods
+            // Old format: Username#1234
+            // New format: username (lowercase)
+            if (!name || name.length < 2) return false;
+            
+            // Check for old format with discriminator
+            if (name.includes('#')) {
+                const parts = name.split('#');
+                return parts.length === 2 && parts[1].length === 4 && /^\d{4}$/.test(parts[1]);
+            }
+            
+            // New format - just check it's not empty and reasonable length
+            return name.length >= 2 && name.length <= 32;
+        }
+
+        function renderDiscordMapping() {
+            const container = document.getElementById('discordMapping');
+            const uniqueDiscords = [...new Set(rosterData.characters.map(c => c.discord).filter(Boolean))];
+            
+            container.innerHTML = uniqueDiscords.map(discord => `
+                <div class="form-row" style="margin-bottom: 10px;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <input type="text" value="${discord}" disabled style="background: var(--bg-dark);">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <input type="text" 
+                               placeholder="Discord User ID" 
+                               value="${discordIdMapping[discord] || ''}"
+                               onchange="updateDiscordId('${discord}', this.value)">
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateDiscordId(discordName, userId) {
+            if (userId) {
+                discordIdMapping[discordName] = userId;
+            } else {
+                delete discordIdMapping[discordName];
+            }
+        }
+
+        async function saveDiscordMapping() {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            
+            // Save to localStorage first (for quick access)
+            const config = getConfig();
+            config.discordIdMapping = discordIdMapping;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+            
+            // Also save to Google Sheet for persistence
+            if (!config.rosterUrl || config.rosterUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                alert('Discord ID mapping saved locally only.\nConfigure roster URL to sync to Google Sheet.');
+                btn.disabled = false;
+                btn.textContent = originalText;
+                return;
+            }
+            
+            try {
+                // Send each mapping to the backend
+                const entries = Object.entries(discordIdMapping);
+                let saved = 0;
+                
+                for (const [name, id] of entries) {
+                    if (id) { // Only save entries that have an ID
+                        await fetch(config.rosterUrl, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: 'updateDiscordId',
+                                discordName: name,
+                                discordUserId: id
+                            })
+                        });
+                        saved++;
+                    }
+                }
+                
+                btn.textContent = '✓ Saved!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 2000);
+                
+                console.log(`Saved ${saved} Discord ID mappings to Google Sheet`);
+                
+            } catch (error) {
+                alert('Saved locally, but failed to sync to sheet: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // ==========================================
+        // AVAILABILITY CALCULATION
+        // ==========================================
+        function calculateDayAvailability() {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayData = {};
+
+            // Initialize
+            days.forEach((day, idx) => {
+                const nextDate = getNextDayOfWeek(idx);
+                dayData[day] = {
+                    name: day,
+                    dayNum: idx,
+                    date: nextDate,
+                    dateStr: formatDateISO(nextDate),
+                    dateDisplay: formatDateDisplay(nextDate),
+                    available: [],
+                    unavailable: [],
+                    total: 0
+                };
+            });
+
+            // Process availability data
+            rosterData.availability.forEach(avail => {
+                const discord = avail.discord;
+                
+                // Find this person's main character
+                const mainChar = rosterData.characters.find(c => 
+                    c.discord?.toLowerCase() === discord?.toLowerCase() && c.mainAlt === 'Main'
+                ) || rosterData.characters.find(c => 
+                    c.discord?.toLowerCase() === discord?.toLowerCase()
+                );
+
+                if (!mainChar) return;
+
+                const autoSignup = avail.autoSignup === true || avail.autoSignup === 'TRUE';
+                const wantsReminders = avail.wantsReminders === true || avail.wantsReminders === 'TRUE';
+
+                const memberInfo = {
+                    discord: discord,
+                    character: mainChar.character,
+                    class: mainChar.class,
+                    spec: mainChar.spec,
+                    role: mainChar.role,
+                    notes: avail.notes,
+                    autoSignup: autoSignup,
+                    wantsReminders: wantsReminders
+                };
+
+                days.forEach(day => {
+                    const isAvailable = avail[day.toLowerCase()] === true || 
+                                       avail[day.toLowerCase()] === 'TRUE' ||
+                                       avail[day.toLowerCase()] === 'true' ||
+                                       avail[day.toLowerCase()] === 1;
+                    
+                    if (isAvailable) {
+                        dayData[day].available.push(memberInfo);
+                    } else {
+                        dayData[day].unavailable.push({
+                            ...memberInfo,
+                            reason: avail.notes || 'Not available'
+                        });
+                    }
+                });
+            });
+
+            // Calculate totals and sort by availability
+            Object.values(dayData).forEach(day => {
+                day.total = day.available.length;
+            });
+
+            return dayData;
+        }
+
+        function getNextDayOfWeek(dayOfWeek) {
+            const today = new Date();
+            const currentDay = today.getDay();
+            let daysUntil = dayOfWeek - currentDay;
+            if (daysUntil <= 0) daysUntil += 7;
+            daysUntil += 7; // Always next week
+            
+            const nextDate = new Date(today);
+            nextDate.setDate(today.getDate() + daysUntil);
+            return nextDate;
+        }
+
+        function formatDateISO(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function formatDateDisplay(date) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${months[date.getMonth()]} ${date.getDate()}`;
+        }
+
+        // ==========================================
+        // RENDERING
+        // ==========================================
+        function renderAvailabilityGrid(dayData) {
+            const grid = document.getElementById('availabilityGrid');
+            const days = Object.values(dayData);
+            
+            // Sort by availability to find top 3
+            const sorted = [...days].sort((a, b) => b.total - a.total);
+            const top3 = sorted.slice(0, 3).map(d => d.name);
+            
+            // Find max for percentage calculation
+            const maxAvailable = Math.max(...days.map(d => d.total), 1);
+
+            grid.innerHTML = days.map(day => {
+                const rank = top3.indexOf(day.name);
+                const isRecommended = rank !== -1;
+                const pct = (day.total / maxAvailable) * 100;
+                
+                return `
+                    <div class="day-card ${isRecommended ? 'recommended' : ''}" 
+                         onclick="selectDay('${day.name}')"
+                         data-day="${day.name}">
+                        ${isRecommended ? `<span class="rank">${rank + 1}</span>` : ''}
+                        <div class="day-name">${day.name.slice(0, 3)}</div>
+                        <div class="day-date">${day.dateDisplay}</div>
+                        <div class="availability-bar">
+                            <div class="availability-fill" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="availability-count">
+                            <strong>${day.total}</strong> available
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            grid.style.display = 'grid';
+        }
+
+        function selectDay(dayName) {
+            const dayData = calculateDayAvailability()[dayName];
+            selectedDay = dayData;
+
+            // Update selection UI
+            document.querySelectorAll('.day-card').forEach(card => {
+                card.classList.remove('selected');
+                if (card.dataset.day === dayName) {
+                    card.classList.add('selected');
+                }
+            });
+
+            // Show day details
+            document.getElementById('selectedDayInfo').style.display = 'block';
+            document.getElementById('selectedDayName').textContent = dayName;
+            document.getElementById('selectedDayDate').textContent = dayData.dateDisplay;
+
+            // Count roles
+            const tanks = dayData.available.filter(m => m.role === 'Tank').length;
+            const healers = dayData.available.filter(m => m.role === 'Healer').length;
+            const melee = dayData.available.filter(m => m.role === 'Melee').length;
+            const ranged = dayData.available.filter(m => m.role === 'Ranged').length;
+
+            document.getElementById('tankCount').textContent = tanks;
+            document.getElementById('healerCount').textContent = healers;
+            document.getElementById('meleeCount').textContent = melee;
+            document.getElementById('rangedCount').textContent = ranged;
+            document.getElementById('availableCount').textContent = dayData.available.length;
+            document.getElementById('unavailableCount').textContent = dayData.unavailable.length;
+
+            // Render available roster
+            document.getElementById('availableRoster').innerHTML = dayData.available.map(m => `
+                <tr>
+                    <td class="discord-name">${m.discord}</td>
+                    <td class="character">${m.character}</td>
+                    <td><span class="role-badge ${m.role?.toLowerCase()}">${m.role || '?'}</span></td>
+                    <td>
+                        ${m.autoSignup ? 
+                            '<span class="status-badge available">✓ Auto</span>' : 
+                            '<span class="status-badge" style="background: var(--warning-dim); color: var(--warning);">Tentative</span>'
+                        }
+                        ${m.wantsReminders ? '<span style="margin-left: 5px; font-size: 0.8rem;" title="Wants 5pm reminder">🔔</span>' : ''}
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">No one available</td></tr>';
+
+            // Render unavailable roster
+            document.getElementById('unavailableRoster').innerHTML = dayData.unavailable.map(m => `
+                <tr>
+                    <td class="discord-name">${m.discord}</td>
+                    <td class="character">${m.character}</td>
+                    <td><span class="role-badge ${m.role?.toLowerCase()}">${m.role || '?'}</span></td>
+                    <td style="color: var(--text-secondary);">${m.reason || 'Not available'}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">Everyone available!</td></tr>';
+
+            // Generate commands
+            generateCommands(dayData);
+            document.getElementById('commandsSection').style.display = 'block';
+        }
+
+        function generateCommands(dayData) {
+            const config = getConfig();
+            const title = config.defaultTitle || 'PATT Prog Raid';
+            const time = config.defaultTime || '21:00';
+            const duration = config.defaultDuration || '0';
+            const template = config.defaultTemplate || 'wowretail2';
+
+            // Store for API use
+            window.selectedRaidData = {
+                title: title,
+                date: dayData.dateStr,
+                time: time,
+                duration: parseInt(duration) || 0,
+                templateId: template,  // Can be string like "wowretail2" or number
+                dayData: dayData
+            };
+
+            // Create command
+            const createCmd = `/create title:${title} date:${dayData.dateStr} time:${time} duration:${duration} template:${template}`;
+            document.getElementById('createCommand').innerHTML = createCmd + '<span class="copy-hint">Click to copy</span>';
+
+            // Signup commands based on preferences
+            const signupCmds = [];
+            const autoSignupMembers = [];
+            const tentativeMembers = [];
+            const reminderMembers = [];
+            
+            // Separate members by their signup preference
+            dayData.available.forEach(m => {
+                if (m.autoSignup) {
+                    autoSignupMembers.push(m);
+                } else {
+                    tentativeMembers.push(m);
+                }
+                if (m.wantsReminders) {
+                    reminderMembers.push(m);
+                }
+            });
+
+            // Auto-signup members get signed up directly
+            autoSignupMembers.forEach(m => {
+                signupCmds.push(`/adduser [EVENT_ID] @${m.discord} class:${m.class || 'Unknown'} spec:${m.role || 'Melee'}`);
+            });
+
+            // Tentative members get added as tentative
+            tentativeMembers.forEach(m => {
+                signupCmds.push(`/adduser [EVENT_ID] @${m.discord} class:${m.class || 'Unknown'} spec:Tentative`);
+            });
+
+            // Unavailable members as absent
+            dayData.unavailable.forEach(m => {
+                signupCmds.push(`/adduser [EVENT_ID] @${m.discord} status:Absence`);
+            });
+
+            // Build output with sections
+            let output = '';
+            if (autoSignupMembers.length > 0) {
+                output += `# Auto-signed up (${autoSignupMembers.length}):\n`;
+                autoSignupMembers.forEach(m => {
+                    output += `/adduser [EVENT_ID] @${m.discord} class:${m.class || 'Unknown'} spec:${m.role || 'Melee'}\n`;
+                });
+                output += '\n';
+            }
+            if (tentativeMembers.length > 0) {
+                output += `# Tentative (${tentativeMembers.length}):\n`;
+                tentativeMembers.forEach(m => {
+                    output += `/adduser [EVENT_ID] @${m.discord} class:${m.class || 'Unknown'} spec:Tentative\n`;
+                });
+                output += '\n';
+            }
+            if (dayData.unavailable.length > 0) {
+                output += `# Marked absent (${dayData.unavailable.length}):\n`;
+                dayData.unavailable.forEach(m => {
+                    output += `/adduser [EVENT_ID] @${m.discord} status:Absence\n`;
+                });
+                output += '\n';
+            }
+            if (reminderMembers.length > 0) {
+                output += `# Wants 5pm reminder (${reminderMembers.length}): ${reminderMembers.map(m => m.discord).join(', ')}\n`;
+            }
+
+            document.getElementById('signupCommands').innerHTML = 
+                (output || 'No signup commands (no roster data)') +
+                '<span class="copy-hint">Click to copy</span>';
+
+            document.getElementById('commandsSection').style.display = 'block';
+            
+            // Populate preview
+            const membersWithIds = dayData.available.filter(m => discordIdMapping[m.discord]).length;
+            document.getElementById('previewTitle').textContent = title;
+            document.getElementById('previewDate').textContent = dayData.dateStr;
+            document.getElementById('previewTime').textContent = time;
+            document.getElementById('previewTemplate').textContent = template;
+            document.getElementById('previewChannel').textContent = config.channelId || '⚠️ Not set';
+            document.getElementById('previewVoice').textContent = config.voiceChannelId || '(none)';
+            document.getElementById('previewAvailable').textContent = `${dayData.available.length} members`;
+            document.getElementById('previewWithIds').textContent = `${membersWithIds} of ${dayData.available.length} (will be auto-signed)`;
+            
+            // Check if API is configured
+            updateCreateButtonState();
+        }
+
+        function updateCreateButtonState() {
+            const config = getConfig();
+            const btn = document.getElementById('createEventBtn');
+            const missingConfig = [];
+            
+            if (!config.apiKey) missingConfig.push('API Key');
+            if (!config.serverId) missingConfig.push('Server ID');
+            if (!config.channelId) missingConfig.push('Signup Channel ID');
+            
+            if (missingConfig.length > 0) {
+                btn.disabled = true;
+                btn.innerHTML = `⚠️ Configure: ${missingConfig.join(', ')}`;
+                btn.style.background = 'var(--bg-input)';
+                btn.style.color = 'var(--text-secondary)';
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '🚀 Create Event in Discord';
+                btn.style.background = '';
+                btn.style.color = '';
+            }
+        }
+
+        async function createEventViaAPI() {
+            const config = getConfig();
+            const raidData = window.selectedRaidData;
+            const btn = document.getElementById('createEventBtn');
+            const status = document.getElementById('createEventStatus');
+            
+            if (!raidData) {
+                showStatus('Select a raid day first', 'error');
+                return;
+            }
+            
+            // Validate config
+            if (!config.apiKey || !config.serverId || !config.channelId) {
+                showStatus('Missing API configuration. Go to Settings tab.', 'error');
+                return;
+            }
+            
+            if (!config.rosterUrl || config.rosterUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+                showStatus('Google Apps Script URL not configured. Needed for API proxy.', 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Creating event...';
+            showStatus('Connecting to Raid-Helper API via proxy...', 'pending');
+            
+            // Build the API request
+            const eventPayload = {
+                leaderId: config.leaderId || '',
+                templateId: raidData.templateId,
+                date: raidData.date,
+                time: raidData.time,
+                title: raidData.title,
+                description: `Roster auto-generated. ${raidData.dayData.available.length} available.`,
+                channelId: config.channelId,
+                advancedSettings: {
+                    duration: raidData.duration,
+                    create_discordevent: true,
+                    attendance: "true",
+                    use_nicknames: true
+                }
+            };
+            
+            // Add voice channel if configured
+            if (config.voiceChannelId) {
+                eventPayload.advancedSettings.voice_channel = config.voiceChannelId;
+            }
+            
+            console.log('Event payload:', eventPayload);
+            
+            // Go straight to proxy (direct browser calls are blocked by CORS)
+            try {
+                // Use text/plain to avoid CORS preflight (GAS doesn't handle OPTIONS)
+                const proxyResponse = await fetch(config.rosterUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'createRaidEvent',
+                        apiKey: config.apiKey,
+                        serverId: config.serverId,
+                        eventPayload: eventPayload
+                    })
+                });
+                
+                const proxyResult = await proxyResponse.json();
+                console.log('Proxy result:', proxyResult);
+                
+                if (proxyResult.success) {
+                    // Event ID can be in different places depending on API response structure
+                    const eventId = proxyResult.eventId || 
+                                    proxyResult.response?.event?.id || 
+                                    proxyResult.response?.id;
+                    console.log('Extracted event ID:', eventId);
+                    
+                    showStatus(`✅ Event created! ID: ${eventId || 'success'}`, 'success');
+                    btn.innerHTML = '✅ Event Created!';
+                    
+                    // Now add signups if we have an event ID and Discord IDs mapped
+                    if (eventId) {
+                        await addSignupsViaProxy(config, eventId, raidData.dayData);
+                    } else {
+                        showStatus(`✅ Event created! (No event ID returned for auto-signups)`, 'success');
+                    }
+                    
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = '🚀 Create Another Event';
+                    }, 3000);
+                } else {
+                    throw new Error(proxyResult.error || 'Unknown API error');
+                }
+            } catch (error) {
+                console.error('API Error:', error);
+                showStatus(`❌ ${error.message}`, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '🚀 Create Event in Discord';
+            }
+        }
+
+        async function addSignupsViaProxy(config, eventId, dayData) {
+            showStatus(`Adding signups to event ${eventId}...`, 'pending');
+            
+            // Map WoW Class + Spec to Raid-Helper specName
+            // Raid-Helper uses suffixes (Holy1, Frost1, etc.) to distinguish same-named specs
+            function getSpecName(wowClass, wowSpec) {
+                // Normalize inputs
+                const cls = (wowClass || '').toLowerCase().replace(/\s+/g, '');
+                const spec = (wowSpec || '').toLowerCase().replace(/\s+/g, '');
+                
+                // Spec name mapping - handle duplicates with suffixes
+                const specMap = {
+                    // Death Knight
+                    'deathknight-blood': 'Blood',
+                    'deathknight-frost': 'Frost1',  // Frost1 for DK
+                    'deathknight-unholy': 'Unholy',
+                    
+                    // Demon Hunter
+                    'demonhunter-vengeance': 'Vengeance',
+                    'demonhunter-havoc': 'Havoc',
+                    'demonhunter-devourer': 'Devourer',
+                    
+                    // Druid
+                    'druid-balance': 'Balance',
+                    'druid-feral': 'Feral',
+                    'druid-guardian': 'Guardian',
+                    'druid-restoration': 'Restoration',
+                    
+                    // Evoker
+                    'evoker-devastation': 'Devastation',
+                    'evoker-preservation': 'Preservation',
+                    'evoker-augmentation': 'Augmentation',
+                    
+                    // Hunter
+                    'hunter-beastmastery': 'Beastmastery',
+                    'hunter-beast mastery': 'Beastmastery',
+                    'hunter-marksmanship': 'Marksmanship',
+                    'hunter-survival': 'Survival',
+                    
+                    // Mage
+                    'mage-arcane': 'Arcane',
+                    'mage-fire': 'Fire',
+                    'mage-frost': 'Frost',
+                    
+                    // Monk
+                    'monk-brewmaster': 'Brewmaster',
+                    'monk-mistweaver': 'Mistweaver',
+                    'monk-windwalker': 'Windwalker',
+                    
+                    // Paladin
+                    'paladin-holy': 'Holy1',
+                    'paladin-protection': 'Protection1',
+                    'paladin-retribution': 'Retribution',
+                    
+                    // Priest
+                    'priest-discipline': 'Discipline',
+                    'priest-holy': 'Holy',
+                    'priest-shadow': 'Shadow',
+                    
+                    // Rogue
+                    'rogue-assassination': 'Assassination',
+                    'rogue-outlaw': 'Outlaw',
+                    'rogue-subtlety': 'Subtlety',
+                    
+                    // Shaman
+                    'shaman-elemental': 'Elemental',
+                    'shaman-enhancement': 'Enhancement',
+                    'shaman-restoration': 'Restoration1',
+                    
+                    // Warlock
+                    'warlock-affliction': 'Affliction',
+                    'warlock-demonology': 'Demonology',
+                    'warlock-destruction': 'Destruction',
+                    
+                    // Warrior
+                    'warrior-arms': 'Arms',
+                    'warrior-fury': 'Fury',
+                    'warrior-protection': 'Protection'
+                };
+                
+                const key = `${cls}-${spec}`;
+                return specMap[key] || null;
+            }
+            
+            // Map role from form to Raid-Helper className
+            // Form now has: Tank, Healer, Melee, Ranged
+            function getClassName(role) {
+                // Direct mapping - role values now match Raid-Helper class names
+                if (role === 'Tank') return 'Tank';
+                if (role === 'Healer') return 'Healer';
+                if (role === 'Melee') return 'Melee';
+                if (role === 'Ranged') return 'Ranged';
+                // Legacy support for old "DPS" value
+                if (role === 'DPS') return 'Melee';
+                return 'Melee'; // Default
+            }
+            
+            // Build signup list
+            const signups = [];
+            
+            for (const member of dayData.available) {
+                const discordUserId = discordIdMapping[member.discord];
+                if (!discordUserId) {
+                    console.log(`Skipping ${member.discord} - no Discord ID mapped`);
+                    continue;
+                }
+                
+                if (member.autoSignup) {
+                    const className = getClassName(member.role);
+                    const specName = getSpecName(member.class, member.spec);
+                    
+                    console.log(`Signup: ${member.discord} (${member.class} ${member.spec}) -> className: ${className}, specName: ${specName}`);
+                    
+                    signups.push({
+                        userId: discordUserId,
+                        className: className,
+                        specName: specName
+                    });
+                } else {
+                    // Tentative signup
+                    signups.push({
+                        userId: discordUserId,
+                        className: 'Tentative'
+                    });
+                }
+            }
+            
+            for (const member of dayData.unavailable) {
+                const discordUserId = discordIdMapping[member.discord];
+                if (!discordUserId) continue;
+                signups.push({
+                    userId: discordUserId,
+                    className: 'Absence'
+                });
+            }
+            
+            if (signups.length === 0) {
+                showStatus(`✅ Event created! (No Discord IDs mapped for signups)`, 'success');
+                return;
+            }
+            
+            console.log('Signups to send:', signups);
+            
+            try {
+                // Use text/plain to avoid CORS preflight
+                const response = await fetch(config.rosterUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'addRaidSignups',
+                        apiKey: config.apiKey,
+                        serverId: config.serverId,
+                        eventId: eventId,
+                        signups: signups
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Signup result:', result);
+                
+                const successCount = result.results?.filter(r => r.success).length || 0;
+                showStatus(`✅ Event created! Added ${successCount}/${signups.length} signups.`, 'success');
+            } catch (error) {
+                console.error('Signup error:', error);
+                showStatus(`✅ Event created! (Signup error: ${error.message})`, 'success');
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('createEventStatus');
+            status.style.display = 'block';
+            status.textContent = message;
+            
+            if (type === 'success') {
+                status.style.color = 'var(--success)';
+            } else if (type === 'error') {
+                status.style.color = 'var(--danger)';
+            } else {
+                status.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        function generateQuickCommands(dayData) {
+            const config = getConfig();
+            const title = config.defaultTitle || 'PATT Prog Raid';
+            const time = config.defaultTime || '21:00';
+            const duration = config.defaultDuration || '0';
+            const template = config.defaultTemplate || 'wowretail2';
+
+            // Sort and get top 3
+            const sorted = Object.values(dayData).sort((a, b) => b.total - a.total).slice(0, 3);
+
+            const container = document.getElementById('quickCommands');
+            container.innerHTML = sorted.map((day, idx) => {
+                const cmd = `/create title:${title} date:${day.dateStr} time:${time} duration:${duration} template:${template}`;
+                const tanks = day.available.filter(m => m.role === 'Tank').length;
+                const healers = day.available.filter(m => m.role === 'Healer').length;
+                const melee = day.available.filter(m => m.role === 'Melee').length;
+                const ranged = day.available.filter(m => m.role === 'Ranged').length;
+
+                return `
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <span style="background: var(--accent-gold); color: var(--bg-dark); width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem;">${idx + 1}</span>
+                            <strong>${day.name}</strong>
+                            <span style="color: var(--text-secondary);">${day.dateDisplay}</span>
+                            <span style="color: var(--text-secondary); font-size: 0.85rem;">
+                                (${day.total}: ${tanks}T/${healers}H/${melee}M/${ranged}R)
+                            </span>
+                        </div>
+                        <div class="command-box" onclick="copyCommand(this)">
+                            ${cmd}
+                            <span class="copy-hint">Click to copy</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('quickCommandsCard').style.display = 'block';
+        }
+
+        function renderFullRoster() {
+            const tbody = document.getElementById('fullRosterBody');
+            
+            // Group characters by discord name, showing main first
+            const grouped = {};
+            rosterData.characters.forEach(char => {
+                const key = char.discord?.toLowerCase() || 'unknown';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(char);
+            });
+
+            // Sort each group to put Main first
+            Object.values(grouped).forEach(chars => {
+                chars.sort((a, b) => (a.mainAlt === 'Main' ? -1 : 1));
+            });
+
+            // Find availability for each person
+            const availByDiscord = {};
+            rosterData.availability.forEach(a => {
+                availByDiscord[a.discord?.toLowerCase()] = a;
+            });
+
+            const rows = [];
+            Object.entries(grouped).forEach(([discord, chars]) => {
+                const avail = availByDiscord[discord];
+                const autoSignup = avail?.autoSignup === true || avail?.autoSignup === 'TRUE';
+                const wantsReminders = avail?.wantsReminders === true || avail?.wantsReminders === 'TRUE';
+
+                chars.forEach((char, idx) => {
+                    const hasDiscordId = discordIdMapping[char.discord];
+                    rows.push(`
+                        <tr>
+                            <td class="discord-name">${idx === 0 ? char.discord : ''}</td>
+                            <td class="character">${char.character}</td>
+                            <td>${char.class || '?'}</td>
+                            <td><span class="role-badge ${char.role?.toLowerCase()}">${char.role || '?'}</span></td>
+                            <td>${char.mainAlt || '?'}</td>
+                            <td>${idx === 0 ? (autoSignup ? '<span style="color: var(--success);">✓ Yes</span>' : '<span style="color: var(--text-muted);">No</span>') : ''}</td>
+                            <td>${idx === 0 ? (wantsReminders ? '<span style="color: var(--success);">✓ Yes</span>' : '<span style="color: var(--text-muted);">No</span>') : ''}</td>
+                            <td>
+                                ${hasDiscordId ? 
+                                    '<span class="status-badge available">✓ ID Set</span>' : 
+                                    '<span class="status-badge unknown">⚠ No ID</span>'
+                                }
+                            </td>
+                        </tr>
+                    `);
+                });
+            });
+
+            tbody.innerHTML = rows.join('');
+            document.getElementById('fullRosterTable').style.display = 'table';
+        }
+
+        // ==========================================
+        // UI HELPERS
+        // ==========================================
+        function copyCommand(element) {
+            // Get text without the copy hint
+            const text = element.textContent.replace('Click to copy', '').replace('✓ Copied!', '').trim();
+            navigator.clipboard.writeText(text).then(() => {
+                element.classList.add('copied');
+                element.querySelector('.copy-hint').textContent = '✓ Copied!';
+                setTimeout(() => {
+                    element.classList.remove('copied');
+                    element.querySelector('.copy-hint').textContent = 'Click to copy';
+                }, 2000);
+            });
+        }
+
+        function showPage(pageName) {
+            document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            
+            document.getElementById('page-' + pageName).style.display = 'block';
+            document.querySelector(`.nav-item[data-page="${pageName}"]`)?.classList.add('active');
+        }
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => showPage(item.dataset.page));
+        });
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabGroup = tab.parentElement;
+                const contentParent = tabGroup.parentElement;
+                
+                tabGroup.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                contentParent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                contentParent.querySelector('#tab-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings(); // Now async, handles its own data loading
+        });
+    </script>
+</body>
+</html>

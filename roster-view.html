@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roster Dashboard - Pull All The Things</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ffd700, #ff8c00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 1rem;
+        }
+
+        /* View Toggle */
+        .view-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .view-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ccc;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .view-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .view-btn.active {
+            background: linear-gradient(90deg, #ffd700, #ff8c00);
+            color: #1a1a2e;
+            font-weight: 600;
+        }
+
+        /* Cards */
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card h2 {
+            font-size: 1.1rem;
+            color: #ccc;
+            margin-bottom: 15px;
+        }
+
+        .card h3 {
+            font-size: 1rem;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        /* Availability Bars */
+        .availability-bar-container {
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .availability-bar-container:hover {
+            transform: scale(1.01);
+        }
+
+        .availability-bar-container.selected {
+            transform: scale(1.02);
+        }
+
+        .availability-bar-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .availability-bar-label .day {
+            color: #ccc;
+            font-weight: 500;
+        }
+
+        .availability-bar-label .count {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .availability-bar {
+            height: 30px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .availability-bar-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+
+        .availability-bar-fill.high { background: #22c55e; }
+        .availability-bar-fill.medium { background: #eab308; }
+        .availability-bar-fill.low { background: #ef4444; }
+
+        .availability-bar-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        .legend-dot.high { background: #22c55e; }
+        .legend-dot.medium { background: #eab308; }
+        .legend-dot.low { background: #ef4444; }
+
+        /* Unavailable List */
+        .unavailable-list {
+            margin-top: 15px;
+        }
+
+        .unavailable-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .unavailable-item .name {
+            color: #f87171;
+            font-weight: 600;
+            min-width: 100px;
+        }
+
+        .unavailable-item .reason {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .all-available {
+            padding: 15px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 8px;
+            color: #22c55e;
+            text-align: center;
+        }
+
+        /* Best Days */
+        .best-days {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .best-days h3 {
+            color: #22c55e;
+            margin-bottom: 8px;
+        }
+
+        .best-days p {
+            color: #ccc;
+        }
+
+        .best-days strong {
+            color: #22c55e;
+        }
+
+        /* Roster Table */
+        .roster-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #aaa;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .checkbox-label input {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .roster-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .roster-table th {
+            text-align: left;
+            padding: 12px 10px;
+            background: rgba(0, 0, 0, 0.4);
+            color: #888;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        .roster-table td {
+            padding: 12px 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .roster-table tr:hover td {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .role-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .role-tank { background: #3b82f6; color: #fff; }
+        .role-healer { background: #22c55e; color: #fff; }
+        .role-melee { background: #f97316; color: #fff; }
+        .role-ranged { background: #a855f7; color: #fff; }
+        .role-dps { background: #ef4444; color: #fff; }
+
+        .main-badge {
+            color: #ffd700;
+        }
+
+        .alt-badge {
+            color: #666;
+        }
+
+        /* Class Colors */
+        .class-death-knight { color: #C41E3A; }
+        .class-demon-hunter { color: #A330C9; }
+        .class-druid { color: #FF7C0A; }
+        .class-evoker { color: #33937F; }
+        .class-hunter { color: #AAD372; }
+        .class-mage { color: #3FC7EB; }
+        .class-monk { color: #00FF98; }
+        .class-paladin { color: #F48CBA; }
+        .class-priest { color: #FFFFFF; }
+        .class-rogue { color: #FFF468; }
+        .class-shaman { color: #0070DD; }
+        .class-warlock { color: #8788EE; }
+        .class-warrior { color: #C69B6D; }
+
+        /* Composition */
+        .role-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .role-card {
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .role-card.tank {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+        }
+
+        .role-card.healer {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.5);
+        }
+
+        .role-card.dps {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+
+        .role-card.melee {
+            background: rgba(249, 115, 22, 0.2);
+            border: 1px solid rgba(249, 115, 22, 0.5);
+        }
+
+        .role-card.ranged {
+            background: rgba(168, 85, 247, 0.2);
+            border: 1px solid rgba(168, 85, 247, 0.5);
+        }
+
+        .role-card .count {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+
+        .role-card.tank .count { color: #60a5fa; }
+        .role-card.healer .count { color: #4ade80; }
+        .role-card.melee .count { color: #fb923c; }
+        .role-card.ranged .count { color: #c084fc; }
+        .role-card.dps .count { color: #f87171; }
+
+        .role-card .label {
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .role-card.tank .label { color: #93c5fd; }
+        .role-card.healer .label { color: #86efac; }
+        .role-card.melee .label { color: #fdba74; }
+        .role-card.ranged .label { color: #d8b4fe; }
+        .role-card.dps .label { color: #fca5a5; }
+
+        .role-card .target {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Class Grid */
+        .class-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        @media (min-width: 600px) {
+            .class-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .class-count-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 8px;
+        }
+
+        .class-count-item.empty {
+            opacity: 0.4;
+        }
+
+        .class-count-item .class-name {
+            font-weight: 500;
+        }
+
+        .class-count-item .count {
+            font-weight: bold;
+            color: #888;
+        }
+
+        /* Gaps Alert */
+        .gaps-alert {
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .gaps-alert h3 {
+            color: #eab308;
+            margin-bottom: 10px;
+        }
+
+        .gaps-alert ul {
+            list-style: none;
+            color: #ccc;
+        }
+
+        .gaps-alert li {
+            margin-bottom: 5px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 215, 0, 0.3);
+            border-top-color: #ffd700;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            text-align: center;
+            padding: 30px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #f87171;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        footer a {
+            color: #ffd700;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Wowhead Export */
+        .wowhead-btn {
+            width: 100%;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(90deg, #b35900, #8b4500);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .wowhead-btn:hover {
+            background: linear-gradient(90deg, #cc6600, #a05000);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(179, 89, 0, 0.3);
+        }
+
+        .wowhead-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .wowhead-note {
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        /* Responsive Table */
+        @media (max-width: 600px) {
+            .roster-table {
+                font-size: 0.8rem;
+            }
+            
+            .roster-table th,
+            .roster-table td {
+                padding: 8px 6px;
+            }
+
+            .role-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pull All The Things Prog Raid Roster</h1>
+            <p class="subtitle">Team availability and composition overview</p>
+        </header>
+
+        <div class="view-toggle">
+            <button class="view-btn active" data-view="availability">📅 Availability</button>
+            <button class="view-btn" data-view="roster">👥 Full Roster</button>
+            <button class="view-btn" data-view="composition">⚔️ Composition</button>
+        </div>
+
+        <div id="loadingIndicator" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Loading roster data...</div>
+        </div>
+
+        <div id="errorMessage" class="error-message hidden">
+            Unable to load roster data. Make sure the Apps Script is deployed and the URL is correct.
+        </div>
+
+        <!-- Availability View -->
+        <div id="availabilityView" class="hidden">
+            <div class="card">
+                <h2>Team Availability by Day (9pm - 11pm EST)</h2>
+                <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px;">Click a day to see who's unavailable and why</p>
+                <div id="availabilityBars"></div>
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-dot high"></div> 80%+ available</div>
+                    <div class="legend-item"><div class="legend-dot medium"></div> 60-79%</div>
+                    <div class="legend-item"><div class="legend-dot low"></div> &lt;60%</div>
+                </div>
+            </div>
+
+            <div class="card hidden" id="unavailableCard">
+                <h2 id="unavailableTitle">Who's Out?</h2>
+                <div id="unavailableList"></div>
+            </div>
+
+            <div class="best-days" id="bestDays">
+                <h3>📊 Best Raid Days</h3>
+                <p id="bestDaysText"></p>
+            </div>
+        </div>
+
+        <!-- Roster View -->
+        <div id="rosterView" class="hidden">
+            <div class="card">
+                <div class="roster-controls">
+                    <h2 style="margin-bottom: 0;">All Characters</h2>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="mainsOnlyCheckbox" checked>
+                        Mains only
+                    </label>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="roster-table">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Character</th>
+                                <th>Class / Spec</th>
+                                <th>Role</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rosterTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Composition View -->
+        <div id="compositionView" class="hidden">
+            <div class="role-cards">
+                <div class="role-card tank">
+                    <div class="count" id="tankCount">0</div>
+                    <div class="label">Tanks</div>
+                    <div class="target">Need: 2</div>
+                </div>
+                <div class="role-card healer">
+                    <div class="count" id="healerCount">0</div>
+                    <div class="label">Healers</div>
+                    <div class="target">Need: 4-5</div>
+                </div>
+                <div class="role-card melee">
+                    <div class="count" id="meleeCount">0</div>
+                    <div class="label">Melee</div>
+                    <div class="target">Need: 6-7</div>
+                </div>
+                <div class="role-card ranged">
+                    <div class="count" id="rangedCount">0</div>
+                    <div class="label">Ranged</div>
+                    <div class="target">Need: 6-7</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Class Distribution (Mains Only)</h2>
+                <div class="class-grid" id="classDistribution"></div>
+            </div>
+
+            <div class="gaps-alert" id="gapsAlert">
+                <h3>⚠️ Potential Gaps</h3>
+                <ul id="gapsList"></ul>
+            </div>
+
+            <!-- Wowhead Export -->
+            <div class="card" style="margin-top: 20px;">
+                <h2>🔗 Wowhead Raid Composition Tool</h2>
+                <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px;">
+                    Export your mains to Wowhead's raid comp tool to see buff/debuff coverage, missing utilities, and more.
+                </p>
+                <button id="wowheadExportBtn" class="wowhead-btn" onclick="openWowheadRaidComp()">
+                    Open in Wowhead Raid Composition →
+                </button>
+                <p id="wowheadNote" class="wowhead-note">
+                    <span id="mainsSummary"></span>
+                </p>
+            </div>
+        </div>
+
+        <footer>
+            <div class="footer-links">
+                <a href="roster.html">📝 Sign Up / Update</a>
+                <a href="https://shadowedvaca.com">← Back to Shadowedvaca LLC</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ===========================================
+        // CONFIGURATION - UPDATE THIS WITH YOUR APPS SCRIPT URL
+        // ===========================================
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyS-X2rTSq9T8LxWmY4f5FzX-jKnpZvZvybFrUNbjjvrn1_nFSYbL0oFXfBDVWjEFFX/exec';
+        // ===========================================
+
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const classColors = {
+            'Death Knight': 'class-death-knight',
+            'Demon Hunter': 'class-demon-hunter',
+            'Druid': 'class-druid',
+            'Evoker': 'class-evoker',
+            'Hunter': 'class-hunter',
+            'Mage': 'class-mage',
+            'Monk': 'class-monk',
+            'Paladin': 'class-paladin',
+            'Priest': 'class-priest',
+            'Rogue': 'class-rogue',
+            'Shaman': 'class-shaman',
+            'Warlock': 'class-warlock',
+            'Warrior': 'class-warrior'
+        };
+
+        let availabilityData = [];
+        let charactersData = [];
+        let selectedDay = null;
+        let currentView = 'availability';
+
+        // View switching
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentView = btn.dataset.view;
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                showView(currentView);
+            });
+        });
+
+        function showView(view) {
+            document.getElementById('availabilityView').classList.toggle('hidden', view !== 'availability');
+            document.getElementById('rosterView').classList.toggle('hidden', view !== 'roster');
+            document.getElementById('compositionView').classList.toggle('hidden', view !== 'composition');
+        }
+
+        // Mains only checkbox
+        document.getElementById('mainsOnlyCheckbox').addEventListener('change', renderRosterTable);
+
+        // Load data
+        async function loadData() {
+            try {
+                const response = await fetch(APPS_SCRIPT_URL);
+                const result = await response.json();
+                
+                if (result.success) {
+                    availabilityData = result.availability || [];
+                    charactersData = result.characters || [];
+                    
+                    document.getElementById('loadingIndicator').classList.add('hidden');
+                    renderAll();
+                    showView('availability');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                document.getElementById('loadingIndicator').classList.add('hidden');
+                document.getElementById('errorMessage').classList.remove('hidden');
+            }
+        }
+
+        function renderAll() {
+            renderAvailabilityBars();
+            renderRosterTable();
+            renderComposition();
+        }
+
+        function renderAvailabilityBars() {
+            const container = document.getElementById('availabilityBars');
+            container.innerHTML = '';
+
+            const total = availabilityData.length;
+            if (total === 0) {
+                container.innerHTML = '<p style="color: #888; text-align: center;">No availability data yet</p>';
+                document.getElementById('bestDays').classList.add('hidden');
+                return;
+            }
+
+            const dayCounts = days.map(day => {
+                const available = availabilityData.filter(p => p[day.toLowerCase()] === true || p[day.toLowerCase()] === 'TRUE').length;
+                const percentage = Math.round((available / total) * 100);
+                return { day, available, percentage };
+            });
+
+            dayCounts.forEach(({ day, available, percentage }) => {
+                const div = document.createElement('div');
+                div.className = `availability-bar-container${selectedDay === day ? ' selected' : ''}`;
+                div.onclick = () => selectDay(day);
+
+                let fillClass = 'low';
+                if (percentage >= 80) fillClass = 'high';
+                else if (percentage >= 60) fillClass = 'medium';
+
+                div.innerHTML = `
+                    <div class="availability-bar-label">
+                        <span class="day">${day}</span>
+                        <span class="count">${available}/${total}</span>
+                    </div>
+                    <div class="availability-bar">
+                        <div class="availability-bar-fill ${fillClass}" style="width: ${percentage}%"></div>
+                        <div class="availability-bar-text">${percentage}%</div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            // Best days
+            const sorted = [...dayCounts].sort((a, b) => b.available - a.available);
+            const bestThree = sorted.slice(0, 3).map(d => d.day).join(', ');
+            document.getElementById('bestDaysText').innerHTML = `Based on current signups, your best options are: <strong>${bestThree}</strong>`;
+            document.getElementById('bestDays').classList.remove('hidden');
+        }
+
+        function selectDay(day) {
+            selectedDay = selectedDay === day ? null : day;
+            renderAvailabilityBars();
+            renderUnavailableList();
+        }
+
+        function renderUnavailableList() {
+            const card = document.getElementById('unavailableCard');
+            const list = document.getElementById('unavailableList');
+            const title = document.getElementById('unavailableTitle');
+
+            if (!selectedDay) {
+                card.classList.add('hidden');
+                return;
+            }
+
+            card.classList.remove('hidden');
+            title.textContent = `${selectedDay} - Who's Out?`;
+
+            const unavailable = availabilityData.filter(p => 
+                p[selectedDay.toLowerCase()] !== true && p[selectedDay.toLowerCase()] !== 'TRUE'
+            );
+
+            if (unavailable.length === 0) {
+                list.innerHTML = '<div class="all-available">🎉 Everyone is available!</div>';
+            } else {
+                list.innerHTML = unavailable.map(p => `
+                    <div class="unavailable-item">
+                        <span class="name">${p.discord}</span>
+                        <span class="reason">${p.notes || 'No reason given'}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderRosterTable() {
+            const tbody = document.getElementById('rosterTableBody');
+            const mainsOnly = document.getElementById('mainsOnlyCheckbox').checked;
+
+            const filtered = mainsOnly 
+                ? charactersData.filter(c => c.mainAlt === 'Main')
+                : charactersData;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #888; padding: 30px;">No characters registered yet</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(c => {
+                const colorClass = classColors[c.class] || '';
+                return `
+                    <tr>
+                        <td>${c.discord}</td>
+                        <td class="${colorClass}" style="font-weight: 500;">${c.character}</td>
+                        <td class="${colorClass}">${c.class} - ${c.spec}</td>
+                        <td><span class="role-badge role-${c.role.toLowerCase()}">${c.role}</span></td>
+                        <td>${c.mainAlt === 'Main' ? '<span class="main-badge">⭐ Main</span>' : '<span class="alt-badge">Alt</span>'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderComposition() {
+            const mains = charactersData.filter(c => c.mainAlt === 'Main');
+
+            // Role counts
+            const tankCount = mains.filter(c => c.role === 'Tank').length;
+            const healerCount = mains.filter(c => c.role === 'Healer').length;
+            const meleeCount = mains.filter(c => c.role === 'Melee').length;
+            const rangedCount = mains.filter(c => c.role === 'Ranged').length;
+
+            document.getElementById('tankCount').textContent = tankCount;
+            document.getElementById('healerCount').textContent = healerCount;
+            document.getElementById('meleeCount').textContent = meleeCount;
+            document.getElementById('rangedCount').textContent = rangedCount;
+
+            // Class distribution
+            const classCounts = {};
+            Object.keys(classColors).forEach(c => classCounts[c] = 0);
+            mains.forEach(c => {
+                if (classCounts.hasOwnProperty(c.class)) {
+                    classCounts[c.class]++;
+                }
+            });
+
+            const classGrid = document.getElementById('classDistribution');
+            classGrid.innerHTML = Object.entries(classCounts).map(([cls, count]) => {
+                const colorClass = classColors[cls] || '';
+                return `
+                    <div class="class-count-item${count === 0 ? ' empty' : ''}">
+                        <span class="class-name ${colorClass}">${cls}</span>
+                        <span class="count">${count}</span>
+                    </div>
+                `;
+            }).join('');
+
+            // Gaps
+            const gaps = [];
+            const missingClasses = Object.entries(classCounts).filter(([_, count]) => count === 0).map(([cls]) => cls);
+            if (missingClasses.length > 0) {
+                gaps.push(`<strong>Missing classes:</strong> ${missingClasses.join(', ')}`);
+            }
+            if (tankCount < 2) {
+                gaps.push(`Need more tanks (${2 - tankCount} more)`);
+            }
+            if (healerCount < 4) {
+                gaps.push(`Need more healers (${4 - healerCount} more)`);
+            }
+            const totalDps = meleeCount + rangedCount;
+            if (totalDps < 13) {
+                gaps.push(`Could use more DPS (${13 - totalDps} more for a full roster)`);
+            }
+
+            const gapsAlert = document.getElementById('gapsAlert');
+            const gapsList = document.getElementById('gapsList');
+            
+            if (gaps.length === 0) {
+                gapsAlert.classList.add('hidden');
+            } else {
+                gapsAlert.classList.remove('hidden');
+                gapsList.innerHTML = gaps.map(g => `<li>${g}</li>`).join('');
+            }
+
+            // Update Wowhead export summary
+            const mainsSummary = document.getElementById('mainsSummary');
+            if (mains.length > 0) {
+                mainsSummary.textContent = `Ready to export ${mains.length} mains: ${tankCount}T / ${healerCount}H / ${meleeCount}M / ${rangedCount}R`;
+            } else {
+                mainsSummary.textContent = 'No mains to export yet';
+            }
+        }
+
+        // Wowhead Raid Composition URL builder
+        // Spec codes for retail WoW (verified from Wowhead's raid-composition tool)
+        const wowheadSpecCodes = {
+            // Death Knight
+            'Death Knight|Blood': 's',
+            'Death Knight|Frost': 't',
+            'Death Knight|Unholy': 'v',
+            // Demon Hunter
+            'Demon Hunter|Havoc': 'S',
+            'Demon Hunter|Vengeance': 'T',
+            'Demon Hunter|Devourer': null, // New Midnight spec - not in Wowhead yet
+            // Druid
+            'Druid|Balance': 'n',
+            'Druid|Feral': 'p',
+            'Druid|Guardian': 'q',
+            'Druid|Restoration': 'r',
+            // Evoker
+            'Evoker|Devastation': 'V',
+            'Evoker|Preservation': 'W',
+            'Evoker|Augmentation': 'X',
+            // Hunter
+            'Hunter|Beast Mastery': 'w',
+            'Hunter|Marksmanship': 'x',
+            'Hunter|Survival': 'y',
+            // Mage
+            'Mage|Arcane': 'b',
+            'Mage|Fire': 'c',
+            'Mage|Frost': 'd',
+            // Monk
+            'Monk|Brewmaster': 'P',
+            'Monk|Mistweaver': 'R',
+            'Monk|Windwalker': 'Q',
+            // Paladin
+            'Paladin|Holy': 'f',
+            'Paladin|Protection': 'g',
+            'Paladin|Retribution': 'h',
+            // Priest
+            'Priest|Discipline': 'z',
+            'Priest|Holy': 'B',
+            'Priest|Shadow': 'C',
+            // Rogue
+            'Rogue|Assassination': 'D',
+            'Rogue|Outlaw': 'F',
+            'Rogue|Subtlety': 'G',
+            // Shaman
+            'Shaman|Elemental': 'H',
+            'Shaman|Enhancement': 'J',
+            'Shaman|Restoration': 'K',
+            // Warlock
+            'Warlock|Affliction': 'L',
+            'Warlock|Demonology': 'M',
+            'Warlock|Destruction': 'N',
+            // Warrior
+            'Warrior|Arms': 'j',
+            'Warrior|Fury': 'k',
+            'Warrior|Protection': 'm'
+        };
+
+        function openWowheadRaidComp() {
+            const mains = charactersData.filter(c => c.mainAlt === 'Main');
+            
+            if (mains.length === 0) {
+                alert('No mains found in the roster yet!');
+                return;
+            }
+
+            let specCodes = '';
+            let names = [];
+            let unmappedSpecs = [];
+
+            mains.forEach(char => {
+                const key = char.class + '|' + char.spec;
+                const code = wowheadSpecCodes[key];
+                
+                if (code) {
+                    specCodes += code;
+                    names.push(char.character);
+                } else {
+                    unmappedSpecs.push(char.spec + ' ' + char.class + ' (' + char.character + ')');
+                }
+            });
+
+            // Build URL: https://www.wowhead.com/raid-composition#0[specs];[names]
+            let url = 'https://www.wowhead.com/raid-composition#0' + specCodes;
+            if (names.length > 0) {
+                url += ';' + names.join(';');
+            }
+
+            // Show note about any unmapped specs
+            const noteEl = document.getElementById('wowheadNote');
+            if (unmappedSpecs.length > 0) {
+                noteEl.innerHTML = '⚠️ Could not export: ' + unmappedSpecs.join(', ') + 
+                    '<br><small>These specs may need to be added manually on Wowhead.</small>';
+            } else {
+                noteEl.textContent = '✓ Exported ' + mains.length + ' characters';
+            }
+
+            // Open in new tab
+            window.open(url, '_blank');
+        }
+
+        // Check URL params for initial view
+        function getInitialView() {
+            const params = new URLSearchParams(window.location.search);
+            const view = params.get('view');
+            if (view && ['availability', 'roster', 'composition'].includes(view)) {
+                return view;
+            }
+            return 'availability';
+        }
+
+        // Initialize
+        currentView = getInitialView();
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.view === currentView);
+        });
+        loadData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "scriptUrl": "https://script.google.com/macros/s/AKfycbxI8ZSBrh499DpRPZy043zR1zn6on37t5kRoQhxzsizPR62AahnNQKR9pZ8GZbzU4bT/exec",
+  "raidDefaults": {
+    "title": "Heroric Raid",
+    "time": "21:00",
+    "duration": 120,
+    "template": "wowretail2"
+  },
+  "channels": {
+    "signup": "1327719564842237993",
+    "voice": "1288213207995125824",
+    "announcement": "1320176407355064434",
+    "pug": "1322399667241222144",
+    "notification": "1459086326493351968"
+  },
+  "serverId": "1288213206938026069",
+  "leaderId": "195547238959677441"
+}
