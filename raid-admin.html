@@ -399,8 +399,15 @@
             gap: 15px;
         }
 
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+
         @media (max-width: 600px) {
             .form-row { grid-template-columns: 1fr; }
+            .form-row-3 { grid-template-columns: 1fr; }
         }
 
         label {
@@ -427,6 +434,11 @@
         input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: var(--accent-gold);
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
         }
 
         .help-text {
@@ -473,6 +485,13 @@
         .btn-sm {
             padding: 6px 12px;
             font-size: 0.8rem;
+        }
+
+        .btn-lg {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            width: 100%;
+            justify-content: center;
         }
 
         .btn-group {
@@ -672,6 +691,110 @@
         .summary-stat.healers .value { color: var(--healer); }
         .summary-stat.melee .value { color: var(--melee); }
         .summary-stat.ranged .value { color: var(--ranged); }
+
+        /* Event Type Cards */
+        .event-types {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        @media (max-width: 700px) {
+            .event-types { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 400px) {
+            .event-types { grid-template-columns: 1fr; }
+        }
+
+        .event-type-option {
+            position: relative;
+        }
+
+        .event-type-option input {
+            display: none;
+        }
+
+        .event-type-option label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 15px 10px;
+            background: var(--bg-input);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            margin: 0;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .event-type-option label:hover {
+            border-color: var(--accent-gold);
+        }
+
+        .event-type-option input:checked + label {
+            border-color: var(--accent-gold);
+            background: var(--accent-gold-glow);
+            color: var(--accent-gold);
+        }
+
+        .event-type-option .icon {
+            font-size: 1.5rem;
+        }
+
+        /* Event Settings Templates */
+        .template-editor {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .template-editor-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .template-editor-header .icon {
+            font-size: 1.2rem;
+        }
+
+        /* Status message for event creation */
+        .event-status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .event-status.success {
+            display: block;
+            background: var(--success-dim);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .event-status.error {
+            display: block;
+            background: var(--danger-dim);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+
+        .event-status.pending {
+            display: block;
+            background: var(--accent-gold-glow);
+            border: 1px solid var(--accent-gold);
+            color: var(--accent-gold);
+        }
     </style>
 </head>
 <body>
@@ -695,10 +818,22 @@
                 </div>
 
                 <div class="nav-section">
+                    <div class="nav-label">Event Creation</div>
+                    <div class="nav-item" data-page="create-event">
+                        <span class="icon">🗓️</span>
+                        <span>Create Event</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
                     <div class="nav-label">Configuration</div>
                     <div class="nav-item" data-page="settings">
                         <span class="icon">⚙️</span>
                         <span>Settings</span>
+                    </div>
+                    <div class="nav-item" data-page="event-settings">
+                        <span class="icon">📝</span>
+                        <span>Event Templates</span>
                     </div>
                     <div class="nav-item" data-page="discord">
                         <span class="icon">🔗</span>
@@ -908,6 +1043,132 @@
                 </div>
             </div>
 
+            <!-- Create Event Page -->
+            <div id="page-create-event" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Create Guild Event</h1>
+                    <p class="page-subtitle">Schedule ad hoc events for the guild</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Event Type</span>
+                    </div>
+                    
+                    <div class="event-types">
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typeOldRaids" value="oldRaids" checked>
+                            <label for="typeOldRaids">
+                                <span class="icon">🏰</span>
+                                <span>Old Raids</span>
+                            </label>
+                        </div>
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typeAchievements" value="achievements">
+                            <label for="typeAchievements">
+                                <span class="icon">🏆</span>
+                                <span>Achievements</span>
+                            </label>
+                        </div>
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typeMythicPlus" value="mythicPlus">
+                            <label for="typeMythicPlus">
+                                <span class="icon">🔑</span>
+                                <span>Mythic+</span>
+                            </label>
+                        </div>
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typePvP" value="pvp">
+                            <label for="typePvP">
+                                <span class="icon">⚔️</span>
+                                <span>PvP</span>
+                            </label>
+                        </div>
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typeFarming" value="farming">
+                            <label for="typeFarming">
+                                <span class="icon">🌾</span>
+                                <span>Farming</span>
+                            </label>
+                        </div>
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typeSocial" value="social">
+                            <label for="typeSocial">
+                                <span class="icon">🎉</span>
+                                <span>Social</span>
+                            </label>
+                        </div>
+                        <div class="event-type-option">
+                            <input type="radio" name="eventType" id="typeOther" value="other">
+                            <label for="typeOther">
+                                <span class="icon">✨</span>
+                                <span>Other</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Event Details</span>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Edit as needed for this event</span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="eventTitle">Title</label>
+                        <input type="text" id="eventTitle" placeholder="Event title...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="eventDescription">Description</label>
+                        <textarea id="eventDescription" placeholder="Event description..."></textarea>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Date & Time</span>
+                    </div>
+                    
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label for="eventDate">Date</label>
+                            <input type="date" id="eventDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="eventTime">Time</label>
+                            <input type="time" id="eventTime" value="21:00">
+                        </div>
+                        <div class="form-group">
+                            <label for="eventTimezone">Timezone</label>
+                            <select id="eventTimezone">
+                                <option value="EST" selected>EST (Eastern)</option>
+                                <option value="CST">CST (Central)</option>
+                                <option value="MST">MST (Mountain)</option>
+                                <option value="PST">PST (Pacific)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="eventDuration">Duration</label>
+                        <select id="eventDuration">
+                            <option value="60">1 hour</option>
+                            <option value="90">1.5 hours</option>
+                            <option value="120" selected>2 hours</option>
+                            <option value="180">3 hours</option>
+                            <option value="240">4 hours</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-lg" id="createGuildEventBtn" onclick="createGuildEvent()">
+                    🚀 Create Event in Discord
+                </button>
+                
+                <div id="guildEventStatus" class="event-status"></div>
+            </div>
+
             <!-- Settings Page -->
             <div id="page-settings" class="page" style="display: none;">
                 <div class="page-header">
@@ -929,7 +1190,7 @@
                     <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
                             <label>Default Title</label>
-                            <input type="text" id="defaultTitle" value="PATT Prog Raid">
+                            <input type="text" id="defaultTitle" value="Heroic Raid">
                         </div>
                         <div class="form-group">
                             <label>Start Time</label>
@@ -951,9 +1212,9 @@
                 </div>
 
                 <div class="card">
-                    <div class="card-title">Raid-Helper API (Optional)</div>
+                    <div class="card-title">Raid-Helper API</div>
                     <p style="color: var(--text-secondary); margin: 10px 0;">
-                        Only needed if you want to use API-based signup pre-population.
+                        Required for creating events via Discord bot.
                     </p>
                     <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
@@ -972,34 +1233,45 @@
                         <input type="text" id="leaderId" placeholder="e.g., 123456789012345678">
                         <p class="help-text">Right-click yourself → Copy ID. Events will be created as you.</p>
                     </div>
-                    <div class="form-row">
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Channel Configuration</div>
+                    <div class="form-row" style="margin-top: 15px;">
                         <div class="form-group">
-                            <label>Signup Channel ID</label>
+                            <label>Raid Signup Channel ID</label>
                             <input type="text" id="channelId" placeholder="Main channel for raid signups">
-                            <p class="help-text">Where the event embed gets posted</p>
+                            <p class="help-text">Where raid event embeds get posted</p>
                         </div>
+                        <div class="form-group">
+                            <label>Event Signup Channel ID</label>
+                            <input type="text" id="eventChannelId" placeholder="Channel for guild events">
+                            <p class="help-text">Where non-raid events get posted</p>
+                        </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Voice Channel ID</label>
                             <input type="text" id="voiceChannelId" placeholder="Raid voice channel">
                             <p class="help-text">Links event to voice room</p>
                         </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group">
                             <label>Announcement Channel ID</label>
                             <input type="text" id="announcementChannelId" placeholder="Guild general channel">
-                            <p class="help-text">Where @everyone ping goes when event is created</p>
+                            <p class="help-text">Where @everyone ping goes</p>
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Pug Channel ID</label>
                             <input type="text" id="pugChannelId" placeholder="Pug channel for visibility">
                             <p class="help-text">Secondary channel to show signups</p>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Notification Channel ID</label>
-                        <input type="text" id="notificationChannelId" placeholder="spam spam spam channel">
-                        <p class="help-text">Where signup notifications get posted</p>
+                        <div class="form-group">
+                            <label>Notification Channel ID</label>
+                            <input type="text" id="notificationChannelId" placeholder="spam spam spam channel">
+                            <p class="help-text">Where signup notifications go</p>
+                        </div>
                     </div>
                 </div>
 
@@ -1007,6 +1279,21 @@
                     <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
                     <button class="btn btn-secondary" onclick="resetSettings()" style="margin-left: 10px;">Reset to Config File Defaults</button>
                     <button class="btn btn-secondary" onclick="loadSettings()">Reset</button>
+                </div>
+            </div>
+
+            <!-- Event Templates Settings Page -->
+            <div id="page-event-settings" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1 class="page-title">Event Templates</h1>
+                    <p class="page-subtitle">Customize the default text for each event type</p>
+                </div>
+
+                <div id="templateEditors"></div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="saveEventTemplates()">Save Templates</button>
+                    <button class="btn btn-secondary" onclick="resetEventTemplates()">Reset to Defaults</button>
                 </div>
             </div>
 
@@ -1056,9 +1343,65 @@
         // STATE
         // ==========================================
         const STORAGE_KEY = 'patt_admin_config';
+        const TEMPLATES_KEY = 'patt_event_templates';
         let rosterData = { availability: [], characters: [] };
         let selectedDay = null;
         let discordIdMapping = {}; // discord_name -> discord_user_id
+
+        // Default event templates
+        const DEFAULT_EVENT_TEMPLATES = {
+            oldRaids: {
+                icon: '🏰',
+                name: 'Old Raids',
+                title: "Old Raid Night",
+                description: "Time to go back and destroy some old content! We'll be running legacy raids for transmog, mounts, and achievements.\n\n🎯 Bring any character you want\n🐴 Mount drops will be rolled\n✨ Achievements available!",
+                template: "wowretail2"
+            },
+            achievements: {
+                icon: '🏆',
+                name: 'Achievements',
+                title: "Achievement Run",
+                description: "Let's knock out some achievements together! We'll be working on group achievements that are easier (or only possible) with a coordinated team.\n\n📋 Check Discord for the achievement list\n🏆 Glory mounts available!",
+                template: "wowretail2"
+            },
+            mythicPlus: {
+                icon: '🔑',
+                name: 'Mythic+',
+                title: "Mythic+ Night",
+                description: "Guild M+ night! We'll be forming groups and pushing keys together. All key levels welcome.\n\n🔑 Bring your keys\n📈 Let's get those vaults filled\n🤝 Chill, no-stress runs",
+                template: "wowretail2"
+            },
+            pvp: {
+                icon: '⚔️',
+                name: 'PvP',
+                title: "PvP Night",
+                description: "Time to fight some real players! Whether it's battlegrounds, arena, or world PvP, let's group up and have some fun.\n\n⚔️ All skill levels welcome\n🎯 BGs, Arenas, or World PvP\n🏆 For honor and glory!",
+                template: "wowretail2"
+            },
+            farming: {
+                icon: '🌾',
+                name: 'Farming',
+                title: "Farming Event",
+                description: "Group farming session! We'll be working together to farm materials, rep, or whatever we need.\n\n🌾 Strength in numbers\n💰 Help each other out\n🗺️ Location TBD in Discord",
+                template: "wowretail2"
+            },
+            social: {
+                icon: '🎉',
+                name: 'Social',
+                title: "Social Night",
+                description: "Just hanging out! No specific content planned - just vibes, Discord chat, and whatever we feel like doing.\n\n🎉 Chill vibes only\n🎮 Play whatever you want\n💬 Come hang in Discord",
+                template: "wowretail2"
+            },
+            other: {
+                icon: '✨',
+                name: 'Other',
+                title: "Guild Event",
+                description: "Guild event! Check Discord for details.",
+                template: "wowretail2"
+            }
+        };
+
+        let eventTemplates = { ...DEFAULT_EVENT_TEMPLATES };
 
         // ==========================================
         // LOAD CONFIG FROM FILE (then override with localStorage)
@@ -1088,7 +1431,7 @@
             // Merge: localStorage wins, but file provides defaults
             const config = {
                 rosterUrl: localConfig.rosterUrl || fileConfig?.scriptUrl || '',
-                defaultTitle: localConfig.defaultTitle || fileConfig?.raidDefaults?.title || 'PATT Prog Raid',
+                defaultTitle: localConfig.defaultTitle || fileConfig?.raidDefaults?.title || 'Heroic Raid',
                 defaultTime: localConfig.defaultTime || fileConfig?.raidDefaults?.time || '21:00',
                 defaultDuration: localConfig.defaultDuration || fileConfig?.raidDefaults?.duration || '120',
                 defaultTemplate: localConfig.defaultTemplate || fileConfig?.raidDefaults?.template || 'wowretail2',
@@ -1096,6 +1439,7 @@
                 serverId: localConfig.serverId || fileConfig?.serverId || '',
                 leaderId: localConfig.leaderId || fileConfig?.leaderId || '',
                 channelId: localConfig.channelId || fileConfig?.channels?.signup || '',
+                eventChannelId: localConfig.eventChannelId || fileConfig?.channels?.eventSignup || '',
                 voiceChannelId: localConfig.voiceChannelId || fileConfig?.channels?.voice || '',
                 announcementChannelId: localConfig.announcementChannelId || fileConfig?.channels?.announcement || '',
                 pugChannelId: localConfig.pugChannelId || fileConfig?.channels?.pug || '',
@@ -1113,11 +1457,15 @@
             document.getElementById('serverId').value = config.serverId;
             document.getElementById('leaderId').value = config.leaderId;
             document.getElementById('channelId').value = config.channelId;
+            document.getElementById('eventChannelId').value = config.eventChannelId;
             document.getElementById('voiceChannelId').value = config.voiceChannelId;
             document.getElementById('announcementChannelId').value = config.announcementChannelId;
             document.getElementById('pugChannelId').value = config.pugChannelId;
             document.getElementById('notificationChannelId').value = config.notificationChannelId;
             discordIdMapping = config.discordIdMapping;
+            
+            // Load event templates
+            loadEventTemplates();
             
             updateConnectionStatus();
             
@@ -1125,6 +1473,9 @@
             if (config.rosterUrl && config.rosterUrl !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
                 refreshData();
             }
+            
+            // Initialize event creation page
+            initEventCreation();
         }
 
         function saveSettings() {
@@ -1138,6 +1489,7 @@
                 serverId: document.getElementById('serverId').value,
                 leaderId: document.getElementById('leaderId').value,
                 channelId: document.getElementById('channelId').value,
+                eventChannelId: document.getElementById('eventChannelId').value,
                 voiceChannelId: document.getElementById('voiceChannelId').value,
                 announcementChannelId: document.getElementById('announcementChannelId').value,
                 pugChannelId: document.getElementById('pugChannelId').value,
@@ -1190,6 +1542,228 @@
                 dot.classList.remove('connected');
                 text.textContent = 'Not connected';
             }
+        }
+
+        // ==========================================
+        // EVENT TEMPLATES
+        // ==========================================
+        function loadEventTemplates() {
+            const saved = localStorage.getItem(TEMPLATES_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Merge with defaults (in case new templates were added)
+                eventTemplates = { ...DEFAULT_EVENT_TEMPLATES, ...parsed };
+            } else {
+                eventTemplates = { ...DEFAULT_EVENT_TEMPLATES };
+            }
+            renderTemplateEditors();
+        }
+
+        function saveEventTemplates() {
+            // Gather from form
+            Object.keys(eventTemplates).forEach(key => {
+                const titleInput = document.getElementById(`template-${key}-title`);
+                const descInput = document.getElementById(`template-${key}-desc`);
+                if (titleInput && descInput) {
+                    eventTemplates[key].title = titleInput.value;
+                    eventTemplates[key].description = descInput.value;
+                }
+            });
+            
+            localStorage.setItem(TEMPLATES_KEY, JSON.stringify(eventTemplates));
+            alert('Event templates saved!');
+        }
+
+        function resetEventTemplates() {
+            if (!confirm('Reset all event templates to defaults?')) return;
+            localStorage.removeItem(TEMPLATES_KEY);
+            eventTemplates = { ...DEFAULT_EVENT_TEMPLATES };
+            renderTemplateEditors();
+            alert('Templates reset to defaults.');
+        }
+
+        function renderTemplateEditors() {
+            const container = document.getElementById('templateEditors');
+            container.innerHTML = Object.entries(eventTemplates).map(([key, template]) => `
+                <div class="card">
+                    <div class="template-editor-header">
+                        <span class="icon">${template.icon}</span>
+                        <span>${template.name}</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="template-${key}-title">Title</label>
+                        <input type="text" id="template-${key}-title" value="${escapeHtml(template.title)}">
+                    </div>
+                    <div class="form-group">
+                        <label for="template-${key}-desc">Description</label>
+                        <textarea id="template-${key}-desc" rows="4">${escapeHtml(template.description)}</textarea>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ==========================================
+        // EVENT CREATION PAGE
+        // ==========================================
+        function initEventCreation() {
+            // Set default date to today
+            const today = new Date();
+            document.getElementById('eventDate').value = today.toISOString().split('T')[0];
+            
+            // Set up event type listeners
+            document.querySelectorAll('input[name="eventType"]').forEach(radio => {
+                radio.addEventListener('change', updateEventDetails);
+            });
+            
+            // Initial population
+            updateEventDetails();
+        }
+
+        function updateEventDetails() {
+            const selectedType = document.querySelector('input[name="eventType"]:checked').value;
+            const template = eventTemplates[selectedType];
+            
+            document.getElementById('eventTitle').value = template.title;
+            document.getElementById('eventDescription').value = template.description;
+        }
+
+        async function createGuildEvent() {
+            const config = getConfig();
+            const btn = document.getElementById('createGuildEventBtn');
+            const status = document.getElementById('guildEventStatus');
+            
+            // Validate config
+            if (!config.apiKey || !config.serverId) {
+                showEventStatus('Missing API configuration. Go to Settings tab.', 'error');
+                return;
+            }
+            
+            // Use event channel, fall back to raid signup channel
+            const channelId = config.eventChannelId || config.channelId;
+            if (!channelId) {
+                showEventStatus('No event channel configured. Go to Settings tab.', 'error');
+                return;
+            }
+            
+            if (!config.rosterUrl) {
+                showEventStatus('Google Apps Script URL not configured.', 'error');
+                return;
+            }
+            
+            // Get form values
+            const title = document.getElementById('eventTitle').value;
+            const description = document.getElementById('eventDescription').value;
+            const date = document.getElementById('eventDate').value;
+            const time = document.getElementById('eventTime').value;
+            const timezone = document.getElementById('eventTimezone').value;
+            const duration = parseInt(document.getElementById('eventDuration').value);
+            
+            if (!date || !title) {
+                showEventStatus('Please enter a date and title!', 'error');
+                return;
+            }
+            
+            // Convert time to EST for the API (Raid-Helper expects server time)
+            const convertedTime = convertToEST(time, timezone);
+            
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Creating event...';
+            showEventStatus('Connecting to Discord...', 'pending');
+            
+            const selectedType = document.querySelector('input[name="eventType"]:checked').value;
+            const templateId = eventTemplates[selectedType].template;
+            
+            const eventPayload = {
+                leaderId: config.leaderId || '',
+                templateId: templateId,
+                date: date,
+                time: convertedTime,
+                title: title,
+                description: description,
+                channelId: channelId,
+                advancedSettings: {
+                    duration: duration,
+                    create_discordevent: true,
+                    use_nicknames: true
+                }
+            };
+            
+            // Add voice channel if configured
+            if (config.voiceChannelId) {
+                eventPayload.advancedSettings.voice_channel = config.voiceChannelId;
+            }
+            
+            console.log('Creating guild event:', eventPayload);
+            
+            try {
+                const response = await fetch(config.rosterUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'createRaidEvent',
+                        apiKey: config.apiKey,
+                        serverId: config.serverId,
+                        eventPayload: eventPayload
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Result:', result);
+                
+                if (result.success) {
+                    const eventId = result.eventId || result.response?.id;
+                    showEventStatus(`✅ Event created successfully! Event ID: ${eventId || 'Created'}`, 'success');
+                    btn.innerHTML = '✅ Event Created!';
+                    
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = '🚀 Create Event in Discord';
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showEventStatus(`❌ Failed to create event: ${error.message}`, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '🚀 Create Event in Discord';
+            }
+        }
+
+        function convertToEST(time, fromTimezone) {
+            // Timezone offsets from EST (negative = behind EST)
+            const offsets = {
+                'EST': 0,
+                'CST': -1,
+                'MST': -2,
+                'PST': -3
+            };
+            
+            const offset = offsets[fromTimezone] || 0;
+            
+            // Parse time
+            const [hours, minutes] = time.split(':').map(Number);
+            
+            // Convert to EST (add the offset since we're going TO EST)
+            let estHours = hours - offset;
+            
+            // Handle day wraparound
+            if (estHours >= 24) estHours -= 24;
+            if (estHours < 0) estHours += 24;
+            
+            return `${estHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        }
+
+        function showEventStatus(message, type) {
+            const status = document.getElementById('guildEventStatus');
+            status.textContent = message;
+            status.className = `event-status ${type}`;
         }
 
         // ==========================================
@@ -1303,9 +1877,6 @@
         }
 
         function isValidDiscordName(name) {
-            // Discord usernames: 2-32 chars, lowercase, alphanumeric, underscores, periods
-            // Old format: Username#1234
-            // New format: username (lowercase)
             if (!name || name.length < 2) return false;
             
             // Check for old format with discriminator
@@ -1335,6 +1906,10 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        function renderDiscordIdTable() {
+            renderDiscordMapping();
         }
 
         function updateDiscordId(discordName, userId) {
@@ -1597,7 +2172,7 @@
 
         function generateCommands(dayData) {
             const config = getConfig();
-            const title = config.defaultTitle || 'PATT Prog Raid';
+            const title = config.defaultTitle || 'Heroic Raid';
             const time = config.defaultTime || '21:00';
             const duration = config.defaultDuration || '0';
             const template = config.defaultTemplate || 'wowretail2';
@@ -1608,7 +2183,7 @@
                 date: dayData.dateStr,
                 time: time,
                 duration: parseInt(duration) || 0,
-                templateId: template,  // Can be string like "wowretail2" or number
+                templateId: template,
                 dayData: dayData
             };
 
@@ -1822,77 +2397,49 @@
             showStatus(`Adding signups to event ${eventId}...`, 'pending');
             
             // Map WoW Class + Spec to Raid-Helper specName
-            // Raid-Helper uses suffixes (Holy1, Frost1, etc.) to distinguish same-named specs
             function getSpecName(wowClass, wowSpec) {
-                // Normalize inputs
                 const cls = (wowClass || '').toLowerCase().replace(/\s+/g, '');
                 const spec = (wowSpec || '').toLowerCase().replace(/\s+/g, '');
                 
-                // Spec name mapping - handle duplicates with suffixes
                 const specMap = {
-                    // Death Knight
                     'deathknight-blood': 'Blood',
-                    'deathknight-frost': 'Frost1',  // Frost1 for DK
+                    'deathknight-frost': 'Frost1',
                     'deathknight-unholy': 'Unholy',
-                    
-                    // Demon Hunter
                     'demonhunter-vengeance': 'Vengeance',
                     'demonhunter-havoc': 'Havoc',
                     'demonhunter-devourer': 'Devourer',
-                    
-                    // Druid
                     'druid-balance': 'Balance',
                     'druid-feral': 'Feral',
                     'druid-guardian': 'Guardian',
                     'druid-restoration': 'Restoration',
-                    
-                    // Evoker
                     'evoker-devastation': 'Devastation',
                     'evoker-preservation': 'Preservation',
                     'evoker-augmentation': 'Augmentation',
-                    
-                    // Hunter
                     'hunter-beastmastery': 'Beastmastery',
                     'hunter-beast mastery': 'Beastmastery',
                     'hunter-marksmanship': 'Marksmanship',
                     'hunter-survival': 'Survival',
-                    
-                    // Mage
                     'mage-arcane': 'Arcane',
                     'mage-fire': 'Fire',
                     'mage-frost': 'Frost',
-                    
-                    // Monk
                     'monk-brewmaster': 'Brewmaster',
                     'monk-mistweaver': 'Mistweaver',
                     'monk-windwalker': 'Windwalker',
-                    
-                    // Paladin
                     'paladin-holy': 'Holy1',
                     'paladin-protection': 'Protection1',
                     'paladin-retribution': 'Retribution',
-                    
-                    // Priest
                     'priest-discipline': 'Discipline',
                     'priest-holy': 'Holy',
                     'priest-shadow': 'Shadow',
-                    
-                    // Rogue
                     'rogue-assassination': 'Assassination',
                     'rogue-outlaw': 'Outlaw',
                     'rogue-subtlety': 'Subtlety',
-                    
-                    // Shaman
                     'shaman-elemental': 'Elemental',
                     'shaman-enhancement': 'Enhancement',
                     'shaman-restoration': 'Restoration1',
-                    
-                    // Warlock
                     'warlock-affliction': 'Affliction',
                     'warlock-demonology': 'Demonology',
                     'warlock-destruction': 'Destruction',
-                    
-                    // Warrior
                     'warrior-arms': 'Arms',
                     'warrior-fury': 'Fury',
                     'warrior-protection': 'Protection'
@@ -1902,17 +2449,13 @@
                 return specMap[key] || null;
             }
             
-            // Map role from form to Raid-Helper className
-            // Form now has: Tank, Healer, Melee, Ranged
             function getClassName(role) {
-                // Direct mapping - role values now match Raid-Helper class names
                 if (role === 'Tank') return 'Tank';
                 if (role === 'Healer') return 'Healer';
                 if (role === 'Melee') return 'Melee';
                 if (role === 'Ranged') return 'Ranged';
-                // Legacy support for old "DPS" value
                 if (role === 'DPS') return 'Melee';
-                return 'Melee'; // Default
+                return 'Melee';
             }
             
             // Build signup list
@@ -1937,7 +2480,6 @@
                         specName: specName
                     });
                 } else {
-                    // Tentative signup
                     signups.push({
                         userId: discordUserId,
                         className: 'Tentative'
@@ -1962,7 +2504,6 @@
             console.log('Signups to send:', signups);
             
             try {
-                // Use text/plain to avoid CORS preflight
                 const response = await fetch(config.rosterUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
@@ -2002,7 +2543,7 @@
 
         function generateQuickCommands(dayData) {
             const config = getConfig();
-            const title = config.defaultTitle || 'PATT Prog Raid';
+            const title = config.defaultTitle || 'Heroic Raid';
             const time = config.defaultTime || '21:00';
             const duration = config.defaultDuration || '0';
             const template = config.defaultTemplate || 'wowretail2';
@@ -2097,7 +2638,6 @@
         // UI HELPERS
         // ==========================================
         function copyCommand(element) {
-            // Get text without the copy hint
             const text = element.textContent.replace('Click to copy', '').replace('✓ Copied!', '').trim();
             navigator.clipboard.writeText(text).then(() => {
                 element.classList.add('copied');
@@ -2140,7 +2680,7 @@
         // INITIALIZATION
         // ==========================================
         document.addEventListener('DOMContentLoaded', () => {
-            loadSettings(); // Now async, handles its own data loading
+            loadSettings();
         });
     </script>
 </body>
