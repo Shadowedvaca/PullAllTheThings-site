@@ -1478,8 +1478,8 @@
             const today = new Date();
             const currentDay = today.getDay();
             let daysUntil = dayOfWeek - currentDay;
+            // If target day is today or already passed this week, get next week's occurrence
             if (daysUntil <= 0) daysUntil += 7;
-            daysUntil += 7; // Always next week
             
             const nextDate = new Date(today);
             nextDate.setDate(today.getDate() + daysUntil);
