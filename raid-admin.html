@@ -441,6 +441,11 @@
             resize: vertical;
         }
 
+        /* Larger textarea for event descriptions */
+        #eventDescription {
+            min-height: 150px;
+        }
+
         .help-text {
             font-size: 0.75rem;
             color: var(--text-muted);
@@ -1439,7 +1444,7 @@
                 serverId: localConfig.serverId || fileConfig?.serverId || '',
                 leaderId: localConfig.leaderId || fileConfig?.leaderId || '',
                 channelId: localConfig.channelId || fileConfig?.channels?.signup || '',
-                eventChannelId: localConfig.eventChannelId || fileConfig?.channels?.eventSignup || '',
+                eventChannelId: localConfig.eventChannelId || (fileConfig?.channels?.eventSignup && !fileConfig.channels.eventSignup.includes('YOUR_') ? fileConfig.channels.eventSignup : ''),
                 voiceChannelId: localConfig.voiceChannelId || fileConfig?.channels?.voice || '',
                 announcementChannelId: localConfig.announcementChannelId || fileConfig?.channels?.announcement || '',
                 pugChannelId: localConfig.pugChannelId || fileConfig?.channels?.pug || '',
@@ -1645,7 +1650,17 @@
             }
             
             // Use event channel, fall back to raid signup channel
-            const channelId = config.eventChannelId || config.channelId;
+            // Check for non-empty string (not just truthy) since empty string from input is falsy
+            const channelId = (config.eventChannelId && config.eventChannelId.trim()) 
+                ? config.eventChannelId.trim() 
+                : config.channelId;
+            
+            console.log('Channel selection:', {
+                eventChannelId: config.eventChannelId,
+                channelId: config.channelId,
+                usingChannel: channelId
+            });
+            
             if (!channelId) {
                 showEventStatus('No event channel configured. Go to Settings tab.', 'error');
                 return;
@@ -1674,7 +1689,7 @@
             
             btn.disabled = true;
             btn.innerHTML = '⏳ Creating event...';
-            showEventStatus('Connecting to Discord...', 'pending');
+            showEventStatus(`Creating in channel ${channelId}...`, 'pending');
             
             const selectedType = document.querySelector('input[name="eventType"]:checked').value;
             const templateId = eventTemplates[selectedType].template;
