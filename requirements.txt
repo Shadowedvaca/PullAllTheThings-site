@@ -1,0 +1,30 @@
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+jinja2>=3.1.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy[asyncio]>=2.0.25
+asyncpg>=0.29.0
+alembic>=1.13.0
+
+# Auth
+pyjwt>=2.8.0
+bcrypt>=4.1.0
+
+# Discord
+discord.py>=2.3.0
+
+# Config
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# HTTP client (for Google Drive, external APIs)
+httpx>=0.26.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+factory-boy>=3.3.0

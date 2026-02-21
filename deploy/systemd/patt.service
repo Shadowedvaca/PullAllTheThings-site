@@ -1,0 +1,16 @@
+[Unit]
+Description=PATT Guild Platform
+After=network.target postgresql.service
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/patt-platform
+EnvironmentFile=/opt/patt-platform/.env
+ExecStart=/opt/patt-platform/.venv/bin/uvicorn patt.app:create_app --host 0.0.0.0 --port 8100 --factory
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

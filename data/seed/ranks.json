@@ -1,0 +1,7 @@
+[
+    {"name": "Initiate", "level": 1, "description": "New member, proving reliability and social fit"},
+    {"name": "Member", "level": 2, "description": "Regular attendee who engages with the guild"},
+    {"name": "Veteran", "level": 3, "description": "Key performer, helps others, brings the guild together"},
+    {"name": "Officer", "level": 4, "description": "Guild leadership team"},
+    {"name": "Guild Leader", "level": 5, "description": "Guild master"}
+]
