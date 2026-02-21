@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(tail:*)",
+      "Bash(cd H:/Development/PullAllTheThings-site && .venv/Scripts/pytest tests/unit/ -v 2>&1)",
+      "Bash(cd H:/Development/PullAllTheThings-site && DATABASE_URL=\"postgresql+asyncpg://patt_user:CHANGEME@localhost:5432/patt_db\" JWT_SECRET_KEY=\"placeholder\" PYTHONPATH=src .venv/Scripts/alembic revision --autogenerate -m \"initial schema\" 2>&1)"
+    ]
+  }
+}
