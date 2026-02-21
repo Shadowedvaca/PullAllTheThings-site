@@ -4,10 +4,15 @@ import asyncio
 import os
 import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# Load .env from project root so DATABASE_URL is available without manual export
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Ensure src/ is on path so models can be imported
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
