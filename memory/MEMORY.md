@@ -10,7 +10,8 @@
 - Phase 2.5D complete: 133 unit tests pass (24 skipped/DB-only); integration tests in tests/integration/test_guild_*.py need live DB
 - Phase 3 complete: campaign_service, vote_service, campaign_routes (admin/vote/public), background status checker, unit+integration tests (163/187 pass, 24 skip DB-only)
 - Phase 4 complete: page routes (auth, vote, admin, public), Jinja2 templates, cookie auth, JS files, integration tests (test_page_rendering.py)
-- Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass
+- Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass; data migrated from Sheets on server
+- CI/CD live: .github/workflows/deploy.yml auto-deploys on push to main (SSH key = DEPLOY_SSH_KEY GitHub secret)
 
 ## Key File Locations
 - Phase plans: `reference/PHASE-N.md`, Phase 2.5 plans: `reference/PHASE_2_5*.md`

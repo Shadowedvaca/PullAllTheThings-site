@@ -516,13 +516,14 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
   - Tests: `tests/integration/test_legacy_api.py`, `tests/unit/test_migration.py`
 
 ### What Exists on the Server
-- Nginx running, serving shadowedvaca.com as static files (nginx config ready at deploy/nginx/)
-- PostgreSQL setup script ready at deploy/setup_postgres.sql (not yet run on server)
-- FastAPI app scaffold ready — starts and serves /api/health
-- systemd service file ready at deploy/systemd/patt.service
-- Alembic migrations ready — run `alembic upgrade head` after DB setup
+- Nginx running, serving shadowedvaca.com as static files (nginx config at deploy/nginx/)
+- PostgreSQL, FastAPI (uvicorn port 8100), systemd patt.service — all running
+- All migrations applied through 0003 (member_availability, mito_quotes, mito_titles)
+- Google Sheets data fully migrated (20 members, 30 chars, 21 Mito quotes, 13 Mito titles)
 - Test framework operational — `pytest tests/unit/ -v` passes 192/216 (24 skip when no DB)
-- pullallthething.com DNS still points to GitHub Pages (cut over when ready for Phase 5 deploy)
+- **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
+  - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
+  - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
 
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)
