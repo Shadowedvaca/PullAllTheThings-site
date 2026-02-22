@@ -472,9 +472,10 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 2: Authentication & Discord Bot
 - Phase 3: Campaign Engine & Voting API
 - Phase 4: Web UI — vote pages, results, admin pages, auth pages, landing page
+- Phase 5: Google Sheets migration, legacy HTML moved, new API endpoints
 
 ### Current Phase
-- Phase 5: Legacy migration and DNS cutover
+- Phase 6: Contest Agent
 
 ### What Exists
 - sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
@@ -501,6 +502,18 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
   - Cookie auth: HTTP-only `patt_token` cookie (30-day), set on login/register, cleared on logout
   - Shared Jinja2 instance: `src/patt/templating.py`
   - Integration tests: `tests/integration/test_page_rendering.py`
+- **Phase 5 Legacy Migration:**
+  - New DB tables: `common.member_availability`, `patt.mito_quotes`, `patt.mito_titles`
+  - Alembic migration: `alembic/versions/0003_phase5_legacy_tables.py`
+  - Legacy API: `GET /api/v1/guild/roster-data`, `POST /api/v1/guild/roster-submit`,
+    `GET/POST /api/v1/guild/availability`, full Mito CRUD at `/api/v1/guild/mito/*`
+  - Legacy HTML moved to `src/patt/static/legacy/` (roster.html, roster-view.html,
+    raid-admin.html, mitos-corner.html, patt-config.json) — served at original URL paths by FastAPI
+  - Legacy HTML JS updated to call new API instead of Google Apps Script
+  - Nginx legacy file block removed — all requests now go through FastAPI
+  - Migration script: `scripts/migrate_sheets.py` — run once to import Sheets data
+  - Field mapping docs: `docs/MIGRATION-MAP.md`
+  - Tests: `tests/integration/test_legacy_api.py`, `tests/unit/test_migration.py`
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config ready at deploy/nginx/)
@@ -508,8 +521,8 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - FastAPI app scaffold ready — starts and serves /api/health
 - systemd service file ready at deploy/systemd/patt.service
 - Alembic migrations ready — run `alembic upgrade head` after DB setup
-- Test framework operational — `pytest tests/unit/ -v` passes 163/187 (24 skip when no DB)
-- pullallthething.com DNS still points to GitHub Pages (intentional until Phase 5)
+- Test framework operational — `pytest tests/unit/ -v` passes 192/216 (24 skip when no DB)
+- pullallthething.com DNS still points to GitHub Pages (cut over when ready for Phase 5 deploy)
 
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)

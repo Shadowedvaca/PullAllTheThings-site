@@ -9,6 +9,8 @@
 - Phase 2.5C complete: WoW addon (wow_addon/PATTSync/), companion app (companion_app/)
 - Phase 2.5D complete: 133 unit tests pass (24 skipped/DB-only); integration tests in tests/integration/test_guild_*.py need live DB
 - Phase 3 complete: campaign_service, vote_service, campaign_routes (admin/vote/public), background status checker, unit+integration tests (163/187 pass, 24 skip DB-only)
+- Phase 4 complete: page routes (auth, vote, admin, public), Jinja2 templates, cookie auth, JS files, integration tests (test_page_rendering.py)
+- Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass
 
 ## Key File Locations
 - Phase plans: `reference/PHASE-N.md`, Phase 2.5 plans: `reference/PHASE_2_5*.md`
@@ -31,6 +33,15 @@
 - Alembic migrations: `alembic/versions/0001_initial_schema.py`, `0002_guild_identity_schema.py`
 - Tests: `tests/unit/test_auth.py`, `tests/unit/test_lua_parser.py`, `tests/unit/test_blizzard_client.py`, `tests/unit/test_discord_sync.py`, `tests/unit/test_identity_engine.py`, `tests/unit/test_vote_scoring.py`, `tests/unit/test_campaign_service.py`
 - Campaign integration tests: `tests/integration/test_campaign_flow.py` (needs live DB)
+- Page rendering tests: `tests/integration/test_page_rendering.py` (needs live DB)
+- Legacy API integration tests: `tests/integration/test_legacy_api.py` (needs live DB)
+- Migration unit tests: `tests/unit/test_migration.py` (pure unit, no DB)
+- Legacy HTML: `src/patt/static/legacy/` (roster.html, roster-view.html, raid-admin.html, mitos-corner.html, patt-config.json)
+- Migration script: `scripts/migrate_sheets.py` (run once; needs DATABASE_URL + GOOGLE_APPS_SCRIPT_URL)
+- Migration docs: `docs/MIGRATION-MAP.md`
+- Page routes: `src/patt/pages/auth_pages.py`, `vote_pages.py`, `admin_pages.py`, `public_pages.py`
+- Shared templates instance: `src/patt/templating.py`
+- Cookie auth dep: `get_page_member()`, `require_page_rank(N)` in deps.py; cookie name = `patt_token`
 - Guild sync integration tests: `tests/integration/test_guild_schema.py`, `test_guild_db_sync.py`, `test_guild_identity.py`, `test_guild_integrity.py` (need live DB)
 - Conftest: `tests/conftest.py`
 
