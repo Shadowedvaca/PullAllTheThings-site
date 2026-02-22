@@ -27,6 +27,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+async def _run_campaign_checker(database_url: str) -> None:
+    """Wrapper that starts the campaign status checker with its own session factory."""
+    from patt.services.campaign_service import check_campaign_statuses
+
+    factory = get_session_factory(database_url)
+    await check_campaign_statuses(factory)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
 
@@ -63,6 +71,12 @@ def create_app() -> FastAPI:
             guild_sync_pool = None
             app.state.guild_sync_pool = None
 
+        # Start campaign status checker background task
+        campaign_checker_task = asyncio.create_task(
+            _run_campaign_checker(settings.database_url)
+        )
+        logger.info("Campaign status checker task started")
+
         # Start guild sync scheduler (skipped if Blizzard creds or Discord bot missing)
         guild_scheduler = None
         if (
@@ -90,6 +104,12 @@ def create_app() -> FastAPI:
         yield
 
         # Graceful shutdown
+        campaign_checker_task.cancel()
+        try:
+            await campaign_checker_task
+        except asyncio.CancelledError:
+            pass
+
         if guild_scheduler is not None:
             await guild_scheduler.stop()
 
@@ -119,12 +139,20 @@ def create_app() -> FastAPI:
     from patt.api.admin_routes import router as admin_router
     from patt.api.guild_routes import router as guild_router
     from patt.api.auth_routes import router as auth_router
+    from patt.api.campaign_routes import (
+        admin_campaign_router,
+        vote_router,
+        public_campaign_router,
+    )
     from sv_common.guild_sync.api.routes import guild_sync_router, identity_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
     app.include_router(admin_router)
+    app.include_router(admin_campaign_router)
     app.include_router(guild_router)
+    app.include_router(vote_router)
+    app.include_router(public_campaign_router)
     app.include_router(guild_sync_router)
     app.include_router(identity_router)
 

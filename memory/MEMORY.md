@@ -8,7 +8,7 @@
 - Phase 2.5B complete: discord_sync, identity_engine, integrity_checker, reporter, scheduler, API routes
 - Phase 2.5C complete: WoW addon (wow_addon/PATTSync/), companion app (companion_app/)
 - Phase 2.5D complete: 133 unit tests pass (24 skipped/DB-only); integration tests in tests/integration/test_guild_*.py need live DB
-- Phase 3 (Voting Engine) queued after Phase 2.5
+- Phase 3 complete: campaign_service, vote_service, campaign_routes (admin/vote/public), background status checker, unit+integration tests (163/187 pass, 24 skip DB-only)
 
 ## Key File Locations
 - Phase plans: `reference/PHASE-N.md`, Phase 2.5 plans: `reference/PHASE_2_5*.md`
@@ -29,7 +29,8 @@
 - Guild API: `src/patt/api/guild_routes.py`
 - Health route: `src/patt/api/health.py`
 - Alembic migrations: `alembic/versions/0001_initial_schema.py`, `0002_guild_identity_schema.py`
-- Tests: `tests/unit/test_auth.py`, `tests/unit/test_lua_parser.py`, `tests/unit/test_blizzard_client.py`, `tests/unit/test_discord_sync.py`, `tests/unit/test_identity_engine.py`
+- Tests: `tests/unit/test_auth.py`, `tests/unit/test_lua_parser.py`, `tests/unit/test_blizzard_client.py`, `tests/unit/test_discord_sync.py`, `tests/unit/test_identity_engine.py`, `tests/unit/test_vote_scoring.py`, `tests/unit/test_campaign_service.py`
+- Campaign integration tests: `tests/integration/test_campaign_flow.py` (needs live DB)
 - Guild sync integration tests: `tests/integration/test_guild_schema.py`, `test_guild_db_sync.py`, `test_guild_identity.py`, `test_guild_integrity.py` (need live DB)
 - Conftest: `tests/conftest.py`
 

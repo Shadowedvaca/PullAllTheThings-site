@@ -470,9 +470,10 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 0: Server infrastructure, project scaffolding, testing framework
 - Phase 1: Common services — identity & guild data model
 - Phase 2: Authentication & Discord Bot
+- Phase 3: Campaign Engine & Voting API
 
 ### Current Phase
-- Phase 3: Voting Engine
+- Phase 4: Web UI (Jinja2 templates for vote pages, admin pages)
 
 ### What Exists
 - sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
@@ -485,6 +486,13 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster` (public, no auth required)
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
 - Bot setup docs: `docs/DISCORD-BOT-SETUP.md`
+- Campaign service: `src/patt/services/campaign_service.py` — full lifecycle (draft→live→closed)
+- Vote service: `src/patt/services/vote_service.py` — cast votes, validate, calculate results
+- Campaign API (admin): `POST/PATCH /api/v1/admin/campaigns`, entries, activate, close, stats
+- Campaign API (vote): `POST /api/v1/campaigns/{id}/vote`, `GET /api/v1/campaigns/{id}/my-vote`
+- Campaign API (public): `GET /api/v1/campaigns`, `/api/v1/campaigns/{id}`, `/results`, `/results/live`
+- Background task: campaign status checker (auto-activate, auto-close, early-close) every 60s
+- Visibility rules: min_rank_to_view enforced; voted members see live standings
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config ready at deploy/nginx/)
@@ -492,7 +500,7 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - FastAPI app scaffold ready — starts and serves /api/health
 - systemd service file ready at deploy/systemd/patt.service
 - Alembic migrations ready — run `alembic upgrade head` after DB setup
-- Test framework operational — `pytest tests/unit/ -v` passes 28/28 (24 skip when no DB)
+- Test framework operational — `pytest tests/unit/ -v` passes 163/187 (24 skip when no DB)
 - pullallthething.com DNS still points to GitHub Pages (intentional until Phase 5)
 
 ### Local Dev Notes
