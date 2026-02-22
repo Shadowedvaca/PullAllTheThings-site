@@ -469,16 +469,22 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 ### Completed Phases
 - Phase 0: Server infrastructure, project scaffolding, testing framework
 - Phase 1: Common services — identity & guild data model
+- Phase 2: Authentication & Discord Bot
 
 ### Current Phase
-- Phase 2: Authentication & Discord Bot
+- Phase 3: Voting Engine
 
 ### What Exists
 - sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
-- Admin API: `/api/v1/admin/ranks`, `/api/v1/admin/members`, `/api/v1/admin/characters`
-- Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`
-- FastAPI DB dependency: `src/patt/deps.py` — `get_db()` used in all routes
-- Full test coverage for identity operations (DB tests skip gracefully without local PostgreSQL)
+- sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
+- sv_common.discord package: bot client, role sync, DM dispatch (`src/sv_common/discord/`)
+- Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- Auth middleware: `get_current_member()`, `require_rank(level)` deps in `src/patt/deps.py`
+- Admin API: `/api/v1/admin/*` — all routes protected (Officer+ rank required)
+- Admin API: `POST /api/v1/admin/members/{id}/send-invite` — generates code + sends Discord DM
+- Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster` (public, no auth required)
+- Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
+- Bot setup docs: `docs/DISCORD-BOT-SETUP.md`
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config ready at deploy/nginx/)
@@ -486,7 +492,7 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - FastAPI app scaffold ready — starts and serves /api/health
 - systemd service file ready at deploy/systemd/patt.service
 - Alembic migrations ready — run `alembic upgrade head` after DB setup
-- Test framework operational — `pytest tests/unit/ -v` passes 9/9 (24 skip when no DB)
+- Test framework operational — `pytest tests/unit/ -v` passes 28/28 (24 skip when no DB)
 - pullallthething.com DNS still points to GitHub Pages (intentional until Phase 5)
 
 ### Local Dev Notes
@@ -495,6 +501,7 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Run dev server: `python scripts/run_dev.py` (requires .env with DATABASE_URL)
 - DB-dependent tests (service + integration) require TEST_DATABASE_URL env var pointing to a running PostgreSQL instance
 - Pure unit tests (smoke + pure function tests) pass without a live database
+- JWT_SECRET_KEY in .env must be 32+ bytes (PyJWT warns if shorter)
 
 ---
 

@@ -1,15 +1,24 @@
-"""Admin API routes — guild management (unprotected; auth layered on in Phase 2)."""
+"""Admin API routes — guild management (Officer+ required)."""
+
+import logging
 
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from patt.deps import get_db
+from patt.deps import get_db, require_rank
+from sv_common.db.models import GuildMember
 from sv_common.identity import characters as char_service
 from sv_common.identity import members as member_service
 from sv_common.identity import ranks as rank_service
 
-router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(
+    prefix="/api/v1/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_rank(4))],  # Officer+ for all admin routes
+)
 
 
 # ---------------------------------------------------------------------------
@@ -287,3 +296,57 @@ async def delete_character(char_id: int, db: AsyncSession = Depends(get_db)):
     if not deleted:
         return {"ok": False, "error": f"Character {char_id} not found"}
     return {"ok": True, "data": {"deleted": True}}
+
+
+# ---------------------------------------------------------------------------
+# Invite codes
+# ---------------------------------------------------------------------------
+
+
+@router.post("/members/{member_id}/send-invite")
+async def send_invite(
+    member_id: int,
+    request: Request,
+    admin: GuildMember = Depends(require_rank(4)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate an invite code for a member and DM it via the Discord bot.
+
+    The member must have a discord_id set. Returns success/failure.
+    """
+    from sv_common.auth.invite_codes import generate_invite_code
+    from sv_common.discord import dm as dm_module
+
+    target = await member_service.get_member_by_id(db, member_id)
+    if target is None:
+        return {"ok": False, "error": f"Member {member_id} not found"}
+
+    if not target.discord_id:
+        return {"ok": False, "error": "Member has no discord_id — cannot send DM"}
+
+    code = await generate_invite_code(db, member_id=member_id, created_by_id=admin.id)
+
+    base_url = str(request.base_url).rstrip("/")
+    register_url = f"{base_url}/register?code={code}"
+
+    # Send DM if bot is available
+    try:
+        from sv_common.discord.bot import bot
+        sent = await dm_module.send_registration_dm(
+            bot=bot,
+            discord_id=target.discord_id,
+            invite_code=code,
+            register_url=register_url,
+        )
+    except Exception as exc:
+        logger.warning("Bot DM failed for member %s: %s", member_id, exc)
+        sent = False
+
+    return {
+        "ok": True,
+        "data": {
+            "code": code,
+            "discord_id": target.discord_id,
+            "dm_sent": sent,
+        },
+    }
