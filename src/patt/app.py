@@ -7,6 +7,7 @@ from pathlib import Path
 
 import asyncpg
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from patt.config import get_settings
@@ -24,6 +25,7 @@ logging.getLogger("discord.gateway").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
+LEGACY_DIR = Path(__file__).parent / "static" / "legacy"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
@@ -133,6 +135,52 @@ def create_app() -> FastAPI:
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    # Serve legacy HTML files at their original URL paths (Phase 5)
+    # These were previously at repo root served by Nginx; now served by FastAPI.
+    if LEGACY_DIR.exists():
+        _legacy_files = {
+            "roster": "roster.html",
+            "roster-view": "roster-view.html",
+            "raid-admin": "raid-admin.html",
+            "mitos-corner": "mitos-corner.html",
+        }
+
+        def _make_legacy_handler(filename: str):
+            filepath = LEGACY_DIR / filename
+
+            async def _handler():
+                return FileResponse(filepath, media_type="text/html")
+
+            return _handler
+
+        for _route, _file in _legacy_files.items():
+            app.add_api_route(
+                f"/{_route}",
+                _make_legacy_handler(_file),
+                methods=["GET"],
+                include_in_schema=False,
+            )
+            # Also serve with .html extension for backwards compat
+            app.add_api_route(
+                f"/{_file}",
+                _make_legacy_handler(_file),
+                methods=["GET"],
+                include_in_schema=False,
+            )
+
+        # Serve patt-config.json
+        _config_path = LEGACY_DIR / "patt-config.json"
+
+        async def _serve_patt_config():
+            return FileResponse(_config_path, media_type="application/json")
+
+        app.add_api_route(
+            "/patt-config.json",
+            _serve_patt_config,
+            methods=["GET"],
+            include_in_schema=False,
+        )
 
     # Register API routes
     from patt.api.health import router as health_router

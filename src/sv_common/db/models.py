@@ -98,6 +98,7 @@ class GuildMember(Base):
     user: Mapped[Optional[User]] = relationship(back_populates="member")
     rank: Mapped[GuildRank] = relationship(back_populates="members")
     characters: Mapped[list["Character"]] = relationship(back_populates="member")
+    availability: Mapped[list["MemberAvailability"]] = relationship(back_populates="member")
     invite_codes: Mapped[list["InviteCode"]] = relationship(
         back_populates="member", foreign_keys="InviteCode.member_id"
     )
@@ -312,6 +313,61 @@ class ContestAgentLog(Base):
     )
 
     campaign: Mapped[Campaign] = relationship(back_populates="agent_log")
+
+
+# ---------------------------------------------------------------------------
+# common schema additions (Phase 5)
+# ---------------------------------------------------------------------------
+
+
+class MemberAvailability(Base):
+    __tablename__ = "member_availability"
+    __table_args__ = (
+        UniqueConstraint("member_id", "day_of_week"),
+        {"schema": "common"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    member_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("common.guild_members.id", ondelete="CASCADE"), nullable=False
+    )
+    day_of_week: Mapped[str] = mapped_column(String(10), nullable=False)
+    available: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    auto_signup: Mapped[bool] = mapped_column(Boolean, default=False)
+    wants_reminders: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    member: Mapped[GuildMember] = relationship(back_populates="availability")
+
+
+# ---------------------------------------------------------------------------
+# patt schema additions (Phase 5)
+# ---------------------------------------------------------------------------
+
+
+class MitoQuote(Base):
+    __tablename__ = "mito_quotes"
+    __table_args__ = {"schema": "patt"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quote: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
+class MitoTitle(Base):
+    __tablename__ = "mito_titles"
+    __table_args__ = {"schema": "patt"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
 
 
 # ---------------------------------------------------------------------------

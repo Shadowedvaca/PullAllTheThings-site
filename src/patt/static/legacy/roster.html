@@ -698,39 +698,21 @@
             });
         });
 
-        // ===========================================
-        // CONFIGURATION - Loaded from patt-config.json
-        // ===========================================
-        let CONFIG = null;
-        
-        // Load config on page load
-        async function loadConfig() {
-            try {
-                const response = await fetch('patt-config.json');
-                if (!response.ok) throw new Error('Config file not found');
-                CONFIG = await response.json();
-                console.log('Config loaded successfully');
-            } catch (error) {
-                console.warn('Could not load patt-config.json:', error.message);
-                console.warn('Create patt-config.json in the same folder as this HTML file');
-            }
-        }
-        
-        // Load config when page loads
-        loadConfig();
+        // Phase 5: API endpoint (replaces Google Apps Script)
+        const ROSTER_SUBMIT_URL = '/api/v1/guild/roster-submit';
 
         // Form submission
         document.getElementById('rosterForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            
+
             const btn = this.querySelector('.submit-btn');
             const status = document.getElementById('statusMessage');
-            
+
             btn.disabled = true;
             btn.textContent = 'Submitting...';
             status.className = 'status';
             status.style.display = 'none';
-            
+
             const formData = {
                 discordName: document.getElementById('discordName').value.trim(),
                 characterName: document.getElementById('characterName').value.trim(),
@@ -753,40 +735,33 @@
             };
 
             try {
-                const scriptUrl = CONFIG?.scriptUrl;
-                
-                if (!scriptUrl || scriptUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
-                    console.log('Form data:', formData);
-                    status.className = 'status error';
-                    status.textContent = '✗ Not configured! Set scriptUrl in patt-config.json';
-                    status.style.display = 'block';
-                    btn.disabled = false;
-                    btn.textContent = 'Join the Roster';
-                    return;
-                }
-                
-                const response = await fetch(scriptUrl, {
+                const response = await fetch(ROSTER_SUBMIT_URL, {
                     method: 'POST',
-                    mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
-                
-                status.className = 'status success';
-                status.textContent = '✓ You\'ve been added to the roster! Submit again to add an alt.';
-                status.style.display = 'block';
-                
-                // Reset form but keep discord name
-                const discordName = document.getElementById('discordName').value;
-                this.reset();
-                document.getElementById('discordName').value = discordName;
-                
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    status.className = 'status success';
+                    status.textContent = '✓ You\'ve been added to the roster! Submit again to add an alt.';
+                    status.style.display = 'block';
+
+                    // Reset form but keep discord name
+                    const discordName = document.getElementById('discordName').value;
+                    this.reset();
+                    document.getElementById('discordName').value = discordName;
+                } else {
+                    throw new Error(result.detail || result.error || 'Server error');
+                }
+
             } catch (error) {
                 status.className = 'status error';
                 status.textContent = '✗ Error: ' + error.message;
                 status.style.display = 'block';
             }
-            
+
             btn.disabled = false;
             btn.textContent = 'Join the Roster';
         });

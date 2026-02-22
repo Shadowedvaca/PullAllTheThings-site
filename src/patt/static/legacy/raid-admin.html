@@ -1434,8 +1434,9 @@
             const localConfig = saved ? JSON.parse(saved) : {};
             
             // Merge: localStorage wins, but file provides defaults
+            // Phase 5: default rosterUrl is now the platform API
             const config = {
-                rosterUrl: localConfig.rosterUrl || fileConfig?.scriptUrl || '',
+                rosterUrl: localConfig.rosterUrl || '/api/v1/guild/roster-data',
                 defaultTitle: localConfig.defaultTitle || fileConfig?.raidDefaults?.title || 'Heroic Raid',
                 defaultTime: localConfig.defaultTime || fileConfig?.raidDefaults?.time || '21:00',
                 defaultDuration: localConfig.defaultDuration || fileConfig?.raidDefaults?.duration || '120',
@@ -1474,8 +1475,8 @@
             
             updateConnectionStatus();
             
-            // Auto-load data if we have a roster URL
-            if (config.rosterUrl && config.rosterUrl !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+            // Auto-load data
+            if (config.rosterUrl) {
                 refreshData();
             }
             
@@ -1786,8 +1787,8 @@
         // ==========================================
         async function refreshData() {
             const config = getConfig();
-            if (!config.rosterUrl || config.rosterUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
-                alert('Please configure your roster URL in Settings first.');
+            if (!config.rosterUrl) {
+                alert('Roster URL not configured. Check settings.');
                 showPage('settings');
                 return;
             }
@@ -1947,7 +1948,7 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
             
             // Also save to Google Sheet for persistence
-            if (!config.rosterUrl || config.rosterUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+            if (!config.rosterUrl || false) {
                 alert('Discord ID mapping saved locally only.\nConfigure roster URL to sync to Google Sheet.');
                 btn.disabled = false;
                 btn.textContent = originalText;
@@ -2326,7 +2327,7 @@
                 return;
             }
             
-            if (!config.rosterUrl || config.rosterUrl === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+            if (!config.rosterUrl || false) {
                 showStatus('Google Apps Script URL not configured. Needed for API proxy.', 'error');
                 return;
             }

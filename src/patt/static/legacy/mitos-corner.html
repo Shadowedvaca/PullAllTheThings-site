@@ -473,9 +473,10 @@
 
     <script>
         // ===========================================
-        // CONFIGURATION
+        // CONFIGURATION (Phase 5 — now uses REST API)
         // ===========================================
-        let CONFIG = null;
+        const MITO_API = '/api/v1/guild/mito';
+        // quotesData and titlesData are arrays of {id, quote/title}
         let quotesData = [];
         let titlesData = [];
 
@@ -483,16 +484,6 @@
         // INITIALIZATION
         // ===========================================
         async function init() {
-            // Load config
-            try {
-                const response = await fetch('patt-config.json');
-                if (!response.ok) throw new Error('Config not found');
-                CONFIG = await response.json();
-            } catch (error) {
-                showStatus('Could not load config. Make sure patt-config.json exists!', 'error');
-                return;
-            }
-
             // Load data
             await loadData();
 
@@ -539,12 +530,12 @@
         // ===========================================
         async function loadData() {
             try {
-                const response = await fetch(CONFIG.scriptUrl);
+                const response = await fetch(MITO_API);
                 const data = await response.json();
 
-                if (data.success) {
-                    quotesData = data.mitoQuotes || [];
-                    titlesData = data.mitoTitles || [];
+                if (data.ok) {
+                    quotesData = data.data.quotes || [];
+                    titlesData = data.data.titles || [];
                 }
 
                 renderQuotes();
@@ -561,22 +552,22 @@
         // ===========================================
         function renderQuotes() {
             const container = document.getElementById('quotesList');
-            
+
             if (quotesData.length === 0) {
                 container.innerHTML = '<div class="empty-state"><div class="emoji">📜</div>No quotes yet. Add your first legendary quote!</div>';
                 return;
             }
 
-            container.innerHTML = quotesData.map((quote, i) => `
-                <div class="item" data-index="${i}">
+            container.innerHTML = quotesData.map((item, i) => `
+                <div class="item" data-id="${item.id}">
                     <div class="item-number">${i + 1}</div>
-                    <div class="item-content">${escapeHtml(quote)}</div>
-                    <input type="text" class="edit-input" style="display:none" value="${escapeHtml(quote)}">
+                    <div class="item-content">${escapeHtml(item.quote)}</div>
+                    <input type="text" class="edit-input" style="display:none" value="${escapeHtml(item.quote)}">
                     <div class="item-actions">
-                        <button class="item-btn edit" onclick="editQuote(${i})" title="Edit">✏️</button>
-                        <button class="item-btn save" style="display:none" onclick="saveQuote(${i})" title="Save">💾</button>
-                        <button class="item-btn cancel" style="display:none" onclick="cancelEdit(${i}, 'quote')" title="Cancel">❌</button>
-                        <button class="item-btn delete" onclick="deleteQuote(${i})" title="Delete">🗑️</button>
+                        <button class="item-btn edit" onclick="editQuote(${item.id})" title="Edit">✏️</button>
+                        <button class="item-btn save" style="display:none" onclick="saveQuote(${item.id})" title="Save">💾</button>
+                        <button class="item-btn cancel" style="display:none" onclick="cancelEdit(${item.id}, 'quote')" title="Cancel">❌</button>
+                        <button class="item-btn delete" onclick="deleteQuote(${item.id})" title="Delete">🗑️</button>
                     </div>
                 </div>
             `).join('');
@@ -584,22 +575,22 @@
 
         function renderTitles() {
             const container = document.getElementById('titlesList');
-            
+
             if (titlesData.length === 0) {
                 container.innerHTML = '<div class="empty-state"><div class="emoji">🏆</div>No titles yet. What should people call you?</div>';
                 return;
             }
 
-            container.innerHTML = titlesData.map((title, i) => `
-                <div class="item" data-index="${i}">
+            container.innerHTML = titlesData.map((item, i) => `
+                <div class="item" data-id="${item.id}">
                     <div class="item-number">${i + 1}</div>
-                    <div class="item-content">${escapeHtml(title)}</div>
-                    <input type="text" class="edit-input" style="display:none" value="${escapeHtml(title)}">
+                    <div class="item-content">${escapeHtml(item.title)}</div>
+                    <input type="text" class="edit-input" style="display:none" value="${escapeHtml(item.title)}">
                     <div class="item-actions">
-                        <button class="item-btn edit" onclick="editTitle(${i})" title="Edit">✏️</button>
-                        <button class="item-btn save" style="display:none" onclick="saveTitle(${i})" title="Save">💾</button>
-                        <button class="item-btn cancel" style="display:none" onclick="cancelEdit(${i}, 'title')" title="Cancel">❌</button>
-                        <button class="item-btn delete" onclick="deleteTitle(${i})" title="Delete">🗑️</button>
+                        <button class="item-btn edit" onclick="editTitle(${item.id})" title="Edit">✏️</button>
+                        <button class="item-btn save" style="display:none" onclick="saveTitle(${item.id})" title="Save">💾</button>
+                        <button class="item-btn cancel" style="display:none" onclick="cancelEdit(${item.id}, 'title')" title="Cancel">❌</button>
+                        <button class="item-btn delete" onclick="deleteTitle(${item.id})" title="Delete">🗑️</button>
                     </div>
                 </div>
             `).join('');
@@ -611,19 +602,22 @@
         async function addQuote() {
             const input = document.getElementById('newQuote');
             const text = input.value.trim();
-            
-            if (!text) {
-                showStatus('Type something first!', 'error');
-                return;
-            }
+
+            if (!text) { showStatus('Type something first!', 'error'); return; }
 
             const btn = document.getElementById('addQuoteBtn');
             btn.disabled = true;
             btn.textContent = 'Adding...';
 
             try {
-                await sendToSheet('addMitoQuote', { quote: text });
-                quotesData.push(text);
+                const res = await fetch(`${MITO_API}/quotes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ quote: text })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.detail || 'Server error');
+                quotesData.push(data.data);
                 renderQuotes();
                 input.value = '';
                 showStatus('Quote added! 🎉', 'success');
@@ -638,19 +632,22 @@
         async function addTitle() {
             const input = document.getElementById('newTitle');
             const text = input.value.trim();
-            
-            if (!text) {
-                showStatus('Type something first!', 'error');
-                return;
-            }
+
+            if (!text) { showStatus('Type something first!', 'error'); return; }
 
             const btn = document.getElementById('addTitleBtn');
             btn.disabled = true;
             btn.textContent = 'Adding...';
 
             try {
-                await sendToSheet('addMitoTitle', { title: text });
-                titlesData.push(text);
+                const res = await fetch(`${MITO_API}/titles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: text })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.detail || 'Server error');
+                titlesData.push(data.data);
                 renderTitles();
                 input.value = '';
                 showStatus('Title added! 🏆', 'success');
@@ -665,8 +662,8 @@
         // ===========================================
         // EDIT ITEMS
         // ===========================================
-        function editQuote(index) {
-            const item = document.querySelector(`#quotesList .item[data-index="${index}"]`);
+        function editQuote(id) {
+            const item = document.querySelector(`#quotesList .item[data-id="${id}"]`);
             item.classList.add('editing');
             item.querySelector('.item-content').style.display = 'none';
             item.querySelector('.edit-input').style.display = 'block';
@@ -676,8 +673,8 @@
             item.querySelector('.edit-input').focus();
         }
 
-        function editTitle(index) {
-            const item = document.querySelector(`#titlesList .item[data-index="${index}"]`);
+        function editTitle(id) {
+            const item = document.querySelector(`#titlesList .item[data-id="${id}"]`);
             item.classList.add('editing');
             item.querySelector('.item-content').style.display = 'none';
             item.querySelector('.edit-input').style.display = 'block';
@@ -687,18 +684,21 @@
             item.querySelector('.edit-input').focus();
         }
 
-        async function saveQuote(index) {
-            const item = document.querySelector(`#quotesList .item[data-index="${index}"]`);
+        async function saveQuote(id) {
+            const item = document.querySelector(`#quotesList .item[data-id="${id}"]`);
             const newText = item.querySelector('.edit-input').value.trim();
-            
-            if (!newText) {
-                showStatus('Quote cannot be empty!', 'error');
-                return;
-            }
+            if (!newText) { showStatus('Quote cannot be empty!', 'error'); return; }
 
             try {
-                await sendToSheet('updateMitoQuote', { index: index, quote: newText });
-                quotesData[index] = newText;
+                const res = await fetch(`${MITO_API}/quotes/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ quote: newText })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.detail || 'Server error');
+                const idx = quotesData.findIndex(q => q.id === id);
+                if (idx !== -1) quotesData[idx].quote = newText;
                 renderQuotes();
                 showStatus('Quote updated! ✨', 'success');
             } catch (error) {
@@ -706,18 +706,21 @@
             }
         }
 
-        async function saveTitle(index) {
-            const item = document.querySelector(`#titlesList .item[data-index="${index}"]`);
+        async function saveTitle(id) {
+            const item = document.querySelector(`#titlesList .item[data-id="${id}"]`);
             const newText = item.querySelector('.edit-input').value.trim();
-            
-            if (!newText) {
-                showStatus('Title cannot be empty!', 'error');
-                return;
-            }
+            if (!newText) { showStatus('Title cannot be empty!', 'error'); return; }
 
             try {
-                await sendToSheet('updateMitoTitle', { index: index, title: newText });
-                titlesData[index] = newText;
+                const res = await fetch(`${MITO_API}/titles/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: newText })
+                });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.detail || 'Server error');
+                const idx = titlesData.findIndex(t => t.id === id);
+                if (idx !== -1) titlesData[idx].title = newText;
                 renderTitles();
                 showStatus('Title updated! ✨', 'success');
             } catch (error) {
@@ -725,7 +728,7 @@
             }
         }
 
-        function cancelEdit(index, type) {
+        function cancelEdit(id, type) {
             if (type === 'quote') renderQuotes();
             else renderTitles();
         }
@@ -733,12 +736,14 @@
         // ===========================================
         // DELETE ITEMS
         // ===========================================
-        async function deleteQuote(index) {
+        async function deleteQuote(id) {
             if (!confirm('Delete this quote? This cannot be undone!')) return;
 
             try {
-                await sendToSheet('deleteMitoQuote', { index: index });
-                quotesData.splice(index, 1);
+                const res = await fetch(`${MITO_API}/quotes/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.detail || 'Server error');
+                quotesData = quotesData.filter(q => q.id !== id);
                 renderQuotes();
                 showStatus('Quote deleted! 🗑️', 'success');
             } catch (error) {
@@ -746,12 +751,14 @@
             }
         }
 
-        async function deleteTitle(index) {
+        async function deleteTitle(id) {
             if (!confirm('Delete this title? This cannot be undone!')) return;
 
             try {
-                await sendToSheet('deleteMitoTitle', { index: index });
-                titlesData.splice(index, 1);
+                const res = await fetch(`${MITO_API}/titles/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (!data.ok) throw new Error(data.detail || 'Server error');
+                titlesData = titlesData.filter(t => t.id !== id);
                 renderTitles();
                 showStatus('Title deleted! 🗑️', 'success');
             } catch (error) {
@@ -767,15 +774,15 @@
             const titleEl = document.getElementById('previewTitle');
 
             if (quotesData.length > 0) {
-                const randomQuote = quotesData[Math.floor(Math.random() * quotesData.length)];
-                quoteEl.textContent = randomQuote;
+                const item = quotesData[Math.floor(Math.random() * quotesData.length)];
+                quoteEl.textContent = item.quote;
             } else {
                 quoteEl.textContent = 'No quotes yet. Add some!';
             }
 
             if (titlesData.length > 0) {
-                const randomTitle = titlesData[Math.floor(Math.random() * titlesData.length)];
-                titleEl.textContent = randomTitle;
+                const item = titlesData[Math.floor(Math.random() * titlesData.length)];
+                titleEl.textContent = item.title;
             } else {
                 titleEl.textContent = 'Healer Extraordinaire';
             }
@@ -784,17 +791,6 @@
         // ===========================================
         // HELPERS
         // ===========================================
-        async function sendToSheet(action, data) {
-            const response = await fetch(CONFIG.scriptUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, ...data })
-            });
-            // no-cors means we can't read the response, but it should work
-            return true;
-        }
-
         function showStatus(message, type) {
             const el = document.getElementById('statusMessage');
             el.textContent = message;
