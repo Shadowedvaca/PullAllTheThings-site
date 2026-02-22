@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import asyncpg
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -50,9 +51,51 @@ def create_app() -> FastAPI:
         else:
             logger.info("No DISCORD_BOT_TOKEN — bot not started")
 
+        # Set up asyncpg pool for guild_sync (raw SQL, separate from SQLAlchemy)
+        # Converts postgresql+asyncpg:// DSN to plain postgresql:// for asyncpg
+        raw_dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
+        try:
+            guild_sync_pool = await asyncpg.create_pool(raw_dsn, min_size=2, max_size=10)
+            app.state.guild_sync_pool = guild_sync_pool
+            logger.info("Guild sync asyncpg pool created")
+        except Exception as exc:
+            logger.warning("Guild sync pool not created (DB may not be available): %s", exc)
+            guild_sync_pool = None
+            app.state.guild_sync_pool = None
+
+        # Start guild sync scheduler (skipped if Blizzard creds or Discord bot missing)
+        guild_scheduler = None
+        if (
+            guild_sync_pool
+            and settings.blizzard_client_id
+            and settings.blizzard_client_secret
+            and settings.discord_bot_token
+            and settings.patt_audit_channel_id
+        ):
+            from sv_common.guild_sync.scheduler import GuildSyncScheduler
+            from sv_common.discord.bot import get_bot
+            discord_bot = get_bot()
+            guild_scheduler = GuildSyncScheduler(
+                db_pool=guild_sync_pool,
+                discord_bot=discord_bot,
+                audit_channel_id=int(settings.patt_audit_channel_id),
+            )
+            await guild_scheduler.start()
+            app.state.guild_sync_scheduler = guild_scheduler
+            logger.info("Guild sync scheduler started")
+        else:
+            app.state.guild_sync_scheduler = None
+            logger.info("Guild sync scheduler skipped (missing credentials or audit channel)")
+
         yield
 
         # Graceful shutdown
+        if guild_scheduler is not None:
+            await guild_scheduler.stop()
+
+        if guild_sync_pool is not None:
+            await guild_sync_pool.close()
+
         if bot_task is not None:
             from sv_common.discord.bot import stop_bot
             await stop_bot()
@@ -76,11 +119,14 @@ def create_app() -> FastAPI:
     from patt.api.admin_routes import router as admin_router
     from patt.api.guild_routes import router as guild_router
     from patt.api.auth_routes import router as auth_router
+    from sv_common.guild_sync.api.routes import guild_sync_router, identity_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
     app.include_router(admin_router)
     app.include_router(guild_router)
+    app.include_router(guild_sync_router)
+    app.include_router(identity_router)
 
     return app
 

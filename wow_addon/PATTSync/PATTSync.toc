@@ -1,0 +1,9 @@
+## Interface: 110100
+## Title: PATTSync - Guild Roster Exporter
+## Notes: Exports guild roster data for Pull All The Things guild management tools
+## Author: Trog
+## Version: 1.0.0
+## SavedVariables: PATTSyncDB
+## DefaultState: enabled
+
+PATTSync.lua

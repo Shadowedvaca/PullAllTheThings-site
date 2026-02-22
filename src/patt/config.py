@@ -17,6 +17,18 @@ class Settings(BaseSettings):
     app_port: int = 8100
     app_host: str = "0.0.0.0"
 
+    # Blizzard API (Phase 2.5)
+    blizzard_client_id: str = ""
+    blizzard_client_secret: str = ""
+
+    # Guild sync config (Phase 2.5)
+    patt_guild_realm_slug: str = "senjin"
+    patt_guild_name_slug: str = "pull-all-the-things"
+    patt_audit_channel_id: str = ""
+
+    # Companion app API key (Phase 2.5)
+    patt_api_key: str = ""
+
 
 _settings: Settings | None = None
 

@@ -4,6 +4,7 @@ import os
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
+import asyncpg
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
@@ -49,6 +50,7 @@ async def test_engine():
     async with engine.begin() as conn:
         await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS common"))
         await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS patt"))
+        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS guild_identity"))
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
@@ -157,3 +159,22 @@ def mock_discord_bot():
     bot.sent_dms = []
     bot.sent_messages = []
     return bot
+
+
+@pytest_asyncio.fixture(scope="session")
+async def guild_sync_pool(test_engine):
+    """
+    Asyncpg connection pool for guild_identity tests.
+
+    Depends on test_engine to ensure the schema is already created.
+    Uses a raw asyncpg DSN (no SQLAlchemy dialect prefix).
+    """
+    raw_dsn = TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+    try:
+        pool = await asyncpg.create_pool(raw_dsn, min_size=1, max_size=5)
+    except Exception as exc:
+        pytest.skip(f"asyncpg pool unavailable for guild_sync tests: {exc}")
+
+    yield pool
+
+    await pool.close()

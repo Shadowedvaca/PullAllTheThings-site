@@ -33,3 +33,8 @@ async def stop_bot() -> None:
     """Gracefully close the bot connection."""
     if not bot.is_closed():
         await bot.close()
+
+
+def get_bot() -> commands.Bot:
+    """Return the global bot instance."""
+    return bot

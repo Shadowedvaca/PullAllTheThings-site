@@ -2,13 +2,17 @@
 
 common schema: guild_ranks, users, guild_members, characters, discord_config, invite_codes
 patt schema: campaigns, campaign_entries, votes, campaign_results, contest_agent_log
+guild_identity schema: persons, wow_characters, discord_members, identity_links, audit_issues, sync_log
 """
 
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
+    CheckConstraint,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -17,7 +21,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
 
 
 class Base(DeclarativeBase):
@@ -308,3 +312,185 @@ class ContestAgentLog(Base):
     )
 
     campaign: Mapped[Campaign] = relationship(back_populates="agent_log")
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema
+# ---------------------------------------------------------------------------
+
+
+class GuildIdentityPerson(Base):
+    __tablename__ = "persons"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    wow_characters: Mapped[list["WowCharacter"]] = relationship(back_populates="person")
+    discord_members: Mapped[list["GuildIdentityDiscordMember"]] = relationship(back_populates="person")
+    identity_links: Mapped[list["IdentityLink"]] = relationship(back_populates="person")
+
+
+class WowCharacter(Base):
+    __tablename__ = "wow_characters"
+    __table_args__ = (
+        UniqueConstraint("character_name", "realm_slug"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    person_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.persons.id", ondelete="SET NULL")
+    )
+    character_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    realm_slug: Mapped[str] = mapped_column(String(50), nullable=False)
+    realm_name: Mapped[Optional[str]] = mapped_column(String(100))
+    character_class: Mapped[Optional[str]] = mapped_column(String(30))
+    active_spec: Mapped[Optional[str]] = mapped_column(String(50))
+    level: Mapped[Optional[int]] = mapped_column(Integer)
+    item_level: Mapped[Optional[int]] = mapped_column(Integer)
+    guild_rank: Mapped[Optional[int]] = mapped_column(Integer)
+    guild_rank_name: Mapped[Optional[str]] = mapped_column(String(50))
+    last_login_timestamp: Mapped[Optional[int]] = mapped_column(BigInteger)
+    guild_note: Mapped[Optional[str]] = mapped_column(Text)
+    officer_note: Mapped[Optional[str]] = mapped_column(Text)
+    addon_last_seen: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    is_main: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    role_category: Mapped[Optional[str]] = mapped_column(String(10))
+    blizzard_last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    addon_last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    first_seen: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    removed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+    person: Mapped[Optional[GuildIdentityPerson]] = relationship(back_populates="wow_characters")
+    identity_link: Mapped[Optional["IdentityLink"]] = relationship(
+        back_populates="wow_character", foreign_keys="IdentityLink.wow_character_id"
+    )
+
+
+class GuildIdentityDiscordMember(Base):
+    __tablename__ = "discord_members"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    person_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.persons.id", ondelete="SET NULL")
+    )
+    discord_id: Mapped[str] = mapped_column(String(25), nullable=False, unique=True)
+    username: Mapped[str] = mapped_column(String(50), nullable=False)
+    display_name: Mapped[Optional[str]] = mapped_column(String(50))
+    highest_guild_role: Mapped[Optional[str]] = mapped_column(String(30))
+    all_guild_roles: Mapped[Optional[list]] = mapped_column(ARRAY(Text))
+    joined_server_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    is_present: Mapped[bool] = mapped_column(Boolean, server_default="true")
+    removed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    first_seen: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    person: Mapped[Optional[GuildIdentityPerson]] = relationship(back_populates="discord_members")
+    identity_link: Mapped[Optional["IdentityLink"]] = relationship(
+        back_populates="discord_member", foreign_keys="IdentityLink.discord_member_id"
+    )
+
+
+class IdentityLink(Base):
+    __tablename__ = "identity_links"
+    __table_args__ = (
+        CheckConstraint(
+            "wow_character_id IS NOT NULL OR discord_member_id IS NOT NULL",
+            name="identity_links_target_not_null",
+        ),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    person_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.persons.id", ondelete="CASCADE"), nullable=False
+    )
+    wow_character_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"), unique=True
+    )
+    discord_member_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.discord_members.id", ondelete="CASCADE"), unique=True
+    )
+    link_source: Mapped[str] = mapped_column(String(30), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(10), nullable=False, server_default="high")
+    is_confirmed: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    confirmed_by: Mapped[Optional[str]] = mapped_column(String(50))
+
+    person: Mapped[GuildIdentityPerson] = relationship(back_populates="identity_links")
+    wow_character: Mapped[Optional[WowCharacter]] = relationship(
+        back_populates="identity_link", foreign_keys=[wow_character_id]
+    )
+    discord_member: Mapped[Optional[GuildIdentityDiscordMember]] = relationship(
+        back_populates="identity_link", foreign_keys=[discord_member_id]
+    )
+
+
+class AuditIssue(Base):
+    __tablename__ = "audit_issues"
+    __table_args__ = (
+        UniqueConstraint("issue_hash", "resolved_at", name="uq_audit_issue_hash_resolved"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    issue_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False, server_default="info")
+    wow_character_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE")
+    )
+    discord_member_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.discord_members.id", ondelete="CASCADE")
+    )
+    person_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.persons.id", ondelete="SET NULL")
+    )
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[Optional[dict]] = mapped_column(JSONB)
+    first_detected: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    last_detected: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    notified_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(50))
+    resolution_note: Mapped[Optional[str]] = mapped_column(Text)
+    issue_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class GuildSyncLog(Base):
+    __tablename__ = "sync_log"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(30), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    characters_found: Mapped[Optional[int]] = mapped_column(Integer)
+    characters_updated: Mapped[Optional[int]] = mapped_column(Integer)
+    characters_new: Mapped[Optional[int]] = mapped_column(Integer)
+    characters_removed: Mapped[Optional[int]] = mapped_column(Integer)
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    duration_seconds: Mapped[Optional[float]] = mapped_column(Float)
+    started_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
