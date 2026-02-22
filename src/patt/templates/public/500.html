@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Server Error — Pull All The Things{% endblock %}
+{% block content %}
+<div class="state-panel" style="max-width:600px;margin:4rem auto;">
+    <div style="font-size:3rem;margin-bottom:1rem;">⚔️</div>
+    <h1 class="state-panel__title">Something broke. Blame Mito.</h1>
+    <p class="state-panel__text">
+        The server encountered an unexpected error. Don't worry — our officers are
+        on it (probably). If this keeps happening, let Trog know in Discord.
+    </p>
+    <div style="margin-top:1.5rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+        <a href="/" class="btn btn-primary">Go Home</a>
+        <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+    </div>
+    {% if error_id %}
+    <p style="margin-top:2rem;font-size:0.75rem;color:var(--color-text-muted);font-family:var(--font-mono);">
+        Error ID: {{ error_id }}
+    </p>
+    {% endif %}
+</div>
+{% endblock %}

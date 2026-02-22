@@ -910,6 +910,22 @@ textarea.form-control {
     height: 100%;
     background: var(--color-accent);
     border-radius: 2px;
+    /* Animate from 0 on page load */
+    animation: score-bar-grow 0.7s ease-out both;
+}
+@keyframes score-bar-grow {
+    from { width: 0 !important; }
+}
+
+/* Medal badges for top 3 in results */
+.medal-1::before { content: "🥇 "; }
+.medal-2::before { content: "🥈 "; }
+.medal-3::before { content: "🥉 "; }
+
+/* Result item fade-in (used via inline animation-delay per row) */
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Coming soon / states */

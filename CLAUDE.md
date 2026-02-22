@@ -467,16 +467,10 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 > **UPDATE THIS SECTION AT THE END OF EVERY PHASE**
 
 ### Completed Phases
-- Phase 0: Server infrastructure, project scaffolding, testing framework
-- Phase 1: Common services — identity & guild data model
-- Phase 2: Authentication & Discord Bot
-- Phase 3: Campaign Engine & Voting API
-- Phase 4: Web UI — vote pages, results, admin pages, auth pages, landing page
-- Phase 5: Google Sheets migration, legacy HTML moved, new API endpoints
-- Phase 6: Contest Agent — Discord milestone announcements during live campaigns
+- Phase 0 through 7: Platform complete
 
 ### Current Phase
-- Phase 7: End-to-end regression suite
+- All phases done. Platform is live and ready.
 
 ### What Exists
 - sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
@@ -531,13 +525,27 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
   - Personality reference: `data/contest_agent_personality.md`
   - Tests: `tests/unit/test_contest_agent.py` (36 tests), `tests/integration/test_contest_agent_flow.py`
   - Background task started in `app.py` lifespan alongside campaign_checker
+- **Phase 7 Polish & Launch:**
+  - End-to-end regression suite: `tests/regression/test_full_platform.py` — covers full auth+campaign+vote+results+agent flow
+  - Art vote setup script: `scripts/setup_art_vote.py` — run once with Drive file IDs to configure the campaign
+  - Error pages: `src/patt/templates/public/404.html`, `500.html` — styled with PATT theme
+  - FastAPI exception handlers for 404 + 500 in `app.py`
+  - Security middleware: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy headers (`SecurityHeadersMiddleware` in `app.py`)
+  - Rate limiting: login endpoint rate-limited to 10 attempts/60s per IP (in-memory, `app.py`)
+  - Secure cookie flag: `httponly=True, secure=True` (production), `samesite="lax"` — in `auth_pages.py`
+  - Visual polish: score bars animate on page load (CSS `@keyframes score-bar-grow`), result rows fade-in with stagger, medal emojis (🥇🥈🥉) in results panel
+  - Operations guide: `docs/OPERATIONS.md` — how Mike operates the platform independently
+
+### Ready to Launch
+- Salt All The Things Profile Pic Contest: run `scripts/setup_art_vote.py` with Drive file IDs to configure
+- Mike activates the campaign when ready
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config at deploy/nginx/)
 - PostgreSQL, FastAPI (uvicorn port 8100), systemd patt.service — all running
 - All migrations applied through 0004 (agent_enabled, agent_chattiness on campaigns)
 - Google Sheets data fully migrated (20 members, 30 chars, 21 Mito quotes, 13 Mito titles)
-- Test framework operational — `pytest tests/unit/ -v` passes 228/252 (24 skip when no DB)
+- Test framework operational — `pytest tests/unit/ -v` passes 228/252 (24 skip when no DB); regression suite at `tests/regression/` requires live DB
 - **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check

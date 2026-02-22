@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Not Found — Pull All The Things{% endblock %}
 {% block content %}
-<div class="state-panel">
-    <h1 class="state-panel__title">Page Not Found</h1>
-    <p class="state-panel__text">{{ message or "The page you're looking for doesn't exist." }}</p>
-    <a href="/" class="btn btn-primary">Go Home</a>
+<div class="state-panel" style="max-width:600px;margin:4rem auto;">
+    <div style="font-size:3rem;margin-bottom:1rem;">🗺️</div>
+    <h1 class="state-panel__title">You've wandered into uncharted territory...</h1>
+    <p class="state-panel__text">
+        {{ message or "The page you're looking for doesn't exist or has moved." }}
+    </p>
+    <div style="margin-top:1.5rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+        <a href="/" class="btn btn-primary">Go Home</a>
+        <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+    </div>
 </div>
 {% endblock %}

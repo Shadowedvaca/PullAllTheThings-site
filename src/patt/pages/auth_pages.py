@@ -20,10 +20,13 @@ COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
 
 
 def _set_auth_cookie(response: RedirectResponse, token: str) -> None:
+    from patt.config import get_settings
+    settings = get_settings()
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
+        secure=settings.app_env == "production",
         samesite="lax",
         max_age=COOKIE_MAX_AGE,
         path="/",

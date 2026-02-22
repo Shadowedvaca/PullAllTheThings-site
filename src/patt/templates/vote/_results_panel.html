@@ -23,11 +23,15 @@
     {% set max_score = results[0].weighted_score if results[0].weighted_score > 0 else 1 %}
     <div class="results-list">
         {% for r in results %}
-        <div class="result-item {% if r.final_rank == 1 %}result-item--winner{% endif %}">
+        <div class="result-item {% if r.final_rank == 1 %}result-item--winner{% endif %}"
+             style="animation: fade-in 0.4s ease both; animation-delay: {{ loop.index0 * 0.06 }}s;">
             <div class="result-item__rank-badge
                          {% if r.final_rank <= 3 %}result-item__rank-badge--{{ r.final_rank }}
                          {% else %}result-item__rank-badge--other{% endif %}">
-                #{{ r.final_rank }}
+                {% if r.final_rank == 1 %}🥇
+                {% elif r.final_rank == 2 %}🥈
+                {% elif r.final_rank == 3 %}🥉
+                {% else %}#{{ r.final_rank }}{% endif %}
             </div>
 
             {% if r.entry.image_url %}

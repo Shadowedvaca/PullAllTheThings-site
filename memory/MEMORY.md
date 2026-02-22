@@ -12,6 +12,7 @@
 - Phase 4 complete: page routes (auth, vote, admin, public), Jinja2 templates, cookie auth, JS files, integration tests (test_page_rendering.py)
 - Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass; data migrated from Sheets on server
 - Phase 6 complete: contest agent Discord updates; migration 0004 (agent_enabled, agent_chattiness on campaigns); contest_agent.py service; channels.py Discord posting module; admin form updated; 36 unit tests + integration tests; tests 228/252 pass (24 skip DB-only)
+- Phase 7 complete: regression suite (tests/regression/test_full_platform.py); art vote setup script (scripts/setup_art_vote.py); 500.html error page; 404.html enhanced; SecurityHeadersMiddleware + login rate limiting in app.py; secure cookie flag (production); CSS animations for score bars + result rows; docs/OPERATIONS.md; CLAUDE.md updated
 - CI/CD live: .github/workflows/deploy.yml auto-deploys on push to main (SSH key = DEPLOY_SSH_KEY GitHub secret)
 
 ## Key File Locations

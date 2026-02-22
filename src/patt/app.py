@@ -2,13 +2,18 @@
 
 import asyncio
 import logging
+import time
+import uuid
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Callable
 
 import asyncpg
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from patt.config import get_settings
 from sv_common.db.engine import get_engine, get_session_factory
@@ -25,6 +30,59 @@ logging.getLogger("discord.gateway").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# ---------------------------------------------------------------------------
+# Rate limiter (in-process, simple sliding window)
+# ---------------------------------------------------------------------------
+
+# Maps IP → list of timestamps of recent requests
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+_RATE_LIMIT_MAX = 10       # max attempts
+_RATE_LIMIT_WINDOW = 60    # seconds
+
+
+def _check_rate_limit(ip: str) -> bool:
+    """Return True if the request is allowed, False if rate-limited."""
+    now = time.monotonic()
+    window_start = now - _RATE_LIMIT_WINDOW
+    hits = _rate_limit_store[ip]
+    # Remove entries outside the window
+    hits[:] = [t for t in hits if t >= window_start]
+    if len(hits) >= _RATE_LIMIT_MAX:
+        return False
+    hits.append(now)
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Security headers middleware
+# ---------------------------------------------------------------------------
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Adds standard security headers to every response."""
+
+    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            (
+                "default-src 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com; "
+                "img-src 'self' https://drive.google.com data:; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none';"
+            ),
+        )
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+        )
+        return response
 LEGACY_DIR = Path(__file__).parent / "static" / "legacy"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -152,6 +210,65 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    # Security headers on every response
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    # ---------------------------------------------------------------------------
+    # Exception handlers
+    # ---------------------------------------------------------------------------
+
+    from patt.templating import templates as _templates
+
+    @app.exception_handler(404)
+    async def not_found_handler(request: Request, exc):
+        # Only render HTML for browser requests; return JSON for API paths
+        if request.url.path.startswith("/api/"):
+            return Response(
+                content='{"ok":false,"error":"Not found"}',
+                status_code=404,
+                media_type="application/json",
+            )
+        return _templates.TemplateResponse(
+            "public/404.html",
+            {"request": request, "current_member": None, "active_campaigns": []},
+            status_code=404,
+        )
+
+    @app.exception_handler(500)
+    async def server_error_handler(request: Request, exc):
+        error_id = str(uuid.uuid4())[:8]
+        logger.error("Server error %s on %s: %s", error_id, request.url.path, exc)
+        if request.url.path.startswith("/api/"):
+            return Response(
+                content=f'{{"ok":false,"error":"Internal server error","error_id":"{error_id}"}}',
+                status_code=500,
+                media_type="application/json",
+            )
+        return _templates.TemplateResponse(
+            "public/500.html",
+            {
+                "request": request,
+                "current_member": None,
+                "active_campaigns": [],
+                "error_id": error_id,
+            },
+            status_code=500,
+        )
+
+    # Rate limiting for login endpoint
+    @app.middleware("http")
+    async def rate_limit_login(request: Request, call_next: Callable) -> Response:
+        if request.url.path == "/api/v1/auth/login" and request.method == "POST":
+            client_ip = request.client.host if request.client else "unknown"
+            if not _check_rate_limit(client_ip):
+                logger.warning("Rate limit hit for IP %s on login", client_ip)
+                return Response(
+                    content='{"ok":false,"error":"Too many login attempts. Try again in a minute."}',
+                    status_code=429,
+                    media_type="application/json",
+                )
+        return await call_next(request)
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
