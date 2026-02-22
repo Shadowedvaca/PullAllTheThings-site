@@ -12,6 +12,14 @@ from patt.config import get_settings
 from sv_common.db.engine import get_engine, get_session_factory
 from sv_common.db.seed import seed_ranks
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
+# Surface discord.py logs at WARNING and above in production
+logging.getLogger("discord").setLevel(logging.WARNING)
+logging.getLogger("discord.gateway").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
