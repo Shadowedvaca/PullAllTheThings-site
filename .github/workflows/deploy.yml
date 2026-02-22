@@ -34,6 +34,6 @@ jobs:
 
             echo "==> Verifying health..."
             sleep 3
-            curl -sf http://localhost:8100/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('status')=='ok' else 1)"
+            curl -sf http://localhost:8100/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ok') else 1)"
 
             echo "==> Deploy complete!"
