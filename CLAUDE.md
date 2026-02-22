@@ -471,9 +471,10 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 1: Common services — identity & guild data model
 - Phase 2: Authentication & Discord Bot
 - Phase 3: Campaign Engine & Voting API
+- Phase 4: Web UI — vote pages, results, admin pages, auth pages, landing page
 
 ### Current Phase
-- Phase 4: Web UI (Jinja2 templates for vote pages, admin pages)
+- Phase 5: Legacy migration and DNS cutover
 
 ### What Exists
 - sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
@@ -481,18 +482,25 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - sv_common.discord package: bot client, role sync, DM dispatch (`src/sv_common/discord/`)
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Auth middleware: `get_current_member()`, `require_rank(level)` deps in `src/patt/deps.py`
+- Cookie-based auth for page routes: `get_page_member()`, `require_page_rank(level)` in deps.py
 - Admin API: `/api/v1/admin/*` — all routes protected (Officer+ rank required)
-- Admin API: `POST /api/v1/admin/members/{id}/send-invite` — generates code + sends Discord DM
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster` (public, no auth required)
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
-- Bot setup docs: `docs/DISCORD-BOT-SETUP.md`
 - Campaign service: `src/patt/services/campaign_service.py` — full lifecycle (draft→live→closed)
 - Vote service: `src/patt/services/vote_service.py` — cast votes, validate, calculate results
 - Campaign API (admin): `POST/PATCH /api/v1/admin/campaigns`, entries, activate, close, stats
 - Campaign API (vote): `POST /api/v1/campaigns/{id}/vote`, `GET /api/v1/campaigns/{id}/my-vote`
 - Campaign API (public): `GET /api/v1/campaigns`, `/api/v1/campaigns/{id}`, `/results`, `/results/live`
 - Background task: campaign status checker (auto-activate, auto-close, early-close) every 60s
-- Visibility rules: min_rank_to_view enforced; voted members see live standings
+- **Phase 4 Web UI (page routes + templates):**
+  - Page routes: `src/patt/pages/` — auth_pages.py, vote_pages.py, admin_pages.py, public_pages.py
+  - Templates: `src/patt/templates/` — auth/login.html, auth/register.html, vote/campaign.html,
+    vote/_results_panel.html, admin/campaigns.html, admin/campaign_edit.html, admin/roster.html,
+    public/index.html, public/404.html, public/403.html
+  - JS: `src/patt/static/js/` — vote-interaction.js, countdown.js, admin-forms.js
+  - Cookie auth: HTTP-only `patt_token` cookie (30-day), set on login/register, cleared on logout
+  - Shared Jinja2 instance: `src/patt/templating.py`
+  - Integration tests: `tests/integration/test_page_rendering.py`
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config ready at deploy/nginx/)

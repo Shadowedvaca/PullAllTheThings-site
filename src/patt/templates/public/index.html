@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Pull All The Things — WoW Guild{% endblock %}
+
+{% block content %}
+<div class="landing-hero">
+    <h1 class="landing-hero__title">Pull All The Things</h1>
+    <p class="landing-hero__tagline">A World of Warcraft guild &mdash; Real life first, zero toxicity</p>
+
+    <div class="landing-hero__image-wrap">
+        <img class="landing-hero__image"
+             src="https://drive.google.com/uc?id=1jqR_dMhV-7tKqxbNNJPdGwpS5I5-V4Hg&export=view"
+             alt="Pull All The Things Guild"
+             loading="lazy"
+             onerror="this.style.display='none'">
+    </div>
+
+    {% if not current_member %}
+    <div>
+        <a href="/login" class="btn btn-primary btn-lg">Sign In</a>
+        <span class="text-muted" style="margin-left:1rem;font-size:0.9rem;">Have an invite code? <a href="/register">Register</a></span>
+    </div>
+    {% endif %}
+</div>
+
+<hr class="divider">
+
+{# Active campaigns #}
+{% if live_campaigns %}
+<section class="landing-campaigns">
+    <h2 class="landing-section-title">Active Votes</h2>
+    <div class="campaign-cards">
+        {% for c in live_campaigns %}
+        <div class="campaign-card">
+            <div class="campaign-card__title">{{ c.title }}</div>
+            {% if c.description %}
+                <div class="campaign-card__meta">{{ c.description[:100] }}{% if c.description|length > 100 %}…{% endif %}</div>
+            {% endif %}
+            <div class="campaign-card__meta">
+                {% if c.entries %}{{ c.entries|length }} entries{% endif %}
+                &bull; Ends in
+                <span class="countdown" data-end-ts="{{ (c.start_at.timestamp() + c.duration_hours * 3600)|int }}">…</span>
+            </div>
+            <div class="campaign-card__actions">
+                {% if current_member %}
+                    <a href="/vote/{{ c.id }}" class="btn btn-primary btn-sm">Vote Now</a>
+                {% else %}
+                    <a href="/login?next=/vote/{{ c.id }}" class="btn btn-secondary btn-sm">Login to Vote</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% elif current_member %}
+<section class="landing-campaigns">
+    <div class="empty-state">
+        <div class="empty-state__icon">🗳</div>
+        <div class="empty-state__text">No active campaigns right now. Check back soon!</div>
+    </div>
+</section>
+{% endif %}
+
+{# Recently closed campaigns #}
+{% if closed_campaigns %}
+<section class="landing-campaigns mt-3">
+    <h2 class="landing-section-title">Recent Results</h2>
+    <div class="campaign-cards">
+        {% for c in closed_campaigns %}
+        <div class="campaign-card">
+            <div class="campaign-card__title">{{ c.title }}</div>
+            <div class="campaign-card__meta">
+                <span class="badge badge-closed">Closed</span>
+            </div>
+            <div class="campaign-card__actions">
+                <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">View Results</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Guild info #}
+<hr class="divider">
+<section>
+    <h2 class="landing-section-title">About the Guild</h2>
+    <div class="card">
+        <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1.5rem;">
+            <div>
+                <h3 style="font-family:var(--font-display);color:var(--color-accent);font-size:1rem;margin-bottom:0.5rem;">Our Philosophy</h3>
+                <p class="text-muted" style="font-size:0.95rem;">
+                    Real life first. Zero toxicity. We raid together, we support each other,
+                    and we have fun along the way.
+                </p>
+            </div>
+            <div>
+                <h3 style="font-family:var(--font-display);color:var(--color-accent);font-size:1rem;margin-bottom:0.5rem;">Focus</h3>
+                <p class="text-muted" style="font-size:0.95rem;">
+                    Casual heroic raiding on Sen'jin. We clear content at a pace that works
+                    for adults with lives outside the game.
+                </p>
+            </div>
+            <div>
+                <h3 style="font-family:var(--font-display);color:var(--color-accent);font-size:1rem;margin-bottom:0.5rem;">Podcast</h3>
+                <p class="text-muted" style="font-size:0.95rem;">
+                    Listen to <em>Salt All The Things</em> — our companion podcast hosted by
+                    Trog &amp; Rocket.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/countdown.js"></script>
+{% endblock %}

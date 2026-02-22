@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}
+    {% if campaign %}Edit Campaign — {% else %}New Campaign — {% endif %}Admin — Pull All The Things
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__title">Admin</div>
+        <nav class="admin-nav">
+            <a href="/admin/campaigns" class="admin-nav-link active">Campaigns</a>
+            <a href="/admin/roster" class="admin-nav-link">Roster</a>
+        </nav>
+    </aside>
+
+    <div>
+        <div class="admin-header">
+            <h1 class="admin-title">
+                {% if campaign %}Edit: {{ campaign.title }}{% else %}New Campaign{% endif %}
+            </h1>
+            <a href="/admin/campaigns" class="btn btn-secondary btn-sm">← Back</a>
+        </div>
+
+        {% if error %}
+            <div class="flash-bar flash-bar--error">⚠ {{ error }}</div>
+        {% endif %}
+
+        {# Campaign settings form (only editable in draft) #}
+        {% if not campaign or campaign.status == 'draft' %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-title">Campaign Settings</span>
+            </div>
+            <div class="card-body">
+                <form class="form"
+                      method="post"
+                      action="{% if campaign %}/admin/campaigns/{{ campaign.id }}/edit{% else %}/admin/campaigns/new{% endif %}">
+
+                    <div class="form-row">
+                        <div class="form-group" style="grid-column:1/-1">
+                            <label class="form-label" for="title">Title <span class="required">*</span></label>
+                            <input class="form-control" type="text" id="title" name="title"
+                                   value="{{ campaign.title if campaign else form.title or '' }}"
+                                   placeholder="e.g. Guild Art Vote 2024" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description"
+                                  placeholder="Optional description for members">{{ campaign.description if campaign else form.description or '' }}</textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="min_rank_to_vote">Min Rank to Vote <span class="required">*</span></label>
+                            <select class="form-control" id="min_rank_to_vote" name="min_rank_to_vote" required>
+                                {% for rank in ranks %}
+                                <option value="{{ rank.level }}"
+                                    {% if campaign and campaign.min_rank_to_vote == rank.level %}selected
+                                    {% elif form.min_rank_to_vote == rank.level %}selected{% endif %}>
+                                    {{ rank.name }} (Level {{ rank.level }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="min_rank_to_view">Min Rank to View</label>
+                            <select class="form-control" id="min_rank_to_view" name="min_rank_to_view">
+                                <option value="">Public</option>
+                                {% for rank in ranks %}
+                                <option value="{{ rank.level }}"
+                                    {% if campaign and campaign.min_rank_to_view == rank.level %}selected{% endif %}>
+                                    {{ rank.name }} (Level {{ rank.level }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="start_at">Start Date/Time (UTC) <span class="required">*</span></label>
+                            <input class="form-control" type="datetime-local" id="start_at" name="start_at"
+                                   value="{{ campaign.start_at.strftime('%Y-%m-%dT%H:%M') if campaign and campaign.start_at else '' }}"
+                                   required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="duration_hours">Duration (hours) <span class="required">*</span></label>
+                            <input class="form-control" type="number" id="duration_hours" name="duration_hours"
+                                   value="{{ campaign.duration_hours if campaign else 168 }}"
+                                   min="1" max="8760" required>
+                            <div class="duration-presets mt-1">
+                                <button type="button" class="preset-btn" data-hours="24" data-target="duration_hours">24h</button>
+                                <button type="button" class="preset-btn" data-hours="48" data-target="duration_hours">48h</button>
+                                <button type="button" class="preset-btn" data-hours="168" data-target="duration_hours">1 week</button>
+                                <button type="button" class="preset-btn" data-hours="336" data-target="duration_hours">2 weeks</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="picks_per_voter">Picks Per Voter</label>
+                            <input class="form-control" type="number" id="picks_per_voter" name="picks_per_voter"
+                                   value="{{ campaign.picks_per_voter if campaign else 3 }}"
+                                   min="1" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="discord_channel_id">Discord Channel ID</label>
+                            <input class="form-control text-mono" type="text" id="discord_channel_id" name="discord_channel_id"
+                                   value="{{ campaign.discord_channel_id if campaign else '' }}"
+                                   placeholder="Discord channel snowflake ID">
+                        </div>
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" id="early_close_if_all_voted" name="early_close_if_all_voted"
+                               {% if not campaign or campaign.early_close_if_all_voted %}checked{% endif %}>
+                        <label for="early_close_if_all_voted">
+                            Close early when all eligible members have voted
+                        </label>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            {% if campaign %}Save Changes{% else %}Create Campaign{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        {# Non-draft campaign: show settings as read-only summary #}
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-title">Campaign Settings</span>
+                <span class="text-muted text-sm">Settings locked while {{ campaign.status }}</span>
+            </div>
+            <div class="card-body">
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;">
+                    <div><span class="text-muted text-sm">Min rank to vote</span><div>{{ campaign.min_rank_to_vote }}</div></div>
+                    <div><span class="text-muted text-sm">Min rank to view</span><div>{{ campaign.min_rank_to_view or 'Public' }}</div></div>
+                    <div><span class="text-muted text-sm">Start</span><div class="text-mono text-sm">{{ campaign.start_at.strftime('%Y-%m-%d %H:%M UTC') }}</div></div>
+                    <div><span class="text-muted text-sm">Duration</span><div>{{ campaign.duration_hours }}h</div></div>
+                    <div><span class="text-muted text-sm">Picks per voter</span><div>{{ campaign.picks_per_voter }}</div></div>
+                    <div><span class="text-muted text-sm">Early close</span><div>{{ 'Yes' if campaign.early_close_if_all_voted else 'No' }}</div></div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Campaign lifecycle actions #}
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-title">Actions</span>
+                <span class="badge badge-{{ campaign.status }}">{{ campaign.status }}</span>
+            </div>
+            <div class="card-body">
+                <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+                    {% if campaign and campaign.status == 'draft' %}
+                        <form method="post" action="/admin/campaigns/{{ campaign.id }}/activate"
+                              data-confirm="Activate this campaign? It will be visible to members immediately.">
+                            <button type="submit" class="btn btn-success">Activate Campaign</button>
+                        </form>
+                    {% elif campaign and campaign.status == 'live' %}
+                        {% if vote_stats %}
+                            <div class="text-sm text-muted">
+                                {{ vote_stats.total_voted }} / {{ vote_stats.total_eligible }} members voted
+                                ({{ vote_stats.percent_voted }}%)
+                            </div>
+                        {% endif %}
+                        <a href="/vote/{{ campaign.id }}" class="btn btn-secondary" target="_blank">View Live</a>
+                        <form method="post" action="/admin/campaigns/{{ campaign.id }}/close"
+                              data-confirm="Close this campaign? Results will be calculated immediately.">
+                            <button type="submit" class="btn btn-danger">Close Campaign</button>
+                        </form>
+                    {% elif campaign and campaign.status == 'closed' %}
+                        <a href="/vote/{{ campaign.id }}" class="btn btn-secondary" target="_blank">View Results</a>
+                        <span class="text-muted text-sm">Campaign is closed. Results are final.</span>
+                    {% elif not campaign %}
+                        <span class="text-muted text-sm">Save the campaign to see actions.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# Entry management (only for draft campaigns or to view existing) #}
+        {% if campaign %}
+        <div class="campaign-edit-layout">
+            <div>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Entries ({{ campaign.entries|length if campaign.entries else 0 }})</span>
+                    </div>
+                    <div class="card-body">
+                        {% if campaign.entries %}
+                        <div class="entries-list mb-2">
+                            {% for entry in campaign.entries|sort(attribute='sort_order') %}
+                            <div class="entry-row">
+                                {% if entry.image_url %}
+                                    <img class="entry-row__thumb" src="{{ entry.image_url }}" alt="{{ entry.name }}" loading="lazy">
+                                {% else %}
+                                    <div class="entry-row__thumb-placeholder">🖼</div>
+                                {% endif %}
+                                <div class="entry-row__info">
+                                    <div class="entry-row__name">{{ entry.name }}</div>
+                                    {% if entry.description %}
+                                        <div class="entry-row__meta">{{ entry.description[:80] }}</div>
+                                    {% endif %}
+                                    {% if entry.image_url %}
+                                        <div class="entry-row__meta text-mono">{{ entry.image_url[:60] }}{% if entry.image_url|length > 60 %}…{% endif %}</div>
+                                    {% endif %}
+                                </div>
+                                {% if campaign.status == 'draft' %}
+                                <form method="post"
+                                      action="/admin/campaigns/{{ campaign.id }}/entries/{{ entry.id }}/delete"
+                                      data-confirm="Remove this entry?">
+                                    <button type="submit" class="btn btn-danger btn-sm">×</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted text-sm mb-2">No entries yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if campaign.status == 'draft' %}
+            <div>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Add Entry</span>
+                    </div>
+                    <div class="card-body">
+                        <form class="form" method="post" action="/admin/campaigns/{{ campaign.id }}/entries">
+                            <div class="form-group">
+                                <label class="form-label" for="entry_name">Name <span class="required">*</span></label>
+                                <input class="form-control" type="text" id="entry_name" name="name"
+                                       placeholder="e.g. Trogmoon's Art" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="entry_description">Description</label>
+                                <input class="form-control" type="text" id="entry_description" name="description"
+                                       placeholder="Optional short description">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="entry_image_url">Image URL</label>
+                                <input class="form-control text-mono" type="url" id="entry_image_url" name="image_url"
+                                       placeholder="https://drive.google.com/uc?id=...">
+                                <span class="form-hint">Google Drive: Share → Copy link, replace with uc?id=FILE_ID&export=view</span>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="entry_member">Associated Member</label>
+                                <select class="form-control" id="entry_member" name="associated_member_id">
+                                    <option value="">— None —</option>
+                                    {% for m in all_members %}
+                                    <option value="{{ m.id }}">{{ m.display_name or m.discord_username }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="entry_sort_order">Sort Order</label>
+                                <input class="form-control" type="number" id="entry_sort_order" name="sort_order"
+                                       value="{{ (campaign.entries|length if campaign.entries else 0) }}" min="0">
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Add Entry</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin-forms.js"></script>
+{% endblock %}

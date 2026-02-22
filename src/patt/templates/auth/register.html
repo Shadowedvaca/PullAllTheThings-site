@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Register — Pull All The Things{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <h1 class="auth-title">Join the Guild</h1>
+        <p class="auth-subtitle">Register with your invite code</p>
+
+        {% if error %}
+            <div class="flash-bar flash-bar--error">⚠ {{ error }}</div>
+        {% endif %}
+
+        <form class="form" method="post" action="/register">
+            <div class="form-group">
+                <label class="form-label" for="code">
+                    Invite Code <span class="required">*</span>
+                </label>
+                <input
+                    class="form-control text-mono"
+                    type="text"
+                    id="code"
+                    name="code"
+                    value="{{ form.code or '' }}"
+                    placeholder="e.g. PATT-XXXXX"
+                    autocomplete="off"
+                    required
+                    autofocus
+                >
+                <span class="form-hint">Check your Discord DMs from the PATT bot for your invite code.</span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="discord_username">
+                    Discord Username <span class="required">*</span>
+                </label>
+                <input
+                    class="form-control"
+                    type="text"
+                    id="discord_username"
+                    name="discord_username"
+                    value="{{ form.discord_username or '' }}"
+                    placeholder="e.g. trogmoon"
+                    autocomplete="username"
+                    required
+                >
+                <span class="form-hint">Must match the username your invite code was sent to.</span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">
+                    Password <span class="required">*</span>
+                </label>
+                <input
+                    class="form-control"
+                    type="password"
+                    id="password"
+                    name="password"
+                    autocomplete="new-password"
+                    minlength="8"
+                    required
+                >
+                <span class="form-hint">At least 8 characters.</span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password2">
+                    Confirm Password <span class="required">*</span>
+                </label>
+                <input
+                    class="form-control"
+                    type="password"
+                    id="password2"
+                    name="password2"
+                    autocomplete="new-password"
+                    required
+                >
+                <span id="pw-match-msg" class="form-hint"></span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" style="width:100%;">Create Account</button>
+            </div>
+        </form>
+
+        <div class="auth-footer">
+            Already registered? <a href="/login">Sign in</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const pw = document.getElementById('password');
+const pw2 = document.getElementById('password2');
+const msg = document.getElementById('pw-match-msg');
+function checkMatch() {
+    if (!pw2.value) { msg.textContent = ''; return; }
+    if (pw.value === pw2.value) {
+        msg.textContent = '✓ Passwords match';
+        msg.style.color = 'var(--color-success)';
+    } else {
+        msg.textContent = '✗ Passwords do not match';
+        msg.style.color = 'var(--color-danger)';
+    }
+}
+pw.addEventListener('input', checkMatch);
+pw2.addEventListener('input', checkMatch);
+</script>
+{% endblock %}

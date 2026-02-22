@@ -1,0 +1,73 @@
+{# Shared results panel — included in campaign.html for voted/closed states #}
+
+<div class="results-header">
+    <h2 class="results-title">
+        {% if campaign.status == 'closed' %}Final Results{% else %}Live Standings{% endif %}
+    </h2>
+
+    {% if vote_stats %}
+    <div class="vote-progress">
+        <span class="vote-progress__text">
+            {{ vote_stats.total_voted }} of {{ vote_stats.total_eligible }} eligible members voted
+        </span>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar"
+                 style="width: {{ vote_stats.percent_voted }}%"></div>
+        </div>
+        <span class="vote-progress__text">{{ vote_stats.percent_voted }}%</span>
+    </div>
+    {% endif %}
+</div>
+
+{% if results %}
+    {% set max_score = results[0].weighted_score if results[0].weighted_score > 0 else 1 %}
+    <div class="results-list">
+        {% for r in results %}
+        <div class="result-item {% if r.final_rank == 1 %}result-item--winner{% endif %}">
+            <div class="result-item__rank-badge
+                         {% if r.final_rank <= 3 %}result-item__rank-badge--{{ r.final_rank }}
+                         {% else %}result-item__rank-badge--other{% endif %}">
+                #{{ r.final_rank }}
+            </div>
+
+            {% if r.entry.image_url %}
+                <img class="result-item__thumb"
+                     src="{{ r.entry.image_url }}"
+                     alt="{{ r.entry.name }}"
+                     loading="lazy">
+            {% else %}
+                <div class="result-item__thumb-placeholder">🖼</div>
+            {% endif %}
+
+            <div class="result-item__info">
+                <div class="result-item__name">
+                    {{ r.entry.name }}
+                    {% if r.final_rank == 1 and campaign.status == 'closed' %}
+                        <span class="winner-badge">WINNER</span>
+                    {% endif %}
+                </div>
+                <div class="result-item__breakdown">
+                    {{ r.first_place_count }} first &bull;
+                    {{ r.second_place_count }} second &bull;
+                    {{ r.third_place_count }} third
+                </div>
+                <div class="score-bar-wrap">
+                    <div class="score-bar"
+                         style="width: {{ [((r.weighted_score / max_score) * 100)|round, 2]|max }}%">
+                    </div>
+                </div>
+            </div>
+
+            <div class="result-item__score-wrap">
+                <div class="result-item__score">{{ r.weighted_score }}</div>
+                <div class="result-item__score-label">pts</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="empty-state">
+        <div class="empty-state__icon">📊</div>
+        <div class="empty-state__text">No votes have been cast yet.</div>
+    </div>
+{% endif %}

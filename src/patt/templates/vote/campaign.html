@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.title }} — Pull All The Things{% endblock %}
+
+{% block head %}
+<style>
+.picks-bar { margin: 0 -2rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="campaign-header">
+    <h1 class="campaign-title">{{ campaign.title }}</h1>
+    <div class="campaign-meta">
+        <span class="badge badge-{{ campaign.status }}">{{ campaign.status|upper }}</span>
+        {% if campaign.status == 'live' and end_ts %}
+            <div>
+                <span class="countdown__label">Time remaining:</span>
+                <span class="countdown" data-end-ts="{{ end_ts }}">Loading...</span>
+            </div>
+        {% elif campaign.status == 'closed' %}
+            <span class="text-muted">Voting closed</span>
+        {% endif %}
+    </div>
+    {% if campaign.description %}
+        <p class="campaign-description">{{ campaign.description }}</p>
+    {% endif %}
+</div>
+
+{# =====================================================================
+   STATE: Campaign not yet live (draft / future start)
+   ===================================================================== #}
+{% if page_state == 'upcoming' %}
+<div class="state-panel">
+    <h2 class="state-panel__title">Coming Soon</h2>
+    <p class="state-panel__text">
+        This campaign hasn't started yet.
+        {% if campaign.start_at %}
+            Voting opens {{ campaign.start_at.strftime('%B %d, %Y at %H:%M UTC') }}.
+        {% endif %}
+    </p>
+</div>
+
+{# =====================================================================
+   STATE: Can vote — show image gallery with selection
+   ===================================================================== #}
+{% elif page_state == 'can_vote' %}
+<div class="campaign-instructions">
+    <strong>How to vote:</strong> Click images to rank your top
+    {{ campaign.picks_per_voter }} choices. Click again to deselect.
+    Your 1st choice gets 3 points, 2nd gets 2, 3rd gets 1.
+</div>
+
+<form id="vote-form" method="post" action="/vote/{{ campaign.id }}">
+    <div id="vote-hidden-inputs"></div>
+
+    <div id="vote-grid" class="vote-grid" data-max-picks="{{ campaign.picks_per_voter }}">
+        {% for entry in campaign.entries|sort(attribute='sort_order') %}
+        <div class="entry-card"
+             data-entry-id="{{ entry.id }}"
+             data-entry-name="{{ entry.name }}">
+            <div class="entry-card__image-wrap">
+                {% if entry.image_url %}
+                    <img class="entry-card__image"
+                         src="{{ entry.image_url }}"
+                         alt="{{ entry.name }}"
+                         loading="lazy">
+                {% else %}
+                    <div class="entry-card__placeholder">🖼</div>
+                {% endif %}
+                <div class="pick-badge"></div>
+            </div>
+            <div class="entry-card__info">
+                <div class="entry-card__name">{{ entry.name }}</div>
+                {% if entry.description %}
+                    <div class="entry-card__desc">{{ entry.description }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="picks-bar">
+        <span class="picks-bar__label">Your Picks:</span>
+        <div class="picks-bar__slots">
+            {% for i in range(1, campaign.picks_per_voter + 1) %}
+            <div class="pick-slot" id="pick-slot-{{ i }}">
+                <div class="pick-slot__num pick-slot__num--{{ i }}">{{ i }}</div>
+                <span class="pick-slot__name" style="display:none;"></span>
+                <span class="pick-slot__empty">—</span>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="button" id="vote-submit-btn" class="btn btn-primary" disabled>
+            Submit Vote
+        </button>
+    </div>
+
+    {% if vote_error %}
+        <div class="flash-bar flash-bar--error mt-2" id="vote-error">⚠ {{ vote_error }}</div>
+    {% else %}
+        <div id="vote-error" style="display:none;"></div>
+    {% endif %}
+</form>
+
+{# =====================================================================
+   STATE: Already voted — show their picks + live standings
+   ===================================================================== #}
+{% elif page_state == 'voted' %}
+<div class="campaign-instructions">
+    <strong>Your vote is in!</strong> Here are your picks and the live standings.
+</div>
+
+{% if my_picks %}
+<div class="card mb-3">
+    <div class="card-header">
+        <span class="card-title">Your Picks</span>
+    </div>
+    <div class="card-body">
+        <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+            {% for pick in my_picks|sort(attribute='rank') %}
+            <div class="pick-slot">
+                <div class="pick-slot__num pick-slot__num--{{ pick.rank }}">{{ pick.rank }}</div>
+                <span class="pick-slot__name">{{ pick.entry_name }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% include "vote/_results_panel.html" %}
+
+{# =====================================================================
+   STATE: View only (rank too low) — show entries but no voting
+   ===================================================================== #}
+{% elif page_state == 'view_only' %}
+<div class="flash-bar flash-bar--info">
+    ℹ Your rank is not high enough to vote in this campaign, but you can see the entries.
+</div>
+
+<div id="vote-grid" class="vote-grid" data-max-picks="0">
+    {% for entry in campaign.entries|sort(attribute='sort_order') %}
+    <div class="entry-card results-view">
+        <div class="entry-card__image-wrap">
+            {% if entry.image_url %}
+                <img class="entry-card__image"
+                     src="{{ entry.image_url }}"
+                     alt="{{ entry.name }}"
+                     loading="lazy">
+            {% else %}
+                <div class="entry-card__placeholder">🖼</div>
+            {% endif %}
+        </div>
+        <div class="entry-card__info">
+            <div class="entry-card__name">{{ entry.name }}</div>
+            {% if entry.description %}
+                <div class="entry-card__desc">{{ entry.description }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# =====================================================================
+   STATE: Closed — show final results
+   ===================================================================== #}
+{% elif page_state == 'closed' %}
+{% include "vote/_results_panel.html" %}
+
+{# =====================================================================
+   STATE: Not logged in / public view
+   ===================================================================== #}
+{% elif page_state == 'public' %}
+<div class="state-panel">
+    <h2 class="state-panel__title">Members-Only Campaign</h2>
+    <p class="state-panel__text">Please <a href="/login">log in</a> to view or participate in this campaign.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+{% if page_state == 'can_vote' %}
+<script src="/static/js/vote-interaction.js"></script>
+{% endif %}
+{% if campaign.status == 'live' %}
+<script src="/static/js/countdown.js"></script>
+{% endif %}
+{% endblock %}

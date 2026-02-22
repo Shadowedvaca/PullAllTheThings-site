@@ -14,17 +14,45 @@
         <div class="header-inner">
             <a href="/" class="site-title">Pull All The Things</a>
             <nav class="site-nav">
-                {% block nav %}{% endblock %}
+                {% if current_member %}
+                    <a href="/" class="nav-link">Home</a>
+                    {% if active_campaigns %}
+                        <a href="/vote/{{ active_campaigns[0].id }}" class="nav-link">Vote</a>
+                    {% endif %}
+                    {% if current_member.rank and current_member.rank.level >= 4 %}
+                        <a href="/admin/campaigns" class="nav-link nav-link--admin">Admin</a>
+                    {% endif %}
+                    <div class="nav-user">
+                        <span class="nav-username">{{ current_member.display_name or current_member.discord_username }}</span>
+                        {% if current_member.rank %}
+                            <span class="nav-rank">{{ current_member.rank.name }}</span>
+                        {% endif %}
+                        <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
+                    </div>
+                {% else %}
+                    <a href="/" class="nav-link">Home</a>
+                    <a href="/login" class="btn btn-primary btn-sm">Login</a>
+                {% endif %}
             </nav>
         </div>
     </header>
 
     <main class="site-main">
+        {% if flash_error %}
+            <div class="flash-bar flash-bar--error">⚠ {{ flash_error }}</div>
+        {% endif %}
+        {% if flash_success %}
+            <div class="flash-bar flash-bar--success">✓ {{ flash_success }}</div>
+        {% endif %}
+        {% if flash_info %}
+            <div class="flash-bar flash-bar--info">ℹ {{ flash_info }}</div>
+        {% endif %}
+
         {% block content %}{% endblock %}
     </main>
 
     <footer class="site-footer">
-        <p>Pull All The Things &mdash; A WoW Guild</p>
+        <p>Pull All The Things &mdash; A WoW Guild &mdash; <em>Real life first, zero toxicity</em></p>
     </footer>
 
     {% block scripts %}{% endblock %}

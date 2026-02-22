@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — Admin — Pull All The Things{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__title">Admin</div>
+        <nav class="admin-nav">
+            <a href="/admin/campaigns" class="admin-nav-link active">Campaigns</a>
+            <a href="/admin/roster" class="admin-nav-link">Roster</a>
+        </nav>
+    </aside>
+
+    <div>
+        <div class="admin-header">
+            <h1 class="admin-title">Campaigns</h1>
+            <a href="/admin/campaigns/new" class="btn btn-primary">+ New Campaign</a>
+        </div>
+
+        {% if campaigns %}
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Status</th>
+                        <th>Start</th>
+                        <th>Duration</th>
+                        <th>Entries</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in campaigns %}
+                    <tr>
+                        <td>
+                            <strong>{{ c.title }}</strong>
+                            {% if c.description %}
+                                <div class="text-muted text-sm">{{ c.description[:60] }}{% if c.description|length > 60 %}…{% endif %}</div>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
+                        <td class="text-sm text-mono">
+                            {{ c.start_at.strftime('%Y-%m-%d %H:%M') if c.start_at else '—' }}
+                        </td>
+                        <td class="text-sm">{{ c.duration_hours }}h</td>
+                        <td class="text-sm">{{ c.entries|length if c.entries else 0 }}</td>
+                        <td>
+                            <div class="actions">
+                                <a href="/admin/campaigns/{{ c.id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+                                {% if c.status == 'live' %}
+                                    <a href="/vote/{{ c.id }}" class="btn btn-sm btn-success">View</a>
+                                {% elif c.status == 'closed' %}
+                                    <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">Results</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state__icon">📋</div>
+            <div class="empty-state__text">No campaigns yet. <a href="/admin/campaigns/new">Create your first campaign.</a></div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin-forms.js"></script>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Access Denied — Pull All The Things{% endblock %}
+{% block content %}
+<div class="state-panel">
+    <h1 class="state-panel__title">Access Denied</h1>
+    <p class="state-panel__text">{{ message or "You don't have permission to view this page." }}</p>
+    <a href="/" class="btn btn-primary">Go Home</a>
+</div>
+{% endblock %}

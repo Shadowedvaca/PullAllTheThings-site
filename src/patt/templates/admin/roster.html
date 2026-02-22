@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Roster — Admin — Pull All The Things{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__title">Admin</div>
+        <nav class="admin-nav">
+            <a href="/admin/campaigns" class="admin-nav-link">Campaigns</a>
+            <a href="/admin/roster" class="admin-nav-link active">Roster</a>
+        </nav>
+    </aside>
+
+    <div>
+        <div class="admin-header">
+            <h1 class="admin-title">Roster ({{ members|length }})</h1>
+        </div>
+
+        {# Add Member Form #}
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-title">Add Member</span>
+            </div>
+            <div class="card-body">
+                <form class="form" method="post" action="/admin/roster/add"
+                      style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;align-items:end;">
+                    <div class="form-group">
+                        <label class="form-label" for="add_username">Discord Username <span class="required">*</span></label>
+                        <input class="form-control" type="text" id="add_username" name="discord_username"
+                               placeholder="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_discord_id">Discord ID</label>
+                        <input class="form-control text-mono" type="text" id="add_discord_id" name="discord_id"
+                               placeholder="Snowflake ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_display_name">Display Name</label>
+                        <input class="form-control" type="text" id="add_display_name" name="display_name"
+                               placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="add_rank_id">Rank <span class="required">*</span></label>
+                        <select class="form-control" id="add_rank_id" name="rank_id" required>
+                            {% for rank in ranks %}
+                            <option value="{{ rank.id }}">{{ rank.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary">Add Member</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {# Roster table #}
+        {% if members %}
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Discord ID</th>
+                        <th>Rank</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in members %}
+                    <tr>
+                        <td>
+                            <div><strong>{{ m.display_name or m.discord_username }}</strong></div>
+                            {% if m.display_name and m.display_name != m.discord_username %}
+                                <div class="text-muted text-xs">@{{ m.discord_username }}</div>
+                            {% endif %}
+                            {% if m.characters %}
+                                <button class="btn btn-secondary btn-sm mt-1"
+                                        data-toggle-chars="{{ m.id }}"
+                                        style="font-size:0.75rem;">
+                                    ▼ Characters
+                                </button>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {# Inline Discord ID editing #}
+                            <div id="discord-display-{{ m.id }}" style="display:flex;align-items:center;gap:0.5rem;">
+                                <span class="text-mono text-sm">{{ m.discord_id or '—' }}</span>
+                                <button class="btn btn-secondary btn-sm" data-edit-discord="{{ m.id }}"
+                                        style="font-size:0.7rem;">Edit</button>
+                            </div>
+                            <div id="discord-editor-{{ m.id }}"
+                                 style="display:none;flex-direction:column;gap:0.4rem;">
+                                <form method="post" action="/admin/roster/{{ m.id }}/update"
+                                      style="display:flex;gap:0.4rem;align-items:center;">
+                                    <input type="hidden" name="rank_id" value="{{ m.rank_id }}">
+                                    <input class="form-control text-mono" type="text" name="discord_id"
+                                           value="{{ m.discord_id or '' }}"
+                                           placeholder="Snowflake ID"
+                                           style="width:160px;font-size:0.8rem;">
+                                    <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                                    <button type="button" class="btn btn-secondary btn-sm"
+                                            data-cancel-discord="{{ m.id }}">×</button>
+                                </form>
+                            </div>
+                        </td>
+                        <td>
+                            {# Rank quick-change form #}
+                            <form method="post" action="/admin/roster/{{ m.id }}/update"
+                                  style="display:flex;gap:0.4rem;align-items:center;">
+                                <input type="hidden" name="discord_id" value="{{ m.discord_id or '' }}">
+                                <select class="form-control" name="rank_id"
+                                        style="font-size:0.85rem;padding:0.3rem 2rem 0.3rem 0.5rem;"
+                                        onchange="this.closest('form').submit()">
+                                    {% for rank in ranks %}
+                                    <option value="{{ rank.id }}"
+                                            {% if m.rank_id == rank.id %}selected{% endif %}>
+                                        {{ rank.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        </td>
+                        <td>
+                            <span class="text-xs text-muted">{{ m.rank_source }}</span>
+                        </td>
+                        <td>
+                            {% if m.user_id %}
+                                <span class="badge badge-live" style="font-size:0.7rem;">Registered</span>
+                            {% elif m.invite_codes %}
+                                {% set latest = m.invite_codes|sort(attribute='created_at')|last %}
+                                {% if latest.used_at %}
+                                    <span class="text-muted text-xs">Code used</span>
+                                {% elif latest.expires_at and latest.expires_at < now %}
+                                    <span class="text-xs" style="color:var(--color-warning)">Expired invite</span>
+                                {% else %}
+                                    <span class="text-xs" style="color:var(--color-info)">Invite sent</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted text-xs">Not invited</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="actions">
+                                {% if not m.user_id and m.discord_id %}
+                                    <form method="post" action="/admin/roster/{{ m.id }}/invite">
+                                        <button type="submit" class="btn btn-secondary btn-sm"
+                                                data-confirm="Send a new invite code to {{ m.discord_username }} via Discord DM?">
+                                            Send Invite
+                                        </button>
+                                    </form>
+                                {% elif not m.user_id and not m.discord_id %}
+                                    <span class="text-xs text-muted">Need Discord ID</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% if m.characters %}
+                    <tr>
+                        <td colspan="6" style="padding:0;">
+                            <div class="member-chars" id="chars-{{ m.id }}">
+                                <div class="member-chars-inner">
+                                    {% for char in m.characters %}
+                                    <div class="char-chip">
+                                        <span class="char-chip__role-{{ char.role.replace('_dps','') if 'dps' in char.role else char.role }}">
+                                            {% if char.role == 'tank' %}🛡{% elif char.role == 'healer' %}💚{% else %}⚔{% endif %}
+                                        </span>
+                                        <span>{{ char.name }}-{{ char.realm }}</span>
+                                        <span class="text-muted text-xs">{{ char.spec or char.class_ or '' }}</span>
+                                        {% if char.main_alt == 'main' %}<span class="text-xs" style="color:var(--color-accent)">M</span>{% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="empty-state__icon">👥</div>
+            <div class="empty-state__text">No members yet.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin-forms.js"></script>
+{% endblock %}

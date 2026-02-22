@@ -134,7 +134,7 @@ def create_app() -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-    # Register routes
+    # Register API routes
     from patt.api.health import router as health_router
     from patt.api.admin_routes import router as admin_router
     from patt.api.guild_routes import router as guild_router
@@ -155,6 +155,17 @@ def create_app() -> FastAPI:
     app.include_router(public_campaign_router)
     app.include_router(guild_sync_router)
     app.include_router(identity_router)
+
+    # Register page routes (server-rendered HTML)
+    from patt.pages.auth_pages import router as auth_page_router
+    from patt.pages.vote_pages import router as vote_page_router
+    from patt.pages.admin_pages import router as admin_page_router
+    from patt.pages.public_pages import router as public_page_router
+
+    app.include_router(public_page_router)
+    app.include_router(auth_page_router)
+    app.include_router(vote_page_router)
+    app.include_router(admin_page_router)
 
     return app
 
