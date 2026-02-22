@@ -468,9 +468,17 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 
 ### Completed Phases
 - Phase 0: Server infrastructure, project scaffolding, testing framework
+- Phase 1: Common services — identity & guild data model
 
 ### Current Phase
-- Phase 1: Common Services — Identity & Guild Data Model
+- Phase 2: Authentication & Discord Bot
+
+### What Exists
+- sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
+- Admin API: `/api/v1/admin/ranks`, `/api/v1/admin/members`, `/api/v1/admin/characters`
+- Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`
+- FastAPI DB dependency: `src/patt/deps.py` — `get_db()` used in all routes
+- Full test coverage for identity operations (DB tests skip gracefully without local PostgreSQL)
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config ready at deploy/nginx/)
@@ -478,14 +486,15 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - FastAPI app scaffold ready — starts and serves /api/health
 - systemd service file ready at deploy/systemd/patt.service
 - Alembic migrations ready — run `alembic upgrade head` after DB setup
-- Test framework operational — `pytest tests/unit/ -v` passes 4/4
+- Test framework operational — `pytest tests/unit/ -v` passes 9/9 (24 skip when no DB)
 - pullallthething.com DNS still points to GitHub Pages (intentional until Phase 5)
 
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)
 - Run tests: `.venv/Scripts/pytest tests/unit/ -v`
 - Run dev server: `python scripts/run_dev.py` (requires .env with DATABASE_URL)
-- Phase 0 unit tests pass without a live database
+- DB-dependent tests (service + integration) require TEST_DATABASE_URL env var pointing to a running PostgreSQL instance
+- Pure unit tests (smoke + pure function tests) pass without a live database
 
 ---
 

@@ -28,15 +28,27 @@ def anyio_backend():
 
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
-    """Create test database tables once per session."""
+    """Create test database tables once per session.
+
+    Skips all dependent tests if the test database is not available.
+    Set TEST_DATABASE_URL env var to point to a running PostgreSQL instance.
+    """
+    from sqlalchemy import text as sa_text
     from sv_common.db.models import Base
 
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 
+    # Verify connectivity before doing anything else
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(sa_text("SELECT 1"))
+    except Exception as exc:
+        await engine.dispose()
+        pytest.skip(f"Test database not available ({TEST_DATABASE_URL}): {exc}")
+
     async with engine.begin() as conn:
-        # Create schemas first
-        await conn.execute(__import__("sqlalchemy").text("CREATE SCHEMA IF NOT EXISTS common"))
-        await conn.execute(__import__("sqlalchemy").text("CREATE SCHEMA IF NOT EXISTS patt"))
+        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS common"))
+        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS patt"))
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
@@ -61,8 +73,14 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client with database session override."""
     from patt.app import create_app
+    from patt.deps import get_db
 
     app = create_app()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"

@@ -47,7 +47,12 @@ def create_app() -> FastAPI:
 
     # Register routes
     from patt.api.health import router as health_router
+    from patt.api.admin_routes import router as admin_router
+    from patt.api.guild_routes import router as guild_router
+
     app.include_router(health_router, prefix="/api")
+    app.include_router(admin_router)
+    app.include_router(guild_router)
 
     return app
 
