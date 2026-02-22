@@ -203,6 +203,8 @@ class Campaign(Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
     early_close_if_all_voted: Mapped[bool] = mapped_column(Boolean, default=True)
     discord_channel_id: Mapped[Optional[str]] = mapped_column(String(20))
+    agent_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    agent_chattiness: Mapped[str] = mapped_column(String(10), default="normal")
     created_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("common.guild_members.id")
     )

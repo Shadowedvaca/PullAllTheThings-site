@@ -11,6 +11,7 @@
 - Phase 3 complete: campaign_service, vote_service, campaign_routes (admin/vote/public), background status checker, unit+integration tests (163/187 pass, 24 skip DB-only)
 - Phase 4 complete: page routes (auth, vote, admin, public), Jinja2 templates, cookie auth, JS files, integration tests (test_page_rendering.py)
 - Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass; data migrated from Sheets on server
+- Phase 6 complete: contest agent Discord updates; migration 0004 (agent_enabled, agent_chattiness on campaigns); contest_agent.py service; channels.py Discord posting module; admin form updated; 36 unit tests + integration tests; tests 228/252 pass (24 skip DB-only)
 - CI/CD live: .github/workflows/deploy.yml auto-deploys on push to main (SSH key = DEPLOY_SSH_KEY GitHub secret)
 
 ## Key File Locations
@@ -31,8 +32,8 @@
 - Auth API: `src/patt/api/auth_routes.py` (register, login, me)
 - Guild API: `src/patt/api/guild_routes.py`
 - Health route: `src/patt/api/health.py`
-- Alembic migrations: `alembic/versions/0001_initial_schema.py`, `0002_guild_identity_schema.py`
-- Tests: `tests/unit/test_auth.py`, `tests/unit/test_lua_parser.py`, `tests/unit/test_blizzard_client.py`, `tests/unit/test_discord_sync.py`, `tests/unit/test_identity_engine.py`, `tests/unit/test_vote_scoring.py`, `tests/unit/test_campaign_service.py`
+- Alembic migrations: `alembic/versions/0001_initial_schema.py`, `0002_guild_identity_schema.py`, `0003_phase5_legacy_tables.py`, `0004_phase6_agent_chattiness.py`
+- Tests: `tests/unit/test_auth.py`, `tests/unit/test_lua_parser.py`, `tests/unit/test_blizzard_client.py`, `tests/unit/test_discord_sync.py`, `tests/unit/test_identity_engine.py`, `tests/unit/test_vote_scoring.py`, `tests/unit/test_campaign_service.py`, `tests/unit/test_contest_agent.py`
 - Campaign integration tests: `tests/integration/test_campaign_flow.py` (needs live DB)
 - Page rendering tests: `tests/integration/test_page_rendering.py` (needs live DB)
 - Legacy API integration tests: `tests/integration/test_legacy_api.py` (needs live DB)

@@ -32,6 +32,8 @@ async def create_campaign(
     discord_channel_id: str | None = None,
     created_by: int | None = None,
     early_close_if_all_voted: bool = True,
+    agent_enabled: bool = True,
+    agent_chattiness: str = "normal",
 ) -> Campaign:
     """Create a new campaign in draft status."""
     campaign = Campaign(
@@ -46,6 +48,8 @@ async def create_campaign(
         discord_channel_id=discord_channel_id,
         created_by=created_by,
         early_close_if_all_voted=early_close_if_all_voted,
+        agent_enabled=agent_enabled,
+        agent_chattiness=agent_chattiness,
         status="draft",
     )
     db.add(campaign)

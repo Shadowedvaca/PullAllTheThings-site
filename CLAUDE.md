@@ -473,14 +473,15 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 3: Campaign Engine & Voting API
 - Phase 4: Web UI — vote pages, results, admin pages, auth pages, landing page
 - Phase 5: Google Sheets migration, legacy HTML moved, new API endpoints
+- Phase 6: Contest Agent — Discord milestone announcements during live campaigns
 
 ### Current Phase
-- Phase 6: Contest Agent
+- Phase 7: End-to-end regression suite
 
 ### What Exists
 - sv_common.identity package: ranks, members, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
-- sv_common.discord package: bot client, role sync, DM dispatch (`src/sv_common/discord/`)
+- sv_common.discord package: bot client, role sync, DM dispatch, channel posting (`src/sv_common/discord/`)
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Auth middleware: `get_current_member()`, `require_rank(level)` deps in `src/patt/deps.py`
 - Cookie-based auth for page routes: `get_page_member()`, `require_page_rank(level)` in deps.py
@@ -514,13 +515,29 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
   - Migration script: `scripts/migrate_sheets.py` — run once to import Sheets data
   - Field mapping docs: `docs/MIGRATION-MAP.md`
   - Tests: `tests/integration/test_legacy_api.py`, `tests/unit/test_migration.py`
+- **Phase 6 Contest Agent:**
+  - DB: `agent_enabled` (bool) + `agent_chattiness` (quiet/normal/hype) on `patt.campaigns`
+  - Alembic migration: `alembic/versions/0004_phase6_agent_chattiness.py`
+  - Contest agent service: `src/patt/services/contest_agent.py`
+    - Pure functions: `detect_milestone()`, `generate_message()`, `get_allowed_events()`
+    - Background task: `run_contest_agent()` — checks every 5 minutes
+    - Milestone triggers: launch, first_vote, lead_change, 25/50/75%, final_stretch, last_call, all_voted, campaign_closed
+    - Chattiness levels control which triggers are active per campaign
+    - Deduplication via `contest_agent_log` — events never re-posted
+    - Lead change tracking: current leader stored in log message as `leader_id:{id}`
+  - Discord channel posting: `src/sv_common/discord/channels.py` — `post_embed_to_channel()`
+  - Admin form updated: agent_enabled checkbox + chattiness dropdown in campaign_edit.html
+  - Admin pages updated: handles agent_enabled and agent_chattiness form fields
+  - Personality reference: `data/contest_agent_personality.md`
+  - Tests: `tests/unit/test_contest_agent.py` (36 tests), `tests/integration/test_contest_agent_flow.py`
+  - Background task started in `app.py` lifespan alongside campaign_checker
 
 ### What Exists on the Server
 - Nginx running, serving shadowedvaca.com as static files (nginx config at deploy/nginx/)
 - PostgreSQL, FastAPI (uvicorn port 8100), systemd patt.service — all running
-- All migrations applied through 0003 (member_availability, mito_quotes, mito_titles)
+- All migrations applied through 0004 (agent_enabled, agent_chattiness on campaigns)
 - Google Sheets data fully migrated (20 members, 30 chars, 21 Mito quotes, 13 Mito titles)
-- Test framework operational — `pytest tests/unit/ -v` passes 192/216 (24 skip when no DB)
+- Test framework operational — `pytest tests/unit/ -v` passes 228/252 (24 skip when no DB)
 - **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check

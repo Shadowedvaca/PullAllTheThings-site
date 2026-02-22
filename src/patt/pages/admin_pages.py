@@ -128,6 +128,8 @@ async def admin_campaign_new_post(
     discord_channel_id: str = Form(""),
     early_close_if_all_voted: str = Form("on"),
     picks_per_voter: int = Form(3),
+    agent_enabled: str = Form("on"),
+    agent_chattiness: str = Form("normal"),
     db: AsyncSession = Depends(get_db),
 ):
     member = await _require_admin(request, db)
@@ -154,6 +156,8 @@ async def admin_campaign_new_post(
             early_close_if_all_voted=(early_close_if_all_voted == "on"),
             picks_per_voter=picks_per_voter,
             created_by=member.id,
+            agent_enabled=(agent_enabled == "on"),
+            agent_chattiness=agent_chattiness if agent_chattiness in ("quiet", "normal", "hype") else "normal",
         )
         return RedirectResponse(
             url=f"/admin/campaigns/{campaign.id}/edit",
@@ -242,6 +246,8 @@ async def admin_campaign_edit_post(
     discord_channel_id: str = Form(""),
     early_close_if_all_voted: str = Form("off"),
     picks_per_voter: int = Form(3),
+    agent_enabled: str = Form("off"),
+    agent_chattiness: str = Form("normal"),
     db: AsyncSession = Depends(get_db),
 ):
     member = await _require_admin(request, db)
@@ -268,6 +274,8 @@ async def admin_campaign_edit_post(
             discord_channel_id=discord_channel_id or None,
             early_close_if_all_voted=(early_close_if_all_voted == "on"),
             picks_per_voter=picks_per_voter,
+            agent_enabled=(agent_enabled == "on"),
+            agent_chattiness=agent_chattiness if agent_chattiness in ("quiet", "normal", "hype") else "normal",
         )
         return RedirectResponse(
             url=f"/admin/campaigns/{campaign_id}/edit?success=Campaign+updated.",

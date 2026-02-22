@@ -4,7 +4,30 @@
       "Bash(cd:*)",
       "Bash(tail:*)",
       "Bash(cd H:/Development/PullAllTheThings-site && .venv/Scripts/pytest tests/unit/ -v 2>&1)",
-      "Bash(cd H:/Development/PullAllTheThings-site && DATABASE_URL=\"postgresql+asyncpg://patt_user:CHANGEME@localhost:5432/patt_db\" JWT_SECRET_KEY=\"placeholder\" PYTHONPATH=src .venv/Scripts/alembic revision --autogenerate -m \"initial schema\" 2>&1)"
+      "Bash(cd H:/Development/PullAllTheThings-site && DATABASE_URL=\"postgresql+asyncpg://patt_user:CHANGEME@localhost:5432/patt_db\" JWT_SECRET_KEY=\"placeholder\" PYTHONPATH=src .venv/Scripts/alembic revision --autogenerate -m \"initial schema\" 2>&1)",
+      "Bash(cd /h/Development/PullAllTheThings-site && .venv/Scripts/pytest tests/unit/ -v 2>&1)",
+      "Bash(pg_isready:*)",
+      "Bash(.venv/Scripts/pytest:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ssh:*)",
+      "Bash(rsync:*)",
+      "Bash(where rsync:*)",
+      "Bash(git push:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(PYTHONPATH=src .venv/Scripts/python -c \"from sv_common.db.models import GuildIdentityPerson, WowCharacter, GuildIdentityDiscordMember, IdentityLink, AuditIssue, GuildSyncLog; print\\('All guild_identity models imported OK'\\)\" 2>&1 && PYTHONPATH=src .venv/Scripts/python -c \"from sv_common.guild_sync.blizzard_client import BlizzardClient, RANK_NAME_MAP, CLASS_ID_MAP; from sv_common.guild_sync.db_sync import sync_blizzard_roster, sync_addon_data; from sv_common.guild_sync.migration import get_role_category; from sv_common.guild_sync.sync_logger import SyncLogEntry; print\\('All guild_sync modules imported OK'\\)\" 2>&1)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(PYTHONPATH=src .venv/Scripts/python:*)",
+      "Bash(find /H/Development/PullAllTheThings-site/src/patt -type f -exec ls -lh {} ;)",
+      "Bash(cd \"H:\\\\Development\\\\PullAllTheThings-site\" && PYTHONPATH=src DATABASE_URL=\"postgresql+asyncpg://test:test@localhost/test\" JWT_SECRET_KEY=\"test-secret-key-32-bytes-min-len!\" .venv/Scripts/python -c \"\nfrom patt.pages.auth_pages import router as r1\nfrom patt.pages.vote_pages import router as r2\nfrom patt.pages.admin_pages import router as r3\nfrom patt.pages.public_pages import router as r4\nfrom patt.templating import templates\nprint\\('All page modules imported OK'\\)\nprint\\('Auth routes:', [r.path for r in r1.routes]\\)\nprint\\('Vote routes:', [r.path for r in r2.routes]\\)\nprint\\('Admin routes:', [r.path for r in r3.routes]\\)\nprint\\('Public routes:', [r.path for r in r4.routes]\\)\n\" 2>&1)",
+      "WebFetch(domain:script.google.com)",
+      "WebFetch(domain:script.googleusercontent.com)",
+      "Bash(cd H:\\\\Development\\\\PullAllTheThings-site:*)",
+      "Bash(ssh-keyscan:*)",
+      "Bash(gh secret:*)",
+      "Bash(sleep 8 && gh run list --repo Shadowedvaca/PullAllTheThings-site --limit 3 2>&1)",
+      "Bash(sleep 30 && gh run list --repo Shadowedvaca/PullAllTheThings-site --limit 2 2>&1)",
+      "Bash(gh run:*)"
     ]
   }
 }

@@ -122,6 +122,34 @@
                         </label>
                     </div>
 
+                    <div class="form-check">
+                        <input type="checkbox" id="agent_enabled" name="agent_enabled"
+                               {% if not campaign or campaign.agent_enabled %}checked{% endif %}>
+                        <label for="agent_enabled">
+                            Enable contest agent Discord updates
+                        </label>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="agent_chattiness">Chattiness Level</label>
+                            <select class="form-control" id="agent_chattiness" name="agent_chattiness">
+                                <option value="quiet"
+                                    {% if campaign and campaign.agent_chattiness == 'quiet' %}selected{% endif %}>
+                                    Quiet — Launch &amp; results only
+                                </option>
+                                <option value="normal"
+                                    {% if not campaign or campaign.agent_chattiness == 'normal' %}selected{% endif %}>
+                                    Normal — + Milestones &amp; time warnings
+                                </option>
+                                <option value="hype"
+                                    {% if campaign and campaign.agent_chattiness == 'hype' %}selected{% endif %}>
+                                    Hype — Everything including lead changes
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">
                             {% if campaign %}Save Changes{% else %}Create Campaign{% endif %}
@@ -145,6 +173,8 @@
                     <div><span class="text-muted text-sm">Duration</span><div>{{ campaign.duration_hours }}h</div></div>
                     <div><span class="text-muted text-sm">Picks per voter</span><div>{{ campaign.picks_per_voter }}</div></div>
                     <div><span class="text-muted text-sm">Early close</span><div>{{ 'Yes' if campaign.early_close_if_all_voted else 'No' }}</div></div>
+                    <div><span class="text-muted text-sm">Contest agent</span><div>{{ 'Enabled' if campaign.agent_enabled else 'Disabled' }}</div></div>
+                    <div><span class="text-muted text-sm">Chattiness</span><div>{{ campaign.agent_chattiness | capitalize }}</div></div>
                 </div>
             </div>
         </div>

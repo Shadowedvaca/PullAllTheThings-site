@@ -37,6 +37,14 @@ async def _run_campaign_checker(database_url: str) -> None:
     await check_campaign_statuses(factory)
 
 
+async def _run_contest_agent(database_url: str) -> None:
+    """Wrapper that starts the contest agent with its own session factory."""
+    from patt.services.contest_agent import run_contest_agent
+
+    factory = get_session_factory(database_url)
+    await run_contest_agent(factory)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
 
@@ -79,6 +87,12 @@ def create_app() -> FastAPI:
         )
         logger.info("Campaign status checker task started")
 
+        # Start contest agent background task
+        contest_agent_task = asyncio.create_task(
+            _run_contest_agent(settings.database_url)
+        )
+        logger.info("Contest agent task started")
+
         # Start guild sync scheduler (skipped if Blizzard creds or Discord bot missing)
         guild_scheduler = None
         if (
@@ -109,6 +123,12 @@ def create_app() -> FastAPI:
         campaign_checker_task.cancel()
         try:
             await campaign_checker_task
+        except asyncio.CancelledError:
+            pass
+
+        contest_agent_task.cancel()
+        try:
+            await contest_agent_task
         except asyncio.CancelledError:
             pass
 
