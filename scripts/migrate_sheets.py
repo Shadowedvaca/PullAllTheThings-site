@@ -97,7 +97,13 @@ async def get_or_create_member(
         created = True
 
     if discord_id and not member.discord_id:
-        member.discord_id = discord_id
+        # Only set if not already claimed by another member
+        taken_res = await session.execute(
+            select(GuildMember).where(GuildMember.discord_id == discord_id)
+        )
+        taken = taken_res.scalar_one_or_none()
+        if taken is None:
+            member.discord_id = discord_id
 
     return member, created
 
