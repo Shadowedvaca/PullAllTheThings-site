@@ -443,16 +443,43 @@ async def admin_players_data(
     )
     members = list(members_result.scalars().all())
 
+    # Build set of discord_ids already linked to a player
+    linked_discord_ids = {m.discord_id for m in members if m.discord_id}
+
     from sv_common.db.models import Character
     chars_result = await db.execute(
         select(Character).order_by(Character.name)
     )
     chars = list(chars_result.scalars().all())
 
+    # Get Discord server member list from bot
+    discord_users = []
+    try:
+        from sv_common.discord.bot import get_bot
+        from patt.config import get_settings
+        settings = get_settings()
+        bot = get_bot()
+        if bot and not bot.is_closed() and settings.discord_guild_id:
+            guild = bot.get_guild(int(settings.discord_guild_id))
+            if guild:
+                for dm in guild.members:
+                    if dm.bot:
+                        continue
+                    discord_users.append({
+                        "id": str(dm.id),
+                        "username": dm.name,
+                        "display_name": dm.display_name,
+                        "linked": str(dm.id) in linked_discord_ids,
+                    })
+                discord_users.sort(key=lambda u: u["display_name"].lower())
+    except Exception as e:
+        logger.warning("Could not load Discord members: %s", e)
+
     return JSONResponse({
         "ok": True,
         "data": {
-            "members": [
+            "discord_users": discord_users,
+            "players": [
                 {
                     "id": m.id,
                     "discord_username": m.discord_username,
@@ -554,6 +581,93 @@ async def admin_toggle_main_alt(
     await db.commit()
 
     return JSONResponse({"ok": True, "data": {"char_id": char_id, "char_name": char.name, "main_alt": main_alt}})
+
+
+@router.post("/players/create")
+async def admin_create_player(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new guild_member record (no Discord or registration required)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        display_name = (body.get("display_name") or "").strip()
+        if not display_name:
+            return JSONResponse({"ok": False, "error": "display_name required"}, status_code=400)
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body"}, status_code=400)
+
+    # Use a placeholder discord_username from display_name (can be updated later)
+    import re
+    username_slug = re.sub(r'[^a-z0-9_]', '_', display_name.lower()).strip('_') or "player"
+
+    # Get default rank (Initiate = level 1)
+    rank_result = await db.execute(select(GuildRank).order_by(GuildRank.level).limit(1))
+    default_rank = rank_result.scalar_one_or_none()
+    if not default_rank:
+        return JSONResponse({"ok": False, "error": "No ranks configured"}, status_code=500)
+
+    new_member = GuildMember(
+        discord_username=username_slug,
+        display_name=display_name,
+        rank_id=default_rank.id,
+        rank_source="manual",
+    )
+    db.add(new_member)
+    await db.commit()
+    await db.refresh(new_member)
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "id": new_member.id,
+            "discord_username": new_member.discord_username,
+            "display_name": new_member.display_name,
+            "discord_id": None,
+            "rank_name": default_rank.name,
+            "rank_level": default_rank.level,
+            "registered": False,
+        },
+    })
+
+
+@router.patch("/players/{member_id}/link-discord")
+async def admin_link_discord(
+    request: Request,
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Link (or unlink) a Discord user to a guild member player."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        discord_id = body.get("discord_id")      # None = unlink
+        discord_username = body.get("discord_username", "")
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body"}, status_code=400)
+
+    result = await db.execute(select(GuildMember).where(GuildMember.id == member_id))
+    m = result.scalar_one_or_none()
+    if not m:
+        return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    m.discord_id = discord_id or None
+    if discord_username and discord_id:
+        # Update discord_username to match Discord display if we have it
+        m.discord_username = discord_username
+    await db.commit()
+
+    return JSONResponse({
+        "ok": True,
+        "data": {"member_id": member_id, "discord_id": discord_id},
+    })
 
 
 @router.get("/roster", response_class=HTMLResponse)
