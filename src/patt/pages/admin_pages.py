@@ -740,7 +740,9 @@ async def admin_delete_player(
         return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
 
     name = m.display_name or m.discord_username
-    await db.delete(m)
+    # Use raw SQL to let DB-level cascades handle dependent rows cleanly,
+    # bypassing SQLAlchemy ORM's attempt to NULL foreign keys first.
+    await db.execute(text("DELETE FROM common.guild_members WHERE id = :id"), {"id": member_id})
     await db.commit()
     return JSONResponse({"ok": True, "data": {"deleted": True, "name": name}})
 
