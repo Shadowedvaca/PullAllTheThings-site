@@ -59,11 +59,16 @@ function renderDiscord() {
              data-username="${escAttr(u.username)}"
              ondragstart="handleDiscordDragStart(event, '${escAttr(u.id)}', '${escAttr(u.username)}')">
             <span class="pm-discord-icon">💬</span>
-            <span class="pm-discord-name">${escHtml(u.display_name)}</span>
-            <span class="pm-discord-handle text-muted">@${escHtml(u.username)}</span>
-            ${u.linked
-                ? '<span class="pm-badge pm-badge--ok pm-linked-badge">linked</span>'
-                : '<span class="pm-badge pm-badge--warn">unlinked</span>'}
+            <div class="pm-discord-info">
+                <span class="pm-discord-name">${escHtml(u.display_name)}</span>
+                <span class="pm-discord-handle text-muted">@${escHtml(u.username)}</span>
+            </div>
+            <div class="pm-discord-badges">
+                ${u.rank_name ? `<span class="pm-discord-rank">${escHtml(u.rank_name)}</span>` : ''}
+                ${u.linked
+                    ? '<span class="pm-badge pm-badge--ok">linked</span>'
+                    : '<span class="pm-badge pm-badge--warn">unlinked</span>'}
+            </div>
         </div>
     `).join('');
 }
@@ -96,6 +101,18 @@ function renderPlayers() {
         const regBadge = p.registered
             ? '<span class="pm-badge pm-badge--ok">Reg</span>' : '';
 
+        // Display name: player-set > discord server name > main char name
+        const effectiveName = p.display_name
+            || (discordUser ? discordUser.display_name : null)
+            || p.main_char_name
+            || p.discord_username;
+        const nameIsSet = !!p.display_name;
+
+        // Role: main char game role > discord rank > nothing
+        const effectiveRole = p.main_char_role || (discordUser ? discordUser.rank_name : null) || '';
+        const roleIcon = effectiveRole === 'tank' ? '🛡️' : effectiveRole === 'healer' ? '💚'
+                       : (effectiveRole === 'dps' || effectiveRole === 'melee_dps' || effectiveRole === 'ranged_dps') ? '⚔️' : '';
+
         return `
         <div class="pm-player-card"
              data-member-id="${p.id}"
@@ -103,9 +120,23 @@ function renderPlayers() {
              ondragleave="this.classList.remove('pm-drag-over')"
              ondrop="handlePlayerDrop(event, ${p.id})">
             <div class="pm-player-header">
-                <span class="pm-player-name">${escHtml(p.display_name || p.discord_username)}</span>
+                ${roleIcon ? `<span class="pm-player-role-icon">${roleIcon}</span>` : ''}
+                <span class="pm-player-name ${nameIsSet ? '' : 'pm-name-derived'}"
+                      title="${nameIsSet ? 'Custom display name' : 'Derived — click pencil to set'}"
+                >${escHtml(effectiveName)}</span>
+                <button class="pm-edit-name-btn" onclick="startEditName(event,${p.id},'${escAttr(p.display_name || '')}')"
+                        title="Edit display name">✎</button>
                 <span class="pm-player-rank">${escHtml(p.rank_name)}</span>
                 ${regBadge}
+                <button class="pm-delete-player-btn" onclick="deletePlayer(event,${p.id},'${escAttr(effectiveName)}')"
+                        title="Delete player">🗑</button>
+            </div>
+            <div id="pm-name-editor-${p.id}" class="pm-name-editor" style="display:none;">
+                <input class="pm-name-input form-control" id="pm-name-input-${p.id}"
+                       placeholder="${escAttr(effectiveName)}" value="${escAttr(p.display_name || '')}"
+                       style="font-size:0.82rem;">
+                <button class="btn btn-primary btn-sm" onclick="saveDisplayName(event,${p.id})">Save</button>
+                <button class="btn btn-secondary btn-sm" onclick="cancelEditName(${p.id})">✕</button>
             </div>
             <div class="pm-player-meta">
                 ${discordLabel}
@@ -172,6 +203,7 @@ function renderChars() {
                     <span class="pm-char-name">${escHtml(c.name)}</span>
                     <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
                     <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
+                    ${c.guild_rank_name ? `<span class="pm-char-guild-rank">${escHtml(c.guild_rank_name)}</span>` : ''}
                     ${isMain ? '<span class="pm-main-badge">M</span>' : '<span class="pm-alt-badge">A</span>'}
                     ${notInScanBadge}
                     <button class="pm-toggle-btn" onclick="toggleMain(event,${c.id})"
@@ -301,6 +333,68 @@ async function assignChar(charId, memberId) {
         }
     } catch (e) {
         showStatus('Network error assigning character', 'error');
+    }
+}
+
+// ── Player display name editing ────────────────────────────────────────────
+
+function startEditName(event, memberId, current) {
+    event.stopPropagation();
+    const editor = document.getElementById(`pm-name-editor-${memberId}`);
+    const input  = document.getElementById(`pm-name-input-${memberId}`);
+    if (editor) {
+        editor.style.display = 'flex';
+        input.focus();
+        input.select();
+    }
+}
+function cancelEditName(memberId) {
+    const editor = document.getElementById(`pm-name-editor-${memberId}`);
+    if (editor) editor.style.display = 'none';
+}
+async function saveDisplayName(event, memberId) {
+    event.stopPropagation();
+    const input = document.getElementById(`pm-name-input-${memberId}`);
+    const name = (input ? input.value : '').trim();
+    try {
+        const res = await fetch(`/admin/players/${memberId}/display-name`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ display_name: name }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            const p = players.find(pl => pl.id === memberId);
+            if (p) p.display_name = data.data.display_name || null;
+            render();
+            showStatus(name ? `Name set to "${name}"` : 'Name cleared (using fallback)', 'success');
+        } else {
+            showStatus('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showStatus('Network error saving name', 'error');
+    }
+}
+
+// ── Delete Player ──────────────────────────────────────────────────────────
+
+async function deletePlayer(event, memberId, name) {
+    event.stopPropagation();
+    if (!confirm(`Delete player "${name}"?\n\nThis unlinks their characters but does not delete the characters themselves.`)) return;
+    try {
+        const res = await fetch(`/admin/players/${memberId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            players = players.filter(p => p.id !== memberId);
+            // Unlink any chars that belonged to this player
+            allChars.forEach(c => { if (c.member_id === memberId) c.member_id = null; });
+            render();
+            showStatus(`"${name}" deleted`, 'success');
+        } else {
+            showStatus('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showStatus('Network error deleting player', 'error');
     }
 }
 

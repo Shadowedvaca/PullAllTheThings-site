@@ -446,18 +446,29 @@ async def admin_players_data(
     # Build set of discord_ids already linked to a player
     linked_discord_ids = {m.discord_id for m in members if m.discord_id}
 
-    # Join common.characters with guild_identity notes by name+realm
+    # Join common.characters with guild_identity notes+rank by name+realm
     chars_result = await db.execute(text("""
         SELECT c.id, c.name, c.realm, c.class, c.spec, c.role, c.main_alt, c.member_id,
-               wc.guild_note, wc.officer_note,
+               wc.guild_note, wc.officer_note, wc.guild_rank_name,
                (wc.id IS NOT NULL) AS in_wow_scan
         FROM common.characters c
         LEFT JOIN guild_identity.wow_characters wc
             ON LOWER(wc.character_name) = LOWER(c.name)
-            AND LOWER(wc.realm_slug) = LOWER(c.realm)
+            AND LOWER(wc.realm_slug) = LOWER(REPLACE(c.realm, '''', ''))
         ORDER BY c.name
     """))
     chars = chars_result.mappings().all()
+
+    # Main character info per member (for display_name and role fallbacks)
+    main_char_by_member = {}   # member_id -> {name, role}
+    for c in chars:
+        if c["main_alt"] == "main" and c["member_id"] and c["member_id"] not in main_char_by_member:
+            main_char_by_member[c["member_id"]] = {"name": c["name"], "role": c["role"]}
+
+    # Build rank role_id → rank_name lookup for Discord role matching
+    ranks_result = await db.execute(select(GuildRank).order_by(GuildRank.level.desc()))
+    all_ranks = list(ranks_result.scalars().all())
+    role_id_to_rank = {r.discord_role_id: r for r in all_ranks if r.discord_role_id}
 
     # Get Discord server member list from bot
     discord_users = []
@@ -472,11 +483,19 @@ async def admin_players_data(
                 for dm in guild.members:
                     if dm.bot:
                         continue
+                    # Find highest guild rank from Discord roles
+                    highest_rank = None
+                    for role in dm.roles:
+                        r = role_id_to_rank.get(str(role.id))
+                        if r and (highest_rank is None or r.level > highest_rank.level):
+                            highest_rank = r
                     discord_users.append({
                         "id": str(dm.id),
                         "username": dm.name,
                         "display_name": dm.display_name,
                         "linked": str(dm.id) in linked_discord_ids,
+                        "rank_name": highest_rank.name if highest_rank else None,
+                        "rank_level": highest_rank.level if highest_rank else 0,
                     })
                 discord_users.sort(key=lambda u: u["display_name"].lower())
     except Exception as e:
@@ -495,6 +514,8 @@ async def admin_players_data(
                     "rank_name": m.rank.name if m.rank else "Unknown",
                     "rank_level": m.rank.level if m.rank else 0,
                     "registered": m.user_id is not None,
+                    "main_char_name": (main_char_by_member.get(m.id) or {}).get("name"),
+                    "main_char_role": (main_char_by_member.get(m.id) or {}).get("role"),
                 }
                 for m in members
             ],
@@ -510,6 +531,7 @@ async def admin_players_data(
                     "member_id": c["member_id"],
                     "guild_note": c["guild_note"] or "",
                     "officer_note": c["officer_note"] or "",
+                    "guild_rank_name": c["guild_rank_name"] or "",
                     "in_wow_scan": bool(c["in_wow_scan"]),
                 }
                 for c in chars
@@ -700,6 +722,53 @@ async def admin_link_discord(
         "ok": True,
         "data": {"member_id": member_id, "discord_id": discord_id},
     })
+
+
+@router.delete("/players/{member_id}")
+async def admin_delete_player(
+    request: Request,
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(select(GuildMember).where(GuildMember.id == member_id))
+    m = result.scalar_one_or_none()
+    if not m:
+        return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    name = m.display_name or m.discord_username
+    await db.delete(m)
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"deleted": True, "name": name}})
+
+
+@router.patch("/players/{member_id}/display-name")
+async def admin_update_display_name(
+    request: Request,
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        display_name = (body.get("display_name") or "").strip()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body"}, status_code=400)
+
+    result = await db.execute(select(GuildMember).where(GuildMember.id == member_id))
+    m = result.scalar_one_or_none()
+    if not m:
+        return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    m.display_name = display_name or None  # None clears it, falls back to discord_username in UI
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"member_id": member_id, "display_name": m.display_name}})
 
 
 @router.get("/roster", response_class=HTMLResponse)
