@@ -54,6 +54,7 @@
 - Dev server: `python scripts/run_dev.py` (needs .env)
 
 ## Architecture Notes
+- Domain: pullallthethings.com (plural — note the 's') → Hetzner 5.78.114.224
 - Python 3.13 on Windows dev, Linux prod (Hetzner 5.78.114.224)
 - pytest.ini sets `pythonpath = src` — no editable installs needed
 - asyncio_mode = auto in pytest.ini

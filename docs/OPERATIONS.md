@@ -9,9 +9,9 @@
 
 | What | URL / Command |
 |------|--------------|
-| Guild website | https://pullallthething.com |
-| Admin panel | https://pullallthething.com/admin/campaigns |
-| Health check | https://pullallthething.com/api/health |
+| Guild website | https://pullallthethings.com |
+| Admin panel | https://pullallthethings.com/admin/campaigns |
+| Health check | https://pullallthethings.com/api/health |
 | Server SSH | `ssh root@5.78.114.224` |
 | App logs | `journalctl -u patt -f` |
 | Restart app | `sudo systemctl restart patt` |
@@ -22,7 +22,7 @@
 
 ### Via the Admin Panel (recommended)
 
-1. Log in at https://pullallthething.com/login
+1. Log in at https://pullallthethings.com/login
 2. Go to **Admin → Campaigns → New Campaign**
 3. Fill in the form:
    - **Title** — the campaign name
@@ -81,7 +81,7 @@ The art vote has a pre-built setup script. Once you have all 10 image URLs:
 3. Click **Send Invite** next to their name
 4. They'll receive a DM from PATT-Bot with:
    - Their personal invite code
-   - A link to https://pullallthething.com/register
+   - A link to https://pullallthethings.com/register
 
 The invite code expires in 7 days. If it expires, send a new one.
 
@@ -108,7 +108,7 @@ sudo systemctl restart patt
 
 ### Is the platform healthy?
 ```bash
-curl https://pullallthething.com/api/health
+curl https://pullallthethings.com/api/health
 ```
 Should return: `{"status": "ok"}`
 
@@ -165,7 +165,7 @@ sudo systemctl restart patt
 
 The app typically comes back online in about 5 seconds. Check with:
 ```bash
-curl https://pullallthething.com/api/health
+curl https://pullallthethings.com/api/health
 ```
 
 ---

@@ -10,7 +10,7 @@
 
 - **Project:** Pull All The Things (PATT) Guild Platform
 - **Repo:** `Shadowedvaca/PullAllTheThings-site` (GitHub)
-- **Domain:** pullallthething.com
+- **Domain:** pullallthethings.com
 - **Owner:** Mike (Discord: Trog, Character: Trogmoon, Balance Druid, Sen'jin)
 - **Guild:** "Pull All The Things" — a WoW guild focused on casual heroic raiding with a "real-life first" philosophy and zero-toxicity culture
 - **Podcast:** "Salt All The Things" — a companion podcast to the guild, co-hosted by Trog and Rocket

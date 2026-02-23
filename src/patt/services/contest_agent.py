@@ -593,7 +593,7 @@ async def _process_campaign(
                 description=message_text,
                 color=PATT_GOLD,
             )
-            embed.set_footer(text="PATT-Bot • pullallthething.com")
+            embed.set_footer(text="PATT-Bot • pullallthethings.com")
             embed.timestamp = datetime.now(timezone.utc)
 
             from sv_common.discord.channels import post_embed_to_channel
@@ -614,7 +614,7 @@ async def _process_campaign(
 async def check_campaign_updates(
     db: AsyncSession,
     bot,
-    base_url: str = "https://pullallthething.com",
+    base_url: str = "https://pullallthethings.com",
 ) -> None:
     """Check all agent-enabled campaigns for milestone events and post updates.
 
@@ -670,7 +670,7 @@ async def check_campaign_updates(
 # ---------------------------------------------------------------------------
 
 
-async def run_contest_agent(session_factory, base_url: str = "https://pullallthething.com") -> None:
+async def run_contest_agent(session_factory, base_url: str = "https://pullallthethings.com") -> None:
     """Background asyncio task: checks for campaign updates every 5 minutes."""
     while True:
         await asyncio.sleep(300)  # 5 minutes
