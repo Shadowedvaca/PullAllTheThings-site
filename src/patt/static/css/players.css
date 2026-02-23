@@ -532,3 +532,51 @@
     color: var(--color-warning);
     border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
 }
+
+/* ── Audit filter row ── */
+.pm-filter-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+/* ── Rank multi-select dropdown ── */
+.pm-rank-dropdown {
+    position: relative;
+}
+
+.pm-rank-summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    padding: 2px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-bg-card);
+    white-space: nowrap;
+    user-select: none;
+}
+.pm-rank-summary::-webkit-details-marker { display: none; }
+.pm-rank-summary::marker { display: none; }
+.pm-rank-dropdown[open] .pm-rank-summary {
+    border-color: var(--color-accent);
+    color: var(--color-text);
+}
+
+.pm-rank-panel {
+    position: absolute;
+    top: calc(100% + 3px);
+    left: 0;
+    z-index: 100;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    padding: 0.4rem 0.6rem;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}

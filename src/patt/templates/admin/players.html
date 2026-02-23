@@ -51,6 +51,15 @@
         <div class="pm-pane__toolbar">
             <input type="search" id="player-search" class="form-control"
                    placeholder="Filter by name…" style="font-size:0.85rem;">
+            <div class="pm-filter-row">
+                <details class="pm-rank-dropdown" id="rank-dropdown">
+                    <summary class="pm-rank-summary" id="rank-summary">All Ranks ▾</summary>
+                    <div class="pm-rank-panel" id="rank-panel"></div>
+                </details>
+                <label class="pm-filter-label"><input type="checkbox" id="player-no-chars"> No chars</label>
+                <label class="pm-filter-label"><input type="checkbox" id="player-no-discord"> No Discord</label>
+                <label class="pm-filter-label"><input type="checkbox" id="player-no-main"> No main</label>
+            </div>
         </div>
         <div id="new-player-form" style="display:none;" class="pm-new-form">
             <input id="new-player-name" class="form-control" placeholder="Display name (e.g. Trog)" style="font-size:0.85rem;">
@@ -75,9 +84,11 @@
         <div class="pm-pane__toolbar">
             <input type="search" id="char-search" class="form-control"
                    placeholder="Name, class, spec…" style="font-size:0.85rem;">
-            <label class="pm-filter-label">
-                <input type="checkbox" id="char-unlinked-only"> Unlinked only
-            </label>
+            <div class="pm-filter-row">
+                <label class="pm-filter-label"><input type="checkbox" id="char-unlinked-only"> Unlinked only</label>
+                <label class="pm-filter-label"><input type="checkbox" id="char-not-in-api"> Not in API</label>
+                <label class="pm-filter-label"><input type="checkbox" id="char-role-mismatch"> Role mismatch</label>
+            </div>
         </div>
         <div id="char-list" class="pm-scroll-list">
             <div class="pm-unassign-zone" id="pm-char-unlink">

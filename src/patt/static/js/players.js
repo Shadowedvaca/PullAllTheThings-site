@@ -70,10 +70,49 @@ async function loadData() {
         discordUsers = data.data.discord_users || [];
         players      = data.data.players       || [];
         allChars     = data.data.characters    || [];
+        buildRankFilter();
         render();
     } catch (e) {
         showStatus('Network error loading data', 'error');
     }
+}
+
+// ── Rank filter dropdown ────────────────────────────────────────────────────
+
+function buildRankFilter() {
+    const rankMap = new Map();
+    players.forEach(p => {
+        if (p.rank_level != null && !rankMap.has(p.rank_level))
+            rankMap.set(p.rank_level, p.rank_name);
+    });
+    const ranks = [...rankMap.entries()]
+        .map(([level, name]) => ({ level, name }))
+        .sort((a, b) => b.level - a.level);
+
+    const panel = document.getElementById('rank-panel');
+    if (!panel) return;
+    panel.innerHTML = ranks.map(r => `
+        <label class="pm-filter-label">
+            <input type="checkbox" class="pm-rank-cb" value="${r.level}" checked>
+            ${escHtml(r.name)}
+        </label>`).join('');
+    panel.querySelectorAll('.pm-rank-cb').forEach(cb =>
+        cb.addEventListener('change', () => { updateRankSummary(); renderPlayers(); })
+    );
+    updateRankSummary();
+}
+
+function getSelectedRankLevels() {
+    const cbs = [...document.querySelectorAll('.pm-rank-cb')];
+    if (!cbs.length) return null;
+    return new Set(cbs.filter(cb => cb.checked).map(cb => parseInt(cb.value)));
+}
+
+function updateRankSummary() {
+    const cbs = [...document.querySelectorAll('.pm-rank-cb')];
+    const total = cbs.length, checked = cbs.filter(cb => cb.checked).length;
+    const el = document.getElementById('rank-summary');
+    if (el) el.textContent = (checked === total ? 'All Ranks' : `${checked} Rank${checked !== 1 ? 's' : ''}`) + ' ▾';
 }
 
 // ── Render all three columns ───────────────────────────────────────────────
@@ -139,13 +178,34 @@ function renderDiscord() {
 // ── Col 2: Players ─────────────────────────────────────────────────────────
 
 function renderPlayers() {
-    const search = (document.getElementById('player-search').value || '').toLowerCase();
+    const search       = (document.getElementById('player-search').value || '').toLowerCase();
+    const noChars      = document.getElementById('player-no-chars')?.checked;
+    const noDiscord    = document.getElementById('player-no-discord')?.checked;
+    const noMain       = document.getElementById('player-no-main')?.checked;
+    const selectedRanks = getSelectedRankLevels();
+    const auditActive  = noChars || noDiscord || noMain;
 
     const filtered = players.filter(p => {
         if (drill) return drill.memberIds.has(p.id);
-        if (!search) return true;
-        return (p.display_name || '').toLowerCase().includes(search) ||
-               (p.discord_username || '').toLowerCase().includes(search);
+
+        // Rank filter
+        if (selectedRanks && !selectedRanks.has(p.rank_level)) return false;
+
+        // Search
+        if (search && !(p.display_name || '').toLowerCase().includes(search) &&
+                      !(p.discord_username || '').toLowerCase().includes(search)) return false;
+
+        // Audit filters (OR — show player if they fail any checked condition)
+        if (auditActive) {
+            const charCount = allChars.filter(c => c.member_id === p.id).length;
+            const hasMain   = allChars.some(c => c.member_id === p.id && c.main_alt === 'main');
+            const hit = (noChars   && charCount === 0) ||
+                        (noDiscord && !p.discord_id)   ||
+                        (noMain    && charCount > 0 && !hasMain);
+            if (!hit) return false;
+        }
+
+        return true;
     });
 
     document.getElementById('player-count').textContent = `(${players.length})`;
@@ -213,13 +273,31 @@ function renderPlayers() {
 
 // ── Col 3: Characters ──────────────────────────────────────────────────────
 
+// Maps common.characters.role → guild_identity role_category values
+const ROLE_MAP = { tank: 'Tank', healer: 'Healer', melee_dps: 'Melee', ranged_dps: 'Ranged' };
+
+function isRoleMismatch(c) {
+    return c.in_wow_scan && c.api_role && c.role !== 'dps' && ROLE_MAP[c.role] !== c.api_role;
+}
+
 function renderChars() {
-    const search = (document.getElementById('char-search').value || '').toLowerCase();
-    const unlinkedOnly = document.getElementById('char-unlinked-only').checked;
+    const search        = (document.getElementById('char-search').value || '').toLowerCase();
+    const unlinkedOnly  = document.getElementById('char-unlinked-only')?.checked;
+    const notInApi      = document.getElementById('char-not-in-api')?.checked;
+    const roleMismatch  = document.getElementById('char-role-mismatch')?.checked;
+    const auditActive   = notInApi || roleMismatch;
 
     const filtered = allChars.filter(c => {
         if (drill) return drill.charIds.has(c.id);
         if (unlinkedOnly && c.member_id) return false;
+
+        // Char audit filters (OR)
+        if (auditActive) {
+            const hit = (notInApi     && !c.in_wow_scan) ||
+                        (roleMismatch && isRoleMismatch(c));
+            if (!hit) return false;
+        }
+
         if (search &&
             !c.name.toLowerCase().includes(search) &&
             !(c.class        || '').toLowerCase().includes(search) &&
@@ -250,6 +328,9 @@ function renderChars() {
         const notInScanBadge = c.in_wow_scan ? ''
             : `<span class="pm-badge pm-badge--warn pm-not-in-scan" title="Not found in Blizzard API scan — name may have changed">? API</span>
                <button class="pm-delete-btn" onclick="deleteChar(event,${c.id},'${escAttr(c.name)}')" title="Delete this character">✕</button>`;
+        const mismatchBadge = isRoleMismatch(c)
+            ? `<span class="pm-badge pm-badge--warn pm-role-mismatch" title="Role mismatch: stored as ${c.role}, API says ${c.api_role}">⚡ ${escHtml(c.api_role)}</span>`
+            : '';
         const noteHtml = (c.guild_note || c.officer_note)
             ? `<div class="pm-char-notes">
                 ${c.guild_note    ? `<span class="pm-char-note pm-char-note--guild" title="Guild note">${escHtml(c.guild_note)}</span>` : ''}
@@ -270,6 +351,7 @@ function renderChars() {
                     <span class="pm-char-name">${escHtml(c.name)}</span>
                     <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
                     <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
+                    ${mismatchBadge}
                     ${c.guild_rank_name ? `<span class="pm-char-guild-rank">${escHtml(c.guild_rank_name)}</span>` : ''}
                     ${isMain ? '<span class="pm-main-badge">M</span>' : '<span class="pm-alt-badge">A</span>'}
                     ${notInScanBadge}
@@ -574,7 +656,12 @@ function escAttr(s) { return escHtml(s); }
 document.getElementById('discord-search').addEventListener('input', renderDiscord);
 document.getElementById('discord-unlinked-only').addEventListener('change', renderDiscord);
 document.getElementById('player-search').addEventListener('input', renderPlayers);
+document.getElementById('player-no-chars').addEventListener('change', renderPlayers);
+document.getElementById('player-no-discord').addEventListener('change', renderPlayers);
+document.getElementById('player-no-main').addEventListener('change', renderPlayers);
 document.getElementById('char-search').addEventListener('input', renderChars);
 document.getElementById('char-unlinked-only').addEventListener('change', renderChars);
+document.getElementById('char-not-in-api').addEventListener('change', renderChars);
+document.getElementById('char-role-mismatch').addEventListener('change', renderChars);
 
 loadData();

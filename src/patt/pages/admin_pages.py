@@ -449,7 +449,7 @@ async def admin_players_data(
     # Join common.characters with guild_identity notes+rank by name+realm
     chars_result = await db.execute(text("""
         SELECT c.id, c.name, c.realm, c.class, c.spec, c.role, c.main_alt, c.member_id,
-               wc.guild_note, wc.officer_note, wc.guild_rank_name,
+               wc.guild_note, wc.officer_note, wc.guild_rank_name, wc.role_category AS api_role,
                (wc.id IS NOT NULL) AS in_wow_scan
         FROM common.characters c
         LEFT JOIN guild_identity.wow_characters wc
@@ -533,6 +533,7 @@ async def admin_players_data(
                     "officer_note": c["officer_note"] or "",
                     "guild_rank_name": c["guild_rank_name"] or "",
                     "in_wow_scan": bool(c["in_wow_scan"]),
+                    "api_role": c["api_role"] or "",
                 }
                 for c in chars
             ],
