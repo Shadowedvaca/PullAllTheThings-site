@@ -454,7 +454,7 @@ async def admin_players_data(
         FROM common.characters c
         LEFT JOIN guild_identity.wow_characters wc
             ON LOWER(wc.character_name) = LOWER(c.name)
-            AND LOWER(wc.realm_slug) = LOWER(REPLACE(c.realm, '''', ''))
+            AND LOWER(wc.realm_name) = LOWER(c.realm)
         ORDER BY c.name
     """))
     chars = chars_result.mappings().all()
