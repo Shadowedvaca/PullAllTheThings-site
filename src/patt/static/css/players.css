@@ -93,6 +93,57 @@
     background: var(--color-bg-panel);
 }
 
+/* ── Drill filter banner ── */
+.pm-drill-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+}
+.pm-drill-label {
+    color: var(--color-accent);
+    font-weight: 600;
+    flex: 1;
+}
+.pm-drill-clear {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 10px;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+.pm-drill-clear:hover { background: var(--color-bg-panel); color: var(--color-text); }
+
+/* Drill button — appears on every row */
+.pm-drill-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0 3px;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+}
+.pm-discord-row:hover .pm-drill-btn,
+.pm-player-card:hover .pm-drill-btn,
+.pm-char-chip:hover .pm-drill-btn { opacity: 1; }
+.pm-drill-btn:hover { color: var(--color-accent); }
+
+/* Active/highlighted items during drill */
+.pm-drill-active { background: color-mix(in srgb, var(--color-accent) 6%, transparent) !important; }
+
 /* ── Discord rows ── */
 .pm-discord-row {
     display: flex;

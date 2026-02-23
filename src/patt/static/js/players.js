@@ -9,6 +9,57 @@ let allChars = [];
 let dragType = null;   // 'discord' | 'char'
 let dragId = null;     // discord_id (string) or char id (number)
 
+// ── Drill state ────────────────────────────────────────────────────────────
+// When active, overrides search filters to show only related items.
+// drill.memberIds / drill.discordIds / drill.charIds are Sets of allowed IDs.
+let drill = null;  // null = off, or { label, memberIds, discordIds, charIds }
+
+function drillOn(type, id) {
+    let memberIds = new Set();
+    let discordIds = new Set();
+    let charIds = new Set();
+    let label = '';
+
+    if (type === 'discord') {
+        const u = discordUsers.find(u => u.id === id);
+        if (!u) return;
+        label = u.display_name || u.username;
+        discordIds.add(id);
+        // Find linked player(s)
+        players.filter(p => p.discord_id === id).forEach(p => {
+            memberIds.add(p.id);
+            allChars.filter(c => c.member_id === p.id).forEach(c => charIds.add(c.id));
+        });
+    } else if (type === 'player') {
+        const p = players.find(p => p.id === id);
+        if (!p) return;
+        label = p.display_name || p.discord_username;
+        memberIds.add(id);
+        if (p.discord_id) discordIds.add(p.discord_id);
+        allChars.filter(c => c.member_id === id).forEach(c => charIds.add(c.id));
+    } else if (type === 'char') {
+        const c = allChars.find(c => c.id === id);
+        if (!c) return;
+        label = c.name;
+        charIds.add(id);
+        if (c.member_id) {
+            memberIds.add(c.member_id);
+            // All chars for same player
+            allChars.filter(ch => ch.member_id === c.member_id).forEach(ch => charIds.add(ch.id));
+            const p = players.find(p => p.id === c.member_id);
+            if (p && p.discord_id) discordIds.add(p.discord_id);
+        }
+    }
+
+    drill = { label, memberIds, discordIds, charIds };
+    render();
+}
+
+function clearDrill() {
+    drill = null;
+    render();
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 
 async function loadData() {
@@ -28,6 +79,16 @@ async function loadData() {
 // ── Render all three columns ───────────────────────────────────────────────
 
 function render() {
+    // Drill banner
+    const banner = document.getElementById('pm-drill-banner');
+    if (banner) {
+        if (drill) {
+            banner.style.display = 'flex';
+            banner.querySelector('.pm-drill-label').textContent = `Filtered: ${drill.label}`;
+        } else {
+            banner.style.display = 'none';
+        }
+    }
     renderDiscord();
     renderPlayers();
     renderChars();
@@ -42,6 +103,7 @@ function renderDiscord() {
     const unlinkedOnly = document.getElementById('discord-unlinked-only').checked;
 
     const filtered = discordUsers.filter(u => {
+        if (drill) return drill.discordIds.has(u.id);
         if (unlinkedOnly && u.linked) return false;
         if (search && !u.display_name.toLowerCase().includes(search) &&
                       !u.username.toLowerCase().includes(search)) return false;
@@ -53,11 +115,12 @@ function renderDiscord() {
 
     const list = document.getElementById('discord-list');
     list.innerHTML = filtered.map(u => `
-        <div class="pm-discord-row ${u.linked ? 'pm-linked' : 'pm-unlinked-row'}"
+        <div class="pm-discord-row ${u.linked ? 'pm-linked' : 'pm-unlinked-row'} ${drill && drill.discordIds.has(u.id) ? 'pm-drill-active' : ''}"
              draggable="true"
              data-discord-id="${escAttr(u.id)}"
              data-username="${escAttr(u.username)}"
              ondragstart="handleDiscordDragStart(event, '${escAttr(u.id)}', '${escAttr(u.username)}')">
+            <button class="pm-drill-btn" onclick="drillOn('discord','${escAttr(u.id)}')" title="Focus on ${escAttr(u.display_name)}">◎</button>
             <span class="pm-discord-icon">💬</span>
             <div class="pm-discord-info">
                 <span class="pm-discord-name">${escHtml(u.display_name)}</span>
@@ -79,6 +142,7 @@ function renderPlayers() {
     const search = (document.getElementById('player-search').value || '').toLowerCase();
 
     const filtered = players.filter(p => {
+        if (drill) return drill.memberIds.has(p.id);
         if (!search) return true;
         return (p.display_name || '').toLowerCase().includes(search) ||
                (p.discord_username || '').toLowerCase().includes(search);
@@ -114,12 +178,13 @@ function renderPlayers() {
                        : (effectiveRole === 'dps' || effectiveRole === 'melee_dps' || effectiveRole === 'ranged_dps') ? '⚔️' : '';
 
         return `
-        <div class="pm-player-card"
+        <div class="pm-player-card ${drill && drill.memberIds.has(p.id) ? 'pm-drill-active' : ''}"
              data-member-id="${p.id}"
              ondragover="event.preventDefault();this.classList.add('pm-drag-over')"
              ondragleave="this.classList.remove('pm-drag-over')"
              ondrop="handlePlayerDrop(event, ${p.id})">
             <div class="pm-player-header">
+                <button class="pm-drill-btn" onclick="drillOn('player',${p.id})" title="Focus on ${escAttr(effectiveName)}">◎</button>
                 ${roleIcon ? `<span class="pm-player-role-icon">${roleIcon}</span>` : ''}
                 <span class="pm-player-name ${nameIsSet ? '' : 'pm-name-derived'}"
                       title="${nameIsSet ? 'Custom display name' : 'Derived — click pencil to set'}"
@@ -153,6 +218,7 @@ function renderChars() {
     const unlinkedOnly = document.getElementById('char-unlinked-only').checked;
 
     const filtered = allChars.filter(c => {
+        if (drill) return drill.charIds.has(c.id);
         if (unlinkedOnly && c.member_id) return false;
         if (search &&
             !c.name.toLowerCase().includes(search) &&
@@ -192,13 +258,14 @@ function renderChars() {
             : '';
 
         return `
-        <div class="pm-char-row">
+        <div class="pm-char-row ${drill && drill.charIds.has(c.id) ? 'pm-drill-active' : ''}">
             <div class="pm-char-chip-wrap">
                 <div class="pm-char-chip pm-char-chip--${roleClass}"
                      draggable="true"
                      data-char-id="${c.id}"
                      ondragstart="handleCharDragStart(event, ${c.id})"
                      ondragend="this.classList.remove('pm-dragging')">
+                    <button class="pm-drill-btn" onclick="drillOn('char',${c.id})" title="Focus on ${escAttr(c.name)}">◎</button>
                     <span class="pm-role-icon">${roleIcon}</span>
                     <span class="pm-char-name">${escHtml(c.name)}</span>
                     <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
