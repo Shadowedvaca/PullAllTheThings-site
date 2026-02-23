@@ -33,7 +33,10 @@
       "Bash(curl:*)",
       "Bash(nslookup:*)",
       "Bash(cat:*)",
-      "Bash(cd /h/Development/PullAllTheThings-site/companion_app && python -c \"import watchdog, httpx, dotenv; print\\('all deps OK'\\)\" 2>&1)"
+      "Bash(cd /h/Development/PullAllTheThings-site/companion_app && python -c \"import watchdog, httpx, dotenv; print\\('all deps OK'\\)\" 2>&1)",
+      "Bash(grep:*)",
+      "Bash(ls memory:*)",
+      "Bash(gh api:*)"
     ]
   }
 }
