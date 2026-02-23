@@ -1,33 +1,326 @@
 {% extends "base.html" %}
 {% block title %}Pull All The Things — WoW Guild{% endblock %}
 
+{% block head %}
+<style>
+/* ── Landing-page-specific styles ── */
+.lp-hero {
+    text-align: center;
+    padding: 70px 20px 55px;
+    background: linear-gradient(180deg, rgba(212,168,75,0.08) 0%, transparent 100%);
+    border-bottom: 1px solid var(--color-border, #2a2a2e);
+}
+.lp-hero__title {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: clamp(2.2rem, 6vw, 3.5rem);
+    font-weight: 900;
+    color: var(--color-accent, #d4a84b);
+    text-shadow: 0 0 20px rgba(212,168,75,0.3);
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+}
+.lp-hero__tagline {
+    font-size: 1.2rem;
+    color: var(--color-text-muted, #888);
+    max-width: 600px;
+    margin: 0 auto 22px;
+}
+.lp-faction-badges {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+.lp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 13px;
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    color: var(--color-text-muted, #888);
+}
+.lp-badge--gold  { border-color: var(--color-accent, #d4a84b); color: var(--color-accent, #d4a84b); }
+.lp-badge--horde { border-color: #8b0000; color: #ff6666; }
+.lp-realm-info   { font-size: 0.9rem; color: #555; margin-bottom: 22px; }
+.lp-hero-cta     { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+/* Section wrapper */
+.lp-container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+.lp-section   { margin-bottom: 48px; }
+.lp-section-title {
+    font-family: var(--font-display, 'Cinzel', serif);
+    font-size: 1.4rem;
+    color: var(--color-accent, #d4a84b);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.lp-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--color-border, #2a2a2e), transparent);
+}
+
+/* About */
+.lp-about {
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 12px;
+    padding: 28px;
+}
+.lp-about p { margin-bottom: 16px; }
+.lp-about p:last-child { margin-bottom: 0; }
+.lp-highlight { color: var(--color-accent, #d4a84b); font-weight: 600; }
+
+/* Values grid */
+.lp-values {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(195px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+}
+.lp-value {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    background: var(--color-bg, #1e1e22);
+    border-radius: 8px;
+    font-size: 0.93rem;
+}
+.lp-value__icon { font-size: 1.2rem; }
+
+/* Recruiting needs */
+.lp-needs {
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 12px;
+    padding: 24px;
+}
+.lp-needs-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    text-align: center;
+}
+.lp-need-item {
+    padding: 14px;
+    background: var(--color-bg, #1e1e22);
+    border-radius: 8px;
+    transition: opacity 0.2s;
+}
+.lp-need-item.fulfilled { opacity: 0.45; }
+.lp-need-item.high-need {
+    border: 1px solid var(--color-accent, #d4a84b);
+    background: rgba(212,168,75,0.08);
+}
+.lp-need-role  { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
+.lp-need-count { font-size: 0.88rem; color: var(--color-text-muted, #888); }
+.lp-needs-note { text-align: center; font-size: 0.82rem; color: #555; margin-top: 14px; }
+.role-tank   { color: #60a5fa; }
+.role-healer { color: #4ade80; }
+.role-dps    { color: #f87171; }
+
+/* Schedule */
+.lp-schedule {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+.lp-sched-item {
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 10px;
+    padding: 18px;
+}
+.lp-sched-day  { font-family: var(--font-display, 'Cinzel', serif); font-size: 1.05rem; color: var(--color-accent, #d4a84b); margin-bottom: 4px; }
+.lp-sched-time { font-size: 0.88rem; color: var(--color-text-muted, #888); margin-bottom: 6px; }
+.lp-sched-desc { font-size: 0.93rem; }
+
+/* Join Us */
+.lp-links {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    max-width: 480px;
+    margin: 0 auto;
+}
+.lp-link-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 18px;
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--color-text, #e8e8e8);
+    transition: all 0.2s ease;
+}
+.lp-link-card:hover {
+    background: #1a1a1e;
+    border-color: var(--color-accent, #d4a84b);
+    transform: translateY(-2px);
+    box-shadow: 0 0 18px rgba(212,168,75,0.25);
+}
+.lp-link-icon  { font-size: 2rem; }
+.lp-link-title { font-family: var(--font-display, 'Cinzel', serif); font-size: 0.95rem; color: var(--color-accent, #d4a84b); }
+.lp-link-desc  { font-size: 0.82rem; color: var(--color-text-muted, #888); text-align: center; }
+
+/* Officers */
+.lp-gl-card {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 18px 20px;
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-accent, #d4a84b);
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--color-surface, #141416) 0%, rgba(212,168,75,0.08) 100%);
+    margin-bottom: 16px;
+}
+.lp-gl-avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--color-bg, #1e1e22);
+    border: 2px solid var(--color-accent, #d4a84b);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+}
+.lp-gl-rank     { font-size: 0.82rem; color: var(--color-accent, #d4a84b); margin-bottom: 2px; }
+.lp-gl-name     { font-family: var(--font-display, 'Cinzel', serif); font-size: 1.05rem; }
+.lp-gl-char a   { font-size: 0.9rem; color: var(--color-text-muted, #888); text-decoration: none; }
+.lp-gl-char a:hover { color: var(--color-accent, #d4a84b); }
+
+.lp-officers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 13px;
+}
+.lp-officer-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 10px;
+}
+.lp-officer-avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--color-bg, #1e1e22);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+}
+.lp-officer-name { font-weight: 600; font-size: 0.93rem; margin-bottom: 2px; }
+.lp-officer-char a { font-size: 0.8rem; color: var(--color-text-muted, #888); text-decoration: none; }
+.lp-officer-char a:hover { color: var(--color-accent, #d4a84b); }
+
+/* Mito's Quote */
+.lp-quote {
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 12px;
+    padding: 28px;
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+}
+.lp-quote-char { flex-shrink: 0; text-align: center; }
+.lp-quote-avatar {
+    width: 76px; height: 76px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4ade80 0%, #2d8a4d 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.3rem;
+    margin-bottom: 6px;
+}
+.lp-quote-name { font-family: var(--font-display, 'Cinzel', serif); font-size: 0.88rem; color: #4ade80; }
+.lp-quote-bubble {
+    flex: 1;
+    position: relative;
+    background: var(--color-bg, #1e1e22);
+    border-radius: 12px;
+    padding: 18px 22px;
+}
+.lp-quote-bubble::before {
+    content: '';
+    position: absolute;
+    left: -9px; top: 22px;
+    width: 0; height: 0;
+    border-top: 9px solid transparent;
+    border-bottom: 9px solid transparent;
+    border-right: 9px solid var(--color-bg, #1e1e22);
+}
+.lp-quote-text  { font-size: 1.02rem; font-style: italic; line-height: 1.6; }
+.lp-quote-label { margin-top: 10px; font-size: 0.8rem; color: #555; }
+
+/* Members Only */
+.lp-members {
+    background: var(--color-surface, #141416);
+    border: 1px solid var(--color-border, #2a2a2e);
+    border-radius: 12px;
+    padding: 24px;
+}
+.lp-members-note {
+    text-align: center;
+    color: var(--color-text-muted, #888);
+    font-size: 0.93rem;
+    margin-bottom: 18px;
+}
+
+/* Campaigns section */
+.lp-campaigns-section { margin-bottom: 40px; }
+
+/* Divider */
+.lp-divider { border: none; border-top: 1px solid var(--color-border, #2a2a2e); margin: 40px 0; }
+
+@media (max-width: 600px) {
+    .lp-needs-grid { grid-template-columns: repeat(2, 1fr); }
+    .lp-links      { grid-template-columns: 1fr; }
+    .lp-quote      { flex-direction: column; align-items: center; text-align: center; }
+    .lp-quote-bubble::before { display: none; }
+    .lp-faction-badges { gap: 8px; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="landing-hero">
-    <h1 class="landing-hero__title">Pull All The Things</h1>
-    <p class="landing-hero__tagline">A World of Warcraft guild &mdash; Real life first, zero toxicity</p>
 
-    <div class="landing-hero__image-wrap">
-        <img class="landing-hero__image"
-             src="https://drive.google.com/uc?id=1jqR_dMhV-7tKqxbNNJPdGwpS5I5-V4Hg&export=view"
-             alt="Pull All The Things Guild"
-             loading="lazy"
-             onerror="this.style.display='none'">
+{# ── Hero ── #}
+<section class="lp-hero">
+    <h1 class="lp-hero__title">Pull All The Things</h1>
+    <p class="lp-hero__tagline">Casual Heroic Raiding with Real-Life Balance &amp; Immaculate Vibes</p>
+    <div class="lp-faction-badges">
+        <span class="lp-badge lp-badge--horde">🔥 Horde</span>
+        <span class="lp-badge">⚔️ Alliance</span>
+        <span class="lp-badge lp-badge--gold">🏰 Est. BC</span>
     </div>
-
+    <p class="lp-realm-info">Based on Sen'jin &bull; Cross-Realm Welcome</p>
     {% if not current_member %}
-    <div>
-        <a href="/login" class="btn btn-primary btn-lg">Sign In</a>
-        <span class="text-muted" style="margin-left:1rem;font-size:0.9rem;">Have an invite code? <a href="/register">Register</a></span>
+    <div class="lp-hero-cta">
+        <a href="/login" class="btn btn-primary">Sign In</a>
+        <span class="text-muted" style="font-size:0.9rem;display:flex;align-items:center;">
+            Have an invite code? <a href="/register" style="margin-left:0.3rem;">Register</a>
+        </span>
     </div>
     {% endif %}
-</div>
+</section>
 
-<hr class="divider">
+<div class="lp-container">
 
-{# Active campaigns #}
+{# ── Active Campaigns ── #}
 {% if live_campaigns %}
-<section class="landing-campaigns">
-    <h2 class="landing-section-title">Active Votes</h2>
+<section class="lp-campaigns-section">
+    <h2 class="lp-section-title">🗳 Active Votes</h2>
     <div class="campaign-cards">
         {% for c in live_campaigns %}
         <div class="campaign-card">
@@ -51,26 +344,17 @@
         {% endfor %}
     </div>
 </section>
-{% elif current_member %}
-<section class="landing-campaigns">
-    <div class="empty-state">
-        <div class="empty-state__icon">🗳</div>
-        <div class="empty-state__text">No active campaigns right now. Check back soon!</div>
-    </div>
-</section>
 {% endif %}
 
-{# Recently closed campaigns #}
+{# ── Recent Results ── #}
 {% if closed_campaigns %}
-<section class="landing-campaigns mt-3">
-    <h2 class="landing-section-title">Recent Results</h2>
+<section class="lp-campaigns-section">
+    <h2 class="lp-section-title">Recent Results</h2>
     <div class="campaign-cards">
         {% for c in closed_campaigns %}
         <div class="campaign-card">
             <div class="campaign-card__title">{{ c.title }}</div>
-            <div class="campaign-card__meta">
-                <span class="badge badge-closed">Closed</span>
-            </div>
+            <div class="campaign-card__meta"><span class="badge badge-closed">Closed</span></div>
             <div class="campaign-card__actions">
                 <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">View Results</a>
             </div>
@@ -80,38 +364,277 @@
 </section>
 {% endif %}
 
-{# Guild info #}
-<hr class="divider">
-<section>
-    <h2 class="landing-section-title">About the Guild</h2>
-    <div class="card">
-        <div class="card-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1.5rem;">
-            <div>
-                <h3 style="font-family:var(--font-display);color:var(--color-accent);font-size:1rem;margin-bottom:0.5rem;">Our Philosophy</h3>
-                <p class="text-muted" style="font-size:0.95rem;">
-                    Real life first. Zero toxicity. We raid together, we support each other,
-                    and we have fun along the way.
-                </p>
+{% if live_campaigns or closed_campaigns %}
+<hr class="lp-divider">
+{% endif %}
+
+{# ── Who We Are ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Who We Are</h2>
+    <div class="lp-about">
+        <p>
+            <span class="lp-highlight">Tired of pug chaos?</span> Want a guild that values progression
+            <em>and</em> your IRL commitments? Come pull all the things with us.
+        </p>
+        <p>
+            Pull All The Things is a tight-knit guild run by adult gamers who log in to make progress
+            and most importantly enjoy downtime. We raid Heroic content weekly, push Mythic+ keys,
+            go on mount runs, knock out achievements, and chill in Discord with all of the memes.
+        </p>
+        <p>
+            But honestly? <span class="lp-highlight">We care more about people who mesh with our group than class/spec.</span>
+        </p>
+        <div class="lp-values">
+            <div class="lp-value"><span class="lp-value__icon">🏠</span><span><strong>Real-Life First</strong> — Life happens, we get it</span></div>
+            <div class="lp-value"><span class="lp-value__icon">🤝</span><span><strong>Inclusive</strong> — Any role, any skill level</span></div>
+            <div class="lp-value"><span class="lp-value__icon">💚</span><span><strong>Community</strong> — M+, crafting, achievements</span></div>
+            <div class="lp-value"><span class="lp-value__icon">✨</span><span><strong>Zero Toxicity</strong> — Good vibes only</span></div>
+        </div>
+    </div>
+</section>
+
+{# ── Currently Recruiting ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Currently Recruiting</h2>
+    <div class="lp-needs">
+        <div class="lp-needs-grid">
+            <div class="lp-need-item" id="need-tank">
+                <div class="lp-need-role role-tank">🛡️ Tank</div>
+                <div class="lp-need-count" id="need-tank-count">Loading…</div>
             </div>
-            <div>
-                <h3 style="font-family:var(--font-display);color:var(--color-accent);font-size:1rem;margin-bottom:0.5rem;">Focus</h3>
-                <p class="text-muted" style="font-size:0.95rem;">
-                    Casual heroic raiding on Sen'jin. We clear content at a pace that works
-                    for adults with lives outside the game.
-                </p>
+            <div class="lp-need-item" id="need-healer">
+                <div class="lp-need-role role-healer">💚 Healer</div>
+                <div class="lp-need-count" id="need-healer-count">Loading…</div>
             </div>
+            <div class="lp-need-item" id="need-melee">
+                <div class="lp-need-role role-dps">⚔️ Melee DPS</div>
+                <div class="lp-need-count" id="need-melee-count">Loading…</div>
+            </div>
+            <div class="lp-need-item" id="need-ranged">
+                <div class="lp-need-role role-dps">🏹 Ranged DPS</div>
+                <div class="lp-need-count" id="need-ranged-count">Loading…</div>
+            </div>
+        </div>
+        <p class="lp-needs-note" id="needsNote">Targeting 20-player roster</p>
+    </div>
+</section>
+
+{# ── Weekly Schedule ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Weekly Schedule</h2>
+    <div class="lp-schedule">
+        <div class="lp-sched-item">
+            <div class="lp-sched-day">Friday</div>
+            <div class="lp-sched-time">6:00 PM PST / 9:00 PM EST</div>
+            <div class="lp-sched-desc">Heroic Raid Night</div>
+        </div>
+        <div class="lp-sched-item">
+            <div class="lp-sched-day">Saturday</div>
+            <div class="lp-sched-time">6:00 PM PST / 9:00 PM EST</div>
+            <div class="lp-sched-desc">Heroic Raid Night</div>
+        </div>
+        <div class="lp-sched-item">
+            <div class="lp-sched-day">Sunday</div>
+            <div class="lp-sched-time">Flexible</div>
+            <div class="lp-sched-desc">Achievement Runs</div>
+        </div>
+        <div class="lp-sched-item">
+            <div class="lp-sched-day">Weeknights</div>
+            <div class="lp-sched-time">Various</div>
+            <div class="lp-sched-desc">Mythic+ / Delves / PvP</div>
+        </div>
+    </div>
+</section>
+
+{# ── Join Us ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Join Us</h2>
+    <div class="lp-links">
+        <a href="https://discord.gg/jgSSRBvjHM" target="_blank" rel="noopener" class="lp-link-card">
+            <span class="lp-link-icon">💬</span>
+            <span class="lp-link-title">Discord</span>
+            <span class="lp-link-desc">Hop in, grab a guest role, and say hi!</span>
+        </a>
+        <a href="https://us.forums.blizzard.com/en/wow/t/ah-pull-all-the-things-recruiting-casual-heroic-raiding-with-real-life-balance-immaculate-vibes/2060891" target="_blank" rel="noopener" class="lp-link-card">
+            <span class="lp-link-icon">📜</span>
+            <span class="lp-link-title">Forum Post</span>
+            <span class="lp-link-desc">Our official recruitment thread</span>
+        </a>
+    </div>
+</section>
+
+{# ── Guild Officers ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Guild Officers</h2>
+    <div class="lp-gl-card">
+        <div class="lp-gl-avatar">👑</div>
+        <div>
+            <div class="lp-gl-rank">Guild Leader</div>
+            <div class="lp-gl-name">Trog</div>
+            <div class="lp-gl-char">
+                <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/trogmoon" target="_blank" rel="noopener" class="role-dps">
+                    Trogmoon — Balance Druid
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="lp-officers">
+        <div class="lp-officer-card">
+            <div class="lp-officer-avatar">🛡️</div>
             <div>
-                <h3 style="font-family:var(--font-display);color:var(--color-accent);font-size:1rem;margin-bottom:0.5rem;">Podcast</h3>
-                <p class="text-muted" style="font-size:0.95rem;">
-                    Listen to <em>Salt All The Things</em> — our companion podcast hosted by
-                    Trog &amp; Rocket.
-                </p>
+                <div class="lp-officer-name">Shodoom</div>
+                <div class="lp-officer-char">
+                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/bleeding-hollow/shodoom" target="_blank" rel="noopener" class="role-tank">
+                        Shodoom — Prot Paladin
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="lp-officer-card">
+            <div class="lp-officer-avatar">💚</div>
+            <div>
+                <div class="lp-officer-name">Mito</div>
+                <div class="lp-officer-char">
+                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/alterac-mountains/bloodvalor" target="_blank" rel="noopener" class="role-healer">
+                        Bloodvalor — Holy Paladin
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="lp-officer-card">
+            <div class="lp-officer-avatar">⚔️</div>
+            <div>
+                <div class="lp-officer-name">Rocket</div>
+                <div class="lp-officer-char">
+                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/sargeras/Zatan%C3%B1a" target="_blank" rel="noopener" class="role-dps">
+                        Zatañña — Demo Warlock
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="lp-officer-card">
+            <div class="lp-officer-avatar">⚔️</div>
+            <div>
+                <div class="lp-officer-name">Skate</div>
+                <div class="lp-officer-char">
+                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/tichondrius/skatefarm" target="_blank" rel="noopener" class="role-dps">
+                        Skatefarm — Feral Druid
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 </section>
+
+{# ── Mito's Quote of the Day ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Mito's Quote of the Day</h2>
+    <div class="lp-quote">
+        <div class="lp-quote-char">
+            <div class="lp-quote-avatar">💚</div>
+            <div class="lp-quote-name">Mito</div>
+        </div>
+        <div class="lp-quote-bubble">
+            <div class="lp-quote-text">
+                {{ mito_quote or "Anything is possible when your character raids like a Paladin. I'm on a charger." }}
+            </div>
+            <div class="lp-quote-label">— Mito, {{ mito_title or "Healer Extraordinaire" }}</div>
+        </div>
+    </div>
+</section>
+
+{# ── Members Only ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">🔒 Members Only</h2>
+    <div class="lp-members">
+        <p class="lp-members-note">Guild tools for PATT members. If you're not in the guild yet, hop into Discord first!</p>
+        <div class="lp-links">
+            <a href="/roster.html" class="lp-link-card">
+                <span class="lp-link-icon">📝</span>
+                <span class="lp-link-title">Join Roster</span>
+                <span class="lp-link-desc">Sign up for the raid roster</span>
+            </a>
+            <a href="/roster-view.html" class="lp-link-card">
+                <span class="lp-link-icon">👥</span>
+                <span class="lp-link-title">View Roster</span>
+                <span class="lp-link-desc">See who's on the team</span>
+            </a>
+        </div>
+    </div>
+</section>
+
+</div>{# /lp-container #}
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/countdown.js"></script>
+<script>
+// ── Recruiting Needs (live from platform API) ──
+const RAID_TARGETS = { tank: 2, healer: 4, melee: 7, ranged: 7 };
+const TANK_SPECS   = ['Protection', 'Guardian', 'Brewmaster', 'Blood', 'Vengeance'];
+const HEALER_SPECS = ['Holy', 'Discipline', 'Restoration', 'Mistweaver', 'Preservation'];
+const MELEE_SPECS  = [
+    'Fury', 'Arms',
+    'Retribution',
+    'Feral', 'Guardian',
+    'Windwalker', 'Brewmaster',
+    'Assassination', 'Outlaw', 'Subtlety',
+    'Enhancement',
+    'Unholy', 'Frost', 'Blood',
+    'Havoc', 'Vengeance',
+    'Survival'
+];
+
+async function loadRecruitingNeeds() {
+    try {
+        const res = await fetch('/api/v1/guild/roster-data');
+        const data = await res.json();
+        if (!data.success || !data.characters) { showDefaultNeeds(); return; }
+
+        const counts = { tank: 0, healer: 0, melee: 0, ranged: 0 };
+        data.characters.forEach(char => {
+            const isMain = char.mainAlt === 'Main';
+            if (!isMain) return;
+            const spec = char.spec || '';
+            const role = (char.role || '').toLowerCase();
+            if (role === 'tank' || TANK_SPECS.includes(spec))         counts.tank++;
+            else if (role === 'healer' || HEALER_SPECS.includes(spec)) counts.healer++;
+            else if (role === 'melee' || MELEE_SPECS.includes(spec))   counts.melee++;
+            else                                                         counts.ranged++;
+        });
+
+        const total = Object.values(counts).reduce((a, b) => a + b, 0);
+        ['tank', 'healer', 'melee', 'ranged'].forEach(role => {
+            const target  = RAID_TARGETS[role];
+            const current = counts[role];
+            const needed  = Math.max(0, target - current);
+            const countEl = document.getElementById(`need-${role}-count`);
+            const itemEl  = document.getElementById(`need-${role}`);
+            if (!countEl) return;
+            if (needed === 0) {
+                countEl.textContent = `✓ Full (${current}/${target})`;
+                itemEl && itemEl.classList.add('fulfilled');
+            } else {
+                countEl.textContent = `${needed} needed (${current}/${target})`;
+                itemEl && itemEl.classList.remove('fulfilled');
+                if (needed >= 3 && itemEl) itemEl.classList.add('high-need');
+            }
+        });
+        const noteEl = document.getElementById('needsNote');
+        if (noteEl) noteEl.textContent = `Current roster: ${total}/20 • Updated live`;
+    } catch (e) {
+        showDefaultNeeds();
+    }
+}
+
+function showDefaultNeeds() {
+    const defaults = { tank: '1 needed', healer: '1–2 needed', melee: '3–4 needed', ranged: '3–4 needed' };
+    Object.entries(defaults).forEach(([role, text]) => {
+        const el = document.getElementById(`need-${role}-count`);
+        if (el) el.textContent = text;
+    });
+}
+
+loadRecruitingNeeds();
+</script>
 {% endblock %}
