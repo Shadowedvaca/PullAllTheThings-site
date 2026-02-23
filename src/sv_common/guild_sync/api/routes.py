@@ -83,6 +83,43 @@ async def trigger_blizzard_sync(
     return {"ok": True, "status": "sync_triggered"}
 
 
+@guild_sync_router.post("/discord/trigger")
+async def trigger_discord_sync(
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """
+    Manually trigger a Discord member sync.
+    Works without the full scheduler — only needs the running bot.
+    """
+    from sv_common.discord.bot import get_bot
+    from sv_common.guild_sync.discord_sync import sync_discord_members
+    from patt.config import get_settings
+    import asyncio
+
+    bot = get_bot()
+    if not bot or bot.is_closed():
+        raise HTTPException(503, "Discord bot is not running")
+
+    settings = get_settings()
+    if not settings.discord_guild_id:
+        raise HTTPException(503, "DISCORD_GUILD_ID not configured")
+
+    guild = bot.get_guild(int(settings.discord_guild_id))
+    if not guild:
+        raise HTTPException(503, "Bot cannot see the Discord guild — check DISCORD_GUILD_ID")
+
+    async def _run():
+        try:
+            stats = await sync_discord_members(pool, guild)
+            logger.info("Manual Discord sync complete: %s", stats)
+        except Exception as e:
+            logger.error("Manual Discord sync failed: %s", e)
+
+    asyncio.create_task(_run())
+    return {"ok": True, "status": "discord_sync_triggered", "guild": guild.name}
+
+
 @guild_sync_router.post("/addon-upload", dependencies=[Depends(verify_addon_key)])
 async def addon_upload(
     request: Request,
