@@ -403,6 +403,22 @@
     border: 1px solid color-mix(in srgb, var(--color-info) 40%, transparent);
 }
 
+.pm-delete-btn {
+    font-size: 0.68rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1.4;
+    transition: background 0.15s, color 0.15s;
+}
+.pm-delete-btn:hover {
+    background: color-mix(in srgb, var(--color-danger) 20%, transparent);
+}
+
 .pm-char-note--officer {
     background: color-mix(in srgb, var(--color-warning) 15%, transparent);
     color: var(--color-warning);

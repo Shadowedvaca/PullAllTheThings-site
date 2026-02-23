@@ -125,8 +125,10 @@ function renderChars() {
         if (unlinkedOnly && c.member_id) return false;
         if (search &&
             !c.name.toLowerCase().includes(search) &&
-            !(c.class || '').toLowerCase().includes(search) &&
-            !(c.spec  || '').toLowerCase().includes(search)) return false;
+            !(c.class        || '').toLowerCase().includes(search) &&
+            !(c.spec         || '').toLowerCase().includes(search) &&
+            !(c.guild_note   || '').toLowerCase().includes(search) &&
+            !(c.officer_note || '').toLowerCase().includes(search)) return false;
         return true;
     });
 
@@ -149,7 +151,8 @@ function renderChars() {
             ? `<span class="pm-char-owner">→ ${escHtml(owner.display_name || owner.discord_username)}</span>`
             : `<span class="pm-char-unlinked">Unlinked</span>`;
         const notInScanBadge = c.in_wow_scan ? ''
-            : `<span class="pm-badge pm-badge--warn pm-not-in-scan" title="Not found in Blizzard API scan — name may have changed">? API</span>`;
+            : `<span class="pm-badge pm-badge--warn pm-not-in-scan" title="Not found in Blizzard API scan — name may have changed">? API</span>
+               <button class="pm-delete-btn" onclick="deleteChar(event,${c.id},'${escAttr(c.name)}')" title="Delete this character">✕</button>`;
         const noteHtml = (c.guild_note || c.officer_note)
             ? `<div class="pm-char-notes">
                 ${c.guild_note    ? `<span class="pm-char-note pm-char-note--guild" title="Guild note">${escHtml(c.guild_note)}</span>` : ''}
@@ -298,6 +301,26 @@ async function assignChar(charId, memberId) {
         }
     } catch (e) {
         showStatus('Network error assigning character', 'error');
+    }
+}
+
+// ── Delete Character ───────────────────────────────────────────────────────
+
+async function deleteChar(event, charId, charName) {
+    event.stopPropagation();
+    if (!confirm(`Delete "${charName}"? This cannot be undone.`)) return;
+    try {
+        const res = await fetch(`/admin/characters/${charId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            allChars = allChars.filter(c => c.id !== charId);
+            render();
+            showStatus(`"${charName}" deleted`, 'success');
+        } else {
+            showStatus('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showStatus('Network error deleting character', 'error');
     }
 }
 

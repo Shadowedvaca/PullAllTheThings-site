@@ -563,6 +563,28 @@ async def admin_assign_character(
     })
 
 
+@router.delete("/characters/{char_id}")
+async def admin_delete_character(
+    request: Request,
+    char_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    from sv_common.db.models import Character
+    result = await db.execute(select(Character).where(Character.id == char_id))
+    char = result.scalar_one_or_none()
+    if not char:
+        return JSONResponse({"ok": False, "error": f"Character {char_id} not found"}, status_code=404)
+
+    name = char.name
+    await db.delete(char)
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"deleted": True, "char_name": name}})
+
+
 @router.patch("/characters/{char_id}/main-alt")
 async def admin_toggle_main_alt(
     request: Request,
