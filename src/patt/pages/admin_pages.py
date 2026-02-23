@@ -409,6 +409,19 @@ async def admin_close(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/players", response_class=HTMLResponse)
+async def admin_players(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    member = await _require_admin(request, db)
+    if member is None:
+        return _redirect_login("/admin/players")
+
+    ctx = await _base_ctx(request, member, db)
+    return templates.TemplateResponse("admin/players.html", ctx)
+
+
 @router.get("/roster", response_class=HTMLResponse)
 async def admin_roster(
     request: Request,

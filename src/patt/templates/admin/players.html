@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Player Manager — Admin — Pull All The Things{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/players.css">
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout">
+    <aside class="admin-sidebar">
+        <div class="admin-sidebar__title">Admin</div>
+        <nav class="admin-nav">
+            <a href="/admin/campaigns" class="admin-nav-link">Campaigns</a>
+            <a href="/admin/roster" class="admin-nav-link">Roster</a>
+            <a href="/admin/players" class="admin-nav-link active">Player Manager</a>
+        </nav>
+    </aside>
+
+    <div class="pm-workspace">
+        <div class="admin-header">
+            <h1 class="admin-title">Player Manager</h1>
+            <p style="color:var(--color-text-muted);margin-top:0.25rem;">
+                Drag characters onto players to link them. Click <strong>M/A</strong> to toggle Main&nbsp;↔&nbsp;Alt. Changes save instantly.
+            </p>
+        </div>
+
+        <div id="pm-status" class="flash-bar" style="display:none;"></div>
+
+        <div class="pm-split">
+
+            {# ── Left: Players ── #}
+            <div class="pm-pane">
+                <div class="pm-pane__header">
+                    <span class="pm-pane__title">Players</span>
+                    <span class="pm-count" id="player-count"></span>
+                </div>
+                <div id="player-list"></div>
+                <div class="pm-unassign-zone" id="pm-unassign">
+                    <span>🚫 Drop here to unlink character</span>
+                </div>
+            </div>
+
+            {# ── Right: Character pool ── #}
+            <div class="pm-pane">
+                <div class="pm-pane__header">
+                    <span class="pm-pane__title">Characters</span>
+                    <span class="pm-count" id="char-count"></span>
+                </div>
+                <div class="pm-pane__toolbar">
+                    <input type="search" id="char-search" class="form-control"
+                           placeholder="Filter by name, class, spec…"
+                           style="font-size:0.85rem;">
+                </div>
+                <div id="char-list"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/players.js"></script>
+{% endblock %}
