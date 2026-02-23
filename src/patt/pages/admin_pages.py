@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -446,11 +446,18 @@ async def admin_players_data(
     # Build set of discord_ids already linked to a player
     linked_discord_ids = {m.discord_id for m in members if m.discord_id}
 
-    from sv_common.db.models import Character
-    chars_result = await db.execute(
-        select(Character).order_by(Character.name)
-    )
-    chars = list(chars_result.scalars().all())
+    # Join common.characters with guild_identity notes by name+realm
+    chars_result = await db.execute(text("""
+        SELECT c.id, c.name, c.realm, c.class, c.spec, c.role, c.main_alt, c.member_id,
+               wc.guild_note, wc.officer_note,
+               (wc.id IS NOT NULL) AS in_wow_scan
+        FROM common.characters c
+        LEFT JOIN guild_identity.wow_characters wc
+            ON LOWER(wc.character_name) = LOWER(c.name)
+            AND LOWER(wc.realm_slug) = LOWER(c.realm)
+        ORDER BY c.name
+    """))
+    chars = chars_result.mappings().all()
 
     # Get Discord server member list from bot
     discord_users = []
@@ -493,14 +500,17 @@ async def admin_players_data(
             ],
             "characters": [
                 {
-                    "id": c.id,
-                    "name": c.name,
-                    "realm": c.realm,
-                    "class": c.class_,
-                    "spec": c.spec,
-                    "role": c.role,
-                    "main_alt": c.main_alt,
-                    "member_id": c.member_id,
+                    "id": c["id"],
+                    "name": c["name"],
+                    "realm": c["realm"],
+                    "class": c["class"],
+                    "spec": c["spec"],
+                    "role": c["role"],
+                    "main_alt": c["main_alt"],
+                    "member_id": c["member_id"],
+                    "guild_note": c["guild_note"] or "",
+                    "officer_note": c["officer_note"] or "",
+                    "in_wow_scan": bool(c["in_wow_scan"]),
                 }
                 for c in chars
             ],

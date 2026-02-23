@@ -342,9 +342,26 @@
 
 .pm-char-row:last-child { border-bottom: none; }
 
-.pm-char-row .pm-char-chip {
+/* Wrapper that stacks chip + row2 vertically */
+.pm-char-chip-wrap {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.pm-char-chip-wrap .pm-char-chip {
+    width: 100%;
+}
+
+/* Second line: owner link + notes */
+.pm-char-row2 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding-left: 0.25rem;
 }
 
 .pm-char-owner {
@@ -355,9 +372,39 @@
 }
 
 .pm-char-unlinked {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--color-danger);
     font-style: italic;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+/* Notes area */
+.pm-char-notes {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.pm-char-note {
+    font-size: 0.72rem;
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.pm-char-note--guild {
+    background: color-mix(in srgb, var(--color-info) 15%, transparent);
+    color: var(--color-info);
+    border: 1px solid color-mix(in srgb, var(--color-info) 40%, transparent);
+}
+
+.pm-char-note--officer {
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    color: var(--color-warning);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
 }

@@ -148,23 +148,34 @@ function renderChars() {
         const ownerLabel = owner
             ? `<span class="pm-char-owner">→ ${escHtml(owner.display_name || owner.discord_username)}</span>`
             : `<span class="pm-char-unlinked">Unlinked</span>`;
+        const notInScanBadge = c.in_wow_scan ? ''
+            : `<span class="pm-badge pm-badge--warn pm-not-in-scan" title="Not found in Blizzard API scan — name may have changed">? API</span>`;
+        const noteHtml = (c.guild_note || c.officer_note)
+            ? `<div class="pm-char-notes">
+                ${c.guild_note    ? `<span class="pm-char-note pm-char-note--guild" title="Guild note">${escHtml(c.guild_note)}</span>` : ''}
+                ${c.officer_note  ? `<span class="pm-char-note pm-char-note--officer" title="Officer note">${escHtml(c.officer_note)}</span>` : ''}
+               </div>`
+            : '';
 
         return `
         <div class="pm-char-row">
-            <div class="pm-char-chip pm-char-chip--${roleClass}"
-                 draggable="true"
-                 data-char-id="${c.id}"
-                 ondragstart="handleCharDragStart(event, ${c.id})"
-                 ondragend="this.classList.remove('pm-dragging')">
-                <span class="pm-role-icon">${roleIcon}</span>
-                <span class="pm-char-name">${escHtml(c.name)}</span>
-                <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
-                <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
-                ${isMain ? '<span class="pm-main-badge">M</span>' : '<span class="pm-alt-badge">A</span>'}
-                <button class="pm-toggle-btn" onclick="toggleMain(event,${c.id})"
-                        title="Toggle Main/Alt">${isMain ? 'Alt?' : 'Main?'}</button>
+            <div class="pm-char-chip-wrap">
+                <div class="pm-char-chip pm-char-chip--${roleClass}"
+                     draggable="true"
+                     data-char-id="${c.id}"
+                     ondragstart="handleCharDragStart(event, ${c.id})"
+                     ondragend="this.classList.remove('pm-dragging')">
+                    <span class="pm-role-icon">${roleIcon}</span>
+                    <span class="pm-char-name">${escHtml(c.name)}</span>
+                    <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
+                    <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
+                    ${isMain ? '<span class="pm-main-badge">M</span>' : '<span class="pm-alt-badge">A</span>'}
+                    ${notInScanBadge}
+                    <button class="pm-toggle-btn" onclick="toggleMain(event,${c.id})"
+                            title="Toggle Main/Alt">${isMain ? 'Alt?' : 'Main?'}</button>
+                </div>
+                <div class="pm-char-row2">${ownerLabel}${noteHtml}</div>
             </div>
-            ${ownerLabel}
         </div>`;
     }).join('') + unzoneHtml;
 }
