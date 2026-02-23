@@ -85,20 +85,29 @@ async def trigger_blizzard_sync(
 
 @guild_sync_router.post("/addon-upload", dependencies=[Depends(verify_addon_key)])
 async def addon_upload(
+    request: Request,
     payload: AddonUploadRequest,
-    scheduler=Depends(get_sync_scheduler),
+    pool: asyncpg.Pool = Depends(get_db_pool),
 ):
     """
     Receive guild roster data from the WoW addon companion app.
 
     The companion app watches SavedVariables and POSTs here when new data
-    is detected.
+    is detected. Works with or without the full scheduler running.
     """
     if not payload.characters:
         raise HTTPException(400, "No character data provided")
 
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+
     import asyncio
-    asyncio.create_task(scheduler.run_addon_sync(payload.characters))
+    if scheduler is not None:
+        asyncio.create_task(scheduler.run_addon_sync(payload.characters))
+    else:
+        # Scheduler not running (no audit channel configured) — process directly
+        from sv_common.guild_sync.db_sync import sync_addon_data
+        from sv_common.guild_sync.matching import run_matching
+        asyncio.create_task(_process_addon_direct(pool, payload.characters))
 
     return {
         "ok": True,
@@ -106,6 +115,21 @@ async def addon_upload(
         "characters_received": len(payload.characters),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def _process_addon_direct(pool: asyncpg.Pool, characters: list[dict]):
+    """Process addon upload without a running scheduler (no Discord audit posts)."""
+    try:
+        from sv_common.guild_sync.db_sync import sync_addon_data
+        from sv_common.guild_sync.matching import run_matching
+        from sv_common.guild_sync.scheduler import SyncLogEntry
+        async with SyncLogEntry(pool, "addon_upload") as log:
+            stats = await sync_addon_data(pool, characters)
+            log.stats = {"found": stats["processed"], "updated": stats["updated"]}
+            await run_matching(pool)
+        logger.info("Addon upload processed: %s characters", len(characters))
+    except Exception as e:
+        logger.error("Addon upload processing failed: %s", e)
 
 
 @guild_sync_router.get("/addon-upload/status")
