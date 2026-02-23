@@ -105,8 +105,6 @@ async def addon_upload(
         asyncio.create_task(scheduler.run_addon_sync(payload.characters))
     else:
         # Scheduler not running (no audit channel configured) — process directly
-        from sv_common.guild_sync.db_sync import sync_addon_data
-        from sv_common.guild_sync.matching import run_matching
         asyncio.create_task(_process_addon_direct(pool, payload.characters))
 
     return {
@@ -121,8 +119,8 @@ async def _process_addon_direct(pool: asyncpg.Pool, characters: list[dict]):
     """Process addon upload without a running scheduler (no Discord audit posts)."""
     try:
         from sv_common.guild_sync.db_sync import sync_addon_data
-        from sv_common.guild_sync.matching import run_matching
-        from sv_common.guild_sync.scheduler import SyncLogEntry
+        from sv_common.guild_sync.identity_engine import run_matching
+        from sv_common.guild_sync.sync_logger import SyncLogEntry
         async with SyncLogEntry(pool, "addon_upload") as log:
             stats = await sync_addon_data(pool, characters)
             log.stats = {"found": stats["processed"], "updated": stats["updated"]}
