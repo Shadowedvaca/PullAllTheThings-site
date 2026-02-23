@@ -6,8 +6,9 @@
 {% endblock %}
 
 {% block content %}
+<div class="pm-page">
 <div class="admin-layout">
-    <aside class="admin-sidebar">
+    <aside class="pm-sidebar" id="pm-sidebar">
         <div class="admin-sidebar__title">Admin</div>
         <nav class="admin-nav">
             <a href="/admin/campaigns" class="admin-nav-link">Campaigns</a>
@@ -15,6 +16,7 @@
             <a href="/admin/players" class="admin-nav-link active">Player Manager</a>
         </nav>
     </aside>
+    <button class="pm-sidebar-toggle" id="pm-sidebar-toggle" title="Toggle nav" onclick="togglePmSidebar()">&#x276E;</button>
 
     <div class="pm-workspace">
         <div class="admin-header">
@@ -94,8 +96,29 @@
         </div>
     </div>
 </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/players.js"></script>
+<script>
+function togglePmSidebar() {
+    const sidebar = document.getElementById('pm-sidebar');
+    const btn = document.getElementById('pm-sidebar-toggle');
+    const collapsed = sidebar.classList.toggle('pm-collapsed');
+    btn.innerHTML = collapsed ? '&#x276F;' : '&#x276E;';
+    btn.title = collapsed ? 'Show nav' : 'Hide nav';
+    localStorage.setItem('pm-sidebar-collapsed', collapsed);
+}
+// Restore state on load
+(function() {
+    if (localStorage.getItem('pm-sidebar-collapsed') === 'true') {
+        const sidebar = document.getElementById('pm-sidebar');
+        const btn = document.getElementById('pm-sidebar-toggle');
+        sidebar.classList.add('pm-collapsed');
+        btn.innerHTML = '&#x276F;';
+        btn.title = 'Show nav';
+    }
+})();
+</script>
 {% endblock %}
