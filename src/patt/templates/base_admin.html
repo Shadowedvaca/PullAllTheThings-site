@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin — Pull All The Things{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="admin-body">
+
+    {# Full-height sidebar #}
+    <aside class="admin-sidenav" id="admin-sidenav">
+        <div class="admin-sidenav__header">
+            <a href="/" class="admin-sidenav__brand">PATT</a>
+            <button class="admin-sidenav__toggle" id="admin-sidenav-toggle"
+                    onclick="toggleAdminNav()" title="Collapse sidebar">&#x276E;</button>
+        </div>
+
+        <div class="admin-sidenav__section-label">Admin</div>
+        <nav class="admin-sidenav__nav">
+            <a href="/admin/campaigns" class="admin-sidenav__link {% block nav_campaigns %}{% endblock %}">
+                Campaigns
+            </a>
+            <a href="/admin/roster" class="admin-sidenav__link {% block nav_roster %}{% endblock %}">
+                Roster
+            </a>
+            <a href="/admin/players" class="admin-sidenav__link {% block nav_players %}{% endblock %}">
+                Player Manager
+            </a>
+        </nav>
+
+        <div class="admin-sidenav__spacer"></div>
+
+        <div class="admin-sidenav__footer">
+            {% if current_member %}
+                <span class="admin-sidenav__user">{{ current_member.display_name or current_member.discord_username }}</span>
+                {% if current_member.rank %}
+                    <span class="admin-sidenav__rank">{{ current_member.rank.name }}</span>
+                {% endif %}
+            {% endif %}
+            <a href="/" class="admin-sidenav__link">← Site</a>
+            <a href="/logout" class="admin-sidenav__link admin-sidenav__link--dim">Logout</a>
+        </div>
+    </aside>
+
+    {# Collapsed-state tab (only visible when sidebar is hidden) #}
+    <button class="admin-sidenav__expand-tab" id="admin-expand-tab"
+            onclick="toggleAdminNav()" title="Show sidebar">&#x276F;</button>
+
+    {# Main content area #}
+    <div class="admin-content" id="admin-content">
+        {% if flash_error %}
+            <div class="flash-bar flash-bar--error">⚠ {{ flash_error }}</div>
+        {% endif %}
+        {% if flash_success %}
+            <div class="flash-bar flash-bar--success">✓ {{ flash_success }}</div>
+        {% endif %}
+        {% if flash_info %}
+            <div class="flash-bar flash-bar--info">ℹ {{ flash_info }}</div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+    const SIDENAV_KEY = 'admin-sidenav-collapsed';
+    function toggleAdminNav() {
+        const nav = document.getElementById('admin-sidenav');
+        const content = document.getElementById('admin-content');
+        const toggle = document.getElementById('admin-sidenav-toggle');
+        const tab = document.getElementById('admin-expand-tab');
+        const collapsed = nav.classList.toggle('collapsed');
+        content.classList.toggle('expanded', collapsed);
+        tab.classList.toggle('visible', collapsed);
+        toggle.innerHTML = collapsed ? '&#x276F;' : '&#x276E;';
+        localStorage.setItem(SIDENAV_KEY, collapsed);
+    }
+    (function() {
+        if (localStorage.getItem(SIDENAV_KEY) === 'true') {
+            document.getElementById('admin-sidenav').classList.add('collapsed');
+            document.getElementById('admin-content').classList.add('expanded');
+            document.getElementById('admin-expand-tab').classList.add('visible');
+            document.getElementById('admin-sidenav-toggle').innerHTML = '&#x276F;';
+        }
+    })();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,124 +1,89 @@
-{% extends "base.html" %}
+{% extends "base_admin.html" %}
 {% block title %}Player Manager — Admin — Pull All The Things{% endblock %}
+{% block nav_players %}active{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="/static/css/players.css">
 {% endblock %}
 
 {% block content %}
-<div class="pm-page">
-<div class="admin-layout">
-    <aside class="pm-sidebar" id="pm-sidebar">
-        <div class="admin-sidebar__title">Admin</div>
-        <nav class="admin-nav">
-            <a href="/admin/campaigns" class="admin-nav-link">Campaigns</a>
-            <a href="/admin/roster" class="admin-nav-link">Roster</a>
-            <a href="/admin/players" class="admin-nav-link active">Player Manager</a>
-        </nav>
-    </aside>
-    <button class="pm-sidebar-toggle" id="pm-sidebar-toggle" title="Toggle nav" onclick="togglePmSidebar()">&#x276E;</button>
+<div class="admin-header">
+    <h1 class="admin-title">Player Manager</h1>
+    <p style="color:var(--color-text-muted);margin-top:0.25rem;font-size:0.9rem;">
+        Drag <strong>Discord users</strong> onto Players to link them.
+        Drag <strong>Characters</strong> onto Players to assign them.
+        All saves are instant.
+    </p>
+</div>
 
-    <div class="pm-workspace">
-        <div class="admin-header">
-            <h1 class="admin-title">Player Manager</h1>
-            <p style="color:var(--color-text-muted);margin-top:0.25rem;font-size:0.9rem;">
-                Drag <strong>Discord users</strong> onto Players to link them.
-                Drag <strong>Characters</strong> onto Players to assign them.
-                All saves are instant.
-            </p>
+<div id="pm-status" class="flash-bar" style="display:none;"></div>
+
+<div class="pm-three-col">
+
+    {# ── Col 1: Discord Users ── #}
+    <div class="pm-pane">
+        <div class="pm-pane__header">
+            <span class="pm-pane__title">Discord</span>
+            <span class="pm-count" id="discord-count"></span>
         </div>
+        <div class="pm-pane__toolbar">
+            <input type="search" id="discord-search" class="form-control"
+                   placeholder="Filter by username…" style="font-size:0.85rem;">
+            <label class="pm-filter-label">
+                <input type="checkbox" id="discord-unlinked-only"> Unlinked only
+            </label>
+        </div>
+        <div id="discord-list" class="pm-scroll-list"></div>
+    </div>
 
-        <div id="pm-status" class="flash-bar" style="display:none;"></div>
-
-        <div class="pm-three-col">
-
-            {# ── Col 1: Discord Users ── #}
-            <div class="pm-pane">
-                <div class="pm-pane__header">
-                    <span class="pm-pane__title">Discord</span>
-                    <span class="pm-count" id="discord-count"></span>
-                </div>
-                <div class="pm-pane__toolbar">
-                    <input type="search" id="discord-search" class="form-control"
-                           placeholder="Filter by username…" style="font-size:0.85rem;">
-                    <label class="pm-filter-label">
-                        <input type="checkbox" id="discord-unlinked-only"> Unlinked only
-                    </label>
-                </div>
-                <div id="discord-list" class="pm-scroll-list"></div>
+    {# ── Col 2: Players ── #}
+    <div class="pm-pane">
+        <div class="pm-pane__header">
+            <span class="pm-pane__title">Players</span>
+            <span class="pm-count" id="player-count"></span>
+            <button class="btn btn-primary btn-sm pm-new-player-btn" onclick="showNewPlayerForm()">+ New</button>
+        </div>
+        <div class="pm-pane__toolbar">
+            <input type="search" id="player-search" class="form-control"
+                   placeholder="Filter by name…" style="font-size:0.85rem;">
+        </div>
+        <div id="new-player-form" style="display:none;" class="pm-new-form">
+            <input id="new-player-name" class="form-control" placeholder="Display name (e.g. Trog)" style="font-size:0.85rem;">
+            <div style="display:flex;gap:0.4rem;margin-top:0.4rem;">
+                <button class="btn btn-primary btn-sm" onclick="createPlayer()">Create</button>
+                <button class="btn btn-secondary btn-sm" onclick="hideNewPlayerForm()">Cancel</button>
             </div>
-
-            {# ── Col 2: Players ── #}
-            <div class="pm-pane">
-                <div class="pm-pane__header">
-                    <span class="pm-pane__title">Players</span>
-                    <span class="pm-count" id="player-count"></span>
-                    <button class="btn btn-primary btn-sm pm-new-player-btn" onclick="showNewPlayerForm()">+ New</button>
-                </div>
-                <div class="pm-pane__toolbar">
-                    <input type="search" id="player-search" class="form-control"
-                           placeholder="Filter by name…" style="font-size:0.85rem;">
-                </div>
-                <div id="new-player-form" style="display:none;" class="pm-new-form">
-                    <input id="new-player-name" class="form-control" placeholder="Display name (e.g. Trog)" style="font-size:0.85rem;">
-                    <div style="display:flex;gap:0.4rem;margin-top:0.4rem;">
-                        <button class="btn btn-primary btn-sm" onclick="createPlayer()">Create</button>
-                        <button class="btn btn-secondary btn-sm" onclick="hideNewPlayerForm()">Cancel</button>
-                    </div>
-                </div>
-                <div id="player-list" class="pm-scroll-list">
-                    <div class="pm-unassign-zone" id="pm-discord-unlink">
-                        <span>🚫 Drop Discord user here to unlink</span>
-                    </div>
-                </div>
+        </div>
+        <div id="player-list" class="pm-scroll-list">
+            <div class="pm-unassign-zone" id="pm-discord-unlink">
+                <span>🚫 Drop Discord user here to unlink</span>
             </div>
-
-            {# ── Col 3: Characters ── #}
-            <div class="pm-pane">
-                <div class="pm-pane__header">
-                    <span class="pm-pane__title">Characters</span>
-                    <span class="pm-count" id="char-count"></span>
-                </div>
-                <div class="pm-pane__toolbar">
-                    <input type="search" id="char-search" class="form-control"
-                           placeholder="Name, class, spec…" style="font-size:0.85rem;">
-                    <label class="pm-filter-label">
-                        <input type="checkbox" id="char-unlinked-only"> Unlinked only
-                    </label>
-                </div>
-                <div id="char-list" class="pm-scroll-list">
-                    <div class="pm-unassign-zone" id="pm-char-unlink">
-                        <span>🚫 Drop here to unlink character</span>
-                    </div>
-                </div>
-            </div>
-
         </div>
     </div>
-</div>
+
+    {# ── Col 3: Characters ── #}
+    <div class="pm-pane">
+        <div class="pm-pane__header">
+            <span class="pm-pane__title">Characters</span>
+            <span class="pm-count" id="char-count"></span>
+        </div>
+        <div class="pm-pane__toolbar">
+            <input type="search" id="char-search" class="form-control"
+                   placeholder="Name, class, spec…" style="font-size:0.85rem;">
+            <label class="pm-filter-label">
+                <input type="checkbox" id="char-unlinked-only"> Unlinked only
+            </label>
+        </div>
+        <div id="char-list" class="pm-scroll-list">
+            <div class="pm-unassign-zone" id="pm-char-unlink">
+                <span>🚫 Drop here to unlink character</span>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/players.js"></script>
-<script>
-function togglePmSidebar() {
-    const sidebar = document.getElementById('pm-sidebar');
-    const btn = document.getElementById('pm-sidebar-toggle');
-    const collapsed = sidebar.classList.toggle('pm-collapsed');
-    btn.innerHTML = collapsed ? '&#x276F;' : '&#x276E;';
-    btn.title = collapsed ? 'Show nav' : 'Hide nav';
-    localStorage.setItem('pm-sidebar-collapsed', collapsed);
-}
-// Restore state on load
-(function() {
-    if (localStorage.getItem('pm-sidebar-collapsed') === 'true') {
-        const sidebar = document.getElementById('pm-sidebar');
-        const btn = document.getElementById('pm-sidebar-toggle');
-        sidebar.classList.add('pm-collapsed');
-        btn.innerHTML = '&#x276F;';
-        btn.title = 'Show nav';
-    }
-})();
-</script>
 {% endblock %}

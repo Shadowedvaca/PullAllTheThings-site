@@ -2,68 +2,7 @@
    Player Manager — /admin/players
    ============================================================ */
 
-/* Override the normal admin-layout for this page so the workspace
-   gets all available width and the sidebar can collapse */
-.pm-page .admin-layout {
-    display: flex;
-    align-items: start;
-    gap: 0;
-}
-
-/* Collapsible sidebar */
-.pm-sidebar {
-    flex-shrink: 0;
-    width: 180px;
-    transition: width 0.2s ease, padding 0.2s ease, opacity 0.2s ease;
-    overflow: hidden;
-    position: sticky;
-    top: 5rem;
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    padding: 1rem;
-    margin-right: 1rem;
-}
-
-.pm-sidebar.pm-collapsed {
-    width: 0;
-    padding: 0;
-    border-width: 0;
-    opacity: 0;
-    margin-right: 0;
-}
-
-.pm-sidebar-toggle {
-    position: sticky;
-    top: 5rem;
-    flex-shrink: 0;
-    width: 24px;
-    height: 60px;
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--color-text-muted);
-    font-size: 0.75rem;
-    margin-right: 0.75rem;
-    transition: background 0.15s, color 0.15s;
-    align-self: flex-start;
-}
-
-.pm-sidebar-toggle:hover {
-    background: var(--color-bg-panel);
-    color: var(--color-accent);
-}
-
-.pm-workspace {
-    flex: 1;
-    min-width: 0;
-}
-
-/* Three-column layout — equal thirds filling all available space */
+/* Three equal columns filling all available admin-content width */
 .pm-three-col {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;

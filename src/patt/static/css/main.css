@@ -960,57 +960,170 @@ textarea.form-control {
 }
 
 /* ============================================================
-   ADMIN PAGES
+   ADMIN LAYOUT — full-height sidebar
    ============================================================ */
 
-.admin-layout {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 2rem;
-    align-items: start;
+/* Body override for admin pages */
+.admin-body {
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+    overflow-x: hidden;
 }
-.admin-sidebar {
+
+/* Full-height fixed sidebar */
+.admin-sidenav {
+    width: var(--admin-nav-width, 200px);
+    min-height: 100vh;
     background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius);
-    padding: 1rem;
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: width 0.2s ease;
+    overflow: hidden;
     position: sticky;
-    top: 5rem;
+    top: 0;
+    height: 100vh;
 }
-.admin-sidebar__title {
+
+.admin-sidenav.collapsed {
+    width: 0;
+    border-right-width: 0;
+}
+
+.admin-sidenav__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0.75rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.admin-sidenav__brand {
     font-family: var(--font-display);
-    font-size: 0.75rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    text-decoration: none;
+}
+.admin-sidenav__brand:hover { text-decoration: none; }
+
+.admin-sidenav__toggle {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+}
+.admin-sidenav__toggle:hover {
+    color: var(--color-accent);
+    background: var(--color-bg-panel);
+}
+
+.admin-sidenav__section-label {
+    font-family: var(--font-display);
+    font-size: 0.7rem;
     color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--color-border);
+    padding: 0.75rem 0.75rem 0.25rem;
+    white-space: nowrap;
 }
-.admin-nav {
+
+.admin-sidenav__nav {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.1rem;
+    padding: 0 0.5rem;
 }
-.admin-nav-link {
+
+.admin-sidenav__link {
     display: block;
     padding: 0.5rem 0.75rem;
     border-radius: var(--radius-sm);
     color: var(--color-text);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     text-decoration: none;
+    white-space: nowrap;
     transition: background 0.15s, color 0.15s;
 }
-.admin-nav-link:hover {
+.admin-sidenav__link:hover {
     background: var(--color-bg-panel);
     color: var(--color-accent);
     text-decoration: none;
 }
-.admin-nav-link.active {
-    background: rgba(212, 168, 75, 0.1);
+.admin-sidenav__link.active {
+    background: rgba(212, 168, 75, 0.12);
     color: var(--color-accent);
 }
+.admin-sidenav__link--dim {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.admin-sidenav__spacer { flex: 1; }
+
+.admin-sidenav__footer {
+    padding: 0.75rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    white-space: nowrap;
+}
+
+.admin-sidenav__user {
+    color: var(--color-accent);
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.admin-sidenav__rank {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+/* Expand tab — only visible when sidebar is collapsed */
+.admin-sidenav__expand-tab {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 56px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-left: none;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+    z-index: 200;
+    transition: color 0.15s, background 0.15s;
+}
+.admin-sidenav__expand-tab.visible { display: flex; align-items: center; justify-content: center; }
+.admin-sidenav__expand-tab:hover { color: var(--color-accent); background: var(--color-bg-panel); }
+
+/* Main content fills all remaining width */
+.admin-content {
+    flex: 1;
+    min-width: 0;
+    padding: 1.5rem 2rem;
+    transition: none;
+}
+
+/* Keep these for backwards-compat on any remaining pages */
+.admin-layout { display: contents; }
+.admin-sidebar { display: none; }
 
 .admin-header {
     display: flex;

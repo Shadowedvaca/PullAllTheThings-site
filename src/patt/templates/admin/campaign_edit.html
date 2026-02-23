@@ -1,20 +1,11 @@
-{% extends "base.html" %}
+{% extends "base_admin.html" %}
 {% block title %}
     {% if campaign %}Edit Campaign — {% else %}New Campaign — {% endif %}Admin — Pull All The Things
 {% endblock %}
+{% block nav_campaigns %}active{% endblock %}
 
 {% block content %}
-<div class="admin-layout">
-    <aside class="admin-sidebar">
-        <div class="admin-sidebar__title">Admin</div>
-        <nav class="admin-nav">
-            <a href="/admin/campaigns" class="admin-nav-link active">Campaigns</a>
-            <a href="/admin/roster" class="admin-nav-link">Roster</a>
-            <a href="/admin/players" class="admin-nav-link">Player Manager</a>
-        </nav>
-    </aside>
-
-    <div>
+<div>
         <div class="admin-header">
             <h1 class="admin-title">
                 {% if campaign %}Edit: {{ campaign.title }}{% else %}New Campaign{% endif %}
@@ -309,7 +300,6 @@
         </div>
         {% endif %}
     </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
