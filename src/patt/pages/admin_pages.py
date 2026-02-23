@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -420,6 +420,140 @@ async def admin_players(
 
     ctx = await _base_ctx(request, member, db)
     return templates.TemplateResponse("admin/players.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Player Manager JSON API — cookie-auth so browser fetch() works
+# ---------------------------------------------------------------------------
+
+
+@router.get("/players-data")
+async def admin_players_data(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    member = await _require_admin(request, db)
+    if member is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    members_result = await db.execute(
+        select(GuildMember)
+        .options(selectinload(GuildMember.rank))
+        .order_by(GuildMember.discord_username)
+    )
+    members = list(members_result.scalars().all())
+
+    from sv_common.db.models import Character
+    chars_result = await db.execute(
+        select(Character).order_by(Character.name)
+    )
+    chars = list(chars_result.scalars().all())
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "members": [
+                {
+                    "id": m.id,
+                    "discord_username": m.discord_username,
+                    "display_name": m.display_name,
+                    "discord_id": m.discord_id,
+                    "rank_name": m.rank.name if m.rank else "Unknown",
+                    "rank_level": m.rank.level if m.rank else 0,
+                    "registered": m.user_id is not None,
+                }
+                for m in members
+            ],
+            "characters": [
+                {
+                    "id": c.id,
+                    "name": c.name,
+                    "realm": c.realm,
+                    "class": c.class_,
+                    "spec": c.spec,
+                    "role": c.role,
+                    "main_alt": c.main_alt,
+                    "member_id": c.member_id,
+                }
+                for c in chars
+            ],
+        },
+    })
+
+
+@router.patch("/characters/{char_id}/assign")
+async def admin_assign_character(
+    request: Request,
+    char_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        member_id = body.get("member_id")  # may be None (unlink)
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body"}, status_code=400)
+
+    from sv_common.db.models import Character
+    result = await db.execute(select(Character).where(Character.id == char_id))
+    char = result.scalar_one_or_none()
+    if not char:
+        return JSONResponse({"ok": False, "error": f"Character {char_id} not found"}, status_code=404)
+
+    char.member_id = member_id
+    await db.commit()
+
+    member_name = "Unlinked"
+    if member_id:
+        m_result = await db.execute(
+            select(GuildMember).where(GuildMember.id == member_id)
+        )
+        m = m_result.scalar_one_or_none()
+        if m:
+            member_name = m.display_name or m.discord_username
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "char_id": char_id,
+            "char_name": char.name,
+            "member_id": member_id,
+            "member_name": member_name,
+        },
+    })
+
+
+@router.patch("/characters/{char_id}/main-alt")
+async def admin_toggle_main_alt(
+    request: Request,
+    char_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        main_alt = body.get("main_alt")
+        if main_alt not in ("main", "alt"):
+            raise ValueError("invalid")
+    except Exception:
+        return JSONResponse({"ok": False, "error": "main_alt must be 'main' or 'alt'"}, status_code=400)
+
+    from sv_common.db.models import Character
+    result = await db.execute(select(Character).where(Character.id == char_id))
+    char = result.scalar_one_or_none()
+    if not char:
+        return JSONResponse({"ok": False, "error": f"Character {char_id} not found"}, status_code=404)
+
+    char.main_alt = main_alt
+    await db.commit()
+
+    return JSONResponse({"ok": True, "data": {"char_id": char_id, "char_name": char.name, "main_alt": main_alt}})
 
 
 @router.get("/roster", response_class=HTMLResponse)

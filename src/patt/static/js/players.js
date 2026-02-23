@@ -9,9 +9,9 @@ let draggedCharId = null;
 
 async function loadData() {
     try {
-        const res = await fetch('/api/v1/admin/players-data');
+        const res = await fetch('/admin/players-data');
         const data = await res.json();
-        if (!data.ok) { showStatus('Failed to load player data', 'error'); return; }
+        if (!data.ok) { showStatus('Failed to load player data: ' + (data.error || 'unknown'), 'error'); return; }
         allMembers = data.data.members;
         allChars   = data.data.characters;
         render();
@@ -148,7 +148,7 @@ async function handleUnassignDrop(event) {
 
 async function assignChar(charId, memberId) {
     try {
-        const res = await fetch(`/api/v1/admin/characters/${charId}/assign`, {
+        const res = await fetch(`/admin/characters/${charId}/assign`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ member_id: memberId }),
@@ -177,7 +177,7 @@ async function toggleMain(event, charId) {
     const newVal = char.main_alt === 'main' ? 'alt' : 'main';
 
     try {
-        const res = await fetch(`/api/v1/admin/characters/${charId}`, {
+        const res = await fetch(`/admin/characters/${charId}/main-alt`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ main_alt: newVal }),
