@@ -232,10 +232,20 @@ function renderPlayers() {
             || p.discord_username;
         const nameIsSet = !!p.display_name;
 
-        // Role: main char game role > discord rank > nothing
-        const effectiveRole = p.main_char_role || (discordUser ? discordUser.rank_name : null) || '';
+        // Role: preferred_role override > main char game role > discord rank > nothing
+        const isRoleOverride = !!p.preferred_role;
+        const effectiveRole = p.preferred_role || p.main_char_role || (discordUser ? discordUser.rank_name : null) || '';
         const roleIcon = effectiveRole === 'tank' ? '🛡️' : effectiveRole === 'healer' ? '💚'
                        : (effectiveRole === 'dps' || effectiveRole === 'melee_dps' || effectiveRole === 'ranged_dps') ? '⚔️' : '';
+
+        // If role is overridden, find canonical spec for that class+role
+        const mainChar = allChars.find(c => c.member_id === p.id && c.main_alt === 'main');
+        const overrideSpec = isRoleOverride && mainChar
+            ? ((CLASS_ROLE_SPEC[mainChar.class] || {})[p.preferred_role] || p.preferred_role)
+            : '';
+        const roleTitle = isRoleOverride
+            ? `Roster role override: ${overrideSpec} (click to change)`
+            : effectiveRole || 'No role set';
 
         return `
         <div class="pm-player-card ${drill && drill.memberIds.has(p.id) ? 'pm-drill-active' : ''}"
@@ -245,7 +255,7 @@ function renderPlayers() {
              ondrop="handlePlayerDrop(event, ${p.id})">
             <div class="pm-player-header">
                 <button class="pm-drill-btn" onclick="drillOn('player',${p.id})" title="Focus on ${escAttr(effectiveName)}">◎</button>
-                ${roleIcon ? `<span class="pm-player-role-icon">${roleIcon}</span>` : ''}
+                ${roleIcon ? `<span class="pm-player-role-icon ${isRoleOverride ? 'pm-role-overridden' : ''}" title="${escAttr(roleTitle)}">${roleIcon}${isRoleOverride ? '<sup>★</sup>' : ''}</span>` : ''}
                 <span class="pm-player-name ${nameIsSet ? '' : 'pm-name-derived'}"
                       title="${nameIsSet ? 'Custom display name' : 'Derived — click pencil to set'}"
                 >${escHtml(effectiveName)}</span>
@@ -267,8 +277,61 @@ function renderPlayers() {
                 ${discordLabel}
                 <span class="pm-char-count">${charCount} char${charCount !== 1 ? 's' : ''}</span>
             </div>
+            <div class="pm-role-selector-row">
+                <label class="pm-role-selector-label" title="Override roster role (ignores in-game spec)">Roster role:</label>
+                <select class="pm-role-select ${isRoleOverride ? 'pm-role-select--active' : ''}"
+                        onchange="setPreferredRole(this, ${p.id})"
+                        onclick="event.stopPropagation()">
+                    <option value="" ${!p.preferred_role ? 'selected' : ''}>auto${overrideSpec ? '' : ''}</option>
+                    <option value="tank"       ${p.preferred_role === 'tank'       ? 'selected' : ''}>🛡️ Tank</option>
+                    <option value="healer"     ${p.preferred_role === 'healer'     ? 'selected' : ''}>💚 Healer</option>
+                    <option value="melee_dps"  ${p.preferred_role === 'melee_dps'  ? 'selected' : ''}>⚔️ Melee DPS</option>
+                    <option value="ranged_dps" ${p.preferred_role === 'ranged_dps' ? 'selected' : ''}>🏹 Ranged DPS</option>
+                </select>
+                ${isRoleOverride && overrideSpec ? `<span class="pm-role-spec-hint">${escHtml(overrideSpec)}</span>` : ''}
+            </div>
         </div>`;
     }).join('') + unzoneHtml;
+}
+
+// ── Preferred role helpers ──────────────────────────────────────────────────
+
+// WoW class → role → canonical spec (for display when preferred_role overrides actual spec)
+const CLASS_ROLE_SPEC = {
+    'Paladin':      { tank: 'Protection', healer: 'Holy',         melee_dps: 'Retribution', ranged_dps: 'Retribution' },
+    'Warrior':      { tank: 'Protection',                         melee_dps: 'Fury',         ranged_dps: 'Fury' },
+    'Death Knight': { tank: 'Blood',                              melee_dps: 'Unholy',       ranged_dps: 'Frost' },
+    'Demon Hunter': { tank: 'Vengeance',                          melee_dps: 'Havoc',        ranged_dps: 'Havoc' },
+    'Druid':        { tank: 'Guardian',   healer: 'Restoration',  melee_dps: 'Feral',        ranged_dps: 'Balance' },
+    'Monk':         { tank: 'Brewmaster', healer: 'Mistweaver',   melee_dps: 'Windwalker',   ranged_dps: 'Windwalker' },
+    'Shaman':       {                     healer: 'Restoration',  melee_dps: 'Enhancement',  ranged_dps: 'Elemental' },
+    'Priest':       {                     healer: 'Holy',         melee_dps: 'Shadow',       ranged_dps: 'Shadow' },
+    'Hunter':       {                                             melee_dps: 'Survival',     ranged_dps: 'Beast Mastery' },
+    'Mage':         {                                             melee_dps: 'Arcane',       ranged_dps: 'Arcane' },
+    'Warlock':      {                                             melee_dps: 'Affliction',   ranged_dps: 'Affliction' },
+    'Rogue':        {                                             melee_dps: 'Subtlety',     ranged_dps: 'Outlaw' },
+    'Evoker':       {                     healer: 'Preservation', melee_dps: 'Devastation',  ranged_dps: 'Augmentation' },
+};
+
+async function setPreferredRole(selectEl, memberId) {
+    const role = selectEl.value || null;
+    const resp = await fetch(`/admin/players/${memberId}/preferred-role`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferred_role: role }),
+        credentials: 'include',
+    });
+    const data = await resp.json();
+    if (data.ok) {
+        const p = players.find(p => p.id === memberId);
+        if (p) {
+            p.preferred_role = role || '';
+            renderPlayers();
+        }
+    } else {
+        alert('Failed to update role: ' + (data.error || 'unknown error'));
+        selectEl.value = players.find(p => p.id === memberId)?.preferred_role || '';
+    }
 }
 
 // ── Col 3: Characters ──────────────────────────────────────────────────────

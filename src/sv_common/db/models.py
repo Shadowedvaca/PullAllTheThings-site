@@ -86,6 +86,7 @@ class GuildMember(Base):
         Integer, ForeignKey("common.guild_ranks.id"), nullable=False
     )
     rank_source: Mapped[str] = mapped_column(String(20), default="manual")
+    preferred_role: Mapped[Optional[str]] = mapped_column(String(20))
     registered_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     created_at: Mapped[datetime] = mapped_column(

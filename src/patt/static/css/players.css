@@ -580,3 +580,46 @@
     gap: 0.25rem;
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
+
+/* ── Roster role selector in player card ── */
+.pm-role-selector-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--color-border);
+}
+.pm-role-selector-label {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.pm-role-select {
+    font-size: 0.72rem;
+    padding: 1px 4px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 4px);
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+.pm-role-select:hover {
+    border-color: var(--color-accent);
+}
+.pm-role-select--active {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+.pm-role-spec-hint {
+    font-size: 0.72rem;
+    color: var(--color-accent);
+    font-style: italic;
+    white-space: nowrap;
+}
+.pm-player-role-icon.pm-role-overridden sup {
+    font-size: 0.55rem;
+    color: var(--color-accent);
+    vertical-align: super;
+}

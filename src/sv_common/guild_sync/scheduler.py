@@ -30,6 +30,7 @@ from .identity_engine import run_matching
 from .integrity_checker import run_integrity_check
 from .reporter import send_new_issues_report, send_sync_summary
 from .sync_logger import SyncLogEntry
+from .onboarding.deadline_checker import OnboardingDeadlineChecker
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,15 @@ class GuildSyncScheduler:
             misfire_grace_time=300,
         )
 
+        # Onboarding deadline check: every 30 minutes
+        self.scheduler.add_job(
+            self.run_onboarding_check,
+            IntervalTrigger(minutes=30),
+            id="onboarding_check",
+            name="Onboarding Deadline & Verification Check",
+            misfire_grace_time=300,
+        )
+
         self.scheduler.start()
         logger.info("Guild sync scheduler started")
 
@@ -111,6 +121,9 @@ class GuildSyncScheduler:
             # Step 4: Report new issues
             if channel and integrity_stats.get("total_new", 0) > 0:
                 await send_new_issues_report(self.db_pool, channel)
+
+            # Step 5: Retry onboarding verifications (new roster data may unlock matches)
+            await self.run_onboarding_check()
 
             duration = time.time() - start
 
@@ -159,6 +172,15 @@ class GuildSyncScheduler:
             if channel:
                 combined_stats = {**addon_stats, **integrity_stats}
                 await send_sync_summary(channel, "WoW Addon Upload", combined_stats, duration)
+
+    async def run_onboarding_check(self):
+        """Re-run verification for pending sessions; escalate overdue ones."""
+        checker = OnboardingDeadlineChecker(
+            self.db_pool,
+            bot=self.discord_bot,
+            audit_channel_id=self.audit_channel_id,
+        )
+        await checker.run()
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

@@ -514,6 +514,7 @@ async def admin_players_data(
                     "rank_name": m.rank.name if m.rank else "Unknown",
                     "rank_level": m.rank.level if m.rank else 0,
                     "registered": m.user_id is not None,
+                    "preferred_role": m.preferred_role or "",
                     "main_char_name": (main_char_by_member.get(m.id) or {}).get("name"),
                     "main_char_role": (main_char_by_member.get(m.id) or {}).get("role"),
                 }
@@ -772,6 +773,36 @@ async def admin_update_display_name(
     m.display_name = display_name or None  # None clears it, falls back to discord_username in UI
     await db.commit()
     return JSONResponse({"ok": True, "data": {"member_id": member_id, "display_name": m.display_name}})
+
+
+@router.patch("/players/{member_id}/preferred-role")
+async def admin_update_preferred_role(
+    request: Request,
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        role = (body.get("preferred_role") or "").strip() or None
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body"}, status_code=400)
+
+    valid_roles = {"tank", "healer", "melee_dps", "ranged_dps", None}
+    if role not in valid_roles:
+        return JSONResponse({"ok": False, "error": "Invalid role"}, status_code=400)
+
+    result = await db.execute(select(GuildMember).where(GuildMember.id == member_id))
+    m = result.scalar_one_or_none()
+    if not m:
+        return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    m.preferred_role = role
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"member_id": member_id, "preferred_role": m.preferred_role}})
 
 
 @router.get("/roster", response_class=HTMLResponse)
