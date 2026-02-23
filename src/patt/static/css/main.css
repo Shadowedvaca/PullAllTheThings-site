@@ -83,6 +83,7 @@ a:hover {
 .site-title {
     font-family: var(--font-display);
     font-size: 1.4rem;
+    font-weight: 700;
     color: var(--color-accent);
     text-decoration: none;
     white-space: nowrap;
@@ -149,11 +150,20 @@ a:hover {
 .site-footer {
     background-color: var(--color-bg-card);
     border-top: 1px solid var(--color-border);
-    padding: 1rem 2rem;
+    padding: 1.5rem 2rem;
     text-align: center;
     color: var(--color-text-muted);
     font-size: 0.875rem;
 }
+.site-footer .footer-tagline {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--color-text);
+    margin-bottom: 0.4rem;
+}
+.site-footer a { color: var(--color-accent); text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
 
 /* ============================================================
    FLASH MESSAGES
@@ -201,6 +211,7 @@ a:hover {
 .page-title {
     font-family: var(--font-display);
     font-size: 2rem;
+    font-weight: 700;
     color: var(--color-accent);
     margin-bottom: 0.25rem;
 }
@@ -230,6 +241,7 @@ a:hover {
 .card-title {
     font-family: var(--font-display);
     font-size: 1.1rem;
+    font-weight: 700;
     color: var(--color-accent);
 }
 .card-body {

@@ -42,7 +42,7 @@
     color: var(--color-text-muted);
 }
 .lp-badge--gold  { border-color: var(--color-accent); color: var(--color-accent); }
-.lp-badge--horde { border-color: #8b0000; color: #ff6666; }
+.lp-badge--horde { border-color: #8b0000; color: #ff6666; font-size: 0.935rem; padding: 6px 15px; }
 .lp-realm-info   { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 22px; }
 .lp-hero-cta     { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 
@@ -51,7 +51,8 @@
 .lp-section   { margin-bottom: 48px; }
 .lp-section-title {
     font-family: var(--font-display);
-    font-size: 1.4rem;
+    font-size: 1.5rem;
+    font-weight: 700;
     color: var(--color-accent);
     margin-bottom: 18px;
     display: flex;
@@ -137,7 +138,7 @@
     border-radius: 10px;
     padding: 18px;
 }
-.lp-sched-day  { font-family: var(--font-display); font-size: 1.05rem; color: var(--color-accent); margin-bottom: 4px; }
+.lp-sched-day  { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; color: var(--color-accent); margin-bottom: 4px; }
 .lp-sched-time { font-size: 0.88rem; color: var(--color-text-muted); margin-bottom: 6px; }
 .lp-sched-desc { font-size: 0.93rem; }
 
@@ -167,9 +168,11 @@
     border-color: var(--color-accent);
     transform: translateY(-2px);
     box-shadow: 0 0 18px rgba(212,168,75,0.25);
+    text-decoration: none;
 }
+.lp-link-card *:hover { text-decoration: none; }
 .lp-link-icon  { font-size: 2rem; }
-.lp-link-title { font-family: var(--font-display); font-size: 0.95rem; color: var(--color-accent); }
+.lp-link-title { font-family: var(--font-display); font-size: 0.95rem; font-weight: 700; color: var(--color-accent); }
 .lp-link-desc  { font-size: 0.82rem; color: var(--color-text-muted); text-align: center; }
 
 /* Officers */
@@ -192,10 +195,10 @@
     font-size: 1.5rem;
     flex-shrink: 0;
 }
-.lp-gl-rank     { font-size: 0.82rem; color: var(--color-accent); margin-bottom: 2px; }
-.lp-gl-name     { font-family: var(--font-display); font-size: 1.05rem; }
+.lp-gl-rank     { font-size: 0.82rem; font-weight: 700; color: var(--color-accent); margin-bottom: 2px; }
+.lp-gl-name     { font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; }
 .lp-gl-char a   { font-size: 0.9rem; color: var(--color-text-muted); text-decoration: none; }
-.lp-gl-char a:hover { color: var(--color-accent); }
+.lp-gl-char a:hover { color: var(--color-accent); text-decoration: none; }
 
 .lp-officers {
     display: grid;
@@ -221,7 +224,7 @@
 }
 .lp-officer-name { font-weight: 600; font-size: 0.93rem; margin-bottom: 2px; }
 .lp-officer-char a { font-size: 0.8rem; color: var(--color-text-muted); text-decoration: none; }
-.lp-officer-char a:hover { color: var(--color-accent); }
+.lp-officer-char a:hover { color: var(--color-accent); text-decoration: none; }
 
 /* Mito's Quote */
 .lp-quote {
