@@ -27,7 +27,13 @@
       "Bash(gh secret:*)",
       "Bash(sleep 8 && gh run list --repo Shadowedvaca/PullAllTheThings-site --limit 3 2>&1)",
       "Bash(sleep 30 && gh run list --repo Shadowedvaca/PullAllTheThings-site --limit 2 2>&1)",
-      "Bash(gh run:*)"
+      "Bash(gh run:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(curl:*)",
+      "Bash(nslookup:*)",
+      "Bash(cat:*)",
+      "Bash(cd /h/Development/PullAllTheThings-site/companion_app && python -c \"import watchdog, httpx, dotenv; print\\('all deps OK'\\)\" 2>&1)"
     ]
   }
 }

@@ -1,0 +1,27 @@
+{"ok":true,"data":{"db":"connected","version":"0.1.0"}}root@ubuntu-2gb-hil-1:/opt/patt-platform# curl -v http://localhost/api/health 2>&1
+* Host localhost:80 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+*   Trying [::1]:80...
+* Connected to localhost (::1) port 80
+> GET /api/health HTTP/1.1
+> Host: localhost
+> User-Agent: curl/8.5.0
+> Accept: */*
+>
+< HTTP/1.1 404 Not Found
+< Server: nginx/1.24.0 (Ubuntu)
+< Date: Sun, 22 Feb 2026 00:07:29 GMT
+< Content-Type: text/html
+< Content-Length: 162
+< Connection: keep-alive
+<
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+* Connection #0 to host localhost left intact
+root@ubuntu-2gb-hil-1:/opt/patt-platform#
