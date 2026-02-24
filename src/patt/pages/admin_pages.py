@@ -844,7 +844,10 @@ async def admin_send_invite_json(
 
         code = await generate_invite_code(db, player_id=player_id, created_by_id=admin.id)
 
-        target = await db.get(Player, player_id)
+        result = await db.execute(
+            select(Player).where(Player.id == player_id).options(selectinload(Player.discord_user))
+        )
+        target = result.scalar_one_or_none()
         dm_sent = False
         if target and target.discord_user:
             try:
