@@ -852,11 +852,16 @@ async def admin_send_invite_json(
         if target and target.discord_user:
             try:
                 from sv_common.discord.bot import get_bot
-                from sv_common.discord.dm import send_invite_dm, is_invite_dm_enabled
+                from sv_common.discord.dm import send_invite_dm
+                from sv_common.db.models import DiscordConfig
                 bot = get_bot()
-                pool = getattr(request.app.state, "guild_sync_pool", None)
-                if bot is not None and pool and await is_invite_dm_enabled(pool):
-                    await send_invite_dm(bot, target.discord_user.discord_id, code)
+                cfg_result = await db.execute(select(DiscordConfig).limit(1))
+                cfg = cfg_result.scalar_one_or_none()
+                dm_enabled = cfg and cfg.bot_dm_enabled and cfg.feature_invite_dm
+                if bot is not None and dm_enabled:
+                    base_url = str(request.base_url).rstrip("/")
+                    register_url = f"{base_url}/register?code={code}"
+                    await send_invite_dm(bot, target.discord_user.discord_id, code, register_url)
                     dm_sent = True
             except Exception as dm_err:
                 logger.warning("DM send failed for player %d: %s", player_id, dm_err)
