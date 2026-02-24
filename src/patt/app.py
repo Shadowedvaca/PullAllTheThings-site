@@ -103,6 +103,18 @@ async def _run_contest_agent(database_url: str) -> None:
     await run_contest_agent(factory)
 
 
+async def _auto_book_loop(pool: asyncpg.Pool) -> None:
+    """Background loop: checks every 5 minutes for events to auto-book."""
+    from patt.services.raid_booking_service import check_and_auto_book, POLL_INTERVAL_SECONDS
+    logger.info("Auto-booking scheduler started")
+    while True:
+        try:
+            await check_and_auto_book(pool)
+        except Exception as e:
+            logger.error("Auto-booking loop error: %s", e, exc_info=True)
+        await asyncio.sleep(POLL_INTERVAL_SECONDS)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
 
@@ -144,6 +156,11 @@ def create_app() -> FastAPI:
             guild_sync_pool = None
             app.state.guild_sync_pool = None
 
+        # Start auto-booking scheduler (requires guild_sync_pool)
+        auto_book_task = None
+        if guild_sync_pool:
+            auto_book_task = asyncio.create_task(_auto_book_loop(guild_sync_pool))
+
         # Start campaign status checker background task
         campaign_checker_task = asyncio.create_task(
             _run_campaign_checker(settings.database_url)
@@ -183,6 +200,13 @@ def create_app() -> FastAPI:
         yield
 
         # Graceful shutdown
+        if auto_book_task is not None:
+            auto_book_task.cancel()
+            try:
+                await auto_book_task
+            except asyncio.CancelledError:
+                pass
+
         campaign_checker_task.cancel()
         try:
             await campaign_checker_task
