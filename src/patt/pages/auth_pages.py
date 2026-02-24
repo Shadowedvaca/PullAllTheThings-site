@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from patt.deps import COOKIE_NAME, get_db, get_page_member
 from patt.templating import templates
-from sv_common.db.models import GuildMember, InviteCode, User
+from sv_common.db.models import InviteCode, Player, User
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +37,10 @@ def _clear_auth_cookie(response: RedirectResponse) -> None:
     response.delete_cookie(key=COOKIE_NAME, path="/")
 
 
-def _base_ctx(request: Request, member: GuildMember | None) -> dict:
+def _base_ctx(request: Request, player: Player | None) -> dict:
     return {
         "request": request,
-        "current_member": member,
+        "current_member": player,
         "active_campaigns": [],
     }
 
@@ -55,9 +55,9 @@ async def login_page(
     request: Request,
     next: str = "/",
     db: AsyncSession = Depends(get_db),
-    current_member: GuildMember | None = Depends(get_page_member),
+    current_player: Player | None = Depends(get_page_member),
 ):
-    if current_member:
+    if current_player:
         return RedirectResponse(url=next, status_code=302)
     return templates.TemplateResponse(
         "auth/login.html",
@@ -88,27 +88,36 @@ async def login_post(
             status_code=400,
         )
 
-    # Look up the member by discord_username
-    result = await db.execute(
-        select(GuildMember)
-        .options(selectinload(GuildMember.rank), selectinload(GuildMember.user))
-        .where(GuildMember.discord_username == discord_username)
+    # Look up user by email (discord_username stored as email at registration)
+    login_email = discord_username.lower().strip()
+    user_result = await db.execute(
+        select(User).where(User.email == login_email)
     )
-    member = result.scalar_one_or_none()
+    user = user_result.scalar_one_or_none()
 
-    if member is None or member.user is None:
+    if user is None:
         return render_error("Invalid username or password.")
 
-    if not member.user.is_active:
+    if not user.is_active:
         return render_error("Account is inactive. Contact an officer.")
 
-    if not verify_password(password, member.user.password_hash):
+    if not verify_password(password, user.password_hash):
         return render_error("Invalid username or password.")
 
+    # Find the player linked to this user
+    player_result = await db.execute(
+        select(Player)
+        .options(selectinload(Player.guild_rank))
+        .where(Player.website_user_id == user.id)
+    )
+    player = player_result.scalar_one_or_none()
+    if player is None:
+        return render_error("No player account linked to this login.")
+
     token = create_access_token(
-        user_id=member.user.id,
-        member_id=member.id,
-        rank_level=member.rank.level if member.rank else 0,
+        user_id=user.id,
+        member_id=player.id,
+        rank_level=player.guild_rank.level if player.guild_rank else 0,
     )
 
     safe_next = next if next.startswith("/") else "/"
@@ -126,9 +135,9 @@ async def login_post(
 async def register_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_member: GuildMember | None = Depends(get_page_member),
+    current_player: Player | None = Depends(get_page_member),
 ):
-    if current_member:
+    if current_player:
         return RedirectResponse(url="/", status_code=302)
     return templates.TemplateResponse(
         "auth/register.html",
@@ -168,7 +177,7 @@ async def register_post(
     code_upper = code.strip().upper()
     invite_result = await db.execute(
         select(InviteCode)
-        .options(selectinload(InviteCode.member))
+        .options(selectinload(InviteCode.player))
         .where(InviteCode.code == code_upper)
     )
     invite = invite_result.scalar_one_or_none()
@@ -183,25 +192,30 @@ async def register_post(
     if invite.expires_at and invite.expires_at < now:
         return render_error("This invite code has expired.")
 
-    if invite.member is None:
-        return render_error("Invite code is not associated with a member.")
+    if invite.player is None:
+        return render_error("Invite code is not associated with a player.")
 
-    if invite.member.discord_username.lower() != discord_username.strip().lower():
-        return render_error("Discord username does not match the invite code.")
-
-    member = invite.member
-    if member.user_id is not None:
+    player = invite.player
+    if player.website_user_id is not None:
         return render_error("This account is already registered.")
 
+    # Use discord_username as the login key (stored as User.email)
+    login_email = discord_username.lower().strip()
+
+    # Check for duplicate email
+    existing_result = await db.execute(
+        select(User).where(User.email == login_email)
+    )
+    if existing_result.scalar_one_or_none() is not None:
+        return render_error("An account with this Discord username already exists.")
+
     # Create the user account
-    password_hash = hash_password(password)
-    user = User(password_hash=password_hash, is_active=True)
+    user = User(email=login_email, password_hash=hash_password(password), is_active=True)
     db.add(user)
     await db.flush()
 
-    # Link user to member
-    member.user_id = user.id
-    member.registered_at = now
+    # Link user to player
+    player.website_user_id = user.id
 
     # Consume the invite code
     invite.used_at = now
@@ -209,12 +223,12 @@ async def register_post(
     await db.flush()
 
     # Load rank for token
-    await db.refresh(member, ["rank"])
+    await db.refresh(player, ["guild_rank"])
 
     token = create_access_token(
         user_id=user.id,
-        member_id=member.id,
-        rank_level=member.rank.level if member.rank else 0,
+        member_id=player.id,
+        rank_level=player.guild_rank.level if player.guild_rank else 0,
     )
 
     response = RedirectResponse(url="/", status_code=302)

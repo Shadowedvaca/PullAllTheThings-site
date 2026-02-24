@@ -13,57 +13,33 @@
 - Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass; data migrated from Sheets on server
 - Phase 6 complete: contest agent Discord updates; migration 0004 (agent_enabled, agent_chattiness on campaigns); contest_agent.py service; channels.py Discord posting module; admin form updated; 36 unit tests + integration tests; tests 228/252 pass (24 skip DB-only)
 - Phase 7 complete: regression suite (tests/regression/test_full_platform.py); art vote setup script (scripts/setup_art_vote.py); 500.html error page; 404.html enhanced; SecurityHeadersMiddleware + login rate limiting in app.py; secure cookie flag (production); CSS animations for score bars + result rows; docs/OPERATIONS.md; CLAUDE.md updated
-- CI/CD live: .github/workflows/deploy.yml auto-deploys on push to main (SSH key = DEPLOY_SSH_KEY GitHub secret)
+- CI/CD: GitHub Actions at .github/workflows/deploy.yml — auto-deploys on push to main
+- Phase 2.6 built but NOT activated: onboarding_sessions table (migration 0005), preferred_role column (migration 0006), conversation.py, provisioner.py, deadline_checker.py, commands.py — on_member_join not wired, slash commands not registered
 
-## Key File Locations
-- Phase plans: `reference/PHASE-N.md`, Phase 2.5 plans: `reference/PHASE_2_5*.md`
-- Testing guide: `reference/TESTING.md`
-- App entry: `src/patt/app.py` (factory: `create_app()`)
-- Config: `src/patt/config.py` (pydantic-settings, reads .env)
-- DB dependency: `src/patt/deps.py` — `get_db()`, `get_current_member()`, `require_rank(level)`
-- Models: `src/sv_common/db/models.py` (all ORM models — common, patt, guild_identity schemas)
-- Engine/session: `src/sv_common/db/engine.py`
-- Seed data: `src/sv_common/db/seed.py` + `data/seed/ranks.json`
-- Identity services: `src/sv_common/identity/ranks.py`, `members.py`, `characters.py`
-- Auth services: `src/sv_common/auth/passwords.py`, `jwt.py`, `invite_codes.py`
-- Discord services: `src/sv_common/discord/bot.py`, `role_sync.py`, `dm.py`
-- Guild sync package: `src/sv_common/guild_sync/` — blizzard_client, db_sync, migration, sync_logger, discord_sync, identity_engine, integrity_checker, reporter, scheduler
-- Guild sync API: `src/sv_common/guild_sync/api/routes.py` — mounted at /api/guild-sync/ and /api/identity/
-- Admin API: `src/patt/api/admin_routes.py` (Officer+ protected)
-- Auth API: `src/patt/api/auth_routes.py` (register, login, me)
-- Guild API: `src/patt/api/guild_routes.py`
-- Health route: `src/patt/api/health.py`
-- Alembic migrations: `alembic/versions/0001_initial_schema.py`, `0002_guild_identity_schema.py`, `0003_phase5_legacy_tables.py`, `0004_phase6_agent_chattiness.py`
-- Tests: `tests/unit/test_auth.py`, `tests/unit/test_lua_parser.py`, `tests/unit/test_blizzard_client.py`, `tests/unit/test_discord_sync.py`, `tests/unit/test_identity_engine.py`, `tests/unit/test_vote_scoring.py`, `tests/unit/test_campaign_service.py`, `tests/unit/test_contest_agent.py`
-- Campaign integration tests: `tests/integration/test_campaign_flow.py` (needs live DB)
-- Page rendering tests: `tests/integration/test_page_rendering.py` (needs live DB)
-- Legacy API integration tests: `tests/integration/test_legacy_api.py` (needs live DB)
-- Migration unit tests: `tests/unit/test_migration.py` (pure unit, no DB)
-- Legacy HTML: `src/patt/static/legacy/` (roster.html, roster-view.html, raid-admin.html, mitos-corner.html, patt-config.json)
-- Migration script: `scripts/migrate_sheets.py` (run once; needs DATABASE_URL + GOOGLE_APPS_SCRIPT_URL)
-- Migration docs: `docs/MIGRATION-MAP.md`
-- Page routes: `src/patt/pages/auth_pages.py`, `vote_pages.py`, `admin_pages.py`, `public_pages.py`
-- Shared templates instance: `src/patt/templating.py`
-- Cookie auth dep: `get_page_member()`, `require_page_rank(N)` in deps.py; cookie name = `patt_token`
-- Guild sync integration tests: `tests/integration/test_guild_schema.py`, `test_guild_db_sync.py`, `test_guild_identity.py`, `test_guild_integrity.py` (need live DB)
-- Conftest: `tests/conftest.py`
+## Current Phase: 2.7 — Data Model Migration (Clean 3NF Rebuild)
+- See reference/PHASE_2_7_DATA_MODEL_MIGRATION.md for full instructions
+- Eliminates: common.guild_members, common.characters, guild_identity.identity_links
+- Creates: reference tables (roles, classes, specializations), player_characters bridge
+- Renames: persons → players, discord_members → discord_users
+- Adds to players: discord_user_id, website_user_id, guild_rank_id, main/offspec fields
+- Repoints all FKs from guild_members → players
+- Updates all models, services, routes, templates, tests
+- Alembic migration: 0007
 
-## Dev Commands
-- Run unit tests: `.venv/Scripts/pytest tests/unit/ -v`
-- Run all tests: `.venv/Scripts/pytest tests/ -v`
-- Dev server: `python scripts/run_dev.py` (needs .env)
+## Key Data State (pre-2.7)
+- guild_identity.persons: EMPTY (identity engine never run on existing data)
+- guild_identity.identity_links: EMPTY
+- guild_identity.wow_characters: ~320 rows from Blizzard API syncs
+- guild_identity.discord_members: populated from Discord bot syncs
+- common.guild_members: ~40 rows (from Google Sheets migration — will be migrated to players)
+- common.characters: character data from Sheets migration (will be dropped)
+- Migrations 0001-0006 deployed on server
 
 ## Architecture Notes
-- Domain: pullallthethings.com (plural — note the 's') → Hetzner 5.78.114.224
-- Python 3.13 on Windows dev, Linux prod (Hetzner 5.78.114.224)
-- pytest.ini sets `pythonpath = src` — no editable installs needed
-- asyncio_mode = auto in pytest.ini
-- Schemas: `common` (identity/auth) and `patt` (campaigns/votes)
-- Alembic version table lives in `patt` schema
-- Integration tests need TEST_DATABASE_URL env var set to patt_test_db
-
-## Patterns Established
-- API responses: `{"ok": true/false, "data": {...}}` or `{"ok": false, "error": "..."}`
-- Settings singleton via `get_settings()` in config.py
-- Engine singleton via `get_engine()` / `get_session_factory()` in engine.py
-- Model schema assignment: `__table_args__ = {"schema": "common"}` or `"patt"`
+- Server: Hetzner 5.78.114.224, Nginx → uvicorn :8100
+- Domain: pullallthething.com (SSL via certbot)
+- DB: PostgreSQL 16, schemas: common, patt, guild_identity
+- App: Python 3.11+, FastAPI, SQLAlchemy 2.0, discord.py 2.x
+- Repo: Shadowedvaca/PullAllTheThings-site
+- Deploy: systemd patt.service, auto-deploy via GitHub Actions
+- Completed phase docs archived to reference/archive/

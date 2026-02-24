@@ -20,8 +20,6 @@ from sv_common.db.models import (
     CampaignResult,
     ContestAgentLog,
     DiscordConfig,
-    GuildMember,
-    GuildRank,
     Vote,
 )
 
@@ -427,7 +425,7 @@ async def _get_total_voters(db: AsyncSession, campaign_id: int) -> int:
     """Return distinct voter count for this campaign."""
     from sqlalchemy import func as sqlfunc
     result = await db.execute(
-        select(sqlfunc.count(sqlfunc.distinct(Vote.member_id))).where(
+        select(sqlfunc.count(sqlfunc.distinct(Vote.player_id))).where(
             Vote.campaign_id == campaign_id
         )
     )

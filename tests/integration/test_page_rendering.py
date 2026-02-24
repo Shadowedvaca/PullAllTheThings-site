@@ -4,7 +4,7 @@ Tests that:
 - Public pages render correctly (200 status, expected content)
 - Auth-gated pages redirect to login when not authenticated
 - Auth pages render and function
-- Vote page renders for different member states
+- Vote page renders for different player states
 - Admin pages require Officer+ rank
 
 Requires TEST_DATABASE_URL to be set to a live PostgreSQL test database.
@@ -17,7 +17,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sv_common.db.models import (
-    GuildMember, GuildRank, User, Campaign, CampaignEntry,
+    DiscordUser, GuildRank, Player, User, Campaign, CampaignEntry,
     InviteCode,
 )
 from sv_common.auth.passwords import hash_password
@@ -30,11 +30,11 @@ from patt.deps import COOKIE_NAME
 # ---------------------------------------------------------------------------
 
 
-def _make_token(member: GuildMember, rank_level: int = 0) -> str:
+def _make_token(player: Player, rank_level: int = 0) -> str:
     return create_access_token(
-        user_id=member.user_id or 0,
-        member_id=member.id,
-        rank_level=member.rank.level if member.rank else rank_level,
+        user_id=player.website_user_id or 0,
+        member_id=player.id,
+        rank_level=player.guild_rank.level if player.guild_rank else rank_level,
     )
 
 
@@ -48,54 +48,103 @@ def _auth_cookies(token: str) -> dict:
 
 
 @pytest_asyncio.fixture
-async def officer_member_with_user(db_session: AsyncSession):
-    """Officer rank member with registered user account."""
+async def officer_player_with_user(db_session: AsyncSession):
+    """Officer rank player with registered user account."""
     rank = GuildRank(name="Officer_pr", level=4, description="Officer")
     db_session.add(rank)
     await db_session.flush()
 
-    user = User(password_hash=hash_password("testpass123"), is_active=True)
+    user = User(email="officer_test", password_hash=hash_password("testpass123"), is_active=True)
     db_session.add(user)
     await db_session.flush()
 
-    member = GuildMember(
-        user_id=user.id,
-        discord_username="officer_test",
+    player = Player(
         display_name="Officer",
-        discord_id="444444444444444444",
-        rank_id=rank.id,
+        website_user_id=user.id,
+        guild_rank_id=rank.id,
     )
-    db_session.add(member)
+    db_session.add(player)
     await db_session.flush()
 
-    # reload rank relationship
-    member.rank = rank
-    return member
+    player.guild_rank = rank
+    return player
+
+
+# Backward compat alias
+officer_member_with_user = officer_player_with_user
 
 
 @pytest_asyncio.fixture
-async def member_with_user(db_session: AsyncSession):
-    """Member rank member with registered user account."""
+async def member_player_with_user(db_session: AsyncSession):
+    """Member rank player with registered user account."""
     rank = GuildRank(name="Member_pr", level=2, description="Member")
     db_session.add(rank)
     await db_session.flush()
 
-    user = User(password_hash=hash_password("testpass123"), is_active=True)
+    user = User(email="member_test", password_hash=hash_password("testpass123"), is_active=True)
     db_session.add(user)
     await db_session.flush()
 
-    member = GuildMember(
-        user_id=user.id,
-        discord_username="member_test",
+    player = Player(
         display_name="Member",
-        discord_id="555555555555555555",
-        rank_id=rank.id,
+        website_user_id=user.id,
+        guild_rank_id=rank.id,
     )
-    db_session.add(member)
+    db_session.add(player)
     await db_session.flush()
 
-    member.rank = rank
-    return member
+    player.guild_rank = rank
+    return player
+
+
+# Backward compat alias used by tests
+@pytest_asyncio.fixture
+async def member_with_user(db_session: AsyncSession):
+    """Member rank player with registered user account (alias for member_player_with_user)."""
+    rank = GuildRank(name="Member_pr2", level=2, description="Member")
+    db_session.add(rank)
+    await db_session.flush()
+
+    user = User(email="member_test2", password_hash=hash_password("testpass123"), is_active=True)
+    db_session.add(user)
+    await db_session.flush()
+
+    player = Player(
+        display_name="Member",
+        website_user_id=user.id,
+        guild_rank_id=rank.id,
+    )
+    db_session.add(player)
+    await db_session.flush()
+
+    player.guild_rank = rank
+    # Store login email for tests that need it
+    player._login_email = "member_test2"
+    return player
+
+
+@pytest_asyncio.fixture
+async def officer_member_with_user(db_session: AsyncSession):
+    """Officer rank player with registered user account."""
+    rank = GuildRank(name="Officer_pr2", level=4, description="Officer")
+    db_session.add(rank)
+    await db_session.flush()
+
+    user = User(email="officer_test2", password_hash=hash_password("testpass123"), is_active=True)
+    db_session.add(user)
+    await db_session.flush()
+
+    player = Player(
+        display_name="Officer",
+        website_user_id=user.id,
+        guild_rank_id=rank.id,
+    )
+    db_session.add(player)
+    await db_session.flush()
+
+    player.guild_rank = rank
+    player._login_email = "officer_test2"
+    return player
 
 
 @pytest_asyncio.fixture
@@ -112,7 +161,7 @@ async def live_campaign_with_entries(db_session: AsyncSession, member_with_user)
         duration_hours=168,
         status="live",
         early_close_if_all_voted=False,
-        created_by=member_with_user.id,
+        created_by_player_id=member_with_user.id,
     )
     db_session.add(campaign)
     await db_session.flush()
@@ -133,31 +182,29 @@ async def live_campaign_with_entries(db_session: AsyncSession, member_with_user)
 
 
 @pytest_asyncio.fixture
-async def invite_code_for_member(db_session: AsyncSession):
-    """A fresh member with an unused invite code."""
+async def invite_code_for_player(db_session: AsyncSession):
+    """A fresh player with an unused invite code."""
     rank = GuildRank(name="Initiate_ic", level=1, description="Initiate")
     db_session.add(rank)
     await db_session.flush()
 
-    member = GuildMember(
-        discord_username="invite_test_user",
+    player = Player(
         display_name="Invitee",
-        discord_id="666666666666666666",
-        rank_id=rank.id,
+        guild_rank_id=rank.id,
     )
-    db_session.add(member)
+    db_session.add(player)
     await db_session.flush()
 
     invite = InviteCode(
         code="TEST-INVITE-CODE",
-        member_id=member.id,
+        player_id=player.id,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db_session.add(invite)
     await db_session.flush()
 
-    member.rank = rank
-    return member, invite
+    player.guild_rank = rank
+    return player, invite
 
 
 # ---------------------------------------------------------------------------
@@ -180,9 +227,9 @@ async def test_public_landing_page_shows_login_link_when_anonymous(client: Async
 
 
 async def test_public_landing_page_shows_username_when_logged_in(
-    client: AsyncClient, member_with_user: GuildMember
+    client: AsyncClient, member_with_user: Player
 ):
-    """GET / with auth cookie → shows member's display name."""
+    """GET / with auth cookie → shows player's display name."""
     token = _make_token(member_with_user)
     response = await client.get("/", cookies=_auth_cookies(token))
     assert response.status_code == 200
@@ -211,7 +258,7 @@ async def test_register_page_renders(client: AsyncClient):
 
 
 async def test_login_redirects_authenticated_user(
-    client: AsyncClient, member_with_user: GuildMember
+    client: AsyncClient, member_with_user: Player
 ):
     """GET /login when already logged in → redirects to home."""
     token = _make_token(member_with_user)
@@ -221,13 +268,15 @@ async def test_login_redirects_authenticated_user(
 
 
 async def test_login_post_valid_credentials(
-    client: AsyncClient, member_with_user: GuildMember
+    client: AsyncClient, member_with_user: Player
 ):
     """POST /login with correct credentials → sets cookie and redirects."""
+    # Login uses the email stored at registration (discord_username stored as email)
+    login_email = getattr(member_with_user, "_login_email", "member_test2")
     response = await client.post(
         "/login",
         data={
-            "discord_username": member_with_user.discord_username,
+            "discord_username": login_email,
             "password": "testpass123",
         },
         follow_redirects=False,
@@ -248,7 +297,7 @@ async def test_login_post_invalid_credentials(client: AsyncClient):
 
 
 async def test_logout_clears_cookie(
-    client: AsyncClient, member_with_user: GuildMember
+    client: AsyncClient, member_with_user: Player
 ):
     """GET /logout → redirects to home, cookie cleared."""
     token = _make_token(member_with_user)
@@ -303,7 +352,7 @@ async def test_register_post_invalid_invite_code(client: AsyncClient):
 
 async def test_vote_page_renders_for_eligible_member(
     client: AsyncClient,
-    member_with_user: GuildMember,
+    member_with_user: Player,
     live_campaign_with_entries: Campaign,
 ):
     """GET /vote/{id} for eligible member → 200, contains vote form."""
@@ -324,24 +373,24 @@ async def test_vote_page_shows_gallery_for_view_only_member(
     live_campaign_with_entries: Campaign,
     db_session: AsyncSession,
 ):
-    """GET /vote/{id} for member below min_rank_to_vote → shows entries, no vote form."""
-    # Create initiate member (rank level 1, below min_rank_to_vote=2)
+    """GET /vote/{id} for player below min_rank_to_vote → shows entries, no vote form."""
+    # Create initiate player (rank level 1, below min_rank_to_vote=2)
     rank = GuildRank(name="Initiate_vo", level=1)
     db_session.add(rank)
     await db_session.flush()
-    user = User(password_hash=hash_password("x"), is_active=True)
+    user = User(email="low_rank_user_vo", password_hash=hash_password("x"), is_active=True)
     db_session.add(user)
     await db_session.flush()
-    low_member = GuildMember(
-        user_id=user.id,
-        discord_username="low_rank_user",
-        rank_id=rank.id,
+    low_player = Player(
+        display_name="LowRankUser",
+        website_user_id=user.id,
+        guild_rank_id=rank.id,
     )
-    db_session.add(low_member)
+    db_session.add(low_player)
     await db_session.flush()
-    low_member.rank = rank
+    low_player.guild_rank = rank
 
-    token = _make_token(low_member)
+    token = _make_token(low_player)
     response = await client.get(
         f"/vote/{live_campaign_with_entries.id}",
         cookies=_auth_cookies(token),
@@ -354,19 +403,19 @@ async def test_vote_page_shows_gallery_for_view_only_member(
 
 async def test_vote_page_shows_results_after_voting(
     client: AsyncClient,
-    member_with_user: GuildMember,
+    member_with_user: Player,
     live_campaign_with_entries: Campaign,
     db_session: AsyncSession,
 ):
     """GET /vote/{id} after casting vote → shows 'voted' state with standings."""
     from sv_common.db.models import Vote
 
-    # Manually insert votes for the member
+    # Manually insert votes for the player
     entries = live_campaign_with_entries.entries
     for i, entry in enumerate(entries[:3]):
         vote = Vote(
             campaign_id=live_campaign_with_entries.id,
-            member_id=member_with_user.id,
+            player_id=member_with_user.id,
             entry_id=entry.id,
             rank=i + 1,
         )
@@ -423,9 +472,9 @@ async def test_vote_page_anonymous_on_live_campaign(
 
 async def test_admin_campaigns_requires_officer_rank(
     client: AsyncClient,
-    member_with_user: GuildMember,
+    member_with_user: Player,
 ):
-    """GET /admin/campaigns for Member-rank user → redirect to login (not officer)."""
+    """GET /admin/campaigns for Member-rank player → redirect to login (not officer)."""
     token = _make_token(member_with_user)
     response = await client.get(
         "/admin/campaigns",
@@ -445,7 +494,7 @@ async def test_admin_campaigns_requires_auth(client: AsyncClient):
 
 async def test_admin_campaigns_accessible_by_officer(
     client: AsyncClient,
-    officer_member_with_user: GuildMember,
+    officer_member_with_user: Player,
 ):
     """GET /admin/campaigns for Officer → 200."""
     token = _make_token(officer_member_with_user)
@@ -459,7 +508,7 @@ async def test_admin_campaigns_accessible_by_officer(
 
 async def test_admin_roster_requires_officer_rank(
     client: AsyncClient,
-    member_with_user: GuildMember,
+    member_with_user: Player,
 ):
     """GET /admin/roster for Member-rank → redirect (not officer)."""
     token = _make_token(member_with_user)
@@ -473,7 +522,7 @@ async def test_admin_roster_requires_officer_rank(
 
 async def test_admin_roster_accessible_by_officer(
     client: AsyncClient,
-    officer_member_with_user: GuildMember,
+    officer_member_with_user: Player,
 ):
     """GET /admin/roster for Officer → 200."""
     token = _make_token(officer_member_with_user)
@@ -487,7 +536,7 @@ async def test_admin_roster_accessible_by_officer(
 
 async def test_admin_new_campaign_form_accessible_by_officer(
     client: AsyncClient,
-    officer_member_with_user: GuildMember,
+    officer_member_with_user: Player,
 ):
     """GET /admin/campaigns/new for Officer → 200, contains form."""
     token = _make_token(officer_member_with_user)
@@ -502,7 +551,7 @@ async def test_admin_new_campaign_form_accessible_by_officer(
 
 async def test_admin_edit_campaign_accessible_by_officer(
     client: AsyncClient,
-    officer_member_with_user: GuildMember,
+    officer_member_with_user: Player,
     live_campaign_with_entries: Campaign,
 ):
     """GET /admin/campaigns/{id}/edit for Officer → 200."""

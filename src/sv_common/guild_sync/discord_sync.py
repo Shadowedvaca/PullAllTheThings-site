@@ -1,17 +1,7 @@
 """
 Discord server member and role synchronization.
 
-Integrates with the existing Phase 2 Discord bot to:
-- Pull the full member list with roles
-- Determine each member's highest guild-relevant role
-- Listen for real-time join/leave/role-change events
-- Write data to guild_identity.discord_members
-
-Guild-relevant Discord roles (in priority order):
-  GM > Officer > Veteran > Member > Initiate
-
-Members without ANY of these roles are tracked but flagged differently —
-they might be guests, bots, or people who haven't been assigned a role yet.
+Writes to guild_identity.discord_users (renamed from discord_members).
 """
 
 import logging
@@ -23,11 +13,8 @@ import discord
 
 logger = logging.getLogger(__name__)
 
-# Discord role names → normalized names, in priority order (highest first)
-# The role name in Discord should match these exactly (case-insensitive matching applied)
 GUILD_ROLE_PRIORITY = ["GM", "Officer", "Veteran", "Member", "Initiate"]
 
-# Map Discord role to equivalent in-game rank name for comparison
 DISCORD_TO_INGAME_RANK = {
     "GM": "Guild Leader",
     "Officer": "Officer",
@@ -38,30 +25,20 @@ DISCORD_TO_INGAME_RANK = {
 
 
 def get_highest_guild_role(member: discord.Member) -> Optional[str]:
-    """
-    Determine a Discord member's highest guild-relevant role.
-
-    Returns the role name (e.g., "Officer") or None if they have no guild roles.
-    """
     member_role_names = [r.name for r in member.roles]
-
     for role_name in GUILD_ROLE_PRIORITY:
         for mr in member_role_names:
             if mr.lower() == role_name.lower():
                 return role_name
-
     return None
 
 
 def get_all_guild_roles(member: discord.Member) -> list[str]:
-    """Get all guild-relevant roles a member has."""
     result = []
     member_role_names = [r.name.lower() for r in member.roles]
-
     for role_name in GUILD_ROLE_PRIORITY:
         if role_name.lower() in member_role_names:
             result.append(role_name)
-
     return result
 
 
@@ -69,11 +46,7 @@ async def sync_discord_members(
     pool: asyncpg.Pool,
     guild: discord.Guild,
 ) -> dict:
-    """
-    Full sync of all Discord server members into the database.
-
-    Called periodically (every 15-30 min) or on demand.
-    """
+    """Full sync of all Discord server members into guild_identity.discord_users."""
     now = datetime.now(timezone.utc)
     stats = {"found": 0, "updated": 0, "new": 0, "departed": 0}
 
@@ -82,7 +55,6 @@ async def sync_discord_members(
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            # Iterate all members (requires GUILD_MEMBERS intent)
             async for member in guild.fetch_members(limit=None):
                 if member.bot:
                     continue
@@ -97,14 +69,14 @@ async def sync_discord_members(
 
                 existing = await conn.fetchrow(
                     """SELECT id, highest_guild_role, is_present
-                       FROM guild_identity.discord_members
+                       FROM guild_identity.discord_users
                        WHERE discord_id = $1""",
                     discord_id,
                 )
 
                 if existing:
                     await conn.execute(
-                        """UPDATE guild_identity.discord_members SET
+                        """UPDATE guild_identity.discord_users SET
                             username = $2,
                             display_name = $3,
                             highest_guild_role = $4,
@@ -114,7 +86,7 @@ async def sync_discord_members(
                             removed_at = NULL
                            WHERE discord_id = $1""",
                         discord_id,
-                        member.name,  # New Discord username (no discriminator)
+                        member.name,
                         display,
                         highest_role,
                         all_roles,
@@ -123,7 +95,7 @@ async def sync_discord_members(
                     stats["updated"] += 1
                 else:
                     await conn.execute(
-                        """INSERT INTO guild_identity.discord_members
+                        """INSERT INTO guild_identity.discord_users
                            (discord_id, username, display_name, highest_guild_role,
                             all_guild_roles, joined_server_at, last_sync, is_present)
                            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)""",
@@ -139,14 +111,14 @@ async def sync_discord_members(
 
             # Mark members who left
             all_present = await conn.fetch(
-                """SELECT id, discord_id FROM guild_identity.discord_members
+                """SELECT id, discord_id FROM guild_identity.discord_users
                    WHERE is_present = TRUE"""
             )
 
             for row in all_present:
                 if row["discord_id"] not in current_ids:
                     await conn.execute(
-                        """UPDATE guild_identity.discord_members SET
+                        """UPDATE guild_identity.discord_users SET
                             is_present = FALSE, removed_at = $2
                            WHERE id = $1""",
                         row["id"], now,
@@ -160,10 +132,6 @@ async def sync_discord_members(
     return stats
 
 
-# ---------------------------------------------------------------------------
-# Real-time event handlers (register with existing bot)
-# ---------------------------------------------------------------------------
-
 async def on_member_join(pool: asyncpg.Pool, member: discord.Member):
     """Handle a new member joining the Discord server."""
     if member.bot:
@@ -171,7 +139,7 @@ async def on_member_join(pool: asyncpg.Pool, member: discord.Member):
 
     async with pool.acquire() as conn:
         await conn.execute(
-            """INSERT INTO guild_identity.discord_members
+            """INSERT INTO guild_identity.discord_users
                (discord_id, username, display_name, joined_server_at, last_sync, is_present)
                VALUES ($1, $2, $3, $4, NOW(), TRUE)
                ON CONFLICT (discord_id) DO UPDATE SET
@@ -189,7 +157,7 @@ async def on_member_remove(pool: asyncpg.Pool, member: discord.Member):
 
     async with pool.acquire() as conn:
         await conn.execute(
-            """UPDATE guild_identity.discord_members SET
+            """UPDATE guild_identity.discord_users SET
                 is_present = FALSE, removed_at = NOW()
                WHERE discord_id = $1""",
             str(member.id),
@@ -202,7 +170,6 @@ async def on_member_update(pool: asyncpg.Pool, before: discord.Member, after: di
     if after.bot:
         return
 
-    # Check if guild-relevant roles changed
     old_roles = get_all_guild_roles(before)
     new_roles = get_all_guild_roles(after)
 
@@ -212,7 +179,7 @@ async def on_member_update(pool: asyncpg.Pool, before: discord.Member, after: di
 
         async with pool.acquire() as conn:
             await conn.execute(
-                """UPDATE guild_identity.discord_members SET
+                """UPDATE guild_identity.discord_users SET
                     username = $2, display_name = $3,
                     highest_guild_role = $4, all_guild_roles = $5,
                     last_sync = NOW()

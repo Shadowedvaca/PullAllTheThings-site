@@ -10,8 +10,8 @@ from sv_common.db.models import (
     Campaign,
     CampaignEntry,
     CampaignResult,
-    GuildMember,
     GuildRank,
+    Player,
     Vote,
 )
 
@@ -60,10 +60,7 @@ def compute_scores(votes: list[dict]) -> dict[int, dict]:
 def rank_results(
     entry_scores: dict[int, dict]
 ) -> list[tuple[int, dict]]:
-    """Sort entries by weighted_score desc, then first_place_count desc.
-
-    Returns a list of (entry_id, score_dict) in final rank order.
-    """
+    """Sort entries by weighted_score desc, then first_place_count desc."""
     return sorted(
         entry_scores.items(),
         key=lambda item: (-item[1]["weighted_score"], -item[1]["first"]),
@@ -78,15 +75,12 @@ def rank_results(
 async def cast_vote(
     db: AsyncSession,
     campaign_id: int,
-    member_id: int,
+    player_id: int,
     picks: list[dict],
 ) -> list[Vote]:
     """Cast ranked-choice votes for a campaign.
 
     picks: [{"entry_id": int, "rank": int}, ...]
-
-    Validates: campaign live, member rank, no duplicate vote, correct pick
-    count, no duplicate entries or ranks, all entries belong to campaign.
     """
     # Load campaign
     campaign_result = await db.execute(
@@ -98,19 +92,19 @@ async def cast_vote(
     if campaign.status != "live":
         raise ValueError(f"Campaign is {campaign.status}, voting not allowed")
 
-    # Check member rank
-    member_result = await db.execute(
-        select(GuildMember)
-        .options(selectinload(GuildMember.rank))
-        .where(GuildMember.id == member_id)
+    # Check player rank
+    player_result = await db.execute(
+        select(Player)
+        .options(selectinload(Player.guild_rank))
+        .where(Player.id == player_id)
     )
-    member = member_result.scalar_one_or_none()
-    if member is None:
-        raise ValueError(f"Member {member_id} not found")
-    rank_level = member.rank.level if member.rank else 0
+    player = player_result.scalar_one_or_none()
+    if player is None:
+        raise ValueError(f"Player {player_id} not found")
+    rank_level = player.guild_rank.level if player.guild_rank else 0
     if rank_level < campaign.min_rank_to_vote:
         raise ValueError(
-            f"Member rank {rank_level} does not meet minimum required rank "
+            f"Player rank {rank_level} does not meet minimum required rank "
             f"{campaign.min_rank_to_vote}"
         )
 
@@ -118,11 +112,11 @@ async def cast_vote(
     existing_result = await db.execute(
         select(Vote).where(
             Vote.campaign_id == campaign_id,
-            Vote.member_id == member_id,
+            Vote.player_id == player_id,
         )
     )
     if existing_result.scalars().first() is not None:
-        raise ValueError("Member has already voted in this campaign")
+        raise ValueError("Player has already voted in this campaign")
 
     # Validate pick count
     if len(picks) != campaign.picks_per_voter:
@@ -156,7 +150,7 @@ async def cast_vote(
     for pick in picks:
         vote = Vote(
             campaign_id=campaign_id,
-            member_id=member_id,
+            player_id=player_id,
             entry_id=pick["entry_id"],
             rank=pick["rank"],
         )
@@ -166,30 +160,37 @@ async def cast_vote(
     return votes
 
 
-async def get_member_vote(
-    db: AsyncSession, campaign_id: int, member_id: int
+async def get_player_vote(
+    db: AsyncSession, campaign_id: int, player_id: int
 ) -> list[Vote] | None:
-    """Return member's votes for this campaign, or None if not voted."""
+    """Return player's votes for this campaign, or None if not voted."""
     result = await db.execute(
         select(Vote).where(
             Vote.campaign_id == campaign_id,
-            Vote.member_id == member_id,
+            Vote.player_id == player_id,
         )
     )
     votes = list(result.scalars().all())
     return votes if votes else None
 
 
-async def has_member_voted(
-    db: AsyncSession, campaign_id: int, member_id: int
+# Backward compat alias
+get_member_vote = get_player_vote
+
+
+async def has_player_voted(
+    db: AsyncSession, campaign_id: int, player_id: int
 ) -> bool:
     result = await db.execute(
         select(Vote).where(
             Vote.campaign_id == campaign_id,
-            Vote.member_id == member_id,
+            Vote.player_id == player_id,
         )
     )
     return result.scalars().first() is not None
+
+
+has_member_voted = has_player_voted
 
 
 # ---------------------------------------------------------------------------
@@ -201,12 +202,10 @@ async def calculate_results(
     db: AsyncSession, campaign_id: int
 ) -> list[CampaignResult]:
     """Calculate ranked-choice results and store in campaign_results table."""
-    # Clear any existing results
     await db.execute(
         delete(CampaignResult).where(CampaignResult.campaign_id == campaign_id)
     )
 
-    # Load all votes
     votes_result = await db.execute(
         select(Vote).where(Vote.campaign_id == campaign_id)
     )
@@ -216,13 +215,11 @@ async def calculate_results(
     ]
     scores = compute_scores(vote_dicts)
 
-    # Load all entries (to include zero-vote entries)
     entries_result = await db.execute(
         select(CampaignEntry).where(CampaignEntry.campaign_id == campaign_id)
     )
     entries = entries_result.scalars().all()
 
-    # Merge zero-score entries into the scores dict
     for entry in entries:
         if entry.id not in scores:
             scores[entry.id] = {
@@ -232,7 +229,6 @@ async def calculate_results(
                 "weighted_score": 0,
             }
 
-    # Sort by score
     ranked = rank_results(scores)
 
     results = []
@@ -294,17 +290,18 @@ async def get_vote_stats(db: AsyncSession, campaign_id: int) -> dict:
     if campaign is None:
         raise ValueError(f"Campaign {campaign_id} not found")
 
-    # Count eligible members (rank level >= min_rank_to_vote)
+    # Count eligible players (rank level >= min_rank_to_vote AND have website account)
     eligible_q = await db.execute(
-        select(func.count(GuildMember.id))
-        .join(GuildRank, GuildMember.rank_id == GuildRank.id)
+        select(func.count(Player.id))
+        .join(GuildRank, Player.guild_rank_id == GuildRank.id)
         .where(GuildRank.level >= campaign.min_rank_to_vote)
+        .where(Player.website_user_id.is_not(None))
     )
     total_eligible = eligible_q.scalar_one()
 
-    # Count distinct members who have voted
+    # Count distinct players who have voted
     voted_q = await db.execute(
-        select(func.count(func.distinct(Vote.member_id))).where(
+        select(func.count(func.distinct(Vote.player_id))).where(
             Vote.campaign_id == campaign_id
         )
     )
@@ -324,10 +321,7 @@ async def get_vote_stats(db: AsyncSession, campaign_id: int) -> dict:
 
 
 async def check_early_close(db: AsyncSession, campaign_id: int) -> bool:
-    """Close campaign early if all eligible members have voted.
-
-    Returns True if the campaign was closed, False otherwise.
-    """
+    """Close campaign early if all eligible players have voted."""
     campaign_result = await db.execute(
         select(Campaign).where(Campaign.id == campaign_id)
     )
@@ -345,7 +339,7 @@ async def check_early_close(db: AsyncSession, campaign_id: int) -> bool:
 
         await close_campaign(db, campaign_id)
         logger.info(
-            "Campaign %d closed early — all eligible members voted", campaign_id
+            "Campaign %d closed early — all eligible players voted", campaign_id
         )
         return True
     return False

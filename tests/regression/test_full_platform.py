@@ -1,17 +1,17 @@
 """End-to-end regression suite for the PATT platform.
 
 Tests the complete lifecycle in one connected flow:
-  1. Create ranks and members
-  2. Issue invite codes and register members via the auth API
+  1. Create ranks and players
+  2. Issue invite codes and register players via the auth API
   3. Verify login and /me
   4. Create a campaign with 10 entries
   5. Activate the campaign
-  6. Verify ineligible members cannot vote
+  6. Verify ineligible players cannot vote
   7. Verify non-voters cannot see live results
-  8. Each eligible member votes; verify live standings update
+  8. Each eligible player votes; verify live standings update
   9. Duplicate vote rejected
  10. Verify vote stats
- 11. Early close triggers when all eligible members have voted
+ 11. Early close triggers when all eligible players have voted
  12. Verify final results are correct
  13. Contest agent milestone detection (pure function assertions)
 
@@ -32,11 +32,13 @@ from sv_common.db.models import (
     Campaign,
     CampaignEntry,
     ContestAgentLog,
-    GuildMember,
     GuildRank,
     InviteCode,
+    Player,
+    User,
 )
 from sv_common.auth.jwt import create_access_token
+from sv_common.auth.passwords import hash_password
 from patt.services import campaign_service, vote_service
 from patt.services.contest_agent import detect_milestone
 
@@ -53,33 +55,29 @@ async def _create_rank(db: AsyncSession, *, name: str, level: int) -> GuildRank:
     return r
 
 
-async def _create_member(
+async def _create_player(
     db: AsyncSession,
     *,
-    discord_username: str,
+    display_name: str,
     rank_id: int,
-    discord_id: str,
-    display_name: str | None = None,
-) -> GuildMember:
-    m = GuildMember(
-        discord_username=discord_username,
-        display_name=display_name or discord_username,
-        discord_id=discord_id,
-        rank_id=rank_id,
+) -> Player:
+    p = Player(
+        display_name=display_name,
+        guild_rank_id=rank_id,
     )
-    db.add(m)
+    db.add(p)
     await db.flush()
-    return m
+    return p
 
 
 async def _create_invite(
-    db: AsyncSession, *, member_id: int, created_by_id: int
+    db: AsyncSession, *, player_id: int, created_by_id: int
 ) -> InviteCode:
     code = secrets.token_hex(8)  # 16-char hex string
     inv = InviteCode(
         code=code,
-        member_id=member_id,
-        created_by=created_by_id,
+        player_id=player_id,
+        created_by_player_id=created_by_id,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db.add(inv)
@@ -87,20 +85,20 @@ async def _create_invite(
     return inv
 
 
-def _auth_headers(member_id: int, rank_level: int) -> dict:
-    """Generate Bearer auth headers for a member."""
+def _auth_headers(player_id: int, rank_level: int) -> dict:
+    """Generate Bearer auth headers for a player."""
     token = create_access_token(
-        user_id=0, member_id=member_id, rank_level=rank_level
+        user_id=0, member_id=player_id, rank_level=rank_level
     )
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _load_with_rank(db: AsyncSession, member_id: int) -> GuildMember:
-    """Load a GuildMember with its rank eagerly loaded."""
+async def _load_with_rank(db: AsyncSession, player_id: int) -> Player:
+    """Load a Player with its rank eagerly loaded."""
     result = await db.execute(
-        select(GuildMember)
-        .options(selectinload(GuildMember.rank))
-        .where(GuildMember.id == member_id)
+        select(Player)
+        .options(selectinload(Player.guild_rank))
+        .where(Player.id == player_id)
     )
     return result.scalar_one()
 
@@ -120,7 +118,7 @@ async def test_full_platform_regression(
     """
 
     # ==================================================================
-    # 1. SETUP: Ranks and members
+    # 1. SETUP: Ranks and players
     # ==================================================================
 
     rank_initiate = await _create_rank(db_session, name="RegInitiate", level=1)
@@ -129,58 +127,59 @@ async def test_full_platform_regression(
     rank_gl = await _create_rank(db_session, name="RegGuildLeader", level=5)
 
     # Guild leader (admin, creates campaign)
-    admin = await _create_member(
+    admin = await _create_player(
         db_session,
-        discord_username="reg_trog",
-        rank_id=rank_gl.id,
-        discord_id="9900000000000000001",
         display_name="Trog",
+        rank_id=rank_gl.id,
     )
 
-    # Veteran+ members — eligible to vote (min_rank_to_vote=3)
-    vet1 = await _create_member(
+    # Veteran+ players — eligible to vote (min_rank_to_vote=3)
+    vet1 = await _create_player(
         db_session,
-        discord_username="reg_rocket",
-        rank_id=rank_veteran.id,
-        discord_id="9900000000000000002",
         display_name="Rocket",
-    )
-    vet2 = await _create_member(
-        db_session,
-        discord_username="reg_mito",
         rank_id=rank_veteran.id,
-        discord_id="9900000000000000003",
-        display_name="Mito",
     )
-    officer1 = await _create_member(
+    vet2 = await _create_player(
         db_session,
-        discord_username="reg_shodoom",
-        rank_id=rank_officer.id,
-        discord_id="9900000000000000004",
+        display_name="Mito",
+        rank_id=rank_veteran.id,
+    )
+    officer1 = await _create_player(
+        db_session,
         display_name="Shodoom",
+        rank_id=rank_officer.id,
     )
 
     # Initiate — NOT eligible to vote
-    initiate = await _create_member(
+    initiate = await _create_player(
         db_session,
-        discord_username="reg_newbie",
-        rank_id=rank_initiate.id,
-        discord_id="9900000000000000005",
         display_name="Newbie",
+        rank_id=rank_initiate.id,
     )
 
+    # Admin also gets a website account so they count as eligible in stats
+    admin_user = User(
+        email="reg_trog@regtest.com",
+        password_hash=hash_password("adminpw"),
+        is_active=True,
+    )
+    db_session.add(admin_user)
+    await db_session.flush()
+    admin.website_user_id = admin_user.id
+    await db_session.flush()
+
     # ==================================================================
-    # 2. INVITE CODES: Create for members who will register
+    # 2. INVITE CODES: Create for players who will register
     # ==================================================================
 
     inv_vet1 = await _create_invite(
-        db_session, member_id=vet1.id, created_by_id=admin.id
+        db_session, player_id=vet1.id, created_by_id=admin.id
     )
     inv_vet2 = await _create_invite(
-        db_session, member_id=vet2.id, created_by_id=admin.id
+        db_session, player_id=vet2.id, created_by_id=admin.id
     )
     inv_off1 = await _create_invite(
-        db_session, member_id=officer1.id, created_by_id=admin.id
+        db_session, player_id=officer1.id, created_by_id=admin.id
     )
 
     # ==================================================================
@@ -254,14 +253,14 @@ async def test_full_platform_regression(
     )
     assert resp.status_code == 401, "Wrong password should be rejected"
 
-    # /me returns the correct member profile
+    # /me returns the correct player profile
     resp = await client.get(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {rocket_token}"},
     )
     assert resp.status_code == 200
     me = resp.json()["data"]
-    assert me["discord_username"] == "reg_rocket"
+    assert me["display_name"] == "Rocket"
     assert me["rank"]["level"] == 3
 
     # ==================================================================
@@ -303,7 +302,7 @@ async def test_full_platform_regression(
     assert campaign.status == "live"
 
     # ==================================================================
-    # 6. PERMISSION: Ineligible member cannot vote
+    # 6. PERMISSION: Ineligible player cannot vote
     # ==================================================================
 
     resp = await client.post(
@@ -330,7 +329,7 @@ async def test_full_platform_regression(
     assert resp.status_code == 403, "Non-voter should not see live results"
 
     # ==================================================================
-    # 8. VOTING: Each eligible member votes
+    # 8. VOTING: Each eligible player votes
     # ==================================================================
 
     # rocket votes: Trog=1, Rocket=2, Mito=3 → Trog gets 3pts from this
@@ -412,12 +411,12 @@ async def test_full_platform_regression(
     )
     assert resp.status_code == 200, f"shodoom vote failed: {resp.text}"
 
-    # admin (Guild Leader, level 5) votes directly via service (no registered user)
+    # admin (Guild Leader, level 5) votes directly via service
     # admin: Trog=1, Shodoom=2, Skate=3
     await vote_service.cast_vote(
         db_session,
         campaign_id=campaign.id,
-        member_id=admin.id,
+        player_id=admin.id,
         picks=[
             {"entry_id": entries[0].id, "rank": 1},  # Trog
             {"entry_id": entries[3].id, "rank": 2},  # Shodoom
@@ -426,11 +425,13 @@ async def test_full_platform_regression(
     )
 
     # ==================================================================
-    # 9. VOTE STATS: Verify all eligible members have voted
+    # 9. VOTE STATS: Verify all eligible players have voted
     # ==================================================================
 
     stats = await vote_service.get_vote_stats(db_session, campaign.id)
-    # Eligible: admin(5), vet1(3), vet2(3), officer1(4) = 4 members
+    # Eligible: players with website_user_id AND rank >= 3
+    # admin(5, has website_user_id), vet1(3, registered), vet2(3, registered),
+    # officer1(4, registered) = 4 members
     assert stats["total_eligible"] == 4, (
         f"Expected 4 eligible voters, got {stats['total_eligible']}"
     )
@@ -545,8 +546,6 @@ async def test_full_platform_regression(
         "percent_voted": 25,
         "all_voted": False,
     }
-    # "normal" chattiness includes milestone_50 but not milestone_25.
-    # At 25% voted with hype: milestone_25 fires. With normal: first_vote fires.
     first_vote_event = detect_milestone(
         campaign_status="live",
         stats=one_vote_stats,
@@ -586,30 +585,25 @@ async def test_full_platform_regression(
 
 
 async def test_invite_code_expiry(db_session: AsyncSession, client: AsyncClient):
-    """Expired invite code is rejected at registration.
-
-    Bug guard: ensure expired codes are checked server-side, not just not sent.
-    """
+    """Expired invite code is rejected at registration."""
     rank = await _create_rank(db_session, name="ExpMember", level=2)
-    admin = await _create_member(
+    admin = await _create_player(
         db_session,
-        discord_username="exp_admin",
+        display_name="exp_admin",
         rank_id=rank.id,
-        discord_id="8800000000000000001",
     )
-    member = await _create_member(
+    member = await _create_player(
         db_session,
-        discord_username="exp_user",
+        display_name="exp_user",
         rank_id=rank.id,
-        discord_id="8800000000000000002",
     )
 
     # Create an already-expired invite code
     expired_code = secrets.token_hex(8)
     inv = InviteCode(
         code=expired_code,
-        member_id=member.id,
-        created_by=admin.id,
+        player_id=member.id,
+        created_by_player_id=admin.id,
         expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # Past!
     )
     db_session.add(inv)
@@ -627,16 +621,12 @@ async def test_invite_code_expiry(db_session: AsyncSession, client: AsyncClient)
 
 
 async def test_voting_on_closed_campaign_rejected(db_session: AsyncSession):
-    """Voting on a closed campaign is rejected.
-
-    Bug guard: prevents vote stuffing after close.
-    """
+    """Voting on a closed campaign is rejected."""
     rank = await _create_rank(db_session, name="ClosedOfficer", level=4)
-    officer = await _create_member(
+    officer = await _create_player(
         db_session,
-        discord_username="closed_off",
+        display_name="closed_off",
         rank_id=rank.id,
-        discord_id="7700000000000000001",
     )
 
     now = datetime.now(timezone.utc)
@@ -660,7 +650,7 @@ async def test_voting_on_closed_campaign_rejected(db_session: AsyncSession):
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign.id,
-            member_id=officer.id,
+            player_id=officer.id,
             picks=[
                 {"entry_id": e1.id, "rank": 1},
                 {"entry_id": e2.id, "rank": 2},
@@ -670,22 +660,17 @@ async def test_voting_on_closed_campaign_rejected(db_session: AsyncSession):
 
 
 async def test_wrong_number_of_picks_rejected(db_session: AsyncSession):
-    """Submitting fewer or more picks than required is rejected.
-
-    Bug guard: ensures the picks_per_voter constraint is enforced.
-    """
+    """Submitting fewer or more picks than required is rejected."""
     rank = await _create_rank(db_session, name="PickOfficer", level=4)
-    officer = await _create_member(
+    officer = await _create_player(
         db_session,
-        discord_username="pick_off",
+        display_name="pick_off",
         rank_id=rank.id,
-        discord_id="6600000000000000001",
     )
-    voter = await _create_member(
+    voter = await _create_player(
         db_session,
-        discord_username="pick_voter",
+        display_name="pick_voter",
         rank_id=rank.id,
-        discord_id="6600000000000000002",
     )
 
     now = datetime.now(timezone.utc)
@@ -709,7 +694,7 @@ async def test_wrong_number_of_picks_rejected(db_session: AsyncSession):
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign.id,
-            member_id=voter.id,
+            player_id=voter.id,
             picks=[{"entry_id": e1.id, "rank": 1}],
         )
 
@@ -719,11 +704,10 @@ async def test_public_api_returns_live_campaign_list(
 ):
     """Public /api/v1/campaigns endpoint returns live campaigns to anonymous users."""
     rank = await _create_rank(db_session, name="PubOfficer", level=4)
-    officer = await _create_member(
+    officer = await _create_player(
         db_session,
-        discord_username="pub_off",
+        display_name="pub_off",
         rank_id=rank.id,
-        discord_id="5500000000000000001",
     )
 
     now = datetime.now(timezone.utc)

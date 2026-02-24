@@ -20,10 +20,10 @@ async def guild_db(guild_sync_pool):
     async with guild_sync_pool.acquire() as conn:
         await conn.execute("""
             TRUNCATE
-                guild_identity.persons,
+                guild_identity.players,
                 guild_identity.wow_characters,
-                guild_identity.discord_members,
-                guild_identity.identity_links,
+                guild_identity.discord_users,
+                guild_identity.player_characters,
                 guild_identity.audit_issues,
                 guild_identity.sync_log
             CASCADE

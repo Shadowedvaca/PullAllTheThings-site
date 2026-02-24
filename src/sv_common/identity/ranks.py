@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sv_common.db.models import GuildMember, GuildRank
+from sv_common.db.models import GuildRank, Player
+from sqlalchemy.orm import selectinload
 
 
 async def get_all_ranks(db: AsyncSession) -> list[GuildRank]:
@@ -72,17 +73,13 @@ async def delete_rank(db: AsyncSession, rank_id: int) -> bool:
 async def member_meets_rank_requirement(
     db: AsyncSession, member_id: int, required_level: int
 ) -> bool:
-    """Return True if the member's rank level >= required_level."""
+    """Return True if the player's rank level >= required_level."""
     result = await db.execute(
-        select(GuildMember).where(GuildMember.id == member_id)
+        select(Player).options(selectinload(Player.guild_rank)).where(Player.id == member_id)
     )
-    member = result.scalar_one_or_none()
-    if member is None:
+    player = result.scalar_one_or_none()
+    if player is None:
         return False
-    rank_result = await db.execute(
-        select(GuildRank).where(GuildRank.id == member.rank_id)
-    )
-    rank = rank_result.scalar_one_or_none()
-    if rank is None:
+    if player.guild_rank is None:
         return False
-    return rank.level >= required_level
+    return player.guild_rank.level >= required_level

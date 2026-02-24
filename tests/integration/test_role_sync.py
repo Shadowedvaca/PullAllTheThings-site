@@ -1,7 +1,8 @@
 """Integration tests for Discord role sync.
 
-All Discord API calls are mocked. Tests verify that platform member ranks
-are correctly updated based on Discord role changes.
+All Discord API calls are mocked. Tests verify that platform player ranks
+are correctly updated based on Discord role changes, and that DiscordUser
+records are created/updated for new Discord members.
 """
 
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sv_common.db.models import DiscordConfig, GuildMember, GuildRank
+from sv_common.db.models import DiscordUser, GuildRank, Player
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +33,30 @@ async def _setup_ranks(db: AsyncSession) -> dict[str, GuildRank]:
         db.add(r)
     await db.flush()
     return ranks
+
+
+async def _setup_discord_user_and_player(
+    db: AsyncSession, discord_id: str, username: str, rank_id: int
+) -> tuple[DiscordUser, Player]:
+    """Create a DiscordUser and linked Player for testing."""
+    du = DiscordUser(
+        discord_id=discord_id,
+        username=username,
+        display_name=username,
+        is_present=True,
+    )
+    db.add(du)
+    await db.flush()
+
+    player = Player(
+        display_name=username,
+        discord_user_id=du.id,
+        guild_rank_id=rank_id,
+        guild_rank_source="manual",
+    )
+    db.add(player)
+    await db.flush()
+    return du, player
 
 
 def _make_discord_member(discord_id: str, role_ids: list[str], name: str = "testuser"):
@@ -56,10 +81,6 @@ def _make_bot_with_members(discord_members: list) -> MagicMock:
     guild = MagicMock()
     guild.members = discord_members
 
-    async def fetch_members(**kwargs):
-        pass
-
-    # Make `async for` work on fetch_members by returning an async iterator
     async def _async_iter():
         for m in discord_members:
             yield m
@@ -77,24 +98,17 @@ def _make_bot_with_members(discord_members: list) -> MagicMock:
 
 
 class TestRoleSync:
-    async def test_role_sync_promotes_member_when_discord_role_added(
+    async def test_role_sync_promotes_player_when_discord_role_added(
         self, db_session: AsyncSession
     ):
-        """Member currently Initiate gains Officer role in Discord → rank updated."""
+        """Player currently Initiate gains Officer role in Discord → rank updated."""
         from sv_common.discord.role_sync import sync_discord_roles
-        from sqlalchemy.ext.asyncio import async_sessionmaker
 
         ranks = await _setup_ranks(db_session)
 
-        member = GuildMember(
-            discord_id="555000000000000001",
-            discord_username="to_be_promoted",
-            display_name="To Be Promoted",
-            rank_id=ranks["initiate"].id,
-            rank_source="manual",
+        _, player = await _setup_discord_user_and_player(
+            db_session, "555000000000000001", "to_be_promoted", ranks["initiate"].id
         )
-        db_session.add(member)
-        await db_session.flush()
 
         # Discord says this user now has the Officer role
         discord_member = _make_discord_member(
@@ -104,34 +118,27 @@ class TestRoleSync:
         )
         bot = _make_bot_with_members([discord_member])
 
-        # Use a session factory that returns our test db_session
         factory = AsyncMock()
         factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
-        await db_session.refresh(member)
-        assert member.rank_id == ranks["officer"].id
-        assert member.rank_source == "discord_sync"
+        await db_session.refresh(player)
+        assert player.guild_rank_id == ranks["officer"].id
+        assert player.guild_rank_source == "discord_sync"
 
-    async def test_role_sync_demotes_member_when_discord_role_removed(
+    async def test_role_sync_demotes_player_when_discord_role_removed(
         self, db_session: AsyncSession
     ):
-        """Member was Officer; Discord role removed → reverts to Initiate (no match)."""
+        """Player was Officer; Discord role changed to Initiate → rank updated."""
         from sv_common.discord.role_sync import sync_discord_roles
 
         ranks = await _setup_ranks(db_session)
 
-        member = GuildMember(
-            discord_id="555000000000000002",
-            discord_username="to_be_demoted",
-            display_name="To Be Demoted",
-            rank_id=ranks["officer"].id,
-            rank_source="discord_sync",
+        _, player = await _setup_discord_user_and_player(
+            db_session, "555000000000000002", "to_be_demoted", ranks["officer"].id
         )
-        db_session.add(member)
-        await db_session.flush()
 
         # Discord says this user now has only Initiate role
         discord_member = _make_discord_member(
@@ -147,14 +154,14 @@ class TestRoleSync:
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
-        await db_session.refresh(member)
-        assert member.rank_id == ranks["initiate"].id
-        assert member.rank_source == "discord_sync"
+        await db_session.refresh(player)
+        assert player.guild_rank_id == ranks["initiate"].id
+        assert player.guild_rank_source == "discord_sync"
 
-    async def test_role_sync_creates_new_member_for_unknown_discord_user(
+    async def test_role_sync_creates_new_discord_user_for_unknown_discord_member(
         self, db_session: AsyncSession
     ):
-        """Discord member not in platform → new GuildMember record created."""
+        """Discord member not in platform → new DiscordUser record created."""
         from sv_common.discord.role_sync import sync_discord_roles
 
         await _setup_ranks(db_session)
@@ -170,33 +177,27 @@ class TestRoleSync:
         factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        await sync_discord_roles(bot, factory, _GUILD_ID)
+        stats = await sync_discord_roles(bot, factory, _GUILD_ID)
 
         result = await db_session.execute(
-            select(GuildMember).where(GuildMember.discord_id == "555000000000000003")
+            select(DiscordUser).where(DiscordUser.discord_id == "555000000000000003")
         )
-        new_member = result.scalar_one_or_none()
-        assert new_member is not None
-        assert new_member.rank_source == "discord_sync"
+        new_du = result.scalar_one_or_none()
+        assert new_du is not None
+        assert stats["created"] == 1
 
-    async def test_role_sync_skips_members_without_matching_roles(
+    async def test_role_sync_skips_player_when_rank_unchanged(
         self, db_session: AsyncSession
     ):
-        """Existing member with correct rank and no role change is skipped."""
+        """Existing player with correct rank and no role change is skipped."""
         from sv_common.discord.role_sync import sync_discord_roles
 
         ranks = await _setup_ranks(db_session)
 
-        member = GuildMember(
-            discord_id="555000000000000004",
-            discord_username="stable_member",
-            display_name="Stable Member",
-            rank_id=ranks["member"].id,
-            rank_source="discord_sync",
+        _, player = await _setup_discord_user_and_player(
+            db_session, "555000000000000004", "stable_member", ranks["member"].id
         )
-        db_session.add(member)
-        await db_session.flush()
-        original_rank_id = member.rank_id
+        original_rank_id = player.guild_rank_id
 
         # Discord matches current rank — no change expected
         discord_member = _make_discord_member(
@@ -212,26 +213,20 @@ class TestRoleSync:
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
-        await db_session.refresh(member)
-        assert member.rank_id == original_rank_id
+        await db_session.refresh(player)
+        assert player.guild_rank_id == original_rank_id
 
     async def test_role_sync_sets_source_to_discord_sync(
         self, db_session: AsyncSession
     ):
-        """rank_source is set to 'discord_sync' on any rank update."""
+        """guild_rank_source is set to 'discord_sync' on any rank update."""
         from sv_common.discord.role_sync import sync_discord_roles
 
         ranks = await _setup_ranks(db_session)
 
-        member = GuildMember(
-            discord_id="555000000000000005",
-            discord_username="source_test_user",
-            display_name="Source Test",
-            rank_id=ranks["initiate"].id,
-            rank_source="manual",
+        _, player = await _setup_discord_user_and_player(
+            db_session, "555000000000000005", "source_test_user", ranks["initiate"].id
         )
-        db_session.add(member)
-        await db_session.flush()
 
         discord_member = _make_discord_member(
             "555000000000000005",
@@ -246,13 +241,13 @@ class TestRoleSync:
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
-        await db_session.refresh(member)
-        assert member.rank_source == "discord_sync"
+        await db_session.refresh(player)
+        assert player.guild_rank_source == "discord_sync"
 
     async def test_role_sync_skips_bot_accounts(
         self, db_session: AsyncSession
     ):
-        """Bot accounts in Discord guild should not create platform members."""
+        """Bot accounts in Discord guild should not create DiscordUser records."""
         from sv_common.discord.role_sync import sync_discord_roles
 
         await _setup_ranks(db_session)
@@ -273,6 +268,6 @@ class TestRoleSync:
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
         result = await db_session.execute(
-            select(GuildMember).where(GuildMember.discord_id == "555000000000000006")
+            select(DiscordUser).where(DiscordUser.discord_id == "555000000000000006")
         )
         assert result.scalar_one_or_none() is None

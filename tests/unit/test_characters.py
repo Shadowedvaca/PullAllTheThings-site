@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sv_common.db.models import GuildMember, GuildRank
+from sv_common.db.models import GuildRank, Player, WowCharacter
 from sv_common.identity import characters as char_service
 from sv_common.identity.characters import build_armory_url
 
@@ -35,145 +35,140 @@ def test_build_armory_url_lowercase_name():
 
 
 # ---------------------------------------------------------------------------
-# Validation (pure — no DB needed)
-# ---------------------------------------------------------------------------
-
-
-def test_invalid_role_rejected_sync():
-    """Validate that VALID_ROLES does not include garbage."""
-    from sv_common.identity.characters import VALID_ROLES
-
-    assert "tank" in VALID_ROLES
-    assert "healer" in VALID_ROLES
-    assert "melee_dps" in VALID_ROLES
-    assert "ranged_dps" in VALID_ROLES
-    assert "wizard" not in VALID_ROLES
-
-
-# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-async def _setup_member(db: AsyncSession) -> GuildMember:
-    rank = GuildRank(name=f"Member_char", level=2)
+async def _make_rank(db: AsyncSession, name: str, level: int) -> GuildRank:
+    rank = GuildRank(name=name, level=level)
     db.add(rank)
     await db.flush()
-    member = GuildMember(discord_username="char_owner", rank_id=rank.id)
-    db.add(member)
+    return rank
+
+
+async def _make_player(db: AsyncSession, rank_id: int, name: str) -> Player:
+    player = Player(display_name=name, guild_rank_id=rank_id)
+    db.add(player)
     await db.flush()
-    return member
+    return player
+
+
+async def _make_wow_char(db: AsyncSession, char_name: str, realm: str = "senjin") -> WowCharacter:
+    char = WowCharacter(character_name=char_name, realm_slug=realm)
+    db.add(char)
+    await db.flush()
+    return char
 
 
 # ---------------------------------------------------------------------------
-# create_character
+# link / unlink / get operations
 # ---------------------------------------------------------------------------
 
 
-async def test_create_character_builds_armory_url(db_session: AsyncSession):
-    member = await _setup_member(db_session)
+async def test_link_character_to_player(db_session: AsyncSession):
+    rank = await _make_rank(db_session, "Member_lcp", 2)
+    player = await _make_player(db_session, rank.id, "LinkPlayer")
+    char = await _make_wow_char(db_session, "LinkChar_lcp")
 
-    char = await char_service.create_character(
-        db_session,
-        member_id=member.id,
-        name="Trogmoon",
-        realm="Stormrage",
-        wow_class="Druid",
-        spec="Balance",
-        role="ranged_dps",
-    )
+    bridge = await char_service.link_character_to_player(db_session, player.id, char.id)
 
-    assert char.armory_url is not None
-    assert "stormrage" in char.armory_url
-    assert "trogmoon" in char.armory_url
+    assert bridge.player_id == player.id
+    assert bridge.character_id == char.id
 
 
-async def test_create_character_senjin_apostrophe_handling(db_session: AsyncSession):
-    member = await _setup_member(db_session)
+async def test_get_characters_for_player(db_session: AsyncSession):
+    rank = await _make_rank(db_session, "Member_gcfp", 2)
+    player = await _make_player(db_session, rank.id, "MultiPlayer_gcfp")
+    char1 = await _make_wow_char(db_session, "CharA_gcfp")
+    char2 = await _make_wow_char(db_session, "CharB_gcfp")
 
-    char = await char_service.create_character(
-        db_session,
-        member_id=member.id,
-        name="Trogmoon",
-        realm="Sen'jin",
-        wow_class="Druid",
-    )
+    await char_service.link_character_to_player(db_session, player.id, char1.id)
+    await char_service.link_character_to_player(db_session, player.id, char2.id)
 
-    assert "senjin" in char.armory_url
-    assert "'" not in char.armory_url
-
-
-async def test_get_main_character(db_session: AsyncSession):
-    member = await _setup_member(db_session)
-
-    await char_service.create_character(
-        db_session,
-        member_id=member.id,
-        name="MainChar",
-        realm="Stormrage",
-        wow_class="Druid",
-        main_alt="main",
-    )
-    await char_service.create_character(
-        db_session,
-        member_id=member.id,
-        name="AltChar",
-        realm="Stormrage",
-        wow_class="Warrior",
-        main_alt="alt",
-    )
-
-    main = await char_service.get_main_character(db_session, member.id)
-
-    assert main is not None
-    assert main.name == "MainChar"
-    assert main.main_alt == "main"
+    chars = await char_service.get_characters_for_player(db_session, player.id)
+    names = [c.character_name for c in chars]
+    assert "CharA_gcfp" in names
+    assert "CharB_gcfp" in names
 
 
-async def test_invalid_role_rejected(db_session: AsyncSession):
-    member = await _setup_member(db_session)
+async def test_get_characters_for_player_empty(db_session: AsyncSession):
+    rank = await _make_rank(db_session, "Member_gcfpe", 2)
+    player = await _make_player(db_session, rank.id, "EmptyPlayer_gcfpe")
 
-    with pytest.raises(ValueError, match="Invalid role"):
-        await char_service.create_character(
-            db_session,
-            member_id=member.id,
-            name="BadRole",
-            realm="Stormrage",
-            wow_class="Druid",
-            role="wizard",
-        )
+    chars = await char_service.get_characters_for_player(db_session, player.id)
+    assert chars == []
 
 
-async def test_invalid_main_alt_rejected(db_session: AsyncSession):
-    member = await _setup_member(db_session)
+async def test_get_player_for_character(db_session: AsyncSession):
+    rank = await _make_rank(db_session, "Member_gpfc", 2)
+    player = await _make_player(db_session, rank.id, "OwnerPlayer_gpfc")
+    char = await _make_wow_char(db_session, "OwnedChar_gpfc")
 
-    with pytest.raises(ValueError, match="Invalid main_alt"):
-        await char_service.create_character(
-            db_session,
-            member_id=member.id,
-            name="BadAlt",
-            realm="Stormrage",
-            wow_class="Druid",
-            main_alt="primary",
-        )
+    await char_service.link_character_to_player(db_session, player.id, char.id)
+
+    found_player_id = await char_service.get_player_for_character(db_session, char.id)
+    assert found_player_id == player.id
 
 
-async def test_duplicate_name_realm_rejected(db_session: AsyncSession):
-    member = await _setup_member(db_session)
+async def test_get_player_for_character_not_linked(db_session: AsyncSession):
+    char = await _make_wow_char(db_session, "UnlinkedChar_gpfc")
 
-    await char_service.create_character(
-        db_session,
-        member_id=member.id,
-        name="Dupchar",
-        realm="Stormrage",
-        wow_class="Druid",
-    )
+    found = await char_service.get_player_for_character(db_session, char.id)
+    assert found is None
 
-    with pytest.raises(ValueError, match="already exists"):
-        await char_service.create_character(
-            db_session,
-            member_id=member.id,
-            name="Dupchar",
-            realm="Stormrage",
-            wow_class="Warrior",
-        )
+
+async def test_unlink_character_from_player(db_session: AsyncSession):
+    rank = await _make_rank(db_session, "Member_ucfp", 2)
+    player = await _make_player(db_session, rank.id, "UnlinkPlayer_ucfp")
+    char = await _make_wow_char(db_session, "UnlinkChar_ucfp")
+
+    await char_service.link_character_to_player(db_session, player.id, char.id)
+
+    removed = await char_service.unlink_character_from_player(db_session, char.id)
+    assert removed is True
+
+    found = await char_service.get_player_for_character(db_session, char.id)
+    assert found is None
+
+
+async def test_unlink_character_not_linked_returns_false(db_session: AsyncSession):
+    char = await _make_wow_char(db_session, "FreeChar_ucfp")
+
+    removed = await char_service.unlink_character_from_player(db_session, char.id)
+    assert removed is False
+
+
+async def test_get_wow_character_by_name(db_session: AsyncSession):
+    await _make_wow_char(db_session, "Trogmoon_gwcbn", "senjin")
+
+    found = await char_service.get_wow_character_by_name(db_session, "Trogmoon_gwcbn", "senjin")
+    assert found is not None
+    assert found.character_name == "Trogmoon_gwcbn"
+
+
+async def test_get_wow_character_by_name_not_found(db_session: AsyncSession):
+    found = await char_service.get_wow_character_by_name(db_session, "GhostChar_nf", "senjin")
+    assert found is None
+
+
+async def test_get_wow_character_by_id(db_session: AsyncSession):
+    char = await _make_wow_char(db_session, "IdChar_gwcbi", "senjin")
+
+    found = await char_service.get_wow_character_by_id(db_session, char.id)
+    assert found is not None
+    assert found.id == char.id
+
+
+async def test_character_unique_per_player(db_session: AsyncSession):
+    """A character can only be linked to one player at a time (UNIQUE on character_id)."""
+    from sqlalchemy.exc import IntegrityError
+
+    rank = await _make_rank(db_session, "Member_cupp", 2)
+    player1 = await _make_player(db_session, rank.id, "Player1_cupp")
+    player2 = await _make_player(db_session, rank.id, "Player2_cupp")
+    char = await _make_wow_char(db_session, "SharedChar_cupp")
+
+    await char_service.link_character_to_player(db_session, player1.id, char.id)
+
+    with pytest.raises(IntegrityError):
+        await char_service.link_character_to_player(db_session, player2.id, char.id)

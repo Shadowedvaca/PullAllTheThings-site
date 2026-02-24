@@ -1,20 +1,15 @@
 """
 Writes Blizzard API and addon data into the guild_identity PostgreSQL schema.
 
-Handles:
-- Upsert of character data (new characters, updated specs/levels, departures)
-- Tracking of who left the guild vs. who's still present
-- Marking characters as removed when they disappear from the roster
+Uses the Phase 2.7 schema: class_id/active_spec_id/guild_rank_id FKs on wow_characters.
 """
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 import asyncpg
 
 from .blizzard_client import CharacterProfileData, RANK_NAME_MAP
-from .migration import get_role_category
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +18,13 @@ async def sync_blizzard_roster(
     pool: asyncpg.Pool,
     characters: list[CharacterProfileData],
 ) -> dict:
-    """
-    Sync a full Blizzard API roster pull into the database.
+    """Sync a full Blizzard API roster pull into the database.
 
     Returns stats dict: {found, updated, new, removed}
     """
     now = datetime.now(timezone.utc)
     stats = {"found": len(characters), "updated": 0, "new": 0, "removed": 0}
 
-    # Build set of current character keys
     current_keys = set()
     for char in characters:
         current_keys.add((char.character_name.lower(), char.realm_slug.lower()))
@@ -39,69 +32,81 @@ async def sync_blizzard_roster(
     async with pool.acquire() as conn:
         async with conn.transaction():
 
-            # Upsert each character
             for char in characters:
-                role_cat = get_role_category(
-                    char.character_class,
-                    char.active_spec or "",
-                    "",
-                )
-
                 existing = await conn.fetchrow(
-                    """SELECT id, active_spec, level, item_level, guild_rank, removed_at
+                    """SELECT id, removed_at
                        FROM guild_identity.wow_characters
                        WHERE LOWER(character_name) = $1 AND LOWER(realm_slug) = $2""",
                     char.character_name.lower(), char.realm_slug.lower(),
                 )
 
+                # Resolve class_id and active_spec_id from reference tables
+                class_row = await conn.fetchrow(
+                    "SELECT id FROM guild_identity.classes WHERE LOWER(name) = LOWER($1)",
+                    char.character_class or "",
+                )
+                class_id = class_row["id"] if class_row else None
+
+                spec_id = None
+                if class_id and char.active_spec:
+                    spec_row = await conn.fetchrow(
+                        """SELECT id FROM guild_identity.specializations
+                           WHERE class_id = $1 AND LOWER(name) = LOWER($2)""",
+                        class_id, char.active_spec,
+                    )
+                    spec_id = spec_row["id"] if spec_row else None
+
+                rank_row = await conn.fetchrow(
+                    "SELECT id FROM common.guild_ranks WHERE level = $1",
+                    char.guild_rank,
+                )
+                guild_rank_id = rank_row["id"] if rank_row else None
+
                 if existing:
-                    # Update existing character
                     await conn.execute(
                         """UPDATE guild_identity.wow_characters SET
-                            character_class = $2,
-                            active_spec = $3,
+                            class_id = $2,
+                            active_spec_id = $3,
                             level = $4,
                             item_level = $5,
-                            guild_rank = $6,
-                            guild_rank_name = $7,
-                            last_login_timestamp = $8,
-                            role_category = $9,
-                            blizzard_last_sync = $10,
+                            guild_rank_id = $6,
+                            last_login_timestamp = $7,
+                            blizzard_last_sync = $8,
                             removed_at = NULL,
-                            realm_name = $11
+                            realm_name = $9
                            WHERE id = $1""",
                         existing["id"],
-                        char.character_class,
-                        char.active_spec,
+                        class_id,
+                        spec_id,
                         char.level,
                         char.item_level,
-                        char.guild_rank,
-                        RANK_NAME_MAP.get(char.guild_rank, f"Rank {char.guild_rank}"),
+                        guild_rank_id,
                         char.last_login_timestamp,
-                        role_cat,
                         now,
                         char.realm_name,
                     )
 
                     if existing["removed_at"] is not None:
-                        logger.info("Character %s has returned to the guild", char.character_name)
+                        logger.info(
+                            "Character %s has returned to the guild", char.character_name
+                        )
 
                     stats["updated"] += 1
                 else:
-                    # New character
                     await conn.execute(
                         """INSERT INTO guild_identity.wow_characters
-                           (character_name, realm_slug, realm_name, character_class,
-                            active_spec, level, item_level, guild_rank, guild_rank_name,
-                            last_login_timestamp, role_category, blizzard_last_sync)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)""",
+                           (character_name, realm_slug, realm_name, class_id,
+                            active_spec_id, level, item_level, guild_rank_id,
+                            last_login_timestamp, blizzard_last_sync)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
                         char.character_name, char.realm_slug, char.realm_name,
-                        char.character_class, char.active_spec, char.level,
-                        char.item_level, char.guild_rank,
-                        RANK_NAME_MAP.get(char.guild_rank, f"Rank {char.guild_rank}"),
-                        char.last_login_timestamp, role_cat, now,
+                        class_id, spec_id, char.level, char.item_level,
+                        guild_rank_id, char.last_login_timestamp, now,
                     )
-                    logger.info("New guild member detected: %s (%s)", char.character_name, char.character_class)
+                    logger.info(
+                        "New guild member detected: %s (%s)",
+                        char.character_name, char.character_class,
+                    )
                     stats["new"] += 1
 
             # Mark characters as removed if they're no longer in the roster
@@ -134,25 +139,7 @@ async def sync_addon_data(
     pool: asyncpg.Pool,
     addon_characters: list[dict],
 ) -> dict:
-    """
-    Sync data from the WoW addon upload (guild notes, officer notes).
-
-    addon_characters format:
-    [
-        {
-            "name": "Trogmoon",
-            "realm": "Sen'jin",
-            "guild_note": "GM / Mike",
-            "officer_note": "Discord: Trog",
-            "rank": 0,
-            "rank_name": "Guild Leader",
-            "class": "Druid",
-            "level": 80,
-            "last_online": "0d 2h 15m",
-        },
-        ...
-    ]
-    """
+    """Sync data from the WoW addon upload (guild notes, officer notes)."""
     now = datetime.now(timezone.utc)
     stats = {"processed": 0, "updated": 0, "not_found": 0}
 
@@ -164,8 +151,6 @@ async def sync_addon_data(
 
             stats["processed"] += 1
 
-            # Try to find the character in our DB
-            # Use case-insensitive match since addon might have different casing
             row = await conn.fetchrow(
                 """SELECT id FROM guild_identity.wow_characters
                    WHERE LOWER(character_name) = $1 AND removed_at IS NULL""",

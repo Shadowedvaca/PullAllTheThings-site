@@ -30,11 +30,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from patt.config import get_settings
 from patt.deps import get_current_member, get_db, require_rank
 from patt.services import campaign_service, vote_service
-from sv_common.db.models import Campaign, GuildMember
+from sv_common.db.models import Campaign, Player
 
 _optional_bearer = HTTPBearer(auto_error=False)
 
@@ -75,7 +76,7 @@ class EntryCreate(BaseModel):
     name: str
     description: str | None = None
     image_url: str | None = None
-    associated_member_id: int | None = None
+    player_id: int | None = None
     sort_order: int = 0
 
 
@@ -109,7 +110,7 @@ def _campaign_dict(campaign: Campaign) -> dict:
         "status": campaign.status,
         "early_close_if_all_voted": campaign.early_close_if_all_voted,
         "discord_channel_id": campaign.discord_channel_id,
-        "created_by": campaign.created_by,
+        "created_by": campaign.created_by_player_id,
         "entries": [
             {
                 "id": e.id,
@@ -117,7 +118,7 @@ def _campaign_dict(campaign: Campaign) -> dict:
                 "description": e.description,
                 "image_url": e.image_url,
                 "sort_order": e.sort_order,
-                "associated_member_id": e.associated_member_id,
+                "associated_member_id": e.player_id,
             }
             for e in (campaign.entries or [])
         ],
@@ -127,6 +128,7 @@ def _campaign_dict(campaign: Campaign) -> dict:
 # ---------------------------------------------------------------------------
 # Admin campaign routes (Officer+)
 # ---------------------------------------------------------------------------
+
 
 admin_campaign_router = APIRouter(
     prefix="/api/v1/admin",
@@ -138,7 +140,7 @@ admin_campaign_router = APIRouter(
 @admin_campaign_router.post("/campaigns")
 async def admin_create_campaign(
     body: CampaignCreate,
-    admin: GuildMember = Depends(require_rank(4)),
+    admin: Player = Depends(require_rank(4)),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -188,7 +190,7 @@ async def admin_add_entry(
             name=body.name,
             description=body.description,
             image_url=body.image_url,
-            associated_member_id=body.associated_member_id,
+            associated_member_id=body.player_id,
             sort_order=body.sort_order,
         )
         return {
@@ -280,7 +282,7 @@ async def admin_campaign_stats(
 
 
 # ---------------------------------------------------------------------------
-# Vote routes (authenticated members)
+# Vote routes (authenticated players)
 # ---------------------------------------------------------------------------
 
 vote_router = APIRouter(
@@ -293,21 +295,21 @@ vote_router = APIRouter(
 async def cast_vote(
     campaign_id: int,
     body: VoteSubmit,
-    member: GuildMember = Depends(get_current_member),
+    player: Player = Depends(get_current_member),
     db: AsyncSession = Depends(get_db),
 ):
     try:
         votes = await vote_service.cast_vote(
             db,
             campaign_id=campaign_id,
-            member_id=member.id,
+            player_id=player.id,
             picks=body.picks,
         )
         return {
             "ok": True,
             "data": {
                 "campaign_id": campaign_id,
-                "member_id": member.id,
+                "player_id": player.id,
                 "votes": [
                     {"entry_id": v.entry_id, "rank": v.rank} for v in votes
                 ],
@@ -320,10 +322,10 @@ async def cast_vote(
 @vote_router.get("/{campaign_id}/my-vote")
 async def get_my_vote(
     campaign_id: int,
-    member: GuildMember = Depends(get_current_member),
+    player: Player = Depends(get_current_member),
     db: AsyncSession = Depends(get_db),
 ):
-    votes = await vote_service.get_member_vote(db, campaign_id, member.id)
+    votes = await vote_service.get_player_vote(db, campaign_id, player.id)
     if votes is None:
         raise HTTPException(status_code=404, detail="You have not voted in this campaign")
     return {
@@ -345,18 +347,21 @@ public_campaign_router = APIRouter(
 )
 
 
-def _viewer_rank_level(member: GuildMember | None) -> int:
+def _viewer_rank_level(player: Player | None) -> int:
     """Return the rank level of the viewer, or 0 for anonymous."""
-    if member is None:
+    if player is None:
         return 0
-    return member.rank.level if member.rank else 0
+    return player.guild_rank.level if player.guild_rank else 0
 
 
-async def _get_optional_member(
+async def _get_optional_player(
     credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
     db: AsyncSession = Depends(get_db),
-) -> GuildMember | None:
-    """Try to extract the current member from JWT; return None if unauthenticated."""
+) -> Player | None:
+    """Try to extract the current player from JWT; return None if unauthenticated.
+
+    Tries user_id first (primary), then falls back to member_id (= player.id in JWT).
+    """
     if credentials is None:
         return None
     try:
@@ -366,25 +371,39 @@ async def _get_optional_member(
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
         )
-        member_id = payload.get("member_id")
-        if member_id is None:
-            return None
-        result = await db.execute(
-            select(GuildMember).where(GuildMember.id == member_id)
-        )
-        return result.scalar_one_or_none()
+        # Primary: user_id → Player.website_user_id
+        user_id = payload.get("user_id")
+        if user_id:
+            result = await db.execute(
+                select(Player)
+                .options(selectinload(Player.guild_rank))
+                .where(Player.website_user_id == user_id)
+            )
+            player = result.scalar_one_or_none()
+            if player:
+                return player
+        # Fallback: member_id = player.id (JWT backward compat)
+        player_id = payload.get("member_id")
+        if player_id:
+            result = await db.execute(
+                select(Player)
+                .options(selectinload(Player.guild_rank))
+                .where(Player.id == player_id)
+            )
+            return result.scalar_one_or_none()
     except Exception:
         return None
+    return None
 
 
 @public_campaign_router.get("")
 async def list_campaigns(
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
-    member: GuildMember | None = Depends(_get_optional_member),
+    player: Player | None = Depends(_get_optional_player),
 ):
     """List campaigns visible to the current viewer."""
-    viewer_level = _viewer_rank_level(member)
+    viewer_level = _viewer_rank_level(player)
     campaigns = await campaign_service.list_campaigns(db, status=status)
     visible = [
         c for c in campaigns
@@ -397,13 +416,13 @@ async def list_campaigns(
 async def get_campaign(
     campaign_id: int,
     db: AsyncSession = Depends(get_db),
-    member: GuildMember | None = Depends(_get_optional_member),
+    player: Player | None = Depends(_get_optional_player),
 ):
     """Get campaign detail. Respects min_rank_to_view."""
     campaign = await campaign_service.get_campaign(db, campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    viewer_level = _viewer_rank_level(member)
+    viewer_level = _viewer_rank_level(player)
     if campaign.min_rank_to_view and viewer_level < campaign.min_rank_to_view:
         raise HTTPException(status_code=403, detail="Insufficient rank to view this campaign")
     return {"ok": True, "data": _campaign_dict(campaign)}
@@ -413,27 +432,27 @@ async def get_campaign(
 async def get_campaign_results(
     campaign_id: int,
     db: AsyncSession = Depends(get_db),
-    member: GuildMember | None = Depends(_get_optional_member),
+    player: Player | None = Depends(_get_optional_player),
 ):
     """Get final results.
 
     Visible if:
-    - campaign is closed, OR member has already voted
+    - campaign is closed, OR player has already voted
     - Respects min_rank_to_view
     """
     campaign = await campaign_service.get_campaign(db, campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    viewer_level = _viewer_rank_level(member)
+    viewer_level = _viewer_rank_level(player)
     if campaign.min_rank_to_view and viewer_level < campaign.min_rank_to_view:
         raise HTTPException(status_code=403, detail="Insufficient rank to view this campaign")
 
-    # Results visible if: campaign closed OR member has voted
+    # Results visible if: campaign closed OR player has voted
     if campaign.status != "closed":
-        if member is None:
+        if player is None:
             raise HTTPException(status_code=403, detail="Results not yet available")
-        has_voted = await vote_service.has_member_voted(db, campaign_id, member.id)
+        has_voted = await vote_service.has_player_voted(db, campaign_id, player.id)
         if not has_voted:
             raise HTTPException(status_code=403, detail="Vote to see live standings")
 
@@ -444,19 +463,19 @@ async def get_campaign_results(
 @public_campaign_router.get("/{campaign_id}/results/live")
 async def get_live_standings(
     campaign_id: int,
-    member: GuildMember = Depends(get_current_member),
+    player: Player = Depends(get_current_member),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get live standings — only visible to members who have already voted."""
+    """Get live standings — only visible to players who have already voted."""
     campaign = await campaign_service.get_campaign(db, campaign_id)
     if campaign is None:
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    viewer_level = _viewer_rank_level(member)
+    viewer_level = _viewer_rank_level(player)
     if campaign.min_rank_to_view and viewer_level < campaign.min_rank_to_view:
         raise HTTPException(status_code=403, detail="Insufficient rank to view this campaign")
 
-    has_voted = await vote_service.has_member_voted(db, campaign_id, member.id)
+    has_voted = await vote_service.has_player_voted(db, campaign_id, player.id)
     if not has_voted:
         raise HTTPException(status_code=403, detail="You must vote before seeing live standings")
 

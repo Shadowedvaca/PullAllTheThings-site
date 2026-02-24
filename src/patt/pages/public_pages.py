@@ -9,14 +9,14 @@ from sqlalchemy import func, select
 from patt.deps import get_db, get_page_member
 from patt.services import campaign_service
 from patt.templating import templates
-from sv_common.db.models import GuildMember, MitoQuote, MitoTitle
+from sv_common.db.models import Player, MitoQuote, MitoTitle
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["public-pages"])
 
 
-def _rank_level(member: GuildMember | None) -> int:
+def _rank_level(member: Player | None) -> int:
     if member is None:
         return 0
     return member.rank.level if member.rank else 0
@@ -26,7 +26,7 @@ def _rank_level(member: GuildMember | None) -> int:
 async def landing_page(
     request: Request,
     db=Depends(get_db),
-    current_member: GuildMember | None = Depends(get_page_member),
+    current_member: Player | None = Depends(get_page_member),
 ):
     viewer_level = _rank_level(current_member)
 

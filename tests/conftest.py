@@ -91,63 +91,72 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest_asyncio.fixture
-async def admin_member(db_session: AsyncSession):
-    """Creates a Guild Leader rank member for admin tests."""
-    from sv_common.db.models import GuildMember, GuildRank
+async def admin_player(db_session: AsyncSession):
+    """Creates a Guild Leader rank player for admin tests."""
+    from sv_common.db.models import GuildRank, Player, User
+    from sv_common.auth.passwords import hash_password
 
     rank = GuildRank(name="Guild Leader", level=5, description="Guild master")
     db_session.add(rank)
     await db_session.flush()
 
-    member = GuildMember(
-        discord_username="trog",
-        display_name="Trog",
-        discord_id="111111111111111111",
-        rank_id=rank.id,
-    )
-    db_session.add(member)
+    user = User(email="admin@test.com", password_hash=hash_password("adminpw"))
+    db_session.add(user)
     await db_session.flush()
-    return member
+
+    player = Player(
+        display_name="Trog",
+        guild_rank_id=rank.id,
+        website_user_id=user.id,
+    )
+    db_session.add(player)
+    await db_session.flush()
+    return player, user, rank
 
 
 @pytest_asyncio.fixture
-async def veteran_member(db_session: AsyncSession):
-    """Creates a Veteran rank member for standard voting tests."""
-    from sv_common.db.models import GuildMember, GuildRank
+async def veteran_player(db_session: AsyncSession):
+    """Creates a Veteran rank player for standard voting tests."""
+    from sv_common.db.models import GuildRank, Player, User
+    from sv_common.auth.passwords import hash_password
 
     rank = GuildRank(name="Veteran", level=3, description="Veteran member")
     db_session.add(rank)
     await db_session.flush()
 
-    member = GuildMember(
-        discord_username="veteran_user",
-        display_name="Veteran",
-        discord_id="222222222222222222",
-        rank_id=rank.id,
-    )
-    db_session.add(member)
+    user = User(email="veteran@test.com", password_hash=hash_password("vetpw"))
+    db_session.add(user)
     await db_session.flush()
-    return member
+
+    player = Player(
+        display_name="Veteran",
+        guild_rank_id=rank.id,
+        website_user_id=user.id,
+    )
+    db_session.add(player)
+    await db_session.flush()
+    return player, user, rank
 
 
 @pytest_asyncio.fixture
-async def initiate_member(db_session: AsyncSession):
-    """Creates an Initiate rank member for permission denial tests."""
-    from sv_common.db.models import GuildMember, GuildRank
+async def initiate_player(db_session: AsyncSession):
+    """Creates an Initiate rank player for permission denial tests."""
+    from sv_common.db.models import GuildRank, Player
 
     rank = GuildRank(name="Initiate", level=1, description="New member")
     db_session.add(rank)
     await db_session.flush()
 
-    member = GuildMember(
-        discord_username="initiate_user",
-        display_name="Initiate",
-        discord_id="333333333333333333",
-        rank_id=rank.id,
-    )
-    db_session.add(member)
+    player = Player(display_name="Initiate", guild_rank_id=rank.id)
+    db_session.add(player)
     await db_session.flush()
-    return member
+    return player, rank
+
+
+# Backward-compat aliases
+admin_member = admin_player
+veteran_member = veteran_player
+initiate_member = initiate_player
 
 
 @pytest.fixture

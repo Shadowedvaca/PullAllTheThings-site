@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sv_common.db.models import GuildMember, GuildRank, InviteCode, User
+from sv_common.db.models import GuildRank, InviteCode, Player, User
 from sv_common.auth.passwords import hash_password
 
 
@@ -24,46 +24,41 @@ async def _create_rank(db: AsyncSession, *, name: str, level: int) -> GuildRank:
     return rank
 
 
-async def _create_member(
-    db: AsyncSession, *, discord_username: str, rank_id: int, discord_id: str = "000000000000000001"
-) -> GuildMember:
-    member = GuildMember(
-        discord_username=discord_username,
-        display_name=discord_username,
-        discord_id=discord_id,
-        rank_id=rank_id,
-    )
-    db.add(member)
+async def _create_player(
+    db: AsyncSession, *, display_name: str, rank_id: int
+) -> Player:
+    """Create an unregistered player (no website account)."""
+    player = Player(display_name=display_name, guild_rank_id=rank_id)
+    db.add(player)
     await db.flush()
-    return member
+    return player
 
 
-async def _create_registered_member(
-    db: AsyncSession, *, discord_username: str, rank_id: int, password: str, discord_id: str = "000000000000000002"
+async def _create_registered_player(
+    db: AsyncSession, *, discord_username: str, rank_id: int, password: str
 ):
-    """Create a member with a linked user account (already registered)."""
-    user = User(password_hash=hash_password(password))
+    """Create a player with a linked website account (already registered)."""
+    user = User(
+        email=discord_username.lower(),
+        password_hash=hash_password(password),
+    )
     db.add(user)
     await db.flush()
 
-    from datetime import datetime, timezone
-    member = GuildMember(
-        discord_username=discord_username,
+    player = Player(
         display_name=discord_username,
-        discord_id=discord_id,
-        rank_id=rank_id,
-        user_id=user.id,
-        registered_at=datetime.now(timezone.utc),
+        guild_rank_id=rank_id,
+        website_user_id=user.id,
     )
-    db.add(member)
+    db.add(player)
     await db.flush()
-    return member, user
+    return player, user
 
 
 async def _create_invite(
     db: AsyncSession,
     *,
-    member_id: int,
+    player_id: int,
     created_by_id: int,
     hours: int = 72,
     used: bool = False,
@@ -79,8 +74,8 @@ async def _create_invite(
 
     invite = InviteCode(
         code=code,
-        member_id=member_id,
-        created_by=created_by_id,
+        player_id=player_id,
+        created_by_player_id=created_by_id,
         expires_at=expires_at,
         used_at=used_at,
     )
@@ -100,11 +95,11 @@ class TestRegistration:
     ):
         """generate code → register → login → access /me"""
         rank = await _create_rank(db_session, name="Member_reg", level=2)
-        member = await _create_member(
-            db_session, discord_username="test_reg_user", rank_id=rank.id, discord_id="100000000000000001"
+        player = await _create_player(
+            db_session, display_name="test_reg_user", rank_id=rank.id
         )
         code = await _create_invite(
-            db_session, member_id=member.id, created_by_id=member.id
+            db_session, player_id=player.id, created_by_id=player.id
         )
 
         # Register
@@ -130,15 +125,11 @@ class TestRegistration:
         resp = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         me = resp.json()["data"]
-        assert me["discord_username"] == "test_reg_user"
+        assert me["display_name"] == "test_reg_user"
 
     async def test_register_with_invalid_code_rejected(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        rank = await _create_rank(db_session, name="Member_inv", level=2)
-        await _create_member(
-            db_session, discord_username="user_invalid_code", rank_id=rank.id, discord_id="100000000000000002"
-        )
         resp = await client.post(
             "/api/v1/auth/register",
             json={"code": "ZZZZZZZZ", "discord_username": "user_invalid_code", "password": "pw"},
@@ -149,11 +140,11 @@ class TestRegistration:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         rank = await _create_rank(db_session, name="Member_exp", level=2)
-        member = await _create_member(
-            db_session, discord_username="user_expired_code", rank_id=rank.id, discord_id="100000000000000003"
+        player = await _create_player(
+            db_session, display_name="user_expired_code", rank_id=rank.id
         )
         code = await _create_invite(
-            db_session, member_id=member.id, created_by_id=member.id, expired=True
+            db_session, player_id=player.id, created_by_id=player.id, expired=True
         )
         resp = await client.post(
             "/api/v1/auth/register",
@@ -161,20 +152,19 @@ class TestRegistration:
         )
         assert resp.status_code == 400
 
-    async def test_register_with_wrong_username_rejected(
+    async def test_register_with_used_code_rejected(
         self, client: AsyncClient, db_session: AsyncSession
     ):
-        """Code was generated for member A; user registers claiming to be member B."""
-        rank = await _create_rank(db_session, name="Member_wrong", level=2)
-        member = await _create_member(
-            db_session, discord_username="real_user", rank_id=rank.id, discord_id="100000000000000004"
+        rank = await _create_rank(db_session, name="Member_used", level=2)
+        player = await _create_player(
+            db_session, display_name="user_used_code", rank_id=rank.id
         )
         code = await _create_invite(
-            db_session, member_id=member.id, created_by_id=member.id
+            db_session, player_id=player.id, created_by_id=player.id, used=True
         )
         resp = await client.post(
             "/api/v1/auth/register",
-            json={"code": code, "discord_username": "wrong_user", "password": "pw"},
+            json={"code": code, "discord_username": "user_used_code", "password": "pw"},
         )
         assert resp.status_code == 400
 
@@ -182,11 +172,14 @@ class TestRegistration:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         rank = await _create_rank(db_session, name="Member_rereg", level=2)
-        member, _ = await _create_registered_member(
-            db_session, discord_username="already_regged", rank_id=rank.id, password="pw", discord_id="100000000000000005"
+        player, _ = await _create_registered_player(
+            db_session,
+            discord_username="already_regged",
+            rank_id=rank.id,
+            password="pw",
         )
         code = await _create_invite(
-            db_session, member_id=member.id, created_by_id=member.id
+            db_session, player_id=player.id, created_by_id=player.id
         )
         resp = await client.post(
             "/api/v1/auth/register",
@@ -205,12 +198,11 @@ class TestLogin:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         rank = await _create_rank(db_session, name="Member_login", level=2)
-        await _create_registered_member(
+        await _create_registered_player(
             db_session,
             discord_username="login_user",
             rank_id=rank.id,
             password="correct_pw",
-            discord_id="100000000000000006",
         )
         resp = await client.post(
             "/api/v1/auth/login",
@@ -224,12 +216,11 @@ class TestLogin:
         self, client: AsyncClient, db_session: AsyncSession
     ):
         rank = await _create_rank(db_session, name="Member_badpw", level=2)
-        await _create_registered_member(
+        await _create_registered_player(
             db_session,
             discord_username="badpw_user",
             rank_id=rank.id,
             password="real_pw",
-            discord_id="100000000000000007",
         )
         resp = await client.post(
             "/api/v1/auth/login",
@@ -237,13 +228,12 @@ class TestLogin:
         )
         assert resp.status_code == 401
 
-    async def test_login_unregistered_member_rejected(
+    async def test_login_unregistered_player_rejected(
         self, client: AsyncClient, db_session: AsyncSession
     ):
+        """A player with no website_user_id cannot log in."""
         rank = await _create_rank(db_session, name="Member_unreg", level=2)
-        await _create_member(
-            db_session, discord_username="unreg_user", rank_id=rank.id, discord_id="100000000000000008"
-        )
+        await _create_player(db_session, display_name="unreg_user", rank_id=rank.id)
         resp = await client.post(
             "/api/v1/auth/login",
             json={"discord_username": "unreg_user", "password": "whatever"},
@@ -291,16 +281,15 @@ class TestProtectedRoutes:
     ):
         """A registered Member (rank 2) should get 403 on admin routes."""
         rank = await _create_rank(db_session, name="Member_admblk", level=2)
-        member, _ = await _create_registered_member(
+        player, user = await _create_registered_player(
             db_session,
             discord_username="low_rank_member",
             rank_id=rank.id,
             password="pw",
-            discord_id="100000000000000009",
         )
         from sv_common.auth.jwt import create_access_token
         token = create_access_token(
-            user_id=member.user_id, member_id=member.id, rank_level=2
+            user_id=user.id, member_id=player.id, rank_level=2
         )
         resp = await client.get(
             "/api/v1/admin/ranks", headers={"Authorization": f"Bearer {token}"}
@@ -312,16 +301,15 @@ class TestProtectedRoutes:
     ):
         """A registered Officer (rank 4) should access admin routes."""
         rank = await _create_rank(db_session, name="Officer_adm", level=4)
-        member, _ = await _create_registered_member(
+        player, user = await _create_registered_player(
             db_session,
             discord_username="officer_access",
             rank_id=rank.id,
             password="pw",
-            discord_id="100000000000000010",
         )
         from sv_common.auth.jwt import create_access_token
         token = create_access_token(
-            user_id=member.user_id, member_id=member.id, rank_level=4
+            user_id=user.id, member_id=player.id, rank_level=4
         )
         resp = await client.get(
             "/api/v1/admin/ranks", headers={"Authorization": f"Bearer {token}"}

@@ -10,14 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from patt.deps import get_db, get_page_member
 from patt.services import campaign_service, vote_service
 from patt.templating import templates
-from sv_common.db.models import GuildMember
+from sv_common.db.models import Player
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["vote-pages"])
 
 
-def _rank_level(member: GuildMember | None) -> int:
+def _rank_level(member: Player | None) -> int:
     if member is None:
         return 0
     return member.rank.level if member.rank else 0
@@ -31,7 +31,7 @@ def _campaign_end_ts(campaign) -> int | None:
     return int(end_at.timestamp())
 
 
-async def _base_ctx(request: Request, member: GuildMember | None, db: AsyncSession) -> dict:
+async def _base_ctx(request: Request, member: Player | None, db: AsyncSession) -> dict:
     """Build base context dict including active campaigns for nav."""
     active = await campaign_service.list_campaigns(db, status="live")
     viewer_level = _rank_level(member)
@@ -52,7 +52,7 @@ async def vote_page(
     campaign_id: int,
     vote_error: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_member: GuildMember | None = Depends(get_page_member),
+    current_member: Player | None = Depends(get_page_member),
 ):
     campaign = await campaign_service.get_campaign(db, campaign_id)
     if campaign is None:
@@ -107,11 +107,11 @@ async def vote_page(
         return templates.TemplateResponse("vote/campaign.html", ctx)
 
     # Logged in — check if already voted
-    has_voted = await vote_service.has_member_voted(db, campaign_id, current_member.id)
+    has_voted = await vote_service.has_player_voted(db, campaign_id, current_member.id)
 
     if has_voted:
         # Show their picks + live standings
-        my_votes = await vote_service.get_member_vote(db, campaign_id, current_member.id)
+        my_votes = await vote_service.get_player_vote(db, campaign_id, current_member.id)
         # Build picks list with entry names
         entry_map = {e.id: e.name for e in campaign.entries}
         my_picks = [
@@ -140,7 +140,7 @@ async def vote_post(
     request: Request,
     campaign_id: int,
     db: AsyncSession = Depends(get_db),
-    current_member: GuildMember | None = Depends(get_page_member),
+    current_member: Player | None = Depends(get_page_member),
 ):
     """Handle form-based vote submission."""
     if current_member is None:
@@ -172,7 +172,7 @@ async def vote_post(
         )
 
     try:
-        await vote_service.cast_vote(db, campaign_id=campaign_id, member_id=current_member.id, picks=picks)
+        await vote_service.cast_vote(db, campaign_id=campaign_id, player_id=current_member.id, picks=picks)
     except ValueError as e:
         import urllib.parse
         error_msg = urllib.parse.quote(str(e))

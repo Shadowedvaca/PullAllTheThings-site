@@ -1,7 +1,7 @@
 """
-Integration tests: guild_identity schema validation.
+Integration tests: guild_identity schema validation (Phase 2.7).
 
-Verifies that the schema, tables, and constraints exist as expected.
+Verifies that the Phase 2.7 schema, tables, and constraints exist as expected.
 These tests require a running PostgreSQL instance with the guild_identity
 schema created (via test_engine fixture which calls Base.metadata.create_all).
 """
@@ -21,8 +21,9 @@ class TestSchemaExists:
 
     async def test_all_expected_tables_exist(self, guild_sync_pool):
         expected_tables = [
-            "persons", "wow_characters", "discord_members",
-            "identity_links", "audit_issues", "sync_log",
+            "players", "wow_characters", "discord_users",
+            "player_characters", "audit_issues", "sync_log",
+            "classes", "specializations", "roles",
         ]
         async with guild_sync_pool.acquire() as conn:
             for table in expected_tables:
@@ -32,6 +33,18 @@ class TestSchemaExists:
                     table,
                 )
                 assert result == table, f"Table '{table}' not found in guild_identity schema"
+
+    async def test_old_tables_removed(self, guild_sync_pool):
+        """Verify legacy tables no longer exist after Phase 2.7 migration."""
+        removed_tables = ["persons", "discord_members", "identity_links"]
+        async with guild_sync_pool.acquire() as conn:
+            for table in removed_tables:
+                result = await conn.fetchval(
+                    "SELECT table_name FROM information_schema.tables "
+                    "WHERE table_schema = 'guild_identity' AND table_name = $1",
+                    table,
+                )
+                assert result is None, f"Old table '{table}' still exists — migration may not have run"
 
 
 class TestCharacterConstraints:
@@ -64,90 +77,91 @@ class TestCharacterConstraints:
         assert count == 2
 
 
-class TestDiscordMemberConstraints:
+class TestDiscordUserConstraints:
     async def test_discord_id_must_be_unique(self, guild_db):
         async with guild_db.acquire() as conn:
             await conn.execute(
-                "INSERT INTO guild_identity.discord_members "
+                "INSERT INTO guild_identity.discord_users "
                 "(discord_id, username) VALUES ('123456', 'userA')"
             )
             with pytest.raises(asyncpg.UniqueViolationError):
                 await conn.execute(
-                    "INSERT INTO guild_identity.discord_members "
+                    "INSERT INTO guild_identity.discord_users "
                     "(discord_id, username) VALUES ('123456', 'userB')"
                 )
 
 
-class TestIdentityLinkConstraints:
-    async def test_character_can_only_be_linked_once(self, guild_db):
+class TestPlayerCharactersConstraints:
+    async def test_character_can_only_belong_to_one_player(self, guild_db):
+        """A wow_character can only be linked to one player (UNIQUE on character_id)."""
         async with guild_db.acquire() as conn:
             p1 = await conn.fetchval(
-                "INSERT INTO guild_identity.persons (display_name) "
-                "VALUES ('PersonOne') RETURNING id"
+                "INSERT INTO guild_identity.players (display_name) "
+                "VALUES ('PlayerOne') RETURNING id"
             )
             p2 = await conn.fetchval(
-                "INSERT INTO guild_identity.persons (display_name) "
-                "VALUES ('PersonTwo') RETURNING id"
+                "INSERT INTO guild_identity.players (display_name) "
+                "VALUES ('PlayerTwo') RETURNING id"
             )
             wc = await conn.fetchval(
                 "INSERT INTO guild_identity.wow_characters "
                 "(character_name, realm_slug) VALUES ('TestChar', 'senjin') RETURNING id"
             )
             await conn.execute(
-                "INSERT INTO guild_identity.identity_links "
-                "(person_id, wow_character_id, link_source, confidence) "
-                "VALUES ($1, $2, 'test', 'high')",
+                "INSERT INTO guild_identity.player_characters "
+                "(player_id, character_id) VALUES ($1, $2)",
                 p1, wc,
             )
             with pytest.raises(asyncpg.UniqueViolationError):
                 await conn.execute(
-                    "INSERT INTO guild_identity.identity_links "
-                    "(person_id, wow_character_id, link_source, confidence) "
-                    "VALUES ($1, $2, 'test', 'high')",
+                    "INSERT INTO guild_identity.player_characters "
+                    "(player_id, character_id) VALUES ($1, $2)",
                     p2, wc,
                 )
 
-    async def test_discord_member_can_only_be_linked_once(self, guild_db):
+    async def test_player_can_have_multiple_characters(self, guild_db):
+        """A player can own many characters."""
         async with guild_db.acquire() as conn:
-            p1 = await conn.fetchval(
-                "INSERT INTO guild_identity.persons (display_name) "
-                "VALUES ('PersonOne') RETURNING id"
+            player_id = await conn.fetchval(
+                "INSERT INTO guild_identity.players (display_name) "
+                "VALUES ('MultiCharPlayer') RETURNING id"
             )
-            p2 = await conn.fetchval(
-                "INSERT INTO guild_identity.persons (display_name) "
-                "VALUES ('PersonTwo') RETURNING id"
+            wc1 = await conn.fetchval(
+                "INSERT INTO guild_identity.wow_characters "
+                "(character_name, realm_slug) VALUES ('MainChar', 'senjin') RETURNING id"
             )
-            dm = await conn.fetchval(
-                "INSERT INTO guild_identity.discord_members "
-                "(discord_id, username) VALUES ('999', 'testuser') RETURNING id"
+            wc2 = await conn.fetchval(
+                "INSERT INTO guild_identity.wow_characters "
+                "(character_name, realm_slug) VALUES ('AltChar', 'senjin') RETURNING id"
             )
             await conn.execute(
-                "INSERT INTO guild_identity.identity_links "
-                "(person_id, discord_member_id, link_source, confidence) "
-                "VALUES ($1, $2, 'test', 'high')",
-                p1, dm,
+                "INSERT INTO guild_identity.player_characters (player_id, character_id) "
+                "VALUES ($1, $2), ($1, $3)",
+                player_id, wc1, wc2,
+            )
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM guild_identity.player_characters WHERE player_id = $1",
+                player_id,
+            )
+        assert count == 2
+
+    async def test_discord_user_id_unique_on_player(self, guild_db):
+        """Two players cannot share the same discord_user_id."""
+        async with guild_db.acquire() as conn:
+            du = await conn.fetchval(
+                "INSERT INTO guild_identity.discord_users "
+                "(discord_id, username) VALUES ('777', 'discorduser') RETURNING id"
+            )
+            await conn.execute(
+                "INSERT INTO guild_identity.players "
+                "(display_name, discord_user_id) VALUES ('Player1', $1)",
+                du,
             )
             with pytest.raises(asyncpg.UniqueViolationError):
                 await conn.execute(
-                    "INSERT INTO guild_identity.identity_links "
-                    "(person_id, discord_member_id, link_source, confidence) "
-                    "VALUES ($1, $2, 'test', 'high')",
-                    p2, dm,
-                )
-
-    async def test_link_requires_at_least_one_target(self, guild_db):
-        """identity_links CHECK constraint: at least one of wow/discord must be set."""
-        async with guild_db.acquire() as conn:
-            p = await conn.fetchval(
-                "INSERT INTO guild_identity.persons (display_name) "
-                "VALUES ('Nobody') RETURNING id"
-            )
-            with pytest.raises(asyncpg.CheckViolationError):
-                await conn.execute(
-                    "INSERT INTO guild_identity.identity_links "
-                    "(person_id, link_source, confidence) "
-                    "VALUES ($1, 'test', 'high')",
-                    p,
+                    "INSERT INTO guild_identity.players "
+                    "(display_name, discord_user_id) VALUES ('Player2', $1)",
+                    du,
                 )
 
 

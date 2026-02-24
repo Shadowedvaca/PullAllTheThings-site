@@ -1,4 +1,4 @@
-"""Discord role sync — keeps guild member ranks in sync with Discord roles.
+"""Discord role sync — keeps player ranks in sync with Discord roles.
 
 Discord is the source of truth. When Mike promotes someone in Discord,
 the next sync picks it up and updates their platform rank.
@@ -11,7 +11,7 @@ import discord
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from sv_common.db.models import DiscordConfig, GuildMember, GuildRank
+from sv_common.db.models import DiscordConfig, DiscordUser, GuildRank, Player
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ async def sync_discord_roles(
 
     Algorithm:
     1. Fetch all members from the Discord guild
-    2. For each member, find their highest-matching platform rank
-       (via guild_ranks.discord_role_id ↔ Discord role IDs)
-    3. Update member rank if it differs; set rank_source='discord_sync'
-    4. Create new guild_member records for Discord members not yet in the platform
+    2. For each member, find or create a DiscordUser record
+    3. Update DiscordUser fields (username, display_name, is_present, last_sync)
+    4. If a Player is linked to the DiscordUser, update their guild_rank_id
+       if the best matching rank has changed
 
     Returns a summary dict: {updated, created, skipped, errors}
     """
@@ -52,15 +52,6 @@ async def sync_discord_roles(
             r.discord_role_id: r for r in mapped_ranks if r.discord_role_id
         }
 
-        # Find the default (lowest) rank for new members
-        default_rank_result = await db.execute(
-            select(GuildRank).order_by(GuildRank.level.asc())
-        )
-        default_rank = default_rank_result.scalars().first()
-        if default_rank is None:
-            logger.error("No guild ranks configured — cannot sync")
-            return {"updated": 0, "created": 0, "skipped": 0, "errors": 1}
-
         try:
             members = guild.members or await guild.fetch_members(limit=None).flatten()
         except Exception:
@@ -81,40 +72,55 @@ async def sync_discord_roles(
             best_rank = max(matching_ranks, key=lambda r: r.level) if matching_ranks else None
 
             try:
-                existing_result = await db.execute(
-                    select(GuildMember).where(GuildMember.discord_id == discord_id)
+                # Find or create DiscordUser
+                du_result = await db.execute(
+                    select(DiscordUser).where(DiscordUser.discord_id == discord_id)
                 )
-                existing = existing_result.scalar_one_or_none()
+                discord_user = du_result.scalar_one_or_none()
 
-                if existing is None:
-                    # New Discord member — create a platform record
-                    target_rank = best_rank or default_rank
-                    new_member = GuildMember(
+                if discord_user is None:
+                    # New Discord member — create DiscordUser record
+                    discord_user = DiscordUser(
                         discord_id=discord_id,
-                        discord_username=str(discord_member),
+                        username=str(discord_member),
                         display_name=discord_member.display_name,
-                        rank_id=target_rank.id,
-                        rank_source="discord_sync",
+                        is_present=True,
+                        last_sync=datetime.now(timezone.utc),
                     )
-                    db.add(new_member)
+                    db.add(discord_user)
+                    await db.flush()
                     stats["created"] += 1
                     logger.info(
-                        "Created member for discord_id=%s rank=%s",
+                        "Created DiscordUser for discord_id=%s",
                         discord_id,
-                        target_rank.name,
                     )
-                elif best_rank is not None and existing.rank_id != best_rank.id:
-                    # Rank changed — update
-                    old_rank_id = existing.rank_id
-                    existing.rank_id = best_rank.id
-                    existing.rank_source = "discord_sync"
-                    stats["updated"] += 1
-                    logger.info(
-                        "Updated rank for discord_id=%s: rank_id %s → %s",
-                        discord_id,
-                        old_rank_id,
-                        best_rank.id,
+                else:
+                    # Update existing DiscordUser presence info
+                    discord_user.username = str(discord_member)
+                    discord_user.display_name = discord_member.display_name
+                    discord_user.is_present = True
+                    discord_user.last_sync = datetime.now(timezone.utc)
+
+                # Update linked Player's rank if applicable
+                if discord_user.id and best_rank is not None:
+                    player_result = await db.execute(
+                        select(Player).where(Player.discord_user_id == discord_user.id)
                     )
+                    player = player_result.scalar_one_or_none()
+
+                    if player is not None and player.guild_rank_id != best_rank.id:
+                        old_rank_id = player.guild_rank_id
+                        player.guild_rank_id = best_rank.id
+                        player.guild_rank_source = "discord_sync"
+                        stats["updated"] += 1
+                        logger.info(
+                            "Updated rank for discord_id=%s: rank_id %s → %s",
+                            discord_id,
+                            old_rank_id,
+                            best_rank.id,
+                        )
+                    else:
+                        stats["skipped"] += 1
                 else:
                     stats["skipped"] += 1
 

@@ -46,7 +46,7 @@ async def create_campaign(
         start_at=start_at,
         duration_hours=duration_hours,
         discord_channel_id=discord_channel_id,
-        created_by=created_by,
+        created_by_player_id=created_by,
         early_close_if_all_voted=early_close_if_all_voted,
         agent_enabled=agent_enabled,
         agent_chattiness=agent_chattiness,
@@ -119,7 +119,7 @@ async def add_entry(
         name=name,
         description=description,
         image_url=image_url,
-        associated_member_id=associated_member_id,
+        player_id=associated_member_id,  # renamed column; caller still uses old kwarg
         sort_order=sort_order,
     )
     db.add(entry)
@@ -175,11 +175,7 @@ async def update_entry(
 
 
 async def activate_campaign(db: AsyncSession, campaign_id: int) -> Campaign:
-    """Transition campaign from draft to live.
-
-    If start_at is in the past, resets it to now so duration is calculated
-    from the moment of activation.
-    """
+    """Transition campaign from draft to live."""
     campaign = await get_campaign(db, campaign_id)
     if campaign is None:
         raise ValueError(f"Campaign {campaign_id} not found")
@@ -224,7 +220,7 @@ async def get_campaign_status(db: AsyncSession, campaign_id: int) -> dict:
         time_remaining = max(0.0, (end_at - now).total_seconds())
 
     votes_q = await db.execute(
-        select(func.count(func.distinct(Vote.member_id))).where(
+        select(func.count(func.distinct(Vote.player_id))).where(
             Vote.campaign_id == campaign_id
         )
     )
@@ -247,19 +243,13 @@ async def get_campaign_status(db: AsyncSession, campaign_id: int) -> dict:
 
 
 async def check_campaign_statuses(session_factory) -> None:
-    """Background asyncio task: runs every 60s to transition campaign statuses.
-
-    1. Draft campaigns where start_at <= now  →  activate (live)
-    2. Live campaigns where end_at <= now     →  close + calculate results
-    3. Live campaigns with early_close flag   →  check if all eligible voted
-    """
+    """Background asyncio task: runs every 60s to transition campaign statuses."""
     while True:
         await asyncio.sleep(60)
         try:
             async with session_factory() as session:
                 now = datetime.now(timezone.utc)
 
-                # 1. Auto-activate draft campaigns whose start time has arrived
                 draft_result = await session.execute(
                     select(Campaign).where(
                         Campaign.status == "draft",
@@ -270,7 +260,6 @@ async def check_campaign_statuses(session_factory) -> None:
                     campaign.status = "live"
                     logger.info("Background: auto-activated campaign %d", campaign.id)
 
-                # 2. Close expired live campaigns, and check early-close
                 live_result = await session.execute(
                     select(Campaign).where(Campaign.status == "live")
                 )

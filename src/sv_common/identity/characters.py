@@ -1,17 +1,16 @@
-"""Character management service functions."""
+"""WoW character service functions.
+
+Operates on guild_identity.wow_characters and guild_identity.player_characters.
+"""
 
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sv_common.db.models import Character
-
-VALID_ROLES = {"tank", "healer", "melee_dps", "ranged_dps"}
-VALID_MAIN_ALT = {"main", "alt"}
+from sv_common.db.models import PlayerCharacter, WowCharacter
 
 
 def build_armory_url(name: str, realm: str) -> str:
-    """Build Blizzard armory URL. Handle special characters in names and realms."""
+    """Build Blizzard armory URL."""
     clean_realm = realm.lower().replace("'", "").replace(" ", "-")
     return (
         f"https://worldofwarcraft.blizzard.com/en-us/character/us"
@@ -19,89 +18,74 @@ def build_armory_url(name: str, realm: str) -> str:
     )
 
 
-async def get_characters_for_member(
-    db: AsyncSession, member_id: int
-) -> list[Character]:
+async def get_characters_for_player(
+    db: AsyncSession, player_id: int
+) -> list[WowCharacter]:
+    """Return all WoW characters owned by a player (via player_characters bridge)."""
     result = await db.execute(
-        select(Character)
-        .where(Character.member_id == member_id)
-        .order_by(Character.main_alt, Character.name)
+        select(WowCharacter)
+        .join(PlayerCharacter, PlayerCharacter.character_id == WowCharacter.id)
+        .where(PlayerCharacter.player_id == player_id)
+        .order_by(WowCharacter.character_name)
     )
     return list(result.scalars().all())
 
 
-async def get_main_character(db: AsyncSession, member_id: int) -> Character | None:
+async def get_player_for_character(
+    db: AsyncSession, character_id: int
+) -> int | None:
+    """Return the player_id that owns this character, or None."""
     result = await db.execute(
-        select(Character)
-        .where(Character.member_id == member_id)
-        .where(Character.main_alt == "main")
-    )
-    return result.scalars().first()
-
-
-async def create_character(
-    db: AsyncSession,
-    member_id: int,
-    name: str,
-    realm: str,
-    wow_class: str,
-    spec: str | None = None,
-    role: str | None = None,
-    main_alt: str = "main",
-) -> Character:
-    if role is not None and role not in VALID_ROLES:
-        raise ValueError(
-            f"Invalid role '{role}'. Must be one of: {', '.join(sorted(VALID_ROLES))}"
+        select(PlayerCharacter.player_id).where(
+            PlayerCharacter.character_id == character_id
         )
-    if main_alt not in VALID_MAIN_ALT:
-        raise ValueError(f"Invalid main_alt '{main_alt}'. Must be 'main' or 'alt'")
-
-    armory_url = build_armory_url(name, realm)
-    char = Character(
-        member_id=member_id,
-        name=name,
-        realm=realm,
-        class_=wow_class,
-        spec=spec,
-        role=role or "ranged_dps",
-        main_alt=main_alt,
-        armory_url=armory_url,
     )
-    db.add(char)
-    try:
-        await db.flush()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise ValueError(
-            f"Character '{name}' on '{realm}' already exists"
-        ) from exc
-    await db.refresh(char)
-    return char
+    row = result.scalar_one_or_none()
+    return row
 
 
-async def update_character(db: AsyncSession, char_id: int, **kwargs) -> Character:
-    result = await db.execute(select(Character).where(Character.id == char_id))
-    char = result.scalar_one_or_none()
-    if char is None:
-        raise ValueError(f"Character {char_id} not found")
-    if "role" in kwargs and kwargs["role"] not in VALID_ROLES:
-        raise ValueError(f"Invalid role '{kwargs['role']}'")
-    if "main_alt" in kwargs and kwargs["main_alt"] not in VALID_MAIN_ALT:
-        raise ValueError(f"Invalid main_alt '{kwargs['main_alt']}'")
-    allowed = {"name", "realm", "class_", "spec", "role", "main_alt", "armory_url"}
-    for key, value in kwargs.items():
-        if key in allowed:
-            setattr(char, key, value)
+async def link_character_to_player(
+    db: AsyncSession, player_id: int, character_id: int
+) -> PlayerCharacter:
+    """Create a player_characters bridge row (link character to player)."""
+    bridge = PlayerCharacter(player_id=player_id, character_id=character_id)
+    db.add(bridge)
     await db.flush()
-    await db.refresh(char)
-    return char
+    await db.refresh(bridge)
+    return bridge
 
 
-async def delete_character(db: AsyncSession, char_id: int) -> bool:
-    result = await db.execute(select(Character).where(Character.id == char_id))
-    char = result.scalar_one_or_none()
-    if char is None:
+async def unlink_character_from_player(
+    db: AsyncSession, character_id: int
+) -> bool:
+    """Remove the player_characters link for this character."""
+    result = await db.execute(
+        select(PlayerCharacter).where(PlayerCharacter.character_id == character_id)
+    )
+    bridge = result.scalar_one_or_none()
+    if bridge is None:
         return False
-    await db.delete(char)
+    await db.delete(bridge)
     await db.flush()
     return True
+
+
+async def get_wow_character_by_id(
+    db: AsyncSession, character_id: int
+) -> WowCharacter | None:
+    result = await db.execute(
+        select(WowCharacter).where(WowCharacter.id == character_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_wow_character_by_name(
+    db: AsyncSession, character_name: str, realm_slug: str
+) -> WowCharacter | None:
+    result = await db.execute(
+        select(WowCharacter).where(
+            WowCharacter.character_name.ilike(character_name),
+            WowCharacter.realm_slug.ilike(realm_slug),
+        )
+    )
+    return result.scalar_one_or_none()

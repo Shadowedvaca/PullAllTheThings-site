@@ -34,7 +34,7 @@ def _make_campaign(**kwargs) -> Campaign:
         status="draft",
         early_close_if_all_voted=True,
         discord_channel_id=None,
-        created_by=None,
+        created_by_player_id=None,
     )
     defaults.update(kwargs)
     return Campaign(**defaults)
@@ -250,7 +250,7 @@ class TestVotingStatusValidation:
         mock_result.scalar_one_or_none.return_value = campaign
         db.execute = AsyncMock(return_value=mock_result)
 
-        return await cast_vote(db, campaign_id=1, member_id=1, picks=picks or [])
+        return await cast_vote(db, campaign_id=1, player_id=1, picks=picks or [])
 
     async def test_campaign_cannot_vote_when_draft(self):
         with pytest.raises(ValueError, match="draft"):

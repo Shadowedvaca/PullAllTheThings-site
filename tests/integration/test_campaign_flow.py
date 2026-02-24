@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sv_common.db.models import (
     Campaign,
     CampaignEntry,
-    GuildMember,
     GuildRank,
+    Player,
 )
 from patt.services import campaign_service, vote_service
 
@@ -31,22 +31,19 @@ async def _create_rank(db: AsyncSession, *, name: str, level: int) -> GuildRank:
     return rank
 
 
-async def _create_member(
+async def _create_player(
     db: AsyncSession,
     *,
-    discord_username: str,
+    display_name: str,
     rank_id: int,
-    discord_id: str,
-) -> GuildMember:
-    member = GuildMember(
-        discord_username=discord_username,
-        display_name=discord_username,
-        discord_id=discord_id,
-        rank_id=rank_id,
+) -> Player:
+    player = Player(
+        display_name=display_name,
+        guild_rank_id=rank_id,
     )
-    db.add(member)
+    db.add(player)
     await db.flush()
-    return member
+    return player
 
 
 async def _make_live_campaign(
@@ -72,21 +69,24 @@ async def _make_live_campaign(
         early_close_if_all_voted=early_close_if_all_voted,
         created_by=created_by,
     )
-    # Add entries while draft
     for i in range(1, 4):
         await campaign_service.add_entry(db, campaign.id, name=f"Entry {i}")
-    # Activate
     campaign = await campaign_service.activate_campaign(db, campaign.id)
     return campaign
 
 
-def _auth_headers(member: GuildMember) -> dict:
-    """Generate auth headers for a member."""
-    from sv_common.auth.jwt import create_access_token
+def _auth_headers(player: Player) -> dict:
+    """Generate auth headers for a player.
 
-    rank_level = member.rank.level if member.rank else 0
+    Uses member_id=player.id in JWT; campaign routes fall back to
+    member_id lookup when user_id resolves to no player.
+    """
+    from sv_common.auth.jwt import create_access_token
+    from sqlalchemy.orm import selectinload
+
+    rank_level = player.guild_rank.level if player.guild_rank else 0
     token = create_access_token(
-        user_id=0, member_id=member.id, rank_level=rank_level
+        user_id=0, member_id=player.id, rank_level=rank_level
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -98,27 +98,23 @@ def _auth_headers(member: GuildMember) -> dict:
 
 async def test_full_campaign_lifecycle(db_session: AsyncSession):
     """Create → add entries → activate → vote → close → results."""
-    # Setup: officer and two voters
     officer_rank = await _create_rank(db_session, name="Officer", level=4)
     member_rank = await _create_rank(db_session, name="Member", level=2)
 
-    officer = await _create_member(
+    officer = await _create_player(
         db_session,
-        discord_username="officer1",
+        display_name="officer1",
         rank_id=officer_rank.id,
-        discord_id="100000000000000001",
     )
-    voter1 = await _create_member(
+    voter1 = await _create_player(
         db_session,
-        discord_username="voter1",
+        display_name="voter1",
         rank_id=member_rank.id,
-        discord_id="100000000000000002",
     )
-    voter2 = await _create_member(
+    voter2 = await _create_player(
         db_session,
-        discord_username="voter2",
+        display_name="voter2",
         rank_id=member_rank.id,
-        discord_id="100000000000000003",
     )
 
     # Create campaign (draft)
@@ -150,7 +146,7 @@ async def test_full_campaign_lifecycle(db_session: AsyncSession):
         {"entry_id": e3.id, "rank": 3},
     ]
     votes1 = await vote_service.cast_vote(
-        db_session, campaign_id=campaign.id, member_id=voter1.id, picks=picks1
+        db_session, campaign_id=campaign.id, player_id=voter1.id, picks=picks1
     )
     assert len(votes1) == 3
 
@@ -160,7 +156,7 @@ async def test_full_campaign_lifecycle(db_session: AsyncSession):
         {"entry_id": e2.id, "rank": 3},
     ]
     await vote_service.cast_vote(
-        db_session, campaign_id=campaign.id, member_id=voter2.id, picks=picks2
+        db_session, campaign_id=campaign.id, player_id=voter2.id, picks=picks2
     )
 
     # Close campaign
@@ -181,21 +177,19 @@ async def test_full_campaign_lifecycle(db_session: AsyncSession):
 
 
 async def test_cast_vote_validates_rank_requirement(db_session: AsyncSession):
-    """Member with rank below min_rank_to_vote is rejected."""
+    """Player with rank below min_rank_to_vote is rejected."""
     officer_rank = await _create_rank(db_session, name="Officer2", level=4)
     low_rank = await _create_rank(db_session, name="Initiate2", level=1)
 
-    officer = await _create_member(
+    officer = await _create_player(
         db_session,
-        discord_username="off2",
+        display_name="off2",
         rank_id=officer_rank.id,
-        discord_id="200000000000000001",
     )
-    initiate = await _create_member(
+    initiate = await _create_player(
         db_session,
-        discord_username="init2",
+        display_name="init2",
         rank_id=low_rank.id,
-        discord_id="200000000000000002",
     )
 
     campaign = await _make_live_campaign(
@@ -207,7 +201,7 @@ async def test_cast_vote_validates_rank_requirement(db_session: AsyncSession):
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign.id,
-            member_id=initiate.id,
+            player_id=initiate.id,
             picks=[
                 {"entry_id": entries[0].id, "rank": 1},
                 {"entry_id": entries[1].id, "rank": 2},
@@ -221,12 +215,8 @@ async def test_cast_vote_rejects_duplicate(db_session: AsyncSession):
     officer_rank = await _create_rank(db_session, name="Officer3", level=4)
     member_rank = await _create_rank(db_session, name="Member3", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off3", rank_id=officer_rank.id, discord_id="300000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter3", rank_id=member_rank.id, discord_id="300000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off3", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter3", rank_id=member_rank.id)
 
     campaign = await _make_live_campaign(db_session, created_by=officer.id)
     entries = campaign.entries
@@ -236,10 +226,10 @@ async def test_cast_vote_rejects_duplicate(db_session: AsyncSession):
         {"entry_id": entries[2].id, "rank": 3},
     ]
 
-    await vote_service.cast_vote(db_session, campaign_id=campaign.id, member_id=voter.id, picks=picks)
+    await vote_service.cast_vote(db_session, campaign_id=campaign.id, player_id=voter.id, picks=picks)
 
     with pytest.raises(ValueError, match="already voted"):
-        await vote_service.cast_vote(db_session, campaign_id=campaign.id, member_id=voter.id, picks=picks)
+        await vote_service.cast_vote(db_session, campaign_id=campaign.id, player_id=voter.id, picks=picks)
 
 
 async def test_cast_vote_rejects_wrong_number_of_picks(db_session: AsyncSession):
@@ -247,12 +237,8 @@ async def test_cast_vote_rejects_wrong_number_of_picks(db_session: AsyncSession)
     officer_rank = await _create_rank(db_session, name="Officer4", level=4)
     member_rank = await _create_rank(db_session, name="Member4", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off4", rank_id=officer_rank.id, discord_id="400000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter4", rank_id=member_rank.id, discord_id="400000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off4", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter4", rank_id=member_rank.id)
 
     campaign = await _make_live_campaign(db_session, created_by=officer.id, picks_per_voter=3)
     entries = campaign.entries
@@ -261,7 +247,7 @@ async def test_cast_vote_rejects_wrong_number_of_picks(db_session: AsyncSession)
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign.id,
-            member_id=voter.id,
+            player_id=voter.id,
             picks=[{"entry_id": entries[0].id, "rank": 1}],  # Only 1 pick, need 3
         )
 
@@ -271,12 +257,8 @@ async def test_cast_vote_rejects_duplicate_entries(db_session: AsyncSession):
     officer_rank = await _create_rank(db_session, name="Officer5", level=4)
     member_rank = await _create_rank(db_session, name="Member5", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off5", rank_id=officer_rank.id, discord_id="500000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter5", rank_id=member_rank.id, discord_id="500000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off5", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter5", rank_id=member_rank.id)
 
     campaign = await _make_live_campaign(db_session, created_by=officer.id)
     entries = campaign.entries
@@ -285,7 +267,7 @@ async def test_cast_vote_rejects_duplicate_entries(db_session: AsyncSession):
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign.id,
-            member_id=voter.id,
+            player_id=voter.id,
             picks=[
                 {"entry_id": entries[0].id, "rank": 1},
                 {"entry_id": entries[0].id, "rank": 2},  # Duplicate!
@@ -299,17 +281,12 @@ async def test_cast_vote_rejects_entry_from_wrong_campaign(db_session: AsyncSess
     officer_rank = await _create_rank(db_session, name="Officer6", level=4)
     member_rank = await _create_rank(db_session, name="Member6", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off6", rank_id=officer_rank.id, discord_id="600000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter6", rank_id=member_rank.id, discord_id="600000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off6", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter6", rank_id=member_rank.id)
 
     campaign_a = await _make_live_campaign(db_session, created_by=officer.id)
     entries_a = campaign_a.entries
 
-    # Create a second campaign and get its entries
     campaign_b = await _make_live_campaign(db_session, created_by=officer.id)
     entries_b = campaign_b.entries
 
@@ -317,7 +294,7 @@ async def test_cast_vote_rejects_entry_from_wrong_campaign(db_session: AsyncSess
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign_a.id,
-            member_id=voter.id,
+            player_id=voter.id,
             picks=[
                 {"entry_id": entries_a[0].id, "rank": 1},
                 {"entry_id": entries_a[1].id, "rank": 2},
@@ -327,40 +304,29 @@ async def test_cast_vote_rejects_entry_from_wrong_campaign(db_session: AsyncSess
 
 
 # ---------------------------------------------------------------------------
-# Results visibility
+# Results visibility (HTTP tests)
 # ---------------------------------------------------------------------------
 
 
 async def test_results_hidden_until_voted(db_session: AsyncSession, client: AsyncClient):
-    """A member who hasn't voted cannot see live results via the API."""
-    officer_rank = await _create_rank(db_session, name="Officer7", level=4)
-    member_rank = await _create_rank(db_session, name="Member7", level=2)
-
-    # Eagerly load rank for JWT generation
+    """A player who hasn't voted cannot see live results via the API."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    officer_result = await db_session.execute(
-        select(GuildRank).where(GuildRank.id == officer_rank.id)
-    )
-    officer_rank = officer_result.scalar_one()
+    officer_rank = await _create_rank(db_session, name="Officer7", level=4)
+    member_rank = await _create_rank(db_session, name="Member7", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off7", rank_id=officer_rank.id, discord_id="700000000000000001"
-    )
-    non_voter = await _create_member(
-        db_session, discord_username="nonvoter7", rank_id=member_rank.id, discord_id="700000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off7", rank_id=officer_rank.id)
+    non_voter = await _create_player(db_session, display_name="nonvoter7", rank_id=member_rank.id)
 
-    # Load members with ranks
+    # Eagerly load ranks for auth header generation
     result = await db_session.execute(
-        select(GuildMember)
-        .options(selectinload(GuildMember.rank))
-        .where(GuildMember.id.in_([officer.id, non_voter.id]))
+        select(Player)
+        .options(selectinload(Player.guild_rank))
+        .where(Player.id.in_([officer.id, non_voter.id]))
     )
-    members = {m.id: m for m in result.scalars().all()}
-    officer = members[officer.id]
-    non_voter = members[non_voter.id]
+    players = {p.id: p for p in result.scalars().all()}
+    non_voter = players[non_voter.id]
 
     campaign = await _make_live_campaign(db_session, created_by=officer.id)
 
@@ -372,36 +338,30 @@ async def test_results_hidden_until_voted(db_session: AsyncSession, client: Asyn
 
 
 async def test_results_visible_after_voting(db_session: AsyncSession, client: AsyncClient):
-    """A member who has voted can see live standings."""
+    """A player who has voted can see live standings."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     officer_rank = await _create_rank(db_session, name="Officer8", level=4)
     member_rank = await _create_rank(db_session, name="Member8", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off8", rank_id=officer_rank.id, discord_id="800000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter8", rank_id=member_rank.id, discord_id="800000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off8", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter8", rank_id=member_rank.id)
 
-    # Load with ranks
     result = await db_session.execute(
-        select(GuildMember)
-        .options(selectinload(GuildMember.rank))
-        .where(GuildMember.id.in_([voter.id]))
+        select(Player)
+        .options(selectinload(Player.guild_rank))
+        .where(Player.id == voter.id)
     )
     voter = result.scalar_one()
 
     campaign = await _make_live_campaign(db_session, created_by=officer.id)
     entries = campaign.entries
 
-    # Vote first
     await vote_service.cast_vote(
         db_session,
         campaign_id=campaign.id,
-        member_id=voter.id,
+        player_id=voter.id,
         picks=[
             {"entry_id": entries[0].id, "rank": 1},
             {"entry_id": entries[1].id, "rank": 2},
@@ -421,30 +381,21 @@ async def test_results_visible_after_voting(db_session: AsyncSession, client: As
 
 async def test_public_campaign_results_visible_to_anonymous(db_session: AsyncSession, client: AsyncClient):
     """Closed public campaigns show results to anyone (no auth required)."""
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-
     officer_rank = await _create_rank(db_session, name="Officer9", level=4)
     member_rank = await _create_rank(db_session, name="Member9", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off9", rank_id=officer_rank.id, discord_id="900000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter9", rank_id=member_rank.id, discord_id="900000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off9", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter9", rank_id=member_rank.id)
 
-    # Public campaign (no min_rank_to_view)
     campaign = await _make_live_campaign(
         db_session, created_by=officer.id, min_rank_to_view=None
     )
     entries = campaign.entries
 
-    # Vote then close
     await vote_service.cast_vote(
         db_session,
         campaign_id=campaign.id,
-        member_id=voter.id,
+        player_id=voter.id,
         picks=[
             {"entry_id": entries[0].id, "rank": 1},
             {"entry_id": entries[1].id, "rank": 2},
@@ -461,24 +412,20 @@ async def test_public_campaign_results_visible_to_anonymous(db_session: AsyncSes
 
 
 async def test_rank_gated_campaign_hidden_from_low_rank(db_session: AsyncSession, client: AsyncClient):
-    """Campaign with min_rank_to_view is hidden from low-rank members."""
+    """Campaign with min_rank_to_view is hidden from low-rank players."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     officer_rank = await _create_rank(db_session, name="Officer10", level=4)
     low_rank = await _create_rank(db_session, name="Initiate10", level=1)
 
-    officer = await _create_member(
-        db_session, discord_username="off10", rank_id=officer_rank.id, discord_id="1000000000000000001"
-    )
-    initiate = await _create_member(
-        db_session, discord_username="init10", rank_id=low_rank.id, discord_id="1000000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off10", rank_id=officer_rank.id)
+    initiate = await _create_player(db_session, display_name="init10", rank_id=low_rank.id)
 
     result = await db_session.execute(
-        select(GuildMember)
-        .options(selectinload(GuildMember.rank))
-        .where(GuildMember.id == initiate.id)
+        select(Player)
+        .options(selectinload(Player.guild_rank))
+        .where(Player.id == initiate.id)
     )
     initiate = result.scalar_one()
 
@@ -500,19 +447,15 @@ async def test_rank_gated_campaign_hidden_from_low_rank(db_session: AsyncSession
 
 
 async def test_early_close_when_all_eligible_voted(db_session: AsyncSession):
-    """Campaign closes early once all eligible members have voted."""
+    """Campaign closes early once all eligible players have voted."""
     officer_rank = await _create_rank(db_session, name="Officer11", level=4)
     member_rank = await _create_rank(db_session, name="Member11", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off11", rank_id=officer_rank.id, discord_id="1100000000000000001"
-    )
-    # Only one eligible voter
-    voter = await _create_member(
-        db_session, discord_username="voter11", rank_id=member_rank.id, discord_id="1100000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off11", rank_id=officer_rank.id)
+    await _create_player(db_session, display_name="voter11", rank_id=member_rank.id)
 
     # Both officer (level 4) and voter (level 2) are eligible for min_rank_to_vote=2
+    # But we use min_rank_to_vote=4 so only the officer can vote
     campaign = await _make_live_campaign(
         db_session,
         created_by=officer.id,
@@ -525,7 +468,7 @@ async def test_early_close_when_all_eligible_voted(db_session: AsyncSession):
     await vote_service.cast_vote(
         db_session,
         campaign_id=campaign.id,
-        member_id=officer.id,
+        player_id=officer.id,
         picks=[
             {"entry_id": entries[0].id, "rank": 1},
             {"entry_id": entries[1].id, "rank": 2},
@@ -546,18 +489,15 @@ async def test_early_close_when_all_eligible_voted(db_session: AsyncSession):
 
 
 # ---------------------------------------------------------------------------
-# Time-based transitions (unit-level, using campaign_service directly)
+# Time-based transitions
 # ---------------------------------------------------------------------------
 
 
 async def test_time_based_activation(db_session: AsyncSession):
     """Draft campaign with past start_at activates when checked."""
     officer_rank = await _create_rank(db_session, name="Officer12", level=4)
-    officer = await _create_member(
-        db_session, discord_username="off12", rank_id=officer_rank.id, discord_id="1200000000000000001"
-    )
+    officer = await _create_player(db_session, display_name="off12", rank_id=officer_rank.id)
 
-    # Create campaign with start_at in the past
     past = datetime.now(timezone.utc) - timedelta(hours=1)
     campaign = await campaign_service.create_campaign(
         db_session,
@@ -569,10 +509,8 @@ async def test_time_based_activation(db_session: AsyncSession):
     )
     assert campaign.status == "draft"
 
-    # Simulating what the background task does: activate if start_at <= now
-    from datetime import datetime as dt
-    now = dt.now(timezone.utc)
-    assert campaign.start_at <= now  # Confirm it's in the past
+    now = datetime.now(timezone.utc)
+    assert campaign.start_at <= now
 
     campaign = await campaign_service.activate_campaign(db_session, campaign.id)
     assert campaign.status == "live"
@@ -583,12 +521,8 @@ async def test_time_based_close(db_session: AsyncSession):
     officer_rank = await _create_rank(db_session, name="Officer13", level=4)
     member_rank = await _create_rank(db_session, name="Member13", level=2)
 
-    officer = await _create_member(
-        db_session, discord_username="off13", rank_id=officer_rank.id, discord_id="1300000000000000001"
-    )
-    voter = await _create_member(
-        db_session, discord_username="voter13", rank_id=member_rank.id, discord_id="1300000000000000002"
-    )
+    officer = await _create_player(db_session, display_name="off13", rank_id=officer_rank.id)
+    voter = await _create_player(db_session, display_name="voter13", rank_id=member_rank.id)
 
     campaign = await _make_live_campaign(db_session, created_by=officer.id)
     entries = campaign.entries
@@ -596,7 +530,7 @@ async def test_time_based_close(db_session: AsyncSession):
     await vote_service.cast_vote(
         db_session,
         campaign_id=campaign.id,
-        member_id=voter.id,
+        player_id=voter.id,
         picks=[
             {"entry_id": entries[0].id, "rank": 1},
             {"entry_id": entries[1].id, "rank": 2},
@@ -604,11 +538,9 @@ async def test_time_based_close(db_session: AsyncSession):
         ],
     )
 
-    # Force close (simulates background task expiry)
     campaign = await campaign_service.close_campaign(db_session, campaign.id)
     assert campaign.status == "closed"
 
-    # Results should be populated
     results = await vote_service.get_results(db_session, campaign.id)
     assert len(results) == 3
     assert results[0]["final_rank"] == 1

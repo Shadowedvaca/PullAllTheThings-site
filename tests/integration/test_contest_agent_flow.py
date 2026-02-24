@@ -19,7 +19,7 @@ pytestmark = pytest.mark.skipif(
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sv_common.db.models import (
-    Campaign, CampaignEntry, ContestAgentLog, GuildMember, GuildRank, Vote
+    Campaign, CampaignEntry, ContestAgentLog, GuildRank, Player, Vote
 )
 from patt.services.contest_agent import check_campaign_updates
 
@@ -50,20 +50,19 @@ async def rank(db_session):
 
 
 @pytest.fixture
-async def member(db_session, rank):
-    """Create a test guild member."""
-    m = GuildMember(
-        discord_username="testuser",
-        display_name="Test User",
-        rank_id=rank.id,
+async def player(db_session, rank):
+    """Create a test player."""
+    p = Player(
+        display_name="Test Player",
+        guild_rank_id=rank.id,
     )
-    db_session.add(m)
+    db_session.add(p)
     await db_session.flush()
-    return m
+    return p
 
 
 @pytest.fixture
-async def live_campaign(db_session, member):
+async def live_campaign(db_session, player):
     """Create a live campaign with agent enabled."""
     now = datetime.now(timezone.utc)
     c = Campaign(
@@ -78,7 +77,7 @@ async def live_campaign(db_session, member):
         agent_enabled=True,
         agent_chattiness="hype",
         discord_channel_id="123456789012345678",
-        created_by=member.id,
+        created_by_player_id=player.id,
         early_close_if_all_voted=True,
     )
     db_session.add(c)
@@ -152,7 +151,7 @@ class TestAgentPostsLaunchMessage:
 
 class TestAgentPostsLeadChange:
     async def test_agent_posts_lead_change_on_next_check(
-        self, db_session, live_campaign, campaign_entries, member, mock_bot
+        self, db_session, live_campaign, campaign_entries, player, mock_bot
     ):
         """After a lead change log entry with entry A, when entry B now leads, post lead_change."""
         entry_a, entry_b, entry_c = campaign_entries
@@ -171,10 +170,10 @@ class TestAgentPostsLeadChange:
         db_session.add(log_launch)
         db_session.add(log_lead)
 
-        # Add votes so entry_b is now leading (3 first-place votes → 9 pts)
+        # Add votes so entry_b is now leading
         vote1 = Vote(
             campaign_id=live_campaign.id,
-            member_id=member.id,
+            player_id=player.id,
             entry_id=entry_b.id,
             rank=1,
         )

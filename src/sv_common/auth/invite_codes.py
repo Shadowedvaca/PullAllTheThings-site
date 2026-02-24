@@ -1,7 +1,6 @@
 """Invite code generation, validation, and consumption."""
 
 import random
-import string
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -20,17 +19,17 @@ def _generate_code() -> str:
 
 async def generate_invite_code(
     db: AsyncSession,
-    member_id: int,
+    player_id: int,
     created_by_id: int,
     expires_hours: int = 72,
 ) -> str:
-    """Generate an invite code for a guild member. Returns the code string."""
+    """Generate an invite code for a player. Returns the code string."""
     code = _generate_code()
     expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
     invite = InviteCode(
         code=code,
-        member_id=member_id,
-        created_by=created_by_id,
+        player_id=player_id,
+        created_by_player_id=created_by_id,
         expires_at=expires_at,
     )
     db.add(invite)

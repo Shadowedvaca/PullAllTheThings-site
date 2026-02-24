@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sv_common.db.models import GuildMember, GuildRank
+from sv_common.db.models import GuildRank, Player
 from sv_common.identity import ranks as rank_service
 
 
@@ -14,11 +14,11 @@ async def _make_rank(db: AsyncSession, name: str, level: int) -> GuildRank:
     return rank
 
 
-async def _make_member(db: AsyncSession, rank_id: int, username: str) -> GuildMember:
-    member = GuildMember(discord_username=username, rank_id=rank_id)
-    db.add(member)
+async def _make_player(db: AsyncSession, rank_id: int, display_name: str) -> Player:
+    player = Player(display_name=display_name, guild_rank_id=rank_id)
+    db.add(player)
     await db.flush()
-    return member
+    return player
 
 
 # ---------------------------------------------------------------------------
@@ -81,10 +81,10 @@ async def test_create_rank_duplicate_level_rejected(db_session: AsyncSession):
 
 async def test_member_meets_rank_veteran_at_veteran_level(db_session: AsyncSession):
     veteran_rank = await _make_rank(db_session, "Veteran_mrv", 3)
-    member = await _make_member(db_session, veteran_rank.id, "vet_user_mrv")
+    player = await _make_player(db_session, veteran_rank.id, "vet_player_mrv")
 
     result = await rank_service.member_meets_rank_requirement(
-        db_session, member.id, required_level=3
+        db_session, player.id, required_level=3
     )
 
     assert result is True
@@ -92,10 +92,10 @@ async def test_member_meets_rank_veteran_at_veteran_level(db_session: AsyncSessi
 
 async def test_member_meets_rank_initiate_at_veteran_level(db_session: AsyncSession):
     initiate_rank = await _make_rank(db_session, "Initiate_mri", 1)
-    member = await _make_member(db_session, initiate_rank.id, "init_user_mri")
+    player = await _make_player(db_session, initiate_rank.id, "init_player_mri")
 
     result = await rank_service.member_meets_rank_requirement(
-        db_session, member.id, required_level=3
+        db_session, player.id, required_level=3
     )
 
     assert result is False
@@ -103,10 +103,10 @@ async def test_member_meets_rank_initiate_at_veteran_level(db_session: AsyncSess
 
 async def test_member_meets_rank_officer_at_veteran_level(db_session: AsyncSession):
     officer_rank = await _make_rank(db_session, "Officer_mro", 4)
-    member = await _make_member(db_session, officer_rank.id, "off_user_mro")
+    player = await _make_player(db_session, officer_rank.id, "off_player_mro")
 
     result = await rank_service.member_meets_rank_requirement(
-        db_session, member.id, required_level=3
+        db_session, player.id, required_level=3
     )
 
     assert result is True
