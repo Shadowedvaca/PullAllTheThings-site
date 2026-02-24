@@ -18,6 +18,35 @@
 
 <div id="pm-status" class="flash-bar" style="display:none;"></div>
 
+{# ── Identity Matching Panel ── #}
+<details class="pm-match-panel" id="match-panel">
+    <summary class="pm-match-summary">
+        <span class="pm-match-summary__title">Identity Matching</span>
+        <span class="pm-match-summary__hint">Auto-link unlinked characters to players</span>
+    </summary>
+    <div class="pm-match-body">
+        <div class="pm-match-controls">
+            <div class="pm-match-field">
+                <label class="pm-match-label" for="match-rank">Minimum Rank</label>
+                <select class="form-control" id="match-rank" style="width:200px">
+                    <option value="">All ranks</option>
+                    {% for rank in guild_ranks %}
+                        <option value="{{ rank.level }}">{{ rank.name }} (level {{ rank.level }}+)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button class="btn btn-primary" id="match-run-btn" onclick="runMatching()">
+                Run Matching
+            </button>
+        </div>
+        <p class="pm-match-hint">
+            Processes unlinked characters using name matching, guild note parsing, and fuzzy scoring.
+            Officers+ is a good starting point — run it, review Player Manager, then run all ranks when satisfied.
+        </p>
+        <div id="match-result" style="display:none;" class="pm-match-result"></div>
+    </div>
+</details>
+
 <div id="pm-drill-banner" class="pm-drill-banner" style="display:none;">
     <span class="pm-drill-label"></span>
     <button class="pm-drill-clear" onclick="clearDrill()">✕ Clear filter</button>
@@ -102,4 +131,40 @@
 
 {% block scripts %}
 <script src="/static/js/players.js"></script>
+<script>
+async function runMatching() {
+    const btn = document.getElementById('match-run-btn');
+    const result = document.getElementById('match-result');
+    const rankVal = document.getElementById('match-rank').value;
+
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    result.style.display = 'none';
+
+    const url = '/api/identity/run-matching' + (rankVal ? '?min_rank_level=' + rankVal : '');
+    try {
+        const resp = await fetch(url, { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            result.className = 'pm-match-result pm-match-result--ok';
+            const scope = rankVal ? 'Rank level ' + rankVal + '+' : 'All ranks';
+            result.textContent = '✓ Matching started (' + scope + '). Reload Player Manager in a moment to see the results.';
+            result.style.display = 'block';
+            // Reload the player data after a short delay
+            setTimeout(() => { if (typeof loadData === 'function') loadData(); }, 2500);
+        } else {
+            result.className = 'pm-match-result pm-match-result--err';
+            result.textContent = '✗ Error: ' + (data.detail || 'unknown error');
+            result.style.display = 'block';
+        }
+    } catch (e) {
+        result.className = 'pm-match-result pm-match-result--err';
+        result.textContent = '✗ Network error: ' + e.message;
+        result.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Matching';
+    }
+}
+</script>
 {% endblock %}

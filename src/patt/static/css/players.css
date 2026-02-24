@@ -623,3 +623,104 @@
     color: var(--color-accent);
     vertical-align: super;
 }
+
+/* ── Identity Matching Panel ─────────────────────────────────────── */
+
+.pm-match-panel {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.pm-match-summary {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    cursor: pointer;
+    list-style: none;
+    background: var(--color-bg-panel);
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s;
+    user-select: none;
+}
+.pm-match-panel[open] .pm-match-summary {
+    border-bottom-color: var(--color-border);
+}
+.pm-match-summary::-webkit-details-marker { display: none; }
+.pm-match-summary::before {
+    content: '▶';
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+    transition: transform 0.15s;
+}
+.pm-match-panel[open] .pm-match-summary::before {
+    transform: rotate(90deg);
+}
+
+.pm-match-summary__title {
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.pm-match-summary__hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.pm-match-body {
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.pm-match-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.pm-match-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.pm-match-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+}
+
+.pm-match-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+
+.pm-match-result {
+    padding: 0.6rem 0.9rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+.pm-match-result--ok {
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid var(--color-success);
+    color: var(--color-success);
+}
+.pm-match-result--err {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
+}

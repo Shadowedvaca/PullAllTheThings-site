@@ -211,6 +211,36 @@ async def trigger_report(
 # Identity Routes
 # ---------------------------------------------------------------------------
 
+@identity_router.post("/run-matching")
+async def run_identity_matching(
+    request: Request,
+    min_rank_level: int | None = None,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """
+    Run the identity matching engine to auto-link unlinked characters to players.
+
+    Optional query param: min_rank_level (int) — restrict to characters at or above
+    this guild rank level (e.g. 4 = Officers+). Omit to process all ranks.
+    """
+    from sv_common.guild_sync.identity_engine import run_matching
+    import asyncio
+
+    async def _run():
+        try:
+            stats = await run_matching(pool, min_rank_level=min_rank_level)
+            logger.info("Manual identity matching complete (min_rank=%s): %s", min_rank_level, stats)
+        except Exception as e:
+            logger.error("Manual identity matching failed: %s", e)
+
+    asyncio.create_task(_run())
+    return {
+        "ok": True,
+        "status": "matching_started",
+        "min_rank_level": min_rank_level,
+    }
+
+
 @identity_router.get("/players")
 async def list_players(
     pool: asyncpg.Pool = Depends(get_db_pool),

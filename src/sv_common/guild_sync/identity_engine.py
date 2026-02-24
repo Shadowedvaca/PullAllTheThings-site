@@ -118,9 +118,12 @@ def fuzzy_match_score(name1: str, name2: str) -> float:
     return SequenceMatcher(None, n1, n2).ratio()
 
 
-async def run_matching(pool: asyncpg.Pool) -> dict:
+async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) -> dict:
     """
-    Run the full matching engine across all unlinked characters and Discord users.
+    Run the matching engine across all unlinked characters and Discord users.
+
+    min_rank_level: if set, only processes characters whose guild_rank_id corresponds
+                   to a rank with level >= min_rank_level (e.g. 4 = Officers+).
 
     Returns stats about matches found.
     """
@@ -129,12 +132,23 @@ async def run_matching(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
 
         # Get all unlinked WoW characters (not yet in player_characters)
-        unlinked_chars = await conn.fetch(
-            """SELECT id, character_name, guild_note, officer_note
-               FROM guild_identity.wow_characters
-               WHERE removed_at IS NULL
-                 AND id NOT IN (SELECT character_id FROM guild_identity.player_characters)"""
-        )
+        if min_rank_level is not None:
+            unlinked_chars = await conn.fetch(
+                """SELECT wc.id, wc.character_name, wc.guild_note, wc.officer_note
+                   FROM guild_identity.wow_characters wc
+                   JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
+                   WHERE wc.removed_at IS NULL
+                     AND gr.level >= $1
+                     AND wc.id NOT IN (SELECT character_id FROM guild_identity.player_characters)""",
+                min_rank_level,
+            )
+        else:
+            unlinked_chars = await conn.fetch(
+                """SELECT id, character_name, guild_note, officer_note
+                   FROM guild_identity.wow_characters
+                   WHERE removed_at IS NULL
+                     AND id NOT IN (SELECT character_id FROM guild_identity.player_characters)"""
+            )
 
         # Get all unlinked Discord users (present in server with guild role, no player link)
         unlinked_discord = await conn.fetch(

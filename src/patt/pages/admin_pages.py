@@ -421,7 +421,11 @@ async def admin_players(
     if player is None:
         return _redirect_login("/admin/players")
 
+    ranks_result = await db.execute(select(GuildRank).order_by(GuildRank.level.desc()))
+    ranks = list(ranks_result.scalars().all())
+
     ctx = await _base_ctx(request, player, db)
+    ctx["guild_ranks"] = ranks
     return templates.TemplateResponse("admin/players.html", ctx)
 
 
