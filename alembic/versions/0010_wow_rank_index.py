@@ -39,13 +39,12 @@ def upgrade() -> None:
 
     # Seed initial values: WoW rank integer → platform rank name
     # (standard WoW ordering: 0=GL, lower index = more access)
-    op.execute("""
-        UPDATE common.guild_ranks SET wow_rank_index = 0 WHERE name = 'Guild Leader';
-        UPDATE common.guild_ranks SET wow_rank_index = 1 WHERE name = 'Officer';
-        UPDATE common.guild_ranks SET wow_rank_index = 2 WHERE name = 'Veteran';
-        UPDATE common.guild_ranks SET wow_rank_index = 3 WHERE name = 'Member';
-        UPDATE common.guild_ranks SET wow_rank_index = 4 WHERE name = 'Initiate';
-    """)
+    # asyncpg requires one statement per op.execute() call
+    op.execute("UPDATE common.guild_ranks SET wow_rank_index = 0 WHERE name = 'Guild Leader'")
+    op.execute("UPDATE common.guild_ranks SET wow_rank_index = 1 WHERE name = 'Officer'")
+    op.execute("UPDATE common.guild_ranks SET wow_rank_index = 2 WHERE name = 'Veteran'")
+    op.execute("UPDATE common.guild_ranks SET wow_rank_index = 3 WHERE name = 'Member'")
+    op.execute("UPDATE common.guild_ranks SET wow_rank_index = 4 WHERE name = 'Initiate'")
 
 
 def downgrade() -> None:
