@@ -253,7 +253,7 @@
 
             {% if day.event %}
             <div class="day-card__event">
-                ⚔ {{ day.event.label }} · {{ day.event.default_start_time.strftime('%H:%M') }} EST
+                ⚔ {{ day.event.label }} · {{ day.event.default_start_time.strftime('%H:%M') }} server time
             </div>
             {% endif %}
 
@@ -365,8 +365,6 @@ function toggleList(btn) {
     const open = list.classList.toggle('open');
     btn.classList.toggle('open', open);
     btn.setAttribute('aria-expanded', open);
-    const chevron = btn.querySelector('.chevron');
-    if (chevron) chevron.textContent = open ? '›' : '›';
 }
 
 // ── Event Day Table ─────────────────────────────────────────────
