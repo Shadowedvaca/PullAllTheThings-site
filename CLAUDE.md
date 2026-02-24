@@ -629,6 +629,18 @@ CREATE TABLE patt.raid_attendance (
 | Current raid season | `MAX(start_date) WHERE start_date <= NOW() AND is_active = TRUE` |
 | Attendance % | `attended / (events WHERE player had availability on that day_of_week)` within season |
 
+### Schema Additions Planned for Phase 3
+
+#### `patt.raid_events` additions (Migration 0014 — Phase 3.4)
+```sql
+ALTER TABLE patt.raid_events
+    ADD COLUMN recurring_event_id INTEGER REFERENCES patt.recurring_events(id),
+    ADD COLUMN auto_booked BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN raid_helper_payload JSONB;
+```
+
+---
+
 ### Eliminated Tables (removed in Phase 2.7)
 
 | Table | Replaced By |
@@ -701,8 +713,35 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
   - `api/routes.py`: identity routes updated for new schema; `/identity/players` replaces `/identity/persons`
   - 207 unit tests pass, 69 skipped (DB-dependent or legacy tests)
 
+- Phase 3.1: Admin Availability Dashboard + Event Day System (complete)
+  - `patt.recurring_events` table added (migration 0013)
+  - `common.discord_config` gains 6 Raid-Helper config columns (migration 0013)
+  - `RecurringEvent` ORM model added; `DiscordConfig` model updated
+  - Admin API: GET/POST/PATCH/DELETE `/api/v1/admin/recurring-events`
+  - Admin API: GET `/api/v1/admin/availability-by-day` (shared with Phase 3.4 raid tools)
+  - Admin page `/admin/availability` — 7-day grid with % bars (green/amber/red),
+    collapsible player lists with role+rank, event day config table with auto-save
+  - Sidebar nav link "Availability" added to base_admin.html
+
 ### Current Phase
 - **No active phase** — platform is up to date
+
+### Planned Phases (not yet implemented)
+- Phase 3.2: Index Page Revamp (`reference/PHASE_3_2_INDEX_REVAMP.md`)
+  - Officers, recruiting needs, weekly schedule all loaded from DB (no more hardcoded HTML)
+  - Links updated: roster.html → /roster
+- Phase 3.3: Public Roster View (`reference/PHASE_3_3_PUBLIC_ROSTER.md`)
+  - New public page `/roster` — tabbed: Full Roster, Composition, Schedule
+  - Class colors, Wowhead comp link with spec code map, 301 redirects for legacy static files
+- Phase 3.4: Admin Raid Tools (`reference/PHASE_3_4_RAID_TOOLS.md`)
+  - New table additions: `patt.raid_events.recurring_event_id`, `auto_booked`, `raid_helper_payload`
+  - New admin page `/admin/raid-tools` — RH config, availability grid, event builder, roster preview
+  - Server-side Raid-Helper API calls (no GAS proxy needed)
+  - New service: `src/patt/services/raid_helper_service.py`
+  - Alembic migration 0014
+- Phase 3.5: Auto-Booking Scheduler (`reference/PHASE_3_5_AUTO_BOOKING.md`)
+  - Background task polls every 5 min; books next week's event 10–20 min after current event starts
+  - New service: `src/patt/services/raid_booking_service.py`
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
@@ -717,6 +756,9 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Season service: `src/patt/services/season_service.py` — CRUD for `patt.raid_seasons`
 - Admin reference tables page: `/admin/reference-tables` — inline edit ranks, roles, seasons; read-only class/spec reference
 - Admin bot settings page: `/admin/bot-settings` — ON/OFF toggle for bot DMs, onboarding session counts
+- Admin availability page: `/admin/availability` — 7-day grid with % bars, collapsible player lists, event day config table (auto-save)
+- Admin API: GET/POST/PATCH/DELETE `/api/v1/admin/recurring-events` + GET `/api/v1/admin/availability-by-day`
+- RecurringEvent ORM model + patt.recurring_events table (migration 0013)
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/availability` (public, no auth required)
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
 - Bot events: `on_member_join` (discord_sync + onboarding), `on_member_remove`, `on_member_update` all wired
