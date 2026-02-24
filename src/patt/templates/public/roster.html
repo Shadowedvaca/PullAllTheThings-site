@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block title %}Roster — Pull All The Things{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/roster.css">
+{% endblock %}
+
+{% block content %}
+<div class="roster-page">
+
+    <div class="roster-header">
+        <h1 class="roster-title">Guild Roster</h1>
+        <p class="roster-subtitle">Pull All The Things &bull; Sen'jin &bull; US</p>
+    </div>
+
+    {# ── Tab Navigation ── #}
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="roster">Full Roster</button>
+        <button class="tab-btn" data-tab="composition">Composition</button>
+        <button class="tab-btn" data-tab="schedule">Schedule</button>
+    </div>
+
+    {# ── Tab 1: Full Roster ── #}
+    <div id="tab-roster" class="tab-content active">
+        <div class="roster-controls">
+            <input
+                type="text"
+                id="roster-search"
+                class="roster-search"
+                placeholder="Search by name, class, spec…"
+                autocomplete="off"
+            >
+            <label class="roster-alts-label">
+                <input type="checkbox" id="show-alts">
+                Show alts
+            </label>
+        </div>
+
+        <div id="roster-loading" class="roster-loading">Loading roster…</div>
+        <div id="roster-error" class="roster-error" style="display:none"></div>
+
+        <table class="roster-table" id="roster-table" style="display:none">
+            <thead>
+                <tr>
+                    <th class="sort-col" data-col="display_name">Player</th>
+                    <th class="sort-col" data-col="character_name">Character</th>
+                    <th class="sort-col" data-col="class_name">Class</th>
+                    <th class="sort-col" data-col="spec_name">Spec</th>
+                    <th class="sort-col" data-col="role_name">Role</th>
+                    <th class="sort-col" data-col="rank_name">Rank</th>
+                    <th class="sort-col num-col" data-col="item_level">iLvl</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="roster-tbody"></tbody>
+        </table>
+
+        <p id="roster-empty" class="roster-empty" style="display:none">No players found.</p>
+    </div>
+
+    {# ── Tab 2: Composition ── #}
+    <div id="tab-composition" class="tab-content">
+        <div id="comp-loading" class="roster-loading">Loading…</div>
+        <div id="comp-content" style="display:none">
+
+            <section class="comp-section">
+                <h2 class="comp-section-title">Role Distribution</h2>
+                <div class="role-cards" id="role-cards"></div>
+            </section>
+
+            <section class="comp-section">
+                <h2 class="comp-section-title">Class Distribution</h2>
+                <div class="class-grid" id="class-grid"></div>
+            </section>
+
+            <section class="comp-section">
+                <h2 class="comp-section-title">Wowhead Comp Analyzer</h2>
+                <p class="comp-wowhead-note">View the current main-spec composition on Wowhead.</p>
+                <a id="wowhead-btn" href="#" target="_blank" rel="noopener" class="btn btn-primary">
+                    🔗 View Comp on Wowhead
+                </a>
+            </section>
+
+        </div>
+    </div>
+
+    {# ── Tab 3: Schedule ── #}
+    <div id="tab-schedule" class="tab-content">
+        <h2 class="comp-section-title">Weekly Raid Schedule</h2>
+        {% if event_days %}
+        <div class="schedule-list">
+            {% for event in event_days %}
+            <div class="schedule-row">
+                <span class="schedule-day">{{ day_names[event.day_of_week] }}</span>
+                <span class="schedule-label">{{ event.label }}</span>
+                <span class="schedule-time">{{ event.default_start_time.strftime('%I:%M %p') }} EST</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="roster-empty">Check our <a href="https://discord.gg/jgSSRBvjHM" target="_blank" rel="noopener">Discord</a> for the current raid schedule.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+const CLASS_COLORS = {
+    "Death Knight": "#C41E3A",
+    "Demon Hunter": "#A330C9",
+    "Druid": "#FF7C0A",
+    "Evoker": "#33937F",
+    "Hunter": "#AAD372",
+    "Mage": "#3FC7EB",
+    "Monk": "#00FF98",
+    "Paladin": "#F48CBA",
+    "Priest": "#FFFFFF",
+    "Rogue": "#FFF468",
+    "Shaman": "#0070DD",
+    "Warlock": "#8788EE",
+    "Warrior": "#C69B3A"
+};
+
+const CLASS_EMOJIS = {
+    "Druid": "🌿", "Paladin": "⚔️", "Warlock": "👁️", "Priest": "✨",
+    "Mage": "🔮", "Hunter": "🏹", "Warrior": "⚔️", "Shaman": "⚡",
+    "Monk": "☯️", "Death Knight": "💀", "Demon Hunter": "🦅",
+    "Evoker": "🐉", "Rogue": "🗡️"
+};
+
+const ROLE_EMOJIS = {
+    "Tank": "🛡️", "Healer": "💚", "Melee DPS": "⚔️", "Ranged DPS": "🏹"
+};
+
+const ROLE_TARGETS = { "Tank": 2, "Healer": 4, "Melee DPS": 6, "Ranged DPS": 6 };
+
+const SPEC_CODES = {
+    "Death Knight/Blood": "K1", "Death Knight/Frost": "K2", "Death Knight/Unholy": "K3",
+    "Death Knight/San'layn": "K4",
+    "Demon Hunter/Havoc": "Y1", "Demon Hunter/Vengeance": "Y2",
+    "Druid/Balance": "D1", "Druid/Feral": "D2", "Druid/Guardian": "D3", "Druid/Restoration": "D4",
+    "Evoker/Devastation": "V1", "Evoker/Preservation": "V2", "Evoker/Augmentation": "V3",
+    "Hunter/Beast Mastery": "H1", "Hunter/Marksmanship": "H2", "Hunter/Survival": "H3",
+    "Mage/Arcane": "M1", "Mage/Fire": "M2", "Mage/Frost": "M3",
+    "Monk/Brewmaster": "O1", "Monk/Mistweaver": "O2", "Monk/Windwalker": "O3",
+    "Paladin/Holy": "P1", "Paladin/Protection": "P2", "Paladin/Retribution": "P3",
+    "Priest/Discipline": "R1", "Priest/Holy": "R2", "Priest/Shadow": "R3",
+    "Rogue/Assassination": "U1", "Rogue/Outlaw": "U2", "Rogue/Subtlety": "U3",
+    "Shaman/Elemental": "S1", "Shaman/Enhancement": "S2", "Shaman/Restoration": "S3",
+    "Warlock/Affliction": "W1", "Warlock/Demonology": "W2", "Warlock/Destruction": "W3",
+    "Warrior/Arms": "A1", "Warrior/Fury": "A2", "Warrior/Protection": "A3"
+};
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let allPlayers = [];
+let sortCol = 'display_name';
+let sortDir = 1; // 1 = asc, -1 = desc
+
+// ---------------------------------------------------------------------------
+// Data loading
+// ---------------------------------------------------------------------------
+async function loadRoster() {
+    try {
+        const res = await fetch('/api/v1/guild/roster');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { data } = await res.json();
+        allPlayers = data.players || [];
+        document.getElementById('roster-loading').style.display = 'none';
+        document.getElementById('comp-loading').style.display = 'none';
+        document.getElementById('roster-table').style.display = '';
+        document.getElementById('comp-content').style.display = '';
+        renderRoster();
+        renderComposition();
+    } catch (err) {
+        document.getElementById('roster-loading').style.display = 'none';
+        document.getElementById('comp-loading').style.display = 'none';
+        const el = document.getElementById('roster-error');
+        el.textContent = 'Could not load roster. Please try again later.';
+        el.style.display = '';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Roster tab
+// ---------------------------------------------------------------------------
+function buildRows(showAlts, searchText) {
+    const rows = [];
+    const q = searchText.toLowerCase();
+
+    for (const player of allPlayers) {
+        const mc = player.main_character;
+        if (mc) {
+            const classColor = CLASS_COLORS[mc.class_name] || '#e8e8e8';
+            const roleEmoji = ROLE_EMOJIS[mc.role_name] || '';
+            rows.push({
+                player_id: player.player_id,
+                display_name: player.display_name,
+                character_name: mc.character_name,
+                class_name: mc.class_name || '',
+                spec_name: mc.spec_name || '',
+                role_name: mc.role_name || '',
+                rank_name: player.rank_name,
+                rank_level: player.rank_level,
+                item_level: mc.item_level || 0,
+                armory_url: mc.armory_url,
+                class_color: classColor,
+                role_emoji: roleEmoji,
+                is_alt: false,
+            });
+        }
+        if (showAlts && player.characters) {
+            for (const char of player.characters) {
+                if (mc && char.character_id === mc.character_id) continue;
+                rows.push({
+                    player_id: player.player_id,
+                    display_name: player.display_name,
+                    character_name: char.character_name,
+                    class_name: char.class_name || '',
+                    spec_name: char.spec_name || '',
+                    role_name: char.role_name || '',
+                    rank_name: player.rank_name,
+                    rank_level: player.rank_level,
+                    item_level: char.item_level || 0,
+                    armory_url: char.armory_url,
+                    class_color: CLASS_COLORS[char.class_name] || '#e8e8e8',
+                    role_emoji: ROLE_EMOJIS[char.role_name] || '',
+                    is_alt: true,
+                });
+            }
+        }
+    }
+
+    // Filter
+    const filtered = q
+        ? rows.filter(r =>
+            r.display_name.toLowerCase().includes(q) ||
+            r.character_name.toLowerCase().includes(q) ||
+            r.class_name.toLowerCase().includes(q) ||
+            r.spec_name.toLowerCase().includes(q) ||
+            r.role_name.toLowerCase().includes(q)
+          )
+        : rows;
+
+    // Sort
+    filtered.sort((a, b) => {
+        const av = sortCol === 'item_level' || sortCol === 'rank_level'
+            ? (a[sortCol] || 0)
+            : (a[sortCol] || '').toString().toLowerCase();
+        const bv = sortCol === 'item_level' || sortCol === 'rank_level'
+            ? (b[sortCol] || 0)
+            : (b[sortCol] || '').toString().toLowerCase();
+        if (av < bv) return -sortDir;
+        if (av > bv) return sortDir;
+        return 0;
+    });
+
+    return filtered;
+}
+
+function renderRoster() {
+    const showAlts = document.getElementById('show-alts').checked;
+    const searchText = document.getElementById('roster-search').value;
+    const rows = buildRows(showAlts, searchText);
+    const tbody = document.getElementById('roster-tbody');
+    const empty = document.getElementById('roster-empty');
+
+    if (rows.length === 0) {
+        tbody.innerHTML = '';
+        document.getElementById('roster-table').style.display = 'none';
+        empty.style.display = '';
+        return;
+    }
+
+    document.getElementById('roster-table').style.display = '';
+    empty.style.display = 'none';
+
+    tbody.innerHTML = rows.map(r => `
+        <tr class="${r.is_alt ? 'roster-row--alt' : ''}">
+            <td class="col-player">${esc(r.display_name)}</td>
+            <td class="col-character">
+                <span style="color:${r.class_color};font-weight:600">${esc(r.character_name)}</span>
+            </td>
+            <td class="col-class">${esc(r.class_name)}</td>
+            <td class="col-spec">${esc(r.spec_name)}</td>
+            <td class="col-role">${r.role_emoji} ${esc(r.role_name)}</td>
+            <td class="col-rank">${esc(r.rank_name)}</td>
+            <td class="col-ilvl num-col">${r.item_level || '—'}</td>
+            <td class="col-armory">
+                ${r.armory_url
+                    ? `<a href="${esc(r.armory_url)}" target="_blank" rel="noopener" class="armory-link" title="Armory">🔗</a>`
+                    : ''}
+            </td>
+        </tr>
+    `).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Composition tab
+// ---------------------------------------------------------------------------
+function renderComposition() {
+    // Role counts from mains only
+    const roleCounts = { "Tank": 0, "Healer": 0, "Melee DPS": 0, "Ranged DPS": 0 };
+    const classCounts = {};
+
+    for (const player of allPlayers) {
+        const mc = player.main_character;
+        if (!mc) continue;
+        if (mc.role_name && roleCounts.hasOwnProperty(mc.role_name)) {
+            roleCounts[mc.role_name]++;
+        }
+        if (mc.class_name) {
+            classCounts[mc.class_name] = (classCounts[mc.class_name] || 0) + 1;
+        }
+    }
+
+    // Role cards
+    const roleCardsEl = document.getElementById('role-cards');
+    roleCardsEl.innerHTML = Object.entries(ROLE_TARGETS).map(([role, target]) => {
+        const count = roleCounts[role] || 0;
+        let statusClass = 'role-card--danger';
+        if (count >= target) statusClass = 'role-card--ok';
+        else if (count === target - 1) statusClass = 'role-card--warn';
+        const pct = Math.min(100, Math.round((count / target) * 100));
+        return `
+            <div class="role-card ${statusClass}">
+                <div class="role-card__icon">${ROLE_EMOJIS[role] || ''}</div>
+                <div class="role-card__name">${esc(role)}</div>
+                <div class="role-card__count">${count} <span class="role-card__target">/ ${target}</span></div>
+                <div class="role-card__bar-wrap">
+                    <div class="role-card__bar" style="width:${pct}%"></div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Class grid
+    const sorted = Object.entries(classCounts).sort((a, b) => b[1] - a[1]);
+    const classGridEl = document.getElementById('class-grid');
+    classGridEl.innerHTML = sorted.map(([cls, cnt]) => {
+        const color = CLASS_COLORS[cls] || '#e8e8e8';
+        const emoji = CLASS_EMOJIS[cls] || '⚔️';
+        return `
+            <div class="class-chip">
+                <span class="class-chip__emoji">${emoji}</span>
+                <span class="class-chip__name" style="color:${color}">${esc(cls)}</span>
+                <span class="class-chip__count">${cnt}</span>
+            </div>
+        `;
+    }).join('');
+
+    // Wowhead link
+    const codes = allPlayers
+        .filter(p => p.main_character?.class_name && p.main_character?.spec_name)
+        .map(p => SPEC_CODES[`${p.main_character.class_name}/${p.main_character.spec_name}`])
+        .filter(Boolean)
+        .join('');
+    const wowheadUrl = `https://www.wowhead.com/raid-comp#${codes}`;
+    document.getElementById('wowhead-btn').href = wowheadUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Sorting
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.sort-col').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (sortCol === col) {
+            sortDir *= -1;
+        } else {
+            sortCol = col;
+            sortDir = col === 'item_level' ? -1 : 1;
+        }
+        document.querySelectorAll('.sort-col').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+        th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+        renderRoster();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------
+document.getElementById('show-alts').addEventListener('change', renderRoster);
+document.getElementById('roster-search').addEventListener('input', renderRoster);
+
+// ---------------------------------------------------------------------------
+// Tab switching
+// ---------------------------------------------------------------------------
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function esc(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+loadRoster();
+</script>
+{% endblock %}

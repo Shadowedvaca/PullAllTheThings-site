@@ -1,0 +1,381 @@
+/* ── Roster Page ─────────────────────────────────────────────────── */
+
+.roster-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+}
+
+.roster-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.roster-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    color: var(--color-accent);
+    margin-bottom: 0.25rem;
+}
+
+.roster-subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+}
+
+/* ── Tab Navigation ── */
+
+.tab-nav {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.6rem 1.2rem;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+    color: var(--color-text);
+}
+
+.tab-btn.active {
+    color: var(--color-accent);
+    border-bottom-color: var(--color-accent);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* ── Roster Controls ── */
+
+.roster-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.roster-search {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+    width: 280px;
+    transition: border-color 0.15s;
+}
+
+.roster-search:focus {
+    border-color: var(--color-accent);
+    outline: none;
+}
+
+.roster-alts-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.roster-alts-label input[type="checkbox"] {
+    accent-color: var(--color-accent);
+    width: 14px;
+    height: 14px;
+}
+
+/* ── Roster Table ── */
+
+.roster-loading {
+    color: var(--color-text-muted);
+    text-align: center;
+    padding: 3rem 0;
+    font-size: 0.95rem;
+}
+
+.roster-error {
+    color: var(--color-danger);
+    text-align: center;
+    padding: 2rem 0;
+    font-size: 0.95rem;
+}
+
+.roster-empty {
+    color: var(--color-text-muted);
+    text-align: center;
+    padding: 2rem 0;
+    font-size: 0.95rem;
+}
+
+.roster-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.roster-table thead th {
+    background: var(--color-bg-panel);
+    border-bottom: 1px solid var(--color-border-light);
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.roster-table thead th.sort-col {
+    cursor: pointer;
+    user-select: none;
+}
+
+.roster-table thead th.sort-col:hover {
+    color: var(--color-text);
+}
+
+.roster-table thead th.sort-asc::after {
+    content: ' ▲';
+    font-size: 0.7rem;
+}
+
+.roster-table thead th.sort-desc::after {
+    content: ' ▼';
+    font-size: 0.7rem;
+}
+
+.roster-table tbody tr {
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.1s;
+}
+
+.roster-table tbody tr:hover {
+    background: var(--color-bg-card);
+}
+
+.roster-table tbody tr.roster-row--alt {
+    opacity: 0.7;
+}
+
+.roster-table tbody td {
+    padding: 0.5rem 0.75rem;
+    vertical-align: middle;
+}
+
+.num-col {
+    text-align: right;
+}
+
+.armory-link {
+    font-size: 0.85rem;
+    text-decoration: none;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.armory-link:hover {
+    opacity: 1;
+}
+
+/* ── Composition Tab ── */
+
+.comp-section {
+    margin-bottom: 2.5rem;
+}
+
+.comp-section-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    color: var(--color-accent);
+    margin-bottom: 1rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.role-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+}
+
+.role-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--color-border-light);
+    padding: 1rem 1.25rem;
+}
+
+.role-card--ok   { border-left-color: var(--color-success); }
+.role-card--warn { border-left-color: var(--color-warning); }
+.role-card--danger { border-left-color: var(--color-danger); }
+
+.role-card__icon {
+    font-size: 1.4rem;
+    margin-bottom: 0.35rem;
+}
+
+.role-card__name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.2rem;
+}
+
+.role-card__count {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.2;
+}
+
+.role-card__target {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    font-weight: 400;
+}
+
+.role-card__bar-wrap {
+    margin-top: 0.6rem;
+    background: var(--color-border);
+    border-radius: 2px;
+    height: 4px;
+    overflow: hidden;
+}
+
+.role-card--ok   .role-card__bar { background: var(--color-success); }
+.role-card--warn .role-card__bar { background: var(--color-warning); }
+.role-card--danger .role-card__bar { background: var(--color-danger); }
+
+.role-card__bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+.class-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.class-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.class-chip__count {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+}
+
+.comp-wowhead-note {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+/* ── Schedule Tab ── */
+
+.schedule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 480px;
+}
+
+.schedule-row {
+    display: grid;
+    grid-template-columns: 120px 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.65rem 1rem;
+}
+
+.schedule-day {
+    font-weight: 600;
+    color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+}
+
+.schedule-label {
+    color: var(--color-text);
+    font-size: 0.9rem;
+}
+
+.schedule-time {
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 700px) {
+    .roster-page {
+        padding: 1rem 0.75rem 3rem;
+    }
+
+    .roster-table {
+        font-size: 0.8rem;
+    }
+
+    .roster-table thead th,
+    .roster-table tbody td {
+        padding: 0.4rem 0.5rem;
+    }
+
+    .col-rank,
+    .col-role {
+        display: none;
+    }
+
+    .role-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .schedule-row {
+        grid-template-columns: 100px 1fr;
+    }
+
+    .schedule-time {
+        grid-column: 1 / -1;
+        color: var(--color-text-muted);
+        font-size: 0.8rem;
+    }
+}

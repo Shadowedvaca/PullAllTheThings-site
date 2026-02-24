@@ -11,7 +11,7 @@ from typing import Callable
 
 import asyncpg
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -282,8 +282,6 @@ def create_app() -> FastAPI:
     # These were previously at repo root served by Nginx; now served by FastAPI.
     if LEGACY_DIR.exists():
         _legacy_files = {
-            "roster": "roster.html",
-            "roster-view": "roster-view.html",
             "raid-admin": "raid-admin.html",
             "mitos-corner": "mitos-corner.html",
         }
@@ -310,6 +308,15 @@ def create_app() -> FastAPI:
                 methods=["GET"],
                 include_in_schema=False,
             )
+
+        # Redirects for legacy roster pages → new dynamic /roster route
+        @app.get("/roster.html", include_in_schema=False)
+        async def roster_html_redirect():
+            return RedirectResponse(url="/roster", status_code=301)
+
+        @app.get("/roster-view.html", include_in_schema=False)
+        async def roster_view_html_redirect():
+            return RedirectResponse(url="/roster", status_code=301)
 
         # Serve patt-config.json
         _config_path = LEGACY_DIR / "patt-config.json"

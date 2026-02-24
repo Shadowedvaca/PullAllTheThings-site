@@ -14,6 +14,8 @@ from sv_common.db.models import (
     MitoTitle,
     Player,
     PlayerAvailability,
+    PlayerCharacter,
+    Specialization,
     WowCharacter,
 )
 from sv_common.identity import ranks as rank_service
@@ -42,47 +44,89 @@ async def list_ranks(db: AsyncSession = Depends(get_db)):
 
 @router.get("/roster")
 async def get_roster(db: AsyncSession = Depends(get_db)):
-    """Return roster: players who have a main character set."""
+    """Return roster: players who have a main character set, with all characters for alt view."""
     result = await db.execute(
         select(Player)
         .options(
             selectinload(Player.guild_rank),
             selectinload(Player.main_character).selectinload(WowCharacter.wow_class),
-            selectinload(Player.main_character).selectinload(WowCharacter.active_spec),
-            selectinload(Player.main_spec),
+            selectinload(Player.main_character)
+            .selectinload(WowCharacter.active_spec)
+            .selectinload(Specialization.default_role),
+            selectinload(Player.main_spec).selectinload(Specialization.default_role),
+            selectinload(Player.characters)
+            .selectinload(PlayerCharacter.character)
+            .selectinload(WowCharacter.wow_class),
+            selectinload(Player.characters)
+            .selectinload(PlayerCharacter.character)
+            .selectinload(WowCharacter.active_spec)
+            .selectinload(Specialization.default_role),
         )
         .where(Player.main_character_id.is_not(None))
         .where(Player.is_active.is_(True))
         .order_by(Player.display_name)
     )
-    players = list(result.scalars().all())
+    players = list(result.unique().scalars().all())
 
     roster = []
     for p in players:
         mc = p.main_character
-        entry: dict = {
-            "display_name": p.display_name,
-            "rank": p.guild_rank.name if p.guild_rank else "Unknown",
-            "main_character": None,
-        }
+        spec = p.main_spec or (mc.active_spec if mc else None)
+        role = spec.default_role if spec else None
+
+        main_char_data = None
         if mc:
             armory_url = (
                 f"https://worldofwarcraft.blizzard.com/en-us/character/us"
                 f"/{mc.realm_slug}/{mc.character_name.lower()}"
             )
-            entry["main_character"] = {
-                "name": mc.character_name,
-                "realm": mc.realm_slug,
-                "class": mc.wow_class.name if mc.wow_class else None,
-                "spec": p.main_spec.name if p.main_spec else (
-                    mc.active_spec.name if mc.active_spec else None
-                ),
-                "armory_url": armory_url,
+            main_char_data = {
+                "character_id": mc.id,
+                "character_name": mc.character_name,
+                "realm_slug": mc.realm_slug,
+                "class_name": mc.wow_class.name if mc.wow_class else None,
+                "spec_name": spec.name if spec else None,
+                "role_name": role.name if role else None,
                 "item_level": mc.item_level,
+                "armory_url": armory_url,
             }
-        roster.append(entry)
 
-    return {"ok": True, "data": {"members": roster}}
+        all_chars = []
+        for pc in p.characters:
+            char = pc.character
+            if not char:
+                continue
+            char_spec = char.active_spec
+            char_role = char_spec.default_role if char_spec else None
+            all_chars.append(
+                {
+                    "character_id": char.id,
+                    "character_name": char.character_name,
+                    "realm_slug": char.realm_slug,
+                    "class_name": char.wow_class.name if char.wow_class else None,
+                    "spec_name": char_spec.name if char_spec else None,
+                    "role_name": char_role.name if char_role else None,
+                    "item_level": char.item_level,
+                    "armory_url": (
+                        f"https://worldofwarcraft.blizzard.com/en-us/character/us"
+                        f"/{char.realm_slug}/{char.character_name.lower()}"
+                    ),
+                    "is_main": mc is not None and char.id == mc.id,
+                }
+            )
+
+        roster.append(
+            {
+                "player_id": p.id,
+                "display_name": p.display_name,
+                "rank_name": p.guild_rank.name if p.guild_rank else "Unknown",
+                "rank_level": p.guild_rank.level if p.guild_rank else 0,
+                "main_character": main_char_data,
+                "characters": all_chars,
+            }
+        )
+
+    return {"ok": True, "data": {"players": roster}}
 
 
 # ---------------------------------------------------------------------------

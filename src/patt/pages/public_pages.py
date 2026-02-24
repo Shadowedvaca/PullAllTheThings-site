@@ -223,3 +223,30 @@ async def landing_page(
         "day_names": DAY_NAMES,
     }
     return templates.TemplateResponse("public/index.html", ctx)
+
+
+@router.get("/roster", response_class=HTMLResponse)
+async def roster_page(
+    request: Request,
+    db=Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    """Public roster view — no auth required."""
+    event_days = []
+    try:
+        event_days = await _get_event_days(db)
+    except Exception:
+        logger.warning("Could not load event days for roster page", exc_info=True)
+
+    active_campaigns = []
+
+    return templates.TemplateResponse(
+        "public/roster.html",
+        {
+            "request": request,
+            "current_member": current_member,
+            "active_campaigns": active_campaigns,
+            "event_days": event_days,
+            "day_names": DAY_NAMES,
+        },
+    )
