@@ -191,16 +191,7 @@ def upgrade() -> None:
     )
 
     # Add FK constraints after columns exist
-    op.create_foreign_key(
-        "fk_players_discord_user",
-        "players", "discord_users",
-        ["discord_user_id"], ["id"],
-        source_schema="guild_identity", referent_schema="guild_identity",
-    )
-    op.create_unique_constraint(
-        "uq_players_discord_user_id", "players", ["discord_user_id"],
-        schema="guild_identity",
-    )
+    # NOTE: fk_players_discord_user is added in Step 3 after discord_members is renamed
     op.create_foreign_key(
         "fk_players_website_user",
         "players", "users",
@@ -247,6 +238,18 @@ def upgrade() -> None:
     # -------------------------------------------------------------------------
 
     op.rename_table("discord_members", "discord_users", schema="guild_identity")
+
+    # Now that discord_users exists, add the FK and unique constraint from Step 2
+    op.create_foreign_key(
+        "fk_players_discord_user",
+        "players", "discord_users",
+        ["discord_user_id"], ["id"],
+        source_schema="guild_identity", referent_schema="guild_identity",
+    )
+    op.create_unique_constraint(
+        "uq_players_discord_user_id", "players", ["discord_user_id"],
+        schema="guild_identity",
+    )
 
     # Drop the person_id column (relationship moved to players.discord_user_id)
     op.drop_column("discord_users", "person_id", schema="guild_identity")
