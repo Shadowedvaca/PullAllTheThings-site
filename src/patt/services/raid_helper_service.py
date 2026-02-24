@@ -95,14 +95,20 @@ async def create_event(
     if not server_id or not api_key:
         raise RaidHelperError("Raid-Helper is not configured (missing server_id or api_key)")
 
+    effective_channel = channel_id or config.get("raid_channel_id") or ""
+    if not effective_channel:
+        raise RaidHelperError("No channel_id configured for event creation")
+
+    # Date format Raid-Helper expects: D-M-YYYY (no leading zeros)
+    rh_date = f"{start_time_utc.day}-{start_time_utc.month}-{start_time_utc.year}"
+
     payload: dict[str, Any] = {
         "leaderId": config.get("raid_creator_discord_id"),
         "templateId": template_id or config.get("raid_default_template_id") or "wowretail2",
-        "date": start_time_utc.strftime("%Y-%m-%d"),
+        "date": rh_date,
         "time": start_time_utc.strftime("%H:%M"),
         "title": title,
         "description": description,
-        "channelId": channel_id or config.get("raid_channel_id") or "",
         "duration": duration_minutes,
     }
 
@@ -111,7 +117,7 @@ async def create_event(
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{_BASE_URL}/servers/{server_id}/events",
+            f"{_BASE_URL}/servers/{server_id}/channels/{effective_channel}/event",
             headers={"Authorization": api_key, "Content-Type": "application/json"},
             json=payload,
             timeout=15.0,
@@ -121,9 +127,15 @@ async def create_event(
         raise RaidHelperError(f"Raid-Helper API error {resp.status_code}: {resp.text[:200]}")
 
     data = resp.json()
+    event = data.get("event", data)
+    event_id = event.get("id")
+    event_url = (
+        f"https://discord.com/channels/{server_id}/{effective_channel}/{event_id}"
+        if event_id else ""
+    )
     return {
-        "event_id": data.get("id"),
-        "event_url": data.get("url", ""),
+        "event_id": event_id,
+        "event_url": event_url,
         "payload": payload,
     }
 
@@ -141,7 +153,7 @@ async def test_connection(config: dict[str, Any]) -> dict[str, Any]:
 
     async with httpx.AsyncClient() as client:
         resp = await client.get(
-            f"{_BASE_URL}/servers/{server_id}",
+            f"{_BASE_URL}/servers/{server_id}/events",
             headers={"Authorization": api_key},
             timeout=10.0,
         )
@@ -150,7 +162,9 @@ async def test_connection(config: dict[str, Any]) -> dict[str, Any]:
         raise RaidHelperError(f"Raid-Helper API error {resp.status_code}: {resp.text[:200]}")
 
     data = resp.json()
+    posted = data.get("postedEvents", [])
     return {
         "connected": True,
-        "server_name": data.get("name") or data.get("serverName") or "Unknown",
+        "server_name": f"Server {server_id}",
+        "event_count": len(posted),
     }
