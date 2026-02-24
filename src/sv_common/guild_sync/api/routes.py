@@ -70,12 +70,47 @@ async def verify_addon_key(x_api_key: str = Header(None)):
 
 @guild_sync_router.post("/blizzard/trigger")
 async def trigger_blizzard_sync(
-    scheduler=Depends(get_sync_scheduler),
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    """Manually trigger a full Blizzard API sync."""
+    """
+    Manually trigger a full Blizzard API sync.
+    Works with or without the scheduler — falls back to running directly
+    if the scheduler is not initialised (no audit channel configured).
+    """
     import asyncio
-    asyncio.create_task(scheduler.run_blizzard_sync())
-    return {"ok": True, "status": "sync_triggered"}
+    import os
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler is not None:
+        asyncio.create_task(scheduler.run_blizzard_sync())
+        return {"ok": True, "status": "sync_triggered", "mode": "scheduler"}
+
+    # Scheduler not available — run directly
+    async def _run_direct():
+        try:
+            from sv_common.guild_sync.blizzard_client import BlizzardClient
+            from sv_common.guild_sync.db_sync import sync_blizzard_roster
+            from sv_common.guild_sync.sync_logger import SyncLogEntry
+
+            client = BlizzardClient(
+                client_id=os.environ["BLIZZARD_CLIENT_ID"],
+                client_secret=os.environ["BLIZZARD_CLIENT_SECRET"],
+            )
+            await client.initialize()
+            try:
+                async with SyncLogEntry(pool, "blizzard_api") as log:
+                    characters = await client.sync_full_roster()
+                    stats = await sync_blizzard_roster(pool, characters)
+                    log.stats = stats
+                    logger.info("Direct Blizzard sync complete: %s", stats)
+            finally:
+                await client.close()
+        except Exception as e:
+            logger.error("Direct Blizzard sync failed: %s", e)
+
+    asyncio.create_task(_run_direct())
+    return {"ok": True, "status": "sync_triggered", "mode": "direct"}
 
 
 @guild_sync_router.post("/discord/trigger")

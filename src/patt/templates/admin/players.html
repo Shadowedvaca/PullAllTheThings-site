@@ -59,6 +59,8 @@
         <div class="pm-pane__header">
             <span class="pm-pane__title">Discord</span>
             <span class="pm-count" id="discord-count"></span>
+            <button class="btn btn-secondary btn-sm" id="discord-sync-btn"
+                    onclick="runDiscordSync()" title="Re-sync Discord members from server">↻ Sync</button>
         </div>
         <div class="pm-pane__toolbar">
             <input type="search" id="discord-search" class="form-control"
@@ -109,6 +111,8 @@
         <div class="pm-pane__header">
             <span class="pm-pane__title">Characters</span>
             <span class="pm-count" id="char-count"></span>
+            <button class="btn btn-secondary btn-sm" id="blizzard-sync-btn"
+                    onclick="runBlizzardSync()" title="Re-sync guild roster from Blizzard API">↻ Sync</button>
         </div>
         <div class="pm-pane__toolbar">
             <input type="search" id="char-search" class="form-control"
@@ -132,6 +136,48 @@
 {% block scripts %}
 <script src="/static/js/players.js"></script>
 <script>
+async function runDiscordSync() {
+    const btn = document.getElementById('discord-sync-btn');
+    btn.disabled = true;
+    btn.textContent = '↻ Syncing…';
+    try {
+        const resp = await fetch('/api/guild-sync/discord/trigger', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            btn.textContent = '✓ Done';
+            setTimeout(() => { btn.disabled = false; btn.textContent = '↻ Sync'; loadData(); }, 3000);
+        } else {
+            btn.textContent = '✗ Failed';
+            setTimeout(() => { btn.disabled = false; btn.textContent = '↻ Sync'; }, 3000);
+        }
+    } catch (e) {
+        btn.textContent = '✗ Error';
+        setTimeout(() => { btn.disabled = false; btn.textContent = '↻ Sync'; }, 3000);
+    }
+}
+
+async function runBlizzardSync() {
+    const btn = document.getElementById('blizzard-sync-btn');
+    btn.disabled = true;
+    btn.textContent = '↻ Syncing…';
+    try {
+        const resp = await fetch('/api/guild-sync/blizzard/trigger', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+            btn.textContent = '↻ Running…';
+            // Blizzard sync is async — poll for completion by reloading data after a delay
+            setTimeout(() => { loadData(); }, 15000);
+            setTimeout(() => { btn.disabled = false; btn.textContent = '↻ Sync'; }, 20000);
+        } else {
+            btn.textContent = '✗ Failed';
+            setTimeout(() => { btn.disabled = false; btn.textContent = '↻ Sync'; }, 3000);
+        }
+    } catch (e) {
+        btn.textContent = '✗ Error';
+        setTimeout(() => { btn.disabled = false; btn.textContent = '↻ Sync'; }, 3000);
+    }
+}
+
 async function runMatching() {
     const btn = document.getElementById('match-run-btn');
     const result = document.getElementById('match-result');
