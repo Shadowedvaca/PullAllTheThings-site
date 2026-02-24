@@ -43,8 +43,8 @@
         <div class="admin-sidenav__footer">
             {% if current_member %}
                 <span class="admin-sidenav__user">{{ current_member.display_name or current_member.discord_username }}</span>
-                {% if current_member.rank %}
-                    <span class="admin-sidenav__rank">{{ current_member.rank.name }}</span>
+                {% if current_member.guild_rank %}
+                    <span class="admin-sidenav__rank">{{ current_member.guild_rank.name }}</span>
                 {% endif %}
             {% endif %}
             <a href="/" class="admin-sidenav__link">← Site</a>
