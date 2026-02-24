@@ -262,31 +262,61 @@ async def _create_player_and_link(
     discord_user: dict,
     link_source: str,
 ):
-    """Create or find a player and link the WoW character to it via player_characters."""
+    """Create or find a player and link the WoW character to it via player_characters.
+
+    Player creation and character linking are atomic — if the character link fails
+    (already claimed), the player row is not created either.
+    """
 
     # If the Discord user already has a player, use it
     player_id = discord_user.get("player_id")
 
-    if not player_id:
-        # Create a new player with this Discord user linked
-        display = discord_user.get("display_name") or discord_user["username"]
-        player_id = await conn.fetchval(
-            """INSERT INTO guild_identity.players (display_name, discord_user_id)
-               VALUES ($1, $2) RETURNING id""",
-            display, discord_user["id"],
-        )
-        logger.info(
-            "Created new player '%s' (discord: %s, source: %s)",
-            display, discord_user["username"], link_source,
-        )
+    async with conn.transaction():
+        if not player_id:
+            # Check if a player already exists for this Discord user (race guard)
+            existing_player_id = await conn.fetchval(
+                "SELECT id FROM guild_identity.players WHERE discord_user_id = $1",
+                discord_user["id"],
+            )
+            if existing_player_id:
+                player_id = existing_player_id
+                logger.debug(
+                    "Reusing existing player %d for discord: %s",
+                    player_id, discord_user["username"],
+                )
+            else:
+                # Create a new player with this Discord user linked
+                display = discord_user.get("display_name") or discord_user["username"]
+                player_id = await conn.fetchval(
+                    """INSERT INTO guild_identity.players (display_name, discord_user_id)
+                       VALUES ($1, $2) RETURNING id""",
+                    display, discord_user["id"],
+                )
+                logger.info(
+                    "Created new player '%s' (discord: %s, source: %s)",
+                    display, discord_user["username"], link_source,
+                )
 
-    # Link character to player (ON CONFLICT DO NOTHING — idempotent)
-    await conn.execute(
-        """INSERT INTO guild_identity.player_characters (player_id, character_id)
-           VALUES ($1, $2)
-           ON CONFLICT (character_id) DO NOTHING""",
-        player_id, char["id"],
-    )
+        # Check if character is already claimed (can happen if same char appears
+        # twice due to stale snapshot or concurrent run)
+        already_linked = await conn.fetchval(
+            "SELECT player_id FROM guild_identity.player_characters WHERE character_id = $1",
+            char["id"],
+        )
+        if already_linked and already_linked != player_id:
+            logger.warning(
+                "Character '%s' already claimed by player %d — skipping link to player %d",
+                char["character_name"], already_linked, player_id,
+            )
+            return
+
+        # Link character to player (ON CONFLICT DO NOTHING — idempotent)
+        await conn.execute(
+            """INSERT INTO guild_identity.player_characters (player_id, character_id)
+               VALUES ($1, $2)
+               ON CONFLICT (character_id) DO NOTHING""",
+            player_id, char["id"],
+        )
 
     logger.info(
         "Linked character '%s' to player %d (source: %s)",
