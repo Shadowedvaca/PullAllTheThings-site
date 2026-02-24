@@ -14,7 +14,7 @@ from patt.deps import get_db, get_page_member
 from patt.services import campaign_service, vote_service
 from patt.templating import templates
 from sv_common.db.models import (
-    AuditIssue, DiscordUser, GuildRank, Player, WowCharacter, PlayerCharacter,
+    AuditIssue, DiscordUser, GuildRank, Player, Specialization, WowCharacter, PlayerCharacter,
 )
 from sv_common.identity import members as member_service
 
@@ -1191,7 +1191,7 @@ async def admin_raid_tools(
         .options(
             selectinload(Player.guild_rank),
             selectinload(Player.main_character),
-            selectinload(Player.main_spec),
+            selectinload(Player.main_spec).selectinload(Specialization.default_role),
         )
         .where(Player.is_active.is_(True), Player.main_character_id.is_not(None))
         .order_by(Player.display_name)
