@@ -65,14 +65,14 @@ async def send_new_issues_report(
             issues = await conn.fetch(
                 """SELECT * FROM guild_identity.audit_issues
                    WHERE resolved_at IS NULL
-                   ORDER BY severity DESC, issue_type, first_detected"""
+                   ORDER BY severity DESC, issue_type, created_at"""
             )
         else:
             # Only un-notified issues
             issues = await conn.fetch(
                 """SELECT * FROM guild_identity.audit_issues
                    WHERE resolved_at IS NULL AND notified_at IS NULL
-                   ORDER BY severity DESC, issue_type, first_detected"""
+                   ORDER BY severity DESC, issue_type, created_at"""
             )
 
         if not issues:

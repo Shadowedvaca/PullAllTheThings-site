@@ -30,12 +30,7 @@ class AddonUploadRequest(BaseModel):
 
 class ManualLinkRequest(BaseModel):
     wow_character_id: int
-    discord_member_id: int
-    confirmed_by: str = "manual"
-
-
-class LinkConfirmRequest(BaseModel):
-    link_id: int
+    discord_user_id: int
     confirmed_by: str = "manual"
 
 
@@ -216,74 +211,84 @@ async def trigger_report(
 # Identity Routes
 # ---------------------------------------------------------------------------
 
-@identity_router.get("/persons")
-async def list_persons(
+@identity_router.get("/players")
+async def list_players(
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    """List all known persons with their linked characters and Discord accounts."""
+    """List all known players with their linked characters and Discord accounts."""
+    import json
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT p.id, p.display_name, p.is_active,
+                      du.username AS discord_username,
+                      du.highest_guild_role,
                       COALESCE(json_agg(DISTINCT jsonb_build_object(
-                          'id', wc.id, 'character_name', wc.character_name,
-                          'realm_slug', wc.realm_slug, 'character_class', wc.character_class,
-                          'guild_rank_name', wc.guild_rank_name, 'is_main', wc.is_main
-                      )) FILTER (WHERE wc.id IS NOT NULL), '[]') AS characters,
-                      COALESCE(json_agg(DISTINCT jsonb_build_object(
-                          'id', dm.id, 'username', dm.username,
-                          'display_name', dm.display_name,
-                          'highest_guild_role', dm.highest_guild_role
-                      )) FILTER (WHERE dm.id IS NOT NULL), '[]') AS discord_accounts
-               FROM guild_identity.persons p
+                          'id', wc.id,
+                          'character_name', wc.character_name,
+                          'realm_slug', wc.realm_slug,
+                          'is_main', (wc.id = p.main_character_id)
+                      )) FILTER (WHERE wc.id IS NOT NULL), '[]') AS characters
+               FROM guild_identity.players p
+               LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+               LEFT JOIN guild_identity.player_characters pc ON pc.player_id = p.id
                LEFT JOIN guild_identity.wow_characters wc
-                   ON wc.person_id = p.id AND wc.removed_at IS NULL
-               LEFT JOIN guild_identity.discord_members dm
-                   ON dm.person_id = p.id AND dm.is_present = TRUE
+                   ON wc.id = pc.character_id AND wc.removed_at IS NULL
                WHERE p.is_active = TRUE
-               GROUP BY p.id
+               GROUP BY p.id, du.username, du.highest_guild_role
                ORDER BY p.display_name"""
         )
-    import json
-    persons = []
+    players = []
     for row in rows:
-        persons.append({
+        players.append({
             "id": row["id"],
             "display_name": row["display_name"],
+            "discord_username": row["discord_username"],
+            "highest_guild_role": row["highest_guild_role"],
             "characters": json.loads(row["characters"]) if isinstance(row["characters"], str) else row["characters"],
-            "discord_accounts": json.loads(row["discord_accounts"]) if isinstance(row["discord_accounts"], str) else row["discord_accounts"],
         })
-    return {"ok": True, "persons": persons}
+    return {"ok": True, "players": players}
 
 
 @identity_router.get("/orphans/wow")
 async def orphan_wow_characters(
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    """WoW characters in the guild with no Discord link."""
+    """WoW characters in the guild with no player link."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT id, character_name, realm_slug, character_class,
-                      guild_rank_name, active_spec, level, item_level
-               FROM guild_identity.wow_characters
-               WHERE person_id IS NULL AND removed_at IS NULL
-               ORDER BY guild_rank, character_name"""
+            """SELECT wc.id, wc.character_name, wc.realm_slug,
+                      wc.level, wc.item_level,
+                      gr.name AS guild_rank_name,
+                      cl.name AS class_name
+               FROM guild_identity.wow_characters wc
+               LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
+               LEFT JOIN guild_identity.classes cl ON cl.id = wc.class_id
+               WHERE wc.removed_at IS NULL
+                 AND wc.id NOT IN (
+                     SELECT character_id FROM guild_identity.player_characters
+                 )
+               ORDER BY gr.level DESC NULLS LAST, wc.character_name"""
         )
     return {"ok": True, "orphans": [dict(r) for r in rows]}
 
 
 @identity_router.get("/orphans/discord")
-async def orphan_discord_members(
+async def orphan_discord_users(
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    """Discord members with guild roles but no WoW character link."""
+    """Discord users with guild roles but no player link."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT id, discord_id, username, display_name, highest_guild_role
-               FROM guild_identity.discord_members
-               WHERE person_id IS NULL
-                 AND is_present = TRUE
-                 AND highest_guild_role IS NOT NULL
-               ORDER BY highest_guild_role, username"""
+            """SELECT du.id, du.discord_id, du.username, du.display_name,
+                      du.highest_guild_role
+               FROM guild_identity.discord_users du
+               WHERE du.is_present = TRUE
+                 AND du.highest_guild_role IS NOT NULL
+                 AND du.id NOT IN (
+                     SELECT discord_user_id FROM guild_identity.players
+                     WHERE discord_user_id IS NOT NULL
+                 )
+               ORDER BY du.highest_guild_role, du.username"""
         )
     return {"ok": True, "orphans": [dict(r) for r in rows]}
 
@@ -295,12 +300,11 @@ async def role_mismatches(
     """Role mismatches and other open audit issues."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT id, issue_type, severity, summary, details,
-                      first_detected, last_detected
+            """SELECT id, issue_type, severity, summary, details, created_at
                FROM guild_identity.audit_issues
                WHERE resolved_at IS NULL
                  AND issue_type IN ('role_mismatch', 'no_guild_role')
-               ORDER BY severity DESC, first_detected"""
+               ORDER BY severity DESC, created_at"""
         )
     return {"ok": True, "mismatches": [dict(r) for r in rows]}
 
@@ -310,117 +314,85 @@ async def create_manual_link(
     req: ManualLinkRequest,
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    """Manually link a WoW character to a Discord member."""
+    """Manually link a WoW character to a Discord user, creating a player if needed."""
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # Verify both exist
+            # Verify the WoW character exists
             char = await conn.fetchrow(
-                "SELECT id, character_name, person_id FROM guild_identity.wow_characters WHERE id = $1",
+                """SELECT id, character_name
+                   FROM guild_identity.wow_characters WHERE id = $1""",
                 req.wow_character_id,
             )
-            dm = await conn.fetchrow(
-                "SELECT id, username, person_id FROM guild_identity.discord_members WHERE id = $1",
-                req.discord_member_id,
-            )
-
             if not char:
                 raise HTTPException(404, f"WoW character {req.wow_character_id} not found")
-            if not dm:
-                raise HTTPException(404, f"Discord member {req.discord_member_id} not found")
 
-            # Use existing person or create new one
-            if dm["person_id"]:
-                person_id = dm["person_id"]
-            elif char["person_id"]:
-                person_id = char["person_id"]
-            else:
-                person_id = await conn.fetchval(
-                    "INSERT INTO guild_identity.persons (display_name) VALUES ($1) RETURNING id",
-                    dm["username"],
+            # Verify the Discord user exists
+            du = await conn.fetchrow(
+                """SELECT id, username, display_name
+                   FROM guild_identity.discord_users WHERE id = $1""",
+                req.discord_user_id,
+            )
+            if not du:
+                raise HTTPException(404, f"Discord user {req.discord_user_id} not found")
+
+            # Find or create a player for this Discord user
+            player_id = await conn.fetchval(
+                """SELECT id FROM guild_identity.players WHERE discord_user_id = $1""",
+                du["id"],
+            )
+
+            if not player_id:
+                # Check if the character already belongs to a player
+                player_id = await conn.fetchval(
+                    """SELECT player_id FROM guild_identity.player_characters WHERE character_id = $1""",
+                    char["id"],
                 )
 
-            # Link character
-            await conn.execute(
-                "UPDATE guild_identity.wow_characters SET person_id = $1 WHERE id = $2",
-                person_id, char["id"],
-            )
-            await conn.execute(
-                """INSERT INTO guild_identity.identity_links
-                   (person_id, wow_character_id, link_source, confidence, is_confirmed, confirmed_by, confirmed_at)
-                   VALUES ($1, $2, 'manual', 'high', TRUE, $3, NOW())
-                   ON CONFLICT (wow_character_id) DO UPDATE
-                   SET person_id = $1, link_source = 'manual', confidence = 'high',
-                       is_confirmed = TRUE, confirmed_by = $3, confirmed_at = NOW()""",
-                person_id, char["id"], req.confirmed_by,
-            )
+            if not player_id:
+                # Create a new player
+                display = du["display_name"] or du["username"]
+                player_id = await conn.fetchval(
+                    """INSERT INTO guild_identity.players (display_name, discord_user_id)
+                       VALUES ($1, $2) RETURNING id""",
+                    display, du["id"],
+                )
+            else:
+                # Ensure this player's discord_user_id is set
+                await conn.execute(
+                    """UPDATE guild_identity.players SET discord_user_id = $1
+                       WHERE id = $2 AND discord_user_id IS NULL""",
+                    du["id"], player_id,
+                )
 
-            # Link Discord member
+            # Link the character
             await conn.execute(
-                "UPDATE guild_identity.discord_members SET person_id = $1 WHERE id = $2",
-                person_id, dm["id"],
-            )
-            await conn.execute(
-                """INSERT INTO guild_identity.identity_links
-                   (person_id, discord_member_id, link_source, confidence, is_confirmed, confirmed_by, confirmed_at)
-                   VALUES ($1, $2, 'manual', 'high', TRUE, $3, NOW())
-                   ON CONFLICT (discord_member_id) DO UPDATE
-                   SET person_id = $1, link_source = 'manual', confidence = 'high',
-                       is_confirmed = TRUE, confirmed_by = $3, confirmed_at = NOW()""",
-                person_id, dm["id"], req.confirmed_by,
+                """INSERT INTO guild_identity.player_characters (player_id, character_id)
+                   VALUES ($1, $2)
+                   ON CONFLICT (character_id) DO UPDATE SET player_id = $1""",
+                player_id, char["id"],
             )
 
-    return {"ok": True, "status": "linked", "person_id": person_id}
+    return {"ok": True, "status": "linked", "player_id": player_id}
 
 
-@identity_router.post("/confirm")
-async def confirm_link(
-    req: LinkConfirmRequest,
+@identity_router.delete("/character-link/{player_character_id}")
+async def remove_character_link(
+    player_character_id: int,
     pool: asyncpg.Pool = Depends(get_db_pool),
 ):
-    """Confirm an auto-suggested link."""
+    """Remove a character from a player (delete a player_characters entry)."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, is_confirmed FROM guild_identity.identity_links WHERE id = $1",
-            req.link_id,
+            """SELECT id, player_id, character_id
+               FROM guild_identity.player_characters WHERE id = $1""",
+            player_character_id,
         )
         if not row:
-            raise HTTPException(404, f"Link {req.link_id} not found")
+            raise HTTPException(404, f"Character link {player_character_id} not found")
 
         await conn.execute(
-            """UPDATE guild_identity.identity_links
-               SET is_confirmed = TRUE, confirmed_by = $2, confirmed_at = NOW()
-               WHERE id = $1""",
-            req.link_id, req.confirmed_by,
+            "DELETE FROM guild_identity.player_characters WHERE id = $1",
+            player_character_id,
         )
-    return {"ok": True, "status": "confirmed"}
 
-
-@identity_router.delete("/link/{link_id}")
-async def remove_link(
-    link_id: int,
-    pool: asyncpg.Pool = Depends(get_db_pool),
-):
-    """Remove an incorrect identity link."""
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT id, person_id, wow_character_id, discord_member_id FROM guild_identity.identity_links WHERE id = $1",
-            link_id,
-        )
-        if not row:
-            raise HTTPException(404, f"Link {link_id} not found")
-
-        # Clear person_id from the linked entity
-        if row["wow_character_id"]:
-            await conn.execute(
-                "UPDATE guild_identity.wow_characters SET person_id = NULL WHERE id = $1",
-                row["wow_character_id"],
-            )
-        if row["discord_member_id"]:
-            await conn.execute(
-                "UPDATE guild_identity.discord_members SET person_id = NULL WHERE id = $1",
-                row["discord_member_id"],
-            )
-
-        await conn.execute("DELETE FROM guild_identity.identity_links WHERE id = $1", link_id)
-
-    return {"ok": True, "status": "removed"}
+    return {"ok": True, "status": "removed", "character_id": row["character_id"]}

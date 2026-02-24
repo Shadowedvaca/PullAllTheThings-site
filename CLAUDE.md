@@ -676,7 +676,15 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
   - Admin page `/admin/reference-tables` — inline editing for ranks, roles, seasons; read-only class/spec reference
   - `patt.services.availability_service` and `patt.services.season_service` created
   - Alembic migration 0008 created
-  - 205 unit tests pass, 69 skipped (DB-dependent or legacy tests)
+- Phase 2.5 (Revised): Guild Sync Code Update (complete)
+  - All guild_sync modules updated for Phase 2.7 player model
+  - `identity_engine.py`: rewrites matching to use `player_characters` + `players.discord_user_id`
+  - `integrity_checker.py`: all checks rewritten for new schema (no dropped columns)
+  - `reporter.py`: fixed `first_detected` → `created_at`
+  - `scheduler.py`: `run_onboarding_check` stubbed (Phase 2.6 still dormant)
+  - `db_sync.py`: rank lookup fixed (by name not level)
+  - `api/routes.py`: identity routes updated for new schema; `/identity/players` replaces `/identity/persons`
+  - 207 unit tests pass, 69 skipped (DB-dependent or legacy tests)
 
 ### Current Phase
 - **No active phase** — platform is up to date
@@ -697,7 +705,8 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
 - Campaign service: full lifecycle (draft→live→closed) with ranked-choice voting
 - Contest agent: Discord milestone posts, auto-activate/close campaigns
-- Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — uses pre-2.7 schema)
+- Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — uses pre-2.7 schema, not yet updated)
+- guild_sync package: all modules operational against Phase 2.7 schema; scheduler.run_onboarding_check stubbed
 - PATTSync WoW addon + companion app (functional, syncing guild notes)
 - Full regression test suite
 - Web UI: login, register, vote, admin campaigns, admin roster, public landing page
@@ -711,22 +720,18 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Reference tables (roles, classes, specializations): seeded via Alembic migration 0007
 - All players have `main_character_id`, `main_spec_id`, `offspec_*` as NULL (set on first login)
 
-### Dormant Code (uses pre-2.7 schema — needs update before activation)
-- `src/sv_common/guild_sync/identity_engine.py` — references `persons`, `identity_links`
-- `src/sv_common/guild_sync/integrity_checker.py` — same
-- `src/sv_common/guild_sync/discord_sync.py` — references `discord_members`
-- `src/sv_common/guild_sync/db_sync.py` — stale column references
-- `src/sv_common/guild_sync/onboarding/*.py` — references `persons`
+### Dormant Code (not yet updated for Phase 2.7 schema)
+- `src/sv_common/guild_sync/onboarding/*.py` — references `persons` (Phase 2.6 — will be wired up when onboarding is activated)
 
 ---
 
 ## Operations & Deployment
 
-- **Tests:** 205+ pass (69 skip when no DB); regression suite at `tests/regression/` requires live DB
+- **Tests:** 207+ pass (69 skip when no DB); regression suite at `tests/regression/` requires live DB
 - **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
-- **Alembic migrations:** `0001_initial_schema.py` through `0007_data_model_migration.py`
+- **Alembic migrations:** `0001_initial_schema.py` through `0008_scheduling_and_attendance.py`
 
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)

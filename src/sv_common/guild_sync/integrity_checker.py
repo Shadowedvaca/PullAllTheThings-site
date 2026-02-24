@@ -5,12 +5,11 @@ Run after each sync operation to detect NEW issues.
 Only creates audit_issues for problems not already tracked.
 
 Issue Types:
-- orphan_wow: Character in guild but no Discord link
-- orphan_discord: Discord member with guild role but no WoW character link
+- orphan_wow: Character in guild but no player link
+- orphan_discord: Discord member with guild role but no player link
 - role_mismatch: In-game rank doesn't match Discord role
 - stale_character: Character hasn't logged in for >30 days
-- no_guild_role: Discord member linked to a character but has no guild Discord role
-- rank_change: Character's rank changed since last check
+- no_guild_role: Discord member linked to a player but has no guild Discord role
 """
 
 import hashlib
@@ -55,11 +54,14 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
 
         # --- Check 1: Orphaned WoW Characters ---
-        # Characters in the guild with no person_id (and thus no Discord link)
+        # Characters in the guild with no entry in player_characters
         orphan_chars = await conn.fetch(
-            """SELECT id, character_name, realm_slug, guild_rank_name, character_class
-               FROM guild_identity.wow_characters
-               WHERE person_id IS NULL AND removed_at IS NULL"""
+            """SELECT wc.id, wc.character_name, wc.realm_slug
+               FROM guild_identity.wow_characters wc
+               WHERE wc.removed_at IS NULL
+                 AND wc.id NOT IN (
+                     SELECT character_id FROM guild_identity.player_characters
+                 )"""
         )
 
         for char in orphan_chars:
@@ -71,14 +73,11 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
                 wow_character_id=char["id"],
                 summary=(
                     f"WoW character '{char['character_name']}' "
-                    f"({char['character_class']}, {char['guild_rank_name']}) "
-                    f"has no Discord link"
+                    f"({char['realm_slug']}) has no player link"
                 ),
                 details={
                     "character_name": char["character_name"],
                     "realm": char["realm_slug"],
-                    "rank": char["guild_rank_name"],
-                    "class": char["character_class"],
                 },
                 issue_hash=h,
             )
@@ -86,33 +85,37 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
                 stats["orphan_wow"] += 1
                 stats["total_new"] += 1
 
-        # --- Check 2: Orphaned Discord Members ---
-        # Discord members with a guild role but no person_id (no WoW link)
+        # --- Check 2: Orphaned Discord Users ---
+        # Discord users with a guild role but no player link
         orphan_discord = await conn.fetch(
-            """SELECT id, discord_id, username, display_name, highest_guild_role
-               FROM guild_identity.discord_members
-               WHERE person_id IS NULL
-                 AND is_present = TRUE
-                 AND highest_guild_role IS NOT NULL"""
+            """SELECT du.id, du.discord_id, du.username, du.display_name,
+                      du.highest_guild_role
+               FROM guild_identity.discord_users du
+               WHERE du.is_present = TRUE
+                 AND du.highest_guild_role IS NOT NULL
+                 AND du.id NOT IN (
+                     SELECT discord_user_id FROM guild_identity.players
+                     WHERE discord_user_id IS NOT NULL
+                 )"""
         )
 
-        for dm in orphan_discord:
-            h = make_issue_hash("orphan_discord", dm["id"])
-            display = dm["display_name"] or dm["username"]
+        for du in orphan_discord:
+            h = make_issue_hash("orphan_discord", du["id"])
+            display = du["display_name"] or du["username"]
             created = await _upsert_issue(
                 conn,
                 issue_type="orphan_discord",
                 severity="warning",
-                discord_member_id=dm["id"],
+                discord_member_id=du["id"],
                 summary=(
-                    f"Discord member '{display}' (role: {dm['highest_guild_role']}) "
-                    f"has no WoW character linked"
+                    f"Discord member '{display}' (role: {du['highest_guild_role']}) "
+                    f"has no player link"
                 ),
                 details={
-                    "username": dm["username"],
-                    "display_name": dm["display_name"],
-                    "role": dm["highest_guild_role"],
-                    "discord_id": dm["discord_id"],
+                    "username": du["username"],
+                    "display_name": du["display_name"],
+                    "role": du["highest_guild_role"],
+                    "discord_id": du["discord_id"],
                 },
                 issue_hash=h,
             )
@@ -121,45 +124,45 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
                 stats["total_new"] += 1
 
         # --- Check 3: Role Mismatches ---
-        # People where in-game rank doesn't match Discord role
-        linked_persons = await conn.fetch(
-            """SELECT DISTINCT p.id AS person_id, p.display_name,
-                      wc.character_name, wc.guild_rank_name, wc.is_main,
-                      dm.username, dm.display_name AS discord_display,
-                      dm.highest_guild_role, dm.discord_id
-               FROM guild_identity.persons p
-               JOIN guild_identity.wow_characters wc ON wc.person_id = p.id
-               JOIN guild_identity.discord_members dm ON dm.person_id = p.id
-               WHERE wc.removed_at IS NULL AND dm.is_present = TRUE"""
+        # Players where in-game rank doesn't match their Discord role
+        linked_players = await conn.fetch(
+            """SELECT p.id AS player_id, p.display_name,
+                      wc.character_name,
+                      gr.name AS guild_rank_name, gr.level AS guild_rank_level,
+                      du.username, du.display_name AS discord_display,
+                      du.highest_guild_role, du.discord_id, du.id AS discord_user_id
+               FROM guild_identity.players p
+               JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+               JOIN guild_identity.player_characters pc ON pc.player_id = p.id
+               JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
+               LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
+               WHERE wc.removed_at IS NULL AND du.is_present = TRUE"""
         )
 
-        # Group by person to find highest in-game rank
-        person_data = {}
-        for row in linked_persons:
-            pid = row["person_id"]
-            if pid not in person_data:
-                person_data[pid] = {
+        # Group by player, tracking highest in-game rank (highest guild_ranks.level)
+        player_data = {}
+        for row in linked_players:
+            pid = row["player_id"]
+            if pid not in player_data:
+                player_data[pid] = {
                     "display_name": row["display_name"],
                     "discord_username": row["username"],
                     "discord_display": row["discord_display"],
                     "discord_role": row["highest_guild_role"],
                     "discord_id": row["discord_id"],
-                    "ranks": [],
+                    "discord_user_id": row["discord_user_id"],
+                    "highest_rank_level": 0,
+                    "highest_rank_name": None,
                     "characters": [],
                 }
-            person_data[pid]["ranks"].append(row["guild_rank_name"])
-            person_data[pid]["characters"].append(row["character_name"])
+            player_data[pid]["characters"].append(row["character_name"])
+            rank_level = row["guild_rank_level"] or 0
+            if rank_level > player_data[pid]["highest_rank_level"]:
+                player_data[pid]["highest_rank_level"] = rank_level
+                player_data[pid]["highest_rank_name"] = row["guild_rank_name"]
 
-        rank_priority = ["Guild Leader", "Officer", "Veteran", "Member", "Initiate"]
-
-        for pid, data in person_data.items():
-            # Find the highest in-game rank for this person
-            highest_rank = None
-            for rp in rank_priority:
-                if rp in data["ranks"]:
-                    highest_rank = rp
-                    break
-
+        for pid, data in player_data.items():
+            highest_rank = data["highest_rank_name"]
             if not highest_rank:
                 continue
 
@@ -174,14 +177,14 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
                         conn,
                         issue_type="role_mismatch",
                         severity="warning",
-                        person_id=pid,
+                        discord_member_id=data["discord_user_id"],
                         summary=(
                             f"'{display}' is {highest_rank} in-game "
                             f"but {actual_discord_role} on Discord "
                             f"(expected: {expected_discord_role})"
                         ),
                         details={
-                            "person_display": data["display_name"],
+                            "player_display": data["display_name"],
                             "ingame_rank": highest_rank,
                             "discord_role": actual_discord_role,
                             "expected_discord_role": expected_discord_role,
@@ -201,13 +204,13 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
                     conn,
                     issue_type="no_guild_role",
                     severity="warning",
-                    person_id=pid,
+                    discord_member_id=data["discord_user_id"],
                     summary=(
                         f"'{display}' is {highest_rank} in-game "
                         f"but has NO guild role on Discord"
                     ),
                     details={
-                        "person_display": data["display_name"],
+                        "player_display": data["display_name"],
                         "ingame_rank": highest_rank,
                         "expected_discord_role": expected_discord_role,
                         "characters": data["characters"],
@@ -223,7 +226,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         stale_ts = int(stale_threshold.timestamp() * 1000)  # Blizzard uses milliseconds
 
         stale_chars = await conn.fetch(
-            """SELECT id, character_name, guild_rank_name, last_login_timestamp
+            """SELECT id, character_name, last_login_timestamp
                FROM guild_identity.wow_characters
                WHERE removed_at IS NULL
                  AND last_login_timestamp IS NOT NULL
@@ -244,12 +247,11 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
                 severity="info",
                 wow_character_id=char["id"],
                 summary=(
-                    f"'{char['character_name']}' ({char['guild_rank_name']}) "
+                    f"'{char['character_name']}' "
                     f"hasn't logged in for {days_ago} days"
                 ),
                 details={
                     "character_name": char["character_name"],
-                    "rank": char["guild_rank_name"],
                     "last_login": last_login.isoformat(),
                     "days_inactive": days_ago,
                 },
@@ -280,7 +282,6 @@ async def _upsert_issue(
     issue_hash: str,
     wow_character_id: Optional[int] = None,
     discord_member_id: Optional[int] = None,
-    person_id: Optional[int] = None,
 ) -> bool:
     """
     Create an audit issue if it doesn't already exist (unresolved).
@@ -294,10 +295,9 @@ async def _upsert_issue(
     )
 
     if existing:
-        # Update last_detected timestamp
+        # Update summary/details in case they've changed
         await conn.execute(
-            """UPDATE guild_identity.audit_issues SET
-                last_detected = NOW(), summary = $2, details = $3
+            """UPDATE guild_identity.audit_issues SET summary = $2, details = $3
                WHERE id = $1""",
             existing, summary, details,
         )
@@ -306,10 +306,10 @@ async def _upsert_issue(
     # Create new issue
     await conn.execute(
         """INSERT INTO guild_identity.audit_issues
-           (issue_type, severity, wow_character_id, discord_member_id, person_id,
+           (issue_type, severity, wow_character_id, discord_member_id,
             summary, details, issue_hash)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
-        issue_type, severity, wow_character_id, discord_member_id, person_id,
+           VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+        issue_type, severity, wow_character_id, discord_member_id,
         summary, details, issue_hash,
     )
     return True
@@ -319,31 +319,32 @@ async def _auto_resolve_fixed_issues(conn: asyncpg.Connection):
     """
     Auto-resolve issues where the underlying problem no longer exists.
 
-    For example, if a character was an orphan but now has a person_id,
+    For example, if a character was an orphan but now has a player_characters entry,
     resolve the orphan_wow issue.
     """
     now = datetime.now(timezone.utc)
 
-    # Resolve orphan_wow issues where the character now has a person_id
+    # Resolve orphan_wow issues where the character now has a player_characters entry
     await conn.execute(
-        """UPDATE guild_identity.audit_issues ai SET
-            resolved_at = $1, resolved_by = 'auto', resolution_note = 'Character now linked'
-           WHERE ai.issue_type = 'orphan_wow'
-             AND ai.resolved_at IS NULL
-             AND ai.wow_character_id IN (
-                SELECT id FROM guild_identity.wow_characters WHERE person_id IS NOT NULL
+        """UPDATE guild_identity.audit_issues SET
+            resolved_at = $1, resolved_by = 'auto'
+           WHERE issue_type = 'orphan_wow'
+             AND resolved_at IS NULL
+             AND wow_character_id IN (
+                 SELECT character_id FROM guild_identity.player_characters
              )""",
         now,
     )
 
-    # Resolve orphan_discord issues where the member now has a person_id
+    # Resolve orphan_discord issues where the discord user now has a player link
     await conn.execute(
-        """UPDATE guild_identity.audit_issues ai SET
-            resolved_at = $1, resolved_by = 'auto', resolution_note = 'Discord member now linked'
-           WHERE ai.issue_type = 'orphan_discord'
-             AND ai.resolved_at IS NULL
-             AND ai.discord_member_id IN (
-                SELECT id FROM guild_identity.discord_members WHERE person_id IS NOT NULL
+        """UPDATE guild_identity.audit_issues SET
+            resolved_at = $1, resolved_by = 'auto'
+           WHERE issue_type = 'orphan_discord'
+             AND resolved_at IS NULL
+             AND discord_member_id IN (
+                 SELECT discord_user_id FROM guild_identity.players
+                 WHERE discord_user_id IS NOT NULL
              )""",
         now,
     )
@@ -353,13 +354,13 @@ async def _auto_resolve_fixed_issues(conn: asyncpg.Connection):
     stale_ts = int(stale_threshold.timestamp() * 1000)
 
     await conn.execute(
-        """UPDATE guild_identity.audit_issues ai SET
-            resolved_at = $1, resolved_by = 'auto', resolution_note = 'Character now active'
-           WHERE ai.issue_type = 'stale_character'
-             AND ai.resolved_at IS NULL
-             AND ai.wow_character_id IN (
-                SELECT id FROM guild_identity.wow_characters
-                WHERE last_login_timestamp >= $2
+        """UPDATE guild_identity.audit_issues SET
+            resolved_at = $1, resolved_by = 'auto'
+           WHERE issue_type = 'stale_character'
+             AND resolved_at IS NULL
+             AND wow_character_id IN (
+                 SELECT id FROM guild_identity.wow_characters
+                 WHERE last_login_timestamp >= $2
              )""",
         now, stale_ts,
     )

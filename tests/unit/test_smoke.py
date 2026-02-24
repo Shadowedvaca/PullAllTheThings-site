@@ -174,3 +174,58 @@ def test_member_availability_removed():
     """Verify MemberAvailability no longer exists in models."""
     import sv_common.db.models as m
     assert not hasattr(m, "MemberAvailability"), "MemberAvailability should be removed"
+
+
+def test_guild_sync_modules_importable():
+    """Verify all guild_sync modules import without referencing old schema."""
+    from sv_common.guild_sync import discord_sync
+    from sv_common.guild_sync import db_sync
+    from sv_common.guild_sync import identity_engine
+    from sv_common.guild_sync import integrity_checker
+    from sv_common.guild_sync import reporter
+    from sv_common.guild_sync import scheduler
+
+    # Verify key functions exist in each module
+    assert callable(discord_sync.sync_discord_members)
+    assert callable(db_sync.sync_blizzard_roster)
+    assert callable(db_sync.sync_addon_data)
+    assert callable(identity_engine.run_matching)
+    assert callable(identity_engine.normalize_name)
+    assert callable(identity_engine.extract_discord_hints_from_note)
+    assert callable(identity_engine.fuzzy_match_score)
+    assert callable(integrity_checker.run_integrity_check)
+    assert callable(reporter.send_new_issues_report)
+    assert hasattr(scheduler, "GuildSyncScheduler")
+
+
+def test_guild_sync_no_old_schema_references():
+    """Verify guild_sync modules do not reference dropped tables/columns."""
+    import inspect
+    from sv_common.guild_sync import identity_engine, integrity_checker
+
+    engine_src = inspect.getsource(identity_engine)
+    checker_src = inspect.getsource(integrity_checker)
+
+    # These table references must not appear in the updated modules
+    forbidden_tables = [
+        "guild_identity.persons",
+        "guild_identity.discord_members",
+        "guild_identity.identity_links",
+    ]
+    for term in forbidden_tables:
+        assert term not in engine_src, f"identity_engine.py still references table '{term}'"
+        assert term not in checker_src, f"integrity_checker.py still references table '{term}'"
+
+    # These old column accesses must not appear (as actual column references, not aliases)
+    forbidden_columns = [
+        "wc.guild_rank_name",
+        "wc.character_class",
+        "wc.is_main",
+        "wc.role_category",
+        "wc.person_id",
+        "dm.person_id",
+        "discord_members",
+    ]
+    for term in forbidden_columns:
+        assert term not in engine_src, f"identity_engine.py still uses column '{term}'"
+        assert term not in checker_src, f"integrity_checker.py still uses column '{term}'"

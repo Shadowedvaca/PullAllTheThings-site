@@ -30,7 +30,6 @@ from .identity_engine import run_matching
 from .integrity_checker import run_integrity_check
 from .reporter import send_new_issues_report, send_sync_summary
 from .sync_logger import SyncLogEntry
-from .onboarding.deadline_checker import OnboardingDeadlineChecker
 
 logger = logging.getLogger(__name__)
 
@@ -174,13 +173,8 @@ class GuildSyncScheduler:
                 await send_sync_summary(channel, "WoW Addon Upload", combined_stats, duration)
 
     async def run_onboarding_check(self):
-        """Re-run verification for pending sessions; escalate overdue ones."""
-        checker = OnboardingDeadlineChecker(
-            self.db_pool,
-            bot=self.discord_bot,
-            audit_channel_id=self.audit_channel_id,
-        )
-        await checker.run()
+        """Dormant — Phase 2.6 onboarding not yet updated for Phase 2.7 schema."""
+        pass
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

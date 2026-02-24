@@ -56,11 +56,15 @@ async def sync_blizzard_roster(
                     )
                     spec_id = spec_row["id"] if spec_row else None
 
-                rank_row = await conn.fetchrow(
-                    "SELECT id FROM common.guild_ranks WHERE level = $1",
-                    char.guild_rank,
-                )
-                guild_rank_id = rank_row["id"] if rank_row else None
+                rank_name = RANK_NAME_MAP.get(char.guild_rank)
+                if rank_name:
+                    rank_row = await conn.fetchrow(
+                        "SELECT id FROM common.guild_ranks WHERE name = $1",
+                        rank_name,
+                    )
+                    guild_rank_id = rank_row["id"] if rank_row else None
+                else:
+                    guild_rank_id = None
 
                 if existing:
                     await conn.execute(
