@@ -69,14 +69,14 @@ CLASS_ID_MAP = {
 }
 
 # Guild rank index → rank name mapping for PATT
-# WoW rank 0 is always Guild Master. PATT configures ranks in ascending privilege:
-# 1 = Initiate (lowest), 2 = Member, 3 = Veteran, 4 = Officer
+# WoW rank 0 is always Guild Master. Lower rank index = more access (WoW standard).
+# 1 = Officer, 2 = Veteran, 3 = Member, 4 = Initiate (lowest)
 RANK_NAME_MAP = {
     0: "Guild Leader",
-    1: "Initiate",
-    2: "Member",
-    3: "Veteran",
-    4: "Officer",
+    1: "Officer",
+    2: "Veteran",
+    3: "Member",
+    4: "Initiate",
 }
 
 
