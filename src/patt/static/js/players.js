@@ -642,10 +642,10 @@ async function sendInvite(event, playerId, playerName) {
         const res = await fetch(`/admin/players/${playerId}/send-invite`, { method: 'POST' });
         const data = await res.json();
         if (data.ok) {
-            const msg = data.data.dm_sent
+            const msg = data.dm_sent
                 ? `Invite sent to ${playerName} via Discord DM`
                 : `Invite code generated (DM not sent — check Bot Settings)`;
-            showStatus(msg, data.data.dm_sent ? 'success' : 'warn');
+            showStatus(msg, data.dm_sent ? 'success' : 'warn');
         } else {
             showStatus('Invite failed: ' + (data.error || '?'), 'error');
         }
@@ -732,7 +732,7 @@ function showStatus(msg, type) {
     el.className = `flash-bar flash-bar--${type === 'error' ? 'error' : 'success'}`;
     el.style.display = 'block';
     clearTimeout(el._timer);
-    el._timer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+    el._timer = setTimeout(() => { el.style.display = 'none'; }, 7000);
 }
 
 function escHtml(s) {
