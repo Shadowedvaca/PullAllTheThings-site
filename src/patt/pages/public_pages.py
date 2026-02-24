@@ -19,7 +19,7 @@ router = APIRouter(tags=["public-pages"])
 def _rank_level(member: Player | None) -> int:
     if member is None:
         return 0
-    return member.rank.level if member.rank else 0
+    return member.guild_rank.level if member.guild_rank else 0
 
 
 @router.get("/", response_class=HTMLResponse)
