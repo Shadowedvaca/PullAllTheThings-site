@@ -15,6 +15,12 @@ let dragId = null;     // discord_id (string) or char id (number)
 let drill = null;  // null = off, or { label, memberIds, discordIds, charIds }
 
 function drillOn(type, id) {
+    // Toggle off if clicking the already-active drill button
+    if (drill && drill.type === type && drill.activeId === id) {
+        clearDrill();
+        return;
+    }
+
     let memberIds = new Set();
     let discordIds = new Set();
     let charIds = new Set();
@@ -25,7 +31,6 @@ function drillOn(type, id) {
         if (!u) return;
         label = u.display_name || u.username;
         discordIds.add(id);
-        // Find linked player(s)
         players.filter(p => p.discord_id === id).forEach(p => {
             memberIds.add(p.id);
             allChars.filter(c => c.player_id === p.id).forEach(c => charIds.add(c.id));
@@ -44,14 +49,13 @@ function drillOn(type, id) {
         charIds.add(id);
         if (c.player_id) {
             memberIds.add(c.player_id);
-            // All chars for same player
             allChars.filter(ch => ch.player_id === c.player_id).forEach(ch => charIds.add(ch.id));
             const p = players.find(p => p.id === c.player_id);
             if (p && p.discord_id) discordIds.add(p.discord_id);
         }
     }
 
-    drill = { label, memberIds, discordIds, charIds };
+    drill = { type, activeId: id, label, memberIds, discordIds, charIds };
     render();
 }
 
@@ -118,21 +122,17 @@ function updateRankSummary() {
 // ── Render all three columns ───────────────────────────────────────────────
 
 function render() {
-    // Drill banner
+    // Hide the top drill banner — the ◎ button itself is the indicator now
     const banner = document.getElementById('pm-drill-banner');
-    if (banner) {
-        if (drill) {
-            banner.style.display = 'flex';
-            banner.querySelector('.pm-drill-label').textContent = `Filtered: ${drill.label}`;
-        } else {
-            banner.style.display = 'none';
-        }
-    }
+    if (banner) banner.style.display = 'none';
     renderDiscord();
     renderPlayers();
     renderChars();
-    // re-attach unlink zone events (rendered into player-list div)
     attachUnlinkZones();
+}
+
+function isDrillActive(type, id) {
+    return drill && drill.type === type && drill.activeId === id;
 }
 
 // ── Col 1: Discord Users ───────────────────────────────────────────────────
@@ -159,7 +159,7 @@ function renderDiscord() {
              data-discord-id="${escAttr(u.id)}"
              data-username="${escAttr(u.username)}"
              ondragstart="handleDiscordDragStart(event, '${escAttr(u.id)}', '${escAttr(u.username)}')">
-            <button class="pm-drill-btn" onclick="drillOn('discord','${escAttr(u.id)}')" title="Focus on ${escAttr(u.display_name)}">◎</button>
+            <button class="pm-drill-btn ${isDrillActive('discord', u.id) ? 'pm-drill-btn--on' : ''}" onclick="drillOn('discord','${escAttr(u.id)}')" title="${isDrillActive('discord', u.id) ? 'Clear filter' : 'Focus on ' + escAttr(u.display_name)}">◎</button>
             <span class="pm-discord-icon">💬</span>
             <div class="pm-discord-info">
                 <span class="pm-discord-name">${escHtml(u.display_name)}</span>
@@ -254,7 +254,7 @@ function renderPlayers() {
              ondragleave="this.classList.remove('pm-drag-over')"
              ondrop="handlePlayerDrop(event, ${p.id})">
             <div class="pm-player-header">
-                <button class="pm-drill-btn" onclick="drillOn('player',${p.id})" title="Focus on ${escAttr(effectiveName)}">◎</button>
+                <button class="pm-drill-btn ${isDrillActive('player', p.id) ? 'pm-drill-btn--on' : ''}" onclick="drillOn('player',${p.id})" title="${isDrillActive('player', p.id) ? 'Clear filter' : 'Focus on ' + escAttr(effectiveName)}">◎</button>
                 ${roleIcon ? `<span class="pm-player-role-icon ${isRoleOverride ? 'pm-role-overridden' : ''}" title="${escAttr(roleTitle)}">${roleIcon}${isRoleOverride ? '<sup>★</sup>' : ''}</span>` : ''}
                 <span class="pm-player-name ${nameIsSet ? '' : 'pm-name-derived'}"
                       title="${nameIsSet ? 'Custom display name' : 'Derived — click pencil to set'}"
@@ -263,6 +263,7 @@ function renderPlayers() {
                         title="Edit display name">✎</button>
                 <span class="pm-player-rank">${escHtml(p.rank_name)}</span>
                 ${regBadge}
+                ${!p.registered && p.discord_id ? `<button class="pm-invite-btn" onclick="sendInvite(event,${p.id},'${escAttr(effectiveName)}')" title="Send Discord invite DM">✉</button>` : ''}
                 <button class="pm-delete-player-btn" onclick="deletePlayer(event,${p.id},'${escAttr(effectiveName)}')"
                         title="Delete player">🗑</button>
             </div>
@@ -409,7 +410,7 @@ function renderChars() {
                      data-char-id="${c.id}"
                      ondragstart="handleCharDragStart(event, ${c.id})"
                      ondragend="this.classList.remove('pm-dragging')">
-                    <button class="pm-drill-btn" onclick="drillOn('char',${c.id})" title="Focus on ${escAttr(c.name)}">◎</button>
+                    <button class="pm-drill-btn ${isDrillActive('char', c.id) ? 'pm-drill-btn--on' : ''}" onclick="drillOn('char',${c.id})" title="${isDrillActive('char', c.id) ? 'Clear filter' : 'Focus on ' + escAttr(c.name)}">◎</button>
                     <span class="pm-role-icon">${roleIcon}</span>
                     <span class="pm-char-name">${escHtml(c.name)}</span>
                     <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
@@ -627,6 +628,32 @@ async function deleteChar(event, charId, charName) {
         }
     } catch (e) {
         showStatus('Network error deleting character', 'error');
+    }
+}
+
+// ── Send Invite DM ─────────────────────────────────────────────────────────
+
+async function sendInvite(event, playerId, playerName) {
+    event.stopPropagation();
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        const res = await fetch(`/admin/players/${playerId}/send-invite`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            const msg = data.data.dm_sent
+                ? `Invite sent to ${playerName} via Discord DM`
+                : `Invite code generated (DM not sent — check Bot Settings)`;
+            showStatus(msg, data.data.dm_sent ? 'success' : 'warn');
+        } else {
+            showStatus('Invite failed: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showStatus('Network error sending invite', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '✉';
     }
 }
 

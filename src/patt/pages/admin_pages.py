@@ -828,6 +828,47 @@ async def admin_update_display_name(
     })
 
 
+@router.post("/players/{player_id}/send-invite")
+async def admin_send_invite_json(
+    request: Request,
+    player_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate an invite code and optionally DM it — returns JSON for the Player Manager."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        from sv_common.auth.invite_codes import generate_invite_code
+
+        code = await generate_invite_code(db, player_id=player_id, created_by_id=admin.id)
+
+        target = await db.get(Player, player_id)
+        dm_sent = False
+        if target and target.discord_user:
+            try:
+                from sv_common.discord.bot import get_bot
+                from sv_common.discord.dm import send_invite_dm, is_invite_dm_enabled
+                bot = get_bot()
+                pool = getattr(request.app.state, "guild_sync_pool", None)
+                if bot is not None and pool and await is_invite_dm_enabled(pool):
+                    await send_invite_dm(bot, target.discord_user.discord_id, code)
+                    dm_sent = True
+            except Exception as dm_err:
+                logger.warning("DM send failed for player %d: %s", player_id, dm_err)
+
+        return JSONResponse({
+            "ok": True,
+            "code": code,
+            "dm_sent": dm_sent,
+            "has_discord": bool(target and target.discord_user),
+        })
+    except Exception as e:
+        logger.error("Invite error for player %d: %s", player_id, e)
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 # ---------------------------------------------------------------------------
 # Reference Tables page
 # ---------------------------------------------------------------------------

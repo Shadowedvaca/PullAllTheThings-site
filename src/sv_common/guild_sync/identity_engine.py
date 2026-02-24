@@ -165,7 +165,8 @@ async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) ->
         # --- Load unlinked characters ---
         if min_rank_level is not None:
             unlinked_chars = await conn.fetch(
-                """SELECT wc.id, wc.character_name, wc.guild_note, wc.officer_note
+                """SELECT wc.id, wc.character_name, wc.guild_note, wc.officer_note,
+                          wc.guild_rank_id
                    FROM guild_identity.wow_characters wc
                    JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
                    WHERE wc.removed_at IS NULL
@@ -177,7 +178,7 @@ async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) ->
             )
         else:
             unlinked_chars = await conn.fetch(
-                """SELECT id, character_name, guild_note, officer_note
+                """SELECT id, character_name, guild_note, officer_note, guild_rank_id
                    FROM guild_identity.wow_characters
                    WHERE removed_at IS NULL
                      AND id NOT IN (
@@ -283,11 +284,25 @@ async def _create_player_group(
                     display = display_hint.title()
                     discord_uid = None
 
+                # Derive the best rank from the characters in this group
+                char_rank_ids = [ch["guild_rank_id"] for ch in chars if ch.get("guild_rank_id")]
+                best_rank_id = None
+                if char_rank_ids:
+                    best_rank_id = await conn.fetchval(
+                        """SELECT id FROM common.guild_ranks
+                           WHERE id = ANY($1::int[])
+                           ORDER BY level DESC LIMIT 1""",
+                        char_rank_ids,
+                    )
+
                 player_id = await conn.fetchval(
-                    """INSERT INTO guild_identity.players (display_name, discord_user_id)
-                       VALUES ($1, $2) RETURNING id""",
+                    """INSERT INTO guild_identity.players
+                           (display_name, discord_user_id, guild_rank_id, guild_rank_source)
+                       VALUES ($1, $2, $3, $4) RETURNING id""",
                     display,
                     discord_uid,
+                    best_rank_id,
+                    "wow_character" if best_rank_id else None,
                 )
                 stats["players_created"] += 1
                 if discord_user:
