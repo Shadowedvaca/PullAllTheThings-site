@@ -36,7 +36,11 @@
       "Bash(cd /h/Development/PullAllTheThings-site/companion_app && python -c \"import watchdog, httpx, dotenv; print\\('all deps OK'\\)\" 2>&1)",
       "Bash(grep:*)",
       "Bash(ls memory:*)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && python -c \"from patt.pages.public_pages import router; print\\('public_pages OK'\\)\" 2>&1)",
+      "WebFetch(domain:raid-helper.dev)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
