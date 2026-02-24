@@ -618,13 +618,15 @@ def upgrade() -> None:
     # Creates player rows for all existing guild_members, linking discord_users
     # and website users. Also creates player_characters from common.characters.
 
+    # asyncpg requires one statement per execute call
     conn.execute(sa.text("""
-        -- Create a temp mapping table so we can use guild_member.id → player.id
         CREATE TEMP TABLE _member_player_map (
             member_id INTEGER PRIMARY KEY,
             player_id INTEGER
-        ) ON COMMIT DROP;
+        ) ON COMMIT DROP
+    """))
 
+    conn.execute(sa.text("""
         INSERT INTO guild_identity.players
             (display_name, discord_user_id, website_user_id, guild_rank_id,
              guild_rank_source, is_active, created_at, updated_at)
@@ -638,9 +640,10 @@ def upgrade() -> None:
             NOW(),
             NOW()
         FROM common.guild_members gm
-        LEFT JOIN guild_identity.discord_users du ON du.discord_id = gm.discord_id;
+        LEFT JOIN guild_identity.discord_users du ON du.discord_id = gm.discord_id
+    """))
 
-        -- Build the mapping (match by discord_user_id or website_user_id)
+    conn.execute(sa.text("""
         INSERT INTO _member_player_map (member_id, player_id)
         SELECT
             gm.id,
@@ -654,9 +657,10 @@ def upgrade() -> None:
                 WHERE du.discord_id = gm.discord_id
             ))
         )
-        ON CONFLICT DO NOTHING;
+        ON CONFLICT DO NOTHING
+    """))
 
-        -- For members without discord or user link, match by display_name
+    conn.execute(sa.text("""
         INSERT INTO _member_player_map (member_id, player_id)
         SELECT DISTINCT ON (gm.id)
             gm.id,
@@ -665,7 +669,7 @@ def upgrade() -> None:
         JOIN guild_identity.players p
             ON p.display_name = COALESCE(gm.display_name, gm.discord_username)
         WHERE gm.id NOT IN (SELECT member_id FROM _member_player_map)
-        ON CONFLICT DO NOTHING;
+        ON CONFLICT DO NOTHING
     """))
 
     # Create player_characters from common.characters + wow_characters
