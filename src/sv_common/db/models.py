@@ -370,11 +370,20 @@ class RaidEvent(Base):
     created_by_player_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("guild_identity.players.id")
     )
+    # Phase 3.4 additions
+    recurring_event_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("patt.recurring_events.id"), nullable=True
+    )
+    auto_booked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    raid_helper_payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
 
     season: Mapped[Optional[RaidSeason]] = relationship(back_populates="events")
+    recurring_event: Mapped[Optional["RecurringEvent"]] = relationship(
+        foreign_keys=[recurring_event_id]
+    )
     attendance: Mapped[list["RaidAttendance"]] = relationship(back_populates="event")
 
 

@@ -1,0 +1,727 @@
+{% extends "base_admin.html" %}
+{% block title %}Raid Tools — Admin{% endblock %}
+{% block nav_raid_tools %}active{% endblock %}
+
+{% block head %}
+<style>
+/* ── Raid Tools page ──────────────────────────────────────────── */
+.rt-header {
+    padding: 2rem 2rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.rt-header h1 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.6rem;
+    color: var(--gold);
+    margin: 0 0 .25rem;
+}
+.rt-header p { color: var(--text-dim); margin: 0; font-size: .9rem; }
+
+.rt-section {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border);
+}
+.rt-section-title {
+    font-family: 'Cinzel', serif;
+    font-size: 1.1rem;
+    color: var(--gold);
+    margin: 0 0 1rem;
+    padding-bottom: .5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    cursor: pointer;
+    user-select: none;
+}
+.rt-section-title .collapse-icon { font-size: .85rem; color: var(--text-dim); transition: transform .2s; }
+.rt-section-title.collapsed .collapse-icon { transform: rotate(-90deg); }
+.rt-section-body { }
+.rt-section-body.hidden { display: none; }
+
+/* ── Form grid ────────────────────────────────────────────────── */
+.form-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: .6rem 1rem;
+    max-width: 600px;
+    align-items: center;
+}
+.form-grid label {
+    font-size: .875rem;
+    color: var(--text-dim);
+    text-align: right;
+}
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: .4rem .6rem;
+    font-size: .875rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+.form-grid input:focus,
+.form-grid select:focus,
+.form-grid textarea:focus {
+    outline: 2px solid var(--gold);
+    border-color: var(--gold);
+}
+.form-grid textarea { height: 80px; resize: vertical; }
+
+.btn { padding: .45rem 1.1rem; border-radius: 4px; font-size: .875rem; cursor: pointer; border: none; }
+.btn-gold { background: var(--gold); color: #0a0a0b; font-weight: 600; }
+.btn-gold:hover { background: #c4973c; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+.btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+.btn-danger { background: var(--danger); color: #fff; }
+
+.form-actions { display: flex; gap: .75rem; align-items: center; margin-top: .75rem; }
+.status-msg { font-size: .85rem; }
+.status-msg.ok { color: var(--success); }
+.status-msg.err { color: var(--danger); }
+
+/* ── Availability grid (compact clickable cards) ─────────────── */
+.day-grid-compact {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: .75rem;
+    margin-bottom: 1.25rem;
+}
+@media (max-width: 1100px) {
+    .day-grid-compact { grid-template-columns: repeat(4, 1fr); }
+}
+
+.day-card-sm {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    padding: .75rem;
+    cursor: pointer;
+    transition: border-color .15s;
+}
+.day-card-sm:hover { border-color: var(--gold); }
+.day-card-sm.selected { border-color: var(--gold); background: #1e1c0e; }
+.day-card-sm__name {
+    font-family: 'Cinzel', serif;
+    font-size: .85rem;
+    color: var(--text);
+    margin: 0 0 .3rem;
+}
+.day-card-sm__event {
+    font-size: .72rem;
+    color: var(--gold);
+    margin-bottom: .3rem;
+}
+.day-card-sm__bar { height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; margin-bottom: .3rem; }
+.day-card-sm__fill { height: 100%; border-radius: 3px; }
+.bar--green { background: var(--success); }
+.bar--amber { background: var(--warning); }
+.bar--red   { background: var(--danger); }
+.day-card-sm__stats { font-size: .75rem; color: var(--text-dim); }
+.day-card-sm__stats strong { color: var(--text); }
+
+/* role mini-bar */
+.role-bar { display: flex; gap: 2px; margin-top: .25rem; }
+.role-seg { height: 4px; border-radius: 2px; }
+.role-seg--tank   { background: #60a5fa; }
+.role-seg--healer { background: #4ade80; }
+.role-seg--melee  { background: #f87171; }
+.role-seg--ranged { background: #fbbf24; }
+
+/* ── Player list below day selection ─────────────────────────── */
+#day-detail {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    display: none;
+}
+#day-detail.visible { display: block; }
+.day-detail-title { font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold); margin: 0 0 .75rem; }
+.role-summary { display: flex; gap: 1.25rem; margin-bottom: .75rem; font-size: .82rem; }
+.role-summary span strong { font-size: .95em; }
+
+.player-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+.player-table th {
+    text-align: left; padding: .4rem .5rem;
+    color: var(--text-dim); border-bottom: 1px solid var(--border);
+    font-size: .78rem; text-transform: uppercase; letter-spacing: .04em;
+}
+.player-table td { padding: .35rem .5rem; border-bottom: 1px solid #1e1e22; color: var(--text); }
+.player-table tr:hover td { background: var(--surface-alt); }
+
+.role-pill {
+    display: inline-block; font-size: .72rem; font-weight: 600;
+    padding: .1rem .35rem; border-radius: 3px;
+}
+.role-pill--tank   { background: #1e3a5f; color: #60a5fa; }
+.role-pill--healer { background: #143d22; color: #4ade80; }
+.role-pill--melee  { background: #3d1414; color: #f87171; }
+.role-pill--ranged { background: #3d2e05; color: #fbbf24; }
+
+/* ── Event Builder ───────────────────────────────────────────── */
+.builder-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 2rem;
+    max-width: 900px;
+}
+.builder-grid .form-grid { max-width: none; }
+.builder-full { grid-column: 1 / -1; }
+
+/* ── Roster Preview ──────────────────────────────────────────── */
+.roster-preview-table { width: 100%; border-collapse: collapse; font-size: .83rem; margin-top: .75rem; }
+.roster-preview-table th {
+    text-align: left; padding: .4rem .5rem;
+    color: var(--text-dim); border-bottom: 2px solid var(--border);
+    font-size: .78rem; text-transform: uppercase; letter-spacing: .04em;
+}
+.roster-preview-table td { padding: .35rem .5rem; border-bottom: 1px solid #1e1e22; color: var(--text); vertical-align: middle; }
+.roster-preview-table tr:hover td { background: var(--surface-alt); }
+
+.status-badge {
+    display: inline-block; font-size: .72rem; font-weight: 600;
+    padding: .15rem .45rem; border-radius: 10px;
+}
+.status-badge--accepted  { background: #143d22; color: #4ade80; }
+.status-badge--tentative { background: #3d2e05; color: #fbbf24; }
+.status-badge--bench     { background: #2a2a2e; color: #888; }
+
+.status-override select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: 4px; padding: .2rem .4rem; font-size: .78rem;
+}
+
+/* ── Manual Fallback ─────────────────────────────────────────── */
+.fallback-box {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 1rem; font-family: 'JetBrains Mono', monospace;
+    font-size: .82rem; color: var(--text-dim); white-space: pre-wrap;
+    word-break: break-word;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rt-header">
+    <h1>Raid Tools</h1>
+    <p>Configure Raid-Helper, review availability, build and post events.</p>
+</div>
+
+{# ── Section 1: Raid-Helper Config ────────────────────────────── #}
+<div class="rt-section">
+    <h2 class="rt-section-title" onclick="toggleSection(this)">
+        Raid-Helper Configuration
+        <span class="collapse-icon">▼</span>
+    </h2>
+    <div class="rt-section-body collapsed-body hidden">
+        <div class="form-grid" id="rh-config-form">
+            <label for="rh-api-key">API Key</label>
+            <input type="password" id="rh-api-key"
+                   value="{{ discord_config.raid_helper_api_key[:4] ~ '****' if discord_config and discord_config.raid_helper_api_key else '' }}"
+                   placeholder="Paste new key to update">
+
+            <label for="rh-server-id">Server ID</label>
+            <input type="text" id="rh-server-id"
+                   value="{{ discord_config.raid_helper_server_id or '' }}"
+                   placeholder="Discord server snowflake">
+
+            <label for="rh-creator-id">Creator Discord ID</label>
+            <input type="text" id="rh-creator-id"
+                   value="{{ discord_config.raid_creator_discord_id or '' }}"
+                   placeholder="Discord user snowflake">
+
+            <label for="rh-channel-id">Signup Channel ID</label>
+            <input type="text" id="rh-channel-id"
+                   value="{{ discord_config.raid_channel_id or '' }}"
+                   placeholder="Discord channel snowflake">
+
+            <label for="rh-voice-id">Voice Channel ID</label>
+            <input type="text" id="rh-voice-id"
+                   value="{{ discord_config.raid_voice_channel_id or '' }}"
+                   placeholder="Optional">
+
+            <label for="rh-template-id">Default Template</label>
+            <input type="text" id="rh-template-id"
+                   value="{{ discord_config.raid_default_template_id or 'wowretail2' }}"
+                   placeholder="wowretail2">
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-gold" onclick="saveRhConfig()">Save Config</button>
+            <button class="btn btn-outline" onclick="testRhConfig()">Test Connection</button>
+            <span class="status-msg" id="rh-status"></span>
+        </div>
+    </div>
+</div>
+
+{# ── Section 2: Availability Grid ──────────────────────────────── #}
+<div class="rt-section">
+    <h2 class="rt-section-title" onclick="toggleSection(this)">
+        Availability by Day
+        <span class="collapse-icon">▼</span>
+    </h2>
+    <div class="rt-section-body collapsed-body">
+        <div class="day-grid-compact" id="day-grid"></div>
+        <div id="day-detail">
+            <div class="day-detail-title" id="day-detail-title">Available Players</div>
+            <div class="role-summary" id="role-summary"></div>
+            <table class="player-table">
+                <thead>
+                    <tr>
+                        <th>Player</th>
+                        <th>Role</th>
+                        <th>Rank</th>
+                        <th>Earliest</th>
+                    </tr>
+                </thead>
+                <tbody id="day-players"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# ── Section 3: Event Builder ───────────────────────────────────── #}
+<div class="rt-section">
+    <h2 class="rt-section-title" onclick="toggleSection(this)">
+        Event Builder
+        <span class="collapse-icon">▼</span>
+    </h2>
+    <div class="rt-section-body collapsed-body">
+        <div class="builder-grid">
+            {# Left column #}
+            <div>
+                <div class="form-grid">
+                    <label for="ev-title">Title</label>
+                    <input type="text" id="ev-title" placeholder="Heroic Raid Night" oninput="updateFallback()">
+
+                    <label for="ev-type">Event Type</label>
+                    <select id="ev-type" onchange="updateFallback()">
+                        <option value="raid">Heroic/Mythic Raid</option>
+                        <option value="oldraids">Old Raids / Achievements</option>
+                        <option value="mythicplus">Mythic+</option>
+                        <option value="pvp">PvP</option>
+                        <option value="farming">Farming</option>
+                        <option value="social">Social / Other</option>
+                    </select>
+
+                    <label for="ev-date">Date</label>
+                    <input type="date" id="ev-date" onchange="updateFallback()">
+
+                    <label for="ev-time">Time (EST)</label>
+                    <input type="time" id="ev-time" value="21:00" onchange="updateFallback()">
+
+                    <label for="ev-duration">Duration</label>
+                    <select id="ev-duration" onchange="updateFallback()">
+                        <option value="60">1 hour</option>
+                        <option value="90">1.5 hours</option>
+                        <option value="120" selected>2 hours</option>
+                        <option value="150">2.5 hours</option>
+                        <option value="180">3 hours</option>
+                    </select>
+
+                    <label for="ev-channel">Channel ID</label>
+                    <input type="text" id="ev-channel" placeholder="Discord channel ID">
+                </div>
+            </div>
+
+            {# Right column #}
+            <div>
+                <div class="form-grid">
+                    <label for="ev-desc" style="align-self:flex-start;margin-top:.3rem">Description</label>
+                    <textarea id="ev-desc" placeholder="Weekly heroic clear. Sign up below!" oninput="updateFallback()"></textarea>
+                </div>
+            </div>
+        </div>
+
+        {# Roster Preview #}
+        <h3 style="font-family:'Cinzel',serif;color:var(--gold);font-size:.95rem;margin:.75rem 0 .25rem;">
+            Roster Preview
+            <span style="font-size:.75rem;color:var(--text-dim);font-family:'Source Sans 3',sans-serif;margin-left:.5rem;">
+                (auto-invite rules apply · override per player below)
+            </span>
+        </h3>
+        <table class="roster-preview-table" id="roster-table">
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    <th>Role</th>
+                    <th>Rank</th>
+                    <th>Auto-Invite</th>
+                    <th>Status</th>
+                    <th>Override</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in roster_players %}
+            {% set rank_level = p.guild_rank.level if p.guild_rank else 0 %}
+            {% set rank_name = p.guild_rank.name if p.guild_rank else '—' %}
+            {% set auto_inv = p.auto_invite_events %}
+            {% if rank_level == 1 %}
+                {% set default_status = 'bench' %}
+            {% elif auto_inv %}
+                {% set default_status = 'accepted' %}
+            {% else %}
+                {% set default_status = 'tentative' %}
+            {% endif %}
+            {% set spec_name = p.main_spec.name if p.main_spec else '' %}
+            {% set role_name = p.main_spec.default_role.name if p.main_spec and p.main_spec.default_role else '' %}
+            <tr data-player-id="{{ p.id }}" data-default-status="{{ default_status }}">
+                <td>{{ p.display_name }}</td>
+                <td>
+                    {% if role_name %}
+                    {% set role_css = {
+                        'Tank': 'role-pill--tank',
+                        'Healer': 'role-pill--healer',
+                        'Melee DPS': 'role-pill--melee',
+                        'Ranged DPS': 'role-pill--ranged'
+                    } %}
+                    <span class="role-pill {{ role_css.get(role_name, '') }}">{{ role_name }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ rank_name }}</td>
+                <td style="color:{{ '#4ade80' if auto_inv else '#888' }}">
+                    {{ 'Yes' if auto_inv else 'No' }}
+                </td>
+                <td class="status-cell">
+                    <span class="status-badge status-badge--{{ default_status }}">
+                        {{ default_status | capitalize }}
+                    </span>
+                </td>
+                <td class="status-override">
+                    <select onchange="overrideStatus({{ p.id }}, this.value)">
+                        <option value="">— Auto —</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="tentative">Tentative</option>
+                        <option value="bench">Bench</option>
+                        <option value="skip">Skip</option>
+                    </select>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="form-actions" style="margin-top:1rem;">
+            <button class="btn btn-gold" onclick="createEvent()">Create Event in Raid-Helper</button>
+            <span class="status-msg" id="ev-status"></span>
+        </div>
+    </div>
+</div>
+
+{# ── Section 4: Manual Fallback ────────────────────────────────── #}
+<div class="rt-section">
+    <h2 class="rt-section-title collapsed" onclick="toggleSection(this)">
+        Manual Fallback (copy-paste format)
+        <span class="collapse-icon" style="transform:rotate(-90deg)">▼</span>
+    </h2>
+    <div class="rt-section-body collapsed-body hidden">
+        <p style="font-size:.85rem;color:var(--text-dim);margin:0 0 .75rem;">
+            Use this if Raid-Helper is down. Copy and paste into Discord.
+        </p>
+        <pre class="fallback-box" id="fallback-text">Fill in the Event Builder above to generate text here.</pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let availData = null;
+let selectedDow = null;
+let selectedRecurringEventId = null;
+const playerOverrides = {};  // player_id (str) → status string
+
+// ── Section collapse ──────────────────────────────────────────────
+function toggleSection(titleEl) {
+    const body = titleEl.nextElementSibling;
+    const icon = titleEl.querySelector('.collapse-icon');
+    const collapsed = body.classList.toggle('hidden');
+    titleEl.classList.toggle('collapsed', collapsed);
+    icon.style.transform = collapsed ? 'rotate(-90deg)' : '';
+}
+
+// ── Raid-Helper Config ────────────────────────────────────────────
+async function saveRhConfig() {
+    const status = document.getElementById('rh-status');
+    status.textContent = 'Saving…';
+    status.className = 'status-msg';
+
+    const body = {
+        raid_helper_api_key: document.getElementById('rh-api-key').value,
+        raid_helper_server_id: document.getElementById('rh-server-id').value,
+        raid_creator_discord_id: document.getElementById('rh-creator-id').value,
+        raid_channel_id: document.getElementById('rh-channel-id').value,
+        raid_voice_channel_id: document.getElementById('rh-voice-id').value,
+        raid_default_template_id: document.getElementById('rh-template-id').value || 'wowretail2',
+    };
+
+    try {
+        const resp = await fetch('/api/v1/admin/raid-config', {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            status.textContent = '✓ Saved';
+            status.className = 'status-msg ok';
+        } else {
+            status.textContent = '✗ ' + (data.error || 'Error');
+            status.className = 'status-msg err';
+        }
+    } catch (e) {
+        status.textContent = '✗ ' + e.message;
+        status.className = 'status-msg err';
+    }
+}
+
+async function testRhConfig() {
+    const status = document.getElementById('rh-status');
+    status.textContent = 'Testing…';
+    status.className = 'status-msg';
+    try {
+        const resp = await fetch('/api/v1/admin/raid-config/test');
+        const data = await resp.json();
+        if (data.ok) {
+            status.textContent = `✓ Connected — ${data.data.server_name}`;
+            status.className = 'status-msg ok';
+        } else {
+            status.textContent = '✗ ' + (data.error || 'Connection failed');
+            status.className = 'status-msg err';
+        }
+    } catch (e) {
+        status.textContent = '✗ ' + e.message;
+        status.className = 'status-msg err';
+    }
+}
+
+// ── Availability grid ─────────────────────────────────────────────
+const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+
+function barClass(pct) {
+    if (pct >= 70) return 'bar--green';
+    if (pct >= 40) return 'bar--amber';
+    return 'bar--red';
+}
+
+function roleClass(role) {
+    const map = { 'Tank': 'tank', 'Healer': 'healer', 'Melee DPS': 'melee', 'Ranged DPS': 'ranged' };
+    return map[role] || '';
+}
+
+function rolePillClass(role) {
+    const map = { 'Tank': 'role-pill--tank', 'Healer': 'role-pill--healer', 'Melee DPS': 'role-pill--melee', 'Ranged DPS': 'role-pill--ranged' };
+    return map[role] || '';
+}
+
+function renderGrid(data) {
+    availData = data;
+    const grid = document.getElementById('day-grid');
+    grid.innerHTML = '';
+    for (const day of data.days) {
+        const bc = barClass(day.availability_pct);
+        const roles = day.role_breakdown || {};
+        const total = day.available_count || 1;
+
+        // Role bar segments
+        const roleOrder = [
+            ['Tank', 'role-seg--tank'],
+            ['Healer', 'role-seg--healer'],
+            ['Melee DPS', 'role-seg--melee'],
+            ['Ranged DPS', 'role-seg--ranged'],
+        ];
+        const roleSegs = roleOrder.map(([rn, rc]) => {
+            const cnt = roles[rn] || 0;
+            const pct = Math.round(cnt / total * 100);
+            return cnt ? `<div class="role-seg ${rc}" style="width:${pct}%;flex:${cnt}"></div>` : '';
+        }).join('');
+
+        const eventHtml = day.recurring_event
+            ? `<div style="font-size:.72rem;color:var(--gold);margin-bottom:.3rem">⚔ ${day.recurring_event.label} · ${day.recurring_event.default_start_time}</div>`
+            : '';
+
+        const card = document.createElement('div');
+        card.className = 'day-card-sm';
+        card.dataset.dow = day.day_of_week;
+        card.innerHTML = `
+            <div class="day-card-sm__name">${day.day_name}</div>
+            ${eventHtml}
+            <div class="day-card-sm__bar"><div class="day-card-sm__fill ${bc}" style="width:${day.availability_pct}%"></div></div>
+            <div class="day-card-sm__stats">
+                <strong>${day.available_count}</strong> / ${availData.total_active_players} · Wt <strong>${day.weighted_score}</strong>
+            </div>
+            <div class="role-bar">${roleSegs}</div>
+        `;
+        card.addEventListener('click', () => selectDay(day.day_of_week));
+        grid.appendChild(card);
+    }
+}
+
+function selectDay(dow) {
+    // Update card selection
+    document.querySelectorAll('.day-card-sm').forEach(c => {
+        c.classList.toggle('selected', parseInt(c.dataset.dow) === dow);
+    });
+    selectedDow = dow;
+
+    const day = availData.days[dow];
+    selectedRecurringEventId = day.recurring_event ? day.recurring_event.id : null;
+
+    // Show detail panel
+    const detail = document.getElementById('day-detail');
+    detail.classList.add('visible');
+    document.getElementById('day-detail-title').textContent =
+        `${day.day_name} — ${day.available_count} available`;
+
+    // Role summary
+    const roles = day.role_breakdown || {};
+    const summaryEl = document.getElementById('role-summary');
+    const roleOrder = ['Tank', 'Healer', 'Melee DPS', 'Ranged DPS'];
+    summaryEl.innerHTML = roleOrder.map(r =>
+        `<span><strong>${roles[r] || 0}</strong> ${r}</span>`
+    ).join('');
+
+    // Player table
+    const tbody = document.getElementById('day-players');
+    tbody.innerHTML = '';
+    for (const p of day.players) {
+        const rc = rolePillClass(p.main_role);
+        const rolePill = p.main_role
+            ? `<span class="role-pill ${rc}">${p.main_role}</span>`
+            : '—';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${p.display_name}</td>
+            <td>${rolePill}</td>
+            <td>${p.rank || '—'}</td>
+            <td>${p.earliest_start || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    // Pre-fill event builder
+    const nextDate = nextOccurrenceOf(dow);
+    document.getElementById('ev-date').value = nextDate;
+    if (day.recurring_event) {
+        document.getElementById('ev-title').value = day.recurring_event.label;
+        document.getElementById('ev-time').value = day.recurring_event.default_start_time || '21:00';
+        const dur = day.recurring_event.default_duration_minutes || 120;
+        const durSel = document.getElementById('ev-duration');
+        for (const opt of durSel.options) {
+            if (parseInt(opt.value) === dur) { opt.selected = true; break; }
+        }
+    }
+    updateFallback();
+}
+
+function nextOccurrenceOf(dayOfWeek) {
+    // dayOfWeek: 0=Mon … 6=Sun (ISO)
+    const today = new Date();
+    const todayDow = (today.getDay() + 6) % 7; // JS: 0=Sun → convert to ISO
+    let daysUntil = (dayOfWeek - todayDow + 7) % 7;
+    if (daysUntil === 0) daysUntil = 7; // Always next week if same day
+    const next = new Date(today);
+    next.setDate(today.getDate() + daysUntil);
+    return next.toISOString().split('T')[0];
+}
+
+// ── Player status overrides ───────────────────────────────────────
+function overrideStatus(playerId, value) {
+    const tr = document.querySelector(`tr[data-player-id="${playerId}"]`);
+    const statusCell = tr.querySelector('.status-cell');
+    const defaultStatus = tr.dataset.defaultStatus;
+    const effective = value || defaultStatus;
+
+    if (value) {
+        playerOverrides[String(playerId)] = value;
+    } else {
+        delete playerOverrides[String(playerId)];
+    }
+
+    const cls = `status-badge--${effective}`;
+    statusCell.innerHTML = `<span class="status-badge ${cls}">${effective.charAt(0).toUpperCase() + effective.slice(1)}</span>`;
+}
+
+// ── Create Event ──────────────────────────────────────────────────
+async function createEvent() {
+    const status = document.getElementById('ev-status');
+    status.textContent = 'Creating…';
+    status.className = 'status-msg';
+
+    const body = {
+        title: document.getElementById('ev-title').value,
+        event_type: document.getElementById('ev-type').value,
+        event_date: document.getElementById('ev-date').value,
+        start_time: document.getElementById('ev-time').value,
+        timezone: 'America/New_York',
+        duration_minutes: parseInt(document.getElementById('ev-duration').value),
+        channel_id: document.getElementById('ev-channel').value || null,
+        description: document.getElementById('ev-desc').value,
+        recurring_event_id: selectedRecurringEventId,
+        player_overrides: playerOverrides,
+    };
+
+    if (!body.title || !body.event_date || !body.start_time) {
+        status.textContent = '✗ Title, date, and time are required';
+        status.className = 'status-msg err';
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/v1/admin/raid-events', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            const url = data.data.event_url;
+            status.innerHTML = url
+                ? `✓ Event created! <a href="${url}" target="_blank" style="color:var(--gold)">View in Raid-Helper</a>`
+                : `✓ Event created (id: ${data.data.raid_helper_event_id})`;
+            status.className = 'status-msg ok';
+        } else {
+            status.textContent = '✗ ' + (data.error || 'Error');
+            status.className = 'status-msg err';
+        }
+    } catch (e) {
+        status.textContent = '✗ ' + e.message;
+        status.className = 'status-msg err';
+    }
+}
+
+// ── Manual Fallback text ──────────────────────────────────────────
+function updateFallback() {
+    const title = document.getElementById('ev-title').value || '(No title)';
+    const dateVal = document.getElementById('ev-date').value || '(date)';
+    const timeVal = document.getElementById('ev-time').value || '21:00';
+    const dur = document.getElementById('ev-duration').value || '120';
+    const desc = document.getElementById('ev-desc').value || '';
+    const durLabel = { '60': '1 hour', '90': '1.5 hours', '120': '2 hours', '150': '2.5 hours', '180': '3 hours' }[dur] || dur + ' min';
+
+    const text = `**${title}**\n📅 ${dateVal} at ${timeVal} EST (${durLabel})\n${desc ? '\n' + desc : ''}`.trim();
+    document.getElementById('fallback-text').textContent = text;
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────
+async function loadAvailability() {
+    try {
+        const resp = await fetch('/api/v1/admin/availability-by-day');
+        const data = await resp.json();
+        if (data.ok) renderGrid(data.data);
+    } catch (e) {
+        document.getElementById('day-grid').textContent = 'Failed to load availability data.';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadAvailability();
+    updateFallback();
+});
+</script>
+{% endblock %}

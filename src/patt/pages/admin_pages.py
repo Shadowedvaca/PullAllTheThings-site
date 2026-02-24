@@ -1167,6 +1167,46 @@ async def admin_availability(
 
 
 # ---------------------------------------------------------------------------
+# Raid Tools page (Phase 3.4)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/raid-tools", response_class=HTMLResponse)
+async def admin_raid_tools(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from sv_common.db.models import DiscordConfig
+
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/raid-tools")
+
+    cfg_result = await db.execute(select(DiscordConfig).limit(1))
+    discord_config = cfg_result.scalar_one_or_none()
+
+    # Active players with main characters for roster preview
+    players_result = await db.execute(
+        select(Player)
+        .options(
+            selectinload(Player.guild_rank),
+            selectinload(Player.main_character),
+            selectinload(Player.main_spec),
+        )
+        .where(Player.is_active.is_(True), Player.main_character_id.is_not(None))
+        .order_by(Player.display_name)
+    )
+    roster_players = list(players_result.scalars().all())
+
+    ctx = await _base_ctx(request, player, db)
+    ctx.update({
+        "discord_config": discord_config,
+        "roster_players": roster_players,
+    })
+    return templates.TemplateResponse("admin/raid_tools.html", ctx)
+
+
+# ---------------------------------------------------------------------------
 # Audit log
 # ---------------------------------------------------------------------------
 
