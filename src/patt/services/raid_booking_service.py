@@ -2,6 +2,7 @@
 Auto-booking service: fires 10–20 minutes after a recurring raid event starts,
 creates next week's Raid-Helper event, and posts a Discord announcement.
 """
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -129,7 +130,7 @@ async def book_next_occurrence(
         result["event_id"],
         source_event["discord_channel_id"],
         source_event["recurring_event_id"],
-        result["payload"],
+        json.dumps(result["payload"]),
     )
 
     # Batch-insert attendance rows
