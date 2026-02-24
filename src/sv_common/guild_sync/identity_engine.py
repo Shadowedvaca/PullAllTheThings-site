@@ -2,26 +2,37 @@
 Identity matching engine.
 
 Links WoW characters and Discord accounts to unified "player" entities.
-Uses multiple signals to establish links with varying confidence levels.
 
-Matching strategies (in priority order):
-1. Existing confirmed links (from migration or manual confirmation)
-2. Exact name match: Discord username/nickname matches character name
-3. Guild note parsing: note contains Discord username patterns
-4. Officer note parsing: similar to guild note
-5. Fuzzy match: character name is very similar to Discord name
+Strategy (revised):
+1. Group unlinked characters by guild_note (first meaningful word).
+   Characters with the same note belong to the same player.
+   e.g. note="Sho" on Shodoom, Adrenalgland, Dontfoxmybox → one group.
+
+2. For each group, try to find the matching Discord user using the note
+   as the search key. Multiple strategies in priority order:
+     a. Exact match on Discord username
+     b. Exact match on Discord display_name
+     c. Key exactly matches a word in display_name (split on / - space)
+     d. Key is a substring of Discord username (min 3 chars)
+     e. Key is a substring of Discord display_name (min 3 chars)
+
+3. Create one Player per group:
+   - With Discord link if a match was found
+   - Without Discord link (stub) if no match — can be linked manually
+
+4. Characters with no guild note fall back to character-name matching
+   against Discord usernames/display_names.
 
 Rules:
 - A character can only belong to one player
 - A Discord account can only belong to one player
 - Multiple characters CAN belong to the same player (alts)
-- High-confidence matches auto-link; medium/low flag for review
 """
 
 import hashlib
 import logging
 import re
-from difflib import SequenceMatcher
+from collections import defaultdict
 from typing import Optional
 
 import asyncpg
@@ -30,108 +41,128 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_name(name: str) -> str:
-    """Normalize a name for comparison — lowercase, strip special chars."""
+    """Normalize a name for comparison — lowercase, strip accents."""
     if not name:
         return ""
     normalized = name.lower().strip()
-    # Remove common accent characters for fuzzy matching
     accent_map = str.maketrans(
         "àáâãäåèéêëìíîïòóôõöùúûüñ",
-        "aaaaaa" + "eeee" + "iiii" + "ooooo" + "uuuu" + "n",
+        "aaaaaaeeeeiiiiooooouuuun",
     )
     normalized = normalized.translate(accent_map)
     return normalized
 
 
-def extract_discord_hints_from_note(note: str) -> list[str]:
+def _extract_note_key(char: dict) -> str:
     """
-    Parse a guild note or officer note for Discord username hints.
+    Extract the primary grouping key from a character's guild_note.
 
-    Common patterns in guild notes:
-    - "Discord: username"
-    - "DC: username"
-    - "disc: username"
-    - "@username"
-    - "alt of CharacterName"
-    - "Main: CharacterName"
-    - Just a Discord username by itself
+    Takes the first word, strips possessives/punctuation/server-name suffixes.
+    e.g. "Rocket's DH waifu" → "rocket"
+         "Rocket-mental 702"  → "rocket"
+         "shodooms shammy"    → "shodoom" (strip trailing s)
+         "Sho"                → "sho"
+         ""                   → ""
     """
-    if not note or not note.strip():
-        return []
+    note = (char.get("guild_note") or "").strip()
+    if not note:
+        return ""
 
-    hints = []
-    note_clean = note.strip()
+    # Take first word only
+    first_word = note.split()[0]
 
-    # Pattern: "Discord: username" or "DC: username" or "Disc: username"
-    dc_patterns = [
-        r"(?:discord|disc|dc)\s*[:=]\s*(\S+)",
-        r"@(\S+)",
-    ]
+    # Split on hyphen, take first part (e.g. "Rocket-mental" → "Rocket")
+    first_word = first_word.split("-")[0]
 
-    for pattern in dc_patterns:
-        matches = re.findall(pattern, note_clean, re.IGNORECASE)
-        hints.extend(matches)
+    # Strip possessive 's and common punctuation
+    first_word = re.sub(r"'s$", "", first_word, flags=re.IGNORECASE)
+    first_word = re.sub(r"['\.,;:!?()]", "", first_word)
 
-    # Pattern: "alt of X" or "X's alt" — hints at character grouping
-    alt_patterns = [
-        r"alt\s+(?:of|for)\s+(\S+)",
-        r"(\S+)'s?\s+alt",
-        r"main\s*[:=]\s*(\S+)",
-    ]
+    key = normalize_name(first_word)
 
-    for pattern in alt_patterns:
-        matches = re.findall(pattern, note_clean, re.IGNORECASE)
-        hints.extend(matches)
+    # If key ends in 's' and is longer than 3 chars, try without it
+    # to normalise "rockets" → "rocket", "shodooms" → "shodoom"
+    if len(key) > 3 and key.endswith("s"):
+        key = key[:-1]
 
-    # Clean up hints
-    cleaned = []
-    for h in hints:
-        h = h.strip().rstrip(".,;:!)")
-        if len(h) >= 2:  # Ignore single-char hints
-            cleaned.append(h)
-
-    return cleaned
+    return key if len(key) >= 2 else ""
 
 
-def fuzzy_match_score(name1: str, name2: str) -> float:
+def _find_discord_for_key(key: str, all_discord: list) -> Optional[dict]:
     """
-    Calculate similarity between two names.
-    Returns a score from 0.0 to 1.0.
+    Find the Discord user that best matches the given key string.
+
+    Strategies (in priority order):
+      1. Exact match on username
+      2. Exact match on display_name
+      3. Key exactly matches any word in display_name (split on / - space)
+      4. Key is a substring of username          (key >= 3 chars)
+      5. Key is a substring of display_name      (key >= 3 chars)
     """
-    n1 = normalize_name(name1)
-    n2 = normalize_name(name2)
+    if not key or len(key) < 2:
+        return None
 
-    if not n1 or not n2:
-        return 0.0
+    # Pass 1: exact username
+    for du in all_discord:
+        if normalize_name(du["username"]) == key:
+            return du
 
-    # Exact match after normalization
-    if n1 == n2:
-        return 1.0
+    # Pass 2: exact display_name
+    for du in all_discord:
+        if du["display_name"] and normalize_name(du["display_name"]) == key:
+            return du
 
-    # One contains the other (e.g., "trog" and "trogmoon")
-    if n1 in n2 or n2 in n1:
-        shorter = min(len(n1), len(n2))
-        longer = max(len(n1), len(n2))
-        return shorter / longer  # Score based on how much overlap
+    # Pass 3: key matches any word/part of display_name
+    for du in all_discord:
+        if du["display_name"]:
+            parts = [
+                normalize_name(p)
+                for p in re.split(r"[/\-\s]+", du["display_name"])
+                if p.strip()
+            ]
+            if key in parts:
+                return du
 
-    # SequenceMatcher for general similarity
-    return SequenceMatcher(None, n1, n2).ratio()
+    if len(key) < 3:
+        return None  # Don't do substring matching for very short keys
+
+    # Pass 4: key is substring of username
+    for du in all_discord:
+        if key in normalize_name(du["username"]):
+            return du
+
+    # Pass 5: key is substring of display_name
+    for du in all_discord:
+        if du["display_name"] and key in normalize_name(du["display_name"]):
+            return du
+
+    return None
 
 
 async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) -> dict:
     """
-    Run the matching engine across all unlinked characters and Discord users.
+    Run the note-group matching engine.
 
-    min_rank_level: if set, only processes characters whose guild_rank_id corresponds
-                   to a rank with level >= min_rank_level (e.g. 4 = Officers+).
+    Steps:
+    1. Load unlinked characters (optionally rank-filtered).
+    2. Group them by their guild_note key.
+    3. For each group, find the best Discord user match.
+    4. Create one Player per group (with or without Discord link).
+    5. For characters with no note, fall back to character-name matching.
 
-    Returns stats about matches found.
+    Returns stats dict.
     """
-    stats = {"exact": 0, "guild_note": 0, "officer_note": 0, "fuzzy": 0, "skipped": 0}
+    stats = {
+        "players_created": 0,
+        "chars_linked": 0,
+        "discord_linked": 0,
+        "no_discord_match": 0,
+        "skipped": 0,
+    }
 
     async with pool.acquire() as conn:
 
-        # Get all unlinked WoW characters (not yet in player_characters)
+        # --- Load unlinked characters ---
         if min_rank_level is not None:
             unlinked_chars = await conn.fetch(
                 """SELECT wc.id, wc.character_name, wc.guild_note, wc.officer_note
@@ -139,7 +170,9 @@ async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) ->
                    JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
                    WHERE wc.removed_at IS NULL
                      AND gr.level >= $1
-                     AND wc.id NOT IN (SELECT character_id FROM guild_identity.player_characters)""",
+                     AND wc.id NOT IN (
+                         SELECT character_id FROM guild_identity.player_characters
+                     )""",
                 min_rank_level,
             )
         else:
@@ -147,205 +180,151 @@ async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) ->
                 """SELECT id, character_name, guild_note, officer_note
                    FROM guild_identity.wow_characters
                    WHERE removed_at IS NULL
-                     AND id NOT IN (SELECT character_id FROM guild_identity.player_characters)"""
+                     AND id NOT IN (
+                         SELECT character_id FROM guild_identity.player_characters
+                     )"""
             )
 
-        # Get all unlinked Discord users (present in server with guild role, no player link)
-        unlinked_discord = await conn.fetch(
-            """SELECT id, discord_id, username, display_name
-               FROM guild_identity.discord_users
-               WHERE is_present = TRUE
-                 AND highest_guild_role IS NOT NULL
-                 AND id NOT IN (
-                     SELECT discord_user_id FROM guild_identity.players
-                     WHERE discord_user_id IS NOT NULL
-                 )"""
-        )
-
-        # All Discord users for note-based matching (even already-linked ones)
+        # --- Load all Discord users (guild members only) ---
         all_discord = await conn.fetch(
             """SELECT du.id, du.discord_id, du.username, du.display_name,
                       p.id AS player_id
                FROM guild_identity.discord_users du
                LEFT JOIN guild_identity.players p ON p.discord_user_id = du.id
-               WHERE du.is_present = TRUE"""
+               WHERE du.is_present = TRUE
+                 AND du.highest_guild_role IS NOT NULL"""
         )
 
-        # Build lookup maps
-        discord_by_name = {}
-        for du in all_discord:
-            discord_by_name[normalize_name(du["username"])] = du
-            if du["display_name"]:
-                discord_by_name[normalize_name(du["display_name"])] = du
-
-        unlinked_discord_by_name = {}
-        for du in unlinked_discord:
-            unlinked_discord_by_name[normalize_name(du["username"])] = du
-            if du["display_name"]:
-                unlinked_discord_by_name[normalize_name(du["display_name"])] = du
+        # --- Group characters by guild note key ---
+        note_groups: dict[str, list] = defaultdict(list)
+        no_note_chars = []
 
         for char in unlinked_chars:
-            char_name_norm = normalize_name(char["character_name"])
+            key = _extract_note_key(char)
+            if key:
+                note_groups[key].append(char)
+            else:
+                no_note_chars.append(char)
 
-            # --- Strategy 1: Exact name match ---
-            matched_discord = None
-            link_source = None
+        # discord_user_id → player_id: tracks assignments made THIS run
+        # so we reuse the same player when multiple note groups match one Discord user
+        discord_player_cache: dict[int, int] = {}
+        for du in all_discord:
+            if du["player_id"]:
+                discord_player_cache[du["id"]] = du["player_id"]
 
-            if char_name_norm in unlinked_discord_by_name:
-                matched_discord = unlinked_discord_by_name[char_name_norm]
-                link_source = "exact_name_match"
-                stats["exact"] += 1
+        # --- Process each note group ---
+        for note_key, chars in note_groups.items():
+            discord_user = _find_discord_for_key(note_key, all_discord)
+            await _create_player_group(
+                conn, chars, discord_user, note_key, discord_player_cache, stats
+            )
 
-            # --- Strategy 2: Guild note parsing ---
-            if not matched_discord and char["guild_note"]:
-                hints = extract_discord_hints_from_note(char["guild_note"])
-                for hint in hints:
-                    hint_norm = normalize_name(hint)
-                    if hint_norm in discord_by_name:
-                        matched_discord = discord_by_name[hint_norm]
-                        link_source = "guild_note"
-                        stats["guild_note"] += 1
-                        break
-
-            # --- Strategy 3: Officer note parsing ---
-            if not matched_discord and char["officer_note"]:
-                hints = extract_discord_hints_from_note(char["officer_note"])
-                for hint in hints:
-                    hint_norm = normalize_name(hint)
-                    if hint_norm in discord_by_name:
-                        matched_discord = discord_by_name[hint_norm]
-                        link_source = "officer_note"
-                        stats["officer_note"] += 1
-                        break
-
-            # --- Strategy 4: Fuzzy match (only for unlinked Discord users) ---
-            if not matched_discord:
-                best_score = 0.0
-                best_match = None
-                for du in unlinked_discord:
-                    for name_field in [du["username"], du["display_name"]]:
-                        if not name_field:
-                            continue
-                        score = fuzzy_match_score(char["character_name"], name_field)
-                        if score > best_score:
-                            best_score = score
-                            best_match = du
-
-                if best_score >= 0.85:
-                    matched_discord = best_match
-                    link_source = "fuzzy_match"
-                    stats["fuzzy"] += 1
-                elif best_score >= 0.7:
-                    # Low confidence — create an audit issue suggestion instead
-                    await _create_link_suggestion(conn, char, best_match, best_score)
-                    stats["skipped"] += 1
-                    continue
-
-            if not matched_discord:
+        # --- Fallback: chars with no note → try character-name matching ---
+        for char in no_note_chars:
+            char_norm = normalize_name(char["character_name"])
+            discord_user = _find_discord_for_key(char_norm, all_discord)
+            if discord_user:
+                await _create_player_group(
+                    conn, [char], discord_user, char_norm, discord_player_cache, stats
+                )
+            else:
                 stats["skipped"] += 1
-                continue
-
-            # --- Create the link ---
-            await _create_player_and_link(conn, char, matched_discord, link_source)
 
     logger.info(
-        "Matching complete: %d exact, %d guild_note, %d officer_note, %d fuzzy, %d skipped",
-        stats["exact"], stats["guild_note"], stats["officer_note"],
-        stats["fuzzy"], stats["skipped"],
+        "Matching complete: %d players created, %d chars linked, "
+        "%d with Discord, %d stubs (no Discord), %d skipped (no note/name match)",
+        stats["players_created"],
+        stats["chars_linked"],
+        stats["discord_linked"],
+        stats["no_discord_match"],
+        stats["skipped"],
     )
     return stats
 
 
-async def _create_player_and_link(
+async def _create_player_group(
     conn: asyncpg.Connection,
-    char: dict,
-    discord_user: dict,
-    link_source: str,
+    chars: list,
+    discord_user: Optional[dict],
+    display_hint: str,
+    discord_player_cache: dict[int, int],
+    stats: dict,
 ):
-    """Create or find a player and link the WoW character to it via player_characters.
-
-    Player creation and character linking are atomic — if the character link fails
-    (already claimed), the player row is not created either.
     """
+    Create (or find) one Player for a group of characters and link them all.
 
-    # If the Discord user already has a player, use it
-    player_id = discord_user.get("player_id")
+    - If discord_user is provided and already has a player, reuse it.
+    - If discord_user is provided but has no player, create one with Discord linked.
+    - If discord_user is None, create a stub player using display_hint as the name.
+    - All characters in the group are linked to the player via player_characters.
+    """
+    player_id = None
+
+    # Check cache first (player created earlier this run for same Discord user)
+    if discord_user:
+        player_id = discord_player_cache.get(discord_user["id"])
 
     async with conn.transaction():
         if not player_id:
-            # Check if a player already exists for this Discord user (race guard)
-            existing_player_id = await conn.fetchval(
-                "SELECT id FROM guild_identity.players WHERE discord_user_id = $1",
-                discord_user["id"],
-            )
-            if existing_player_id:
-                player_id = existing_player_id
-                logger.debug(
-                    "Reusing existing player %d for discord: %s",
-                    player_id, discord_user["username"],
+            if discord_user:
+                # Re-check DB in case it was created outside this run
+                player_id = await conn.fetchval(
+                    "SELECT id FROM guild_identity.players WHERE discord_user_id = $1",
+                    discord_user["id"],
                 )
-            else:
-                # Create a new player with this Discord user linked
-                display = discord_user.get("display_name") or discord_user["username"]
+
+            if not player_id:
+                # Create the player
+                if discord_user:
+                    display = discord_user.get("display_name") or discord_user["username"]
+                    discord_uid = discord_user["id"]
+                else:
+                    display = display_hint.title()
+                    discord_uid = None
+
                 player_id = await conn.fetchval(
                     """INSERT INTO guild_identity.players (display_name, discord_user_id)
                        VALUES ($1, $2) RETURNING id""",
-                    display, discord_user["id"],
+                    display,
+                    discord_uid,
                 )
-                logger.info(
-                    "Created new player '%s' (discord: %s, source: %s)",
-                    display, discord_user["username"], link_source,
-                )
+                stats["players_created"] += 1
+                if discord_user:
+                    stats["discord_linked"] += 1
+                    discord_player_cache[discord_user["id"]] = player_id
+                    logger.info(
+                        "Created player '%s' linked to Discord '%s' (note key: %s)",
+                        display, discord_user["username"], display_hint,
+                    )
+                else:
+                    stats["no_discord_match"] += 1
+                    logger.info(
+                        "Created stub player '%s' (no Discord match for note key: %s)",
+                        display, display_hint,
+                    )
+            else:
+                # Existing player found in DB
+                discord_player_cache[discord_user["id"]] = player_id
 
-        # Check if character is already claimed (can happen if same char appears
-        # twice due to stale snapshot or concurrent run)
-        already_linked = await conn.fetchval(
-            "SELECT player_id FROM guild_identity.player_characters WHERE character_id = $1",
-            char["id"],
-        )
-        if already_linked and already_linked != player_id:
-            logger.warning(
-                "Character '%s' already claimed by player %d — skipping link to player %d",
-                char["character_name"], already_linked, player_id,
+        # Link all characters to this player
+        for char in chars:
+            existing_owner = await conn.fetchval(
+                "SELECT player_id FROM guild_identity.player_characters WHERE character_id = $1",
+                char["id"],
             )
-            return
+            if existing_owner:
+                if existing_owner != player_id:
+                    logger.warning(
+                        "Character '%s' already claimed by player %d — skipping for player %d",
+                        char["character_name"], existing_owner, player_id,
+                    )
+                continue
 
-        # Link character to player (ON CONFLICT DO NOTHING — idempotent)
-        await conn.execute(
-            """INSERT INTO guild_identity.player_characters (player_id, character_id)
-               VALUES ($1, $2)
-               ON CONFLICT (character_id) DO NOTHING""",
-            player_id, char["id"],
-        )
-
-    logger.info(
-        "Linked character '%s' to player %d (source: %s)",
-        char["character_name"], player_id, link_source,
-    )
-
-
-async def _create_link_suggestion(
-    conn: asyncpg.Connection,
-    char: dict,
-    discord_user: Optional[dict],
-    score: float,
-):
-    """Create an audit issue suggesting a possible link for human review."""
-    if not discord_user:
-        return
-
-    issue_hash = hashlib.sha256(
-        f"auto_link_suggestion:{char['id']}:{discord_user['id']}".encode()
-    ).hexdigest()
-
-    await conn.execute(
-        """INSERT INTO guild_identity.audit_issues
-           (issue_type, severity, wow_character_id, discord_member_id,
-            summary, details, issue_hash)
-           VALUES ('auto_link_suggestion', 'info', $1, $2, $3, $4, $5)
-           ON CONFLICT (issue_hash, resolved_at) DO NOTHING""",
-        char["id"], discord_user["id"],
-        f"Possible match: {char['character_name']} ↔ {discord_user['username']} (score: {score:.0%})",
-        {"score": score, "char_name": char["character_name"], "discord_name": discord_user["username"]},
-        issue_hash,
-    )
+            await conn.execute(
+                """INSERT INTO guild_identity.player_characters (player_id, character_id)
+                   VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                player_id,
+                char["id"],
+            )
+            stats["chars_linked"] += 1
