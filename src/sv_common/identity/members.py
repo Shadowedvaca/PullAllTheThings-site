@@ -92,6 +92,8 @@ async def update_player(db: AsyncSession, player_id: int, **kwargs) -> Player:
         "offspec_spec_id",
         "is_active",
         "notes",
+        "timezone",
+        "auto_invite_events",
     }
     for key, value in kwargs.items():
         if key in allowed:

@@ -22,6 +22,7 @@
                     {% if current_member.guild_rank and current_member.guild_rank.level >= 4 %}
                         <a href="/admin/campaigns" class="nav-link nav-link--admin">Admin</a>
                     {% endif %}
+                    <a href="/profile" class="nav-link">Settings</a>
                     <div class="nav-user">
                         <span class="nav-username">{{ current_member.display_name or current_member.discord_username }}</span>
                         {% if current_member.guild_rank %}

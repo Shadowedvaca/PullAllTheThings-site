@@ -351,11 +351,13 @@ def create_app() -> FastAPI:
     from patt.pages.vote_pages import router as vote_page_router
     from patt.pages.admin_pages import router as admin_page_router
     from patt.pages.public_pages import router as public_page_router
+    from patt.pages.profile_pages import router as profile_page_router
 
     app.include_router(public_page_router)
     app.include_router(auth_page_router)
     app.include_router(vote_page_router)
     app.include_router(admin_page_router)
+    app.include_router(profile_page_router)
 
     return app
 
