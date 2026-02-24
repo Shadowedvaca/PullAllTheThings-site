@@ -287,7 +287,7 @@
       <span class="profile-info-field__label">Main Character</span>
       <span class="profile-info-field__value">
         {{ current_member.main_character.character_name }}
-        <span style="color:var(--color-text-muted);font-weight:400">— {{ current_member.main_character.realm_slug }}</span>
+        <span style="color:var(--color-text-muted);font-weight:400">— {{ current_member.main_character.realm_name or current_member.main_character.realm_slug }}</span>
       </span>
     </div>
     {% if current_member.main_spec %}
@@ -377,7 +377,7 @@
                   value="{{ pc.character.id }}"
                   data-class-id="{{ pc.character.class_id or '' }}"
                   {% if current_member.main_character_id == pc.character.id %}selected{% endif %}
-                >{{ pc.character.character_name }} — {{ pc.character.realm_slug }}</option>
+                >{{ pc.character.character_name }} — {{ pc.character.realm_name or pc.character.realm_slug }}</option>
               {% endfor %}
             </select>
           </div>
@@ -406,7 +406,7 @@
                   value="{{ pc.character.id }}"
                   data-class-id="{{ pc.character.class_id or '' }}"
                   {% if current_member.offspec_character_id == pc.character.id %}selected{% endif %}
-                >{{ pc.character.character_name }} — {{ pc.character.realm_slug }}</option>
+                >{{ pc.character.character_name }} — {{ pc.character.realm_name or pc.character.realm_slug }}</option>
               {% endfor %}
             </select>
           </div>
