@@ -19,13 +19,13 @@
                     {% if active_campaigns %}
                         <a href="/vote/{{ active_campaigns[0].id }}" class="nav-link">Vote</a>
                     {% endif %}
-                    {% if current_member.rank and current_member.rank.level >= 4 %}
+                    {% if current_member.guild_rank and current_member.guild_rank.level >= 4 %}
                         <a href="/admin/campaigns" class="nav-link nav-link--admin">Admin</a>
                     {% endif %}
                     <div class="nav-user">
                         <span class="nav-username">{{ current_member.display_name or current_member.discord_username }}</span>
-                        {% if current_member.rank %}
-                            <span class="nav-rank">{{ current_member.rank.name }}</span>
+                        {% if current_member.guild_rank %}
+                            <span class="nav-rank">{{ current_member.guild_rank.name }}</span>
                         {% endif %}
                         <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
                     </div>
