@@ -100,54 +100,38 @@
 {# ── Currently Recruiting ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Currently Recruiting</h2>
+    {% if recruiting_needs %}
     <div class="lp-needs">
         <div class="lp-needs-grid">
-            <div class="lp-need-item" id="need-tank">
-                <div class="lp-need-role role-tank">🛡️ Tank</div>
-                <div class="lp-need-count" id="need-tank-count">Loading…</div>
+            {% for role, needed in recruiting_needs.items() %}
+            <div class="lp-need-item high-need">
+                <div class="lp-need-role role-{{ role | lower | replace(' ', '-') }}">{{ role_emojis[role] }} {{ role }}</div>
+                <div class="lp-need-count">{{ needed }} needed</div>
             </div>
-            <div class="lp-need-item" id="need-healer">
-                <div class="lp-need-role role-healer">💚 Healer</div>
-                <div class="lp-need-count" id="need-healer-count">Loading…</div>
-            </div>
-            <div class="lp-need-item" id="need-melee">
-                <div class="lp-need-role role-dps">⚔️ Melee DPS</div>
-                <div class="lp-need-count" id="need-melee-count">Loading…</div>
-            </div>
-            <div class="lp-need-item" id="need-ranged">
-                <div class="lp-need-role role-dps">🏹 Ranged DPS</div>
-                <div class="lp-need-count" id="need-ranged-count">Loading…</div>
-            </div>
+            {% endfor %}
         </div>
-        <p class="lp-needs-note" id="needsNote">Targeting 20-player roster</p>
     </div>
+    {% else %}
+    <p class="roster-full">✅ Roster Full — not actively recruiting</p>
+    {% endif %}
 </section>
 
 {# ── Weekly Schedule ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Weekly Schedule</h2>
+    {% if event_days %}
     <div class="lp-schedule">
+        {% for event in event_days %}
         <div class="lp-sched-item">
-            <div class="lp-sched-day">Friday</div>
-            <div class="lp-sched-time">6:00 PM PST / 9:00 PM EST</div>
-            <div class="lp-sched-desc">Heroic Raid Night</div>
+            <div class="lp-sched-day">{{ day_names[event.day_of_week] }}</div>
+            <div class="lp-sched-time">{{ event.default_start_time.strftime('%I:%M %p') }} EST</div>
+            <div class="lp-sched-desc">{{ event.label }}</div>
         </div>
-        <div class="lp-sched-item">
-            <div class="lp-sched-day">Saturday</div>
-            <div class="lp-sched-time">6:00 PM PST / 9:00 PM EST</div>
-            <div class="lp-sched-desc">Heroic Raid Night</div>
-        </div>
-        <div class="lp-sched-item">
-            <div class="lp-sched-day">Sunday</div>
-            <div class="lp-sched-time">Flexible</div>
-            <div class="lp-sched-desc">Achievement Runs</div>
-        </div>
-        <div class="lp-sched-item">
-            <div class="lp-sched-day">Weeknights</div>
-            <div class="lp-sched-time">Various</div>
-            <div class="lp-sched-desc">Mythic+ / Delves / PvP</div>
-        </div>
+        {% endfor %}
     </div>
+    {% else %}
+    <p class="no-schedule">No events currently scheduled.</p>
+    {% endif %}
 </section>
 
 {# ── Join Us ── #}
@@ -170,64 +154,35 @@
 {# ── Guild Officers ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Guild Officers</h2>
-    <div class="lp-gl-card">
-        <div class="lp-gl-avatar">👑</div>
-        <div>
-            <div class="lp-gl-rank">Guild Leader</div>
-            <div class="lp-gl-name">Trog</div>
-            <div class="lp-gl-char">
-                <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/senjin/trogmoon" target="_blank" rel="noopener" class="role-dps">
-                    Trogmoon — Balance Druid
-                </a>
-            </div>
-        </div>
-    </div>
+    {% if officers %}
     <div class="lp-officers">
-        <div class="lp-officer-card">
-            <div class="lp-officer-avatar">🛡️</div>
+        {% for officer in officers %}
+        <div class="lp-officer-card{% if officer.guild_rank.level == 5 %} lp-gl-card{% endif %}">
+            <div class="lp-officer-avatar">
+                {% if officer.guild_rank.level == 5 %}👑{% else %}{{ officer.class_emoji }}{% endif %}
+            </div>
             <div>
-                <div class="lp-officer-name">Shodoom</div>
+                {% if officer.guild_rank.level == 5 %}
+                <div class="lp-gl-rank">Guild Leader</div>
+                {% else %}
+                <div class="lp-officer-rank">{{ officer.guild_rank.name }}</div>
+                {% endif %}
+                <div class="lp-officer-name">{{ officer.display_name }}</div>
+                {% if officer.main_character %}
                 <div class="lp-officer-char">
-                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/bleeding-hollow/shodoom" target="_blank" rel="noopener" class="role-tank">
-                        Shodoom — Prot Paladin
+                    <a href="{{ officer.armory_url }}" target="_blank" rel="noopener"
+                       style="color: {{ officer.class_color }}">
+                        {{ officer.main_character.character_name }}{% if officer.main_character.active_spec %} — {{ officer.main_character.active_spec.name }}{% endif %}
                     </a>
                 </div>
+                {% endif %}
             </div>
         </div>
-        <div class="lp-officer-card">
-            <div class="lp-officer-avatar">💚</div>
-            <div>
-                <div class="lp-officer-name">Mito</div>
-                <div class="lp-officer-char">
-                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/alterac-mountains/bloodvalor" target="_blank" rel="noopener" class="role-healer">
-                        Bloodvalor — Holy Paladin
-                    </a>
-                </div>
-            </div>
-        </div>
-        <div class="lp-officer-card">
-            <div class="lp-officer-avatar">⚔️</div>
-            <div>
-                <div class="lp-officer-name">Rocket</div>
-                <div class="lp-officer-char">
-                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/sargeras/Zatan%C3%B1a" target="_blank" rel="noopener" class="role-dps">
-                        Zatañña — Demo Warlock
-                    </a>
-                </div>
-            </div>
-        </div>
-        <div class="lp-officer-card">
-            <div class="lp-officer-avatar">⚔️</div>
-            <div>
-                <div class="lp-officer-name">Skate</div>
-                <div class="lp-officer-char">
-                    <a href="https://worldofwarcraft.blizzard.com/en-us/character/us/tichondrius/skatefarm" target="_blank" rel="noopener" class="role-dps">
-                        Skatefarm — Feral Druid
-                    </a>
-                </div>
-            </div>
-        </div>
+        {% endfor %}
     </div>
+    {% else %}
+    <p class="lp-officers-empty">Officer information not available.</p>
+    {% endif %}
 </section>
 
 {# ── Mito's Quote of the Day ── #}
@@ -253,12 +208,12 @@
     <div class="lp-members">
         <p class="lp-members-note">Guild tools for PATT members. If you're not in the guild yet, hop into Discord first!</p>
         <div class="lp-links">
-            <a href="/roster.html" class="lp-link-card">
+            <a href="/roster" class="lp-link-card">
                 <span class="lp-link-icon">📝</span>
                 <span class="lp-link-title">Join Roster</span>
                 <span class="lp-link-desc">Sign up for the raid roster</span>
             </a>
-            <a href="/roster-view.html" class="lp-link-card">
+            <a href="/roster" class="lp-link-card">
                 <span class="lp-link-icon">👥</span>
                 <span class="lp-link-title">View Roster</span>
                 <span class="lp-link-desc">See who's on the team</span>
@@ -272,5 +227,4 @@
 
 {% block scripts %}
 <script src="/static/js/countdown.js"></script>
-<script src="/static/js/landing-needs.js"></script>
 {% endblock %}

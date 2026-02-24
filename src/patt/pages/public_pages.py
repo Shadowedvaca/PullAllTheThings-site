@@ -1,19 +1,149 @@
 """Public page routes: landing page."""
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.orm import joinedload
 
 from patt.deps import get_db, get_page_member
 from patt.services import campaign_service
 from patt.templating import templates
-from sv_common.db.models import Player, MitoQuote, MitoTitle
+from sv_common.db.models import (
+    GuildRank,
+    Player,
+    MitoQuote,
+    MitoTitle,
+    RecurringEvent,
+    Specialization,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["public-pages"])
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+ROLE_TARGETS = {
+    "Tank": 2,
+    "Healer": 4,
+    "Melee DPS": 6,
+    "Ranged DPS": 6,
+}
+
+CLASS_EMOJIS = {
+    "Druid": "🌿",
+    "Paladin": "⚔️",
+    "Warlock": "👁️",
+    "Priest": "✨",
+    "Mage": "🔮",
+    "Hunter": "🏹",
+    "Warrior": "⚔️",
+    "Shaman": "⚡",
+    "Monk": "☯️",
+    "Death Knight": "💀",
+    "Demon Hunter": "🦅",
+    "Evoker": "🐉",
+    "Rogue": "🗡️",
+}
+
+ROLE_EMOJIS = {
+    "Tank": "🛡️",
+    "Healer": "💚",
+    "Melee DPS": "⚔️",
+    "Ranged DPS": "🏹",
+}
+
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+# ---------------------------------------------------------------------------
+# Helper queries
+# ---------------------------------------------------------------------------
+
+
+async def _get_officers(db) -> list[dict[str, Any]]:
+    """Query officers (guild_rank.level >= 4), eagerly load char + class + spec."""
+    result = await db.execute(
+        select(Player)
+        .join(GuildRank, Player.guild_rank_id == GuildRank.id)
+        .where(GuildRank.level >= 4, Player.is_active == True)
+        .order_by(GuildRank.level.desc(), Player.display_name.asc())
+        .options(
+            joinedload(Player.guild_rank),
+            joinedload(Player.main_character).joinedload("wow_class"),
+            joinedload(Player.main_character).joinedload("active_spec"),
+        )
+    )
+    players = result.unique().scalars().all()
+
+    officers = []
+    for p in players:
+        char = p.main_character
+        class_name = char.wow_class.name if (char and char.wow_class) else None
+        class_color = (
+            f"#{char.wow_class.color_hex}" if (char and char.wow_class and char.wow_class.color_hex) else "#d4a84b"
+        )
+        armory_url = None
+        if char:
+            armory_url = (
+                f"https://worldofwarcraft.blizzard.com/en-us/character/us"
+                f"/{char.realm_slug}/{char.character_name.lower()}"
+            )
+        officers.append(
+            {
+                "display_name": p.display_name,
+                "guild_rank": p.guild_rank,
+                "main_character": char,
+                "class_emoji": CLASS_EMOJIS.get(class_name, "⚔️") if class_name else "⚔️",
+                "class_color": class_color,
+                "armory_url": armory_url,
+            }
+        )
+    return officers
+
+
+async def _get_recruiting_needs(db) -> dict[str, int]:
+    """Count active roster players by main role vs targets; return roles where count < target."""
+    rows = await db.execute(
+        text(
+            """
+            SELECT r.name AS role_name, COUNT(p.id) AS cnt
+            FROM guild_identity.players p
+            JOIN guild_identity.specializations s ON p.main_spec_id = s.id
+            JOIN guild_identity.roles r ON s.default_role_id = r.id
+            WHERE p.is_active = TRUE AND p.main_character_id IS NOT NULL
+            GROUP BY r.name
+            """
+        )
+    )
+    current_counts: dict[str, int] = {row.role_name: row.cnt for row in rows}
+
+    needs = {}
+    for role, target in ROLE_TARGETS.items():
+        current = current_counts.get(role, 0)
+        if current < target:
+            needs[role] = target - current
+    return needs
+
+
+async def _get_event_days(db) -> list[RecurringEvent]:
+    """Load public-visible active recurring events, ordered by day_of_week."""
+    result = await db.execute(
+        select(RecurringEvent)
+        .where(RecurringEvent.display_on_public == True, RecurringEvent.is_active == True)
+        .order_by(RecurringEvent.day_of_week.asc())
+    )
+    return result.scalars().all()
+
+
+# ---------------------------------------------------------------------------
+# Route helpers
+# ---------------------------------------------------------------------------
 
 
 def _rank_level(member: Player | None) -> int:
@@ -60,6 +190,23 @@ async def landing_page(
     except Exception:
         logger.warning("Could not load Mito quote/title from DB", exc_info=True)
 
+    # Load dynamic index data
+    officers = []
+    recruiting_needs: dict[str, int] = {}
+    event_days = []
+    try:
+        officers = await _get_officers(db)
+    except Exception:
+        logger.warning("Could not load officers from DB", exc_info=True)
+    try:
+        recruiting_needs = await _get_recruiting_needs(db)
+    except Exception:
+        logger.warning("Could not load recruiting needs from DB", exc_info=True)
+    try:
+        event_days = await _get_event_days(db)
+    except Exception:
+        logger.warning("Could not load event days from DB", exc_info=True)
+
     ctx = {
         "request": request,
         "current_member": current_member,
@@ -68,5 +215,11 @@ async def landing_page(
         "closed_campaigns": closed_campaigns,
         "mito_quote": mito_quote,
         "mito_title": mito_title,
+        "officers": officers,
+        "recruiting_needs": recruiting_needs,
+        "event_days": event_days,
+        "class_emojis": CLASS_EMOJIS,
+        "role_emojis": ROLE_EMOJIS,
+        "day_names": DAY_NAMES,
     }
     return templates.TemplateResponse("public/index.html", ctx)
