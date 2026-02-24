@@ -106,6 +106,7 @@ async def book_next_occurrence(
         return None
 
     # Insert patt.raid_events row
+    next_end_utc = next_start_utc + timedelta(minutes=source_event["default_duration_minutes"])
     new_event_id = await conn.fetchval(
         """
         INSERT INTO patt.raid_events
@@ -116,7 +117,7 @@ async def book_next_occurrence(
             (SELECT id FROM patt.raid_seasons
              WHERE start_date <= CURRENT_DATE AND is_active = TRUE
              ORDER BY start_date DESC LIMIT 1),
-            $1, $2, $3, $3 + ($4 * interval '1 minute'),
+            $1, $2, $3, $4,
             $5, $6, $7, TRUE, $8
         )
         RETURNING id
@@ -124,7 +125,7 @@ async def book_next_occurrence(
         source_event["label"],
         next_date,
         next_start_utc,
-        source_event["default_duration_minutes"],
+        next_end_utc,
         result["event_id"],
         source_event["discord_channel_id"],
         source_event["recurring_event_id"],
