@@ -403,10 +403,15 @@ async def update_bot_settings(
     admin: Player = Depends(require_rank(4)),
 ):
     """Update bot configuration — supports bot_dm_enabled, feature_invite_dm, feature_onboarding_dm."""
+    from patt.config import get_settings
     result = await db.execute(select(DiscordConfig).limit(1))
     row = result.scalar_one_or_none()
     if not row:
-        return {"ok": False, "error": "No discord_config row found"}
+        # Create the config row on first use
+        guild_id = get_settings().discord_guild_id or "0"
+        row = DiscordConfig(guild_discord_id=guild_id)
+        db.add(row)
+        await db.flush()  # get the row into the session before setting fields
 
     for field in _BOT_BOOL_FIELDS:
         if field in payload:
