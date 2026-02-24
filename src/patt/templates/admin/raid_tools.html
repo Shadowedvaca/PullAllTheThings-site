@@ -4,61 +4,26 @@
 
 {% block head %}
 <style>
-/* ── Raid Tools page ──────────────────────────────────────────── */
-.rt-header {
-    padding: 2rem 2rem 1rem;
-    border-bottom: 1px solid var(--border);
-}
-.rt-header h1 {
-    font-family: 'Cinzel', serif;
-    font-size: 1.6rem;
-    color: var(--gold);
-    margin: 0 0 .25rem;
-}
-.rt-header p { color: var(--text-dim); margin: 0; font-size: .9rem; }
-
-.rt-section {
-    padding: 1.5rem 2rem;
-    border-bottom: 1px solid var(--border);
-}
-.rt-section-title {
-    font-family: 'Cinzel', serif;
-    font-size: 1.1rem;
-    color: var(--gold);
-    margin: 0 0 1rem;
-    padding-bottom: .5rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: .75rem;
-    cursor: pointer;
-    user-select: none;
-}
-.rt-section-title .collapse-icon { font-size: .85rem; color: var(--text-dim); transition: transform .2s; }
-.rt-section-title.collapsed .collapse-icon { transform: rotate(-90deg); }
-.rt-section-body { }
-.rt-section-body.hidden { display: none; }
-
-/* ── Form grid ────────────────────────────────────────────────── */
+/* ── Form grid ─────────────────────────────────────────────────── */
 .form-grid {
     display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: .6rem 1rem;
-    max-width: 600px;
+    grid-template-columns: 180px 1fr;
+    gap: .5rem .9rem;
+    max-width: 560px;
     align-items: center;
 }
 .form-grid label {
     font-size: .875rem;
-    color: var(--text-dim);
+    color: var(--color-text-muted);
     text-align: right;
 }
 .form-grid input,
 .form-grid select,
 .form-grid textarea {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 4px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
     padding: .4rem .6rem;
     font-size: .875rem;
     width: 100%;
@@ -67,64 +32,72 @@
 .form-grid input:focus,
 .form-grid select:focus,
 .form-grid textarea:focus {
-    outline: 2px solid var(--gold);
-    border-color: var(--gold);
+    outline: 2px solid var(--color-accent);
+    border-color: var(--color-accent);
 }
 .form-grid textarea { height: 80px; resize: vertical; }
 
-.btn { padding: .45rem 1.1rem; border-radius: 4px; font-size: .875rem; cursor: pointer; border: none; }
-.btn-gold { background: var(--gold); color: #0a0a0b; font-weight: 600; }
+.btn-gold {
+    background: var(--color-accent);
+    color: #0a0a0b;
+    font-weight: 600;
+    border: none;
+    padding: .45rem 1.1rem;
+    border-radius: var(--radius-sm);
+    font-size: .875rem;
+    cursor: pointer;
+}
 .btn-gold:hover { background: #c4973c; }
-.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
-.btn-outline:hover { border-color: var(--gold); color: var(--gold); }
-.btn-danger { background: var(--danger); color: #fff; }
+.btn-outline-sm {
+    background: transparent;
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text-muted);
+    padding: .45rem 1.1rem;
+    border-radius: var(--radius-sm);
+    font-size: .875rem;
+    cursor: pointer;
+}
+.btn-outline-sm:hover { border-color: var(--color-accent); color: var(--color-accent); }
 
-.form-actions { display: flex; gap: .75rem; align-items: center; margin-top: .75rem; }
 .status-msg { font-size: .85rem; }
-.status-msg.ok { color: var(--success); }
-.status-msg.err { color: var(--danger); }
+.status-msg.ok  { color: var(--color-success); }
+.status-msg.err { color: var(--color-danger); }
 
 /* ── Availability grid (compact clickable cards) ─────────────── */
 .day-grid-compact {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     gap: .75rem;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1rem;
 }
 @media (max-width: 1100px) {
     .day-grid-compact { grid-template-columns: repeat(4, 1fr); }
 }
 
 .day-card-sm {
-    background: var(--surface);
-    border: 2px solid var(--border);
-    border-radius: 6px;
+    background: var(--color-bg-panel);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius);
     padding: .75rem;
     cursor: pointer;
     transition: border-color .15s;
 }
-.day-card-sm:hover { border-color: var(--gold); }
-.day-card-sm.selected { border-color: var(--gold); background: #1e1c0e; }
+.day-card-sm:hover { border-color: var(--color-accent); }
+.day-card-sm.selected { border-color: var(--color-accent); background: rgba(212,168,75,.07); }
 .day-card-sm__name {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-display);
     font-size: .85rem;
-    color: var(--text);
+    color: var(--color-text);
     margin: 0 0 .3rem;
 }
-.day-card-sm__event {
-    font-size: .72rem;
-    color: var(--gold);
-    margin-bottom: .3rem;
-}
-.day-card-sm__bar { height: 6px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; margin-bottom: .3rem; }
+.day-card-sm__bar { height: 6px; background: var(--color-bg-card); border-radius: 3px; overflow: hidden; margin-bottom: .3rem; }
 .day-card-sm__fill { height: 100%; border-radius: 3px; }
-.bar--green { background: var(--success); }
-.bar--amber { background: var(--warning); }
-.bar--red   { background: var(--danger); }
-.day-card-sm__stats { font-size: .75rem; color: var(--text-dim); }
-.day-card-sm__stats strong { color: var(--text); }
+.bar--green { background: var(--color-success); }
+.bar--amber { background: var(--color-warning); }
+.bar--red   { background: var(--color-danger); }
+.day-card-sm__stats { font-size: .75rem; color: var(--color-text-muted); }
+.day-card-sm__stats strong { color: var(--color-text); }
 
-/* role mini-bar */
 .role-bar { display: flex; gap: 2px; margin-top: .25rem; }
 .role-seg { height: 4px; border-radius: 2px; }
 .role-seg--tank   { background: #60a5fa; }
@@ -132,28 +105,28 @@
 .role-seg--melee  { background: #f87171; }
 .role-seg--ranged { background: #fbbf24; }
 
-/* ── Player list below day selection ─────────────────────────── */
+/* ── Day detail panel ────────────────────────────────────────── */
 #day-detail {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
     padding: 1rem;
-    margin-bottom: 1.25rem;
+    margin-bottom: .75rem;
     display: none;
 }
 #day-detail.visible { display: block; }
-.day-detail-title { font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold); margin: 0 0 .75rem; }
+.day-detail-title { font-family: var(--font-display); font-size: 1rem; color: var(--color-accent); margin: 0 0 .75rem; }
 .role-summary { display: flex; gap: 1.25rem; margin-bottom: .75rem; font-size: .82rem; }
-.role-summary span strong { font-size: .95em; }
 
 .player-table { width: 100%; border-collapse: collapse; font-size: .83rem; }
 .player-table th {
     text-align: left; padding: .4rem .5rem;
-    color: var(--text-dim); border-bottom: 1px solid var(--border);
+    color: var(--color-text-muted); border-bottom: 1px solid var(--color-border);
     font-size: .78rem; text-transform: uppercase; letter-spacing: .04em;
 }
-.player-table td { padding: .35rem .5rem; border-bottom: 1px solid #1e1e22; color: var(--text); }
-.player-table tr:hover td { background: var(--surface-alt); }
+.player-table td { padding: .35rem .5rem; border-bottom: 1px solid var(--color-border); color: var(--color-text); }
+.player-table tr:last-child td { border-bottom: none; }
+.player-table tr:hover td { background: rgba(255,255,255,.02); }
 
 .role-pill {
     display: inline-block; font-size: .72rem; font-weight: 600;
@@ -164,25 +137,24 @@
 .role-pill--melee  { background: #3d1414; color: #f87171; }
 .role-pill--ranged { background: #3d2e05; color: #fbbf24; }
 
-/* ── Event Builder ───────────────────────────────────────────── */
-.builder-grid {
+/* ── Event Builder ────────────────────────────────────────────── */
+.builder-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0 2rem;
-    max-width: 900px;
 }
-.builder-grid .form-grid { max-width: none; }
-.builder-full { grid-column: 1 / -1; }
+.builder-columns .form-grid { max-width: none; }
 
 /* ── Roster Preview ──────────────────────────────────────────── */
 .roster-preview-table { width: 100%; border-collapse: collapse; font-size: .83rem; margin-top: .75rem; }
 .roster-preview-table th {
     text-align: left; padding: .4rem .5rem;
-    color: var(--text-dim); border-bottom: 2px solid var(--border);
+    color: var(--color-text-muted); border-bottom: 2px solid var(--color-border);
     font-size: .78rem; text-transform: uppercase; letter-spacing: .04em;
 }
-.roster-preview-table td { padding: .35rem .5rem; border-bottom: 1px solid #1e1e22; color: var(--text); vertical-align: middle; }
-.roster-preview-table tr:hover td { background: var(--surface-alt); }
+.roster-preview-table td { padding: .35rem .5rem; border-bottom: 1px solid var(--color-border); color: var(--color-text); vertical-align: middle; }
+.roster-preview-table tr:last-child td { border-bottom: none; }
+.roster-preview-table tr:hover td { background: rgba(255,255,255,.02); }
 
 .status-badge {
     display: inline-block; font-size: .72rem; font-weight: 600;
@@ -193,33 +165,69 @@
 .status-badge--bench     { background: #2a2a2e; color: #888; }
 
 .status-override select {
-    background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    border-radius: 4px; padding: .2rem .4rem; font-size: .78rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
+    padding: .2rem .4rem;
+    font-size: .78rem;
 }
 
-/* ── Manual Fallback ─────────────────────────────────────────── */
+/* ── Collapsible card ─────────────────────────────────────────── */
+.card-header.collapsible { cursor: pointer; user-select: none; }
+.card-header.collapsible:hover .card-title { color: var(--color-text); }
+.collapse-caret { font-size: .8rem; color: var(--color-text-muted); transition: transform .2s; }
+.collapsed-body { display: none; }
+
+/* ── Manual fallback ─────────────────────────────────────────── */
 .fallback-box {
-    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
-    padding: 1rem; font-family: 'JetBrains Mono', monospace;
-    font-size: .82rem; color: var(--text-dim); white-space: pre-wrap;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    color: var(--color-text-muted);
+    white-space: pre-wrap;
     word-break: break-word;
+}
+
+.roster-section-title {
+    font-family: var(--font-display);
+    font-size: .95rem;
+    color: var(--color-accent);
+    margin: 1.25rem 0 .5rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+.roster-section-title span {
+    font-size: .75rem;
+    color: var(--color-text-muted);
+    font-family: var(--font-body);
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="rt-header">
-    <h1>Raid Tools</h1>
-    <p>Configure Raid-Helper, review availability, build and post events.</p>
+<div class="admin-header">
+    <div>
+        <h1 class="admin-title">Raid Tools</h1>
+        <p style="color:var(--color-text-muted);font-size:.9rem;margin-top:.2rem;">
+            Configure Raid-Helper, review availability, and build events.
+        </p>
+    </div>
 </div>
 
-{# ── Section 1: Raid-Helper Config ────────────────────────────── #}
-<div class="rt-section">
-    <h2 class="rt-section-title" onclick="toggleSection(this)">
-        Raid-Helper Configuration
-        <span class="collapse-icon">▼</span>
-    </h2>
-    <div class="rt-section-body collapsed-body hidden">
+<div style="display:flex;flex-direction:column;gap:1.5rem;">
+
+{# ── Card 1: Raid-Helper Configuration (collapsed by default) ── #}
+<div class="card">
+    <div class="card-header collapsible" onclick="toggleCard(this)">
+        <span class="card-title">Raid-Helper Configuration</span>
+        <span class="collapse-caret" style="transform:rotate(-90deg)">▼</span>
+    </div>
+    <div class="card-body collapsed-body">
         <div class="form-grid" id="rh-config-form">
             <label for="rh-api-key">API Key</label>
             <input type="password" id="rh-api-key"
@@ -251,21 +259,21 @@
                    value="{{ discord_config.raid_default_template_id or 'wowretail2' }}"
                    placeholder="wowretail2">
         </div>
-        <div class="form-actions">
-            <button class="btn btn-gold" onclick="saveRhConfig()">Save Config</button>
-            <button class="btn btn-outline" onclick="testRhConfig()">Test Connection</button>
+        <div class="form-actions" style="margin-top:.75rem;">
+            <button class="btn-gold" onclick="saveRhConfig()">Save Config</button>
+            <button class="btn-outline-sm" onclick="testRhConfig()">Test Connection</button>
             <span class="status-msg" id="rh-status"></span>
         </div>
     </div>
 </div>
 
-{# ── Section 2: Availability Grid ──────────────────────────────── #}
-<div class="rt-section">
-    <h2 class="rt-section-title" onclick="toggleSection(this)">
-        Availability by Day
-        <span class="collapse-icon">▼</span>
-    </h2>
-    <div class="rt-section-body collapsed-body">
+{# ── Card 2: Availability by Day ───────────────────────────────── #}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Availability by Day</span>
+        <span style="font-size:.8rem;color:var(--color-text-muted);">Click a day to populate the event builder</span>
+    </div>
+    <div class="card-body">
         <div class="day-grid-compact" id="day-grid"></div>
         <div id="day-detail">
             <div class="day-detail-title" id="day-detail-title">Available Players</div>
@@ -285,18 +293,17 @@
     </div>
 </div>
 
-{# ── Section 3: Event Builder ───────────────────────────────────── #}
-<div class="rt-section">
-    <h2 class="rt-section-title" onclick="toggleSection(this)">
-        Event Builder
-        <span class="collapse-icon">▼</span>
-    </h2>
-    <div class="rt-section-body collapsed-body">
-        <p style="font-size:.85rem;color:var(--text-dim);margin:0 0 1rem;">
+{# ── Card 3: Event Builder ──────────────────────────────────────── #}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Event Builder</span>
+    </div>
+    <div class="card-body">
+        <p style="font-size:.85rem;color:var(--color-text-muted);margin:0 0 1.25rem;">
             Creates an event in Raid-Helper, saves it to the DB, and pre-populates signups from the roster.
-            Click a day above to auto-fill from your recurring schedule, or fill in the fields manually for a one-off event.
+            Click a day above to auto-fill, or fill in the fields manually for a one-off event.
         </p>
-        <div class="builder-grid">
+        <div class="builder-columns">
             {# Left column #}
             <div>
                 <div class="form-grid">
@@ -344,13 +351,10 @@
             </div>
         </div>
 
-        {# Roster Preview #}
-        <h3 style="font-family:'Cinzel',serif;color:var(--gold);font-size:.95rem;margin:.75rem 0 .25rem;">
+        <div class="roster-section-title">
             Roster Preview
-            <span style="font-size:.75rem;color:var(--text-dim);font-family:'Source Sans 3',sans-serif;margin-left:.5rem;">
-                (auto-invite rules apply · override per player below)
-            </span>
-        </h3>
+            <span>(auto-invite rules apply &middot; override per player below)</span>
+        </div>
         <table class="roster-preview-table" id="roster-table">
             <thead>
                 <tr>
@@ -412,46 +416,47 @@
             </tbody>
         </table>
 
-        <div class="form-actions" style="margin-top:1rem;">
-            <button class="btn btn-gold" onclick="createEvent()">Create Event in Raid-Helper</button>
+        <div class="form-actions" style="margin-top:1.25rem;">
+            <button class="btn-gold" onclick="createEvent()">Create Event in Raid-Helper</button>
             <span class="status-msg" id="ev-status"></span>
         </div>
     </div>
 </div>
 
-{# ── Section 4: Manual Fallback ────────────────────────────────── #}
-<div class="rt-section">
-    <h2 class="rt-section-title collapsed" onclick="toggleSection(this)">
-        Manual Fallback (copy-paste format)
-        <span class="collapse-icon" style="transform:rotate(-90deg)">▼</span>
-    </h2>
-    <div class="rt-section-body collapsed-body hidden">
-        <p style="font-size:.85rem;color:var(--text-dim);margin:0 0 .75rem;">
+{# ── Card 4: Manual Fallback (collapsed by default) ────────────── #}
+<div class="card">
+    <div class="card-header collapsible" onclick="toggleCard(this)">
+        <span class="card-title">Manual Fallback</span>
+        <span class="collapse-caret" style="transform:rotate(-90deg)">▼</span>
+    </div>
+    <div class="card-body collapsed-body">
+        <p style="font-size:.85rem;color:var(--color-text-muted);margin:0 0 .75rem;">
             Use this if Raid-Helper is down. Copy and paste into Discord.
         </p>
         <pre class="fallback-box" id="fallback-text">Fill in the Event Builder above to generate text here.</pre>
     </div>
 </div>
+
+</div>{# end card stack #}
 {% endblock %}
 
 {% block scripts %}
 <script>
-// ── State ─────────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────────
 let availData = null;
 let selectedDow = null;
 let selectedRecurringEventId = null;
 const playerOverrides = {};  // player_id (str) → status string
 
-// ── Section collapse ──────────────────────────────────────────────
-function toggleSection(titleEl) {
-    const body = titleEl.nextElementSibling;
-    const icon = titleEl.querySelector('.collapse-icon');
-    const collapsed = body.classList.toggle('hidden');
-    titleEl.classList.toggle('collapsed', collapsed);
-    icon.style.transform = collapsed ? 'rotate(-90deg)' : '';
+// ── Card collapse ────────────────────────────────────────────────
+function toggleCard(header) {
+    const body = header.nextElementSibling;
+    const caret = header.querySelector('.collapse-caret');
+    const hidden = body.classList.toggle('collapsed-body');
+    if (caret) caret.style.transform = hidden ? 'rotate(-90deg)' : '';
 }
 
-// ── Raid-Helper Config ────────────────────────────────────────────
+// ── Raid-Helper Config ───────────────────────────────────────────
 async function saveRhConfig() {
     const status = document.getElementById('rh-status');
     status.textContent = 'Saving…';
@@ -506,18 +511,11 @@ async function testRhConfig() {
     }
 }
 
-// ── Availability grid ─────────────────────────────────────────────
-const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-
+// ── Availability grid ────────────────────────────────────────────
 function barClass(pct) {
     if (pct >= 70) return 'bar--green';
     if (pct >= 40) return 'bar--amber';
     return 'bar--red';
-}
-
-function roleClass(role) {
-    const map = { 'Tank': 'tank', 'Healer': 'healer', 'Melee DPS': 'melee', 'Ranged DPS': 'ranged' };
-    return map[role] || '';
 }
 
 function rolePillClass(role) {
@@ -534,7 +532,6 @@ function renderGrid(data) {
         const roles = day.role_breakdown || {};
         const total = day.available_count || 1;
 
-        // Role bar segments
         const roleOrder = [
             ['Tank', 'role-seg--tank'],
             ['Healer', 'role-seg--healer'],
@@ -543,12 +540,11 @@ function renderGrid(data) {
         ];
         const roleSegs = roleOrder.map(([rn, rc]) => {
             const cnt = roles[rn] || 0;
-            const pct = Math.round(cnt / total * 100);
-            return cnt ? `<div class="role-seg ${rc}" style="width:${pct}%;flex:${cnt}"></div>` : '';
+            return cnt ? `<div class="role-seg ${rc}" style="flex:${cnt}"></div>` : '';
         }).join('');
 
         const eventHtml = day.recurring_event
-            ? `<div style="font-size:.72rem;color:var(--gold);margin-bottom:.3rem">⚔ ${day.recurring_event.label} · ${day.recurring_event.default_start_time}</div>`
+            ? `<div style="font-size:.72rem;color:var(--color-accent);margin-bottom:.3rem">⚔ ${day.recurring_event.label} · ${day.recurring_event.default_start_time}</div>`
             : '';
 
         const card = document.createElement('div');
@@ -559,7 +555,7 @@ function renderGrid(data) {
             ${eventHtml}
             <div class="day-card-sm__bar"><div class="day-card-sm__fill ${bc}" style="width:${day.availability_pct}%"></div></div>
             <div class="day-card-sm__stats">
-                <strong>${day.available_count}</strong> / ${availData.total_active_players} · Wt <strong>${day.weighted_score}</strong>
+                <strong>${day.available_count}</strong> / ${availData.total_active_players} &middot; Wt <strong>${day.weighted_score}</strong>
             </div>
             <div class="role-bar">${roleSegs}</div>
         `;
@@ -569,7 +565,6 @@ function renderGrid(data) {
 }
 
 function selectDay(dow) {
-    // Update card selection
     document.querySelectorAll('.day-card-sm').forEach(c => {
         c.classList.toggle('selected', parseInt(c.dataset.dow) === dow);
     });
@@ -578,13 +573,11 @@ function selectDay(dow) {
     const day = availData.days[dow];
     selectedRecurringEventId = day.recurring_event ? day.recurring_event.id : null;
 
-    // Show detail panel
     const detail = document.getElementById('day-detail');
     detail.classList.add('visible');
     document.getElementById('day-detail-title').textContent =
         `${day.day_name} — ${day.available_count} available`;
 
-    // Role summary
     const roles = day.role_breakdown || {};
     const summaryEl = document.getElementById('role-summary');
     const roleOrder = ['Tank', 'Healer', 'Melee DPS', 'Ranged DPS'];
@@ -592,7 +585,6 @@ function selectDay(dow) {
         `<span><strong>${roles[r] || 0}</strong> ${r}</span>`
     ).join('');
 
-    // Player table
     const tbody = document.getElementById('day-players');
     tbody.innerHTML = '';
     for (const p of day.players) {
@@ -610,7 +602,6 @@ function selectDay(dow) {
         tbody.appendChild(tr);
     }
 
-    // Pre-fill event builder
     const nextDate = nextOccurrenceOf(dow);
     document.getElementById('ev-date').value = nextDate;
     if (day.recurring_event) {
@@ -626,17 +617,16 @@ function selectDay(dow) {
 }
 
 function nextOccurrenceOf(dayOfWeek) {
-    // dayOfWeek: 0=Mon … 6=Sun (ISO)
     const today = new Date();
-    const todayDow = (today.getDay() + 6) % 7; // JS: 0=Sun → convert to ISO
+    const todayDow = (today.getDay() + 6) % 7;
     let daysUntil = (dayOfWeek - todayDow + 7) % 7;
-    if (daysUntil === 0) daysUntil = 7; // Always next week if same day
+    if (daysUntil === 0) daysUntil = 7;
     const next = new Date(today);
     next.setDate(today.getDate() + daysUntil);
     return next.toISOString().split('T')[0];
 }
 
-// ── Player status overrides ───────────────────────────────────────
+// ── Player status overrides ──────────────────────────────────────
 function overrideStatus(playerId, value) {
     const tr = document.querySelector(`tr[data-player-id="${playerId}"]`);
     const statusCell = tr.querySelector('.status-cell');
@@ -653,7 +643,7 @@ function overrideStatus(playerId, value) {
     statusCell.innerHTML = `<span class="status-badge ${cls}">${effective.charAt(0).toUpperCase() + effective.slice(1)}</span>`;
 }
 
-// ── Create Event ──────────────────────────────────────────────────
+// ── Create Event ─────────────────────────────────────────────────
 async function createEvent() {
     const status = document.getElementById('ev-status');
     status.textContent = 'Creating…';
@@ -688,7 +678,7 @@ async function createEvent() {
         if (data.ok) {
             const url = data.data.event_url;
             status.innerHTML = url
-                ? `✓ Event created! <a href="${url}" target="_blank" style="color:var(--gold)">View in Raid-Helper</a>`
+                ? `✓ Event created! <a href="${url}" target="_blank" style="color:var(--color-accent)">View in Raid-Helper</a>`
                 : `✓ Event created (id: ${data.data.raid_helper_event_id})`;
             status.className = 'status-msg ok';
         } else {
@@ -701,7 +691,7 @@ async function createEvent() {
     }
 }
 
-// ── Manual Fallback text ──────────────────────────────────────────
+// ── Manual Fallback text ─────────────────────────────────────────
 function updateFallback() {
     const title = document.getElementById('ev-title').value || '(No title)';
     const dateVal = document.getElementById('ev-date').value || '(date)';
@@ -709,12 +699,11 @@ function updateFallback() {
     const dur = document.getElementById('ev-duration').value || '120';
     const desc = document.getElementById('ev-desc').value || '';
     const durLabel = { '60': '1 hour', '90': '1.5 hours', '120': '2 hours', '150': '2.5 hours', '180': '3 hours' }[dur] || dur + ' min';
-
     const text = `**${title}**\n📅 ${dateVal} at ${timeVal} EST (${durLabel})\n${desc ? '\n' + desc : ''}`.trim();
     document.getElementById('fallback-text').textContent = text;
 }
 
-// ── Bootstrap ─────────────────────────────────────────────────────
+// ── Bootstrap ────────────────────────────────────────────────────
 async function loadAvailability() {
     try {
         const resp = await fetch('/api/v1/admin/availability-by-day');
@@ -726,7 +715,6 @@ async function loadAvailability() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Default date to next week's Friday (or tomorrow if no obvious raid day)
     const today = new Date();
     const iso = new Date(today.getTime() + 86400000).toISOString().split('T')[0];
     document.getElementById('ev-date').value = iso;

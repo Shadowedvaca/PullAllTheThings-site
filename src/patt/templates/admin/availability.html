@@ -4,36 +4,7 @@
 
 {% block head %}
 <style>
-/* ── Availability page ─────────────────────────────────────────── */
-.avail-header {
-    padding: 2rem 2rem 1rem;
-    border-bottom: 1px solid var(--border);
-}
-.avail-header h1 {
-    font-family: 'Cinzel', serif;
-    font-size: 1.6rem;
-    color: var(--gold);
-    margin: 0 0 .25rem;
-}
-.avail-header p {
-    color: var(--text-dim);
-    margin: 0;
-    font-size: .9rem;
-}
-
-/* ── Grid ─────────────────────────────────────────────────────── */
-.avail-section {
-    padding: 1.5rem 2rem;
-}
-.avail-section-title {
-    font-family: 'Cinzel', serif;
-    font-size: 1.1rem;
-    color: var(--gold);
-    margin: 0 0 1rem;
-    padding-bottom: .5rem;
-    border-bottom: 1px solid var(--border);
-}
-
+/* ── Day availability cards ──────────────────────────────────────── */
 .day-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -41,9 +12,9 @@
 }
 
 .day-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
     overflow: hidden;
 }
 .day-card__header {
@@ -53,27 +24,23 @@
     padding: .75rem 1rem .5rem;
 }
 .day-card__name {
-    font-family: 'Cinzel', serif;
+    font-family: var(--font-display);
     font-size: 1rem;
-    color: var(--text);
+    color: var(--color-text);
 }
 .day-card__badge {
     font-size: .75rem;
-    background: var(--surface-alt);
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
     padding: .1rem .5rem;
-    color: var(--gold);
+    color: var(--color-accent);
     white-space: nowrap;
 }
 
-/* progress bar */
-.day-card__bar-wrap {
-    padding: 0 1rem .5rem;
-}
 .bar-track {
     height: 8px;
-    background: var(--surface-alt);
+    background: var(--color-bg-card);
     border-radius: 4px;
     overflow: hidden;
 }
@@ -82,42 +49,53 @@
     border-radius: 4px;
     transition: width .3s;
 }
-.bar--green  { background: var(--success); }
-.bar--amber  { background: var(--warning); }
-.bar--red    { background: var(--danger); }
+.bar--green  { background: var(--color-success); }
+.bar--amber  { background: var(--color-warning); }
+.bar--red    { background: var(--color-danger); }
 
+.day-card__bar-wrap { padding: 0 1rem .5rem; }
 .day-card__stats {
     display: flex;
     gap: 1rem;
     padding: 0 1rem .75rem;
     font-size: .82rem;
-    color: var(--text-dim);
+    color: var(--color-text-muted);
 }
-.day-card__stats strong { color: var(--text); }
+.day-card__stats strong { color: var(--color-text); }
 
-/* collapsible player list */
+.day-card__event {
+    padding: .4rem 1rem .5rem;
+    font-size: .8rem;
+    background: rgba(212,168,75,.05);
+    border-top: 1px solid rgba(212,168,75,.2);
+    color: var(--color-accent);
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+
 .day-card__toggle {
     width: 100%;
     background: none;
     border: none;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--color-border);
     padding: .5rem 1rem;
     text-align: left;
-    color: var(--text-dim);
+    color: var(--color-text-muted);
     font-size: .8rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: .4rem;
 }
-.day-card__toggle:hover { color: var(--gold); }
+.day-card__toggle:hover { color: var(--color-accent); }
 .day-card__toggle .chevron { transition: transform .2s; }
 .day-card__toggle.open .chevron { transform: rotate(90deg); }
 
 .day-card__players {
     display: none;
     padding: .5rem 1rem .75rem;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--color-border);
     max-height: 260px;
     overflow-y: auto;
 }
@@ -129,10 +107,10 @@
     gap: .5rem;
     padding: .25rem 0;
     font-size: .83rem;
-    border-bottom: 1px solid var(--border-subtle, #2a2a2e);
+    border-bottom: 1px solid var(--color-border);
 }
 .player-row:last-child { border-bottom: none; }
-.player-row__name { flex: 1; color: var(--text); }
+.player-row__name { flex: 1; color: var(--color-text); }
 .player-row__role {
     font-size: .75rem;
     padding: .1rem .4rem;
@@ -144,21 +122,9 @@
 .role--healer  { background: #143d22; color: #4ade80; }
 .role--melee   { background: #3d1414; color: #f87171; }
 .role--ranged  { background: #3d2e05; color: #fbbf24; }
-.player-row__rank { font-size: .75rem; color: var(--text-dim); }
+.player-row__rank { font-size: .75rem; color: var(--color-text-muted); }
 
-/* event badge on card */
-.day-card__event {
-    padding: .4rem 1rem .5rem;
-    font-size: .8rem;
-    background: #1a1a0e;
-    border-top: 1px solid #3a3520;
-    color: var(--gold);
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-}
-
-/* ── Event Day Config Table ───────────────────────────────────── */
+/* ── Event Day Config Table ────────────────────────────────────── */
 .event-table {
     width: 100%;
     border-collapse: collapse;
@@ -167,8 +133,8 @@
 .event-table th {
     text-align: left;
     padding: .6rem .75rem;
-    color: var(--text-dim);
-    border-bottom: 2px solid var(--border);
+    color: var(--color-text-muted);
+    border-bottom: 2px solid var(--color-border);
     font-weight: 600;
     font-size: .8rem;
     text-transform: uppercase;
@@ -176,186 +142,191 @@
 }
 .event-table td {
     padding: .6rem .75rem;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text);
     vertical-align: middle;
 }
-.event-table tr:hover td { background: var(--surface-alt); }
+.event-table tr:last-child td { border-bottom: none; }
+.event-table tr:hover td { background: rgba(255,255,255,.02); }
 
 .event-table input[type="text"],
 .event-table input[type="time"],
 .event-table select {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: 4px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
     padding: .3rem .5rem;
     font-size: .85rem;
     width: 100%;
 }
-.event-table input[type="text"]:focus,
-.event-table input[type="time"]:focus,
+.event-table input:focus,
 .event-table select:focus {
-    outline: 2px solid var(--gold);
-    border-color: var(--gold);
+    outline: 2px solid var(--color-accent);
+    border-color: var(--color-accent);
 }
 
-.toggle-wrap {
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-}
-.toggle-label {
-    font-size: .8rem;
-    color: var(--text-dim);
-}
+.toggle-wrap { display: flex; align-items: center; gap: .4rem; }
+.toggle-label { font-size: .8rem; color: var(--color-text-muted); }
 
-/* status indicator for auto-save */
-.save-indicator {
-    font-size: .75rem;
-    color: var(--text-dim);
-    min-width: 60px;
-}
-.save-indicator.saving { color: var(--warning); }
-.save-indicator.saved  { color: var(--success); }
-.save-indicator.error  { color: var(--danger); }
+.save-indicator { font-size: .75rem; color: var(--color-text-muted); min-width: 60px; }
+.save-indicator.saving { color: var(--color-warning); }
+.save-indicator.saved  { color: var(--color-success); }
+.save-indicator.error  { color: var(--color-danger); }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="avail-header">
-    <h1>Availability Dashboard</h1>
-    <p>{{ total_active }} active players · availability per day of week</p>
-</div>
-
-{# ── Section 1: 7-day grid ──────────────────────────────────── #}
-<div class="avail-section">
-    <h2 class="avail-section-title">Player Availability by Day</h2>
-    <div class="day-grid">
-        {% for day in days %}
-        <div class="day-card">
-            <div class="day-card__header">
-                <span class="day-card__name">{{ day.day_name }}</span>
-                <span class="day-card__badge">{{ day.available_count }} / {{ total_active }}</span>
-            </div>
-
-            <div class="day-card__bar-wrap">
-                <div class="bar-track">
-                    <div class="bar-fill {{ day.bar_class }}"
-                         style="width: {{ day.availability_pct }}%"></div>
-                </div>
-            </div>
-
-            <div class="day-card__stats">
-                <span><strong>{{ day.availability_pct }}%</strong> available</span>
-                <span>Weight: <strong>{{ day.weighted_score }}</strong></span>
-            </div>
-
-            {% if day.event %}
-            <div class="day-card__event">
-                ⚔ {{ day.event.label }} · {{ day.event.default_start_time.strftime('%H:%M') }} server time
-            </div>
-            {% endif %}
-
-            {% if day.players %}
-            <button class="day-card__toggle" onclick="toggleList(this)"
-                    aria-expanded="false">
-                <span class="chevron">›</span>
-                Show {{ day.players|length }} player{{ 's' if day.players|length != 1 else '' }}
-            </button>
-            <div class="day-card__players">
-                {% for p in day.players %}
-                <div class="player-row">
-                    <span class="player-row__name">{{ p.display_name }}</span>
-                    {% if p.main_role %}
-                        {% set role_css = {
-                            'Tank': 'role--tank',
-                            'Healer': 'role--healer',
-                            'Melee DPS': 'role--melee',
-                            'Ranged DPS': 'role--ranged'
-                        } %}
-                        <span class="player-row__role {{ role_css.get(p.main_role, '') }}">
-                            {{ p.main_role }}
-                        </span>
-                    {% endif %}
-                    <span class="player-row__rank">{{ p.rank }}</span>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
+<div class="admin-header">
+    <div>
+        <h1 class="admin-title">Availability</h1>
+        <p style="color:var(--color-text-muted);font-size:.9rem;margin-top:.2rem;">
+            {{ total_active }} active players &mdash; availability by day of week
+        </p>
     </div>
 </div>
 
-{# ── Section 2: Event Day Config Table ─────────────────────── #}
-<div class="avail-section">
-    <h2 class="avail-section-title">Event Day Configuration</h2>
-    <table class="event-table" id="event-day-table">
-        <thead>
-            <tr>
-                <th>Day</th>
-                <th style="width:60px">Active</th>
-                <th>Label</th>
-                <th style="width:110px">Time (EST)</th>
-                <th style="width:130px">Duration</th>
-                <th style="width:100px">Show Public</th>
-                <th style="width:70px"></th>
-            </tr>
-        </thead>
-        <tbody>
-            {% set day_names = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
-            {% for dow in range(7) %}
-            {% set ev = events_by_day.get(dow) %}
-            <tr data-dow="{{ dow }}" data-event-id="{{ ev.id if ev else '' }}">
-                <td><strong>{{ day_names[dow] }}</strong></td>
-                <td>
-                    <input type="checkbox" class="js-active-toggle"
-                           {% if ev and ev.is_active %}checked{% endif %}
-                           onchange="onActiveToggle(this)">
-                </td>
-                <td>
-                    <input type="text" class="js-label" maxlength="100"
-                           value="{{ ev.label if ev else '' }}"
-                           placeholder="e.g. Heroic Raid Night"
-                           {% if not ev or not ev.is_active %}disabled{% endif %}
-                           onblur="onFieldChange(this)">
-                </td>
-                <td>
-                    <input type="time" class="js-start-time"
-                           value="{{ ev.default_start_time.strftime('%H:%M') if ev and ev.default_start_time else '21:00' }}"
-                           {% if not ev or not ev.is_active %}disabled{% endif %}
-                           onchange="onFieldChange(this)">
-                </td>
-                <td>
-                    <select class="js-duration"
-                            {% if not ev or not ev.is_active %}disabled{% endif %}
-                            onchange="onFieldChange(this)">
-                        {% for dur in [60, 90, 120, 150, 180] %}
-                        <option value="{{ dur }}"
-                            {% if ev and ev.default_duration_minutes == dur %}selected{% endif %}>
-                            {{ dur }} min
-                        </option>
-                        {% endfor %}
-                    </select>
-                </td>
-                <td>
-                    <div class="toggle-wrap">
-                        <input type="checkbox" class="js-public-toggle"
-                               {% if ev and ev.display_on_public %}checked{% endif %}
+<div style="display:flex;flex-direction:column;gap:1.5rem;">
+
+{# ── Card 1: Player Availability Grid ──────────────────────────── #}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Player Availability by Day</span>
+    </div>
+    <div class="card-body">
+        <div class="day-grid">
+            {% for day in days %}
+            <div class="day-card">
+                <div class="day-card__header">
+                    <span class="day-card__name">{{ day.day_name }}</span>
+                    <span class="day-card__badge">{{ day.available_count }} / {{ total_active }}</span>
+                </div>
+
+                <div class="day-card__bar-wrap">
+                    <div class="bar-track">
+                        <div class="bar-fill {{ day.bar_class }}"
+                             style="width: {{ day.availability_pct }}%"></div>
+                    </div>
+                </div>
+
+                <div class="day-card__stats">
+                    <span><strong>{{ day.availability_pct }}%</strong> available</span>
+                    <span>Weight: <strong>{{ day.weighted_score }}</strong></span>
+                </div>
+
+                {% if day.event %}
+                <div class="day-card__event">
+                    ⚔ {{ day.event.label }} &middot; {{ day.event.default_start_time.strftime('%H:%M') }} server time
+                </div>
+                {% endif %}
+
+                {% if day.players %}
+                <button class="day-card__toggle" onclick="toggleList(this)"
+                        aria-expanded="false">
+                    <span class="chevron">›</span>
+                    Show {{ day.players|length }} player{{ 's' if day.players|length != 1 else '' }}
+                </button>
+                <div class="day-card__players">
+                    {% for p in day.players %}
+                    <div class="player-row">
+                        <span class="player-row__name">{{ p.display_name }}</span>
+                        {% if p.main_role %}
+                            {% set role_css = {
+                                'Tank': 'role--tank',
+                                'Healer': 'role--healer',
+                                'Melee DPS': 'role--melee',
+                                'Ranged DPS': 'role--ranged'
+                            } %}
+                            <span class="player-row__role {{ role_css.get(p.main_role, '') }}">
+                                {{ p.main_role }}
+                            </span>
+                        {% endif %}
+                        <span class="player-row__rank">{{ p.rank }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{# ── Card 2: Event Day Configuration ───────────────────────────── #}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Event Day Configuration</span>
+        <span style="font-size:.8rem;color:var(--color-text-muted);">Changes save automatically</span>
+    </div>
+    <div class="card-body" style="padding:0;">
+        <table class="event-table" id="event-day-table">
+            <thead>
+                <tr>
+                    <th style="padding-left:1.25rem">Day</th>
+                    <th style="width:60px">Active</th>
+                    <th>Label</th>
+                    <th style="width:110px">Time (EST)</th>
+                    <th style="width:130px">Duration</th>
+                    <th style="width:100px">Show Public</th>
+                    <th style="width:70px;padding-right:1.25rem"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set day_names = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+                {% for dow in range(7) %}
+                {% set ev = events_by_day.get(dow) %}
+                <tr data-dow="{{ dow }}" data-event-id="{{ ev.id if ev else '' }}">
+                    <td style="padding-left:1.25rem"><strong>{{ day_names[dow] }}</strong></td>
+                    <td>
+                        <input type="checkbox" class="js-active-toggle"
+                               {% if ev and ev.is_active %}checked{% endif %}
+                               onchange="onActiveToggle(this)">
+                    </td>
+                    <td>
+                        <input type="text" class="js-label" maxlength="100"
+                               value="{{ ev.label if ev else '' }}"
+                               placeholder="e.g. Heroic Raid Night"
+                               {% if not ev or not ev.is_active %}disabled{% endif %}
+                               onblur="onFieldChange(this)">
+                    </td>
+                    <td>
+                        <input type="time" class="js-start-time"
+                               value="{{ ev.default_start_time.strftime('%H:%M') if ev and ev.default_start_time else '21:00' }}"
                                {% if not ev or not ev.is_active %}disabled{% endif %}
                                onchange="onFieldChange(this)">
-                        <span class="toggle-label">Yes</span>
-                    </div>
-                </td>
-                <td>
-                    <span class="save-indicator js-status"></span>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    </td>
+                    <td>
+                        <select class="js-duration"
+                                {% if not ev or not ev.is_active %}disabled{% endif %}
+                                onchange="onFieldChange(this)">
+                            {% for dur in [60, 90, 120, 150, 180] %}
+                            <option value="{{ dur }}"
+                                {% if ev and ev.default_duration_minutes == dur %}selected{% endif %}>
+                                {{ dur }} min
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <div class="toggle-wrap">
+                            <input type="checkbox" class="js-public-toggle"
+                                   {% if ev and ev.display_on_public %}checked{% endif %}
+                                   {% if not ev or not ev.is_active %}disabled{% endif %}
+                                   onchange="onFieldChange(this)">
+                            <span class="toggle-label">Yes</span>
+                        </div>
+                    </td>
+                    <td style="padding-right:1.25rem">
+                        <span class="save-indicator js-status"></span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+
+</div>{# end card stack #}
 {% endblock %}
 
 {% block scripts %}
@@ -367,11 +338,9 @@ function toggleList(btn) {
     btn.setAttribute('aria-expanded', open);
 }
 
-// ── Event Day Table ─────────────────────────────────────────────
+// ── Event Day Table ──────────────────────────────────────────────
 
-function getRow(el) {
-    return el.closest('tr');
-}
+function getRow(el) { return el.closest('tr'); }
 
 function rowData(row) {
     return {
@@ -387,8 +356,6 @@ function rowData(row) {
 
 function setStatus(row, state, text) {
     const el = row.querySelector('.js-status');
-    el.className = 'save-indicator js-status ' + (state ? 'save-indicator--' + state : '');
-    // map state to CSS class
     el.classList.remove('saving', 'saved', 'error');
     if (state) el.classList.add(state);
     el.textContent = text;
@@ -400,16 +367,13 @@ async function onActiveToggle(checkbox) {
     const inputs = row.querySelectorAll('input:not(.js-active-toggle), select');
     inputs.forEach(i => i.disabled = !d.is_active);
 
-    if (!d.is_active && !row.dataset.eventId) {
-        // No DB row yet and deactivating — nothing to do
-        return;
-    }
+    if (!d.is_active && !row.dataset.eventId) return;
     await saveRow(row);
 }
 
 async function onFieldChange(el) {
     const row = getRow(el);
-    if (!row.querySelector('.js-active-toggle').checked) return; // inactive — skip
+    if (!row.querySelector('.js-active-toggle').checked) return;
     await saveRow(row);
 }
 
@@ -419,7 +383,6 @@ async function saveRow(row) {
 
     try {
         if (row.dataset.eventId) {
-            // PATCH existing
             const body = {
                 label: d.label || 'Event',
                 default_start_time: d.start_time || '21:00',
@@ -435,7 +398,6 @@ async function saveRow(row) {
             const json = await resp.json();
             if (!json.ok) throw new Error(json.error || json.detail || 'Error');
         } else if (d.is_active) {
-            // POST create
             const body = {
                 label: d.label || 'Event',
                 event_type: 'raid',
