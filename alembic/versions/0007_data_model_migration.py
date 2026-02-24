@@ -439,6 +439,9 @@ def upgrade() -> None:
         "member_availability", "member_id", new_column_name="player_id", schema="common"
     )
 
+    # Null out stale guild_member IDs — the data migration script re-links to player IDs
+    conn.execute(sa.text("UPDATE common.member_availability SET player_id = NULL"))
+
     # Re-add constraints
     op.create_unique_constraint(
         "member_availability_player_id_day_of_week_key",
