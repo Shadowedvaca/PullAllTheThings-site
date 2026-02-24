@@ -42,21 +42,29 @@ def _decode_token(token: str) -> dict:
 
 
 async def get_current_player(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> Player:
-    """Extract JWT from Authorization header, validate, return the player.
+    """Extract JWT from Authorization header or cookie, validate, return the player.
 
-    Resolves via user_id → players.website_user_id.
-    Raises HTTP 401 if token is missing or invalid.
+    Tries Bearer token first; falls back to the session cookie so that
+    browser fetch() calls from admin pages work without a separate token.
+    Raises HTTP 401 if no valid token is found.
     """
-    if credentials is None:
-        raise HTTPException(status_code=401, detail="Not authenticated.")
-
     from sv_common.auth.jwt import decode_access_token
 
+    token_str: str | None = None
+    if credentials is not None:
+        token_str = credentials.credentials
+    else:
+        token_str = request.cookies.get(COOKIE_NAME)
+
+    if not token_str:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+
     try:
-        payload = decode_access_token(credentials.credentials)
+        payload = decode_access_token(token_str)
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired.")
     except jwt.InvalidTokenError:
