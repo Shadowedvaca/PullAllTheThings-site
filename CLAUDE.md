@@ -723,6 +723,15 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
     collapsible player lists with role+rank, event day config table with auto-save
   - Sidebar nav link "Availability" added to base_admin.html
 
+- Phase 3.3: Public Roster View (complete)
+  - New public page `/roster` (no auth required) — three tabs: Full Roster, Composition, Schedule
+  - Full Roster: sortable table, mains-only default, "Show alts" checkbox, client-side search by name/class/spec, class colors, armory links
+  - Composition: role distribution cards (green/amber/red vs targets 2T/4H/6M/6R), class distribution chips, Wowhead comp link with full spec code map
+  - Schedule: recurring event days from DB (same query as index page)
+  - Updated `GET /api/v1/guild/roster`: returns `player_id`, `rank_name`, `rank_level`, `main_character` (character_id, character_name, realm_slug, class_name, spec_name, role_name, item_level, armory_url), `characters[]` for alt view
+  - `app.py`: removed roster/roster-view from legacy file handlers; 301 redirects `/roster.html` → `/roster`, `/roster-view.html` → `/roster`
+  - New `src/patt/static/css/roster.css`
+
 ### Current Phase
 - **No active phase** — platform is up to date
 
@@ -730,9 +739,6 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 3.2: Index Page Revamp (`reference/PHASE_3_2_INDEX_REVAMP.md`)
   - Officers, recruiting needs, weekly schedule all loaded from DB (no more hardcoded HTML)
   - Links updated: roster.html → /roster
-- Phase 3.3: Public Roster View (`reference/PHASE_3_3_PUBLIC_ROSTER.md`)
-  - New public page `/roster` — tabbed: Full Roster, Composition, Schedule
-  - Class colors, Wowhead comp link with spec code map, 301 redirects for legacy static files
 - Phase 3.4: Admin Raid Tools (`reference/PHASE_3_4_RAID_TOOLS.md`)
   - New table additions: `patt.raid_events.recurring_event_id`, `auto_booked`, `raid_helper_payload`
   - New admin page `/admin/raid-tools` — RH config, availability grid, event builder, roster preview
@@ -760,6 +766,7 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Admin API: GET/POST/PATCH/DELETE `/api/v1/admin/recurring-events` + GET `/api/v1/admin/availability-by-day`
 - RecurringEvent ORM model + patt.recurring_events table (migration 0013)
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/availability` (public, no auth required)
+- Public roster page: `/roster` — Full Roster / Composition / Schedule tabs; 301 redirects from /roster.html and /roster-view.html
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
 - Bot events: `on_member_join` (discord_sync + onboarding), `on_member_remove`, `on_member_update` all wired
 - Bot slash commands: `/onboard-status`, `/onboard-resolve`, `/onboard-dismiss`, `/onboard-retry` registered on_ready
