@@ -4,112 +4,172 @@
 
 {% block head %}
 <style>
+  /* ── Page shell ───────────────────────────────────────────────── */
   .profile-page {
-    max-width: 760px;
-    margin: 2rem auto;
-    padding: 0 1rem;
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2rem 1rem 3rem;
   }
 
-  .profile-page h1 {
-    font-family: 'Cinzel', serif;
-    color: var(--gold);
-    font-size: 1.6rem;
-    margin-bottom: 2rem;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.75rem;
-  }
-
-  .settings-section {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.5rem;
+  .profile-page__title {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    color: var(--color-accent);
     margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
   }
 
-  .settings-section h2 {
-    font-family: 'Cinzel', serif;
-    color: var(--gold);
-    font-size: 1.1rem;
-    margin: 0 0 1.25rem 0;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-subtle);
+  /* ── Read-only info banner ────────────────────────────────────── */
+  .profile-info-banner {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    gap: 2.5rem;
+    flex-wrap: wrap;
   }
 
-  .form-grid {
+  .profile-info-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .profile-info-field__label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+  }
+
+  .profile-info-field__value {
+    font-size: 0.95rem;
+    color: var(--color-text);
+    font-weight: 600;
+  }
+
+  /* ── Section panels ───────────────────────────────────────────── */
+  .settings-section {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+  }
+
+  .settings-section__header {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-panel);
+  }
+
+  .settings-section__title {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+
+  .settings-section__body {
+    padding: 1.25rem;
+  }
+
+  /* ── Consistent form group ────────────────────────────────────── */
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .field-group__label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .field-group__hint {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-top: 0.15rem;
+  }
+
+  /* ── 2-col field grid ─────────────────────────────────────────── */
+  .field-grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1rem;
   }
 
-  .form-grid .full-width {
-    grid-column: 1 / -1;
+  /* ── Character pair rows (label + 2 selects) ──────────────────── */
+  .char-pair {
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr;
+    gap: 0.75rem;
+    align-items: end;
+    margin-bottom: 0.75rem;
   }
 
-  .form-row {
-    margin-bottom: 1rem;
-  }
-
-  .form-row:last-child {
+  .char-pair:last-child {
     margin-bottom: 0;
   }
 
-  .readonly-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+  .char-pair__role-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 0.65rem; /* align with input bottom */
   }
 
-  .readonly-field .form-label {
-    margin-bottom: 0;
-  }
-
-  .readonly-value {
-    color: var(--text-muted);
-    font-size: 0.95rem;
-    padding: 0.45rem 0;
-  }
-
-  .section-actions {
-    margin-top: 1.25rem;
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  /* Availability table */
+  /* ── Availability table ───────────────────────────────────────── */
   .avail-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
   }
 
-  .avail-table th {
-    text-align: left;
-    color: var(--text-muted);
-    font-weight: 600;
-    font-size: 0.8rem;
+  .avail-table colgroup col:nth-child(1) { width: 100px; } /* Day */
+  .avail-table colgroup col:nth-child(2) { width: 90px;  } /* Available */
+  .avail-table colgroup col:nth-child(3) { width: auto;  } /* Start time */
+  .avail-table colgroup col:nth-child(4) { width: 130px; } /* Hours */
+
+  .avail-table thead th {
+    font-size: 0.75rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0 0.5rem 0.5rem 0;
-    border-bottom: 1px solid var(--border-subtle);
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    text-align: left;
+    padding: 0 0 0.6rem 0;
+    border-bottom: 1px solid var(--color-border);
   }
 
-  .avail-table td {
-    padding: 0.5rem 0.5rem 0.5rem 0;
+  .avail-table tbody td {
+    padding: 0.45rem 0.5rem 0.45rem 0;
     vertical-align: middle;
   }
 
-  .avail-table tr.unavailable td {
-    opacity: 0.45;
+  .avail-table tbody tr.row-unavailable {
+    opacity: 0.4;
   }
 
-  .avail-table tr.unavailable td:first-child {
-    opacity: 1;
+  .avail-table tbody tr.row-unavailable td:first-child {
+    opacity: 1; /* keep the day name readable */
   }
 
-  .day-name {
+  .avail-day-name {
+    font-size: 0.9rem;
     font-weight: 600;
-    color: var(--text-primary);
-    min-width: 90px;
+    color: var(--color-text);
   }
 
   .avail-check-wrap {
@@ -118,281 +178,355 @@
     gap: 0.4rem;
   }
 
-  .checkbox-label {
-    font-size: 0.875rem;
-    color: var(--text-muted);
+  .avail-check-wrap input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--color-accent);
     cursor: pointer;
+    flex-shrink: 0;
   }
 
-  /* Preferences */
-  .pref-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-  }
-
-  .pref-row label {
-    cursor: pointer;
-    color: var(--text-primary);
-  }
-
-  .pref-row .pref-desc {
+  .avail-check-wrap label {
     font-size: 0.85rem;
-    color: var(--text-muted);
-    margin-top: 0.1rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  /* ── Checkbox preference row ──────────────────────────────────── */
+  .pref-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem 0 0;
+    border-top: 1px solid var(--color-border);
+    margin-top: 0.75rem;
+  }
+
+  .pref-check-row input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+  }
+
+  .pref-check-row__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .pref-check-row__text label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .pref-check-row__text span {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  /* ── Section footer with save button ─────────────────────────── */
+  .settings-section__footer {
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: flex-end;
+    background: var(--color-bg-panel);
+  }
+
+  /* Column headers above char pair selects */
+  .char-col-headers {
+    display: grid;
+    grid-template-columns: 80px 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .char-col-headers span {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="profile-page">
-  <h1>Profile Settings</h1>
+  <h1 class="profile-page__title">Profile Settings</h1>
 
-  {# Flash messages from query params are handled by base.html via context #}
+  {# ── Read-only guild info ──────────────────────────────────────── #}
+  <div class="profile-info-banner">
+    <div class="profile-info-field">
+      <span class="profile-info-field__label">Discord</span>
+      <span class="profile-info-field__value">
+        {% if current_member.discord_user %}
+          {{ current_member.discord_user.display_name or current_member.discord_user.username }}
+        {% else %}
+          <span style="color:var(--color-text-muted);font-weight:400"><em>Not linked</em></span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="profile-info-field">
+      <span class="profile-info-field__label">Guild Rank</span>
+      <span class="profile-info-field__value">
+        {% if current_member.guild_rank %}
+          {{ current_member.guild_rank.name }}
+        {% else %}
+          <span style="color:var(--color-text-muted);font-weight:400"><em>Unranked</em></span>
+        {% endif %}
+      </span>
+    </div>
+    {% if current_member.main_character %}
+    <div class="profile-info-field">
+      <span class="profile-info-field__label">Main</span>
+      <span class="profile-info-field__value">
+        {{ current_member.main_character.character_name }}
+        {% if current_member.main_spec %}
+          <span style="color:var(--color-text-muted);font-weight:400">— {{ current_member.main_spec.name }}</span>
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+  </div>
 
-  {# ── Identity ────────────────────────────────────────────────────────── #}
+  {# ── Display Name & Preferences ───────────────────────────────── #}
   <div class="settings-section">
-    <h2>Identity</h2>
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Display Name &amp; Preferences</h2>
+    </div>
     <form method="post" action="/profile/info">
-      <div class="form-grid">
-        <div class="form-row">
-          <label class="form-label" for="display_name">Display Name</label>
+      <div class="settings-section__body">
+
+        <div class="field-grid-2">
+          <div class="field-group">
+            <label class="field-group__label" for="display_name">Display Name</label>
+            <input
+              class="form-control"
+              type="text"
+              id="display_name"
+              name="display_name"
+              value="{{ current_member.display_name or '' }}"
+              maxlength="100"
+              required
+            >
+          </div>
+
+          <div class="field-group">
+            <label class="field-group__label" for="timezone">Timezone</label>
+            <select class="form-control" id="timezone" name="timezone">
+              {% for tz in timezones %}
+                <option value="{{ tz }}" {% if current_member.timezone == tz %}selected{% endif %}>{{ tz }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="pref-check-row">
           <input
-            class="form-control"
-            type="text"
-            id="display_name"
-            name="display_name"
-            value="{{ current_member.display_name or '' }}"
-            maxlength="100"
-            required
+            type="checkbox"
+            id="auto_invite_events"
+            name="auto_invite_events"
+            value="on"
+            {% if current_member.auto_invite_events %}checked{% endif %}
           >
+          <div class="pref-check-row__text">
+            <label for="auto_invite_events">Auto-invite to raid events</label>
+            <span>Automatically sign you up for raid events that match your availability schedule.</span>
+          </div>
         </div>
 
-        <div class="form-row readonly-field">
-          <span class="form-label">Discord Username</span>
-          <span class="readonly-value">
-            {% if current_member.discord_user %}
-              {{ current_member.discord_user.display_name or current_member.discord_user.username }}
-            {% else %}
-              <em>Not linked</em>
-            {% endif %}
-          </span>
-        </div>
-
-        <div class="form-row readonly-field">
-          <span class="form-label">Guild Rank</span>
-          <span class="readonly-value">
-            {% if current_member.guild_rank %}
-              {{ current_member.guild_rank.name }}
-            {% else %}
-              <em>Unranked</em>
-            {% endif %}
-          </span>
-        </div>
       </div>
-
-      <div class="section-actions">
-        <button type="submit" class="btn btn-primary">Save Identity</button>
+      <div class="settings-section__footer">
+        <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
   </div>
 
-  {# ── Characters ──────────────────────────────────────────────────────── #}
+  {# ── Characters ──────────────────────────────────────────────── #}
   <div class="settings-section">
-    <h2>Characters</h2>
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Characters</h2>
+    </div>
     <form method="post" action="/profile/characters">
-      <div class="form-grid">
-        {# Main Character #}
-        <div class="form-row">
-          <label class="form-label" for="main_character_id">Main Character</label>
-          <select class="form-control" id="main_character_id" name="main_character_id" onchange="updateSpecDropdown('main')">
-            <option value="">— None —</option>
-            {% for pc in player_chars %}
-              <option
-                value="{{ pc.character.id }}"
-                data-class-id="{{ pc.character.class_id or '' }}"
-                {% if current_member.main_character_id == pc.character.id %}selected{% endif %}
-              >{{ pc.character.character_name }} ({{ pc.character.realm_slug }})</option>
-            {% endfor %}
-          </select>
+      <div class="settings-section__body">
+
+        <div class="char-col-headers">
+          <span></span>
+          <span>Character</span>
+          <span>Specialization</span>
         </div>
 
-        <div class="form-row">
-          <label class="form-label" for="main_spec_id">Main Spec</label>
-          <select class="form-control" id="main_spec_id" name="main_spec_id">
-            <option value="">— None —</option>
-            {% for spec in all_specs %}
-              <option
-                value="{{ spec.id }}"
-                data-class-id="{{ spec.class_id }}"
-                {% if current_member.main_spec_id == spec.id %}selected{% endif %}
-              >{{ spec.wow_class.name }} — {{ spec.name }}</option>
-            {% endfor %}
-          </select>
+        {# Main #}
+        <div class="char-pair">
+          <div class="char-pair__role-label">Main</div>
+          <div class="field-group">
+            <select class="form-control" id="main_character_id" name="main_character_id" onchange="updateSpecDropdown('main')">
+              <option value="">— None —</option>
+              {% for pc in player_chars %}
+                <option
+                  value="{{ pc.character.id }}"
+                  data-class-id="{{ pc.character.class_id or '' }}"
+                  {% if current_member.main_character_id == pc.character.id %}selected{% endif %}
+                >{{ pc.character.character_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field-group">
+            <select class="form-control" id="main_spec_id" name="main_spec_id">
+              <option value="">— None —</option>
+              {% for spec in all_specs %}
+                <option
+                  value="{{ spec.id }}"
+                  data-class-id="{{ spec.class_id }}"
+                  {% if current_member.main_spec_id == spec.id %}selected{% endif %}
+                >{{ spec.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
-        {# Off-spec Character #}
-        <div class="form-row">
-          <label class="form-label" for="offspec_character_id">Off-Spec Character</label>
-          <select class="form-control" id="offspec_character_id" name="offspec_character_id" onchange="updateSpecDropdown('offspec')">
-            <option value="">— None —</option>
-            {% for pc in player_chars %}
-              <option
-                value="{{ pc.character.id }}"
-                data-class-id="{{ pc.character.class_id or '' }}"
-                {% if current_member.offspec_character_id == pc.character.id %}selected{% endif %}
-              >{{ pc.character.character_name }} ({{ pc.character.realm_slug }})</option>
-            {% endfor %}
-          </select>
+        {# Off-Spec #}
+        <div class="char-pair">
+          <div class="char-pair__role-label">Off-Spec</div>
+          <div class="field-group">
+            <select class="form-control" id="offspec_character_id" name="offspec_character_id" onchange="updateSpecDropdown('offspec')">
+              <option value="">— None —</option>
+              {% for pc in player_chars %}
+                <option
+                  value="{{ pc.character.id }}"
+                  data-class-id="{{ pc.character.class_id or '' }}"
+                  {% if current_member.offspec_character_id == pc.character.id %}selected{% endif %}
+                >{{ pc.character.character_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field-group">
+            <select class="form-control" id="offspec_spec_id" name="offspec_spec_id">
+              <option value="">— None —</option>
+              {% for spec in all_specs %}
+                <option
+                  value="{{ spec.id }}"
+                  data-class-id="{{ spec.class_id }}"
+                  {% if current_member.offspec_spec_id == spec.id %}selected{% endif %}
+                >{{ spec.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
         </div>
 
-        <div class="form-row">
-          <label class="form-label" for="offspec_spec_id">Off-Spec</label>
-          <select class="form-control" id="offspec_spec_id" name="offspec_spec_id">
-            <option value="">— None —</option>
-            {% for spec in all_specs %}
-              <option
-                value="{{ spec.id }}"
-                data-class-id="{{ spec.class_id }}"
-                {% if current_member.offspec_spec_id == spec.id %}selected{% endif %}
-              >{{ spec.wow_class.name }} — {{ spec.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
       </div>
-
-      <div class="section-actions">
-        <button type="submit" class="btn btn-primary">Save Characters</button>
+      <div class="settings-section__footer">
+        <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
   </div>
 
-  {# ── Availability ────────────────────────────────────────────────────── #}
+  {# ── Raid Availability ───────────────────────────────────────── #}
   <div class="settings-section">
-    <h2>Raid Availability</h2>
-    <p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:1rem;">
-      Set which days you're available and your earliest start time (in your local timezone).
-      Leave a day unchecked if you're never available that day.
-    </p>
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Raid Availability</h2>
+    </div>
     <form method="post" action="/profile/availability">
-      <table class="avail-table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Available</th>
-            <th>Earliest Start</th>
-            <th>Hours Available</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for day_idx in range(7) %}
-            {% set avail = avail_by_day.get(day_idx) %}
-            {% set is_avail = avail is not none %}
-            <tr id="avail-row-{{ day_idx }}" class="{{ '' if is_avail else 'unavailable' }}">
-              <td class="day-name">{{ day_names[day_idx] }}</td>
-              <td>
-                <div class="avail-check-wrap">
-                  <input
-                    type="checkbox"
-                    id="day_{{ day_idx }}_available"
-                    name="day_{{ day_idx }}_available"
-                    value="1"
-                    {% if is_avail %}checked{% endif %}
-                    onchange="toggleDayRow({{ day_idx }}, this.checked)"
-                  >
-                  <label class="checkbox-label" for="day_{{ day_idx }}_available">Yes</label>
-                </div>
-              </td>
-              <td>
-                <input
-                  type="time"
-                  class="form-control"
-                  id="day_{{ day_idx }}_start"
-                  name="day_{{ day_idx }}_start"
-                  value="{{ avail.earliest_start.strftime('%H:%M') if avail else '18:00' }}"
-                  {% if not is_avail %}disabled{% endif %}
-                  style="width:130px"
-                >
-              </td>
-              <td>
-                <input
-                  type="number"
-                  class="form-control"
-                  id="day_{{ day_idx }}_hours"
-                  name="day_{{ day_idx }}_hours"
-                  min="0.5"
-                  max="16"
-                  step="0.5"
-                  value="{{ avail.available_hours if avail else '4' }}"
-                  {% if not is_avail %}disabled{% endif %}
-                  style="width:90px"
-                >
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="settings-section__body">
+        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:1rem;">
+          Earliest start time and hours available are in your selected timezone.
+          Uncheck a day if you're never available then.
+        </p>
 
-      <div class="section-actions">
-        <button type="submit" class="btn btn-primary">Save Availability</button>
+        <table class="avail-table">
+          <colgroup>
+            <col><col><col><col>
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Available</th>
+              <th>Earliest Start</th>
+              <th>Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for day_idx in range(7) %}
+              {% set avail = avail_by_day.get(day_idx) %}
+              {% set is_avail = avail is not none %}
+              <tr id="avail-row-{{ day_idx }}" class="{{ '' if is_avail else 'row-unavailable' }}">
+                <td class="avail-day-name">{{ day_names[day_idx] }}</td>
+                <td>
+                  <div class="avail-check-wrap">
+                    <input
+                      type="checkbox"
+                      id="day_{{ day_idx }}_available"
+                      name="day_{{ day_idx }}_available"
+                      value="1"
+                      {% if is_avail %}checked{% endif %}
+                      onchange="toggleDayRow({{ day_idx }}, this.checked)"
+                    >
+                    <label for="day_{{ day_idx }}_available">Yes</label>
+                  </div>
+                </td>
+                <td>
+                  <input
+                    type="time"
+                    class="form-control"
+                    id="day_{{ day_idx }}_start"
+                    name="day_{{ day_idx }}_start"
+                    value="{{ avail.earliest_start.strftime('%H:%M') if avail else '18:00' }}"
+                    {% if not is_avail %}disabled{% endif %}
+                  >
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="day_{{ day_idx }}_hours"
+                    name="day_{{ day_idx }}_hours"
+                    min="0.5"
+                    max="16"
+                    step="0.5"
+                    value="{{ avail.available_hours if avail else '4' }}"
+                    {% if not is_avail %}disabled{% endif %}
+                  >
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="settings-section__footer">
+        <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
   </div>
 
-  {# ── Preferences ─────────────────────────────────────────────────────── #}
+  {# ── Change Password ─────────────────────────────────────────── #}
   <div class="settings-section">
-    <h2>Preferences</h2>
-    <form method="post" action="/profile/info">
-      {# Re-send current display_name so it doesn't get blanked #}
-      <input type="hidden" name="display_name" value="{{ current_member.display_name or '' }}">
-
-      <div class="form-row">
-        <label class="form-label" for="timezone">Timezone</label>
-        <select class="form-control" id="timezone" name="timezone" style="max-width:320px">
-          {% for tz in timezones %}
-            <option value="{{ tz }}" {% if current_member.timezone == tz %}selected{% endif %}>{{ tz }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div class="pref-row" style="margin-top:0.75rem">
-        <input
-          type="checkbox"
-          id="auto_invite_events"
-          name="auto_invite_events"
-          value="on"
-          {% if current_member.auto_invite_events %}checked{% endif %}
-        >
-        <div>
-          <label for="auto_invite_events">Auto-invite to raid events</label>
-          <div class="pref-desc">Automatically sign you up for raid events that match your availability.</div>
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Change Password</h2>
+    </div>
+    <form method="post" action="/profile/password">
+      <div class="settings-section__body">
+        <div style="display:flex;flex-direction:column;gap:0.85rem;max-width:360px;">
+          <div class="field-group">
+            <label class="field-group__label" for="current_password">Current Password</label>
+            <input class="form-control" type="password" id="current_password" name="current_password" required>
+          </div>
+          <div class="field-group">
+            <label class="field-group__label" for="new_password">New Password</label>
+            <input class="form-control" type="password" id="new_password" name="new_password" minlength="8" required>
+          </div>
+          <div class="field-group">
+            <label class="field-group__label" for="confirm_password">Confirm New Password</label>
+            <input class="form-control" type="password" id="confirm_password" name="confirm_password" minlength="8" required>
+          </div>
         </div>
       </div>
-
-      <div class="section-actions">
-        <button type="submit" class="btn btn-primary">Save Preferences</button>
-      </div>
-    </form>
-  </div>
-
-  {# ── Password ────────────────────────────────────────────────────────── #}
-  <div class="settings-section">
-    <h2>Change Password</h2>
-    <form method="post" action="/profile/password">
-      <div class="form-row">
-        <label class="form-label" for="current_password">Current Password</label>
-        <input class="form-control" type="password" id="current_password" name="current_password" required style="max-width:360px">
-      </div>
-      <div class="form-row">
-        <label class="form-label" for="new_password">New Password</label>
-        <input class="form-control" type="password" id="new_password" name="new_password" minlength="8" required style="max-width:360px">
-      </div>
-      <div class="form-row">
-        <label class="form-label" for="confirm_password">Confirm New Password</label>
-        <input class="form-control" type="password" id="confirm_password" name="confirm_password" minlength="8" required style="max-width:360px">
-      </div>
-      <div class="section-actions">
+      <div class="settings-section__footer">
         <button type="submit" class="btn btn-primary">Update Password</button>
       </div>
     </form>
@@ -403,45 +537,28 @@
 
 {% block scripts %}
 <script>
-// Toggle availability row inputs when checkbox changes
 function toggleDayRow(dayIdx, checked) {
   const row = document.getElementById('avail-row-' + dayIdx);
   const inputs = row.querySelectorAll('input[type="time"], input[type="number"]');
-  inputs.forEach(function(inp) {
-    inp.disabled = !checked;
-  });
-  if (checked) {
-    row.classList.remove('unavailable');
-  } else {
-    row.classList.add('unavailable');
-  }
+  inputs.forEach(function(inp) { inp.disabled = !checked; });
+  row.classList.toggle('row-unavailable', !checked);
 }
 
-// Filter spec dropdown to match selected character's class
 function updateSpecDropdown(prefix) {
   const charSelect = document.getElementById(prefix + '_character_id');
   const specSelect = document.getElementById(prefix + '_spec_id');
-  const selectedOption = charSelect.options[charSelect.selectedIndex];
-  const classId = selectedOption ? selectedOption.dataset.classId : '';
+  const classId = charSelect.options[charSelect.selectedIndex]?.dataset.classId || '';
 
-  for (let i = 0; i < specSelect.options.length; i++) {
-    const opt = specSelect.options[i];
-    if (!opt.value) {
-      // "None" option always visible
-      opt.hidden = false;
-      continue;
-    }
+  for (const opt of specSelect.options) {
+    if (!opt.value) { opt.hidden = false; continue; }
     opt.hidden = classId ? (opt.dataset.classId !== classId) : false;
   }
 
-  // Reset spec if current selection is now hidden
-  const currentSpec = specSelect.options[specSelect.selectedIndex];
-  if (currentSpec && currentSpec.hidden) {
+  if (specSelect.options[specSelect.selectedIndex]?.hidden) {
     specSelect.value = '';
   }
 }
 
-// Run on page load to filter specs to match current selections
 updateSpecDropdown('main');
 updateSpecDropdown('offspec');
 </script>
