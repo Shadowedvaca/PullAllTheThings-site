@@ -127,6 +127,8 @@ def create_app() -> FastAPI:
         else:
             logger.info("No DISCORD_BOT_TOKEN — bot not started")
 
+        # Wire db_pool into the bot after the pool is available (below)
+
         # Set up asyncpg pool for guild_sync (raw SQL, separate from SQLAlchemy)
         # Converts postgresql+asyncpg:// DSN to plain postgresql:// for asyncpg
         raw_dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
@@ -134,6 +136,9 @@ def create_app() -> FastAPI:
             guild_sync_pool = await asyncpg.create_pool(raw_dsn, min_size=2, max_size=10)
             app.state.guild_sync_pool = guild_sync_pool
             logger.info("Guild sync asyncpg pool created")
+            # Give the bot access to the pool for DM gate checks and onboarding
+            from sv_common.discord.bot import set_db_pool
+            set_db_pool(guild_sync_pool)
         except Exception as exc:
             logger.warning("Guild sync pool not created (DB may not be available): %s", exc)
             guild_sync_pool = None

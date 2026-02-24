@@ -990,3 +990,28 @@ async def admin_roster_invite(
     except Exception as e:
         logger.error("Invite error: %s", e)
         return RedirectResponse(url=f"/admin/roster?error={e}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Bot settings
+# ---------------------------------------------------------------------------
+
+
+@router.get("/bot-settings", response_class=HTMLResponse)
+async def admin_bot_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/bot-settings")
+
+    from sqlalchemy import select as sa_select, text
+    from sv_common.db.models import DiscordConfig
+
+    result = await db.execute(sa_select(DiscordConfig).limit(1))
+    discord_config = result.scalar_one_or_none()
+
+    ctx = await _base_ctx(request, player, db)
+    ctx["discord_config"] = discord_config
+    return templates.TemplateResponse("admin/bot_settings.html", ctx)

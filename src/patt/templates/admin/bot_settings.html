@@ -1,0 +1,258 @@
+{% extends "base_admin.html" %}
+{% block title %}Bot Settings — Admin — Pull All The Things{% endblock %}
+{% block nav_bot_settings %}active{% endblock %}
+
+{% block head %}
+<style>
+.bs-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    max-width: 640px;
+}
+.bs-card__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1.1rem;
+    margin: 0 0 0.25rem 0;
+}
+.bs-card__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+.bs-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+}
+.bs-toggle-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+/* Toggle switch */
+.bs-switch {
+    position: relative;
+    display: inline-block;
+    width: 72px;
+    height: 38px;
+    flex-shrink: 0;
+}
+.bs-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.bs-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #3a3a3e;
+    border-radius: 38px;
+    transition: background 0.3s;
+    border: 2px solid #4a4a4e;
+}
+.bs-slider::before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background: #888;
+    border-radius: 50%;
+    transition: transform 0.3s, background 0.3s;
+}
+input:checked + .bs-slider {
+    background: rgba(212, 168, 75, 0.25);
+    border-color: var(--color-gold);
+}
+input:checked + .bs-slider::before {
+    transform: translateX(34px);
+    background: var(--color-gold);
+}
+.bs-toggle-status {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.bs-toggle-status--on  { color: var(--color-gold); }
+.bs-toggle-status--off { color: #666; }
+
+.bs-info {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+.bs-divider {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1rem 0;
+}
+.bs-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+.bs-stat {
+    background: var(--color-bg-dark);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    text-align: center;
+}
+.bs-stat__count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+}
+.bs-stat__label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+}
+.bs-stat--alert .bs-stat__count { color: #fbbf24; }
+.bs-saving {
+    display: none;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-left: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+    <h1 class="admin-page-title">Bot Settings</h1>
+    <p class="admin-page-subtitle">Control Discord bot messaging and onboarding behavior.</p>
+</div>
+
+{# Bot DM Toggle Card #}
+<div class="bs-card">
+    <h2 class="bs-card__title">Discord DM Messaging</h2>
+    <p class="bs-card__subtitle">Controls all bot-initiated DMs: onboarding conversations, invite code delivery.</p>
+
+    <div class="bs-toggle-row">
+        <label class="bs-switch">
+            <input type="checkbox" id="dm-toggle"
+                   {% if discord_config and discord_config.bot_dm_enabled %}checked{% endif %}
+                   onchange="toggleBotDm(this.checked)">
+            <span class="bs-slider"></span>
+        </label>
+        <span class="bs-toggle-label">Onboarding DMs</span>
+        <span class="bs-toggle-status {% if discord_config and discord_config.bot_dm_enabled %}bs-toggle-status--on{% else %}bs-toggle-status--off{% endif %}"
+              id="dm-status">
+            {% if discord_config and discord_config.bot_dm_enabled %}ON{% else %}OFF{% endif %}
+        </span>
+        <span class="bs-saving" id="dm-saving">Saving…</span>
+    </div>
+
+    <p class="bs-info">
+        When <strong>OFF</strong>, the bot will not send any DMs to guild members.
+        Discord sync, Blizzard sync, audit channel posts, and officer slash commands all continue working.
+        New member join events will create onboarding sessions in the database, but no DM will be sent
+        until this toggle is turned ON.
+    </p>
+    <p class="bs-info">
+        When turned ON, the scheduler will pick up any sessions waiting in
+        <strong>awaiting_dm</strong> state on its next 30-minute check.
+    </p>
+</div>
+
+{# Onboarding Queue Card #}
+<div class="bs-card">
+    <h2 class="bs-card__title">Onboarding Queue</h2>
+    <p class="bs-card__subtitle">Active sessions — flip the DM toggle to start processing.</p>
+
+    <div class="bs-stats" id="onboarding-stats">
+        <div class="bs-stat">
+            <div class="bs-stat__count">—</div>
+            <div class="bs-stat__label">Loading…</div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function toggleBotDm(enabled) {
+    document.getElementById('dm-saving').style.display = 'inline';
+    try {
+        const resp = await fetch('/api/v1/admin/bot-settings', {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({bot_dm_enabled: enabled})
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            updateToggleUI(data.data.bot_dm_enabled);
+        } else {
+            // Revert
+            document.getElementById('dm-toggle').checked = !enabled;
+            alert('Failed to save: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        document.getElementById('dm-toggle').checked = !enabled;
+        alert('Network error: ' + e.message);
+    } finally {
+        document.getElementById('dm-saving').style.display = 'none';
+    }
+}
+
+function updateToggleUI(enabled) {
+    const status = document.getElementById('dm-status');
+    status.textContent = enabled ? 'ON' : 'OFF';
+    status.className = 'bs-toggle-status ' + (enabled ? 'bs-toggle-status--on' : 'bs-toggle-status--off');
+}
+
+async function loadOnboardingStats() {
+    try {
+        const resp = await fetch('/api/v1/admin/onboarding-stats');
+        const data = await resp.json();
+        if (!data.ok) return;
+
+        const stats = data.data;
+        const container = document.getElementById('onboarding-stats');
+
+        const stateLabels = {
+            'awaiting_dm': 'Awaiting DM',
+            'asked_in_guild': 'In Conversation',
+            'asked_main': 'In Conversation',
+            'asked_alts': 'In Conversation',
+            'pending_verification': 'Pending Verify',
+            'verified': 'Verified',
+        };
+
+        // Aggregate "in conversation" states
+        const aggregated = {};
+        for (const [state, count] of Object.entries(stats)) {
+            const label = stateLabels[state] || state;
+            aggregated[label] = (aggregated[label] || 0) + count;
+        }
+
+        if (Object.keys(aggregated).length === 0) {
+            container.innerHTML = '<p style="color: var(--color-text-muted); font-size: 0.875rem;">No pending sessions.</p>';
+            return;
+        }
+
+        container.innerHTML = Object.entries(aggregated).map(([label, count]) => {
+            const alertClass = label === 'Awaiting DM' ? ' bs-stat--alert' : '';
+            return `<div class="bs-stat${alertClass}">
+                <div class="bs-stat__count">${count}</div>
+                <div class="bs-stat__label">${label}</div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        console.warn('Could not load onboarding stats', e);
+    }
+}
+
+loadOnboardingStats();
+</script>
+{% endblock %}

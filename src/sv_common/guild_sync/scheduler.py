@@ -173,8 +173,14 @@ class GuildSyncScheduler:
                 await send_sync_summary(channel, "WoW Addon Upload", combined_stats, duration)
 
     async def run_onboarding_check(self):
-        """Dormant — Phase 2.6 onboarding not yet updated for Phase 2.7 schema."""
-        pass
+        """Run onboarding deadline checks and resume stalled sessions."""
+        from .onboarding.deadline_checker import OnboardingDeadlineChecker
+        checker = OnboardingDeadlineChecker(
+            self.db_pool,
+            self.discord_bot,
+            self.audit_channel_id,
+        )
+        await checker.check_pending()
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

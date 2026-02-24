@@ -229,3 +229,65 @@ def test_guild_sync_no_old_schema_references():
     for term in forbidden_columns:
         assert term not in engine_src, f"identity_engine.py still uses column '{term}'"
         assert term not in checker_src, f"integrity_checker.py still uses column '{term}'"
+
+
+def test_onboarding_modules_importable():
+    """Verify all onboarding modules import cleanly."""
+    from sv_common.guild_sync.onboarding import conversation, provisioner
+    from sv_common.guild_sync.onboarding import deadline_checker, commands
+
+    assert hasattr(conversation, "OnboardingConversation")
+    assert hasattr(provisioner, "AutoProvisioner")
+    assert hasattr(deadline_checker, "OnboardingDeadlineChecker")
+    assert callable(commands.register_onboarding_commands)
+
+
+def test_onboarding_no_old_schema_references():
+    """Verify onboarding modules do not reference dropped tables or old column names."""
+    import inspect
+    from sv_common.guild_sync.onboarding import conversation, provisioner
+    from sv_common.guild_sync.onboarding import deadline_checker, commands
+
+    sources = {
+        "conversation": inspect.getsource(conversation),
+        "provisioner": inspect.getsource(provisioner),
+        "deadline_checker": inspect.getsource(deadline_checker),
+        "commands": inspect.getsource(commands),
+    }
+
+    forbidden = [
+        "guild_identity.persons",
+        "guild_identity.discord_members",
+        "guild_identity.identity_links",
+        "common.guild_members",
+        "common.characters",
+        "verified_person_id",
+        "provision_person",
+        "characters_created",
+        "guild_members",
+    ]
+    for term in forbidden:
+        for mod_name, src in sources.items():
+            assert term not in src, (
+                f"onboarding/{mod_name}.py still references '{term}'"
+            )
+
+
+def test_discord_config_has_bot_dm_enabled():
+    """Verify DiscordConfig has bot_dm_enabled column (Phase 2.6)."""
+    from sv_common.db.models import DiscordConfig
+
+    columns = {c.name for c in DiscordConfig.__table__.columns}
+    assert "bot_dm_enabled" in columns
+
+
+def test_bot_module_has_event_handlers():
+    """Verify bot.py has on_member_join, on_member_remove, on_member_update."""
+    import inspect
+    from sv_common.discord import bot as bot_module
+
+    src = inspect.getsource(bot_module)
+    assert "on_member_join" in src
+    assert "on_member_remove" in src
+    assert "on_member_update" in src
+    assert "set_db_pool" in src

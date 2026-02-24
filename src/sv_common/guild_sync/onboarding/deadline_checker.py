@@ -4,7 +4,7 @@ Deadline checker for onboarding sessions.
 Runs after every Blizzard sync (and on a 30-min interval) to:
   1. Re-attempt verification for all pending_verification sessions
   2. Escalate overdue sessions to the #audit-channel
-  3. Auto-close sessions that were manually resolved or declined
+  3. Resume sessions stuck in awaiting_dm when DMs are re-enabled
 
 Called by GuildSyncScheduler.run_onboarding_check().
 """
@@ -39,14 +39,17 @@ class OnboardingDeadlineChecker:
     async def run(self) -> dict:
         """
         Main entry point. Returns summary stats.
+        Also called as check_pending() for scheduler compatibility.
         """
         stats = {
             "verified": 0,
             "escalated": 0,
             "provisioned": 0,
             "still_pending": 0,
+            "dm_resumed": 0,
         }
 
+        # 1. Retry verification for pending_verification sessions
         async with self.db_pool.acquire() as conn:
             sessions = await conn.fetch(
                 """SELECT id, discord_id, reported_main_name, deadline_at,
@@ -73,18 +76,71 @@ class OnboardingDeadlineChecker:
             else:
                 stats["still_pending"] += 1
 
-        if stats["escalated"] > 0:
+        # 2. Resume awaiting_dm sessions if DMs are now enabled
+        resumed = await self._resume_awaiting_dm_sessions()
+        stats["dm_resumed"] = resumed
+
+        if stats["escalated"] > 0 or resumed > 0:
             logger.info(
-                "Onboarding check: verified=%d provisioned=%d escalated=%d pending=%d",
+                "Onboarding check: verified=%d provisioned=%d escalated=%d pending=%d resumed=%d",
                 stats["verified"], stats["provisioned"],
-                stats["escalated"], stats["still_pending"],
+                stats["escalated"], stats["still_pending"], resumed,
             )
 
         return stats
 
+    # Alias so scheduler can call check_pending() or run()
+    async def check_pending(self) -> dict:
+        return await self.run()
+
+    async def _resume_awaiting_dm_sessions(self) -> int:
+        """
+        If DMs are now enabled, start conversations for sessions stuck in awaiting_dm.
+        Returns the number of sessions where DM was attempted.
+        """
+        from sv_common.discord.dm import is_bot_dm_enabled
+        if not await is_bot_dm_enabled(self.db_pool):
+            return 0  # Still disabled, skip
+
+        async with self.db_pool.acquire() as conn:
+            awaiting = await conn.fetch(
+                """SELECT id, discord_id FROM guild_identity.onboarding_sessions
+                   WHERE state = 'awaiting_dm' AND dm_sent_at IS NULL
+                   ORDER BY created_at ASC LIMIT 10""",
+            )
+
+        resumed = 0
+        for session in awaiting:
+            member = await self._find_discord_member(session["discord_id"])
+            if not member:
+                continue
+            from .conversation import OnboardingConversation
+            conv = OnboardingConversation(self.bot, member, self.db_pool)
+            conv.session_id = session["id"]
+            try:
+                await conv._send_welcome()
+                resumed += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to resume DM for discord_id=%s: %s",
+                    session["discord_id"], e,
+                )
+
+        return resumed
+
+    async def _find_discord_member(self, discord_id: str) -> Optional[discord.Member]:
+        """Find a Discord Member object by discord_id string."""
+        if not self.bot:
+            return None
+        for guild in self.bot.guilds:
+            member = guild.get_member(int(discord_id))
+            if member:
+                return member
+        return None
+
     async def _retry_verification(self, session_id: int, main_name: Optional[str]) -> bool:
         """
-        Re-run character match for this session.
+        Re-run character match for this session using the player model.
         Returns True if the session was verified (and provisioned).
         """
         if not main_name:
@@ -100,7 +156,7 @@ class OnboardingDeadlineChecker:
                 return False
 
             char = await conn.fetchrow(
-                """SELECT id, character_name, realm_slug, person_id
+                """SELECT id, character_name, realm_slug
                    FROM guild_identity.wow_characters
                    WHERE LOWER(character_name) = $1 AND removed_at IS NULL""",
                 main_name.lower(),
@@ -116,61 +172,87 @@ class OnboardingDeadlineChecker:
                 )
                 return False
 
-            # Found the character — create/link person
-            person_id = char["person_id"]
-            if not person_id:
-                person_id = await conn.fetchval(
-                    "INSERT INTO guild_identity.persons (display_name) VALUES ($1) RETURNING id",
-                    char["character_name"],
-                )
-                await conn.execute(
-                    "UPDATE guild_identity.wow_characters SET person_id = $1 WHERE id = $2",
-                    person_id, char["id"],
-                )
-
-            # Load session discord_id and link discord_member
+            # Load session to get discord_id and reported alts
             session = await conn.fetchrow(
                 "SELECT * FROM guild_identity.onboarding_sessions WHERE id = $1",
                 session_id,
             )
-            dm_row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.discord_members WHERE discord_id = $1",
+
+            # Check if character already belongs to a player
+            existing_pc = await conn.fetchrow(
+                """SELECT pc.player_id FROM guild_identity.player_characters pc
+                   WHERE pc.character_id = $1""",
+                char["id"],
+            )
+
+            # Get discord_users.id for this session
+            du_row = await conn.fetchrow(
+                "SELECT id FROM guild_identity.discord_users WHERE discord_id = $1",
                 session["discord_id"],
             )
-            if dm_row:
+            du_id = du_row["id"] if du_row else None
+
+            if existing_pc:
+                player_id = existing_pc["player_id"]
+                if du_id:
+                    await conn.execute(
+                        """UPDATE guild_identity.players SET discord_user_id = $1, updated_at = NOW()
+                           WHERE id = $2 AND discord_user_id IS NULL""",
+                        du_id, player_id,
+                    )
+            else:
+                # Create new player
+                char_name = char["character_name"]
+                player_id = await conn.fetchval(
+                    """INSERT INTO guild_identity.players (display_name, discord_user_id)
+                       VALUES ($1, $2) RETURNING id""",
+                    char_name, du_id,
+                )
                 await conn.execute(
-                    "UPDATE guild_identity.discord_members SET person_id = $1 WHERE id = $2",
-                    person_id, dm_row["id"],
+                    """INSERT INTO guild_identity.player_characters (player_id, character_id)
+                       VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                    player_id, char["id"],
                 )
 
             # Link reported alts
             for alt_name in (session["reported_alt_names"] or []):
-                await conn.execute(
-                    """UPDATE guild_identity.wow_characters SET person_id = $1
-                       WHERE LOWER(character_name) = $2
-                         AND removed_at IS NULL AND person_id IS NULL""",
-                    person_id, alt_name.lower(),
+                alt_char = await conn.fetchrow(
+                    """SELECT id FROM guild_identity.wow_characters
+                       WHERE LOWER(character_name) = $1
+                         AND removed_at IS NULL
+                         AND id NOT IN (
+                             SELECT character_id FROM guild_identity.player_characters
+                         )""",
+                    alt_name.lower(),
                 )
+                if alt_char:
+                    await conn.execute(
+                        """INSERT INTO guild_identity.player_characters (player_id, character_id)
+                           VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                        player_id, alt_char["id"],
+                    )
 
             await conn.execute(
                 """UPDATE guild_identity.onboarding_sessions SET
                     state = 'verified',
                     verified_at = NOW(),
-                    verified_person_id = $2,
+                    verified_player_id = $2,
+                    verification_attempts = verification_attempts + 1,
+                    last_verification_at = NOW(),
                     updated_at = NOW()
                    WHERE id = $1""",
-                session_id, person_id,
+                session_id, player_id,
             )
 
         # Provision (outside the connection — provisioner opens its own)
-        await self._provision(session_id, person_id)
+        await self._provision(session_id, player_id)
         return True
 
-    async def _provision(self, session_id: int, person_id: int):
+    async def _provision(self, session_id: int, player_id: int):
         """Run auto-provisioner for a verified session."""
         provisioner = AutoProvisioner(self.db_pool, self.bot)
-        result = await provisioner.provision_person(
-            person_id,
+        result = await provisioner.provision_player(
+            player_id,
             silent=False,
             onboarding_session_id=session_id,
         )
@@ -189,10 +271,10 @@ class OnboardingDeadlineChecker:
                 session_id,
                 result["invite_code"] is not None,
                 result["invite_code"],
-                result["characters_created"] > 0,
+                result["characters_linked"] > 0,
                 result["discord_role_assigned"],
             )
-        logger.info("Deadline check provisioned person=%d session=%d", person_id, session_id)
+        logger.info("Deadline check provisioned player=%d session=%d", player_id, session_id)
 
     async def _escalate(self, session: asyncpg.Record):
         """Mark session as escalated and post to audit channel."""
@@ -219,7 +301,6 @@ class OnboardingDeadlineChecker:
             return
 
         try:
-            # Try to resolve the Discord user for a friendly name
             user_display = f"<@{session['discord_id']}>"
             main_name = session["reported_main_name"] or "*(not provided)*"
             attempts = session["verification_attempts"]

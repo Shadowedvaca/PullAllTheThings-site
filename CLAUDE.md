@@ -465,6 +465,7 @@ CREATE TABLE common.discord_config (
     role_sync_interval_hours INTEGER DEFAULT 24,
     default_announcement_channel_id VARCHAR(20),
     last_role_sync_at TIMESTAMPTZ,
+    bot_dm_enabled BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 2.6: DM kill switch
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -659,6 +660,20 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 0 through 7: Platform complete and live
 - Phase 2.5A–D: Guild identity system (Blizzard API, Discord sync, addon, integrity checker)
 - Phase 2.6: Onboarding system (built but NOT activated — on_member_join not wired)
+- Phase 2.6 (Revised): Onboarding updated for player model + bot DM toggle (complete)
+  - `common.discord_config.bot_dm_enabled` added (DEFAULT FALSE — DMs off until Mike enables)
+  - `is_bot_dm_enabled()` helper in `sv_common.discord.dm` — checks flag before any DM
+  - Admin API: `GET/PATCH /api/v1/admin/bot-settings`, `GET /api/v1/admin/onboarding-stats`
+  - Admin page `/admin/bot-settings` — prominent ON/OFF toggle + live session count display
+  - `conversation.py` updated: uses `discord_users` table, player model, DM gate in `start()`
+  - `provisioner.py` rewritten: `provision_player()` (was `provision_person()`), player model
+  - `deadline_checker.py` updated: uses `discord_users`/`verified_player_id`, adds `_resume_awaiting_dm_sessions()`
+  - `commands.py` updated: uses player model for resolve command
+  - `on_member_join`, `on_member_remove`, `on_member_update` events wired up in `bot.py`
+  - `bot.py` gets `set_db_pool()` called from FastAPI lifespan; registers slash commands on_ready
+  - `scheduler.run_onboarding_check()` re-enabled (was stubbed since Phase 2.5 revised)
+  - Alembic migration 0009 created
+  - 222 unit tests pass, 69 skipped
 - Phase 2.7: Data Model Migration — Clean 3NF rebuild (complete)
   - `common.guild_members` and `common.characters` eliminated from all code
   - Reference tables added: `guild_identity.roles`, `classes`, `specializations`
@@ -692,21 +707,24 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
-- sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting (`src/sv_common/discord/`)
+- sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch + DM gate, channel posting (`src/sv_common/discord/`)
 - sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Auth middleware: `get_current_player()`, `require_rank(level)` deps in `src/patt/deps.py`
 - Cookie-based auth for page routes: `get_page_member()`, `require_page_rank(level)` in deps.py
-- Admin API: `/api/v1/admin/*` — all routes protected (Officer+ rank required); includes ranks, roles, classes, specializations, seasons
+- Admin API: `/api/v1/admin/*` — all routes protected (Officer+ rank required); includes ranks, roles, classes, specializations, seasons, bot-settings, onboarding-stats
 - Availability service: `src/patt/services/availability_service.py` — CRUD for `patt.player_availability`
 - Season service: `src/patt/services/season_service.py` — CRUD for `patt.raid_seasons`
 - Admin reference tables page: `/admin/reference-tables` — inline edit ranks, roles, seasons; read-only class/spec reference
+- Admin bot settings page: `/admin/bot-settings` — ON/OFF toggle for bot DMs, onboarding session counts
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/availability` (public, no auth required)
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
+- Bot events: `on_member_join` (discord_sync + onboarding), `on_member_remove`, `on_member_update` all wired
+- Bot slash commands: `/onboard-status`, `/onboard-resolve`, `/onboard-dismiss`, `/onboard-retry` registered on_ready
 - Campaign service: full lifecycle (draft→live→closed) with ranked-choice voting
 - Contest agent: Discord milestone posts, auto-activate/close campaigns
-- Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — uses pre-2.7 schema, not yet updated)
-- guild_sync package: all modules operational against Phase 2.7 schema; scheduler.run_onboarding_check stubbed
+- Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py — fully updated for Phase 2.7 player model, **bot_dm_enabled defaults to FALSE**
+- guild_sync package: all modules operational; scheduler.run_onboarding_check active (30-min interval)
 - PATTSync WoW addon + companion app (functional, syncing guild notes)
 - Full regression test suite
 - Web UI: login, register, vote, admin campaigns, admin roster, public landing page
@@ -720,18 +738,18 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Reference tables (roles, classes, specializations): seeded via Alembic migration 0007
 - All players have `main_character_id`, `main_spec_id`, `offspec_*` as NULL (set on first login)
 
-### Dormant Code (not yet updated for Phase 2.7 schema)
-- `src/sv_common/guild_sync/onboarding/*.py` — references `persons` (Phase 2.6 — will be wired up when onboarding is activated)
+### Dormant Code
+- None — all modules are up to date. Onboarding is wired but gated by `bot_dm_enabled = FALSE`.
 
 ---
 
 ## Operations & Deployment
 
-- **Tests:** 207+ pass (69 skip when no DB); regression suite at `tests/regression/` requires live DB
+- **Tests:** 222+ pass (69 skip when no DB); regression suite at `tests/regression/` requires live DB
 - **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
-- **Alembic migrations:** `0001_initial_schema.py` through `0008_scheduling_and_attendance.py`
+- **Alembic migrations:** `0001_initial_schema.py` through `0009_bot_dm_toggle.py`
 
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)

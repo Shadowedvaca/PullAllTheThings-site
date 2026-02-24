@@ -9,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from sqlalchemy import text
+
 from patt.deps import get_db, require_rank
-from sv_common.db.models import Player, Role, RaidSeason, Specialization, WowClass
+from sv_common.db.models import DiscordConfig, Player, Role, RaidSeason, Specialization, WowClass
 from sv_common.identity import ranks as rank_service
 from sv_common.identity import members as member_service
 from patt.services import season_service
@@ -365,6 +367,70 @@ async def get_member(player_id: int, db: AsyncSession = Depends(get_db)):
             ],
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Bot settings
+# ---------------------------------------------------------------------------
+
+
+@router.get("/bot-settings")
+async def get_bot_settings(db: AsyncSession = Depends(get_db)):
+    """Get current bot configuration."""
+    result = await db.execute(select(DiscordConfig).limit(1))
+    row = result.scalar_one_or_none()
+    return {
+        "ok": True,
+        "data": {
+            "bot_dm_enabled": row.bot_dm_enabled if row else False,
+            "role_sync_interval_hours": row.role_sync_interval_hours if row else 24,
+            "guild_discord_id": row.guild_discord_id if row else None,
+        },
+    }
+
+
+@router.patch("/bot-settings")
+async def update_bot_settings(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin: Player = Depends(require_rank(4)),
+):
+    """Update bot configuration. Currently supports: bot_dm_enabled."""
+    result = await db.execute(select(DiscordConfig).limit(1))
+    row = result.scalar_one_or_none()
+    if not row:
+        return {"ok": False, "error": "No discord_config row found"}
+
+    if "bot_dm_enabled" in payload:
+        row.bot_dm_enabled = bool(payload["bot_dm_enabled"])
+
+    await db.commit()
+    logger.info(
+        "Bot settings updated by %s: bot_dm_enabled=%s",
+        admin.display_name,
+        row.bot_dm_enabled,
+    )
+    return {
+        "ok": True,
+        "data": {
+            "bot_dm_enabled": row.bot_dm_enabled,
+        },
+    }
+
+
+@router.get("/onboarding-stats")
+async def get_onboarding_stats(db: AsyncSession = Depends(get_db)):
+    """Get counts of onboarding sessions by state."""
+    result = await db.execute(
+        text("""
+            SELECT state, COUNT(*) as count
+            FROM guild_identity.onboarding_sessions
+            WHERE state NOT IN ('provisioned', 'manually_resolved', 'declined')
+            GROUP BY state
+        """)
+    )
+    stats = {row.state: row.count for row in result}
+    return {"ok": True, "data": stats}
 
 
 # ---------------------------------------------------------------------------

@@ -45,6 +45,8 @@ class OnboardingConversation:
 
     async def start(self):
         """Begin onboarding. Called from on_member_join."""
+        from sv_common.discord.dm import is_bot_dm_enabled
+
         async with self.db_pool.acquire() as conn:
             # Bail if an active session already exists
             existing = await conn.fetchrow(
@@ -57,14 +59,14 @@ class OnboardingConversation:
                 self.session_id = existing["id"]
                 return
 
-            # Ensure discord_member row exists
+            # Ensure discord_users row exists
             dm_id = await conn.fetchval(
-                "SELECT id FROM guild_identity.discord_members WHERE discord_id = $1",
+                "SELECT id FROM guild_identity.discord_users WHERE discord_id = $1",
                 str(self.member.id),
             )
             if not dm_id:
                 dm_id = await conn.fetchval(
-                    """INSERT INTO guild_identity.discord_members
+                    """INSERT INTO guild_identity.discord_users
                        (discord_id, username, display_name, is_present, joined_server_at)
                        VALUES ($1, $2, $3, TRUE, $4)
                        ON CONFLICT (discord_id) DO UPDATE SET is_present = TRUE
@@ -85,11 +87,28 @@ class OnboardingConversation:
                 str(self.member.id),
             )
 
+        # Check DM gate — if disabled, leave session in awaiting_dm state
+        if not await is_bot_dm_enabled(self.db_pool):
+            logger.info(
+                "Bot DM disabled — skipping onboarding DM for %s (session=%s)",
+                self.member.name, self.session_id,
+            )
+            return
+
         try:
             await self._send_welcome()
         except discord.Forbidden:
             logger.warning("Cannot DM %s — DMs closed", self.member.name)
             await self._set_state("declined")
+
+    async def _create_session_only(self):
+        """
+        Create an onboarding session in awaiting_dm state without sending a DM.
+        Used when bot_dm_enabled is False — the deadline checker will resume these later.
+        """
+        # Session is already created in start() before the DM gate check.
+        # This method is available if called externally.
+        pass
 
     # ── Conversation steps ────────────────────────────────────────────────────
 
@@ -143,9 +162,10 @@ class OnboardingConversation:
         # Try to find them in the scan
         match = await self._find_char(main_name)
         if match:
+            class_name = match["class_name"] or "Unknown class"
             await dm.send(
-                f"Found **{match['character_name']}** on **{match['realm_name']}** — "
-                f"{match['character_class']}! That you? 🎉\n\n"
+                f"Found **{match['character_name']}** on **{match['realm_slug']}** — "
+                f"{class_name}! That you? 🎉\n\n"
                 f"**Do you have any alts in the guild?** "
                 f"List them separated by commas, or say **none**."
             )
@@ -260,7 +280,7 @@ class OnboardingConversation:
                 return
 
             char = await conn.fetchrow(
-                """SELECT id, character_name, realm_slug, person_id
+                """SELECT id, character_name, realm_slug
                    FROM guild_identity.wow_characters
                    WHERE LOWER(character_name) = $1 AND removed_at IS NULL""",
                 main_name.lower(),
@@ -276,55 +296,82 @@ class OnboardingConversation:
                 )
                 return
 
-            # Found — ensure they have a person record
-            person_id = char["person_id"]
-            if not person_id:
-                person_id = await conn.fetchval(
-                    "INSERT INTO guild_identity.persons (display_name) VALUES ($1) RETURNING id",
-                    main_name,
-                )
-                await conn.execute(
-                    "UPDATE guild_identity.wow_characters SET person_id = $1 WHERE id = $2",
-                    person_id, char["id"],
-                )
-
-            # Link Discord member to person
-            dm_row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.discord_members WHERE discord_id = $1",
-                session["discord_id"],
+            # Check if character already belongs to a player
+            existing_pc = await conn.fetchrow(
+                """SELECT pc.player_id FROM guild_identity.player_characters pc
+                   WHERE pc.character_id = $1""",
+                char["id"],
             )
-            if dm_row:
+
+            # Get discord_users.id for this member
+            du_row = await conn.fetchrow(
+                "SELECT id FROM guild_identity.discord_users WHERE discord_id = $1",
+                str(self.member.id),
+            )
+            du_id = du_row["id"] if du_row else None
+
+            if existing_pc:
+                player_id = existing_pc["player_id"]
+                # Link discord to existing player if not already linked
+                if du_id:
+                    await conn.execute(
+                        """UPDATE guild_identity.players SET discord_user_id = $1, updated_at = NOW()
+                           WHERE id = $2 AND discord_user_id IS NULL""",
+                        du_id, player_id,
+                    )
+            else:
+                # Create new player
+                display = self.member.nick or self.member.display_name
+                player_id = await conn.fetchval(
+                    """INSERT INTO guild_identity.players (display_name, discord_user_id)
+                       VALUES ($1, $2) RETURNING id""",
+                    display, du_id,
+                )
+                # Link character to player
                 await conn.execute(
-                    "UPDATE guild_identity.discord_members SET person_id = $1 WHERE id = $2",
-                    person_id, dm_row["id"],
+                    """INSERT INTO guild_identity.player_characters (player_id, character_id)
+                       VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                    player_id, char["id"],
                 )
 
-            # Try to link reported alts
+            # Link reported alts
             for alt_name in (session["reported_alt_names"] or []):
-                await conn.execute(
-                    """UPDATE guild_identity.wow_characters SET person_id = $1
-                       WHERE LOWER(character_name) = $2
-                         AND removed_at IS NULL AND person_id IS NULL""",
-                    person_id, alt_name.lower(),
+                alt_char = await conn.fetchrow(
+                    """SELECT id FROM guild_identity.wow_characters
+                       WHERE LOWER(character_name) = $1
+                         AND removed_at IS NULL
+                         AND id NOT IN (
+                             SELECT character_id FROM guild_identity.player_characters
+                         )""",
+                    alt_name.lower(),
                 )
+                if alt_char:
+                    await conn.execute(
+                        """INSERT INTO guild_identity.player_characters (player_id, character_id)
+                           VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                        player_id, alt_char["id"],
+                    )
 
+            # Update session
             await conn.execute(
                 """UPDATE guild_identity.onboarding_sessions SET
                     state = 'verified',
                     verified_at = NOW(),
-                    verified_person_id = $2,
+                    verified_player_id = $2,
+                    verification_attempts = verification_attempts + 1,
+                    last_verification_at = NOW(),
                     updated_at = NOW()
                    WHERE id = $1""",
-                self.session_id, person_id,
+                self.session_id, player_id,
             )
 
-        await self._auto_provision(person_id)
+        await self._auto_provision(player_id)
 
-    async def _auto_provision(self, person_id: int):
+    async def _auto_provision(self, player_id: int):
         from .provisioner import AutoProvisioner
         provisioner = AutoProvisioner(self.db_pool, self.bot)
-        result = await provisioner.provision_person(
-            person_id,
+        result = await provisioner.provision_player(
+            player_id,
             silent=False,
             onboarding_session_id=self.session_id,
         )
@@ -343,7 +390,7 @@ class OnboardingConversation:
                 self.session_id,
                 result["invite_code"] is not None,
                 result["invite_code"],
-                result["characters_created"] > 0,
+                result["characters_linked"] > 0,
                 result["discord_role_assigned"],
             )
 
@@ -352,9 +399,11 @@ class OnboardingConversation:
     async def _find_char(self, name: str) -> Optional[dict]:
         async with self.db_pool.acquire() as conn:
             return await conn.fetchrow(
-                """SELECT character_name, realm_slug, realm_name, character_class
-                   FROM guild_identity.wow_characters
-                   WHERE LOWER(character_name) = $1 AND removed_at IS NULL""",
+                """SELECT wc.id, wc.character_name, wc.realm_slug,
+                          c.name as class_name
+                   FROM guild_identity.wow_characters wc
+                   LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+                   WHERE LOWER(wc.character_name) = $1 AND wc.removed_at IS NULL""",
                 name.lower(),
             )
 

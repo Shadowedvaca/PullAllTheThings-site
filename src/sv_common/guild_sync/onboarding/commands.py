@@ -49,7 +49,8 @@ def register_onboarding_commands(
         async with db_pool.acquire() as conn:
             sessions = await conn.fetch(
                 """SELECT id, discord_id, reported_main_name, state,
-                          verification_attempts, created_at, deadline_at, escalated_at
+                          verification_attempts, created_at, deadline_at, escalated_at,
+                          verified_player_id
                    FROM guild_identity.onboarding_sessions
                    WHERE state NOT IN ('provisioned', 'manually_resolved', 'declined')
                    ORDER BY created_at ASC
@@ -101,45 +102,49 @@ def register_onboarding_commands(
                 )
                 return
 
-            # Find or create person for this discord member
-            dm_row = await conn.fetchrow(
-                """SELECT id, person_id FROM guild_identity.discord_members
-                   WHERE discord_id = $1""",
+            # Look up discord_users record
+            du_row = await conn.fetchrow(
+                "SELECT id FROM guild_identity.discord_users WHERE discord_id = $1",
                 str(member.id),
             )
-            if not dm_row:
+            if not du_row:
                 await interaction.followup.send(
-                    "No discord_member record found. Unable to provision automatically.",
+                    "No discord_users record found. Unable to provision automatically.",
                     ephemeral=True,
                 )
                 return
 
-            person_id = dm_row["person_id"]
-            if not person_id:
-                # Create a bare person record
-                person_id = await conn.fetchval(
-                    "INSERT INTO guild_identity.persons (display_name) VALUES ($1) RETURNING id",
-                    member.display_name,
+            du_id = du_row["id"]
+
+            # Check if a player exists for this discord user
+            player_row = await conn.fetchrow(
+                "SELECT id FROM guild_identity.players WHERE discord_user_id = $1",
+                du_id,
+            )
+            if not player_row:
+                # Create a bare player record
+                player_id = await conn.fetchval(
+                    """INSERT INTO guild_identity.players (display_name, discord_user_id)
+                       VALUES ($1, $2) RETURNING id""",
+                    member.display_name, du_id,
                 )
-                await conn.execute(
-                    "UPDATE guild_identity.discord_members SET person_id = $1 WHERE id = $2",
-                    person_id, dm_row["id"],
-                )
+            else:
+                player_id = player_row["id"]
 
             await conn.execute(
                 """UPDATE guild_identity.onboarding_sessions SET
                     state = 'verified',
                     verified_at = NOW(),
-                    verified_person_id = $2,
+                    verified_player_id = $2,
                     updated_at = NOW()
                    WHERE id = $1""",
-                session["id"], person_id,
+                session["id"], player_id,
             )
 
         # Run provisioner (with DM)
         provisioner = AutoProvisioner(db_pool, interaction.client)
-        result = await provisioner.provision_person(
-            person_id,
+        result = await provisioner.provision_player(
+            player_id,
             silent=False,
             onboarding_session_id=session["id"],
         )
@@ -158,20 +163,20 @@ def register_onboarding_commands(
                 session["id"],
                 result["invite_code"] is not None,
                 result["invite_code"],
-                result["characters_created"] > 0,
+                result["characters_linked"] > 0,
                 result["discord_role_assigned"],
             )
 
         await interaction.followup.send(
             f"✅ {member.mention} has been provisioned.\n"
-            f"• Characters created: {result['characters_created']}\n"
+            f"• Characters linked: {result['characters_linked']}\n"
             f"• Discord role assigned: {'Yes' if result['discord_role_assigned'] else 'No'}\n"
             f"• Invite code: `{result['invite_code'] or 'N/A'}`",
             ephemeral=True,
         )
         logger.info(
-            "Officer manually resolved onboarding for discord_id=%s person=%d by %s",
-            member.id, person_id, interaction.user.name,
+            "Officer manually resolved onboarding for discord_id=%s player=%d by %s",
+            member.id, player_id, interaction.user.name,
         )
 
     @tree.command(

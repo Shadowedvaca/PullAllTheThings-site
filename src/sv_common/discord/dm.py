@@ -1,10 +1,28 @@
 """Discord DM dispatch — send messages directly to guild members."""
 
 import logging
+from typing import TYPE_CHECKING
 
 import discord
 
+if TYPE_CHECKING:
+    import asyncpg
+
 logger = logging.getLogger(__name__)
+
+
+async def is_bot_dm_enabled(pool: "asyncpg.Pool") -> bool:
+    """
+    Check whether the bot is allowed to send DMs to users.
+
+    Reads common.discord_config.bot_dm_enabled.
+    Returns False if not configured or if the flag is off.
+    """
+    async with pool.acquire() as conn:
+        enabled = await conn.fetchval(
+            "SELECT bot_dm_enabled FROM common.discord_config LIMIT 1"
+        )
+        return bool(enabled)
 
 _REGISTRATION_TEMPLATE = """\
 Hey! You've been invited to register on the Pull All The Things guild platform.

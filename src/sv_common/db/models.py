@@ -87,6 +87,9 @@ class DiscordConfig(Base):
     role_sync_interval_hours: Mapped[int] = mapped_column(Integer, default=24)
     default_announcement_channel_id: Mapped[Optional[str]] = mapped_column(String(20))
     last_role_sync_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    bot_dm_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

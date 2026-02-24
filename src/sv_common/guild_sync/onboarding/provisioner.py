@@ -1,13 +1,12 @@
 """
 Auto-provisioner for verified guild members.
 
-Given a person_id from guild_identity, this module:
-  1. Finds or creates a common.guild_member record
-  2. Links their Discord account
-  3. Creates common.characters for all their WoW characters
-  4. Syncs their rank from the highest in-game rank
-  5. Assigns the appropriate Discord role  (skipped when silent=True)
-  6. Generates a website invite + sends DM  (skipped when silent=True)
+Given a player_id from guild_identity.players, this module:
+  1. Looks up the player's Discord account and linked characters
+  2. Determines their rank from highest-ranked character
+  3. Assigns the appropriate Discord role (skipped when silent=True)
+  4. Generates a website invite code (skipped when silent=True)
+  5. DMs the invite code to the member (skipped when silent=True or DM gate OFF)
 
 silent=True is used for retroactive provisioning of existing members —
 full roster sync without sending any messages.
@@ -15,6 +14,7 @@ full roster sync without sending any messages.
 
 import logging
 import secrets
+import string
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -22,14 +22,6 @@ import asyncpg
 import discord
 
 logger = logging.getLogger(__name__)
-
-# guild_identity.role_category → common.characters.role
-ROLE_MAP = {
-    "Tank":   "tank",
-    "Healer": "healer",
-    "Melee":  "melee_dps",
-    "Ranged": "ranged_dps",
-}
 
 # guild rank name → Discord role name (must match actual Discord role names)
 RANK_TO_DISCORD_ROLE = {
@@ -54,235 +46,84 @@ class AutoProvisioner:
         self.db_pool = db_pool
         self.bot = bot
 
-    async def provision_person(
+    async def provision_player(
         self,
-        person_id: int,
+        player_id: int,
         silent: bool = False,
         onboarding_session_id: Optional[int] = None,
     ) -> dict:
         """
-        Provision a person across all platform systems.
+        Provision a player across all platform systems.
 
         Returns a summary dict of what was done.
         silent=True skips Discord role assignment, invite codes, and DMs.
         """
         result = {
-            "person_id": person_id,
-            "guild_member_id": None,
-            "discord_linked": False,
-            "characters_created": 0,
-            "characters_skipped": 0,
+            "player_id": player_id,
             "discord_role_assigned": False,
             "invite_code": None,
+            "characters_linked": 0,
             "errors": [],
         }
 
         async with self.db_pool.acquire() as conn:
-            # Load person's Discord + WoW data from guild_identity
-            discord_member = await conn.fetchrow(
-                """SELECT id, discord_id, username, display_name
-                   FROM guild_identity.discord_members
-                   WHERE person_id = $1 AND is_present = TRUE
-                   LIMIT 1""",
-                person_id,
+            # Get player with discord info
+            player = await conn.fetchrow(
+                """SELECT p.id, p.display_name, p.discord_user_id,
+                          du.discord_id
+                   FROM guild_identity.players p
+                   LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+                   WHERE p.id = $1""",
+                player_id,
             )
-            wow_chars = await conn.fetch(
-                """SELECT character_name, realm_name, character_class,
-                          active_spec, role_category, is_main,
-                          guild_rank, guild_rank_name, level
-                   FROM guild_identity.wow_characters
-                   WHERE person_id = $1 AND removed_at IS NULL
-                   ORDER BY guild_rank ASC, is_main DESC NULLS LAST""",
-                person_id,
-            )
-
-            if not discord_member and not wow_chars:
-                result["errors"].append("No Discord member or characters found")
+            if not player:
+                result["errors"].append("Player not found")
                 return result
 
-            discord_id = discord_member["discord_id"] if discord_member else None
+            discord_id = player["discord_id"]
 
-            # Find or create common.guild_member
-            member_id = await self._find_or_create_guild_member(
-                conn, discord_id, discord_member, wow_chars
+            # Count linked characters
+            char_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM guild_identity.player_characters WHERE player_id = $1",
+                player_id,
             )
-            result["guild_member_id"] = member_id
+            result["characters_linked"] = char_count or 0
 
-            # Link Discord account if not already linked
-            if discord_id:
-                existing_discord = await conn.fetchval(
-                    "SELECT discord_id FROM common.guild_members WHERE id = $1",
-                    member_id,
-                )
-                if not existing_discord:
-                    await conn.execute(
-                        """UPDATE common.guild_members
-                           SET discord_id = $1, discord_username = $2, updated_at = NOW()
-                           WHERE id = $3""",
-                        discord_id,
-                        discord_member["username"],
-                        member_id,
-                    )
-                    result["discord_linked"] = True
-
-            # Create common.characters for each WoW character
-            created, skipped = await self._sync_characters(conn, member_id, wow_chars)
-            result["characters_created"] = created
-            result["characters_skipped"] = skipped
-
-            # Sync rank from highest in-game rank
-            if wow_chars:
-                await self._sync_rank(conn, member_id, wow_chars[0]["guild_rank_name"])
+            # Get highest rank from linked characters
+            rank_row = await conn.fetchrow(
+                """SELECT gr.name as rank_name
+                   FROM guild_identity.player_characters pc
+                   JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
+                   JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
+                   WHERE pc.player_id = $1 AND wc.removed_at IS NULL
+                   ORDER BY gr.level DESC LIMIT 1""",
+                player_id,
+            )
+            rank_name = rank_row["rank_name"] if rank_row else DEFAULT_RANK_NAME
 
         # Assign Discord role (requires live bot, skipped in silent mode)
         if not silent and self.bot and discord_id:
-            rank_name = wow_chars[0]["guild_rank_name"] if wow_chars else None
             result["discord_role_assigned"] = await self._assign_discord_role(
                 discord_id, rank_name
             )
 
-        # Generate invite + send DM (skipped in silent mode)
+        # Generate invite + send DM (skipped in silent mode, also checks DM gate)
         if not silent and discord_id:
-            invite_code = await self._create_invite(member_id, onboarding_session_id)
+            invite_code = await self._create_invite(player_id, onboarding_session_id)
             result["invite_code"] = invite_code
             if invite_code and self.bot:
                 await self._send_invite_dm(discord_id, invite_code)
 
         logger.info(
-            "Provisioned person=%d → member=%d | chars +%d =%d | silent=%s",
-            person_id,
-            member_id,
-            created,
-            skipped,
+            "Provisioned player=%d | chars=%d | role_assigned=%s | silent=%s",
+            player_id,
+            result["characters_linked"],
+            result["discord_role_assigned"],
             silent,
         )
         return result
 
     # ── Private helpers ───────────────────────────────────────────────────────
-
-    async def _find_or_create_guild_member(
-        self,
-        conn: asyncpg.Connection,
-        discord_id: Optional[str],
-        discord_member,
-        wow_chars,
-    ) -> int:
-        """Return existing guild_member id, or create one."""
-        # Try to find by discord_id first
-        if discord_id:
-            existing = await conn.fetchval(
-                "SELECT id FROM common.guild_members WHERE discord_id = $1",
-                discord_id,
-            )
-            if existing:
-                return existing
-
-        # Determine display name
-        display_name = None
-        if discord_member:
-            display_name = discord_member["display_name"] or discord_member["username"]
-
-        # Determine rank
-        rank_name = wow_chars[0]["guild_rank_name"] if wow_chars else DEFAULT_RANK_NAME
-        rank_id = await conn.fetchval(
-            "SELECT id FROM common.guild_ranks WHERE name = $1", rank_name
-        )
-        if not rank_id:
-            rank_id = await conn.fetchval(
-                "SELECT id FROM common.guild_ranks ORDER BY level LIMIT 1"
-            )
-
-        discord_username = (
-            discord_member["username"] if discord_member else display_name or "unknown"
-        )
-
-        member_id = await conn.fetchval(
-            """INSERT INTO common.guild_members
-               (discord_id, discord_username, display_name, rank_id, rank_source)
-               VALUES ($1, $2, $3, $4, 'discord_sync')
-               RETURNING id""",
-            discord_id,
-            discord_username,
-            display_name,
-            rank_id,
-        )
-        return member_id
-
-    async def _sync_characters(
-        self,
-        conn: asyncpg.Connection,
-        member_id: int,
-        wow_chars,
-    ) -> tuple[int, int]:
-        """Create common.characters entries for all wow_chars not already present."""
-        created = skipped = 0
-
-        for wc in wow_chars:
-            realm = wc["realm_name"] or ""
-            if not realm:
-                # Skip chars with no realm data — can't create a valid entry
-                skipped += 1
-                continue
-
-            # Check if character already exists
-            existing_id = await conn.fetchval(
-                """SELECT id FROM common.characters
-                   WHERE LOWER(name) = LOWER($1) AND LOWER(realm) = LOWER($2)""",
-                wc["character_name"],
-                realm,
-            )
-            if existing_id:
-                # Link to this member if currently unlinked
-                await conn.execute(
-                    """UPDATE common.characters SET member_id = $1
-                       WHERE id = $2 AND member_id IS NULL""",
-                    member_id,
-                    existing_id,
-                )
-                skipped += 1
-                continue
-
-            role = ROLE_MAP.get(wc["role_category"] or "", "melee_dps")
-            main_alt = "main" if wc["is_main"] else "alt"
-
-            await conn.execute(
-                """INSERT INTO common.characters
-                   (member_id, name, realm, class, spec, role, main_alt)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7)
-                   ON CONFLICT (name, realm) DO UPDATE
-                       SET member_id = EXCLUDED.member_id""",
-                member_id,
-                wc["character_name"],
-                realm,
-                wc["character_class"] or "",
-                wc["active_spec"] or "",
-                role,
-                main_alt,
-            )
-            created += 1
-
-        return created, skipped
-
-    async def _sync_rank(
-        self,
-        conn: asyncpg.Connection,
-        member_id: int,
-        rank_name: Optional[str],
-    ) -> None:
-        """Update guild_member rank from in-game data."""
-        if not rank_name:
-            return
-        rank_id = await conn.fetchval(
-            "SELECT id FROM common.guild_ranks WHERE name = $1", rank_name
-        )
-        if rank_id:
-            await conn.execute(
-                """UPDATE common.guild_members
-                   SET rank_id = $1, rank_source = 'discord_sync', updated_at = NOW()
-                   WHERE id = $2""",
-                rank_id,
-                member_id,
-            )
 
     async def _assign_discord_role(
         self,
@@ -311,7 +152,7 @@ class AutoProvisioner:
 
     async def _create_invite(
         self,
-        member_id: int,
+        player_id: int,
         onboarding_session_id: Optional[int],
     ) -> Optional[str]:
         """Generate a single-use website invite code."""
@@ -322,20 +163,28 @@ class AutoProvisioner:
             async with self.db_pool.acquire() as conn:
                 await conn.execute(
                     """INSERT INTO common.invite_codes
-                       (code, member_id, expires_at, generated_by, onboarding_session_id)
-                       VALUES ($1, $2, $3, 'auto_onboarding', $4)""",
+                       (code, player_id, generated_by, onboarding_session_id, expires_at)
+                       VALUES ($1, $2, 'auto_onboarding', $3, $4)""",
                     code,
-                    member_id,
-                    expires_at,
+                    player_id,
                     onboarding_session_id,
+                    expires_at,
                 )
             return code
         except Exception as e:
-            logger.error("Failed to create invite code for member %d: %s", member_id, e)
+            logger.error("Failed to create invite code for player %d: %s", player_id, e)
             return None
 
     async def _send_invite_dm(self, discord_id: str, invite_code: str) -> None:
         """DM the invite code and welcome message to the member."""
+        from sv_common.discord.dm import is_bot_dm_enabled
+        if not await is_bot_dm_enabled(self.db_pool):
+            logger.info(
+                "Bot DM disabled — invite code %s created but not sent to %s",
+                invite_code, discord_id,
+            )
+            return
+
         if not self.bot:
             return
         try:
