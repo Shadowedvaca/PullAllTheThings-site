@@ -748,9 +748,11 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - Phase 3.2: Index Page Revamp (`reference/PHASE_3_2_INDEX_REVAMP.md`)
   - Officers, recruiting needs, weekly schedule all loaded from DB (no more hardcoded HTML)
   - Links updated: roster.html → /roster
-- Phase 3.5: Auto-Booking Scheduler (`reference/PHASE_3_5_AUTO_BOOKING.md`)
+
+- Phase 3.5: Auto-Booking Scheduler (complete)
   - Background task polls every 5 min; books next week's event 10–20 min after current event starts
-  - New service: `src/patt/services/raid_booking_service.py`
+  - `src/patt/services/raid_booking_service.py` — `check_and_auto_book()`, `book_next_occurrence()`, signup builder, attendance batch-insert, Discord announcement
+  - `app.py` gains `_auto_book_loop` started in lifespan (skipped if no DB pool)
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
@@ -772,6 +774,7 @@ Images for the art vote live at: `J:\Shared drives\Salt All The Things\Marketing
 - RaidEvent ORM model updated: recurring_event_id, auto_booked, raid_helper_payload (migration 0014)
 - Admin raid tools page: `/admin/raid-tools` — Raid-Helper config, availability grid, event builder with roster preview, manual fallback
 - Raid-Helper service: `src/patt/services/raid_helper_service.py` — `create_event()`, `test_connection()`, spec mapping
+- Auto-booking service: `src/patt/services/raid_booking_service.py` — polls every 5 min; books next week's RH event 10–20 min after recurring event starts; posts Discord announcement
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/availability` (public, no auth required)
 - Public roster page: `/roster` — Full Roster / Composition / Schedule tabs; 301 redirects from /roster.html and /roster-view.html
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
