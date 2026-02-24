@@ -422,7 +422,7 @@ def upgrade() -> None:
 
     # Drop old constraint
     op.drop_constraint(
-        "member_availability_member_id_day_of_week_key",
+        "uq_member_day",
         "member_availability",
         schema="common",
         type_="unique",
