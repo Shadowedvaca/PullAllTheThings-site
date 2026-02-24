@@ -3,7 +3,8 @@
 common schema: guild_ranks, users, discord_config, invite_codes
 patt schema: campaigns, campaign_entries, votes, campaign_results,
              contest_agent_log, mito_quotes, mito_titles,
-             player_availability, raid_seasons, raid_events, raid_attendance
+             player_availability, raid_seasons, raid_events, raid_attendance,
+             recurring_events
 guild_identity schema: roles, classes, specializations, players,
                        wow_characters, discord_users, player_characters,
                        audit_issues, sync_log, onboarding_sessions
@@ -96,6 +97,15 @@ class DiscordConfig(Base):
     )
     feature_onboarding_dm: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
+    )
+    # Raid-Helper config (Phase 3.1)
+    raid_helper_api_key: Mapped[Optional[str]] = mapped_column(String(200))
+    raid_helper_server_id: Mapped[Optional[str]] = mapped_column(String(25))
+    raid_creator_discord_id: Mapped[Optional[str]] = mapped_column(String(25))
+    raid_channel_id: Mapped[Optional[str]] = mapped_column(String(25))
+    raid_voice_channel_id: Mapped[Optional[str]] = mapped_column(String(25))
+    raid_default_template_id: Mapped[Optional[str]] = mapped_column(
+        String(50), server_default="wowretail2"
     )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
@@ -398,6 +408,35 @@ class RaidAttendance(Base):
     event: Mapped[RaidEvent] = relationship(back_populates="attendance")
     player: Mapped["Player"] = relationship()
     character: Mapped[Optional["WowCharacter"]] = relationship()
+
+
+class RecurringEvent(Base):
+    """Event-day configuration: drives front page schedule, raid tools, and auto-booking."""
+
+    __tablename__ = "recurring_events"
+    __table_args__ = (
+        CheckConstraint("day_of_week BETWEEN 0 AND 6", name="ck_recurring_events_day_range"),
+        {"schema": "patt"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(30), nullable=False, server_default="raid")
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    default_start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    default_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="120")
+    discord_channel_id: Mapped[Optional[str]] = mapped_column(String(25))
+    raid_helper_template_id: Mapped[Optional[str]] = mapped_column(
+        String(50), server_default="wowretail2"
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    display_on_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 # ---------------------------------------------------------------------------

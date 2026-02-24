@@ -1,7 +1,8 @@
 """Admin API routes — guild management (Officer+ required)."""
 
 import logging
-from datetime import date
+from datetime import date, time
+from typing import Optional
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -12,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import text
 
 from patt.deps import get_db, require_rank
-from sv_common.db.models import DiscordConfig, Player, Role, RaidSeason, Specialization, WowClass
+from sv_common.db.models import DiscordConfig, Player, RecurringEvent, Role, RaidSeason, Specialization, WowClass
 from sv_common.identity import ranks as rank_service
 from sv_common.identity import members as member_service
 from patt.services import season_service
@@ -73,6 +74,30 @@ class PlayerUpdate(BaseModel):
     guild_rank_id: int | None = None
     guild_rank_source: str | None = None
     is_active: bool | None = None
+
+
+class RecurringEventCreate(BaseModel):
+    label: str
+    event_type: str = "raid"
+    day_of_week: int
+    default_start_time: str = "21:00"  # "HH:MM"
+    default_duration_minutes: int = 120
+    discord_channel_id: str | None = None
+    raid_helper_template_id: str | None = "wowretail2"
+    is_active: bool = True
+    display_on_public: bool = True
+
+
+class RecurringEventUpdate(BaseModel):
+    label: str | None = None
+    event_type: str | None = None
+    day_of_week: int | None = None
+    default_start_time: str | None = None
+    default_duration_minutes: int | None = None
+    discord_channel_id: str | None = None
+    raid_helper_template_id: str | None = None
+    is_active: bool | None = None
+    display_on_public: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -499,5 +524,240 @@ async def send_invite(
             "code": code,
             "discord_id": discord_id,
             "dm_sent": sent,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Recurring Events (Phase 3.1)
+# ---------------------------------------------------------------------------
+
+
+def _event_to_dict(ev: "RecurringEvent") -> dict:
+    return {
+        "id": ev.id,
+        "label": ev.label,
+        "event_type": ev.event_type,
+        "day_of_week": ev.day_of_week,
+        "default_start_time": ev.default_start_time.strftime("%H:%M") if ev.default_start_time else None,
+        "default_duration_minutes": ev.default_duration_minutes,
+        "discord_channel_id": ev.discord_channel_id,
+        "raid_helper_template_id": ev.raid_helper_template_id,
+        "is_active": ev.is_active,
+        "display_on_public": ev.display_on_public,
+    }
+
+
+@router.get("/recurring-events")
+async def list_recurring_events(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(RecurringEvent).order_by(RecurringEvent.day_of_week)
+    )
+    events = list(result.scalars().all())
+    return {"ok": True, "data": [_event_to_dict(e) for e in events]}
+
+
+@router.post("/recurring-events")
+async def create_recurring_event(
+    body: RecurringEventCreate, db: AsyncSession = Depends(get_db)
+):
+    if not (0 <= body.day_of_week <= 6):
+        raise HTTPException(status_code=400, detail="day_of_week must be 0–6")
+
+    # Enforce at most one active row per day_of_week
+    existing = await db.execute(
+        select(RecurringEvent).where(
+            RecurringEvent.day_of_week == body.day_of_week,
+            RecurringEvent.is_active.is_(True),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail=f"An active recurring event already exists for day_of_week={body.day_of_week}",
+        )
+
+    try:
+        start_time = time.fromisoformat(body.default_start_time)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="default_start_time must be HH:MM")
+
+    ev = RecurringEvent(
+        label=body.label,
+        event_type=body.event_type,
+        day_of_week=body.day_of_week,
+        default_start_time=start_time,
+        default_duration_minutes=body.default_duration_minutes,
+        discord_channel_id=body.discord_channel_id,
+        raid_helper_template_id=body.raid_helper_template_id,
+        is_active=body.is_active,
+        display_on_public=body.display_on_public,
+    )
+    db.add(ev)
+    await db.commit()
+    await db.refresh(ev)
+    return {"ok": True, "data": _event_to_dict(ev)}
+
+
+@router.patch("/recurring-events/{event_id}")
+async def update_recurring_event(
+    event_id: int, body: RecurringEventUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(RecurringEvent).where(RecurringEvent.id == event_id)
+    )
+    ev = result.scalar_one_or_none()
+    if not ev:
+        raise HTTPException(status_code=404, detail=f"Recurring event {event_id} not found")
+
+    if body.label is not None:
+        ev.label = body.label
+    if body.event_type is not None:
+        ev.event_type = body.event_type
+    if body.day_of_week is not None:
+        if not (0 <= body.day_of_week <= 6):
+            raise HTTPException(status_code=400, detail="day_of_week must be 0–6")
+        ev.day_of_week = body.day_of_week
+    if body.default_start_time is not None:
+        try:
+            ev.default_start_time = time.fromisoformat(body.default_start_time)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="default_start_time must be HH:MM")
+    if body.default_duration_minutes is not None:
+        ev.default_duration_minutes = body.default_duration_minutes
+    if body.discord_channel_id is not None:
+        ev.discord_channel_id = body.discord_channel_id
+    if body.raid_helper_template_id is not None:
+        ev.raid_helper_template_id = body.raid_helper_template_id
+    if body.is_active is not None:
+        ev.is_active = body.is_active
+    if body.display_on_public is not None:
+        ev.display_on_public = body.display_on_public
+
+    await db.commit()
+    await db.refresh(ev)
+    return {"ok": True, "data": _event_to_dict(ev)}
+
+
+@router.delete("/recurring-events/{event_id}")
+async def delete_recurring_event(
+    event_id: int, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(RecurringEvent).where(RecurringEvent.id == event_id)
+    )
+    ev = result.scalar_one_or_none()
+    if not ev:
+        raise HTTPException(status_code=404, detail=f"Recurring event {event_id} not found")
+    await db.delete(ev)
+    await db.commit()
+    return {"ok": True, "data": {"deleted": True}}
+
+
+# ---------------------------------------------------------------------------
+# Availability by day (Phase 3.1 — shared by availability page + raid tools)
+# ---------------------------------------------------------------------------
+
+_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+@router.get("/availability-by-day")
+async def get_availability_by_day(db: AsyncSession = Depends(get_db)):
+    """Return per-day availability summary with role breakdown and weighted score."""
+    from sqlalchemy import func as sa_func
+    from sv_common.db.models import (
+        GuildRank, Player, PlayerAvailability, RecurringEvent, Role, Specialization
+    )
+
+    # Total active players
+    total_result = await db.execute(
+        select(sa_func.count(Player.id)).where(Player.is_active.is_(True))
+    )
+    total_active = total_result.scalar() or 0
+
+    # All active recurring events keyed by day_of_week
+    events_result = await db.execute(
+        select(RecurringEvent).where(RecurringEvent.is_active.is_(True))
+    )
+    events_by_day: dict[int, RecurringEvent] = {
+        e.day_of_week: e for e in events_result.scalars().all()
+    }
+
+    days = []
+    for dow in range(7):
+        avail_result = await db.execute(
+            select(PlayerAvailability)
+            .options(
+                selectinload(PlayerAvailability.player)
+                .selectinload(Player.guild_rank),
+                selectinload(PlayerAvailability.player)
+                .selectinload(Player.main_spec)
+                .selectinload(Specialization.default_role),
+            )
+            .where(PlayerAvailability.day_of_week == dow)
+        )
+        avail_rows = list(avail_result.scalars().all())
+
+        available_count = len(avail_rows)
+        availability_pct = round(available_count / total_active * 100, 1) if total_active else 0.0
+        weighted_score = sum(
+            r.player.guild_rank.scheduling_weight if r.player.guild_rank else 0
+            for r in avail_rows
+        )
+
+        # Role breakdown
+        role_breakdown: dict[str, int] = {}
+        player_list = []
+        for row in avail_rows:
+            p = row.player
+            rank_name = p.guild_rank.name if p.guild_rank else None
+            sched_weight = p.guild_rank.scheduling_weight if p.guild_rank else 0
+            main_role = None
+            if p.main_spec and p.main_spec.default_role:
+                main_role = p.main_spec.default_role.name
+            if main_role:
+                role_breakdown[main_role] = role_breakdown.get(main_role, 0) + 1
+            player_list.append(
+                {
+                    "player_id": p.id,
+                    "display_name": p.display_name,
+                    "rank": rank_name,
+                    "scheduling_weight": sched_weight,
+                    "main_role": main_role,
+                    "earliest_start": row.earliest_start.strftime("%H:%M") if row.earliest_start else None,
+                    "available_hours": float(row.available_hours),
+                }
+            )
+
+        recurring_event = None
+        ev = events_by_day.get(dow)
+        if ev:
+            recurring_event = {
+                "id": ev.id,
+                "label": ev.label,
+                "default_start_time": ev.default_start_time.strftime("%H:%M") if ev.default_start_time else None,
+                "default_duration_minutes": ev.default_duration_minutes,
+                "is_active": ev.is_active,
+                "display_on_public": ev.display_on_public,
+            }
+
+        days.append(
+            {
+                "day_of_week": dow,
+                "day_name": _DAY_NAMES[dow],
+                "available_count": available_count,
+                "availability_pct": availability_pct,
+                "weighted_score": weighted_score,
+                "recurring_event": recurring_event,
+                "role_breakdown": role_breakdown,
+                "players": player_list,
+            }
+        )
+
+    return {
+        "ok": True,
+        "data": {
+            "total_active_players": total_active,
+            "days": days,
         },
     }

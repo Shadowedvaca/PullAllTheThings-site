@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import select, text
+from sqlalchemy import func as sa_func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1074,6 +1074,96 @@ async def admin_bot_settings(
     ctx = await _base_ctx(request, player, db)
     ctx["discord_config"] = discord_config
     return templates.TemplateResponse("admin/bot_settings.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Availability page (Phase 3.1)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/availability", response_class=HTMLResponse)
+async def admin_availability(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from sv_common.db.models import Player, PlayerAvailability, RecurringEvent, Specialization
+    from sqlalchemy.orm import selectinload
+
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/availability")
+
+    # Total active players
+    total_result = await db.execute(
+        select(sa_func.count(Player.id)).where(Player.is_active.is_(True))
+    )
+    total_active = total_result.scalar() or 0
+
+    # All recurring events keyed by day_of_week (all, not just active — to populate table)
+    events_result = await db.execute(
+        select(RecurringEvent).order_by(RecurringEvent.day_of_week)
+    )
+    events_by_day = {e.day_of_week: e for e in events_result.scalars().all()}
+
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    days = []
+    for dow in range(7):
+        avail_result = await db.execute(
+            select(PlayerAvailability)
+            .options(
+                selectinload(PlayerAvailability.player).selectinload(Player.guild_rank),
+                selectinload(PlayerAvailability.player)
+                    .selectinload(Player.main_spec)
+                    .selectinload(Specialization.default_role),
+            )
+            .where(PlayerAvailability.day_of_week == dow)
+        )
+        avail_rows = list(avail_result.scalars().all())
+
+        available_count = len(avail_rows)
+        pct = round(available_count / total_active * 100, 1) if total_active else 0.0
+        weighted_score = sum(
+            r.player.guild_rank.scheduling_weight if r.player.guild_rank else 0
+            for r in avail_rows
+        )
+
+        if pct >= 70:
+            bar_class = "bar--green"
+        elif pct >= 40:
+            bar_class = "bar--amber"
+        else:
+            bar_class = "bar--red"
+
+        player_list = []
+        for row in avail_rows:
+            p = row.player
+            main_role = None
+            if p.main_spec and p.main_spec.default_role:
+                main_role = p.main_spec.default_role.name
+            player_list.append({
+                "display_name": p.display_name,
+                "rank": p.guild_rank.name if p.guild_rank else "—",
+                "main_role": main_role,
+            })
+
+        days.append({
+            "dow": dow,
+            "day_name": day_names[dow],
+            "available_count": available_count,
+            "availability_pct": pct,
+            "weighted_score": weighted_score,
+            "bar_class": bar_class,
+            "players": player_list,
+            "event": events_by_day.get(dow),
+        })
+
+    ctx = await _base_ctx(request, player, db)
+    ctx.update({
+        "days": days,
+        "total_active": total_active,
+        "events_by_day": events_by_day,
+    })
+    return templates.TemplateResponse("admin/availability.html", ctx)
 
 
 # ---------------------------------------------------------------------------
