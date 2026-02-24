@@ -45,7 +45,7 @@ class OnboardingConversation:
 
     async def start(self):
         """Begin onboarding. Called from on_member_join."""
-        from sv_common.discord.dm import is_bot_dm_enabled
+        from sv_common.discord.dm import is_onboarding_dm_enabled as is_bot_dm_enabled
 
         async with self.db_pool.acquire() as conn:
             # Bail if an active session already exists

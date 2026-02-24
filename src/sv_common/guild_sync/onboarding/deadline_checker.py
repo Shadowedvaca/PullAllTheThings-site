@@ -98,8 +98,8 @@ class OnboardingDeadlineChecker:
         If DMs are now enabled, start conversations for sessions stuck in awaiting_dm.
         Returns the number of sessions where DM was attempted.
         """
-        from sv_common.discord.dm import is_bot_dm_enabled
-        if not await is_bot_dm_enabled(self.db_pool):
+        from sv_common.discord.dm import is_onboarding_dm_enabled
+        if not await is_onboarding_dm_enabled(self.db_pool):
             return 0  # Still disabled, skip
 
         async with self.db_pool.acquire() as conn:

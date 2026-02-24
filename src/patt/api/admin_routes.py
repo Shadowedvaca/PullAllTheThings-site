@@ -385,10 +385,15 @@ async def get_bot_settings(db: AsyncSession = Depends(get_db)):
         "ok": True,
         "data": {
             "bot_dm_enabled": row.bot_dm_enabled if row else False,
+            "feature_invite_dm": row.feature_invite_dm if row else False,
+            "feature_onboarding_dm": row.feature_onboarding_dm if row else False,
             "role_sync_interval_hours": row.role_sync_interval_hours if row else 24,
             "guild_discord_id": row.guild_discord_id if row else None,
         },
     }
+
+
+_BOT_BOOL_FIELDS = {"bot_dm_enabled", "feature_invite_dm", "feature_onboarding_dm"}
 
 
 @router.patch("/bot-settings")
@@ -397,25 +402,28 @@ async def update_bot_settings(
     db: AsyncSession = Depends(get_db),
     admin: Player = Depends(require_rank(4)),
 ):
-    """Update bot configuration. Currently supports: bot_dm_enabled."""
+    """Update bot configuration — supports bot_dm_enabled, feature_invite_dm, feature_onboarding_dm."""
     result = await db.execute(select(DiscordConfig).limit(1))
     row = result.scalar_one_or_none()
     if not row:
         return {"ok": False, "error": "No discord_config row found"}
 
-    if "bot_dm_enabled" in payload:
-        row.bot_dm_enabled = bool(payload["bot_dm_enabled"])
+    for field in _BOT_BOOL_FIELDS:
+        if field in payload:
+            setattr(row, field, bool(payload[field]))
 
     await db.commit()
     logger.info(
-        "Bot settings updated by %s: bot_dm_enabled=%s",
+        "Bot settings updated by %s: %s",
         admin.display_name,
-        row.bot_dm_enabled,
+        {f: getattr(row, f) for f in _BOT_BOOL_FIELDS},
     )
     return {
         "ok": True,
         "data": {
             "bot_dm_enabled": row.bot_dm_enabled,
+            "feature_invite_dm": row.feature_invite_dm,
+            "feature_onboarding_dm": row.feature_onboarding_dm,
         },
     }
 

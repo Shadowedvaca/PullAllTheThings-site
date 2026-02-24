@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def is_bot_dm_enabled(pool: "asyncpg.Pool") -> bool:
     """
-    Check whether the bot is allowed to send DMs to users.
+    Check whether the master DM switch is on.
 
     Reads common.discord_config.bot_dm_enabled.
     Returns False if not configured or if the flag is off.
@@ -23,6 +23,37 @@ async def is_bot_dm_enabled(pool: "asyncpg.Pool") -> bool:
             "SELECT bot_dm_enabled FROM common.discord_config LIMIT 1"
         )
         return bool(enabled)
+
+
+async def is_invite_dm_enabled(pool: "asyncpg.Pool") -> bool:
+    """
+    Check whether invite-code DMs are enabled.
+
+    Requires both bot_dm_enabled AND feature_invite_dm to be TRUE.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT bot_dm_enabled, feature_invite_dm FROM common.discord_config LIMIT 1"
+        )
+        if not row:
+            return False
+        return bool(row["bot_dm_enabled"]) and bool(row["feature_invite_dm"])
+
+
+async def is_onboarding_dm_enabled(pool: "asyncpg.Pool") -> bool:
+    """
+    Check whether onboarding conversation DMs are enabled.
+
+    Requires both bot_dm_enabled AND feature_onboarding_dm to be TRUE.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT bot_dm_enabled, feature_onboarding_dm FROM common.discord_config LIMIT 1"
+        )
+        if not row:
+            return False
+        return bool(row["bot_dm_enabled"]) and bool(row["feature_onboarding_dm"])
+
 
 _REGISTRATION_TEMPLATE = """\
 Hey! You've been invited to register on the Pull All The Things guild platform.
@@ -60,3 +91,7 @@ async def send_registration_dm(
     except Exception as exc:
         logger.error("Failed to send DM to discord_id=%s: %s", discord_id, exc)
         return False
+
+
+# Alias used by admin_pages.py and other callers
+send_invite_dm = send_registration_dm

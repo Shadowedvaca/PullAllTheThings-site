@@ -979,9 +979,11 @@ async def admin_roster_invite(
         if target and target.discord_user:
             try:
                 from sv_common.discord.bot import get_bot
+                from sv_common.discord.dm import send_invite_dm, is_invite_dm_enabled
                 bot = get_bot()
-                if bot is not None:
-                    from sv_common.discord.dm import send_invite_dm
+                pool = getattr(request.app.state, "guild_sync_pool", None)
+                invite_ok = pool and await is_invite_dm_enabled(pool)
+                if bot is not None and invite_ok:
                     await send_invite_dm(bot, target.discord_user.discord_id, code)
                     dm_sent = True
             except Exception as dm_err:
@@ -990,8 +992,10 @@ async def admin_roster_invite(
         msg = f"Invite+code+{code}+created"
         if dm_sent:
             msg += "+and+sent+via+Discord."
+        elif target and target.discord_user:
+            msg += ".+DM+not+sent+(Invite+DMs+are+disabled+in+Bot+Settings)."
         else:
-            msg += ".+DM+not+sent+(player+may+not+have+Discord+linked)."
+            msg += ".+DM+not+sent+(no+Discord+linked)."
         return RedirectResponse(url=f"/admin/roster?success={msg}", status_code=302)
     except Exception as e:
         logger.error("Invite error: %s", e)

@@ -91,6 +91,12 @@ class DiscordConfig(Base):
     bot_dm_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    feature_invite_dm: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    feature_onboarding_dm: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

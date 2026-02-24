@@ -126,6 +126,64 @@ input:checked + .bs-slider::before {
     color: var(--color-text-muted);
     margin-left: 0.5rem;
 }
+.bs-features {
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+}
+.bs-features__title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+}
+.bs-feature-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 0.4rem;
+    background: var(--color-bg-dark);
+    border: 1px solid var(--color-border-subtle);
+    transition: opacity 0.2s;
+}
+.bs-feature-row.bs-feature--disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+/* Smaller toggle for feature rows */
+.bs-switch--sm {
+    width: 52px;
+    height: 28px;
+}
+.bs-switch--sm .bs-slider {
+    border-radius: 28px;
+}
+.bs-switch--sm .bs-slider::before {
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+}
+.bs-switch--sm input:checked + .bs-slider::before {
+    transform: translateX(24px);
+}
+.bs-feature-info {
+    flex: 1;
+}
+.bs-feature-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.bs-feature-desc {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-top: 0.1rem;
+}
 </style>
 {% endblock %}
 
@@ -156,15 +214,50 @@ input:checked + .bs-slider::before {
     </div>
 
     <p class="bs-info">
-        When <strong>OFF</strong>, the bot will not send any DMs to guild members.
-        Discord sync, Blizzard sync, audit channel posts, and officer slash commands all continue working.
-        New member join events will create onboarding sessions in the database, but no DM will be sent
-        until this toggle is turned ON.
+        Master switch. When <strong>OFF</strong>, no DMs are sent regardless of feature settings below.
+        Discord sync, Blizzard sync, and slash commands all continue working.
     </p>
-    <p class="bs-info">
-        When turned ON, the scheduler will pick up any sessions waiting in
-        <strong>awaiting_dm</strong> state on its next 30-minute check.
-    </p>
+
+    {# Feature-level toggles #}
+    <div class="bs-features" id="feature-panel">
+        <div class="bs-features__title">Feature Controls</div>
+
+        <div class="bs-feature-row {% if not discord_config or not discord_config.bot_dm_enabled %}bs-feature--disabled{% endif %}"
+             id="feature-row-invite">
+            <label class="bs-switch bs-switch--sm">
+                <input type="checkbox" id="feature-invite-toggle"
+                       {% if discord_config and discord_config.feature_invite_dm %}checked{% endif %}
+                       onchange="toggleFeature('feature_invite_dm', this.checked)">
+                <span class="bs-slider"></span>
+            </label>
+            <div class="bs-feature-info">
+                <div class="bs-feature-name">Invite DMs</div>
+                <div class="bs-feature-desc">Send registration invite codes to members via Discord DM (triggered manually from Roster).</div>
+            </div>
+            <span class="bs-toggle-status {% if discord_config and discord_config.feature_invite_dm %}bs-toggle-status--on{% else %}bs-toggle-status--off{% endif %}"
+                  id="feature-invite-status">
+                {% if discord_config and discord_config.feature_invite_dm %}ON{% else %}OFF{% endif %}
+            </span>
+        </div>
+
+        <div class="bs-feature-row {% if not discord_config or not discord_config.bot_dm_enabled %}bs-feature--disabled{% endif %}"
+             id="feature-row-onboarding">
+            <label class="bs-switch bs-switch--sm">
+                <input type="checkbox" id="feature-onboarding-toggle"
+                       {% if discord_config and discord_config.feature_onboarding_dm %}checked{% endif %}
+                       onchange="toggleFeature('feature_onboarding_dm', this.checked)">
+                <span class="bs-slider"></span>
+            </label>
+            <div class="bs-feature-info">
+                <div class="bs-feature-name">Onboarding DMs</div>
+                <div class="bs-feature-desc">Start automated onboarding conversations when new members join the Discord server.</div>
+            </div>
+            <span class="bs-toggle-status {% if discord_config and discord_config.feature_onboarding_dm %}bs-toggle-status--on{% else %}bs-toggle-status--off{% endif %}"
+                  id="feature-onboarding-status">
+                {% if discord_config and discord_config.feature_onboarding_dm %}ON{% else %}OFF{% endif %}
+            </span>
+        </div>
+    </div>
 </div>
 
 {# Onboarding Queue Card #}
@@ -181,19 +274,22 @@ input:checked + .bs-slider::before {
 </div>
 
 <script>
+async function patchSettings(payload) {
+    const resp = await fetch('/api/v1/admin/bot-settings', {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+    });
+    return resp.json();
+}
+
 async function toggleBotDm(enabled) {
     document.getElementById('dm-saving').style.display = 'inline';
     try {
-        const resp = await fetch('/api/v1/admin/bot-settings', {
-            method: 'PATCH',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({bot_dm_enabled: enabled})
-        });
-        const data = await resp.json();
+        const data = await patchSettings({bot_dm_enabled: enabled});
         if (data.ok) {
-            updateToggleUI(data.data.bot_dm_enabled);
+            updateMasterUI(data.data.bot_dm_enabled);
         } else {
-            // Revert
             document.getElementById('dm-toggle').checked = !enabled;
             alert('Failed to save: ' + (data.error || 'unknown error'));
         }
@@ -205,10 +301,40 @@ async function toggleBotDm(enabled) {
     }
 }
 
-function updateToggleUI(enabled) {
+async function toggleFeature(field, enabled) {
+    try {
+        const data = await patchSettings({[field]: enabled});
+        if (data.ok) {
+            updateFeatureUI(field, enabled);
+        } else {
+            // Revert checkbox
+            const id = field === 'feature_invite_dm' ? 'feature-invite-toggle' : 'feature-onboarding-toggle';
+            document.getElementById(id).checked = !enabled;
+            alert('Failed to save: ' + (data.error || 'unknown error'));
+        }
+    } catch (e) {
+        const id = field === 'feature_invite_dm' ? 'feature-invite-toggle' : 'feature-onboarding-toggle';
+        document.getElementById(id).checked = !enabled;
+        alert('Network error: ' + e.message);
+    }
+}
+
+function updateMasterUI(enabled) {
     const status = document.getElementById('dm-status');
     status.textContent = enabled ? 'ON' : 'OFF';
     status.className = 'bs-toggle-status ' + (enabled ? 'bs-toggle-status--on' : 'bs-toggle-status--off');
+    // Dim/undim feature rows
+    document.querySelectorAll('.bs-feature-row').forEach(row => {
+        row.classList.toggle('bs-feature--disabled', !enabled);
+    });
+}
+
+function updateFeatureUI(field, enabled) {
+    const isInvite = field === 'feature_invite_dm';
+    const statusId = isInvite ? 'feature-invite-status' : 'feature-onboarding-status';
+    const el = document.getElementById(statusId);
+    el.textContent = enabled ? 'ON' : 'OFF';
+    el.className = 'bs-toggle-status ' + (enabled ? 'bs-toggle-status--on' : 'bs-toggle-status--off');
 }
 
 async function loadOnboardingStats() {
