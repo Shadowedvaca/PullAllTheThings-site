@@ -1,15 +1,19 @@
 """Admin API routes — guild management (Officer+ required)."""
 
 import logging
+from datetime import date
 
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from patt.deps import get_db, require_rank
-from sv_common.db.models import Player
+from sv_common.db.models import Player, Role, RaidSeason, Specialization, WowClass
 from sv_common.identity import ranks as rank_service
 from sv_common.identity import members as member_service
+from patt.services import season_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +34,7 @@ class RankCreate(BaseModel):
     level: int
     description: str | None = None
     discord_role_id: str | None = None
+    scheduling_weight: int = 0
 
 
 class RankUpdate(BaseModel):
@@ -37,6 +42,22 @@ class RankUpdate(BaseModel):
     level: int | None = None
     description: str | None = None
     discord_role_id: str | None = None
+    scheduling_weight: int | None = None
+
+
+class RoleUpdate(BaseModel):
+    name: str | None = None
+
+
+class SeasonCreate(BaseModel):
+    name: str
+    start_date: date
+    is_active: bool = True
+
+
+class SeasonUpdate(BaseModel):
+    name: str | None = None
+    is_active: bool | None = None
 
 
 class PlayerCreate(BaseModel):
@@ -68,6 +89,7 @@ async def list_ranks(db: AsyncSession = Depends(get_db)):
                 "level": r.level,
                 "discord_role_id": r.discord_role_id,
                 "description": r.description,
+                "scheduling_weight": r.scheduling_weight,
             }
             for r in all_ranks
         ],
@@ -83,6 +105,7 @@ async def create_rank(body: RankCreate, db: AsyncSession = Depends(get_db)):
             level=body.level,
             description=body.description,
             discord_role_id=body.discord_role_id,
+            scheduling_weight=body.scheduling_weight,
         )
         return {
             "ok": True,
@@ -101,7 +124,12 @@ async def update_rank(
         rank = await rank_service.update_rank(db, rank_id, **updates)
         return {
             "ok": True,
-            "data": {"id": rank.id, "name": rank.name, "level": rank.level},
+            "data": {
+                "id": rank.id,
+                "name": rank.name,
+                "level": rank.level,
+                "scheduling_weight": rank.scheduling_weight,
+            },
         }
     except ValueError as e:
         return {"ok": False, "error": str(e)}
@@ -113,6 +141,150 @@ async def delete_rank(rank_id: int, db: AsyncSession = Depends(get_db)):
     if not deleted:
         return {"ok": False, "error": f"Rank {rank_id} not found"}
     return {"ok": True, "data": {"deleted": True}}
+
+
+# ---------------------------------------------------------------------------
+# Combat Roles (read + edit)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/roles")
+async def list_roles(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Role).order_by(Role.id))
+    roles = list(result.scalars().all())
+    return {
+        "ok": True,
+        "data": [{"id": r.id, "name": r.name} for r in roles],
+    }
+
+
+@router.patch("/roles/{role_id}")
+async def update_role(
+    role_id: int, body: RoleUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Role).where(Role.id == role_id))
+    role = result.scalar_one_or_none()
+    if not role:
+        raise HTTPException(status_code=404, detail=f"Role {role_id} not found")
+    if body.name is not None:
+        role.name = body.name
+    await db.commit()
+    return {"ok": True, "data": {"id": role.id, "name": role.name}}
+
+
+# ---------------------------------------------------------------------------
+# WoW Classes + Specializations (read-only)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/classes")
+async def list_classes(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(WowClass).order_by(WowClass.name)
+    )
+    classes = list(result.scalars().all())
+    return {
+        "ok": True,
+        "data": [
+            {"id": c.id, "name": c.name, "color_hex": c.color_hex}
+            for c in classes
+        ],
+    }
+
+
+@router.get("/specializations")
+async def list_specializations(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Specialization)
+        .options(
+            selectinload(Specialization.wow_class),
+            selectinload(Specialization.default_role),
+        )
+        .order_by(Specialization.class_id, Specialization.name)
+    )
+    specs = list(result.scalars().all())
+    return {
+        "ok": True,
+        "data": [
+            {
+                "id": s.id,
+                "class_id": s.class_id,
+                "class_name": s.wow_class.name if s.wow_class else None,
+                "name": s.name,
+                "default_role_id": s.default_role_id,
+                "default_role": s.default_role.name if s.default_role else None,
+                "wowhead_slug": s.wowhead_slug,
+            }
+            for s in specs
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Raid Seasons
+# ---------------------------------------------------------------------------
+
+
+@router.get("/seasons")
+async def list_seasons(db: AsyncSession = Depends(get_db)):
+    seasons = await season_service.get_all_seasons(db)
+    return {
+        "ok": True,
+        "data": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "start_date": s.start_date.isoformat(),
+                "is_active": s.is_active,
+                "created_at": s.created_at.isoformat(),
+            }
+            for s in seasons
+        ],
+    }
+
+
+@router.post("/seasons")
+async def create_season(body: SeasonCreate, db: AsyncSession = Depends(get_db)):
+    season = await season_service.create_season(
+        db,
+        name=body.name,
+        start_date=body.start_date,
+        is_active=body.is_active,
+    )
+    await db.commit()
+    return {
+        "ok": True,
+        "data": {
+            "id": season.id,
+            "name": season.name,
+            "start_date": season.start_date.isoformat(),
+            "is_active": season.is_active,
+        },
+    }
+
+
+@router.patch("/seasons/{season_id}")
+async def update_season(
+    season_id: int, body: SeasonUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(RaidSeason).where(RaidSeason.id == season_id))
+    season = result.scalar_one_or_none()
+    if not season:
+        raise HTTPException(status_code=404, detail=f"Season {season_id} not found")
+    if body.name is not None:
+        season.name = body.name
+    if body.is_active is not None:
+        season.is_active = body.is_active
+    await db.commit()
+    return {
+        "ok": True,
+        "data": {
+            "id": season.id,
+            "name": season.name,
+            "start_date": season.start_date.isoformat(),
+            "is_active": season.is_active,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

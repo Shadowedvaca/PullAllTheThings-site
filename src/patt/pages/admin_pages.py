@@ -823,6 +823,48 @@ async def admin_update_display_name(
 
 
 # ---------------------------------------------------------------------------
+# Reference Tables page
+# ---------------------------------------------------------------------------
+
+
+@router.get("/reference-tables", response_class=HTMLResponse)
+async def admin_reference_tables(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from sv_common.db.models import Role, WowClass, Specialization
+    from sv_common.identity import ranks as rank_service
+    from patt.services import season_service
+    from sqlalchemy.orm import selectinload
+
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/reference-tables")
+
+    ranks = await rank_service.get_all_ranks(db)
+    seasons = await season_service.get_all_seasons(db)
+
+    roles_result = await db.execute(select(Role).order_by(Role.id))
+    roles = list(roles_result.scalars().all())
+
+    classes_result = await db.execute(
+        select(WowClass)
+        .options(selectinload(WowClass.specializations).selectinload(Specialization.default_role))
+        .order_by(WowClass.name)
+    )
+    classes = list(classes_result.scalars().all())
+
+    ctx = await _base_ctx(request, player, db)
+    ctx.update({
+        "ranks": ranks,
+        "roles": roles,
+        "classes": classes,
+        "seasons": seasons,
+    })
+    return templates.TemplateResponse("admin/reference_tables.html", ctx)
+
+
+# ---------------------------------------------------------------------------
 # Roster page (legacy — kept for reference; redirects to /admin/players)
 # ---------------------------------------------------------------------------
 

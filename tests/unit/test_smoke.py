@@ -34,7 +34,11 @@ def test_models_importable():
         GuildRank,
         InviteCode,
         Player,
+        PlayerAvailability,
         PlayerCharacter,
+        RaidAttendance,
+        RaidEvent,
+        RaidSeason,
         Role,
         Specialization,
         User,
@@ -59,6 +63,10 @@ def test_models_importable():
     assert Vote.__tablename__ == "votes"
     assert CampaignResult.__tablename__ == "campaign_results"
     assert ContestAgentLog.__tablename__ == "contest_agent_log"
+    assert PlayerAvailability.__tablename__ == "player_availability"
+    assert RaidSeason.__tablename__ == "raid_seasons"
+    assert RaidEvent.__tablename__ == "raid_events"
+    assert RaidAttendance.__tablename__ == "raid_attendance"
 
 
 def test_model_schemas():
@@ -67,6 +75,10 @@ def test_model_schemas():
         Campaign,
         GuildRank,
         Player,
+        PlayerAvailability,
+        RaidAttendance,
+        RaidEvent,
+        RaidSeason,
         Role,
         WowCharacter,
         WowClass,
@@ -78,10 +90,14 @@ def test_model_schemas():
     assert WowCharacter.__table_args__[1]["schema"] == "guild_identity"
     assert Role.__table_args__["schema"] == "guild_identity"
     assert WowClass.__table_args__["schema"] == "guild_identity"
+    assert PlayerAvailability.__table_args__[3]["schema"] == "patt"
+    assert RaidSeason.__table_args__["schema"] == "patt"
+    assert RaidEvent.__table_args__["schema"] == "patt"
+    assert RaidAttendance.__table_args__[1]["schema"] == "patt"
 
 
 def test_player_has_required_fields():
-    """Verify Player model has all Phase 2.7 fields."""
+    """Verify Player model has all Phase 2.7 + 2.8 fields."""
     from sv_common.db.models import Player
 
     columns = {c.name for c in Player.__table__.columns}
@@ -90,9 +106,18 @@ def test_player_has_required_fields():
         "guild_rank_id", "guild_rank_source",
         "main_character_id", "main_spec_id",
         "offspec_character_id", "offspec_spec_id",
+        "timezone", "auto_invite_events",
         "is_active", "notes", "created_at", "updated_at",
     }
     assert required.issubset(columns), f"Missing columns: {required - columns}"
+
+
+def test_guild_rank_has_scheduling_weight():
+    """Verify GuildRank model has scheduling_weight column."""
+    from sv_common.db.models import GuildRank
+
+    columns = {c.name for c in GuildRank.__table__.columns}
+    assert "scheduling_weight" in columns
 
 
 def test_wow_character_has_fk_columns():
@@ -131,3 +156,21 @@ def test_vote_uses_player_id():
     columns = {c.name for c in Vote.__table__.columns}
     assert "player_id" in columns
     assert "member_id" not in columns
+
+
+def test_player_availability_schema():
+    """Verify PlayerAvailability has correct fields and schema."""
+    from sv_common.db.models import PlayerAvailability
+
+    columns = {c.name for c in PlayerAvailability.__table__.columns}
+    assert "player_id" in columns
+    assert "day_of_week" in columns
+    assert "earliest_start" in columns
+    assert "available_hours" in columns
+    assert "updated_at" in columns
+
+
+def test_member_availability_removed():
+    """Verify MemberAvailability no longer exists in models."""
+    import sv_common.db.models as m
+    assert not hasattr(m, "MemberAvailability"), "MemberAvailability should be removed"

@@ -1,26 +1,30 @@
 """SQLAlchemy ORM models for the PATT platform.
 
-common schema: guild_ranks, users, discord_config, invite_codes,
-               member_availability
+common schema: guild_ranks, users, discord_config, invite_codes
 patt schema: campaigns, campaign_entries, votes, campaign_results,
-             contest_agent_log, mito_quotes, mito_titles
+             contest_agent_log, mito_quotes, mito_titles,
+             player_availability, raid_seasons, raid_events, raid_attendance
 guild_identity schema: roles, classes, specializations, players,
                        wow_characters, discord_users, player_characters,
                        audit_issues, sync_log, onboarding_sessions
 """
 
-from datetime import datetime
+from datetime import date, datetime, time
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -44,6 +48,7 @@ class GuildRank(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     level: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    scheduling_weight: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     discord_role_id: Mapped[Optional[str]] = mapped_column(String(20))
     description: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
@@ -120,29 +125,6 @@ class InviteCode(Base):
     created_by_player: Mapped[Optional["Player"]] = relationship(
         back_populates="created_invite_codes", foreign_keys=[created_by_player_id]
     )
-
-
-class MemberAvailability(Base):
-    __tablename__ = "member_availability"
-    __table_args__ = (
-        UniqueConstraint("player_id", "day_of_week"),
-        {"schema": "common"},
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    player_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.players.id", ondelete="CASCADE"), nullable=False
-    )
-    day_of_week: Mapped[str] = mapped_column(String(10), nullable=False)
-    available: Mapped[bool] = mapped_column(Boolean, default=True)
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-    auto_signup: Mapped[bool] = mapped_column(Boolean, default=False)
-    wants_reminders: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    player: Mapped["Player"] = relationship(back_populates="availability")
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +282,112 @@ class MitoTitle(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
+
+
+class PlayerAvailability(Base):
+    """Player raid availability: time windows per day of week (0=Mon … 6=Sun)."""
+
+    __tablename__ = "player_availability"
+    __table_args__ = (
+        CheckConstraint("day_of_week BETWEEN 0 AND 6", name="ck_player_availability_day_range"),
+        CheckConstraint(
+            "available_hours > 0 AND available_hours <= 16",
+            name="ck_player_availability_hours",
+        ),
+        UniqueConstraint("player_id", "day_of_week", name="uq_player_availability_player_day"),
+        {"schema": "patt"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.players.id"), nullable=False
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    earliest_start: Mapped[time] = mapped_column(Time, nullable=False)
+    available_hours: Mapped[Decimal] = mapped_column(Numeric(3, 1), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    player: Mapped["Player"] = relationship(back_populates="availability")
+
+
+class RaidSeason(Base):
+    """A WoW content season (e.g. Season 2 – Liberation of Undermine)."""
+
+    __tablename__ = "raid_seasons"
+    __table_args__ = {"schema": "patt"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    events: Mapped[list["RaidEvent"]] = relationship(back_populates="season")
+
+
+class RaidEvent(Base):
+    """A single scheduled raid night."""
+
+    __tablename__ = "raid_events"
+    __table_args__ = {"schema": "patt"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    season_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("patt.raid_seasons.id")
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    event_date: Mapped[date] = mapped_column(Date, nullable=False)
+    start_time_utc: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    end_time_utc: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    raid_helper_event_id: Mapped[Optional[str]] = mapped_column(String(30))
+    discord_channel_id: Mapped[Optional[str]] = mapped_column(String(25))
+    log_url: Mapped[Optional[str]] = mapped_column(String(500))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_by_player_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.players.id")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    season: Mapped[Optional[RaidSeason]] = relationship(back_populates="events")
+    attendance: Mapped[list["RaidAttendance"]] = relationship(back_populates="event")
+
+
+class RaidAttendance(Base):
+    """Who signed up and who actually attended a raid event."""
+
+    __tablename__ = "raid_attendance"
+    __table_args__ = (
+        UniqueConstraint("event_id", "player_id", name="uq_attendance_event_player"),
+        {"schema": "patt"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("patt.raid_events.id"), nullable=False
+    )
+    player_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.players.id"), nullable=False
+    )
+    signed_up: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    attended: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    character_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id")
+    )
+    noted_absence: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    source: Mapped[str] = mapped_column(String(20), server_default="manual")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    event: Mapped[RaidEvent] = relationship(back_populates="attendance")
+    player: Mapped["Player"] = relationship()
+    character: Mapped[Optional["WowCharacter"]] = relationship()
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +555,10 @@ class Player(Base):
     offspec_spec_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("guild_identity.specializations.id")
     )
+    timezone: Mapped[str] = mapped_column(
+        String(50), nullable=False, server_default="America/Chicago"
+    )
+    auto_invite_events: Mapped[bool] = mapped_column(Boolean, server_default="false")
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
@@ -492,7 +584,7 @@ class Player(Base):
         foreign_keys=[offspec_spec_id]
     )
     characters: Mapped[list["PlayerCharacter"]] = relationship(back_populates="player")
-    availability: Mapped[list[MemberAvailability]] = relationship(back_populates="player")
+    availability: Mapped[list["PlayerAvailability"]] = relationship(back_populates="player")
     invite_codes: Mapped[list[InviteCode]] = relationship(
         back_populates="player", foreign_keys="InviteCode.player_id"
     )

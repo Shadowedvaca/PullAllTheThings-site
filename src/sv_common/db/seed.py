@@ -28,6 +28,7 @@ async def seed_ranks(session: AsyncSession) -> None:
             name=rank_data["name"],
             level=rank_data["level"],
             description=rank_data.get("description"),
+            scheduling_weight=rank_data.get("scheduling_weight", 0),
         )
         session.add(rank)
 

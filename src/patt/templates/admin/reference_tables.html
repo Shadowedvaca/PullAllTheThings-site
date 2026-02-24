@@ -1,0 +1,454 @@
+{% extends "base_admin.html" %}
+{% block title %}Reference Tables — Admin — Pull All The Things{% endblock %}
+{% block nav_reference_tables %}active{% endblock %}
+
+{% block head %}
+<style>
+.rt-section {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.rt-section__header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.rt-section__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0;
+}
+.rt-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+.rt-table th {
+    text-align: left;
+    padding: 0.6rem 1rem;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-dark);
+}
+.rt-table td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--color-border-subtle);
+    vertical-align: middle;
+}
+.rt-table tr:last-child td {
+    border-bottom: none;
+}
+.rt-editable {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--color-text);
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    width: 100%;
+    max-width: 260px;
+    transition: border-color 0.15s;
+}
+.rt-editable:hover, .rt-editable:focus {
+    border-color: var(--color-border);
+    outline: none;
+    background: var(--color-bg-dark);
+}
+.rt-editable--number {
+    max-width: 90px;
+}
+.rt-save-btn {
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    background: var(--color-gold);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.rt-row:hover .rt-save-btn,
+.rt-row--dirty .rt-save-btn {
+    opacity: 1;
+}
+.rt-status {
+    font-size: 0.8rem;
+    color: var(--color-success);
+    margin-left: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.rt-status--visible { opacity: 1; }
+
+/* Seasons create form */
+.rt-create-row {
+    padding: 0.75rem 1rem;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    border-top: 1px solid var(--color-border);
+    background: var(--color-bg-dark);
+    flex-wrap: wrap;
+}
+.rt-create-row label {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.rt-create-row input[type="text"],
+.rt-create-row input[type="date"] {
+    padding: 0.3rem 0.5rem;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.rt-create-row .btn-primary {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+/* Collapsible class list */
+.rt-collapsible summary {
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    user-select: none;
+}
+.rt-collapsible summary:hover { color: var(--color-text); }
+.rt-class-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+    padding: 0 1rem 1rem;
+}
+.rt-class-card {
+    background: var(--color-bg-dark);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+}
+.rt-class-card__name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+}
+.rt-class-card__spec {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    padding: 0.15rem 0;
+    display: flex;
+    justify-content: space-between;
+}
+.rt-class-card__spec-role {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+}
+.badge-active {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--color-success);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+.badge-inactive {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--color-danger);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1 class="admin-title">Reference Tables</h1>
+    <p style="color:var(--color-text-muted);margin-top:0.25rem;font-size:0.9rem;">
+        Edit configurable reference data. Changes take effect immediately.
+    </p>
+</div>
+
+<div id="rt-toast" style="display:none;position:fixed;bottom:1.5rem;right:1.5rem;background:var(--color-card);border:1px solid var(--color-border);padding:0.6rem 1rem;border-radius:6px;font-size:0.9rem;z-index:999;"></div>
+
+{# ── Guild Ranks ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Guild Ranks</h2>
+        <span style="font-size:0.8rem;color:var(--color-text-muted);">Edit inline — click Save to persist</span>
+    </div>
+    <table class="rt-table">
+        <thead>
+            <tr>
+                <th>Level</th>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Sched. Weight</th>
+                <th>Discord Role ID</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for rank in ranks %}
+        <tr class="rt-row" data-id="{{ rank.id }}" data-type="ranks">
+            <td>{{ rank.level }}</td>
+            <td>
+                <input class="rt-editable rt-field" name="name"
+                       value="{{ rank.name }}" data-orig="{{ rank.name }}">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="description"
+                       value="{{ rank.description or '' }}" data-orig="{{ rank.description or '' }}">
+            </td>
+            <td>
+                <input class="rt-editable rt-editable--number rt-field" name="scheduling_weight"
+                       type="number" min="0" max="10"
+                       value="{{ rank.scheduling_weight }}" data-orig="{{ rank.scheduling_weight }}">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="discord_role_id"
+                       value="{{ rank.discord_role_id or '' }}" data-orig="{{ rank.discord_role_id or '' }}"
+                       placeholder="Discord role snowflake">
+            </td>
+            <td>
+                <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
+                <span class="rt-status"></span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# ── Combat Roles ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Combat Roles</h2>
+    </div>
+    <table class="rt-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for role in roles %}
+        <tr class="rt-row" data-id="{{ role.id }}" data-type="roles">
+            <td style="color:var(--color-text-muted);">{{ role.id }}</td>
+            <td>
+                <input class="rt-editable rt-field" name="name"
+                       value="{{ role.name }}" data-orig="{{ role.name }}">
+            </td>
+            <td>
+                <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
+                <span class="rt-status"></span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# ── Raid Seasons ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Raid Seasons</h2>
+    </div>
+    <table class="rt-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Start Date</th>
+                <th>Active</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="seasons-tbody">
+        {% for season in seasons %}
+        <tr class="rt-row" data-id="{{ season.id }}" data-type="seasons">
+            <td style="color:var(--color-text-muted);">{{ season.id }}</td>
+            <td>
+                <input class="rt-editable rt-field" name="name"
+                       value="{{ season.name }}" data-orig="{{ season.name }}">
+            </td>
+            <td style="color:var(--color-text-muted);">{{ season.start_date }}</td>
+            <td>
+                <select class="rt-editable rt-field" name="is_active" data-orig="{{ season.is_active | lower }}">
+                    <option value="true" {% if season.is_active %}selected{% endif %}>Active</option>
+                    <option value="false" {% if not season.is_active %}selected{% endif %}>Inactive</option>
+                </select>
+            </td>
+            <td>
+                <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
+                <span class="rt-status"></span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <div class="rt-create-row">
+        <label>New season:</label>
+        <input type="text" id="new-season-name" placeholder="Season name" style="min-width:200px;">
+        <input type="date" id="new-season-date">
+        <button class="btn btn-primary rt-save-btn" style="opacity:1;" onclick="createSeason()">+ Create Season</button>
+        <span id="season-create-status" class="rt-status"></span>
+    </div>
+</div>
+
+{# ── WoW Classes & Specs (read-only, collapsible) ── #}
+<div class="rt-section">
+    <details class="rt-collapsible">
+        <summary>WoW Classes &amp; Specializations (read-only reference)</summary>
+        <div class="rt-class-grid">
+        {% for cls in classes %}
+            <div class="rt-class-card">
+                <div class="rt-class-card__name" {% if cls.color_hex %}style="color:{{ cls.color_hex }}"{% endif %}>
+                    {{ cls.name }}
+                </div>
+                {% for spec in cls.specializations | sort(attribute='name') %}
+                <div class="rt-class-card__spec">
+                    <span>{{ spec.name }}</span>
+                    <span class="rt-class-card__spec-role">{{ spec.default_role.name if spec.default_role else '—' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        </div>
+    </details>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showToast(msg, isError) {
+    const t = document.getElementById('rt-toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    t.style.borderColor = isError ? 'var(--color-danger)' : 'var(--color-success)';
+    t.style.color = isError ? 'var(--color-danger)' : 'var(--color-success)';
+    setTimeout(() => { t.style.display = 'none'; }, 2500);
+}
+
+function getRowPayload(row) {
+    const fields = row.querySelectorAll('.rt-field');
+    const payload = {};
+    fields.forEach(f => {
+        let val = f.value.trim();
+        if (f.type === 'number') val = val === '' ? null : Number(val);
+        if (f.tagName === 'SELECT' && (val === 'true' || val === 'false')) val = val === 'true';
+        payload[f.name] = val === '' ? null : val;
+    });
+    return payload;
+}
+
+async function saveRow(btn) {
+    const row = btn.closest('.rt-row');
+    const id = row.dataset.id;
+    const type = row.dataset.type;
+    const statusEl = row.querySelector('.rt-status');
+    const payload = getRowPayload(row);
+
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/v1/admin/${type}/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Saved!');
+            statusEl.textContent = '✓';
+            statusEl.classList.add('rt-status--visible');
+            row.classList.remove('rt-row--dirty');
+            // Update orig values
+            row.querySelectorAll('.rt-field').forEach(f => f.dataset.orig = f.value);
+            setTimeout(() => statusEl.classList.remove('rt-status--visible'), 2000);
+        } else {
+            showToast('Error: ' + (data.error || 'unknown'), true);
+        }
+    } catch (e) {
+        showToast('Network error', true);
+    }
+    btn.disabled = false;
+}
+
+// Mark row dirty when a field changes
+document.querySelectorAll('.rt-field').forEach(f => {
+    f.addEventListener('input', () => {
+        f.closest('.rt-row').classList.add('rt-row--dirty');
+    });
+});
+
+async function createSeason() {
+    const name = document.getElementById('new-season-name').value.trim();
+    const dateVal = document.getElementById('new-season-date').value;
+    const statusEl = document.getElementById('season-create-status');
+
+    if (!name || !dateVal) {
+        showToast('Season name and start date are required', true);
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/v1/admin/seasons', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, start_date: dateVal, is_active: true }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Season created!');
+            const s = data.data;
+            const tbody = document.getElementById('seasons-tbody');
+            const tr = document.createElement('tr');
+            tr.className = 'rt-row';
+            tr.dataset.id = s.id;
+            tr.dataset.type = 'seasons';
+            tr.innerHTML = `
+                <td style="color:var(--color-text-muted);">${s.id}</td>
+                <td><input class="rt-editable rt-field" name="name" value="${s.name}" data-orig="${s.name}"></td>
+                <td style="color:var(--color-text-muted);">${s.start_date}</td>
+                <td>
+                    <select class="rt-editable rt-field" name="is_active" data-orig="true">
+                        <option value="true" selected>Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </td>
+                <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
+            `;
+            tbody.prepend(tr);
+            tr.querySelectorAll('.rt-field').forEach(f => {
+                f.addEventListener('input', () => f.closest('.rt-row').classList.add('rt-row--dirty'));
+            });
+            document.getElementById('new-season-name').value = '';
+            document.getElementById('new-season-date').value = '';
+        } else {
+            showToast('Error: ' + (data.error || 'unknown'), true);
+        }
+    } catch (e) {
+        showToast('Network error', true);
+    }
+}
+</script>
+{% endblock %}

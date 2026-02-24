@@ -1,7 +1,7 @@
 [
-    {"name": "Initiate", "level": 1, "description": "New member, proving reliability and social fit"},
-    {"name": "Member", "level": 2, "description": "Regular attendee who engages with the guild"},
-    {"name": "Veteran", "level": 3, "description": "Key performer, helps others, brings the guild together"},
-    {"name": "Officer", "level": 4, "description": "Guild leadership team"},
-    {"name": "Guild Leader", "level": 5, "description": "Guild master"}
+  {"name": "Initiate", "level": 1, "description": "New member, proving reliability and social fit", "scheduling_weight": 0},
+  {"name": "Member", "level": 2, "description": "Regular attendee who engages with the guild", "scheduling_weight": 1},
+  {"name": "Veteran", "level": 3, "description": "Key performer, helps others, brings the guild together", "scheduling_weight": 3},
+  {"name": "Officer", "level": 4, "description": "Guild leadership team", "scheduling_weight": 5},
+  {"name": "Guild Leader", "level": 5, "description": "Guild master", "scheduling_weight": 5}
 ]

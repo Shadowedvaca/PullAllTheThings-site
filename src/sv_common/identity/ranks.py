@@ -29,12 +29,14 @@ async def create_rank(
     level: int,
     description: str | None = None,
     discord_role_id: str | None = None,
+    scheduling_weight: int = 0,
 ) -> GuildRank:
     rank = GuildRank(
         name=name,
         level=level,
         description=description,
         discord_role_id=discord_role_id,
+        scheduling_weight=scheduling_weight,
     )
     db.add(rank)
     try:
@@ -51,7 +53,7 @@ async def update_rank(db: AsyncSession, rank_id: int, **kwargs) -> GuildRank:
     rank = result.scalar_one_or_none()
     if rank is None:
         raise ValueError(f"Rank {rank_id} not found")
-    allowed = {"name", "level", "description", "discord_role_id"}
+    allowed = {"name", "level", "description", "discord_role_id", "scheduling_weight"}
     for key, value in kwargs.items():
         if key in allowed:
             setattr(rank, key, value)

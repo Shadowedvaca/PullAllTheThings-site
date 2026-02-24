@@ -1,45 +1,87 @@
 # PATT Platform — Session Memory
 
-## Project State
-- Phase 0 complete
-- Phase 1 complete: identity services, admin/guild API, full test suite
-- Phase 2 complete: auth package, discord package, auth API, tests (28/28 pass)
-- Phase 2.5A complete: guild_identity schema, Blizzard API client, db_sync, migration, sync_logger
-- Phase 2.5B complete: discord_sync, identity_engine, integrity_checker, reporter, scheduler, API routes
-- Phase 2.5C complete: WoW addon (wow_addon/PATTSync/), companion app (companion_app/)
-- Phase 2.5D complete: 133 unit tests pass (24 skipped/DB-only); integration tests in tests/integration/test_guild_*.py need live DB
-- Phase 3 complete: campaign_service, vote_service, campaign_routes (admin/vote/public), background status checker, unit+integration tests (163/187 pass, 24 skip DB-only)
-- Phase 4 complete: page routes (auth, vote, admin, public), Jinja2 templates, cookie auth, JS files, integration tests (test_page_rendering.py)
-- Phase 5 complete: member_availability + mito_quotes + mito_titles tables (migration 0003); legacy HTML moved to src/patt/static/legacy/ and served by FastAPI at original URLs; new guild API endpoints (roster-data, roster-submit, availability, mito CRUD); migration script scripts/migrate_sheets.py; tests 192/216 pass; data migrated from Sheets on server
-- Phase 6 complete: contest agent Discord updates; migration 0004 (agent_enabled, agent_chattiness on campaigns); contest_agent.py service; channels.py Discord posting module; admin form updated; 36 unit tests + integration tests; tests 228/252 pass (24 skip DB-only)
-- Phase 7 complete: regression suite (tests/regression/test_full_platform.py); art vote setup script (scripts/setup_art_vote.py); 500.html error page; 404.html enhanced; SecurityHeadersMiddleware + login rate limiting in app.py; secure cookie flag (production); CSS animations for score bars + result rows; docs/OPERATIONS.md; CLAUDE.md updated
-- CI/CD: GitHub Actions at .github/workflows/deploy.yml — auto-deploys on push to main
-- Phase 2.6 built but NOT activated: onboarding_sessions table (migration 0005), preferred_role column (migration 0006), conversation.py, provisioner.py, deadline_checker.py, commands.py — on_member_join not wired, slash commands not registered
+> This file captures the running state of the project for context continuity.
+> Updated at the end of each work session.
 
-## Current Phase: 2.7 — Data Model Migration (Clean 3NF Rebuild)
-- See reference/PHASE_2_7_DATA_MODEL_MIGRATION.md for full instructions
-- Eliminates: common.guild_members, common.characters, guild_identity.identity_links
-- Creates: reference tables (roles, classes, specializations), player_characters bridge
-- Renames: persons → players, discord_members → discord_users
-- Adds to players: discord_user_id, website_user_id, guild_rank_id, main/offspec fields
-- Repoints all FKs from guild_members → players
-- Updates all models, services, routes, templates, tests
-- Alembic migration: 0007
+---
 
-## Key Data State (pre-2.7)
-- guild_identity.persons: EMPTY (identity engine never run on existing data)
-- guild_identity.identity_links: EMPTY
-- guild_identity.wow_characters: ~320 rows from Blizzard API syncs
-- guild_identity.discord_members: populated from Discord bot syncs
-- common.guild_members: ~40 rows (from Google Sheets migration — will be migrated to players)
-- common.characters: character data from Sheets migration (will be dropped)
-- Migrations 0001-0006 deployed on server
+## Project State (as of Phase 2.8 start)
+
+### Completed
+- **Phases 0–7:** Full platform built and deployed (auth, campaigns, voting, contest agent, web UI)
+- **Phase 2.5A–D:** Guild identity system (Blizzard API integration, Discord member sync, PATTSync addon + companion app, integrity checker)
+- **Phase 2.6:** Onboarding system code complete but NOT activated (on_member_join not wired up)
+- **Phase 2.7:** Data model migration — 3NF rebuild complete
+  - Migration 0007 applied: 43 players created, 195 player_characters linked, reference tables seeded
+  - `GuildMember` and `Character` models eliminated from all application code
+  - `Player`, `DiscordUser`, `PlayerCharacter`, `Role`, `WowClass`, `Specialization` models live
+  - All deps, routes, services, templates, tests updated for Player model
+  - 202 unit tests pass
+
+### Current Phase: 2.8 — Scheduling, Availability & Attendance Foundation
+- Replace boolean availability with time-window + weighted scheduling
+- Add `scheduling_weight` to guild_ranks
+- Add `timezone` and `auto_invite_events` to players
+- Create `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance` tables
+- Drop old `member_availability` table (data is garbage, 133 orphaned rows)
+- Admin page for reference table management (ranks, roles, seasons)
+- Attendance tables are schema-only in this phase — feature implementation is a fast follower
+
+### Key Data State
+- `guild_identity.players`: 43 rows (migrated from guild_members)
+- `guild_identity.player_characters`: 195 rows
+- `guild_identity.wow_characters`: ~320 rows (from Blizzard API syncs)
+- `guild_identity.discord_users`: Discord server members (from bot syncs)
+- `guild_identity.roles`: 4 rows (Tank, Healer, Melee DPS, Ranged DPS)
+- `guild_identity.classes`: 13 rows (all WoW classes)
+- `guild_identity.specializations`: ~39 rows (all WoW specs)
+- `patt.member_availability`: 133 rows with NULL player_id — TO BE DROPPED in Phase 2.8
+- All players have `main_character_id`, `main_spec_id`, `offspec_*` as NULL (set on first login)
+
+### Dormant Code (not wired up, uses old schema names)
+These modules still reference `persons`, `discord_members`, `identity_links` from pre-2.7:
+- `src/sv_common/guild_sync/identity_engine.py`
+- `src/sv_common/guild_sync/integrity_checker.py`
+- `src/sv_common/guild_sync/discord_sync.py`
+- `src/sv_common/guild_sync/db_sync.py`
+- `src/sv_common/guild_sync/onboarding/*.py`
+
+Will be updated when these features are activated.
+
+---
 
 ## Architecture Notes
-- Server: Hetzner 5.78.114.224, Nginx → uvicorn :8100
-- Domain: pullallthething.com (SSL via certbot)
-- DB: PostgreSQL 16, schemas: common, patt, guild_identity
-- App: Python 3.11+, FastAPI, SQLAlchemy 2.0, discord.py 2.x
-- Repo: Shadowedvaca/PullAllTheThings-site
-- Deploy: systemd patt.service, auto-deploy via GitHub Actions
-- Completed phase docs archived to reference/archive/
+
+- **Server:** Hetzner VPS at 5.78.114.224
+- **Domain:** pullallthething.com (Nginx → FastAPI on port 8100)
+- **Database:** PostgreSQL 16 — patt_db (schemas: common, patt, guild_identity)
+- **Migrations:** Alembic — 0001 through 0007 deployed
+- **CD:** GitHub Actions auto-deploy on push to main (SSH key = DEPLOY_SSH_KEY)
+
+## Key File Locations
+- Phase plans: `reference/PHASE_2_8_SCHEDULING_AND_ATTENDANCE.md` (current)
+- Testing guide: `reference/TESTING.md`
+- App entry: `src/patt/app.py` (factory: `create_app()`)
+- Config: `src/patt/config.py` (pydantic-settings, reads .env)
+- DB dependency: `src/patt/deps.py` — `get_db()`, `get_current_player()`, `require_rank(level)`
+- Models: `src/sv_common/db/models.py` (all ORM models — common, patt, guild_identity schemas)
+- Engine/session: `src/sv_common/db/engine.py`
+- Seed data: `src/sv_common/db/seed.py` + `data/seed/ranks.json`
+- Identity services: `src/sv_common/identity/ranks.py`, `members.py` (Player CRUD), `characters.py`
+- Auth services: `src/sv_common/auth/passwords.py`, `jwt.py`, `invite_codes.py`
+- Discord services: `src/sv_common/discord/bot.py`, `role_sync.py`, `dm.py`
+- Guild sync package: `src/sv_common/guild_sync/` (dormant — see note above)
+- Admin API: `src/patt/api/admin_routes.py` (Officer+ protected)
+- Auth API: `src/patt/api/auth_routes.py` (register, login, me)
+- Guild API: `src/patt/api/guild_routes.py`
+- Campaign API: `src/patt/api/campaign_routes.py`
+- Health route: `src/patt/api/health.py`
+- Alembic migrations: `alembic/versions/` (0001–0007)
+- Tests: `tests/unit/`, `tests/integration/`
+
+## Archived Documentation
+Completed phase instructions moved to `reference/archive/`:
+- PHASE-0.md through PHASE-7.md
+- PHASE_2_5A.md through PHASE_2_5D.md
+- PHASE_2_7_DATA_MODEL_MIGRATION.md
+- ADMIN-SETUP-GUIDE.md (legacy Google Sheets system)

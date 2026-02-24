@@ -10,17 +10,17 @@ from sqlalchemy.orm import selectinload
 
 from patt.deps import get_db
 from sv_common.db.models import (
-    MemberAvailability,
     MitoQuote,
     MitoTitle,
     Player,
+    PlayerAvailability,
     WowCharacter,
 )
 from sv_common.identity import ranks as rank_service
 
 router = APIRouter(prefix="/api/v1/guild", tags=["guild"])
 
-DAYS_OF_WEEK = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+DAY_NAMES = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
 @router.get("/ranks")
@@ -86,40 +86,40 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Availability endpoints (now keyed by player.id or display_name)
+# Availability endpoints — new time-window format (patt.player_availability)
 # ---------------------------------------------------------------------------
 
 
 @router.get("/availability")
 async def get_availability(db: AsyncSession = Depends(get_db)):
-    """Returns availability data shaped for the raid admin dashboard."""
-    players_result = await db.execute(
-        select(Player).options(selectinload(Player.availability))
+    """Returns player availability windows for the raid scheduling dashboard."""
+    result = await db.execute(
+        select(Player)
+        .options(selectinload(Player.availability))
+        .where(Player.is_active.is_(True))
+        .order_by(Player.display_name)
     )
-    players = list(players_result.scalars().all())
+    players = list(result.scalars().all())
 
     rows = []
     for player in players:
         avail_by_day = {a.day_of_week: a for a in player.availability}
-        notes = ""
-        auto_signup = False
-        wants_reminders = False
-        for a in player.availability:
-            if a.notes:
-                notes = a.notes
-            auto_signup = a.auto_signup
-            wants_reminders = a.wants_reminders
-            break
-
         row: dict[str, Any] = {
+            "player_id": player.id,
             "display_name": player.display_name,
-            "notes": notes,
-            "autoSignup": auto_signup,
-            "wantsReminders": wants_reminders,
+            "timezone": player.timezone,
+            "auto_invite_events": player.auto_invite_events,
+            "days": {},
         }
-        for day in DAYS_OF_WEEK:
-            d = avail_by_day.get(day)
-            row[day] = d.available if d else False
+        for day_idx, day_name in enumerate(DAY_NAMES):
+            a = avail_by_day.get(day_idx)
+            if a:
+                row["days"][day_name] = {
+                    "earliest_start": a.earliest_start.strftime("%H:%M"),
+                    "available_hours": float(a.available_hours),
+                }
+            else:
+                row["days"][day_name] = None
         rows.append(row)
 
     return {"ok": True, "data": rows}
