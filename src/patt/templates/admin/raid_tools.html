@@ -292,6 +292,10 @@
         <span class="collapse-icon">▼</span>
     </h2>
     <div class="rt-section-body collapsed-body">
+        <p style="font-size:.85rem;color:var(--text-dim);margin:0 0 1rem;">
+            Creates an event in Raid-Helper, saves it to the DB, and pre-populates signups from the roster.
+            Click a day above to auto-fill from your recurring schedule, or fill in the fields manually for a one-off event.
+        </p>
         <div class="builder-grid">
             {# Left column #}
             <div>
@@ -325,7 +329,9 @@
                     </select>
 
                     <label for="ev-channel">Channel ID</label>
-                    <input type="text" id="ev-channel" placeholder="Discord channel ID">
+                    <input type="text" id="ev-channel"
+                           value="{{ discord_config.raid_channel_id or '' }}"
+                           placeholder="Discord channel ID">
                 </div>
             </div>
 
@@ -720,6 +726,10 @@ async function loadAvailability() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Default date to next week's Friday (or tomorrow if no obvious raid day)
+    const today = new Date();
+    const iso = new Date(today.getTime() + 86400000).toISOString().split('T')[0];
+    document.getElementById('ev-date').value = iso;
     loadAvailability();
     updateFallback();
 });
