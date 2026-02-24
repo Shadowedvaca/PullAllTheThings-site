@@ -51,6 +51,7 @@ class GuildRank(Base):
     scheduling_weight: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     discord_role_id: Mapped[Optional[str]] = mapped_column(String(20))
     description: Mapped[Optional[str]] = mapped_column(Text)
+    wow_rank_index: Mapped[Optional[int]] = mapped_column(Integer, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

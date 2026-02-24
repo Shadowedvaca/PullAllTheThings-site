@@ -200,6 +200,7 @@
                 <th>Name</th>
                 <th>Description</th>
                 <th>Sched. Weight</th>
+                <th>WoW Rank #</th>
                 <th>Discord Role ID</th>
                 <th></th>
             </tr>
@@ -220,6 +221,13 @@
                 <input class="rt-editable rt-editable--number rt-field" name="scheduling_weight"
                        type="number" min="0" max="10"
                        value="{{ rank.scheduling_weight }}" data-orig="{{ rank.scheduling_weight }}">
+            </td>
+            <td>
+                <input class="rt-editable rt-editable--number rt-field" name="wow_rank_index"
+                       type="number" min="0" max="9"
+                       value="{{ rank.wow_rank_index if rank.wow_rank_index is not none else '' }}"
+                       data-orig="{{ rank.wow_rank_index if rank.wow_rank_index is not none else '' }}"
+                       placeholder="—">
             </td>
             <td>
                 <input class="rt-editable rt-field" name="discord_role_id"

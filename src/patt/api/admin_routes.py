@@ -45,6 +45,7 @@ class RankUpdate(BaseModel):
     description: str | None = None
     discord_role_id: str | None = None
     scheduling_weight: int | None = None
+    wow_rank_index: int | None = None
 
 
 class RoleUpdate(BaseModel):
@@ -92,6 +93,7 @@ async def list_ranks(db: AsyncSession = Depends(get_db)):
                 "discord_role_id": r.discord_role_id,
                 "description": r.description,
                 "scheduling_weight": r.scheduling_weight,
+                "wow_rank_index": r.wow_rank_index,
             }
             for r in all_ranks
         ],

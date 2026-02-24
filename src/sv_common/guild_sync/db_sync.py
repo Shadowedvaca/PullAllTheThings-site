@@ -9,9 +9,17 @@ from datetime import datetime, timezone
 
 import asyncpg
 
-from .blizzard_client import CharacterProfileData, RANK_NAME_MAP
+from .blizzard_client import CharacterProfileData
 
 logger = logging.getLogger(__name__)
+
+
+async def _build_rank_index_map(conn: asyncpg.Connection) -> dict[int, int]:
+    """Return {wow_rank_index: guild_rank_id} from the guild_ranks table."""
+    rows = await conn.fetch(
+        "SELECT id, wow_rank_index FROM common.guild_ranks WHERE wow_rank_index IS NOT NULL"
+    )
+    return {row["wow_rank_index"]: row["id"] for row in rows}
 
 
 async def sync_blizzard_roster(
@@ -31,6 +39,9 @@ async def sync_blizzard_roster(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+
+            # Build WoW rank index → guild_rank_id map from DB (replaces RANK_NAME_MAP)
+            rank_index_map = await _build_rank_index_map(conn)
 
             for char in characters:
                 existing = await conn.fetchrow(
@@ -56,15 +67,13 @@ async def sync_blizzard_roster(
                     )
                     spec_id = spec_row["id"] if spec_row else None
 
-                rank_name = RANK_NAME_MAP.get(char.guild_rank)
-                if rank_name:
-                    rank_row = await conn.fetchrow(
-                        "SELECT id FROM common.guild_ranks WHERE name = $1",
-                        rank_name,
+                guild_rank_id = rank_index_map.get(char.guild_rank)
+                if guild_rank_id is None and char.guild_rank is not None:
+                    logger.warning(
+                        "No guild_rank mapping for WoW rank index %d — "
+                        "set wow_rank_index on the matching rank in Reference Tables",
+                        char.guild_rank,
                     )
-                    guild_rank_id = rank_row["id"] if rank_row else None
-                else:
-                    guild_rank_id = None
 
                 if existing:
                     await conn.execute(
