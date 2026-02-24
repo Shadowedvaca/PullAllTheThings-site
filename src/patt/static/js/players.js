@@ -28,7 +28,7 @@ function drillOn(type, id) {
         // Find linked player(s)
         players.filter(p => p.discord_id === id).forEach(p => {
             memberIds.add(p.id);
-            allChars.filter(c => c.member_id === p.id).forEach(c => charIds.add(c.id));
+            allChars.filter(c => c.player_id === p.id).forEach(c => charIds.add(c.id));
         });
     } else if (type === 'player') {
         const p = players.find(p => p.id === id);
@@ -36,17 +36,17 @@ function drillOn(type, id) {
         label = p.display_name || p.discord_username;
         memberIds.add(id);
         if (p.discord_id) discordIds.add(p.discord_id);
-        allChars.filter(c => c.member_id === id).forEach(c => charIds.add(c.id));
+        allChars.filter(c => c.player_id === id).forEach(c => charIds.add(c.id));
     } else if (type === 'char') {
         const c = allChars.find(c => c.id === id);
         if (!c) return;
         label = c.name;
         charIds.add(id);
-        if (c.member_id) {
-            memberIds.add(c.member_id);
+        if (c.player_id) {
+            memberIds.add(c.player_id);
             // All chars for same player
-            allChars.filter(ch => ch.member_id === c.member_id).forEach(ch => charIds.add(ch.id));
-            const p = players.find(p => p.id === c.member_id);
+            allChars.filter(ch => ch.player_id === c.player_id).forEach(ch => charIds.add(ch.id));
+            const p = players.find(p => p.id === c.player_id);
             if (p && p.discord_id) discordIds.add(p.discord_id);
         }
     }
@@ -197,8 +197,8 @@ function renderPlayers() {
 
         // Audit filters (OR — show player if they fail any checked condition)
         if (auditActive) {
-            const charCount = allChars.filter(c => c.member_id === p.id).length;
-            const hasMain   = allChars.some(c => c.member_id === p.id && c.main_alt === 'main');
+            const charCount = allChars.filter(c => c.player_id === p.id).length;
+            const hasMain   = allChars.some(c => c.player_id === p.id && c.main_alt === 'main');
             const hit = (noChars   && charCount === 0) ||
                         (noDiscord && !p.discord_id)   ||
                         (noMain    && charCount > 0 && !hasMain);
@@ -217,7 +217,7 @@ function renderPlayers() {
         </div>`;
 
     list.innerHTML = filtered.map(p => {
-        const charCount = allChars.filter(c => c.member_id === p.id).length;
+        const charCount = allChars.filter(c => c.player_id === p.id).length;
         const discordUser = p.discord_id ? discordUsers.find(u => u.id === p.discord_id) : null;
         const discordLabel = discordUser
             ? `<span class="pm-player-discord">💬 @${escHtml(discordUser.username)}</span>`
@@ -239,7 +239,7 @@ function renderPlayers() {
                        : (effectiveRole === 'dps' || effectiveRole === 'melee_dps' || effectiveRole === 'ranged_dps') ? '⚔️' : '';
 
         // If role is overridden, find canonical spec for that class+role
-        const mainChar = allChars.find(c => c.member_id === p.id && c.main_alt === 'main');
+        const mainChar = allChars.find(c => c.player_id === p.id && c.main_alt === 'main');
         const overrideSpec = isRoleOverride && mainChar
             ? ((CLASS_ROLE_SPEC[mainChar.class] || {})[p.preferred_role] || p.preferred_role)
             : '';
@@ -352,7 +352,7 @@ function renderChars() {
 
     const filtered = allChars.filter(c => {
         if (drill) return drill.charIds.has(c.id);
-        if (unlinkedOnly && c.member_id) return false;
+        if (unlinkedOnly && c.player_id) return false;
 
         // Char audit filters (OR)
         if (auditActive) {
@@ -370,7 +370,7 @@ function renderChars() {
         return true;
     });
 
-    const unlinkedCount = allChars.filter(c => !c.member_id).length;
+    const unlinkedCount = allChars.filter(c => !c.player_id).length;
     document.getElementById('char-count').textContent =
         `(${allChars.length} total, ${unlinkedCount} unlinked)`;
 
@@ -384,7 +384,7 @@ function renderChars() {
         const roleIcon  = c.role === 'tank' ? '🛡️' : c.role === 'healer' ? '💚' : '⚔️';
         const roleClass = c.role === 'tank' ? 'tank' : c.role === 'healer' ? 'healer' : 'dps';
         const isMain    = c.main_alt === 'main';
-        const owner     = c.member_id ? players.find(p => p.id === c.member_id) : null;
+        const owner     = c.player_id ? players.find(p => p.id === c.player_id) : null;
         const ownerLabel = owner
             ? `<span class="pm-char-owner">→ ${escHtml(owner.display_name || owner.discord_username)}</span>`
             : `<span class="pm-char-unlinked">Unlinked</span>`;
@@ -491,7 +491,7 @@ async function handlePlayerDrop(event, memberId) {
         await linkDiscord(memberId, dragId, username || '');
     } else if (dragType === 'char') {
         const char = allChars.find(c => c.id === dragId);
-        if (char && char.member_id === memberId) { clearDrag(); return; }
+        if (char && char.player_id === memberId) { clearDrag(); return; }
         await assignChar(dragId, memberId);
     }
 }
@@ -531,12 +531,12 @@ async function assignChar(charId, memberId) {
         const res = await fetch(`/admin/characters/${charId}/assign`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ member_id: memberId }),
+            body: JSON.stringify({ player_id: memberId }),
         });
         const data = await res.json();
         if (data.ok) {
             const c = allChars.find(ch => ch.id === charId);
-            if (c) c.member_id = memberId;
+            if (c) c.player_id = memberId;
             render();
             const dest = memberId ? `assigned to ${data.data.member_name}` : 'unlinked';
             showStatus(`${data.data.char_name} ${dest}`, 'success');
@@ -599,7 +599,7 @@ async function deletePlayer(event, memberId, name) {
         if (data.ok) {
             players = players.filter(p => p.id !== memberId);
             // Unlink any chars that belonged to this player
-            allChars.forEach(c => { if (c.member_id === memberId) c.member_id = null; });
+            allChars.forEach(c => { if (c.player_id === memberId) c.player_id = null; });
             render();
             showStatus(`"${name}" deleted`, 'success');
         } else {
