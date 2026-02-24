@@ -111,7 +111,7 @@ async def create_event(
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{_BASE_URL}/servers/{server_id}/event",
+            f"{_BASE_URL}/servers/{server_id}/events",
             headers={"Authorization": api_key, "Content-Type": "application/json"},
             json=payload,
             timeout=15.0,
