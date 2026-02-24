@@ -660,6 +660,9 @@ class AuditIssue(Base):
     resolved_by: Mapped[Optional[str]] = mapped_column(String(50))
     notified_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
 
+    wow_character: Mapped[Optional[WowCharacter]] = relationship()
+    discord_member: Mapped[Optional[DiscordUser]] = relationship()
+
 
 class GuildSyncLog(Base):
     __tablename__ = "sync_log"

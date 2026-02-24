@@ -1,0 +1,185 @@
+{% extends "base_admin.html" %}
+{% block title %}Audit Log — Admin — Pull All The Things{% endblock %}
+{% block nav_audit_log %}active{% endblock %}
+
+{% block head %}
+<style>
+.audit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+.audit-tabs {
+    display: flex;
+    gap: 0.25rem;
+}
+.audit-tab {
+    padding: 0.35rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: 1px solid var(--color-border-light);
+    color: var(--color-text-muted);
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.audit-tab:hover { color: var(--color-accent); border-color: var(--color-accent); text-decoration: none; }
+.audit-tab.active {
+    background: rgba(212,168,75,0.12);
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+}
+
+/* Severity badges */
+.sev {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+.sev-warning { background: rgba(251,191,36,0.15); color: var(--color-warning); border: 1px solid var(--color-warning); }
+.sev-error   { background: rgba(248,113,113,0.15); color: var(--color-danger);  border: 1px solid var(--color-danger); }
+.sev-info    { background: rgba(96,165,250,0.12);  color: var(--color-info);    border: 1px solid var(--color-info); }
+
+/* Issue type chip */
+.issue-type {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.45rem;
+    white-space: nowrap;
+}
+
+.audit-table td { vertical-align: top; }
+.audit-table td.td-summary { max-width: 340px; }
+.audit-table td.td-entities { white-space: nowrap; }
+
+.entity-line {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.1rem;
+}
+.entity-line strong { color: var(--color-text); font-weight: 600; }
+
+.td-age { color: var(--color-text-muted); font-size: 0.8rem; white-space: nowrap; }
+
+.empty-audit {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--color-text-muted);
+}
+.empty-audit__icon { font-size: 2rem; margin-bottom: 0.5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="audit-header">
+    <div>
+        <h1 class="admin-title">Audit Log</h1>
+        <p class="text-muted text-sm" style="margin-top:0.25rem">
+            Issues detected by guild sync: orphaned characters, rank mismatches, link suggestions.
+        </p>
+    </div>
+    <div class="audit-tabs">
+        <a href="/admin/audit-log?show=open"
+           class="audit-tab {% if show == 'open' %}active{% endif %}">
+            Open
+        </a>
+        <a href="/admin/audit-log?show=resolved"
+           class="audit-tab {% if show == 'resolved' %}active{% endif %}">
+            Resolved
+        </a>
+    </div>
+</div>
+
+{% if issues %}
+<div class="table-wrapper">
+    <table class="table audit-table">
+        <thead>
+            <tr>
+                <th>Severity</th>
+                <th>Type</th>
+                <th>Summary</th>
+                <th>Entities</th>
+                <th>Age</th>
+                {% if show == 'open' %}<th></th>{% endif %}
+                {% if show == 'resolved' %}<th>Resolved By</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for issue in issues %}
+            <tr>
+                <td>
+                    <span class="sev sev-{{ issue.severity }}">{{ issue.severity }}</span>
+                </td>
+                <td>
+                    <span class="issue-type">{{ issue.issue_type }}</span>
+                </td>
+                <td class="td-summary">
+                    {{ issue.summary }}
+                    {% if issue.details %}
+                        {% if issue.details.get('similarity') %}
+                            <div class="text-muted text-xs" style="margin-top:0.2rem">
+                                Match score: {{ "%.0f"|format(issue.details.similarity * 100) }}%
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td class="td-entities">
+                    {% if issue.wow_character %}
+                    <div class="entity-line">
+                        WoW: <strong>{{ issue.wow_character.character_name }}</strong>
+                        <span style="color:var(--color-text-muted)">— {{ issue.wow_character.realm_name or issue.wow_character.realm_slug }}</span>
+                    </div>
+                    {% endif %}
+                    {% if issue.discord_member %}
+                    <div class="entity-line">
+                        Discord: <strong>{{ issue.discord_member.display_name or issue.discord_member.username }}</strong>
+                    </div>
+                    {% endif %}
+                </td>
+                <td class="td-age">
+                    {{ issue.created_at.strftime('%Y-%m-%d') }}<br>
+                    <span class="text-xs">{{ issue.created_at.strftime('%H:%M UTC') }}</span>
+                </td>
+                {% if show == 'open' %}
+                <td>
+                    <form method="post" action="/admin/audit-log/{{ issue.id }}/resolve">
+                        <button type="submit" class="btn btn-secondary btn-sm">Dismiss</button>
+                    </form>
+                </td>
+                {% endif %}
+                {% if show == 'resolved' %}
+                <td class="text-muted text-sm">
+                    {{ issue.resolved_by or '—' }}<br>
+                    <span class="text-xs">{{ issue.resolved_at.strftime('%Y-%m-%d') if issue.resolved_at else '' }}</span>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-audit">
+    <div class="empty-audit__icon">
+        {% if show == 'open' %}&#10003;{% else %}&#8203;{% endif %}
+    </div>
+    {% if show == 'open' %}
+        No open issues — everything looks clean.
+    {% else %}
+        No resolved issues on record.
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -13,7 +13,9 @@ from sqlalchemy.orm import selectinload
 from patt.deps import get_db, get_page_member
 from patt.services import campaign_service, vote_service
 from patt.templating import templates
-from sv_common.db.models import GuildRank, Player, WowCharacter, PlayerCharacter
+from sv_common.db.models import (
+    AuditIssue, DiscordUser, GuildRank, Player, WowCharacter, PlayerCharacter,
+)
 from sv_common.identity import members as member_service
 
 logger = logging.getLogger(__name__)
@@ -1015,3 +1017,61 @@ async def admin_bot_settings(
     ctx = await _base_ctx(request, player, db)
     ctx["discord_config"] = discord_config
     return templates.TemplateResponse("admin/bot_settings.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+
+@router.get("/audit-log", response_class=HTMLResponse)
+async def admin_audit_log(
+    request: Request,
+    show: str = "open",  # "open" or "resolved"
+    db: AsyncSession = Depends(get_db),
+):
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/audit-log")
+
+    q = (
+        select(AuditIssue)
+        .options(
+            selectinload(AuditIssue.wow_character),
+            selectinload(AuditIssue.discord_member),
+        )
+        .order_by(AuditIssue.created_at.desc())
+    )
+    if show == "resolved":
+        q = q.where(AuditIssue.resolved_at.is_not(None))
+    else:
+        q = q.where(AuditIssue.resolved_at.is_(None))
+
+    result = await db.execute(q)
+    issues = list(result.scalars().all())
+
+    ctx = await _base_ctx(request, player, db)
+    ctx.update({
+        "issues": issues,
+        "show": show,
+    })
+    return templates.TemplateResponse("admin/audit_log.html", ctx)
+
+
+@router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)
+async def admin_audit_resolve(
+    request: Request,
+    issue_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/audit-log")
+
+    result = await db.execute(select(AuditIssue).where(AuditIssue.id == issue_id))
+    issue = result.scalar_one_or_none()
+    if issue and issue.resolved_at is None:
+        issue.resolved_at = datetime.now(timezone.utc)
+        issue.resolved_by = player.display_name
+
+    return RedirectResponse(url="/admin/audit-log", status_code=302)
