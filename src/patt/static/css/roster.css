@@ -186,6 +186,15 @@
     vertical-align: middle;
 }
 
+.roster-table .col-type {
+    width: 2rem;
+    text-align: center;
+    padding-left: 0.5rem;
+    padding-right: 0.25rem;
+    font-size: 0.85rem;
+    cursor: default;
+}
+
 .num-col {
     text-align: right;
 }

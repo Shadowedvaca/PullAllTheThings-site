@@ -55,6 +55,7 @@
             <table class="roster-table" id="roster-table" style="display:none">
                 <thead>
                     <tr>
+                        <th class="col-type" title="⭐ Main · 🔷 Secondary · ⚪ Alt"></th>
                         <th class="sort-col" data-col="display_name">Player</th>
                         <th class="sort-col" data-col="character_name">Character</th>
                         <th class="sort-col" data-col="class_name">Class</th>
@@ -181,7 +182,7 @@ function buildRows(showSecondary, showAlts, searchText) {
                 armory_url: mc.armory_url,
                 class_color: CLASS_COLORS[mc.class_name] || '#e8e8e8',
                 role_emoji: ROLE_EMOJIS[mc.role_name] || '',
-                is_alt: false,
+                row_type: 'main',
             });
         }
         if (showSecondary && sc) {
@@ -198,7 +199,7 @@ function buildRows(showSecondary, showAlts, searchText) {
                 armory_url: sc.armory_url,
                 class_color: CLASS_COLORS[sc.class_name] || '#e8e8e8',
                 role_emoji: ROLE_EMOJIS[sc.role_name] || '',
-                is_alt: true,
+                row_type: 'secondary',
             });
         }
         if (showAlts && player.characters) {
@@ -221,7 +222,7 @@ function buildRows(showSecondary, showAlts, searchText) {
                     armory_url: char.armory_url,
                     class_color: CLASS_COLORS[char.class_name] || '#e8e8e8',
                     role_emoji: ROLE_EMOJIS[char.role_name] || '',
-                    is_alt: true,
+                    row_type: 'alt',
                 });
             }
         }
@@ -272,8 +273,11 @@ function renderRoster() {
     document.getElementById('roster-table').style.display = '';
     empty.style.display = 'none';
 
+    const TYPE_EMOJI = { main: '⭐', secondary: '🔷', alt: '⚪' };
+    const TYPE_LABEL = { main: 'Main', secondary: 'Secondary', alt: 'Alt' };
     tbody.innerHTML = rows.map(r => `
-        <tr class="${r.is_alt ? 'roster-row--alt' : ''}">
+        <tr class="${r.row_type !== 'main' ? 'roster-row--alt' : ''}">
+            <td class="col-type" title="${TYPE_LABEL[r.row_type]}">${TYPE_EMOJI[r.row_type]}</td>
             <td class="col-player">${esc(r.display_name)}</td>
             <td class="col-character">
                 <span style="color:${r.class_color};font-weight:600">${esc(r.character_name)}</span>
