@@ -175,12 +175,18 @@ def create_app() -> FastAPI:
 
         # Start guild sync scheduler (skipped if Blizzard creds or Discord bot missing)
         guild_scheduler = None
+        audit_channel_id_str = None
+        if guild_sync_pool:
+            async with guild_sync_pool.acquire() as _conn:
+                audit_channel_id_str = await _conn.fetchval(
+                    "SELECT audit_channel_id FROM common.discord_config LIMIT 1"
+                )
         if (
             guild_sync_pool
             and settings.blizzard_client_id
             and settings.blizzard_client_secret
             and settings.discord_bot_token
-            and settings.patt_audit_channel_id
+            and audit_channel_id_str
         ):
             from sv_common.guild_sync.scheduler import GuildSyncScheduler
             from sv_common.discord.bot import get_bot
@@ -188,14 +194,14 @@ def create_app() -> FastAPI:
             guild_scheduler = GuildSyncScheduler(
                 db_pool=guild_sync_pool,
                 discord_bot=discord_bot,
-                audit_channel_id=int(settings.patt_audit_channel_id),
+                audit_channel_id=int(audit_channel_id_str),
             )
             await guild_scheduler.start()
             app.state.guild_sync_scheduler = guild_scheduler
             logger.info("Guild sync scheduler started")
         else:
             app.state.guild_sync_scheduler = None
-            logger.info("Guild sync scheduler skipped (missing credentials or audit channel)")
+            logger.info("Guild sync scheduler skipped (missing credentials or audit channel not configured)")
 
         yield
 

@@ -796,6 +796,10 @@ _RAID_CONFIG_FIELDS = {
     "raid_channel_id",
     "raid_voice_channel_id",
     "raid_default_template_id",
+    "audit_channel_id",
+    "raid_event_timezone",
+    "raid_default_start_time",
+    "raid_default_duration_minutes",
 }
 
 
@@ -819,6 +823,10 @@ async def get_raid_config(db: AsyncSession = Depends(get_db)):
             "raid_channel_id": row.raid_channel_id if row else None,
             "raid_voice_channel_id": row.raid_voice_channel_id if row else None,
             "raid_default_template_id": (row.raid_default_template_id if row else None) or "wowretail2",
+            "audit_channel_id": row.audit_channel_id if row else None,
+            "raid_event_timezone": (row.raid_event_timezone if row else None) or "America/New_York",
+            "raid_default_start_time": (row.raid_default_start_time if row else None) or "21:00",
+            "raid_default_duration_minutes": (row.raid_default_duration_minutes if row else None) or 120,
         },
     }
 

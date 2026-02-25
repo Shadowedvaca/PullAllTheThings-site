@@ -107,6 +107,16 @@ class DiscordConfig(Base):
     raid_default_template_id: Mapped[Optional[str]] = mapped_column(
         String(50), server_default="wowretail2"
     )
+    audit_channel_id: Mapped[Optional[str]] = mapped_column(String(25))
+    raid_event_timezone: Mapped[Optional[str]] = mapped_column(
+        String(50), server_default="America/New_York"
+    )
+    raid_default_start_time: Mapped[Optional[str]] = mapped_column(
+        String(5), server_default="21:00"
+    )
+    raid_default_duration_minutes: Mapped[Optional[int]] = mapped_column(
+        Integer, server_default="120"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

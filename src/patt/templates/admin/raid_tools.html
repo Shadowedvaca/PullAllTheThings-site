@@ -254,6 +254,37 @@
             <input type="text" id="rh-template-id"
                    value="{{ discord_config.raid_default_template_id or 'wowretail2' }}"
                    placeholder="wowretail2">
+
+            <label for="rh-audit-channel">Audit Channel</label>
+            <select id="rh-audit-channel"><option value="">— loading —</option></select>
+
+            <label for="rh-timezone">Event Timezone</label>
+            <select id="rh-timezone">
+                {% set tz = discord_config.raid_event_timezone or 'America/New_York' %}
+                <option value="America/New_York"  {% if tz == 'America/New_York'  %}selected{% endif %}>Eastern (America/New_York)</option>
+                <option value="America/Chicago"   {% if tz == 'America/Chicago'   %}selected{% endif %}>Central (America/Chicago)</option>
+                <option value="America/Denver"    {% if tz == 'America/Denver'    %}selected{% endif %}>Mountain (America/Denver)</option>
+                <option value="America/Phoenix"   {% if tz == 'America/Phoenix'   %}selected{% endif %}>Mountain no-DST (America/Phoenix)</option>
+                <option value="America/Los_Angeles" {% if tz == 'America/Los_Angeles' %}selected{% endif %}>Pacific (America/Los_Angeles)</option>
+                <option value="America/Anchorage" {% if tz == 'America/Anchorage' %}selected{% endif %}>Alaska (America/Anchorage)</option>
+                <option value="Pacific/Honolulu"  {% if tz == 'Pacific/Honolulu'  %}selected{% endif %}>Hawaii (Pacific/Honolulu)</option>
+                <option value="Europe/London"     {% if tz == 'Europe/London'     %}selected{% endif %}>London (Europe/London)</option>
+                <option value="UTC"               {% if tz == 'UTC'               %}selected{% endif %}>UTC</option>
+            </select>
+
+            <label for="rh-default-time">Default Start Time</label>
+            <input type="time" id="rh-default-time"
+                   value="{{ discord_config.raid_default_start_time or '21:00' }}">
+
+            <label for="rh-default-duration">Default Duration</label>
+            <select id="rh-default-duration">
+                {% set dur = discord_config.raid_default_duration_minutes or 120 %}
+                <option value="60"  {% if dur == 60  %}selected{% endif %}>1 hour</option>
+                <option value="90"  {% if dur == 90  %}selected{% endif %}>1.5 hours</option>
+                <option value="120" {% if dur == 120 %}selected{% endif %}>2 hours</option>
+                <option value="150" {% if dur == 150 %}selected{% endif %}>2.5 hours</option>
+                <option value="180" {% if dur == 180 %}selected{% endif %}>3 hours</option>
+            </select>
         </div>
         <div class="form-actions" style="margin-top:.75rem;">
             <button class="btn-gold" onclick="saveRhConfig()">Save Config</button>
@@ -319,16 +350,17 @@
                     <label for="ev-date">Date</label>
                     <input type="date" id="ev-date" onchange="updateFallback()">
 
-                    <label for="ev-time">Time (EST)</label>
-                    <input type="time" id="ev-time" value="21:00" onchange="updateFallback()">
+                    <label for="ev-time">Time</label>
+                    <input type="time" id="ev-time" value="{{ discord_config.raid_default_start_time or '21:00' }}" onchange="updateFallback()">
 
                     <label for="ev-duration">Duration</label>
                     <select id="ev-duration" onchange="updateFallback()">
-                        <option value="60">1 hour</option>
-                        <option value="90">1.5 hours</option>
-                        <option value="120" selected>2 hours</option>
-                        <option value="150">2.5 hours</option>
-                        <option value="180">3 hours</option>
+                        {% set def_dur = discord_config.raid_default_duration_minutes or 120 %}
+                        <option value="60"  {% if def_dur == 60  %}selected{% endif %}>1 hour</option>
+                        <option value="90"  {% if def_dur == 90  %}selected{% endif %}>1.5 hours</option>
+                        <option value="120" {% if def_dur == 120 %}selected{% endif %}>2 hours</option>
+                        <option value="150" {% if def_dur == 150 %}selected{% endif %}>2.5 hours</option>
+                        <option value="180" {% if def_dur == 180 %}selected{% endif %}>3 hours</option>
                     </select>
 
                     <label for="ev-channel">Channel</label>
@@ -463,6 +495,10 @@ async function saveRhConfig() {
         raid_channel_id: document.getElementById('rh-channel-id').value,
         raid_voice_channel_id: document.getElementById('rh-voice-id').value,
         raid_default_template_id: document.getElementById('rh-template-id').value || 'wowretail2',
+        audit_channel_id: document.getElementById('rh-audit-channel').value || null,
+        raid_event_timezone: document.getElementById('rh-timezone').value,
+        raid_default_start_time: document.getElementById('rh-default-time').value,
+        raid_default_duration_minutes: parseInt(document.getElementById('rh-default-duration').value),
     };
 
     try {
@@ -648,7 +684,7 @@ async function createEvent() {
         event_type: document.getElementById('ev-type').value,
         event_date: document.getElementById('ev-date').value,
         start_time: document.getElementById('ev-time').value,
-        timezone: 'America/New_York',
+        timezone: document.getElementById('rh-timezone').value || '{{ discord_config.raid_event_timezone or "America/New_York" }}',
         duration_minutes: parseInt(document.getElementById('ev-duration').value),
         channel_id: document.getElementById('ev-channel').value || null,
         description: document.getElementById('ev-desc').value,
@@ -758,13 +794,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('ev-date').value = iso;
     updateFallback();
 
-    // Load channel dropdowns — all three share the same channel list fetch
+    // Load channel dropdowns — all share the same channel list fetch
     const savedText  = '{{ discord_config.raid_channel_id or "" }}';
     const savedVoice = '{{ discord_config.raid_voice_channel_id or "" }}';
+    const savedAudit = '{{ discord_config.audit_channel_id or "" }}';
     await Promise.all([
-        loadChannelDropdown('rh-channel-id', 'text',  savedText),
-        loadChannelDropdown('rh-voice-id',   'voice', savedVoice),
-        loadChannelDropdown('ev-channel',    'text',  savedText),
+        loadChannelDropdown('rh-channel-id',    'text',  savedText),
+        loadChannelDropdown('rh-voice-id',      'voice', savedVoice),
+        loadChannelDropdown('rh-audit-channel', 'text',  savedAudit),
+        loadChannelDropdown('ev-channel',       'text',  savedText),
     ]);
 
     loadAvailability();
