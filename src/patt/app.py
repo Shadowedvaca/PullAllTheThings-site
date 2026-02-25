@@ -71,7 +71,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "script-src 'self' 'unsafe-inline'; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src 'self' https://fonts.gstatic.com; "
-                "img-src 'self' https://drive.google.com data:; "
+                "img-src 'self' https://drive.google.com https://lh3.googleusercontent.com data:; "
                 "connect-src 'self'; "
                 "frame-ancestors 'none';"
             ),
