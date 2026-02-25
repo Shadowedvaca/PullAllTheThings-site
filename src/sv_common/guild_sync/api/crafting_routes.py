@@ -183,13 +183,13 @@ async def post_guild_order(
         channel_id = getattr(settings, "patt_crafters_corner_channel_id", None)
 
         if not bot or not channel_id:
-            logger.warning("Discord bot not available or PATT_CRAFTERS_CORNER_CHANNEL_ID not set")
-            return {"ok": True, "status": "queued", "note": "Discord not configured"}
+            logger.error("Guild order failed: PATT_CRAFTERS_CORNER_CHANNEL_ID not set")
+            raise HTTPException(503, "Crafters corner channel is not configured. Contact an officer.")
 
         channel = bot.get_channel(int(channel_id))
         if not channel:
-            logger.warning("Could not find #crafters-corner channel (id=%s)", channel_id)
-            return {"ok": True, "status": "queued", "note": "Channel not found"}
+            logger.error("Guild order failed: channel id=%s not found", channel_id)
+            raise HTTPException(503, "Could not find the crafters corner channel. Contact an officer.")
 
         embed = discord.Embed(
             title=f"\U0001f528 Guild Order: {recipe['name']}",
@@ -212,8 +212,7 @@ async def post_guild_order(
         )
         content = opted_in_mentions if opted_in_mentions else None
 
-        import asyncio
-        asyncio.create_task(channel.send(content=content, embed=embed))
+        await channel.send(content=content, embed=embed)
 
     except Exception as exc:
         logger.error("Guild order Discord post failed: %s", exc)
