@@ -605,6 +605,7 @@ async def admin_players_data(
                     "rank_name": p.guild_rank.name if p.guild_rank else "Unknown",
                     "rank_level": p.guild_rank.level if p.guild_rank else 0,
                     "registered": p.website_user_id is not None,
+                    "timezone": p.timezone or "UTC",
                     "main_character_id": p.main_character_id,
                     "offspec_character_id": p.offspec_character_id,
                 }

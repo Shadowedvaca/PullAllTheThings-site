@@ -223,8 +223,7 @@ function renderPlayers() {
             ? `<span class="pm-player-discord">💬 @${escHtml(discordUser.username)}</span>`
             : `<span class="pm-player-discord pm-missing">No Discord</span>`;
         const regBadge = p.registered
-            ? `<button class="pm-badge pm-badge--ok pm-reg-drill" onclick="drillOn('player',${p.id})" title="Filter to this player"
-               style="cursor:pointer;border:none;background:none;padding:0;">Reg</button>`
+            ? `<button class="pm-badge pm-badge--ok pm-reg-btn" onclick="toggleRegPanel(event,${p.id})" title="View player settings">Reg ▾</button>`
             : '';
 
         // Display name: player-set > discord server name > main char name
@@ -248,6 +247,22 @@ function renderPlayers() {
         const roleTitle = isRoleOverride
             ? `Roster role override: ${overrideSpec} (click to change)`
             : effectiveRole || 'No role set';
+
+        // Reg panel content (built here so it's available in the card HTML)
+        const mainChar   = allChars.find(c => c.id === p.main_character_id);
+        const offspecChar = allChars.find(c => c.id === p.offspec_character_id);
+        const regPanelHtml = p.registered ? `
+        <div class="pm-reg-panel" id="pm-reg-panel-${p.id}" style="display:none">
+            <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Timezone</span><span class="pm-reg-panel__value">${escHtml(p.timezone)}</span></div>
+            ${mainChar
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value">${escHtml(mainChar.name)} — ${escHtml(mainChar.class)}${mainChar.spec ? ' ' + escHtml(mainChar.spec) : ''}</span></div>`
+                : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
+            ${offspecChar
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value">${escHtml(offspecChar.name)} — ${escHtml(offspecChar.class)}${offspecChar.spec ? ' ' + escHtml(offspecChar.spec) : ''}</span></div>`
+                : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
+            <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Roster role</span><span class="pm-reg-panel__value">${escHtml(p.preferred_role || 'auto (from spec)')}</span></div>
+            <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Rank</span><span class="pm-reg-panel__value">${escHtml(p.rank_name)}</span></div>
+        </div>` : '';
 
         return `
         <div class="pm-player-card ${drill && drill.memberIds.has(p.id) ? 'pm-drill-active' : ''}"
@@ -293,8 +308,25 @@ function renderPlayers() {
                 </select>
                 ${isRoleOverride && overrideSpec ? `<span class="pm-role-spec-hint">${escHtml(overrideSpec)}</span>` : ''}
             </div>
+            ${regPanelHtml}
         </div>`;
     }).join('') + unzoneHtml;
+}
+
+// ── Reg panel toggle ───────────────────────────────────────────────────────
+
+function toggleRegPanel(event, playerId) {
+    event.stopPropagation();
+    const panel = document.getElementById(`pm-reg-panel-${playerId}`);
+    if (!panel) return;
+    const isOpen = panel.style.display !== 'none';
+    // Close all open panels
+    document.querySelectorAll('.pm-reg-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.pm-reg-btn').forEach(b => b.textContent = 'Reg ▾');
+    if (!isOpen) {
+        panel.style.display = '';
+        event.currentTarget.textContent = 'Reg ▴';
+    }
 }
 
 // ── Preferred role helpers ──────────────────────────────────────────────────
