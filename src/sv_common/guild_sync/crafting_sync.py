@@ -198,21 +198,21 @@ async def _upsert_tier(
 
 async def _upsert_recipe(
     conn: asyncpg.Connection,
-    spell_id: int,
+    recipe_id: int,
     name: str,
     profession_db_id: int,
     tier_db_id: int,
 ) -> int:
     """Upsert a recipe row, return its DB id."""
     row = await conn.fetchrow(
-        """INSERT INTO guild_identity.recipes (blizzard_spell_id, name, profession_id, tier_id)
+        """INSERT INTO guild_identity.recipes (blizzard_recipe_id, name, profession_id, tier_id)
            VALUES ($1, $2, $3, $4)
-           ON CONFLICT (blizzard_spell_id) DO UPDATE
+           ON CONFLICT (blizzard_recipe_id) DO UPDATE
                SET name = EXCLUDED.name,
                    profession_id = EXCLUDED.profession_id,
                    tier_id = EXCLUDED.tier_id
            RETURNING id""",
-        spell_id, name, profession_db_id, tier_db_id,
+        recipe_id, name, profession_db_id, tier_db_id,
     )
     return row["id"]
 

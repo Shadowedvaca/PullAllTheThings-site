@@ -53,18 +53,18 @@ async def get_recipes_for_filter(
 ) -> list[dict]:
     """
     Return all recipes for a profession+tier combo, sorted alphabetically.
-    Each recipe includes: id, name, blizzard_spell_id, wowhead_url, crafter_count.
+    Each recipe includes: id, name, blizzard_recipe_id, wowhead_url, crafter_count.
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """SELECT r.id, r.name, r.blizzard_spell_id, r.wowhead_url,
+            """SELECT r.id, r.name, r.blizzard_recipe_id, r.wowhead_url,
                       COUNT(cr.id) AS crafter_count
                FROM guild_identity.recipes r
                LEFT JOIN guild_identity.character_recipes cr ON cr.recipe_id = r.id
                LEFT JOIN guild_identity.wow_characters wc
                    ON wc.id = cr.character_id AND wc.removed_at IS NULL
                WHERE r.profession_id = $1 AND r.tier_id = $2
-               GROUP BY r.id, r.name, r.blizzard_spell_id, r.wowhead_url
+               GROUP BY r.id, r.name, r.blizzard_recipe_id, r.wowhead_url
                ORDER BY r.name""",
             profession_id, tier_id,
         )
