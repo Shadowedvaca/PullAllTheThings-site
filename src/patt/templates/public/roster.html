@@ -115,7 +115,7 @@ const DPS_TOTAL_TARGET = 14;
 const SPEC_CODES = {
     "Death Knight/Blood": "K1", "Death Knight/Frost": "K2", "Death Knight/Unholy": "K3",
     "Death Knight/San'layn": "K4",
-    "Demon Hunter/Havoc": "Y1", "Demon Hunter/Vengeance": "Y2",
+    "Demon Hunter/Havoc": "Y1", "Demon Hunter/Vengeance": "Y2", "Demon Hunter/Devourer": "0Y",
     "Druid/Balance": "D1", "Druid/Feral": "D2", "Druid/Guardian": "D3", "Druid/Restoration": "D4",
     "Evoker/Devastation": "V1", "Evoker/Preservation": "V2", "Evoker/Augmentation": "V3",
     "Hunter/Beast Mastery": "H1", "Hunter/Marksmanship": "H2", "Hunter/Survival": "H3",
@@ -381,16 +381,21 @@ function renderComposition() {
         `;
     }).join('');
 
-    // Wowhead link
-    const codes = allPlayers
+    // Wowhead link — format: CODE:CharacterName/CODE:CharacterName/...
+    const wowheadEntries = allPlayers
         .filter(p => p.main_character?.class_name && p.main_character?.spec_name)
-        .map(p => SPEC_CODES[`${p.main_character.class_name}/${p.main_character.spec_name}`])
-        .filter(Boolean)
-        .join('');
-    const wowheadUrl = `https://www.wowhead.com/raid-comp#${codes}`;
+        .map(p => {
+            const code = SPEC_CODES[`${p.main_character.class_name}/${p.main_character.spec_name}`];
+            if (!code) return null;
+            const name = encodeURIComponent(p.main_character.character_name || p.display_name);
+            return `${code}:${name}`;
+        })
+        .filter(Boolean);
     const btn = document.getElementById('wowhead-btn');
-    btn.href = wowheadUrl;
-    if (!codes) {
+    if (wowheadEntries.length) {
+        btn.href = `https://www.wowhead.com/raid-comp#${wowheadEntries.join('/')}`;
+    } else {
+        btn.href = 'https://www.wowhead.com/raid-comp';
         btn.textContent = '🔗 View Comp on Wowhead (spec data unavailable)';
     }
 }
