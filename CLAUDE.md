@@ -769,15 +769,17 @@ CREATE TABLE patt.mito_titles (
   - 202 unit tests pass, 59 skipped (DB-dependent or legacy script tests)
 
 ### Current Phase
-- Phase 2.8: Crafting Corner — **COMPLETE**
+- Phase 2.9: Data Quality Engine — **COMPLETE**
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
 - sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting (`src/sv_common/discord/`)
-- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service
+- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, **rules registry + mitigations engine (Phase 2.9)**
 - Crafting Corner: `/crafting-corner` public page, `/api/crafting/*` routes, profession/recipe DB tables, adaptive sync cadence
 - Admin Crafting Sync page: `/admin/crafting-sync` — force refresh, season config, sync stats
+- Data Quality Engine: `rules.py` (5-rule registry), `mitigations.py` (targeted fix functions + `run_auto_mitigations`), refactored `integrity_checker.py` (named detect functions)
+- Admin Data Quality page: `/admin/data-quality` — rule stats, open counts, recent findings, manual scan/fix triggers
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Auth middleware: `get_current_player()`, `require_rank(level)` deps in `src/patt/deps.py`
 - Cookie-based auth for page routes: `get_page_player()`, `require_page_rank(level)` in deps.py

@@ -154,11 +154,14 @@ async def sync_addon_data(
 ) -> dict:
     """Sync data from the WoW addon upload (guild notes, officer notes).
 
-    Returns stats including note_changed_ids: character IDs whose guild_note
-    changed AND who are already linked to a player (candidates for relinking).
+    When a character's guild note changes while it is linked to a player,
+    a note_mismatch audit issue is logged. The scheduler's run_auto_mitigations()
+    will process these issues automatically after this function returns.
     """
+    from .integrity_checker import _upsert_issue, make_issue_hash
+
     now = datetime.now(timezone.utc)
-    stats: dict = {"processed": 0, "updated": 0, "not_found": 0, "note_changed_ids": []}
+    stats: dict = {"processed": 0, "updated": 0, "not_found": 0, "note_changed": 0}
 
     async with pool.acquire() as conn:
         for char_data in addon_characters:
@@ -195,20 +198,38 @@ async def sync_addon_data(
                 )
                 stats["updated"] += 1
 
-                # Track characters whose note changed while linked to a player
+                # Log a note_mismatch issue when the note changes for a linked character
                 if note_changed and row["player_id"]:
                     logger.info(
                         "Guild note changed for '%s': '%s' → '%s'",
                         name, old_note.strip(), new_note.strip(),
                     )
-                    stats["note_changed_ids"].append(row["id"])
+                    h = make_issue_hash("note_mismatch", row["id"])
+                    await _upsert_issue(
+                        conn,
+                        issue_type="note_mismatch",
+                        severity="warning",
+                        wow_character_id=row["id"],
+                        summary=(
+                            f"Guild note changed for '{name}': "
+                            f"was '{old_note.strip()}', now '{new_note.strip()}' — "
+                            f"player link may be incorrect"
+                        ),
+                        details={
+                            "character_name": name,
+                            "old_note": old_note.strip(),
+                            "new_note": new_note.strip(),
+                            "player_id": row["player_id"],
+                        },
+                        issue_hash=h,
+                    )
+                    stats["note_changed"] += 1
             else:
                 logger.warning("Addon data for character '%s' not found in DB", name)
                 stats["not_found"] += 1
 
     logger.info(
         "Addon sync stats: %d processed, %d updated, %d not found, %d note changes",
-        stats["processed"], stats["updated"], stats["not_found"],
-        len(stats["note_changed_ids"]),
+        stats["processed"], stats["updated"], stats["not_found"], stats["note_changed"],
     )
     return stats

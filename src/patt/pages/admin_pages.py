@@ -1361,6 +1361,242 @@ async def admin_crafting_sync(
     return templates.TemplateResponse("admin/crafting_sync.html", ctx)
 
 
+# ---------------------------------------------------------------------------
+# Data Quality page
+# ---------------------------------------------------------------------------
+
+
+@router.get("/data-quality", response_class=HTMLResponse)
+async def admin_data_quality(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from sv_common.guild_sync.rules import RULES
+
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/data-quality")
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    rules_with_stats = []
+    recent_issues = []
+
+    if pool:
+        async with pool.acquire() as conn:
+            stats_rows = await conn.fetch(
+                """SELECT
+                       issue_type,
+                       COUNT(*) FILTER (WHERE resolved_at IS NULL)         AS open_count,
+                       COUNT(*) FILTER (WHERE resolved_at IS NOT NULL
+                                          AND resolved_at > NOW() - INTERVAL '30 days') AS resolved_30d,
+                       MAX(created_at) AS last_triggered
+                   FROM guild_identity.audit_issues
+                   WHERE issue_type = ANY($1::text[])
+                   GROUP BY issue_type""",
+                list(RULES.keys()),
+            )
+            stats_by_type = {r["issue_type"]: r for r in stats_rows}
+
+            recent_rows = await conn.fetch(
+                """SELECT ai.id, ai.issue_type, ai.severity, ai.summary,
+                          ai.created_at, ai.resolved_at, ai.resolved_by,
+                          wc.character_name,
+                          du.display_name AS discord_display_name,
+                          du.username     AS discord_username
+                   FROM guild_identity.audit_issues ai
+                   LEFT JOIN guild_identity.wow_characters wc ON wc.id = ai.wow_character_id
+                   LEFT JOIN guild_identity.discord_users  du ON du.id = ai.discord_member_id
+                   ORDER BY ai.created_at DESC
+                   LIMIT 50"""
+            )
+            recent_issues = [dict(r) for r in recent_rows]
+
+        for issue_type, rule in RULES.items():
+            s = stats_by_type.get(issue_type)
+            rules_with_stats.append({
+                "rule": rule,
+                "open_count": s["open_count"] if s else 0,
+                "resolved_30d": s["resolved_30d"] if s else 0,
+                "last_triggered": s["last_triggered"] if s else None,
+            })
+
+    ctx = await _base_ctx(request, player, db)
+    ctx.update({
+        "rules_with_stats": rules_with_stats,
+        "recent_issues": recent_issues,
+        "pool_available": pool is not None,
+    })
+    return templates.TemplateResponse("admin/data_quality.html", ctx)
+
+
+@router.post("/data-quality/scan")
+async def admin_data_quality_scan_all(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run all detection rules now."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.integrity_checker import run_integrity_check
+    import asyncio
+    asyncio.create_task(run_integrity_check(pool))
+    return JSONResponse({"ok": True, "status": "scan_started"})
+
+
+@router.post("/data-quality/scan/{issue_type}")
+async def admin_data_quality_scan_type(
+    request: Request,
+    issue_type: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run detection for a single rule type."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.rules import RULES
+    from sv_common.guild_sync.integrity_checker import DETECT_FUNCTIONS
+
+    if issue_type not in RULES:
+        return JSONResponse({"ok": False, "error": f"Unknown issue type: {issue_type}"}, status_code=400)
+
+    if issue_type == "note_mismatch":
+        return JSONResponse(
+            {"ok": False, "error": "note_mismatch is detected during addon sync, not on-demand"},
+            status_code=400,
+        )
+
+    if issue_type == "role_mismatch":
+        # role_mismatch uses a combined detect function
+        from sv_common.guild_sync.integrity_checker import detect_role_mismatch
+        import asyncio
+
+        async def _run():
+            async with pool.acquire() as conn:
+                await detect_role_mismatch(conn)
+        asyncio.create_task(_run())
+        return JSONResponse({"ok": True, "status": "scan_started", "issue_type": issue_type})
+
+    detect_fn = DETECT_FUNCTIONS.get(issue_type)
+    if not detect_fn:
+        return JSONResponse({"ok": False, "error": f"No detect function for: {issue_type}"}, status_code=400)
+
+    import asyncio
+
+    async def _run():
+        async with pool.acquire() as conn:
+            await detect_fn(conn)
+
+    asyncio.create_task(_run())
+    return JSONResponse({"ok": True, "status": "scan_started", "issue_type": issue_type})
+
+
+@router.post("/data-quality/fix/{issue_id}")
+async def admin_data_quality_fix_one(
+    request: Request,
+    issue_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run mitigation for a specific issue."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.rules import RULES
+
+    # Load the issue
+    async with pool.acquire() as conn:
+        issue_row = await conn.fetchrow(
+            """SELECT id, issue_type, severity, wow_character_id, discord_member_id,
+                      summary, details, issue_hash, created_at, resolved_at, resolved_by
+               FROM guild_identity.audit_issues WHERE id = $1""",
+            issue_id,
+        )
+
+    if not issue_row:
+        return JSONResponse({"ok": False, "error": "Issue not found"}, status_code=404)
+
+    if issue_row["resolved_at"] is not None:
+        return JSONResponse({"ok": False, "error": "Issue already resolved"}, status_code=400)
+
+    rule = RULES.get(issue_row["issue_type"])
+    if not rule or not rule.mitigate_fn:
+        return JSONResponse(
+            {"ok": False, "error": f"No mitigation available for {issue_row['issue_type']}"},
+            status_code=400,
+        )
+
+    import asyncio
+    asyncio.create_task(rule.mitigate_fn(pool, dict(issue_row)))
+    return JSONResponse({"ok": True, "status": "fix_started", "issue_id": issue_id})
+
+
+@router.post("/data-quality/fix-all/{issue_type}")
+async def admin_data_quality_fix_all_type(
+    request: Request,
+    issue_type: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run mitigation for all open issues of a given type."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.rules import RULES
+
+    rule = RULES.get(issue_type)
+    if not rule:
+        return JSONResponse({"ok": False, "error": f"Unknown issue type: {issue_type}"}, status_code=400)
+    if not rule.mitigate_fn:
+        return JSONResponse(
+            {"ok": False, "error": f"No mitigation available for {issue_type}"},
+            status_code=400,
+        )
+
+    import asyncio
+
+    async def _run_all():
+        async with pool.acquire() as conn:
+            issues = await conn.fetch(
+                """SELECT id, issue_type, severity, wow_character_id, discord_member_id,
+                          summary, details, issue_hash, created_at, resolved_at, resolved_by
+                   FROM guild_identity.audit_issues
+                   WHERE issue_type = $1 AND resolved_at IS NULL
+                   ORDER BY created_at""",
+                issue_type,
+            )
+        resolved = 0
+        for issue in issues:
+            try:
+                ok = await rule.mitigate_fn(pool, dict(issue))
+                if ok:
+                    resolved += 1
+            except Exception as exc:
+                logger.error("fix-all %s issue %d error: %s", issue_type, issue["id"], exc)
+        logger.info("fix-all %s: %d/%d resolved", issue_type, resolved, len(issues))
+
+    asyncio.create_task(_run_all())
+    return JSONResponse({"ok": True, "status": "fix_all_started", "issue_type": issue_type})
+
+
 @router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)
 async def admin_audit_resolve(
     request: Request,

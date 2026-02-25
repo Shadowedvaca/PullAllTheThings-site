@@ -1,0 +1,498 @@
+{% extends "base_admin.html" %}
+{% block title %}Data Quality — Admin — Pull All The Things{% endblock %}
+{% block nav_data_quality %}active{% endblock %}
+
+{% block head %}
+<style>
+/* ------------------------------------------------------------------ Page header */
+.dq-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+}
+.dq-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ Rule cards */
+.dq-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+}
+
+.dq-rule-card {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 1.5rem;
+    align-items: start;
+}
+.dq-rule-card:hover {
+    border-color: var(--color-border-light);
+}
+
+.dq-rule-top {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+.dq-rule-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--color-text);
+}
+.dq-rule-type {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.4rem;
+}
+.dq-rule-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 100px;
+    white-space: nowrap;
+}
+.dq-rule-badge--auto {
+    background: rgba(74,222,128,0.12);
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
+}
+.dq-rule-badge--manual {
+    background: rgba(251,191,36,0.10);
+    color: var(--color-warning);
+    border: 1px solid rgba(251,191,36,0.4);
+}
+
+.dq-rule-desc {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+    grid-column: 1;
+}
+.dq-rule-stats {
+    display: flex;
+    gap: 1.25rem;
+    margin-top: 0.35rem;
+    grid-column: 1;
+    flex-wrap: wrap;
+}
+.dq-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+.dq-stat__value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.2;
+}
+.dq-stat__value--open {
+    color: var(--color-warning);
+}
+.dq-stat__value--zero {
+    color: var(--color-text-muted);
+}
+.dq-stat__label {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.dq-rule-last {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+    grid-column: 1;
+}
+
+.dq-rule-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    grid-row: 1 / span 4;
+    grid-column: 2;
+    align-items: flex-end;
+    padding-top: 0.1rem;
+}
+
+/* ------------------------------------------------------------------ Severity badge */
+.sev {
+    display: inline-block;
+    padding: 0.12rem 0.5rem;
+    border-radius: 100px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+.sev-warning { background: rgba(251,191,36,0.15); color: var(--color-warning); border: 1px solid var(--color-warning); }
+.sev-error   { background: rgba(248,113,113,0.15); color: var(--color-danger);  border: 1px solid var(--color-danger); }
+.sev-info    { background: rgba(96,165,250,0.12);  color: var(--color-info);    border: 1px solid var(--color-info); }
+
+/* ------------------------------------------------------------------ Recent findings */
+.dq-findings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.dq-findings-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.dq-findings-subtitle {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.issue-type-chip {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.4rem;
+    white-space: nowrap;
+}
+.td-summary { max-width: 340px; }
+.td-entity  { font-size: 0.8rem; color: var(--color-text-muted); white-space: nowrap; }
+.td-age     { font-size: 0.78rem; color: var(--color-text-muted); white-space: nowrap; }
+.td-status  { font-size: 0.78rem; white-space: nowrap; }
+
+.resolved-label {
+    color: var(--color-success);
+    font-size: 0.75rem;
+}
+.open-label {
+    color: var(--color-warning);
+    font-size: 0.75rem;
+}
+
+.no-pool-notice {
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    color: var(--color-warning);
+    font-size: 0.875rem;
+}
+
+/* ------------------------------------------------------------------ Action feedback */
+.dq-action-feedback {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-success);
+    border-radius: var(--radius);
+    padding: 0.6rem 1rem;
+    color: var(--color-success);
+    font-size: 0.875rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 100;
+}
+.dq-action-feedback.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dq-header">
+    <div>
+        <h1 class="admin-title">Data Quality</h1>
+        <p class="text-muted text-sm" style="margin-top:0.25rem">
+            Rules-based detection and targeted mitigations for guild identity issues.
+        </p>
+    </div>
+    {% if pool_available %}
+    <div class="dq-header-actions">
+        <button class="btn btn-secondary btn-sm" onclick="runScanAll(this)">
+            Run Full Scan
+        </button>
+        <a href="/admin/audit-log" class="btn btn-secondary btn-sm">
+            Audit Log →
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+{% if not pool_available %}
+<div class="no-pool-notice">
+    Guild sync pool not available — configure BLIZZARD_CLIENT_ID/SECRET and restart the app
+    to enable data quality operations.
+</div>
+{% else %}
+
+{# ------------------------------------------------------------------ Rules panel #}
+{% if rules_with_stats %}
+<div class="dq-rules">
+    {% for entry in rules_with_stats %}
+    {% set rule = entry.rule %}
+    <div class="dq-rule-card" id="rule-{{ rule.issue_type }}">
+
+        <div class="dq-rule-top">
+            <span class="dq-rule-name">{{ rule.name }}</span>
+            <span class="dq-rule-type">{{ rule.issue_type }}</span>
+            <span class="sev sev-{{ rule.severity }}">{{ rule.severity }}</span>
+            {% if rule.auto_mitigate %}
+                <span class="dq-rule-badge dq-rule-badge--auto">⚡ Auto-fix</span>
+            {% else %}
+                <span class="dq-rule-badge dq-rule-badge--manual">👤 Manual</span>
+            {% endif %}
+        </div>
+
+        <div class="dq-rule-desc">{{ rule.description }}</div>
+
+        <div class="dq-rule-stats">
+            <div class="dq-stat">
+                <span class="dq-stat__value {% if entry.open_count > 0 %}dq-stat__value--open{% else %}dq-stat__value--zero{% endif %}">
+                    {{ entry.open_count }}
+                </span>
+                <span class="dq-stat__label">Open</span>
+            </div>
+            <div class="dq-stat">
+                <span class="dq-stat__value {% if entry.resolved_30d == 0 %}dq-stat__value--zero{% endif %}">
+                    {{ entry.resolved_30d }}
+                </span>
+                <span class="dq-stat__label">Resolved (30d)</span>
+            </div>
+        </div>
+
+        {% if entry.last_triggered %}
+        <div class="dq-rule-last">
+            Last detected: {{ entry.last_triggered.strftime('%Y-%m-%d %H:%M UTC') }}
+        </div>
+        {% else %}
+        <div class="dq-rule-last text-muted">Never detected</div>
+        {% endif %}
+
+        <div class="dq-rule-actions">
+            {% if rule.issue_type != 'note_mismatch' %}
+            <button class="btn btn-secondary btn-sm"
+                    onclick="runScan('{{ rule.issue_type }}', this)"
+                    title="Run detection for this rule now">
+                Scan
+            </button>
+            {% endif %}
+            {% if rule.mitigate_fn is not none and entry.open_count > 0 %}
+            <button class="btn btn-primary btn-sm"
+                    onclick="runFixAll('{{ rule.issue_type }}', this)"
+                    title="Attempt to fix all open {{ rule.issue_type }} issues">
+                Fix All ({{ entry.open_count }})
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ------------------------------------------------------------------ Recent findings #}
+<div class="dq-findings-header">
+    <div>
+        <span class="dq-findings-title">Recent Findings</span>
+        <span class="dq-findings-subtitle" style="margin-left:0.5rem">last 50 issues</span>
+    </div>
+</div>
+
+{% if recent_issues %}
+<div class="table-wrapper">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Severity</th>
+                <th>Type</th>
+                <th>Summary</th>
+                <th>Entity</th>
+                <th>Age</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for issue in recent_issues %}
+            <tr id="issue-row-{{ issue.id }}">
+                <td>
+                    <span class="sev sev-{{ issue.severity }}">{{ issue.severity }}</span>
+                </td>
+                <td>
+                    <span class="issue-type-chip">{{ issue.issue_type }}</span>
+                </td>
+                <td class="td-summary">{{ issue.summary }}</td>
+                <td class="td-entity">
+                    {% if issue.character_name %}
+                        WoW: <strong>{{ issue.character_name }}</strong>
+                    {% elif issue.discord_display_name or issue.discord_username %}
+                        Discord: <strong>{{ issue.discord_display_name or issue.discord_username }}</strong>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td class="td-age">
+                    {{ issue.created_at.strftime('%Y-%m-%d') }}<br>
+                    <span class="text-xs">{{ issue.created_at.strftime('%H:%M UTC') }}</span>
+                </td>
+                <td class="td-status">
+                    {% if issue.resolved_at %}
+                        <span class="resolved-label">✓ Resolved</span><br>
+                        <span class="text-xs text-muted">{{ issue.resolved_by or 'auto' }}</span>
+                    {% else %}
+                        <span class="open-label">Open</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if not issue.resolved_at %}
+                    {% set rule = none %}
+                    {% for entry in rules_with_stats %}
+                        {% if entry.rule.issue_type == issue.issue_type and entry.rule.mitigate_fn is not none %}
+                            {% set rule = entry.rule %}
+                        {% endif %}
+                    {% endfor %}
+                    {% if rule %}
+                    <button class="btn btn-secondary btn-sm"
+                            onclick="runFix({{ issue.id }}, this)"
+                            title="Attempt fix for this issue">
+                        Fix
+                    </button>
+                    {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div style="text-align:center; padding:2rem 1rem; color:var(--color-text-muted)">
+    No issues recorded yet — run a scan to detect problems.
+</div>
+{% endif %}
+
+{% endif %}{# /pool_available #}
+
+{# Action feedback toast #}
+<div class="dq-action-feedback" id="dq-toast"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showToast(msg, isError) {
+    const el = document.getElementById('dq-toast');
+    el.textContent = msg;
+    el.style.borderColor = isError ? 'var(--color-danger)' : 'var(--color-success)';
+    el.style.color = isError ? 'var(--color-danger)' : 'var(--color-success)';
+    el.classList.add('visible');
+    setTimeout(() => el.classList.remove('visible'), 3000);
+}
+
+async function runScanAll(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Scanning…';
+    try {
+        const r = await fetch('/admin/data-quality/scan', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('Scan started — reload page in a moment to see results.');
+        } else {
+            showToast('Error: ' + d.error, true);
+        }
+    } catch(e) {
+        showToast('Request failed', true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Full Scan';
+    }
+}
+
+async function runScan(issueType, btn) {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'Scanning…';
+    try {
+        const r = await fetch('/admin/data-quality/scan/' + issueType, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('Scan for ' + issueType + ' started.');
+        } else {
+            showToast('Error: ' + d.error, true);
+        }
+    } catch(e) {
+        showToast('Request failed', true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+    }
+}
+
+async function runFix(issueId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Fixing…';
+    try {
+        const r = await fetch('/admin/data-quality/fix/' + issueId, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('Fix started for issue #' + issueId + ' — reload to check result.');
+        } else {
+            showToast('Error: ' + d.error, true);
+            btn.disabled = false;
+            btn.textContent = 'Fix';
+        }
+    } catch(e) {
+        showToast('Request failed', true);
+        btn.disabled = false;
+        btn.textContent = 'Fix';
+    }
+}
+
+async function runFixAll(issueType, btn) {
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = 'Running…';
+    try {
+        const r = await fetch('/admin/data-quality/fix-all/' + issueType, { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('Fix-all for ' + issueType + ' started — reload in a moment.');
+        } else {
+            showToast('Error: ' + d.error, true);
+            btn.disabled = false;
+            btn.textContent = orig;
+        }
+    } catch(e) {
+        showToast('Request failed', true);
+        btn.disabled = false;
+        btn.textContent = orig;
+    }
+}
+</script>
+{% endblock %}

@@ -4,9 +4,11 @@ Scheduler for periodic guild sync operations.
 Uses APScheduler to run:
 - Blizzard API sync: every 6 hours (4x/day)
 - Discord member sync: every 15 minutes
-- Matching engine: after each Blizzard or addon sync
-- Integrity check: after matching
+- Integrity check + auto-mitigations: after each sync
 - Report: after integrity check (only if new issues)
+
+run_matching() is available as an admin-triggered action only
+(via POST /api/identity/run-matching). It is NOT called automatically.
 
 The Discord bot also handles real-time events (joins, leaves, role changes)
 which don't need scheduling.
@@ -26,8 +28,8 @@ import discord
 from .blizzard_client import BlizzardClient
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members
-from .identity_engine import run_matching, relink_note_changed_characters
 from .integrity_checker import run_integrity_check
+from .mitigations import run_auto_mitigations
 from .reporter import send_new_issues_report, send_sync_summary
 from .sync_logger import SyncLogEntry
 
@@ -109,7 +111,14 @@ class GuildSyncScheduler:
         return self.discord_bot.get_channel(self.audit_channel_id)
 
     async def run_blizzard_sync(self):
-        """Full Blizzard API sync pipeline."""
+        """Full Blizzard API sync pipeline.
+
+        Pipeline:
+          1. sync_blizzard_roster()     — update characters from Blizzard API
+          2. run_integrity_check()      — detect new issues
+          3. run_auto_mitigations()     — fix what can be auto-fixed
+          4. send_sync_summary()        — Discord report if notable
+        """
         channel = self._get_audit_channel()
 
         async with SyncLogEntry(self.db_pool, "blizzard_api") as log:
@@ -120,11 +129,11 @@ class GuildSyncScheduler:
             sync_stats = await sync_blizzard_roster(self.db_pool, characters)
             log.stats = sync_stats
 
-            # Step 2: Run matching engine
-            await run_matching(self.db_pool)
-
-            # Step 3: Run integrity check
+            # Step 2: Run integrity check
             integrity_stats = await run_integrity_check(self.db_pool)
+
+            # Step 3: Auto-mitigate what we can
+            await run_auto_mitigations(self.db_pool)
 
             # Step 4: Report new issues
             if channel and integrity_stats.get("total_new", 0) > 0:
@@ -141,7 +150,13 @@ class GuildSyncScheduler:
                 await send_sync_summary(channel, "Blizzard API", combined_stats, duration)
 
     async def run_discord_sync(self):
-        """Discord member sync pipeline."""
+        """Discord member sync pipeline.
+
+        Pipeline:
+          1. sync_discord_members()     — update discord_users table
+          2. run_integrity_check()      — detect new issues (especially role_mismatch)
+          3. run_auto_mitigations()     — fix auto-mitigatable issues
+        """
         async with SyncLogEntry(self.db_pool, "discord_bot") as log:
             # Find the guild that contains our audit channel
             guild = None
@@ -156,26 +171,35 @@ class GuildSyncScheduler:
             sync_stats = await sync_discord_members(self.db_pool, guild)
             log.stats = sync_stats
 
+            await run_integrity_check(self.db_pool)
+            await run_auto_mitigations(self.db_pool)
+
     async def run_addon_sync(self, addon_data: list[dict]):
-        """Process addon upload and run downstream pipeline."""
+        """Process addon upload and run downstream pipeline.
+
+        Pipeline:
+          1. sync_addon_data()          — write notes, log note_mismatch issues
+          2. run_integrity_check()      — detect orphans and other issues
+          3. run_auto_mitigations()     — auto-fix note_mismatch and others
+          4. send_sync_summary()        — Discord report if notable
+
+        Note: run_matching() is NOT called here. Use POST /api/identity/run-matching
+        to trigger the matching engine as an admin action.
+        """
         channel = self._get_audit_channel()
 
         async with SyncLogEntry(self.db_pool, "addon_upload") as log:
             start = time.time()
 
+            # Step 1: Write notes, log note_mismatch issues for changed notes
             addon_stats = await sync_addon_data(self.db_pool, addon_data)
             log.stats = {"found": addon_stats["processed"], "updated": addon_stats["updated"]}
 
-            # Unlink characters whose guild note changed to a different player
-            note_changed_ids = addon_stats.get("note_changed_ids", [])
-            if note_changed_ids:
-                await relink_note_changed_characters(self.db_pool, note_changed_ids)
-
-            # Re-run matching (picks up newly unlinked chars + any new orphans)
-            await run_matching(self.db_pool)
-
-            # Re-run integrity check
+            # Step 2: Detect all other issue types
             integrity_stats = await run_integrity_check(self.db_pool)
+
+            # Step 3: Auto-mitigate (processes note_mismatch issues logged above)
+            await run_auto_mitigations(self.db_pool)
 
             duration = time.time() - start
 
