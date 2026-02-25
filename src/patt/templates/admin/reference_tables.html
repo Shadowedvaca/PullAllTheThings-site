@@ -275,6 +275,36 @@
     </table>
 </div>
 
+{# ── Discord Channels ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Discord Channels</h2>
+        <button class="btn btn-secondary" id="ch-sync-btn" onclick="syncChannels()" style="font-size:0.8rem;padding:0.25rem 0.75rem;">
+            ↻ Sync from Discord
+        </button>
+        <span id="ch-sync-status" class="rt-status" style="font-size:0.8rem;"></span>
+    </div>
+    <div style="padding:0.5rem 1rem;font-size:0.8rem;color:var(--color-text-muted);">
+        Read-only reference. Use channel IDs when configuring bot features.
+        <strong style="color:var(--color-text);">Lock icon = restricted visibility</strong> — hover for allowed roles.
+    </div>
+    <table class="rt-table" id="ch-table">
+        <thead>
+            <tr>
+                <th>Channel ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Category</th>
+                <th>Visibility</th>
+                <th>Last Synced</th>
+            </tr>
+        </thead>
+        <tbody id="ch-tbody">
+        <tr><td colspan="6" style="color:var(--color-text-muted);padding:1rem;">Loading…</td></tr>
+        </tbody>
+    </table>
+</div>
+
 {# ── Raid Seasons ── #}
 <div class="rt-section">
     <div class="rt-section__header">
@@ -364,6 +394,79 @@
 
 {% block scripts %}
 <script>
+// ── Discord Channels ────────────────────────────────────────────────────────
+
+const CH_TYPE_ICONS = {
+    text: '# ',
+    voice: '🔊 ',
+    announcement: '📣 ',
+    forum: '💬 ',
+    stage: '🎙️ ',
+    category: '',
+};
+
+async function loadChannels() {
+    const tbody = document.getElementById('ch-tbody');
+    try {
+        const res = await fetch('/api/guild-sync/channels');
+        const data = await res.json();
+        if (!data.ok || !data.data.length) {
+            tbody.innerHTML = '<tr><td colspan="6" style="color:var(--color-text-muted);padding:1rem;">No channels synced yet — click ↻ Sync from Discord.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.data.map(ch => {
+            const icon = CH_TYPE_ICONS[ch.channel_type] ?? '';
+            const name = ch.channel_type === 'category'
+                ? `<strong style="color:var(--color-gold)">${icon}${ch.name.toUpperCase()}</strong>`
+                : `<span style="padding-left:${ch.category_name ? '1rem' : '0'}">${icon}${ch.name}</span>`;
+            const visibility = ch.is_public
+                ? '<span style="color:var(--color-text-muted)">Public</span>'
+                : `<span title="${(ch.visible_role_names||[]).join(', ') || 'No roles'}" style="cursor:help">🔒 ${(ch.visible_role_names||[]).join(', ') || 'Restricted'}</span>`;
+            const synced = ch.synced_at ? new Date(ch.synced_at).toLocaleDateString() : '—';
+            const nsfwBadge = ch.is_nsfw ? ' <span style="color:var(--color-danger);font-size:0.75rem">NSFW</span>' : '';
+            return `<tr>
+                <td style="font-family:monospace;font-size:0.8rem;color:var(--color-text-muted)">${ch.discord_channel_id}</td>
+                <td>${name}${nsfwBadge}</td>
+                <td style="color:var(--color-text-muted);font-size:0.8rem">${ch.channel_type}</td>
+                <td style="color:var(--color-text-muted);font-size:0.8rem">${ch.category_name || '—'}</td>
+                <td style="font-size:0.85rem">${visibility}</td>
+                <td style="color:var(--color-text-muted);font-size:0.8rem">${synced}</td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--color-danger);padding:1rem;">Failed to load channels.</td></tr>';
+    }
+}
+
+async function syncChannels() {
+    const btn = document.getElementById('ch-sync-btn');
+    const status = document.getElementById('ch-sync-status');
+    btn.disabled = true;
+    btn.textContent = '↻ Syncing…';
+    status.textContent = '';
+    try {
+        const res = await fetch('/api/guild-sync/channels/sync', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            status.textContent = `✓ ${data.channels_synced} channels synced`;
+            status.style.color = 'var(--color-success)';
+            await loadChannels();
+        } else {
+            status.textContent = '✗ ' + (data.detail || data.error || 'Sync failed');
+            status.style.color = 'var(--color-danger)';
+        }
+    } catch (e) {
+        status.textContent = '✗ Network error';
+        status.style.color = 'var(--color-danger)';
+    }
+    btn.disabled = false;
+    btn.textContent = '↻ Sync from Discord';
+}
+
+loadChannels();
+
+// ── General reference table helpers ─────────────────────────────────────────
+
 function showToast(msg, isError) {
     const t = document.getElementById('rt-toast');
     t.textContent = msg;

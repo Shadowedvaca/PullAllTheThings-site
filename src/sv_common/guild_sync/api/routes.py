@@ -498,3 +498,53 @@ async def remove_character_link(
         )
 
     return {"ok": True, "status": "removed", "character_id": row["character_id"]}
+
+
+# ---------------------------------------------------------------------------
+# Discord Channel Routes
+# ---------------------------------------------------------------------------
+
+@guild_sync_router.get("/channels")
+async def list_channels(pool: asyncpg.Pool = Depends(get_db_pool)):
+    """Return all synced Discord channels, ordered by category then position."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT discord_channel_id, name, channel_type, category_name,
+                      position, is_nsfw, is_public, visible_role_names, synced_at
+               FROM guild_identity.discord_channels
+               ORDER BY
+                   COALESCE(category_name, name),
+                   CASE channel_type WHEN 'category' THEN 0 ELSE 1 END,
+                   position"""
+        )
+    return {"ok": True, "data": [dict(r) for r in rows]}
+
+
+@guild_sync_router.post("/channels/sync")
+async def trigger_channel_sync(request: Request, pool: asyncpg.Pool = Depends(get_db_pool)):
+    """Manually re-sync Discord channels from the live server."""
+    try:
+        from sv_common.discord.bot import get_bot
+        from sv_common.discord.channel_sync import sync_channels
+        from patt.config import get_settings
+
+        bot = get_bot()
+        settings = get_settings()
+
+        if not bot or bot.is_closed():
+            raise HTTPException(503, "Discord bot is not running")
+        if not settings.discord_guild_id:
+            raise HTTPException(503, "DISCORD_GUILD_ID not configured")
+
+        guild = bot.get_guild(int(settings.discord_guild_id))
+        if not guild:
+            raise HTTPException(503, "Guild not found — bot may not have joined yet")
+
+        count = await sync_channels(pool, guild)
+        return {"ok": True, "channels_synced": count}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Channel sync failed: %s", exc)
+        raise HTTPException(500, f"Channel sync failed: {exc}")

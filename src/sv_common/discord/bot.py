@@ -43,6 +43,19 @@ async def on_ready():
         except Exception as e:
             logger.warning("Failed to register onboarding commands: %s", e)
 
+    # Sync Discord channel list to DB
+    if _db_pool is not None:
+        try:
+            from sv_common.discord.channel_sync import sync_channels
+            from patt.config import get_settings
+            settings = get_settings()
+            if settings.discord_guild_id:
+                guild = bot.get_guild(int(settings.discord_guild_id))
+                if guild:
+                    await sync_channels(_db_pool, guild)
+        except Exception as e:
+            logger.warning("Channel sync on_ready failed: %s", e)
+
 
 @bot.event
 async def on_member_join(member: discord.Member):
