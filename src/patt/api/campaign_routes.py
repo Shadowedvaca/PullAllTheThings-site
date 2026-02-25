@@ -269,6 +269,20 @@ async def admin_close_campaign(
         return {"ok": False, "error": str(e)}
 
 
+@admin_campaign_router.delete("/campaigns/{campaign_id}")
+async def admin_delete_campaign(
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        deleted = await campaign_service.delete_campaign(db, campaign_id)
+        if not deleted:
+            return {"ok": False, "error": f"Campaign {campaign_id} not found"}
+        return {"ok": True, "data": {"deleted": True}}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
 @admin_campaign_router.get("/campaigns/{campaign_id}/stats")
 async def admin_campaign_stats(
     campaign_id: int,

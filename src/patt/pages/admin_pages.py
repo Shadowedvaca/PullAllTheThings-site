@@ -363,6 +363,29 @@ async def admin_campaign_edit_post(
 
 
 # ---------------------------------------------------------------------------
+# Delete campaign
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/campaigns/{campaign_id}")
+async def admin_campaign_delete(
+    request: Request,
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    player = await _require_admin(request, db)
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+    try:
+        deleted = await campaign_service.delete_campaign(db, campaign_id)
+        if not deleted:
+            return JSONResponse({"ok": False, "error": "Campaign not found"}, status_code=404)
+        return JSONResponse({"ok": True, "data": {"deleted": True}})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+# ---------------------------------------------------------------------------
 # Entry management
 # ---------------------------------------------------------------------------
 

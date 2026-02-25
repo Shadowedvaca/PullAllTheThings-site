@@ -204,6 +204,18 @@ async def close_campaign(db: AsyncSession, campaign_id: int) -> Campaign:
     return campaign
 
 
+async def delete_campaign(db: AsyncSession, campaign_id: int) -> bool:
+    """Delete a campaign. Only draft campaigns may be deleted."""
+    campaign = await get_campaign(db, campaign_id)
+    if campaign is None:
+        return False
+    if campaign.status != "draft":
+        raise ValueError(f"Only draft campaigns can be deleted (this one is '{campaign.status}')")
+    await db.delete(campaign)
+    await db.flush()
+    return True
+
+
 async def get_campaign_status(db: AsyncSession, campaign_id: int) -> dict:
     """Return a status summary dict for the campaign."""
     from sqlalchemy import func

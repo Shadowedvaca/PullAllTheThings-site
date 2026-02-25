@@ -44,6 +44,9 @@
                         {% elif c.status == 'closed' %}
                             <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">Results</a>
                         {% endif %}
+                        {% if c.status == 'draft' %}
+                            <button class="btn btn-danger btn-sm" onclick="deleteCampaign({{ c.id }}, {{ c.title|tojson }})">Delete</button>
+                        {% endif %}
                     </div>
                 </td>
             </tr>
@@ -61,4 +64,20 @@
 
 {% block scripts %}
 <script src="/static/js/admin-forms.js"></script>
+<script>
+async function deleteCampaign(id, title) {
+    if (!confirm(`Delete campaign "${title}"?\n\nThis cannot be undone.`)) return;
+    try {
+        const res = await fetch(`/admin/campaigns/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            location.reload();
+        } else {
+            alert('Delete failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Delete failed: ' + e.message);
+    }
+}
+</script>
 {% endblock %}
