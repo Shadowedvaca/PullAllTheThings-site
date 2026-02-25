@@ -3,6 +3,7 @@
 import logging
 import re
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -47,6 +48,54 @@ async def _base_ctx(request: Request, player: Player, db: AsyncSession) -> dict:
         "current_member": player,
         "active_campaigns": active,
     }
+
+
+def _player_tz_from_name(tz_name: str) -> ZoneInfo:
+    """Return ZoneInfo for a timezone name string, falling back to UTC."""
+    try:
+        return ZoneInfo(tz_name or "UTC")
+    except (ZoneInfoNotFoundError, KeyError):
+        return ZoneInfo("UTC")
+
+
+def _player_tz(player: "Player") -> ZoneInfo:
+    """Return the player's ZoneInfo, falling back to UTC on invalid names."""
+    try:
+        return ZoneInfo(player.timezone or "UTC")
+    except (ZoneInfoNotFoundError, KeyError):
+        return ZoneInfo("UTC")
+
+
+# Google Drive URL → uc?id=FILE_ID&export=view normalizer
+_DRIVE_FILE_ID_RE = re.compile(
+    r"drive\.google\.com"
+    r"(?:/file/d/([A-Za-z0-9_-]+)"
+    r"|/open\?[^'\"\s]*id=([A-Za-z0-9_-]+)"
+    r"|/uc\?[^'\"\s]*id=([A-Za-z0-9_-]+))"
+)
+_BARE_FILE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{25,}$")
+
+
+def _normalize_image_url(url: str) -> str:
+    """Convert any Google Drive URL format to the uc?id=...&export=view embed form.
+
+    Accepts:
+      - drive.google.com/file/d/{id}/view
+      - drive.google.com/open?id={id}
+      - drive.google.com/uc?id={id}  (adds export=view if missing)
+      - Bare file IDs (25+ alphanumeric/_/- chars)
+      - Non-Drive URLs are returned unchanged.
+    """
+    if not url:
+        return url
+    url = url.strip()
+    m = _DRIVE_FILE_ID_RE.search(url)
+    if m:
+        file_id = m.group(1) or m.group(2) or m.group(3)
+        return f"https://drive.google.com/uc?id={file_id}&export=view"
+    if _BARE_FILE_ID_RE.match(url):
+        return f"https://drive.google.com/uc?id={url}&export=view"
+    return url
 
 
 def _redirect_login(url: str) -> RedirectResponse:
@@ -114,7 +163,14 @@ async def admin_campaign_new(
     ranks = list(ranks_result.scalars().all())
 
     ctx = await _base_ctx(request, player, db)
-    ctx.update({"ranks": ranks, "campaign": None, "error": None, "form": {}})
+    ctx.update({
+        "ranks": ranks,
+        "campaign": None,
+        "error": None,
+        "form": {},
+        "user_timezone": player.timezone or "UTC",
+        "start_at_local": None,
+    })
     return templates.TemplateResponse("admin/campaign_edit.html", ctx)
 
 
@@ -132,6 +188,7 @@ async def admin_campaign_new_post(
     picks_per_voter: int = Form(3),
     agent_enabled: str = Form("on"),
     agent_chattiness: str = Form("normal"),
+    user_timezone: str = Form("UTC"),
     db: AsyncSession = Depends(get_db),
 ):
     player = await _require_admin(request, db)
@@ -139,9 +196,11 @@ async def admin_campaign_new_post(
         return _redirect_login("/admin/campaigns")
 
     try:
+        tz = _player_tz_from_name(user_timezone)
         start_dt = datetime.fromisoformat(start_at.replace("Z", "+00:00"))
         if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=timezone.utc)
+            start_dt = start_dt.replace(tzinfo=tz)
+        start_dt = start_dt.astimezone(timezone.utc)
     except ValueError:
         start_dt = datetime.now(timezone.utc)
 
@@ -220,6 +279,11 @@ async def admin_campaign_edit(
         except Exception:
             pass
 
+    user_tz = _player_tz(player)
+    start_at_local = (
+        campaign.start_at.astimezone(user_tz) if campaign and campaign.start_at else None
+    )
+
     ctx = await _base_ctx(request, player, db)
     ctx.update({
         "campaign": campaign,
@@ -230,6 +294,8 @@ async def admin_campaign_edit(
         "flash_error": error,
         "error": None,
         "form": {},
+        "user_timezone": player.timezone or "UTC",
+        "start_at_local": start_at_local,
     })
     return templates.TemplateResponse("admin/campaign_edit.html", ctx)
 
@@ -249,6 +315,7 @@ async def admin_campaign_edit_post(
     picks_per_voter: int = Form(3),
     agent_enabled: str = Form("off"),
     agent_chattiness: str = Form("normal"),
+    user_timezone: str = Form("UTC"),
     db: AsyncSession = Depends(get_db),
 ):
     player = await _require_admin(request, db)
@@ -256,9 +323,11 @@ async def admin_campaign_edit_post(
         return _redirect_login(f"/admin/campaigns/{campaign_id}/edit")
 
     try:
+        tz = _player_tz_from_name(user_timezone)
         start_dt = datetime.fromisoformat(start_at.replace("Z", "+00:00"))
         if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=timezone.utc)
+            start_dt = start_dt.replace(tzinfo=tz)
+        start_dt = start_dt.astimezone(timezone.utc)
     except ValueError:
         start_dt = datetime.now(timezone.utc)
 
@@ -315,7 +384,7 @@ async def admin_add_entry(
             campaign_id,
             name=name,
             description=description or None,
-            image_url=image_url or None,
+            image_url=_normalize_image_url(image_url) or None,
             associated_member_id=int(associated_member_id) if associated_member_id else None,
             sort_order=sort_order,
         )

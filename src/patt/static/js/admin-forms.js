@@ -88,4 +88,35 @@
         editor.style.display = 'none';
     });
 
+    // -----------------------------------------------------------------------
+    // Google Drive URL normalizer
+    // Called onblur on any image URL input.
+    // Converts any Drive link format (or bare file ID) to the embed URL.
+    // -----------------------------------------------------------------------
+    window.normalizeDriveUrl = function (input) {
+        const val = (input.value || '').trim();
+        if (!val) return;
+
+        // Extract file ID from various Drive URL patterns
+        const patterns = [
+            /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/,   // /file/d/{id}
+            /drive\.google\.com\/open\?[^'"]*id=([A-Za-z0-9_-]+)/, // open?id=
+            /drive\.google\.com\/uc\?[^'"]*id=([A-Za-z0-9_-]+)/,   // uc?id=
+        ];
+        for (const re of patterns) {
+            const m = val.match(re);
+            if (m) {
+                input.value = `https://drive.google.com/uc?id=${m[1]}&export=view`;
+                input.style.borderColor = 'var(--color-success)';
+                return;
+            }
+        }
+
+        // Accept bare file IDs (25+ alphanumeric chars)
+        if (/^[A-Za-z0-9_-]{25,}$/.test(val)) {
+            input.value = `https://drive.google.com/uc?id=${val}&export=view`;
+            input.style.borderColor = 'var(--color-success)';
+        }
+    };
+
 })();

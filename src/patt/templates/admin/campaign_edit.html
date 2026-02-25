@@ -72,10 +72,15 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label" for="start_at">Start Date/Time (UTC) <span class="required">*</span></label>
+                            <label class="form-label" for="start_at">
+                                Start Date/Time
+                                <span style="font-weight:400;color:var(--color-text-muted)">({{ user_timezone }})</span>
+                                <span class="required">*</span>
+                            </label>
                             <input class="form-control" type="datetime-local" id="start_at" name="start_at"
-                                   value="{{ campaign.start_at.strftime('%Y-%m-%dT%H:%M') if campaign and campaign.start_at else '' }}"
+                                   value="{{ start_at_local.strftime('%Y-%m-%dT%H:%M') if start_at_local else '' }}"
                                    required>
+                            <input type="hidden" name="user_timezone" value="{{ user_timezone }}">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="duration_hours">Duration (hours) <span class="required">*</span></label>
@@ -161,7 +166,7 @@
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;">
                     <div><span class="text-muted text-sm">Min rank to vote</span><div>{{ campaign.min_rank_to_vote }}</div></div>
                     <div><span class="text-muted text-sm">Min rank to view</span><div>{{ campaign.min_rank_to_view or 'Public' }}</div></div>
-                    <div><span class="text-muted text-sm">Start</span><div class="text-mono text-sm">{{ campaign.start_at.strftime('%Y-%m-%d %H:%M UTC') }}</div></div>
+                    <div><span class="text-muted text-sm">Start</span><div class="text-mono text-sm">{{ start_at_local.strftime('%Y-%m-%d %H:%M') if start_at_local else '—' }} ({{ user_timezone }})</div></div>
                     <div><span class="text-muted text-sm">Duration</span><div>{{ campaign.duration_hours }}h</div></div>
                     <div><span class="text-muted text-sm">Picks per voter</span><div>{{ campaign.picks_per_voter }}</div></div>
                     <div><span class="text-muted text-sm">Early close</span><div>{{ 'Yes' if campaign.early_close_if_all_voted else 'No' }}</div></div>
@@ -270,10 +275,11 @@
                                        placeholder="Optional short description">
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="entry_image_url">Image URL</label>
-                                <input class="form-control text-mono" type="url" id="entry_image_url" name="image_url"
-                                       placeholder="https://drive.google.com/uc?id=...">
-                                <span class="form-hint">Google Drive: Share → Copy link, replace with uc?id=FILE_ID&export=view</span>
+                                <label class="form-label" for="entry_image_url">Image URL or Drive ID</label>
+                                <input class="form-control text-mono" type="text" id="entry_image_url" name="image_url"
+                                       placeholder="Paste any Google Drive link or file ID"
+                                       onblur="normalizeDriveUrl(this)">
+                                <span class="form-hint">Accepts any Drive share link, file URL, or raw file ID — auto-converted on save</span>
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="entry_member">Associated Member</label>
