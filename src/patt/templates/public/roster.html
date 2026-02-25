@@ -25,11 +25,6 @@
         </section>
 
         <section class="comp-section">
-            <h2 class="comp-section-title">Class Distribution</h2>
-            <div class="class-grid" id="class-grid"></div>
-        </section>
-
-        <section class="comp-section">
             <h2 class="comp-section-title">Wowhead Comp Analyzer</h2>
             <p class="comp-wowhead-note">View the current main-spec composition on Wowhead.</p>
             <a id="wowhead-btn" href="#" target="_blank" rel="noopener" class="btn btn-primary">
@@ -48,8 +43,12 @@
                     autocomplete="off"
                 >
                 <label class="roster-alts-label">
+                    <input type="checkbox" id="show-secondary">
+                    Show Secondary
+                </label>
+                <label class="roster-alts-label">
                     <input type="checkbox" id="show-alts">
-                    Show alts
+                    Show The Rest
                 </label>
             </div>
 
@@ -161,12 +160,13 @@ async function loadRoster() {
 // ---------------------------------------------------------------------------
 // Roster section
 // ---------------------------------------------------------------------------
-function buildRows(showAlts, searchText) {
+function buildRows(showSecondary, showAlts, searchText) {
     const rows = [];
     const q = searchText.toLowerCase();
 
     for (const player of allPlayers) {
         const mc = player.main_character;
+        const secondaryId = player.offspec_character_id;
         if (mc) {
             const classColor = CLASS_COLORS[mc.class_name] || '#e8e8e8';
             const roleEmoji = ROLE_EMOJIS[mc.role_name] || '';
@@ -186,9 +186,12 @@ function buildRows(showAlts, searchText) {
                 is_alt: false,
             });
         }
-        if (showAlts && player.characters) {
+        if (player.characters) {
             for (const char of player.characters) {
                 if (mc && char.character_id === mc.character_id) continue;
+                const isSecondary = secondaryId && char.character_id === secondaryId;
+                if (!isSecondary && !showAlts) continue;
+                if (isSecondary && !showSecondary) continue;
                 rows.push({
                     player_id: player.player_id,
                     display_name: player.display_name,
@@ -236,9 +239,10 @@ function buildRows(showAlts, searchText) {
 }
 
 function renderRoster() {
+    const showSecondary = document.getElementById('show-secondary').checked;
     const showAlts = document.getElementById('show-alts').checked;
     const searchText = document.getElementById('roster-search').value;
-    const rows = buildRows(showAlts, searchText);
+    const rows = buildRows(showSecondary, showAlts, searchText);
     const tbody = document.getElementById('roster-tbody');
     const empty = document.getElementById('roster-empty');
 
@@ -301,6 +305,19 @@ function renderComposition() {
         effectiveTargets["Melee DPS"] = Math.max(0, DPS_TOTAL_TARGET - rangedCnt);
     }
 
+    // Build class → spec → count per role (mains only)
+    const classSpecByRole = {};
+    for (const player of allPlayers) {
+        const mc = player.main_character;
+        if (!mc || !mc.role_name) continue;
+        const role = mc.role_name;
+        if (!classSpecByRole[role]) classSpecByRole[role] = {};
+        const cls = mc.class_name || 'Unknown';
+        if (!classSpecByRole[role][cls]) classSpecByRole[role][cls] = {};
+        const spec = mc.spec_name || 'Unknown';
+        classSpecByRole[role][cls][spec] = (classSpecByRole[role][cls][spec] || 0) + 1;
+    }
+
     // Role cards
     const roleCardsEl = document.getElementById('role-cards');
     roleCardsEl.innerHTML = Object.entries(effectiveTargets).map(([role, target]) => {
@@ -309,6 +326,28 @@ function renderComposition() {
         if (count >= target) statusClass = 'role-card--ok';
         else if (count === target - 1) statusClass = 'role-card--warn';
         const pct = target > 0 ? Math.min(100, Math.round((count / target) * 100)) : 100;
+
+        // Class/spec breakdown sorted by class total desc
+        const classData = classSpecByRole[role] || {};
+        const classSorted = Object.entries(classData).sort((a, b) => {
+            const aTotal = Object.values(a[1]).reduce((s, n) => s + n, 0);
+            const bTotal = Object.values(b[1]).reduce((s, n) => s + n, 0);
+            return bTotal - aTotal;
+        });
+        const breakdownHtml = classSorted.map(([cls, specs]) => {
+            const color = CLASS_COLORS[cls] || '#e8e8e8';
+            const emoji = CLASS_EMOJIS[cls] || '⚔️';
+            const clsTotal = Object.values(specs).reduce((s, n) => s + n, 0);
+            const specLines = Object.entries(specs)
+                .sort((a, b) => b[1] - a[1])
+                .map(([sp, cnt]) => `<span class="rc-spec">${esc(sp)}: ${cnt}</span>`)
+                .join('');
+            return `<div class="rc-class">
+                <span class="rc-class__label">${emoji} <span style="color:${color}">${esc(cls)}</span> <span class="rc-class__total">(${clsTotal})</span></span>
+                <div class="rc-spec-list">${specLines}</div>
+            </div>`;
+        }).join('');
+
         return `
             <div class="role-card ${statusClass}">
                 <div class="role-card__icon">${ROLE_EMOJIS[role] || ''}</div>
@@ -317,21 +356,7 @@ function renderComposition() {
                 <div class="role-card__bar-wrap">
                     <div class="role-card__bar" style="width:${pct}%"></div>
                 </div>
-            </div>
-        `;
-    }).join('');
-
-    // Class grid
-    const sorted = Object.entries(classCounts).sort((a, b) => b[1] - a[1]);
-    const classGridEl = document.getElementById('class-grid');
-    classGridEl.innerHTML = sorted.map(([cls, cnt]) => {
-        const color = CLASS_COLORS[cls] || '#e8e8e8';
-        const emoji = CLASS_EMOJIS[cls] || '⚔️';
-        return `
-            <div class="class-chip">
-                <span class="class-chip__emoji">${emoji}</span>
-                <span class="class-chip__name" style="color:${color}">${esc(cls)}</span>
-                <span class="class-chip__count">${cnt}</span>
+                ${breakdownHtml ? `<div class="rc-breakdown">${breakdownHtml}</div>` : ''}
             </div>
         `;
     }).join('');
@@ -371,6 +396,7 @@ document.querySelectorAll('.sort-col').forEach(th => {
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
+document.getElementById('show-secondary').addEventListener('change', renderRoster);
 document.getElementById('show-alts').addEventListener('change', renderRoster);
 document.getElementById('roster-search').addEventListener('input', renderRoster);
 

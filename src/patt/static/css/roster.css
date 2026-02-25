@@ -277,6 +277,43 @@
     transition: width 0.3s;
 }
 
+/* Class/spec breakdown inside role cards */
+.rc-breakdown {
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.rc-class {
+    font-size: 0.78rem;
+}
+
+.rc-class__label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.rc-class__total {
+    color: var(--color-text-muted);
+    font-weight: 400;
+}
+
+.rc-spec-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    padding-left: 0.5rem;
+}
+
+.rc-spec {
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+}
+
 .class-grid {
     display: flex;
     flex-wrap: wrap;

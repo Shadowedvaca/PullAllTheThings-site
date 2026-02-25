@@ -122,6 +122,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 "rank_name": p.guild_rank.name if p.guild_rank else "Unknown",
                 "rank_level": p.guild_rank.level if p.guild_rank else 0,
                 "main_character": main_char_data,
+                "offspec_character_id": p.offspec_character_id,
                 "characters": all_chars,
             }
         )
