@@ -41,7 +41,8 @@
       "WebFetch(domain:raid-helper.dev)",
       "WebSearch",
       "WebFetch(domain:github.com)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(ls:*)"
     ]
   }
 }
