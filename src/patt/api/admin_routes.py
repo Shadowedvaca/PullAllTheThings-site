@@ -57,13 +57,17 @@ class RoleUpdate(BaseModel):
 
 
 class SeasonCreate(BaseModel):
-    name: str
+    expansion_name: str
+    season_number: int
     start_date: date
+    is_new_expansion: bool = False
     is_active: bool = True
 
 
 class SeasonUpdate(BaseModel):
-    name: str | None = None
+    expansion_name: str | None = None
+    season_number: int | None = None
+    is_new_expansion: bool | None = None
     is_active: bool | None = None
 
 
@@ -265,8 +269,11 @@ async def list_seasons(db: AsyncSession = Depends(get_db)):
         "data": [
             {
                 "id": s.id,
-                "name": s.name,
+                "expansion_name": s.expansion_name,
+                "season_number": s.season_number,
+                "display_name": s.display_name,
                 "start_date": s.start_date.isoformat(),
+                "is_new_expansion": s.is_new_expansion,
                 "is_active": s.is_active,
                 "created_at": s.created_at.isoformat(),
             }
@@ -279,8 +286,10 @@ async def list_seasons(db: AsyncSession = Depends(get_db)):
 async def create_season(body: SeasonCreate, db: AsyncSession = Depends(get_db)):
     season = await season_service.create_season(
         db,
-        name=body.name,
+        expansion_name=body.expansion_name,
+        season_number=body.season_number,
         start_date=body.start_date,
+        is_new_expansion=body.is_new_expansion,
         is_active=body.is_active,
     )
     await db.commit()
@@ -288,8 +297,11 @@ async def create_season(body: SeasonCreate, db: AsyncSession = Depends(get_db)):
         "ok": True,
         "data": {
             "id": season.id,
-            "name": season.name,
+            "expansion_name": season.expansion_name,
+            "season_number": season.season_number,
+            "display_name": season.display_name,
             "start_date": season.start_date.isoformat(),
+            "is_new_expansion": season.is_new_expansion,
             "is_active": season.is_active,
         },
     }
@@ -303,8 +315,12 @@ async def update_season(
     season = result.scalar_one_or_none()
     if not season:
         raise HTTPException(status_code=404, detail=f"Season {season_id} not found")
-    if body.name is not None:
-        season.name = body.name
+    if body.expansion_name is not None:
+        season.expansion_name = body.expansion_name
+    if body.season_number is not None:
+        season.season_number = body.season_number
+    if body.is_new_expansion is not None:
+        season.is_new_expansion = body.is_new_expansion
     if body.is_active is not None:
         season.is_active = body.is_active
     await db.commit()
@@ -312,8 +328,11 @@ async def update_season(
         "ok": True,
         "data": {
             "id": season.id,
-            "name": season.name,
+            "expansion_name": season.expansion_name,
+            "season_number": season.season_number,
+            "display_name": season.display_name,
             "start_date": season.start_date.isoformat(),
+            "is_new_expansion": season.is_new_expansion,
             "is_active": season.is_active,
         },
     }

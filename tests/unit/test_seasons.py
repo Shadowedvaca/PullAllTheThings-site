@@ -11,12 +11,19 @@ from patt.services import season_service
 
 async def _create_season(
     db: AsyncSession,
-    name: str,
-    start_date: date,
+    expansion_name: str,
+    season_number: int = 1,
+    start_date: date = None,
     is_active: bool = True,
 ) -> RaidSeason:
+    if start_date is None:
+        start_date = datetime.now(timezone.utc).date()
     return await season_service.create_season(
-        db, name=name, start_date=start_date, is_active=is_active
+        db,
+        expansion_name=expansion_name,
+        season_number=season_number,
+        start_date=start_date,
+        is_active=is_active,
     )
 
 
@@ -28,39 +35,39 @@ async def _create_season(
 async def test_get_current_season_returns_latest_started(db_session: AsyncSession):
     today = datetime.now(timezone.utc).date()
 
-    s1 = await _create_season(db_session, "Season 1", today - timedelta(days=60))
-    s2 = await _create_season(db_session, "Season 2", today - timedelta(days=10))
+    s1 = await _create_season(db_session, "Khaz Algar", 1, today - timedelta(days=60))
+    s2 = await _create_season(db_session, "Midnight", 1, today - timedelta(days=10))
 
     current = await season_service.get_current_season(db_session)
 
     assert current is not None
-    assert current.name == "Season 2"
+    assert current.display_name == "Midnight Season 1"
 
 
 async def test_get_current_season_ignores_future_start_dates(db_session: AsyncSession):
     today = datetime.now(timezone.utc).date()
 
-    past = await _create_season(db_session, "Past Season", today - timedelta(days=30))
-    await _create_season(db_session, "Future Season", today + timedelta(days=30))
+    past = await _create_season(db_session, "Khaz Algar", 1, today - timedelta(days=30))
+    await _create_season(db_session, "Midnight", 1, today + timedelta(days=30))
 
     current = await season_service.get_current_season(db_session)
 
     assert current is not None
-    assert current.name == "Past Season"
+    assert current.display_name == "Khaz Algar Season 1"
 
 
 async def test_get_current_season_ignores_inactive(db_session: AsyncSession):
     today = datetime.now(timezone.utc).date()
 
-    active = await _create_season(db_session, "Active Season", today - timedelta(days=20))
+    active = await _create_season(db_session, "Midnight", 1, today - timedelta(days=20))
     inactive = await _create_season(
-        db_session, "Inactive Season", today - timedelta(days=5), is_active=False
+        db_session, "Midnight", 2, today - timedelta(days=5), is_active=False
     )
 
     current = await season_service.get_current_season(db_session)
 
     assert current is not None
-    assert current.name == "Active Season"
+    assert current.display_name == "Midnight Season 1"
 
 
 async def test_get_current_season_returns_none_when_no_seasons(db_session: AsyncSession):
@@ -74,12 +81,15 @@ async def test_create_season(db_session: AsyncSession):
 
     season = await season_service.create_season(
         db_session,
-        name="Liberation of Undermine",
+        expansion_name="Midnight",
+        season_number=1,
         start_date=today,
         is_active=True,
     )
 
     assert season.id is not None
-    assert season.name == "Liberation of Undermine"
+    assert season.expansion_name == "Midnight"
+    assert season.season_number == 1
+    assert season.display_name == "Midnight Season 1"
     assert season.start_date == today
     assert season.is_active is True

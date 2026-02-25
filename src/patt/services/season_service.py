@@ -31,12 +31,20 @@ async def get_all_seasons(db: AsyncSession) -> list[RaidSeason]:
 
 async def create_season(
     db: AsyncSession,
-    name: str,
+    expansion_name: str,
+    season_number: int,
     start_date: date,
+    is_new_expansion: bool = False,
     is_active: bool = True,
 ) -> RaidSeason:
     """Create a new raid season."""
-    season = RaidSeason(name=name, start_date=start_date, is_active=is_active)
+    season = RaidSeason(
+        expansion_name=expansion_name,
+        season_number=season_number,
+        start_date=start_date,
+        is_new_expansion=is_new_expansion,
+        is_active=is_active,
+    )
     db.add(season)
     await db.flush()
     await db.refresh(season)

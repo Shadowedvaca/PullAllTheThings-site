@@ -333,13 +333,14 @@ class PlayerAvailability(Base):
 
 
 class RaidSeason(Base):
-    """A WoW content season (e.g. Season 2 – Liberation of Undermine)."""
+    """A WoW content season (e.g. Midnight Season 1)."""
 
     __tablename__ = "raid_seasons"
     __table_args__ = {"schema": "patt"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    expansion_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    season_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
     is_new_expansion: Mapped[bool] = mapped_column(Boolean, server_default="false")
@@ -348,6 +349,12 @@ class RaidSeason(Base):
     )
 
     events: Mapped[list["RaidEvent"]] = relationship(back_populates="season")
+
+    @property
+    def display_name(self) -> str:
+        if self.expansion_name and self.season_number is not None:
+            return f"{self.expansion_name} Season {self.season_number}"
+        return self.expansion_name or "Unknown Season"
 
 
 class RaidEvent(Base):

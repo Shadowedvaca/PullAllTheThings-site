@@ -62,9 +62,14 @@ class CraftingSyncConfig:
 class SeasonData:
     """Current season info from patt.raid_seasons."""
     id: int
-    name: str
+    expansion_name: str
+    season_number: int
     start_date: datetime          # stored as DATE, treated as UTC midnight
     is_new_expansion: bool
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.expansion_name} Season {self.season_number}"
 
 
 def derive_expansion_name(tier_name: str, profession_name: str) -> tuple[str, int]:
@@ -118,7 +123,7 @@ def compute_sync_cadence(
 def get_season_display_name(season: Optional[SeasonData]) -> str:
     """Return the season display name, or a fallback if no season is active."""
     if season:
-        return season.name
+        return season.display_name
     return "No season configured"
 
 
@@ -140,15 +145,18 @@ async def _load_config(conn: asyncpg.Connection) -> Optional[CraftingSyncConfig]
 
 
 async def _load_current_season(conn: asyncpg.Connection) -> Optional[SeasonData]:
-    """Load the current active season from patt.raid_seasons."""
-    today = datetime.now(timezone.utc).date()
+    """Load the current active season from patt.raid_seasons.
+
+    Returns the most recent active season regardless of whether its start_date
+    has arrived — an upcoming season is still "the active season" for display
+    and cadence purposes.
+    """
     row = await conn.fetchrow(
-        """SELECT id, name, start_date, is_new_expansion
+        """SELECT id, expansion_name, season_number, start_date, is_new_expansion
            FROM patt.raid_seasons
-           WHERE is_active = TRUE AND start_date <= $1
+           WHERE is_active = TRUE
            ORDER BY start_date DESC
            LIMIT 1""",
-        today,
     )
     if not row:
         return None
@@ -157,7 +165,8 @@ async def _load_current_season(conn: asyncpg.Connection) -> Optional[SeasonData]
     )
     return SeasonData(
         id=row["id"],
-        name=row["name"],
+        expansion_name=row["expansion_name"] or "Unknown",
+        season_number=row["season_number"] or 0,
         start_date=start,
         is_new_expansion=row["is_new_expansion"],
     )
@@ -303,7 +312,7 @@ async def run_crafting_sync(
     logger.info(
         "Crafting sync starting for %d characters (season: %s, cadence: %s)",
         len(characters),
-        season.name if season else "none",
+        season.display_name if season else "none",
         cadence,
     )
 

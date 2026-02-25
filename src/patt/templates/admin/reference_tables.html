@@ -284,8 +284,10 @@
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Name</th>
+                <th>Expansion</th>
+                <th>Season #</th>
                 <th>Start Date</th>
+                <th>New Expansion</th>
                 <th>Active</th>
                 <th></th>
             </tr>
@@ -295,10 +297,20 @@
         <tr class="rt-row" data-id="{{ season.id }}" data-type="seasons">
             <td style="color:var(--color-text-muted);">{{ season.id }}</td>
             <td>
-                <input class="rt-editable rt-field" name="name"
-                       value="{{ season.name }}" data-orig="{{ season.name }}">
+                <input class="rt-editable rt-field" name="expansion_name"
+                       value="{{ season.expansion_name or '' }}" data-orig="{{ season.expansion_name or '' }}">
+            </td>
+            <td>
+                <input class="rt-editable rt-field rt-editable--number" type="number" name="season_number"
+                       value="{{ season.season_number or '' }}" data-orig="{{ season.season_number or '' }}">
             </td>
             <td style="color:var(--color-text-muted);">{{ season.start_date }}</td>
+            <td>
+                <select class="rt-editable rt-field" name="is_new_expansion" data-orig="{{ season.is_new_expansion | lower }}">
+                    <option value="false" {% if not season.is_new_expansion %}selected{% endif %}>No</option>
+                    <option value="true" {% if season.is_new_expansion %}selected{% endif %}>Yes</option>
+                </select>
+            </td>
             <td>
                 <select class="rt-editable rt-field" name="is_active" data-orig="{{ season.is_active | lower }}">
                     <option value="true" {% if season.is_active %}selected{% endif %}>Active</option>
@@ -315,8 +327,12 @@
     </table>
     <div class="rt-create-row">
         <label>New season:</label>
-        <input type="text" id="new-season-name" placeholder="Season name" style="min-width:200px;">
+        <input type="text" id="new-season-expansion" placeholder="Expansion (e.g. Midnight)" style="min-width:160px;">
+        <input type="number" id="new-season-number" placeholder="Season #" style="width:90px;" min="1">
         <input type="date" id="new-season-date">
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;color:var(--color-text-muted);">
+            <input type="checkbox" id="new-season-new-expansion"> New expansion
+        </label>
         <button class="btn btn-primary rt-save-btn" style="opacity:1;" onclick="createSeason()">+ Create Season</button>
         <span id="season-create-status" class="rt-status"></span>
     </div>
@@ -409,12 +425,13 @@ document.querySelectorAll('.rt-field').forEach(f => {
 });
 
 async function createSeason() {
-    const name = document.getElementById('new-season-name').value.trim();
+    const expansion_name = document.getElementById('new-season-expansion').value.trim();
+    const season_number = parseInt(document.getElementById('new-season-number').value, 10);
     const dateVal = document.getElementById('new-season-date').value;
-    const statusEl = document.getElementById('season-create-status');
+    const is_new_expansion = document.getElementById('new-season-new-expansion').checked;
 
-    if (!name || !dateVal) {
-        showToast('Season name and start date are required', true);
+    if (!expansion_name || !season_number || !dateVal) {
+        showToast('Expansion, season number, and start date are required', true);
         return;
     }
 
@@ -422,7 +439,7 @@ async function createSeason() {
         const res = await fetch('/api/v1/admin/seasons', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, start_date: dateVal, is_active: true }),
+            body: JSON.stringify({ expansion_name, season_number, start_date: dateVal, is_new_expansion, is_active: true }),
         });
         const data = await res.json();
         if (data.ok) {
@@ -435,8 +452,15 @@ async function createSeason() {
             tr.dataset.type = 'seasons';
             tr.innerHTML = `
                 <td style="color:var(--color-text-muted);">${s.id}</td>
-                <td><input class="rt-editable rt-field" name="name" value="${s.name}" data-orig="${s.name}"></td>
+                <td><input class="rt-editable rt-field" name="expansion_name" value="${s.expansion_name}" data-orig="${s.expansion_name}"></td>
+                <td><input class="rt-editable rt-field rt-editable--number" type="number" name="season_number" value="${s.season_number}" data-orig="${s.season_number}"></td>
                 <td style="color:var(--color-text-muted);">${s.start_date}</td>
+                <td>
+                    <select class="rt-editable rt-field" name="is_new_expansion" data-orig="${s.is_new_expansion}">
+                        <option value="false" ${!s.is_new_expansion ? 'selected' : ''}>No</option>
+                        <option value="true" ${s.is_new_expansion ? 'selected' : ''}>Yes</option>
+                    </select>
+                </td>
                 <td>
                     <select class="rt-editable rt-field" name="is_active" data-orig="true">
                         <option value="true" selected>Active</option>
@@ -449,8 +473,10 @@ async function createSeason() {
             tr.querySelectorAll('.rt-field').forEach(f => {
                 f.addEventListener('input', () => f.closest('.rt-row').classList.add('rt-row--dirty'));
             });
-            document.getElementById('new-season-name').value = '';
+            document.getElementById('new-season-expansion').value = '';
+            document.getElementById('new-season-number').value = '';
             document.getElementById('new-season-date').value = '';
+            document.getElementById('new-season-new-expansion').checked = false;
         } else {
             showToast('Error: ' + (data.error || 'unknown'), true);
         }

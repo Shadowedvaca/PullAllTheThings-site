@@ -33,7 +33,8 @@ def _make_config(**kwargs) -> CraftingSyncConfig:
 def _make_season(**kwargs) -> SeasonData:
     defaults = {
         "id": 1,
-        "name": "Liberation of Undermine",
+        "expansion_name": "Khaz Algar",
+        "season_number": 2,
         "start_date": datetime.now(timezone.utc) - timedelta(days=5),
         "is_new_expansion": False,
     }
@@ -174,18 +175,17 @@ class TestComputeSyncCadence:
 # ── get_season_display_name ──────────────────────────────────────────────────
 
 class TestGetSeasonDisplayName:
-    def test_returns_season_name(self):
-        season = _make_season(name="Liberation of Undermine")
-        assert get_season_display_name(season) == "Liberation of Undermine"
+    def test_builds_name_from_expansion_and_number(self):
+        season = _make_season(expansion_name="Midnight", season_number=1)
+        assert get_season_display_name(season) == "Midnight Season 1"
 
     def test_no_season_returns_fallback(self):
         assert get_season_display_name(None) == "No season configured"
 
-    def test_custom_name(self):
-        season = _make_season(name="The War Within Season 2")
+    def test_multi_word_expansion_name(self):
+        season = _make_season(expansion_name="The War Within", season_number=2)
         assert get_season_display_name(season) == "The War Within Season 2"
 
-    def test_name_used_as_is(self):
-        """Season name is returned verbatim — not constructed from parts."""
-        season = _make_season(name="Midnight Season 1 (Beta)")
-        assert get_season_display_name(season) == "Midnight Season 1 (Beta)"
+    def test_season_number_increments(self):
+        season = _make_season(expansion_name="Khaz Algar", season_number=3)
+        assert get_season_display_name(season) == "Khaz Algar Season 3"
