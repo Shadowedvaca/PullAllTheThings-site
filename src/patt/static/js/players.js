@@ -248,17 +248,17 @@ function renderPlayers() {
             ? `Roster role override: ${overrideSpec} (click to change)`
             : effectiveRole || 'No role set';
 
-        // Reg panel content (built here so it's available in the card HTML)
-        const mainChar   = allChars.find(c => c.id === p.main_character_id);
-        const offspecChar = allChars.find(c => c.id === p.offspec_character_id);
+        // Reg panel content
+        const regMainChar    = allChars.find(c => c.id === p.main_character_id);
+        const regOffspecChar = allChars.find(c => c.id === p.offspec_character_id);
         const regPanelHtml = p.registered ? `
         <div class="pm-reg-panel" id="pm-reg-panel-${p.id}" style="display:none">
             <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Timezone</span><span class="pm-reg-panel__value">${escHtml(p.timezone)}</span></div>
-            ${mainChar
-                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value">${escHtml(mainChar.name)} — ${escHtml(mainChar.class)}${mainChar.spec ? ' ' + escHtml(mainChar.spec) : ''}</span></div>`
+            ${regMainChar
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value">${escHtml(regMainChar.name)} — ${escHtml(regMainChar.class)}${regMainChar.spec ? ' ' + escHtml(regMainChar.spec) : ''}</span></div>`
                 : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
-            ${offspecChar
-                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value">${escHtml(offspecChar.name)} — ${escHtml(offspecChar.class)}${offspecChar.spec ? ' ' + escHtml(offspecChar.spec) : ''}</span></div>`
+            ${regOffspecChar
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value">${escHtml(regOffspecChar.name)} — ${escHtml(regOffspecChar.class)}${regOffspecChar.spec ? ' ' + escHtml(regOffspecChar.spec) : ''}</span></div>`
                 : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
             <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Roster role</span><span class="pm-reg-panel__value">${escHtml(p.preferred_role || 'auto (from spec)')}</span></div>
             <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Rank</span><span class="pm-reg-panel__value">${escHtml(p.rank_name)}</span></div>
