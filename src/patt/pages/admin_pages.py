@@ -522,6 +522,8 @@ async def admin_players_data(
             selectinload(Player.guild_rank),
             selectinload(Player.discord_user),
             selectinload(Player.characters),
+            selectinload(Player.main_spec),
+            selectinload(Player.offspec_spec),
         )
         .order_by(Player.display_name)
     )
@@ -608,6 +610,8 @@ async def admin_players_data(
                     "timezone": p.timezone or "UTC",
                     "main_character_id": p.main_character_id,
                     "offspec_character_id": p.offspec_character_id,
+                    "main_spec_name": p.main_spec.name if p.main_spec else None,
+                    "offspec_spec_name": p.offspec_spec.name if p.offspec_spec else None,
                 }
                 for p in players
             ],

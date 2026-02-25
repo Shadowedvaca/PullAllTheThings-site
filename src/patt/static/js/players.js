@@ -255,13 +255,11 @@ function renderPlayers() {
         <div class="pm-reg-panel" id="pm-reg-panel-${p.id}" style="display:none">
             <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Timezone</span><span class="pm-reg-panel__value">${escHtml(p.timezone)}</span></div>
             ${regMainChar
-                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value">${escHtml(regMainChar.name)} — ${escHtml(regMainChar.class)}${regMainChar.spec ? ' ' + escHtml(regMainChar.spec) : ''}</span></div>`
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value">${escHtml(regMainChar.name)} — ${escHtml(regMainChar.class)}${p.main_spec_name ? ' ' + escHtml(p.main_spec_name) : ''}</span></div>`
                 : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
             ${regOffspecChar
-                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value">${escHtml(regOffspecChar.name)} — ${escHtml(regOffspecChar.class)}${regOffspecChar.spec ? ' ' + escHtml(regOffspecChar.spec) : ''}</span></div>`
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value">${escHtml(regOffspecChar.name)} — ${escHtml(regOffspecChar.class)}${p.offspec_spec_name ? ' ' + escHtml(p.offspec_spec_name) : ''}</span></div>`
                 : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
-            <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Roster role</span><span class="pm-reg-panel__value">${escHtml(p.preferred_role || 'auto (from spec)')}</span></div>
-            <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Rank</span><span class="pm-reg-panel__value">${escHtml(p.rank_name)}</span></div>
         </div>` : '';
 
         return `
