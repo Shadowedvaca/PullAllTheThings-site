@@ -160,6 +160,25 @@
         </p>
     </div>
 
+    <!-- Discord Settings Card -->
+    <div class="cs-card" style="grid-column: 1 / -1">
+        <h2 class="cs-card__title">Discord Settings</h2>
+        <p class="cs-card__subtitle">Configure which channels the bot posts to. Channels are pulled from the Discord server — if a channel is missing, go to <a href="/admin/reference-tables" class="cs-link">Admin → Reference Tables</a> and click ↻ Sync from Discord.</p>
+
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:0.5rem">
+            <label style="color:var(--color-text-muted);font-size:0.9rem;min-width:160px">Crafters Corner channel</label>
+            <select id="cs-channel-select" class="form-control" style="max-width:320px;font-size:0.9rem">
+                <option value="">— select channel —</option>
+            </select>
+            <button class="btn btn-primary" id="cs-channel-save" style="font-size:0.85rem;padding:0.4rem 1rem">Save</button>
+            <span id="cs-channel-status" style="font-size:0.85rem"></span>
+        </div>
+        <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:0.6rem">
+            Guild orders placed via the Crafting Corner will be posted to this channel.
+            If the channel is not configured or cannot be found, users will see an error when placing orders.
+        </p>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -187,6 +206,70 @@
         return Math.floor(secs / 60) + 'm ' + Math.round(secs % 60) + 's';
     }
 
+    // ── Channel dropdown ────────────────────────────────────────────────────
+
+    async function loadChannelDropdown(selectedId) {
+        const sel = document.getElementById('cs-channel-select');
+        try {
+            const resp = await fetch('/api/guild-sync/channels');
+            const data = await resp.json();
+            const textChannels = (data.data || []).filter(
+                ch => ch.channel_type === 'text' || ch.channel_type === 'announcement'
+            );
+            if (!textChannels.length) {
+                sel.innerHTML = '<option value="">No channels synced yet — sync in Reference Tables</option>';
+                return;
+            }
+            // Group by category
+            const byCategory = {};
+            textChannels.forEach(ch => {
+                const cat = ch.category_name || 'Uncategorized';
+                (byCategory[cat] = byCategory[cat] || []).push(ch);
+            });
+            let html = '<option value="">— select channel —</option>';
+            Object.keys(byCategory).sort().forEach(cat => {
+                html += `<optgroup label="${cat}">`;
+                byCategory[cat].forEach(ch => {
+                    const lock = ch.is_public ? '' : ' 🔒';
+                    const sel_attr = ch.discord_channel_id === selectedId ? ' selected' : '';
+                    html += `<option value="${ch.discord_channel_id}"${sel_attr}>#${ch.name}${lock}</option>`;
+                });
+                html += '</optgroup>';
+            });
+            sel.innerHTML = html;
+        } catch (e) {
+            sel.innerHTML = '<option value="">Failed to load channels</option>';
+        }
+    }
+
+    document.getElementById('cs-channel-save').addEventListener('click', async function() {
+        const channelId = document.getElementById('cs-channel-select').value || null;
+        const statusEl = document.getElementById('cs-channel-status');
+        this.disabled = true;
+        try {
+            const resp = await fetch('/api/crafting/admin/config', {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({crafters_corner_channel_id: channelId}),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                statusEl.textContent = channelId ? '✓ Saved' : '✓ Cleared';
+                statusEl.style.color = 'var(--color-success)';
+            } else {
+                statusEl.textContent = '✗ ' + (data.detail || data.error || 'Save failed');
+                statusEl.style.color = 'var(--color-danger)';
+            }
+        } catch (e) {
+            statusEl.textContent = '✗ Network error';
+            statusEl.style.color = 'var(--color-danger)';
+        }
+        this.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    });
+
+    // ── Sync status ─────────────────────────────────────────────────────────
+
     async function loadConfig() {
         try {
             const [configResp, statusResp] = await Promise.all([
@@ -198,6 +281,7 @@
                 const data = await configResp.json();
                 if (data.ok && data.data) {
                     const c = data.data;
+                    loadChannelDropdown(c.crafters_corner_channel_id);
                     document.getElementById('cs-last-sync').textContent = fmtDate(c.last_sync_at);
                     document.getElementById('cs-chars-processed').textContent =
                         c.last_sync_characters_processed ?? '—';

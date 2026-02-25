@@ -175,21 +175,20 @@ async def post_guild_order(
     # Post to Discord
     try:
         from sv_common.discord.bot import get_bot
-        from patt.config import get_settings
+        from sv_common.discord.channel_sync import get_discord_channel
         import discord
 
         bot = get_bot()
-        settings = get_settings()
-        channel_id = getattr(settings, "patt_crafters_corner_channel_id", None)
+        if not bot or bot.is_closed():
+            raise HTTPException(503, "Discord bot is not running.")
 
-        if not bot or not channel_id:
-            logger.error("Guild order failed: PATT_CRAFTERS_CORNER_CHANNEL_ID not set")
-            raise HTTPException(503, "Crafters corner channel is not configured. Contact an officer.")
+        # Load channel from DB config — never from env vars
+        async with pool.acquire() as conn:
+            channel_id = await conn.fetchval(
+                "SELECT crafters_corner_channel_id FROM guild_identity.crafting_sync_config LIMIT 1"
+            )
 
-        channel = bot.get_channel(int(channel_id))
-        if not channel:
-            logger.error("Guild order failed: channel id=%s not found", channel_id)
-            raise HTTPException(503, "Could not find the crafters corner channel. Contact an officer.")
+        channel = await get_discord_channel(pool, bot, channel_id)
 
         embed = discord.Embed(
             title=f"\U0001f528 Guild Order: {recipe['name']}",
@@ -214,10 +213,11 @@ async def post_guild_order(
 
         await channel.send(content=content, embed=embed)
 
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Guild order Discord post failed: %s", exc)
-        # Don't fail the request — order was placed, Discord posting failed
-        return {"ok": True, "status": "posted", "discord_note": "Discord post failed"}
+        raise HTTPException(503, f"Discord post failed: {exc}")
 
     return {"ok": True, "status": "posted"}
 
@@ -268,5 +268,25 @@ async def get_admin_config(
     if player_id is None:
         raise HTTPException(401, "Login required")
 
+    data = await crafting_service.get_full_config(pool)
+    return {"ok": True, "data": data}
+
+
+class ChannelConfigUpdate(BaseModel):
+    crafters_corner_channel_id: str | None = None
+
+
+@crafting_router.patch("/admin/config")
+async def update_admin_config(
+    request: Request,
+    body: ChannelConfigUpdate,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """Update crafting sync config settings (admin only)."""
+    player_id = await _get_current_player_id(request)
+    if player_id is None:
+        raise HTTPException(401, "Login required")
+
+    await crafting_service.set_crafters_corner_channel(pool, body.crafters_corner_channel_id)
     data = await crafting_service.get_full_config(pool)
     return {"ok": True, "data": data}

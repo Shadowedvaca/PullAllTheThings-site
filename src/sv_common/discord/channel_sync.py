@@ -20,6 +20,56 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+async def get_discord_channel(
+    pool: asyncpg.Pool,
+    bot: "discord.Client",
+    channel_id: str,
+) -> "discord.abc.Messageable":
+    """Resolve a stored channel_id to a live Discord channel object.
+
+    Looks up the channel name from the reference table for a human-readable
+    error message, then fetches the live channel from the bot.
+
+    Raises HTTPException 503 with actionable instructions if:
+      - channel_id is None / not configured
+      - channel_id not found in discord_channels reference table
+      - bot can't access the channel (permissions / deleted)
+    """
+    from fastapi import HTTPException
+
+    if not channel_id:
+        raise HTTPException(
+            503,
+            "No channel configured. Go to Admin → Crafting Sync and select a channel.",
+        )
+
+    # Look up the human-readable name for better error messages
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT name FROM guild_identity.discord_channels WHERE discord_channel_id = $1",
+            channel_id,
+        )
+
+    if not row:
+        raise HTTPException(
+            503,
+            f"Channel ID {channel_id} not found in the Discord channel reference. "
+            "Go to Admin → Reference Tables and click ↻ Sync from Discord, then "
+            "re-select the channel in Admin → Crafting Sync.",
+        )
+
+    channel = bot.get_channel(int(channel_id))
+    if not channel:
+        raise HTTPException(
+            503,
+            f"Channel '#{row['name']}' exists in the reference but the bot can't access it. "
+            "Check that the bot has permission to view and post in that channel.",
+        )
+
+    return channel
+
+
 _CHANNEL_TYPE_MAP = {
     discord.ChannelType.text:         "text",
     discord.ChannelType.voice:        "voice",

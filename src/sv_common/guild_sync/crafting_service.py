@@ -222,7 +222,8 @@ async def get_full_config(pool: asyncpg.Pool) -> Optional[dict]:
         row = await conn.fetchrow(
             """SELECT id, current_cadence, cadence_override_until,
                       last_sync_at, next_sync_at, last_sync_duration_seconds,
-                      last_sync_characters_processed, last_sync_recipes_found
+                      last_sync_characters_processed, last_sync_recipes_found,
+                      crafters_corner_channel_id
                FROM guild_identity.crafting_sync_config LIMIT 1"""
         )
         season = await _load_current_season(conn)
@@ -234,7 +235,34 @@ async def get_full_config(pool: asyncpg.Pool) -> Optional[dict]:
     result["season_name"] = get_season_display_name(season)
     result["season_start_date"] = season.start_date.isoformat() if season else None
     result["is_new_expansion"] = season.is_new_expansion if season else False
+
+    # Resolve channel name from reference table for display
+    channel_id = row["crafters_corner_channel_id"]
+    result["crafters_corner_channel_id"] = channel_id
+    if channel_id:
+        async with pool.acquire() as conn:
+            ch_name = await conn.fetchval(
+                "SELECT name FROM guild_identity.discord_channels WHERE discord_channel_id = $1",
+                channel_id,
+            )
+        result["crafters_corner_channel_name"] = ch_name
+    else:
+        result["crafters_corner_channel_name"] = None
+
     return result
+
+
+async def set_crafters_corner_channel(
+    pool: asyncpg.Pool, channel_id: Optional[str]
+) -> bool:
+    """Persist the crafters corner channel selection. Returns True on success."""
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """UPDATE guild_identity.crafting_sync_config
+               SET crafters_corner_channel_id = $1, updated_at = NOW()""",
+            channel_id,
+        )
+    return result.startswith("UPDATE")
 
 
 async def get_player_crafting_preference(pool: asyncpg.Pool, player_id: int) -> bool:
