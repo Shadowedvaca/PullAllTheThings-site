@@ -152,9 +152,13 @@ async def sync_addon_data(
     pool: asyncpg.Pool,
     addon_characters: list[dict],
 ) -> dict:
-    """Sync data from the WoW addon upload (guild notes, officer notes)."""
+    """Sync data from the WoW addon upload (guild notes, officer notes).
+
+    Returns stats including note_changed_ids: character IDs whose guild_note
+    changed AND who are already linked to a player (candidates for relinking).
+    """
     now = datetime.now(timezone.utc)
-    stats = {"processed": 0, "updated": 0, "not_found": 0}
+    stats: dict = {"processed": 0, "updated": 0, "not_found": 0, "note_changed_ids": []}
 
     async with pool.acquire() as conn:
         for char_data in addon_characters:
@@ -163,14 +167,21 @@ async def sync_addon_data(
                 continue
 
             stats["processed"] += 1
+            new_note = char_data.get("guild_note", "")
 
             row = await conn.fetchrow(
-                """SELECT id FROM guild_identity.wow_characters
+                """SELECT wc.id, wc.guild_note,
+                          (SELECT player_id FROM guild_identity.player_characters
+                           WHERE character_id = wc.id LIMIT 1) AS player_id
+                   FROM guild_identity.wow_characters wc
                    WHERE LOWER(character_name) = $1 AND removed_at IS NULL""",
                 name.lower(),
             )
 
             if row:
+                old_note = row["guild_note"] or ""
+                note_changed = (old_note.strip() != new_note.strip()) and bool(old_note.strip())
+
                 await conn.execute(
                     """UPDATE guild_identity.wow_characters SET
                         guild_note = $2,
@@ -178,17 +189,26 @@ async def sync_addon_data(
                         addon_last_sync = $4
                        WHERE id = $1""",
                     row["id"],
-                    char_data.get("guild_note", ""),
+                    new_note,
                     char_data.get("officer_note", ""),
                     now,
                 )
                 stats["updated"] += 1
+
+                # Track characters whose note changed while linked to a player
+                if note_changed and row["player_id"]:
+                    logger.info(
+                        "Guild note changed for '%s': '%s' → '%s'",
+                        name, old_note.strip(), new_note.strip(),
+                    )
+                    stats["note_changed_ids"].append(row["id"])
             else:
                 logger.warning("Addon data for character '%s' not found in DB", name)
                 stats["not_found"] += 1
 
     logger.info(
-        "Addon sync stats: %d processed, %d updated, %d not found",
+        "Addon sync stats: %d processed, %d updated, %d not found, %d note changes",
         stats["processed"], stats["updated"], stats["not_found"],
+        len(stats["note_changed_ids"]),
     )
     return stats

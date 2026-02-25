@@ -26,7 +26,7 @@ import discord
 from .blizzard_client import BlizzardClient
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members
-from .identity_engine import run_matching
+from .identity_engine import run_matching, relink_note_changed_characters
 from .integrity_checker import run_integrity_check
 from .reporter import send_new_issues_report, send_sync_summary
 from .sync_logger import SyncLogEntry
@@ -166,7 +166,12 @@ class GuildSyncScheduler:
             addon_stats = await sync_addon_data(self.db_pool, addon_data)
             log.stats = {"found": addon_stats["processed"], "updated": addon_stats["updated"]}
 
-            # Re-run matching (addon notes might reveal new links)
+            # Unlink characters whose guild note changed to a different player
+            note_changed_ids = addon_stats.get("note_changed_ids", [])
+            if note_changed_ids:
+                await relink_note_changed_characters(self.db_pool, note_changed_ids)
+
+            # Re-run matching (picks up newly unlinked chars + any new orphans)
             await run_matching(self.db_pool)
 
             # Re-run integrity check

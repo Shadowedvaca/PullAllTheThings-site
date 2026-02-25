@@ -139,6 +139,122 @@ def _find_discord_for_key(key: str, all_discord: list) -> Optional[dict]:
     return None
 
 
+def _note_still_matches_player(note_key: str, player_display: str, discord_username: str, discord_display: str) -> bool:
+    """Return True if the note key still plausibly belongs to this player.
+
+    Mirrors the matching strategy in _find_discord_for_key (passes 1-3 + substring).
+    """
+    candidates = [
+        normalize_name(player_display or ""),
+        normalize_name(discord_username or ""),
+        normalize_name(discord_display or ""),
+    ]
+    for name in candidates:
+        if not name:
+            continue
+        if name == note_key:
+            return True
+        # Key matches a word within the name (e.g. "trog" in "Trog/Moon")
+        words = re.split(r"[/\-\s]+", name)
+        if note_key in words:
+            return True
+        # Substring match for short aliases (e.g. "trog" in "trogmoon")
+        if len(note_key) >= 3 and note_key in name:
+            return True
+    return False
+
+
+async def relink_note_changed_characters(pool: asyncpg.Pool, char_ids: list[int]) -> dict:
+    """Re-evaluate player assignments for characters whose guild note changed.
+
+    For each character:
+    - If the new note key still matches the current player → leave it alone.
+    - If the new note key no longer matches → unlink the character (and clear
+      main_character_id / offspec_character_id if needed) so run_matching()
+      can reassign it to the correct player.
+
+    Does NOT create new links itself — that is left to run_matching().
+    """
+    if not char_ids:
+        return {"unlinked": 0, "skipped": 0}
+
+    stats = {"unlinked": 0, "skipped": 0}
+
+    async with pool.acquire() as conn:
+        for char_id in char_ids:
+            row = await conn.fetchrow(
+                """SELECT
+                       wc.id,
+                       wc.character_name,
+                       wc.guild_note,
+                       pc.player_id,
+                       p.display_name          AS player_display_name,
+                       du.username             AS discord_username,
+                       du.display_name         AS discord_display_name
+                   FROM guild_identity.wow_characters wc
+                   LEFT JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
+                   LEFT JOIN guild_identity.players p            ON p.id = pc.player_id
+                   LEFT JOIN guild_identity.discord_users du     ON du.id = p.discord_user_id
+                   WHERE wc.id = $1""",
+                char_id,
+            )
+
+            if not row or not row["player_id"]:
+                # Already unlinked — run_matching will handle it
+                stats["skipped"] += 1
+                continue
+
+            note_key = _extract_note_key(dict(row))
+            if not note_key:
+                # Empty note — can't determine intent, leave it alone
+                stats["skipped"] += 1
+                continue
+
+            if _note_still_matches_player(
+                note_key,
+                row["player_display_name"],
+                row["discord_username"],
+                row["discord_display_name"],
+            ):
+                stats["skipped"] += 1
+                continue
+
+            # Note no longer matches current player — unlink so run_matching reassigns
+            async with conn.transaction():
+                # Clear main/offspec pointers on the old player if they referenced this char
+                await conn.execute(
+                    """UPDATE guild_identity.players
+                       SET main_character_id = NULL
+                       WHERE id = $1 AND main_character_id = $2""",
+                    row["player_id"], char_id,
+                )
+                await conn.execute(
+                    """UPDATE guild_identity.players
+                       SET offspec_character_id = NULL
+                       WHERE id = $1 AND offspec_character_id = $2""",
+                    row["player_id"], char_id,
+                )
+                await conn.execute(
+                    "DELETE FROM guild_identity.player_characters WHERE character_id = $1",
+                    char_id,
+                )
+
+            logger.info(
+                "Note change: unlinked '%s' from player '%s' (new note key: '%s'). "
+                "run_matching() will reassign.",
+                row["character_name"],
+                row["player_display_name"],
+                note_key,
+            )
+            stats["unlinked"] += 1
+
+    logger.info(
+        "Note-change relink: %d unlinked for reassignment, %d unchanged",
+        stats["unlinked"], stats["skipped"],
+    )
+    return stats
+
+
 async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) -> dict:
     """
     Run the note-group matching engine.
