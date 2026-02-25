@@ -226,7 +226,7 @@
                             {% for entry in campaign.entries|sort(attribute='sort_order') %}
                             <div class="entry-row">
                                 {% if entry.image_url %}
-                                    <img class="entry-row__thumb" src="{{ entry.image_url }}" alt="{{ entry.name }}" loading="lazy">
+                                    <img class="entry-row__thumb" src="{{ entry.image_url }}" alt="{{ entry.name }}" loading="lazy" referrerpolicy="no-referrer">
                                 {% else %}
                                     <div class="entry-row__thumb-placeholder">🖼</div>
                                 {% endif %}
