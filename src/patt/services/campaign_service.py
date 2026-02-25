@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete as sql_delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -205,13 +205,22 @@ async def close_campaign(db: AsyncSession, campaign_id: int) -> Campaign:
 
 
 async def delete_campaign(db: AsyncSession, campaign_id: int) -> bool:
-    """Delete a campaign. Only draft campaigns may be deleted."""
-    campaign = await get_campaign(db, campaign_id)
-    if campaign is None:
+    """Delete a campaign and all its child rows via DB-level CASCADE.
+
+    Uses a direct SQL DELETE (not ORM object deletion) so that the database
+    ON DELETE CASCADE constraints handle entries/votes/results/agent_log
+    without SQLAlchemy attempting to null-out NOT NULL foreign keys first.
+    """
+    # Fetch status only — no relationship loading needed
+    result = await db.execute(
+        select(Campaign.id, Campaign.status).where(Campaign.id == campaign_id)
+    )
+    row = result.one_or_none()
+    if row is None:
         return False
-    if campaign.status == "live":
+    if row.status == "live":
         raise ValueError("Cannot delete a live campaign — close it first")
-    await db.delete(campaign)
+    await db.execute(sql_delete(Campaign).where(Campaign.id == campaign_id))
     await db.flush()
     return True
 
