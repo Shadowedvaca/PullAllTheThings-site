@@ -268,17 +268,22 @@ class SyncWatcher(FileSystemEventHandler):
         self.last_upload_time = 0.0
         self.last_export_time = 0
 
-    def on_modified(self, event):
-        """Called when a file in the watched directory is modified."""
+    def _handle_event(self, event):
         if event.is_directory:
             return
-
         filename = os.path.basename(event.src_path)
         if filename != TARGET_FILE:
             return
-
-        logger.info("Detected change in %s", TARGET_FILE)
+        logger.info("Detected %s on %s", event.event_type, TARGET_FILE)
         self._process_file(event.src_path)
+
+    def on_modified(self, event):
+        """WoW sometimes modifies in place."""
+        self._handle_event(event)
+
+    def on_created(self, event):
+        """WoW often does atomic writes: delete old file + create new one."""
+        self._handle_event(event)
 
     def _process_file(self, filepath: str):
         """Parse the SavedVariables file and upload if there's new data."""
@@ -434,6 +439,10 @@ def main():
     try:
         while True:
             time.sleep(POLL_INTERVAL)
+            # Periodic fallback poll — catches any events watchdog missed
+            if os.path.exists(target_file):
+                logger.debug("Periodic poll: checking %s", TARGET_FILE)
+                watcher._process_file(target_file)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         observer.stop()
