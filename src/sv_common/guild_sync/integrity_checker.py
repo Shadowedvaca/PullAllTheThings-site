@@ -82,6 +82,80 @@ async def _upsert_issue(
 # ---------------------------------------------------------------------------
 
 
+async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
+    """
+    Detect linked characters whose current guild note no longer matches their player.
+
+    This catches pre-existing mismatches that existed before Phase 2.9 was deployed,
+    as well as any case where sync_addon_data() missed a change.
+
+    Returns count of new issues created.
+    """
+    from .identity_engine import _extract_note_key, _note_still_matches_player
+
+    # Load all linked characters with their player + discord info
+    rows = await conn.fetch(
+        """SELECT
+               wc.id          AS char_id,
+               wc.character_name,
+               wc.guild_note,
+               pc.player_id,
+               p.display_name          AS player_display_name,
+               du.username             AS discord_username,
+               du.display_name         AS discord_display_name
+           FROM guild_identity.player_characters pc
+           JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
+           JOIN guild_identity.players p         ON p.id  = pc.player_id
+           LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+           WHERE wc.removed_at IS NULL
+             AND wc.guild_note IS NOT NULL
+             AND wc.guild_note != ''"""
+    )
+
+    new_count = 0
+    for row in rows:
+        note_key = _extract_note_key(dict(row))
+        if not note_key:
+            continue
+
+        still_matches = _note_still_matches_player(
+            note_key,
+            row["player_display_name"],
+            row["discord_username"],
+            row["discord_display_name"],
+        )
+        if still_matches:
+            continue
+
+        h = make_issue_hash("note_mismatch", row["char_id"])
+        created = await _upsert_issue(
+            conn,
+            issue_type="note_mismatch",
+            severity="warning",
+            wow_character_id=row["char_id"],
+            summary=(
+                f"Guild note for '{row['character_name']}' (note key: '{note_key}') "
+                f"does not match linked player '{row['player_display_name']}'"
+            ),
+            details={
+                "character_name": row["character_name"],
+                "note_key": note_key,
+                "guild_note": row["guild_note"],
+                "player_id": row["player_id"],
+                "player_display_name": row["player_display_name"],
+            },
+            issue_hash=h,
+        )
+        if created:
+            new_count += 1
+            logger.info(
+                "note_mismatch detected: '%s' note key '%s' doesn't match player '%s'",
+                row["character_name"], note_key, row["player_display_name"],
+            )
+
+    return new_count
+
+
 async def detect_orphan_wow(conn: asyncpg.Connection) -> int:
     """Detect WoW characters in the guild with no player link. Returns count of new issues."""
     orphan_chars = await conn.fetch(
@@ -305,6 +379,7 @@ async def detect_stale_character(conn: asyncpg.Connection) -> int:
 
 # Mapping for admin scan-by-type endpoint
 DETECT_FUNCTIONS = {
+    "note_mismatch": detect_note_mismatch,
     "orphan_wow": detect_orphan_wow,
     "orphan_discord": detect_orphan_discord,
     "stale_character": detect_stale_character,
@@ -324,6 +399,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     Returns stats: {orphan_wow, orphan_discord, role_mismatch, stale, no_guild_role, total_new}
     """
     stats = {
+        "note_mismatch": 0,
         "orphan_wow": 0,
         "orphan_discord": 0,
         "role_mismatch": 0,
@@ -333,6 +409,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     }
 
     async with pool.acquire() as conn:
+        stats["note_mismatch"] = await detect_note_mismatch(conn)
         stats["orphan_wow"] = await detect_orphan_wow(conn)
         stats["orphan_discord"] = await detect_orphan_discord(conn)
 
@@ -343,7 +420,8 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         stats["stale"] = await detect_stale_character(conn)
 
         stats["total_new"] = (
-            stats["orphan_wow"]
+            stats["note_mismatch"]
+            + stats["orphan_wow"]
             + stats["orphan_discord"]
             + stats["role_mismatch"]
             + stats["no_guild_role"]
@@ -354,10 +432,10 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         await _auto_resolve_fixed_issues(conn)
 
     logger.info(
-        "Integrity check: %d orphan_wow, %d orphan_discord, %d role_mismatch, "
-        "%d stale, %d no_role — %d total new issues",
-        stats["orphan_wow"], stats["orphan_discord"], stats["role_mismatch"],
-        stats["stale"], stats["no_guild_role"], stats["total_new"],
+        "Integrity check: %d note_mismatch, %d orphan_wow, %d orphan_discord, "
+        "%d role_mismatch, %d stale, %d no_role — %d total new issues",
+        stats["note_mismatch"], stats["orphan_wow"], stats["orphan_discord"],
+        stats["role_mismatch"], stats["stale"], stats["no_guild_role"], stats["total_new"],
     )
     return stats
 

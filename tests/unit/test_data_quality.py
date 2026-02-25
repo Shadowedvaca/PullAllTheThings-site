@@ -138,12 +138,13 @@ class TestDetectFunctions:
 
     def test_detect_functions_map(self):
         from sv_common.guild_sync.integrity_checker import DETECT_FUNCTIONS
-        # Should have entries for rule types that can be individually scanned
+        # Should have entries for all rule types that can be individually scanned
+        assert "note_mismatch" in DETECT_FUNCTIONS
         assert "orphan_wow" in DETECT_FUNCTIONS
         assert "orphan_discord" in DETECT_FUNCTIONS
         assert "stale_character" in DETECT_FUNCTIONS
-        # note_mismatch is detected inline during addon sync, not in this map
-        assert "note_mismatch" not in DETECT_FUNCTIONS
+        # role_mismatch uses a tuple-returning combined function, handled separately
+        assert "role_mismatch" not in DETECT_FUNCTIONS
 
 
 # ---------------------------------------------------------------------------

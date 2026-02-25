@@ -1470,12 +1470,6 @@ async def admin_data_quality_scan_type(
     if issue_type not in RULES:
         return JSONResponse({"ok": False, "error": f"Unknown issue type: {issue_type}"}, status_code=400)
 
-    if issue_type == "note_mismatch":
-        return JSONResponse(
-            {"ok": False, "error": "note_mismatch is detected during addon sync, not on-demand"},
-            status_code=400,
-        )
-
     if issue_type == "role_mismatch":
         # role_mismatch uses a combined detect function
         from sv_common.guild_sync.integrity_checker import detect_role_mismatch
