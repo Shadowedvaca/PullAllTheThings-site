@@ -44,7 +44,7 @@
                         {% elif c.status == 'closed' %}
                             <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">Results</a>
                         {% endif %}
-                        {% if c.status == 'draft' %}
+                        {% if c.status != 'live' %}
                             <button class="btn btn-danger btn-sm" onclick="deleteCampaign({{ c.id }}, {{ c.title|tojson }})">Delete</button>
                         {% endif %}
                     </div>
