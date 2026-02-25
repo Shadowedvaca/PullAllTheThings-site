@@ -244,15 +244,11 @@
                    value="{{ discord_config.raid_creator_discord_id or '' }}"
                    placeholder="Discord user snowflake">
 
-            <label for="rh-channel-id">Signup Channel ID</label>
-            <input type="text" id="rh-channel-id"
-                   value="{{ discord_config.raid_channel_id or '' }}"
-                   placeholder="Discord channel snowflake">
+            <label for="rh-channel-id">Signup Channel</label>
+            <select id="rh-channel-id"><option value="">— loading —</option></select>
 
-            <label for="rh-voice-id">Voice Channel ID</label>
-            <input type="text" id="rh-voice-id"
-                   value="{{ discord_config.raid_voice_channel_id or '' }}"
-                   placeholder="Optional">
+            <label for="rh-voice-id">Voice Channel</label>
+            <select id="rh-voice-id"><option value="">— loading —</option></select>
 
             <label for="rh-template-id">Default Template</label>
             <input type="text" id="rh-template-id"
@@ -335,10 +331,8 @@
                         <option value="180">3 hours</option>
                     </select>
 
-                    <label for="ev-channel">Channel ID</label>
-                    <input type="text" id="ev-channel"
-                           value="{{ discord_config.raid_channel_id or '' }}"
-                           placeholder="Discord channel ID">
+                    <label for="ev-channel">Channel</label>
+                    <select id="ev-channel"><option value="">— loading —</option></select>
                 </div>
             </div>
 
@@ -703,6 +697,50 @@ function updateFallback() {
     document.getElementById('fallback-text').textContent = text;
 }
 
+// ── Channel dropdowns ────────────────────────────────────────────
+let _channelCache = null;
+
+async function _fetchChannels() {
+    if (_channelCache) return _channelCache;
+    const resp = await fetch('/api/guild-sync/channels');
+    const data = await resp.json();
+    _channelCache = data.data || [];
+    return _channelCache;
+}
+
+async function loadChannelDropdown(selectId, typeFilter, selectedId) {
+    const sel = document.getElementById(selectId);
+    try {
+        const channels = await _fetchChannels();
+        const filtered = channels.filter(ch => typeFilter === 'voice'
+            ? ch.channel_type === 'voice'
+            : (ch.channel_type === 'text' || ch.channel_type === 'announcement'));
+        if (!filtered.length) {
+            sel.innerHTML = '<option value="">No channels synced — sync in Reference Tables</option>';
+            return;
+        }
+        const byCategory = {};
+        filtered.forEach(ch => {
+            const cat = ch.category_name || 'Uncategorized';
+            (byCategory[cat] = byCategory[cat] || []).push(ch);
+        });
+        let html = '<option value="">— select channel —</option>';
+        Object.keys(byCategory).sort().forEach(cat => {
+            html += `<optgroup label="${cat}">`;
+            byCategory[cat].forEach(ch => {
+                const lock = ch.is_public ? '' : ' 🔒';
+                const sel_attr = ch.discord_channel_id === selectedId ? ' selected' : '';
+                const prefix = typeFilter === 'voice' ? '🔊' : '#';
+                html += `<option value="${ch.discord_channel_id}"${sel_attr}>${prefix}${ch.name}${lock}</option>`;
+            });
+            html += '</optgroup>';
+        });
+        sel.innerHTML = html;
+    } catch (e) {
+        sel.innerHTML = '<option value="">Failed to load channels</option>';
+    }
+}
+
 // ── Bootstrap ────────────────────────────────────────────────────
 async function loadAvailability() {
     try {
@@ -714,12 +752,22 @@ async function loadAvailability() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const today = new Date();
     const iso = new Date(today.getTime() + 86400000).toISOString().split('T')[0];
     document.getElementById('ev-date').value = iso;
-    loadAvailability();
     updateFallback();
+
+    // Load channel dropdowns — all three share the same channel list fetch
+    const savedText  = '{{ discord_config.raid_channel_id or "" }}';
+    const savedVoice = '{{ discord_config.raid_voice_channel_id or "" }}';
+    await Promise.all([
+        loadChannelDropdown('rh-channel-id', 'text',  savedText),
+        loadChannelDropdown('rh-voice-id',   'voice', savedVoice),
+        loadChannelDropdown('ev-channel',    'text',  savedText),
+    ]);
+
+    loadAvailability();
 });
 </script>
 {% endblock %}
