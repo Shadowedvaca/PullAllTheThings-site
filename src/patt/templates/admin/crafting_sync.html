@@ -48,68 +48,47 @@
 }
 .cs-badge--daily { background: var(--color-gold); color: #0a0a0b; }
 .cs-badge--weekly { background: #333; color: #aaa; }
+.cs-badge--new-exp { background: #4ade80; color: #0a0a0b; }
 
-.cs-form label {
-    display: block;
+.cs-season-box {
+    background: rgba(212,168,75,0.08);
+    border: 1px solid rgba(212,168,75,0.25);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+}
+.cs-season-box__name {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0 0 0.25rem 0;
+}
+.cs-season-box__meta {
     font-size: 0.82rem;
     color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
-    margin-top: 0.85rem;
-}
-.cs-form input[type="text"],
-.cs-form input[type="number"],
-.cs-form input[type="date"] {
-    width: 100%;
-    box-sizing: border-box;
-    background: #1a1a1d;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    padding: 0.45rem 0.65rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-.cs-form input:focus {
-    outline: 1px solid var(--color-gold);
-    border-color: var(--color-gold);
-}
-.cs-form__season-preview {
-    font-size: 0.85rem;
-    color: var(--color-gold);
-    margin-top: 0.5rem;
-    min-height: 1.2em;
-}
-.cs-form__checkbox-row {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.cs-season-hint {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
     margin-top: 0.75rem;
-    font-size: 0.9rem;
+    line-height: 1.5;
 }
-.cs-form__checkbox-row input[type="checkbox"] {
-    width: 1rem; height: 1rem;
-    accent-color: var(--color-gold);
+.cs-season-hint a {
+    color: var(--color-gold);
+    text-decoration: none;
 }
+.cs-season-hint a:hover { text-decoration: underline; }
 .cs-btn-row {
     display: flex;
     gap: 0.75rem;
     margin-top: 1.25rem;
     flex-wrap: wrap;
 }
-.btn-danger-outline {
-    background: transparent;
-    border: 1px solid var(--color-danger, #f87171);
-    color: var(--color-danger, #f87171);
-    padding: 0.45rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-.btn-danger-outline:hover { background: rgba(248,113,113,0.1); }
 .cs-link {
     display: inline-block;
-    margin-top: 0.5rem;
     font-size: 0.85rem;
     color: var(--color-gold);
     text-decoration: none;
@@ -129,7 +108,7 @@
     <!-- Sync Status Card -->
     <div class="cs-card">
         <h2 class="cs-card__title">Sync Status</h2>
-        <p class="cs-card__subtitle" id="cs-season-display">Loading...</p>
+        <p class="cs-card__subtitle">Current crafting recipe data for all guild characters.</p>
 
         <div class="cs-stat-row">
             <span class="cs-stat-row__label">Cadence</span>
@@ -158,35 +137,27 @@
         <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:0.5rem" id="cs-trigger-status"></p>
     </div>
 
-    <!-- Season Config Card -->
+    <!-- Season Info Card -->
     <div class="cs-card">
-        <h2 class="cs-card__title">Season Configuration</h2>
-        <p class="cs-card__subtitle">Sets the sync cadence. Daily for 2-4 weeks at season start.</p>
+        <h2 class="cs-card__title">Current Season</h2>
+        <p class="cs-card__subtitle">Cadence is computed from the active raid season's start date.</p>
 
-        <div class="cs-form">
-            <label for="cs-expansion">Expansion Name</label>
-            <input type="text" id="cs-expansion" placeholder="The War Within">
-
-            <label for="cs-season-num">Season Number</label>
-            <input type="number" id="cs-season-num" min="1" max="99" placeholder="2">
-
-            <label for="cs-season-date">Season Start Date</label>
-            <input type="date" id="cs-season-date">
-
-            <div class="cs-form__checkbox-row">
-                <input type="checkbox" id="cs-first-season">
-                <label for="cs-first-season" style="margin:0;text-transform:none;letter-spacing:0;">
-                    First season of expansion (4 weeks daily vs 2 weeks)
-                </label>
+        <div id="cs-season-box" class="cs-season-box" style="display:none">
+            <p class="cs-season-box__name" id="cs-season-name">—</p>
+            <div class="cs-season-box__meta">
+                <span id="cs-season-start"></span>
+                <span id="cs-season-flags"></span>
             </div>
-
-            <p class="cs-form__season-preview" id="cs-season-preview"></p>
-
-            <div class="cs-btn-row">
-                <button class="btn btn-primary" id="cs-save-btn">Save Configuration</button>
-            </div>
-            <p style="font-size:0.8rem;color:var(--color-text-muted);margin-top:0.5rem" id="cs-save-status"></p>
         </div>
+        <p id="cs-no-season" style="color:var(--color-text-muted);font-style:italic;display:none">
+            No active season configured. The sync will run weekly until a season is set.
+        </p>
+
+        <p class="cs-season-hint">
+            Season name, start date, and the "first of expansion" flag are managed in
+            <a href="/admin/raid-tools">Admin → Raid Tools</a>.
+            The crafting sync cadence updates automatically when the active season changes.
+        </p>
     </div>
 
 </div>
@@ -204,7 +175,12 @@
             hour: 'numeric', minute: '2-digit',
         });
     }
-
+    function fmtDateOnly(iso) {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+        });
+    }
     function fmtDuration(secs) {
         if (secs == null) return '—';
         if (secs < 60) return secs.toFixed(1) + 's';
@@ -213,68 +189,61 @@
 
     async function loadConfig() {
         try {
-            const resp = await fetch('/api/crafting/admin/config');
-            if (!resp.ok) return;
-            const data = await resp.json();
-            if (!data.ok || !data.data) return;
-            const c = data.data;
+            const [configResp, statusResp] = await Promise.all([
+                fetch('/api/crafting/admin/config'),
+                fetch('/api/crafting/sync-status'),
+            ]);
 
-            // Season preview in header
-            const statusResp = await fetch('/api/crafting/sync-status');
-            const status = await statusResp.json();
-            if (status.ok) {
-                document.getElementById('cs-season-display').textContent =
-                    status.data.season_name || 'No season configured';
+            if (configResp.ok) {
+                const data = await configResp.json();
+                if (data.ok && data.data) {
+                    const c = data.data;
+                    document.getElementById('cs-last-sync').textContent = fmtDate(c.last_sync_at);
+                    document.getElementById('cs-chars-processed').textContent =
+                        c.last_sync_characters_processed ?? '—';
+                    document.getElementById('cs-recipes-found').textContent =
+                        c.last_sync_recipes_found ?? '—';
+                    document.getElementById('cs-duration').textContent =
+                        fmtDuration(c.last_sync_duration_seconds);
 
-                const cadence = status.data.current_cadence;
-                const cadEl = document.getElementById('cs-cadence-val');
-                if (cadence === 'daily') {
-                    cadEl.innerHTML = `<span class="cs-badge cs-badge--daily">Daily</span> ` +
-                        (status.data.daily_days_remaining > 0
-                            ? status.data.daily_days_remaining + ' days remaining' : '');
-                } else {
-                    cadEl.innerHTML = '<span class="cs-badge cs-badge--weekly">Weekly</span>';
+                    // Season
+                    if (c.season_name && c.season_name !== 'No season configured') {
+                        document.getElementById('cs-season-box').style.display = 'block';
+                        document.getElementById('cs-season-name').textContent = c.season_name;
+                        document.getElementById('cs-season-start').textContent =
+                            'Started: ' + fmtDateOnly(c.season_start_date);
+                        if (c.is_new_expansion) {
+                            document.getElementById('cs-season-flags').innerHTML =
+                                '<span class="cs-badge cs-badge--new-exp">New Expansion</span> 28-day daily window';
+                        } else {
+                            document.getElementById('cs-season-flags').textContent =
+                                '14-day daily window';
+                        }
+                    } else {
+                        document.getElementById('cs-no-season').style.display = 'block';
+                    }
                 }
             }
 
-            document.getElementById('cs-last-sync').textContent = fmtDate(c.last_sync_at);
-            document.getElementById('cs-chars-processed').textContent =
-                c.last_sync_characters_processed ?? '—';
-            document.getElementById('cs-recipes-found').textContent =
-                c.last_sync_recipes_found ?? '—';
-            document.getElementById('cs-duration').textContent =
-                fmtDuration(c.last_sync_duration_seconds);
-
-            // Populate season form
-            document.getElementById('cs-expansion').value = c.expansion_name || '';
-            document.getElementById('cs-season-num').value = c.season_number || '';
-            if (c.season_start_date) {
-                document.getElementById('cs-season-date').value =
-                    c.season_start_date.substring(0, 10);
+            if (statusResp.ok) {
+                const status = await statusResp.json();
+                if (status.ok) {
+                    const s = status.data;
+                    const cadEl = document.getElementById('cs-cadence-val');
+                    if (s.current_cadence === 'daily') {
+                        cadEl.innerHTML = '<span class="cs-badge cs-badge--daily">Daily</span>' +
+                            (s.daily_days_remaining > 0
+                                ? ' &nbsp;' + s.daily_days_remaining + ' days remaining' : '');
+                    } else {
+                        cadEl.innerHTML = '<span class="cs-badge cs-badge--weekly">Weekly</span>';
+                    }
+                }
             }
-            document.getElementById('cs-first-season').checked = c.is_first_season || false;
-            updateSeasonPreview();
         } catch (e) {
             console.error('Failed to load crafting config', e);
         }
     }
 
-    function updateSeasonPreview() {
-        const exp = document.getElementById('cs-expansion').value.trim();
-        const num = document.getElementById('cs-season-num').value.trim();
-        const preview = document.getElementById('cs-season-preview');
-        if (exp && num) {
-            preview.textContent = 'Display: ' + exp + ' Season ' + num;
-        } else {
-            preview.textContent = '';
-        }
-    }
-
-    ['cs-expansion', 'cs-season-num'].forEach(id => {
-        document.getElementById(id).addEventListener('input', updateSeasonPreview);
-    });
-
-    // Force refresh
     document.getElementById('cs-force-btn').addEventListener('click', async function() {
         this.disabled = true;
         this.textContent = 'Triggering...';
@@ -290,36 +259,6 @@
         } finally {
             this.disabled = false;
             this.textContent = 'Force Refresh Now';
-        }
-    });
-
-    // Save season config
-    document.getElementById('cs-save-btn').addEventListener('click', async function() {
-        this.disabled = true;
-        this.textContent = 'Saving...';
-        const statusEl = document.getElementById('cs-save-status');
-        try {
-            const payload = {
-                expansion_name: document.getElementById('cs-expansion').value.trim() || null,
-                season_number: parseInt(document.getElementById('cs-season-num').value) || null,
-                season_start_date: document.getElementById('cs-season-date').value || null,
-                is_first_season: document.getElementById('cs-first-season').checked,
-            };
-            const resp = await fetch('/api/crafting/admin/season-config', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload),
-            });
-            const data = await resp.json();
-            statusEl.textContent = data.ok
-                ? '✓ Configuration saved.'
-                : '✗ ' + (data.error || 'Failed to save.');
-            if (data.ok) updateSeasonPreview();
-        } catch (e) {
-            statusEl.textContent = '✗ Error saving.';
-        } finally {
-            this.disabled = false;
-            this.textContent = 'Save Configuration';
         }
     });
 

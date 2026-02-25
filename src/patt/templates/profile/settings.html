@@ -345,6 +345,20 @@
           </div>
         </div>
 
+        <div class="pref-check-row">
+          <input
+            type="checkbox"
+            id="crafting_notifications_enabled"
+            name="crafting_notifications_enabled"
+            value="on"
+            {% if current_member.crafting_notifications_enabled %}checked{% endif %}
+          >
+          <div class="pref-check-row__text">
+            <label for="crafting_notifications_enabled">Crafting order notifications</label>
+            <span>@Mention me on Discord when someone requests an item I can craft from the <a href="/crafting-corner" style="color:var(--color-accent)">Crafting Corner</a>.</span>
+          </div>
+        </div>
+
       </div>
       <div class="settings-section__footer">
         <button type="submit" class="btn btn-primary">Save</button>

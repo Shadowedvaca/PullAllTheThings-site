@@ -8,7 +8,7 @@
    ============================================================ */
 
 .cc-page {
-    max-width: 960px;
+    max-width: 1140px;
     margin: 0 auto;
     padding: 2rem 1rem;
 }
@@ -56,32 +56,6 @@
     color: #bbb;
 }
 
-/* Notification pref row */
-.cc-notify-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.9rem;
-    color: var(--color-text-muted);
-    margin-bottom: 1.5rem;
-    padding: 0.6rem 0.9rem;
-    background: var(--color-card);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    width: fit-content;
-}
-.cc-notify-toggle {
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.cc-notify-toggle input[type="checkbox"] {
-    width: 1.1rem;
-    height: 1.1rem;
-    accent-color: var(--color-gold);
-}
-
 /* Filter bar */
 .cc-filters {
     display: flex;
@@ -103,7 +77,7 @@
     letter-spacing: 0.05em;
 }
 .cc-filter-group select {
-    background: var(--color-card);
+    background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     color: var(--color-text);
     padding: 0.5rem 0.75rem;
@@ -127,7 +101,7 @@
 }
 .cc-search-input-wrap input {
     width: 100%;
-    background: var(--color-card);
+    background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     color: var(--color-text);
     padding: 0.5rem 2.5rem 0.5rem 0.75rem;
@@ -156,13 +130,17 @@
 /* Layout: recipe list + drill-down */
 .cc-body {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 2fr 3fr;
     gap: 1.5rem;
+    align-items: start;
+}
+@media (max-width: 720px) {
+    .cc-body { grid-template-columns: 1fr; }
 }
 
 /* Recipe list */
 .cc-recipe-list {
-    background: var(--color-card);
+    background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     overflow: hidden;
@@ -225,13 +203,26 @@
 
 /* Drill-down panel */
 .cc-drilldown {
-    background: var(--color-card);
+    background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 1.25rem;
+    min-height: 200px;
+}
+.cc-drilldown__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 160px;
+    color: var(--color-text-muted);
+    font-style: italic;
+    font-size: 0.95rem;
+    text-align: center;
+}
+.cc-drilldown__content {
     display: none;
 }
-.cc-drilldown--visible {
+.cc-drilldown__content--visible {
     display: block;
 }
 .cc-drilldown__header {
@@ -334,7 +325,7 @@
     display: flex;
 }
 .cc-modal {
-    background: var(--color-card);
+    background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 1.5rem;
@@ -422,16 +413,6 @@
         </div>
     </div>
 
-    <!-- Notification preference (logged-in users with Discord only) -->
-    {% if current_member %}
-    <div class="cc-notify-row" id="cc-notify-row" style="display:none">
-        <label class="cc-notify-toggle">
-            <input type="checkbox" id="cc-notify-check">
-            <span>Notify me when someone requests an item I can craft</span>
-        </label>
-    </div>
-    {% endif %}
-
     <!-- Filters -->
     <div class="cc-filters">
         <div class="cc-filter-group">
@@ -469,20 +450,25 @@
 
         <!-- Drill-down panel -->
         <div class="cc-drilldown" id="cc-drilldown">
-            <div class="cc-drilldown__header">
-                <h2 class="cc-drilldown__title" id="cc-drilldown-title">—</h2>
-                <div class="cc-drilldown__actions">
-                    <a href="#" class="cc-btn-wowhead" id="cc-wowhead-link" target="_blank" rel="noopener">
-                        &#x1f517; Wowhead
-                    </a>
-                    {% if current_member %}
-                    <button class="cc-btn-order" id="cc-order-btn">
-                        &#x1f4e2; Request Guild Order
-                    </button>
-                    {% endif %}
-                </div>
+            <div class="cc-drilldown__placeholder" id="cc-drilldown-placeholder">
+                Select a recipe to see who can craft it.
             </div>
-            <div id="cc-crafter-groups"></div>
+            <div class="cc-drilldown__content" id="cc-drilldown-content">
+                <div class="cc-drilldown__header">
+                    <h2 class="cc-drilldown__title" id="cc-drilldown-title">—</h2>
+                    <div class="cc-drilldown__actions">
+                        <a href="#" class="cc-btn-wowhead" id="cc-wowhead-link" target="_blank" rel="noopener">
+                            &#x1f517; Wowhead
+                        </a>
+                        {% if current_member %}
+                        <button class="cc-btn-order" id="cc-order-btn">
+                            &#x1f4e2; Request Guild Order
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div id="cc-crafter-groups"></div>
+            </div>
         </div>
     </div>
 </div>
@@ -544,9 +530,6 @@
 
     async function init() {
         await loadSyncStatus();
-        {% if current_member %}
-        await loadNotifyPref();
-        {% endif %}
         await loadProfessions();
     }
 
@@ -572,43 +555,6 @@
             console.warn('Could not load sync status', e);
         }
     }
-
-    {% if current_member %}
-    async function loadNotifyPref() {
-        try {
-            const resp = await fetch('/api/crafting/preferences');
-            if (!resp.ok) return;
-            const data = await resp.json();
-            if (!data.ok) return;
-            const row = document.getElementById('cc-notify-row');
-            if (row) {
-                row.style.display = 'flex';
-                document.getElementById('cc-notify-check').checked =
-                    data.data.crafting_notifications_enabled;
-            }
-        } catch (e) { /* not logged in or no discord */ }
-    }
-
-    document.getElementById('cc-notify-check')?.addEventListener('change', async function() {
-        try {
-            const resp = await fetch('/api/crafting/preferences', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({enabled: this.checked}),
-            });
-            const data = await resp.json();
-            if (data.ok) {
-                showToast(this.checked ? '&#x1f514; Crafting notifications enabled' : '&#x1f515; Crafting notifications disabled');
-            } else {
-                this.checked = !this.checked; // revert
-                showToast('Could not update preference.');
-            }
-        } catch (e) {
-            this.checked = !this.checked;
-            showToast('Error updating preference.');
-        }
-    });
-    {% endif %}
 
     // ── Professions ────────────────────────────────────────────────────────
 
@@ -741,7 +687,6 @@
     }
 
     function renderDrilldown(data, wowheadUrl) {
-        const dd = document.getElementById('cc-drilldown');
         document.getElementById('cc-drilldown-title').textContent = data.recipe.name;
         document.getElementById('cc-wowhead-link').href = wowheadUrl || data.recipe.wowhead_url || '#';
 
@@ -762,11 +707,13 @@
                 </div>`).join('');
         }
 
-        dd.classList.add('cc-drilldown--visible');
+        document.getElementById('cc-drilldown-placeholder').style.display = 'none';
+        document.getElementById('cc-drilldown-content').classList.add('cc-drilldown__content--visible');
     }
 
     function hideDrilldown() {
-        document.getElementById('cc-drilldown').classList.remove('cc-drilldown--visible');
+        document.getElementById('cc-drilldown-placeholder').style.display = 'flex';
+        document.getElementById('cc-drilldown-content').classList.remove('cc-drilldown__content--visible');
         currentRecipeId = null;
         currentRecipeData = null;
     }

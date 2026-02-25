@@ -16,6 +16,7 @@
             <nav class="site-nav">
                 {% if current_member %}
                     <a href="/" class="nav-link">Home</a>
+                    <a href="/crafting-corner" class="nav-link">Crafting</a>
                     {% if active_campaigns %}
                         <a href="/vote/{{ active_campaigns[0].id }}" class="nav-link">Vote</a>
                     {% endif %}
@@ -32,6 +33,7 @@
                     </div>
                 {% else %}
                     <a href="/" class="nav-link">Home</a>
+                    <a href="/crafting-corner" class="nav-link">Crafting</a>
                     <a href="/login" class="btn btn-primary btn-sm">Login or Register</a>
                 {% endif %}
             </nav>

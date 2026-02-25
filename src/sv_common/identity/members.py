@@ -94,6 +94,7 @@ async def update_player(db: AsyncSession, player_id: int, **kwargs) -> Player:
         "notes",
         "timezone",
         "auto_invite_events",
+        "crafting_notifications_enabled",
     }
     for key, value in kwargs.items():
         if key in allowed:

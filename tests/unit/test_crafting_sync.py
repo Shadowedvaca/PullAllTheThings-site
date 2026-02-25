@@ -11,6 +11,7 @@ import pytest
 
 from sv_common.guild_sync.crafting_sync import (
     CraftingSyncConfig,
+    SeasonData,
     compute_sync_cadence,
     derive_expansion_name,
     get_season_display_name,
@@ -23,14 +24,21 @@ def _make_config(**kwargs) -> CraftingSyncConfig:
         "id": 1,
         "current_cadence": "weekly",
         "cadence_override_until": None,
-        "expansion_name": None,
-        "season_number": None,
-        "season_start_date": None,
-        "is_first_season": False,
         "last_sync_at": None,
     }
     defaults.update(kwargs)
     return CraftingSyncConfig(**defaults)
+
+
+def _make_season(**kwargs) -> SeasonData:
+    defaults = {
+        "id": 1,
+        "name": "Liberation of Undermine",
+        "start_date": datetime.now(timezone.utc) - timedelta(days=5),
+        "is_new_expansion": False,
+    }
+    defaults.update(kwargs)
+    return SeasonData(**defaults)
 
 
 # ── derive_expansion_name ────────────────────────────────────────────────────
@@ -77,104 +85,107 @@ class TestDeriveExpansionName:
 class TestComputeSyncCadence:
     def test_no_season_returns_weekly(self):
         config = _make_config()
-        cadence, days = compute_sync_cadence(config)
+        cadence, days = compute_sync_cadence(config, season=None)
         assert cadence == "weekly"
         assert days == 0
 
-    def test_first_season_within_28_days_is_daily(self):
+    def test_new_expansion_season_within_28_days_is_daily(self):
         start = datetime.now(timezone.utc) - timedelta(days=10)
-        config = _make_config(is_first_season=True, season_start_date=start)
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config()
+        season = _make_season(start_date=start, is_new_expansion=True)
+        cadence, days = compute_sync_cadence(config, season)
         assert cadence == "daily"
         assert days == 18  # 28 - 10
 
-    def test_non_first_season_within_14_days_is_daily(self):
+    def test_regular_season_within_14_days_is_daily(self):
         start = datetime.now(timezone.utc) - timedelta(days=5)
-        config = _make_config(is_first_season=False, season_start_date=start)
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config()
+        season = _make_season(start_date=start, is_new_expansion=False)
+        cadence, days = compute_sync_cadence(config, season)
         assert cadence == "daily"
         assert days == 9  # 14 - 5
 
-    def test_first_season_after_28_days_is_weekly(self):
+    def test_new_expansion_after_28_days_is_weekly(self):
         start = datetime.now(timezone.utc) - timedelta(days=30)
-        config = _make_config(is_first_season=True, season_start_date=start)
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config()
+        season = _make_season(start_date=start, is_new_expansion=True)
+        cadence, days = compute_sync_cadence(config, season)
         assert cadence == "weekly"
         assert days == 0
 
-    def test_non_first_season_after_14_days_is_weekly(self):
+    def test_regular_season_after_14_days_is_weekly(self):
         start = datetime.now(timezone.utc) - timedelta(days=20)
-        config = _make_config(is_first_season=False, season_start_date=start)
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config()
+        season = _make_season(start_date=start, is_new_expansion=False)
+        cadence, days = compute_sync_cadence(config, season)
         assert cadence == "weekly"
         assert days == 0
 
-    def test_admin_override_takes_priority(self):
+    def test_admin_override_takes_priority_over_season(self):
         start = datetime.now(timezone.utc) - timedelta(days=50)
         override_until = datetime.now(timezone.utc) + timedelta(days=3)
-        config = _make_config(
-            is_first_season=False,
-            season_start_date=start,
-            cadence_override_until=override_until,
-        )
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config(cadence_override_until=override_until)
+        season = _make_season(start_date=start, is_new_expansion=False)
+        cadence, days = compute_sync_cadence(config, season)
         assert cadence == "daily"
-        assert days >= 2  # 3 days from now
+        assert days >= 2
 
-    def test_expired_override_falls_through(self):
+    def test_admin_override_takes_priority_when_no_season(self):
+        override_until = datetime.now(timezone.utc) + timedelta(days=5)
+        config = _make_config(cadence_override_until=override_until)
+        cadence, days = compute_sync_cadence(config, season=None)
+        assert cadence == "daily"
+        assert days >= 4
+
+    def test_expired_override_falls_through_to_season(self):
         start = datetime.now(timezone.utc) - timedelta(days=50)
-        override_until = datetime.now(timezone.utc) - timedelta(days=1)  # expired
-        config = _make_config(
-            is_first_season=False,
-            season_start_date=start,
-            cadence_override_until=override_until,
-        )
-        cadence, days = compute_sync_cadence(config)
+        override_until = datetime.now(timezone.utc) - timedelta(days=1)
+        config = _make_config(cadence_override_until=override_until)
+        season = _make_season(start_date=start)
+        cadence, _ = compute_sync_cadence(config, season)
         assert cadence == "weekly"
 
     def test_daily_days_remaining_decreases_over_time(self):
-        """Earlier start = fewer days remaining."""
         start_recent = datetime.now(timezone.utc) - timedelta(days=2)
         start_older = datetime.now(timezone.utc) - timedelta(days=10)
-        _, days_recent = compute_sync_cadence(
-            _make_config(is_first_season=False, season_start_date=start_recent)
-        )
-        _, days_older = compute_sync_cadence(
-            _make_config(is_first_season=False, season_start_date=start_older)
-        )
+        config = _make_config()
+        _, days_recent = compute_sync_cadence(config, _make_season(start_date=start_recent))
+        _, days_older = compute_sync_cadence(config, _make_season(start_date=start_older))
         assert days_recent > days_older
 
-    def test_exactly_at_boundary_first_season(self):
+    def test_exactly_at_boundary_new_expansion(self):
         """Day 28 exactly should still be daily."""
         start = datetime.now(timezone.utc) - timedelta(days=28)
-        config = _make_config(is_first_season=True, season_start_date=start)
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config()
+        season = _make_season(start_date=start, is_new_expansion=True)
+        cadence, days = compute_sync_cadence(config, season)
         assert cadence == "daily"
         assert days == 0
 
     def test_day_zero_season_start(self):
         """Season just started today is daily."""
         start = datetime.now(timezone.utc)
-        config = _make_config(is_first_season=False, season_start_date=start)
-        cadence, days = compute_sync_cadence(config)
+        config = _make_config()
+        season = _make_season(start_date=start)
+        cadence, _ = compute_sync_cadence(config, season)
         assert cadence == "daily"
 
 
 # ── get_season_display_name ──────────────────────────────────────────────────
 
 class TestGetSeasonDisplayName:
-    def test_full_name(self):
-        config = _make_config(expansion_name="The War Within", season_number=2)
-        assert get_season_display_name(config) == "The War Within Season 2"
+    def test_returns_season_name(self):
+        season = _make_season(name="Liberation of Undermine")
+        assert get_season_display_name(season) == "Liberation of Undermine"
 
-    def test_missing_expansion(self):
-        config = _make_config(expansion_name=None, season_number=1)
-        assert get_season_display_name(config) == "No season configured"
+    def test_no_season_returns_fallback(self):
+        assert get_season_display_name(None) == "No season configured"
 
-    def test_missing_season_number(self):
-        config = _make_config(expansion_name="Midnight", season_number=None)
-        assert get_season_display_name(config) == "No season configured"
+    def test_custom_name(self):
+        season = _make_season(name="The War Within Season 2")
+        assert get_season_display_name(season) == "The War Within Season 2"
 
-    def test_season_1(self):
-        config = _make_config(expansion_name="Midnight", season_number=1)
-        assert get_season_display_name(config) == "Midnight Season 1"
+    def test_name_used_as_is(self):
+        """Season name is returned verbatim — not constructed from parts."""
+        season = _make_season(name="Midnight Season 1 (Beta)")
+        assert get_season_display_name(season) == "Midnight Season 1 (Beta)"

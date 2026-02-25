@@ -55,13 +55,6 @@ class GuildOrderRequest(BaseModel):
     message: str = ""
 
 
-class SeasonConfigRequest(BaseModel):
-    expansion_name: Optional[str] = None
-    season_number: Optional[int] = None
-    season_start_date: Optional[str] = None
-    is_first_season: bool = False
-
-
 class CraftingPreferenceRequest(BaseModel):
     enabled: bool
 
@@ -264,40 +257,6 @@ async def update_preferences(
 # ---------------------------------------------------------------------------
 # Admin Endpoints
 # ---------------------------------------------------------------------------
-
-
-@crafting_router.post("/admin/season-config")
-async def update_season_config(
-    request: Request,
-    cfg: SeasonConfigRequest,
-    pool: asyncpg.Pool = Depends(get_db_pool),
-):
-    """Update season configuration (admin only)."""
-    # Verify admin
-    player_id = await _get_current_player_id(request)
-    if player_id is None:
-        raise HTTPException(401, "Login required")
-
-    async with pool.acquire() as conn:
-        rank_level = await conn.fetchval(
-            """SELECT gr.level FROM guild_identity.players p
-               JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
-               WHERE p.id = $1""",
-            player_id,
-        )
-    if rank_level is None or rank_level < 4:
-        raise HTTPException(403, "Officer+ required")
-
-    success = await crafting_service.update_season_config(
-        pool,
-        cfg.expansion_name,
-        cfg.season_number,
-        cfg.season_start_date,
-        cfg.is_first_season,
-    )
-    if not success:
-        raise HTTPException(500, "Failed to update season config")
-    return {"ok": True, "status": "updated"}
 
 
 @crafting_router.get("/admin/config")

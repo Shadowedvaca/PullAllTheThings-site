@@ -10,7 +10,7 @@ from typing import Optional
 
 import asyncpg
 
-from .crafting_sync import CraftingSyncConfig, compute_sync_cadence, get_season_display_name, _load_config
+from .crafting_sync import compute_sync_cadence, get_season_display_name, _load_config, _load_current_season
 
 logger = logging.getLogger(__name__)
 
@@ -200,19 +200,20 @@ async def get_sync_status(pool: asyncpg.Pool) -> dict:
     """
     async with pool.acquire() as conn:
         config = await _load_config(conn)
+        season = await _load_current_season(conn)
 
     if not config:
         return {
-            "season_name": "No season configured",
+            "season_name": get_season_display_name(season),
             "last_sync_at": None,
             "next_sync_at": None,
             "current_cadence": "weekly",
             "daily_days_remaining": 0,
         }
 
-    cadence, days_remaining = compute_sync_cadence(config)
+    cadence, days_remaining = compute_sync_cadence(config, season)
     return {
-        "season_name": get_season_display_name(config),
+        "season_name": get_season_display_name(season),
         "last_sync_at": config.last_sync_at.isoformat() if config.last_sync_at else None,
         "current_cadence": cadence,
         "daily_days_remaining": days_remaining,
@@ -220,51 +221,27 @@ async def get_sync_status(pool: asyncpg.Pool) -> dict:
 
 
 async def get_full_config(pool: asyncpg.Pool) -> Optional[dict]:
-    """Return full crafting_sync_config row as dict (for admin page)."""
+    """
+    Return crafting sync config combined with the current season for the admin page.
+    Season data is sourced from patt.raid_seasons.
+    """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """SELECT id, current_cadence, cadence_override_until, expansion_name,
-                      season_number, season_start_date, is_first_season,
+            """SELECT id, current_cadence, cadence_override_until,
                       last_sync_at, next_sync_at, last_sync_duration_seconds,
                       last_sync_characters_processed, last_sync_recipes_found
                FROM guild_identity.crafting_sync_config LIMIT 1"""
         )
+        season = await _load_current_season(conn)
+
     if not row:
         return None
-    return dict(row)
 
-
-async def update_season_config(
-    pool: asyncpg.Pool,
-    expansion_name: Optional[str],
-    season_number: Optional[int],
-    season_start_date: Optional[str],
-    is_first_season: bool,
-) -> bool:
-    """Update season configuration. Returns True on success."""
-    from datetime import datetime
-    parsed_date = None
-    if season_start_date:
-        try:
-            parsed_date = datetime.fromisoformat(season_start_date.replace("Z", "+00:00"))
-        except ValueError:
-            logger.warning("Invalid season_start_date format: %s", season_start_date)
-
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT id FROM guild_identity.crafting_sync_config LIMIT 1"
-        )
-        if not row:
-            return False
-        await conn.execute(
-            """UPDATE guild_identity.crafting_sync_config SET
-               expansion_name = $1, season_number = $2,
-               season_start_date = $3, is_first_season = $4,
-               updated_at = NOW()
-               WHERE id = $5""",
-            expansion_name, season_number, parsed_date, is_first_season, row["id"],
-        )
-    return True
+    result = dict(row)
+    result["season_name"] = get_season_display_name(season)
+    result["season_start_date"] = season.start_date.isoformat() if season else None
+    result["is_new_expansion"] = season.is_new_expansion if season else False
+    return result
 
 
 async def get_player_crafting_preference(pool: asyncpg.Pool, player_id: int) -> bool:

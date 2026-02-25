@@ -1,24 +1,25 @@
 """
 Crafting profession sync — fetches known recipes for all guild characters.
 
-Adaptive cadence:
-- First season of expansion: daily for 4 weeks from season_start_date
-- Subsequent seasons: daily for 2 weeks from season_start_date
+Adaptive cadence driven by patt.raid_seasons (the existing season reference table):
+- First season of an expansion (is_new_expansion=True): daily for 4 weeks
+- Any other season: daily for 2 weeks
 - After the daily window: weekly
-- Manual override: admin can force a refresh at any time
+- Manual override via cadence_override_until in crafting_sync_config
 
 The sync:
-1. Fetches profession data for every non-removed character in wow_characters
-2. Upserts professions, tiers, and recipes into reference tables
-3. Updates the character_recipes junction table
-4. Logs sync stats to crafting_sync_config
+1. Loads the current active season from patt.raid_seasons
+2. Fetches profession data for every non-removed character in wow_characters
+3. Upserts professions, tiers, and recipes into reference tables
+4. Updates the character_recipes junction table
+5. Logs sync stats to crafting_sync_config
 """
 
 import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import asyncpg
@@ -27,7 +28,7 @@ from .blizzard_client import BlizzardClient
 
 logger = logging.getLogger(__name__)
 
-# Expansion sort order: higher = newer
+# Expansion sort order: higher = newer (for tier filtering on the frontend)
 EXPANSION_SORT_ORDER = {
     "Khaz Algar": 90,
     "Dragon Isles": 80,
@@ -50,11 +51,16 @@ class CraftingSyncConfig:
     id: int
     current_cadence: str
     cadence_override_until: Optional[datetime]
-    expansion_name: Optional[str]
-    season_number: Optional[int]
-    season_start_date: Optional[datetime]
-    is_first_season: bool
     last_sync_at: Optional[datetime]
+
+
+@dataclass
+class SeasonData:
+    """Current season info from patt.raid_seasons."""
+    id: int
+    name: str
+    start_date: datetime          # stored as DATE, treated as UTC midnight
+    is_new_expansion: bool
 
 
 def derive_expansion_name(tier_name: str, profession_name: str) -> tuple[str, int]:
@@ -68,9 +74,14 @@ def derive_expansion_name(tier_name: str, profession_name: str) -> tuple[str, in
     return expansion, sort_order
 
 
-def compute_sync_cadence(config: CraftingSyncConfig) -> tuple[str, int]:
+def compute_sync_cadence(
+    config: CraftingSyncConfig,
+    season: Optional[SeasonData],
+) -> tuple[str, int]:
     """
-    Determine if we should sync daily or weekly based on season timing.
+    Determine if we should sync daily or weekly.
+
+    Season data comes from patt.raid_seasons (the shared reference table).
 
     Returns: (cadence, daily_days_remaining)
         cadence: 'daily' or 'weekly'
@@ -83,11 +94,16 @@ def compute_sync_cadence(config: CraftingSyncConfig) -> tuple[str, int]:
         remaining = (config.cadence_override_until - now).days
         return "daily", max(remaining, 0)
 
-    if not config.season_start_date:
+    if not season:
         return "weekly", 0
 
-    days_since_season = (now - config.season_start_date).days
-    daily_window = 28 if config.is_first_season else 14
+    # Normalise start_date to UTC midnight for arithmetic
+    season_start = season.start_date
+    if season_start.tzinfo is None:
+        season_start = season_start.replace(tzinfo=timezone.utc)
+
+    days_since_season = (now - season_start).days
+    daily_window = 28 if season.is_new_expansion else 14
 
     if days_since_season <= daily_window:
         return "daily", daily_window - days_since_season
@@ -95,18 +111,17 @@ def compute_sync_cadence(config: CraftingSyncConfig) -> tuple[str, int]:
     return "weekly", 0
 
 
-def get_season_display_name(config: CraftingSyncConfig) -> str:
-    """Build display name from expansion_name and season_number fields."""
-    if config.expansion_name and config.season_number:
-        return f"{config.expansion_name} Season {config.season_number}"
+def get_season_display_name(season: Optional[SeasonData]) -> str:
+    """Return the season display name, or a fallback if no season is active."""
+    if season:
+        return season.name
     return "No season configured"
 
 
 async def _load_config(conn: asyncpg.Connection) -> Optional[CraftingSyncConfig]:
     """Load the single crafting_sync_config row."""
     row = await conn.fetchrow(
-        """SELECT id, current_cadence, cadence_override_until, expansion_name,
-                  season_number, season_start_date, is_first_season, last_sync_at
+        """SELECT id, current_cadence, cadence_override_until, last_sync_at
            FROM guild_identity.crafting_sync_config
            LIMIT 1"""
     )
@@ -116,11 +131,31 @@ async def _load_config(conn: asyncpg.Connection) -> Optional[CraftingSyncConfig]
         id=row["id"],
         current_cadence=row["current_cadence"],
         cadence_override_until=row["cadence_override_until"],
-        expansion_name=row["expansion_name"],
-        season_number=row["season_number"],
-        season_start_date=row["season_start_date"],
-        is_first_season=row["is_first_season"],
         last_sync_at=row["last_sync_at"],
+    )
+
+
+async def _load_current_season(conn: asyncpg.Connection) -> Optional[SeasonData]:
+    """Load the current active season from patt.raid_seasons."""
+    today = datetime.now(timezone.utc).date()
+    row = await conn.fetchrow(
+        """SELECT id, name, start_date, is_new_expansion
+           FROM patt.raid_seasons
+           WHERE is_active = TRUE AND start_date <= $1
+           ORDER BY start_date DESC
+           LIMIT 1""",
+        today,
+    )
+    if not row:
+        return None
+    start = datetime.combine(row["start_date"], datetime.min.time()).replace(
+        tzinfo=timezone.utc
+    )
+    return SeasonData(
+        id=row["id"],
+        name=row["name"],
+        start_date=start,
+        is_new_expansion=row["is_new_expansion"],
     )
 
 
@@ -193,7 +228,6 @@ async def sync_character_recipes(
     Inserts new recipe links and removes any that are no longer known.
     Returns {"added": int, "removed": int}.
     """
-    # Get current recipe IDs for this character
     existing_rows = await conn.fetch(
         "SELECT recipe_id FROM guild_identity.character_recipes WHERE character_id = $1",
         character_db_id,
@@ -242,8 +276,10 @@ async def run_crafting_sync(
             logger.error("No crafting_sync_config row found — run migration 0015 first")
             return {"error": "no_config"}
 
-        # Check cadence (skip if weekly and not enough time has passed)
-        cadence, _ = compute_sync_cadence(config)
+        season = await _load_current_season(conn)
+        cadence, _ = compute_sync_cadence(config, season)
+
+        # Skip if weekly cadence and not enough time has passed
         if not force and cadence == "weekly" and config.last_sync_at:
             days_since = (datetime.now(timezone.utc) - config.last_sync_at).days
             if days_since < 7:
@@ -253,7 +289,6 @@ async def run_crafting_sync(
                 )
                 return {"skipped": True, "reason": "cadence_weekly"}
 
-        # Fetch all non-removed characters
         characters = await conn.fetch(
             """SELECT id, character_name, realm_slug
                FROM guild_identity.wow_characters
@@ -261,7 +296,12 @@ async def run_crafting_sync(
                ORDER BY character_name"""
         )
 
-    logger.info("Crafting sync starting for %d characters", len(characters))
+    logger.info(
+        "Crafting sync starting for %d characters (season: %s, cadence: %s)",
+        len(characters),
+        season.name if season else "none",
+        cadence,
+    )
 
     chars_processed = 0
     recipes_found = 0
@@ -288,7 +328,6 @@ async def run_crafting_sync(
             char_recipe_ids: list[int] = []
 
             if result is None:
-                # No professions — clear any stale recipes for this character
                 async with pool.acquire() as conn:
                     await sync_character_recipes(conn, char["id"], [])
                 continue
@@ -324,7 +363,6 @@ async def run_crafting_sync(
 
                 await sync_character_recipes(conn, char["id"], char_recipe_ids)
 
-        # Small delay between batches to be respectful
         if i + batch_size < len(characters):
             await asyncio.sleep(0.5)
 
@@ -333,14 +371,10 @@ async def run_crafting_sync(
     # Update config with sync stats
     async with pool.acquire() as conn:
         now = datetime.now(timezone.utc)
-        cadence_after, _ = compute_sync_cadence(config)
-        next_sync_interval_days = 1 if cadence_after == "daily" else 7
-        next_sync = datetime(
-            now.year, now.month, now.day, 3, 0, 0, tzinfo=timezone.utc
-        )
-        # Add interval days to next sync
-        from datetime import timedelta
-        next_sync = next_sync + timedelta(days=next_sync_interval_days)
+        cadence_after, _ = compute_sync_cadence(config, season)
+        next_sync_delta = timedelta(days=1 if cadence_after == "daily" else 7)
+        next_sync = datetime(now.year, now.month, now.day, 3, 0, 0, tzinfo=timezone.utc)
+        next_sync = next_sync + next_sync_delta
 
         await conn.execute(
             """UPDATE guild_identity.crafting_sync_config SET
@@ -354,16 +388,12 @@ async def run_crafting_sync(
             now, next_sync, duration, chars_processed, recipes_found, config.id,
         )
 
-    # Log to sync_log
-    async with pool.acquire() as conn:
         await conn.execute(
             """INSERT INTO guild_identity.sync_log
                (source, status, characters_found, characters_updated, duration_seconds,
                 started_at, completed_at)
                VALUES ('crafting_sync', 'success', $1, $2, $3, $4, $5)""",
-            len(characters), chars_processed, duration,
-            datetime.now(timezone.utc),
-            datetime.now(timezone.utc),
+            len(characters), chars_processed, duration, now, now,
         )
 
     logger.info(

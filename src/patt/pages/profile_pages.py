@@ -154,6 +154,7 @@ async def profile_update_info(
     display_name: str = Form(...),
     timezone: str = Form("America/Chicago"),
     auto_invite_events: str = Form(None),
+    crafting_notifications_enabled: str = Form(None),
     db: AsyncSession = Depends(get_db),
     current_member: Player | None = Depends(get_page_member),
 ):
@@ -173,6 +174,7 @@ async def profile_update_info(
             display_name=display_name,
             timezone=timezone,
             auto_invite_events=(auto_invite_events == "on"),
+            crafting_notifications_enabled=(crafting_notifications_enabled == "on"),
         )
     except Exception as exc:
         logger.error("profile info update failed for player %s: %s", current_member.id, exc)
