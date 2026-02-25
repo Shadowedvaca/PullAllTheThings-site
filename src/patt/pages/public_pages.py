@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select, text
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 
 from patt.deps import get_db, get_page_member
 from patt.services import campaign_service
@@ -17,7 +17,7 @@ from sv_common.db.models import (
     MitoQuote,
     MitoTitle,
     RecurringEvent,
-    Specialization,
+    WowCharacter,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,9 +31,10 @@ router = APIRouter(tags=["public-pages"])
 ROLE_TARGETS = {
     "Tank": 2,
     "Healer": 4,
-    "Melee DPS": 6,
-    "Ranged DPS": 6,
+    "Melee DPS": 7,
+    "Ranged DPS": 7,
 }
+_DPS_TOTAL_TARGET = 14  # sum of Melee + Ranged targets
 
 CLASS_EMOJIS = {
     "Druid": "🌿",
@@ -74,9 +75,9 @@ async def _get_officers(db) -> list[dict[str, Any]]:
         .where(GuildRank.level >= 4, Player.is_active == True)
         .order_by(GuildRank.level.desc(), Player.display_name.asc())
         .options(
-            joinedload(Player.guild_rank),
-            joinedload(Player.main_character).joinedload("wow_class"),
-            joinedload(Player.main_character).joinedload("active_spec"),
+            selectinload(Player.guild_rank),
+            selectinload(Player.main_character).selectinload(WowCharacter.wow_class),
+            selectinload(Player.main_character).selectinload(WowCharacter.active_spec),
         )
     )
     players = result.unique().scalars().all()
@@ -123,8 +124,17 @@ async def _get_recruiting_needs(db) -> dict[str, int]:
     )
     current_counts: dict[str, int] = {row.role_name: row.cnt for row in rows}
 
+    # Balancing: if one DPS type exceeds 7, the other's target shrinks to keep total = 14
+    effective_targets = dict(ROLE_TARGETS)
+    melee = current_counts.get("Melee DPS", 0)
+    ranged = current_counts.get("Ranged DPS", 0)
+    if melee > ROLE_TARGETS["Melee DPS"]:
+        effective_targets["Ranged DPS"] = max(0, _DPS_TOTAL_TARGET - melee)
+    elif ranged > ROLE_TARGETS["Ranged DPS"]:
+        effective_targets["Melee DPS"] = max(0, _DPS_TOTAL_TARGET - ranged)
+
     needs = {}
-    for role, target in ROLE_TARGETS.items():
+    for role, target in effective_targets.items():
         current = current_counts.get(role, 0)
         if current < target:
             needs[role] = target - current
@@ -232,21 +242,11 @@ async def roster_page(
     current_member: Player | None = Depends(get_page_member),
 ):
     """Public roster view — no auth required."""
-    event_days = []
-    try:
-        event_days = await _get_event_days(db)
-    except Exception:
-        logger.warning("Could not load event days for roster page", exc_info=True)
-
-    active_campaigns = []
-
     return templates.TemplateResponse(
         "public/roster.html",
         {
             "request": request,
             "current_member": current_member,
-            "active_campaigns": active_campaigns,
-            "event_days": event_days,
-            "day_names": DAY_NAMES,
+            "active_campaigns": [],
         },
     )

@@ -223,7 +223,9 @@ function renderPlayers() {
             ? `<span class="pm-player-discord">💬 @${escHtml(discordUser.username)}</span>`
             : `<span class="pm-player-discord pm-missing">No Discord</span>`;
         const regBadge = p.registered
-            ? '<span class="pm-badge pm-badge--ok">Reg</span>' : '';
+            ? `<button class="pm-badge pm-badge--ok pm-reg-drill" onclick="drillOn('player',${p.id})" title="Filter to this player"
+               style="cursor:pointer;border:none;background:none;padding:0;">Reg</button>`
+            : '';
 
         // Display name: player-set > discord server name > main char name
         const effectiveName = p.display_name

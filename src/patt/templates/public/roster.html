@@ -13,93 +13,65 @@
         <p class="roster-subtitle">Pull All The Things &bull; Sen'jin &bull; US</p>
     </div>
 
-    {# ── Tab Navigation ── #}
-    <div class="tab-nav">
-        <button class="tab-btn active" data-tab="roster">Full Roster</button>
-        <button class="tab-btn" data-tab="composition">Composition</button>
-        <button class="tab-btn" data-tab="schedule">Schedule</button>
-    </div>
+    <div id="roster-loading" class="roster-loading">Loading roster…</div>
+    <div id="roster-error" class="roster-error" style="display:none"></div>
 
-    {# ── Tab 1: Full Roster ── #}
-    <div id="tab-roster" class="tab-content active">
-        <div class="roster-controls">
-            <input
-                type="text"
-                id="roster-search"
-                class="roster-search"
-                placeholder="Search by name, class, spec…"
-                autocomplete="off"
-            >
-            <label class="roster-alts-label">
-                <input type="checkbox" id="show-alts">
-                Show alts
-            </label>
-        </div>
+    {# ── Composition section (shown once data loads) ── #}
+    <div id="comp-content" style="display:none">
 
-        <div id="roster-loading" class="roster-loading">Loading roster…</div>
-        <div id="roster-error" class="roster-error" style="display:none"></div>
+        <section class="comp-section">
+            <h2 class="comp-section-title">Role Distribution</h2>
+            <div class="role-cards" id="role-cards"></div>
+        </section>
 
-        <table class="roster-table" id="roster-table" style="display:none">
-            <thead>
-                <tr>
-                    <th class="sort-col" data-col="display_name">Player</th>
-                    <th class="sort-col" data-col="character_name">Character</th>
-                    <th class="sort-col" data-col="class_name">Class</th>
-                    <th class="sort-col" data-col="spec_name">Spec</th>
-                    <th class="sort-col" data-col="role_name">Role</th>
-                    <th class="sort-col" data-col="rank_name">Rank</th>
-                    <th class="sort-col num-col" data-col="item_level">iLvl</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="roster-tbody"></tbody>
-        </table>
+        <section class="comp-section">
+            <h2 class="comp-section-title">Class Distribution</h2>
+            <div class="class-grid" id="class-grid"></div>
+        </section>
 
-        <p id="roster-empty" class="roster-empty" style="display:none">No players found.</p>
-    </div>
+        <section class="comp-section">
+            <h2 class="comp-section-title">Wowhead Comp Analyzer</h2>
+            <p class="comp-wowhead-note">View the current main-spec composition on Wowhead.</p>
+            <a id="wowhead-btn" href="#" target="_blank" rel="noopener" class="btn btn-primary">
+                🔗 View Comp on Wowhead
+            </a>
+        </section>
 
-    {# ── Tab 2: Composition ── #}
-    <div id="tab-composition" class="tab-content">
-        <div id="comp-loading" class="roster-loading">Loading…</div>
-        <div id="comp-content" style="display:none">
-
-            <section class="comp-section">
-                <h2 class="comp-section-title">Role Distribution</h2>
-                <div class="role-cards" id="role-cards"></div>
-            </section>
-
-            <section class="comp-section">
-                <h2 class="comp-section-title">Class Distribution</h2>
-                <div class="class-grid" id="class-grid"></div>
-            </section>
-
-            <section class="comp-section">
-                <h2 class="comp-section-title">Wowhead Comp Analyzer</h2>
-                <p class="comp-wowhead-note">View the current main-spec composition on Wowhead.</p>
-                <a id="wowhead-btn" href="#" target="_blank" rel="noopener" class="btn btn-primary">
-                    🔗 View Comp on Wowhead
-                </a>
-            </section>
-
-        </div>
-    </div>
-
-    {# ── Tab 3: Schedule ── #}
-    <div id="tab-schedule" class="tab-content">
-        <h2 class="comp-section-title">Weekly Raid Schedule</h2>
-        {% if event_days %}
-        <div class="schedule-list">
-            {% for event in event_days %}
-            <div class="schedule-row">
-                <span class="schedule-day">{{ day_names[event.day_of_week] }}</span>
-                <span class="schedule-label">{{ event.label }}</span>
-                <span class="schedule-time">{{ event.default_start_time.strftime('%I:%M %p') }} EST</span>
+        <section class="comp-section">
+            <h2 class="comp-section-title">Full Roster</h2>
+            <div class="roster-controls">
+                <input
+                    type="text"
+                    id="roster-search"
+                    class="roster-search"
+                    placeholder="Search by name, class, spec…"
+                    autocomplete="off"
+                >
+                <label class="roster-alts-label">
+                    <input type="checkbox" id="show-alts">
+                    Show alts
+                </label>
             </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="roster-empty">Check our <a href="https://discord.gg/jgSSRBvjHM" target="_blank" rel="noopener">Discord</a> for the current raid schedule.</p>
-        {% endif %}
+
+            <table class="roster-table" id="roster-table" style="display:none">
+                <thead>
+                    <tr>
+                        <th class="sort-col" data-col="display_name">Player</th>
+                        <th class="sort-col" data-col="character_name">Character</th>
+                        <th class="sort-col" data-col="class_name">Class</th>
+                        <th class="sort-col" data-col="spec_name">Spec</th>
+                        <th class="sort-col" data-col="role_name">Role</th>
+                        <th class="sort-col" data-col="rank_name">Rank</th>
+                        <th class="sort-col num-col" data-col="item_level">iLvl</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="roster-tbody"></tbody>
+            </table>
+
+            <p id="roster-empty" class="roster-empty" style="display:none">No players found.</p>
+        </section>
+
     </div>
 
 </div>
@@ -137,7 +109,8 @@ const ROLE_EMOJIS = {
     "Tank": "🛡️", "Healer": "💚", "Melee DPS": "⚔️", "Ranged DPS": "🏹"
 };
 
-const ROLE_TARGETS = { "Tank": 2, "Healer": 4, "Melee DPS": 6, "Ranged DPS": 6 };
+const ROLE_TARGETS = { "Tank": 2, "Healer": 4, "Melee DPS": 7, "Ranged DPS": 7 };
+const DPS_TOTAL_TARGET = 14;
 
 const SPEC_CODES = {
     "Death Knight/Blood": "K1", "Death Knight/Frost": "K2", "Death Knight/Unholy": "K3",
@@ -173,14 +146,12 @@ async function loadRoster() {
         const { data } = await res.json();
         allPlayers = data.players || [];
         document.getElementById('roster-loading').style.display = 'none';
-        document.getElementById('comp-loading').style.display = 'none';
-        document.getElementById('roster-table').style.display = '';
         document.getElementById('comp-content').style.display = '';
-        renderRoster();
+        document.getElementById('roster-table').style.display = '';
         renderComposition();
+        renderRoster();
     } catch (err) {
         document.getElementById('roster-loading').style.display = 'none';
-        document.getElementById('comp-loading').style.display = 'none';
         const el = document.getElementById('roster-error');
         el.textContent = 'Could not load roster. Please try again later.';
         el.style.display = '';
@@ -188,7 +159,7 @@ async function loadRoster() {
 }
 
 // ---------------------------------------------------------------------------
-// Roster tab
+// Roster section
 // ---------------------------------------------------------------------------
 function buildRows(showAlts, searchText) {
     const rows = [];
@@ -302,7 +273,7 @@ function renderRoster() {
 }
 
 // ---------------------------------------------------------------------------
-// Composition tab
+// Composition section
 // ---------------------------------------------------------------------------
 function renderComposition() {
     // Role counts from mains only
@@ -320,14 +291,24 @@ function renderComposition() {
         }
     }
 
+    // Compute effective DPS targets with balancing (total DPS target = 14)
+    const effectiveTargets = { ...ROLE_TARGETS };
+    const meleeCnt = roleCounts["Melee DPS"];
+    const rangedCnt = roleCounts["Ranged DPS"];
+    if (meleeCnt > ROLE_TARGETS["Melee DPS"]) {
+        effectiveTargets["Ranged DPS"] = Math.max(0, DPS_TOTAL_TARGET - meleeCnt);
+    } else if (rangedCnt > ROLE_TARGETS["Ranged DPS"]) {
+        effectiveTargets["Melee DPS"] = Math.max(0, DPS_TOTAL_TARGET - rangedCnt);
+    }
+
     // Role cards
     const roleCardsEl = document.getElementById('role-cards');
-    roleCardsEl.innerHTML = Object.entries(ROLE_TARGETS).map(([role, target]) => {
+    roleCardsEl.innerHTML = Object.entries(effectiveTargets).map(([role, target]) => {
         const count = roleCounts[role] || 0;
         let statusClass = 'role-card--danger';
         if (count >= target) statusClass = 'role-card--ok';
         else if (count === target - 1) statusClass = 'role-card--warn';
-        const pct = Math.min(100, Math.round((count / target) * 100));
+        const pct = target > 0 ? Math.min(100, Math.round((count / target) * 100)) : 100;
         return `
             <div class="role-card ${statusClass}">
                 <div class="role-card__icon">${ROLE_EMOJIS[role] || ''}</div>
@@ -362,7 +343,11 @@ function renderComposition() {
         .filter(Boolean)
         .join('');
     const wowheadUrl = `https://www.wowhead.com/raid-comp#${codes}`;
-    document.getElementById('wowhead-btn').href = wowheadUrl;
+    const btn = document.getElementById('wowhead-btn');
+    btn.href = wowheadUrl;
+    if (!codes) {
+        btn.textContent = '🔗 View Comp on Wowhead (spec data unavailable)';
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -388,18 +373,6 @@ document.querySelectorAll('.sort-col').forEach(th => {
 // ---------------------------------------------------------------------------
 document.getElementById('show-alts').addEventListener('change', renderRoster);
 document.getElementById('roster-search').addEventListener('input', renderRoster);
-
-// ---------------------------------------------------------------------------
-// Tab switching
-// ---------------------------------------------------------------------------
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    });
-});
 
 // ---------------------------------------------------------------------------
 // Helpers
