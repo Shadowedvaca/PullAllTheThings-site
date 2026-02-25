@@ -242,6 +242,43 @@ async def trigger_report(
     return {"ok": True, "status": "report_triggered"}
 
 
+@guild_sync_router.post("/crafting/trigger")
+async def trigger_crafting_sync(
+    request: Request,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """Manually trigger a crafting professions sync (admin only)."""
+    import asyncio
+    import os
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler is not None:
+        asyncio.create_task(scheduler.run_crafting_sync(force=True))
+        return {"ok": True, "status": "crafting_sync_triggered", "mode": "scheduler"}
+
+    # Scheduler not available — run directly
+    async def _run_direct():
+        try:
+            from sv_common.guild_sync.blizzard_client import BlizzardClient
+            from sv_common.guild_sync.crafting_sync import run_crafting_sync
+
+            client = BlizzardClient(
+                client_id=os.environ["BLIZZARD_CLIENT_ID"],
+                client_secret=os.environ["BLIZZARD_CLIENT_SECRET"],
+            )
+            await client.initialize()
+            try:
+                stats = await run_crafting_sync(pool, client, force=True)
+                logger.info("Direct crafting sync complete: %s", stats)
+            finally:
+                await client.close()
+        except Exception as e:
+            logger.error("Direct crafting sync failed: %s", e)
+
+    asyncio.create_task(_run_direct())
+    return {"ok": True, "status": "crafting_sync_triggered", "mode": "direct"}
+
+
 # ---------------------------------------------------------------------------
 # Identity Routes
 # ---------------------------------------------------------------------------

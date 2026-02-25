@@ -87,6 +87,15 @@ class GuildSyncScheduler:
             misfire_grace_time=300,
         )
 
+        # Crafting sync: runs daily at 3 AM, checks cadence internally
+        self.scheduler.add_job(
+            self.run_crafting_sync,
+            CronTrigger(hour=3, minute=0),
+            id="crafting_sync",
+            name="Crafting Professions Sync",
+            misfire_grace_time=3600,
+        )
+
         self.scheduler.start()
         logger.info("Guild sync scheduler started")
 
@@ -181,6 +190,15 @@ class GuildSyncScheduler:
             self.audit_channel_id,
         )
         await checker.check_pending()
+
+    async def run_crafting_sync(self, force: bool = False):
+        """Run the crafting professions sync."""
+        from .crafting_sync import run_crafting_sync
+        try:
+            stats = await run_crafting_sync(self.db_pool, self.blizzard_client, force=force)
+            logger.info("Crafting sync complete: %s", stats)
+        except Exception as exc:
+            logger.error("Crafting sync failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

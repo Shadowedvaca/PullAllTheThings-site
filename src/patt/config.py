@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Companion app API key (Phase 2.5)
     patt_api_key: str = ""
 
+    # Crafting Corner (Phase 2.8)
+    patt_crafters_corner_channel_id: str = ""
+
 
 _settings: Settings | None = None
 

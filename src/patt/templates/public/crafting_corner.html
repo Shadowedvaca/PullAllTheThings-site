@@ -1,0 +1,891 @@
+{% extends "base.html" %}
+{% block title %}Crafting Corner — Pull All The Things{% endblock %}
+
+{% block head %}
+<style>
+/* ============================================================
+   Crafting Corner Page Styles
+   ============================================================ */
+
+.cc-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+/* Header / sync status */
+.cc-header {
+    margin-bottom: 2rem;
+}
+.cc-header__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 2rem;
+    margin: 0 0 0.25rem 0;
+}
+.cc-header__season {
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+}
+.cc-sync-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    border-left: 2px solid var(--color-gold);
+    padding-left: 0.75rem;
+}
+.cc-sync-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.cc-cadence-badge {
+    background: var(--color-gold);
+    color: #0a0a0b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+.cc-cadence-badge--weekly {
+    background: #444;
+    color: #bbb;
+}
+
+/* Notification pref row */
+.cc-notify-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.5rem;
+    padding: 0.6rem 0.9rem;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    width: fit-content;
+}
+.cc-notify-toggle {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.cc-notify-toggle input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: var(--color-gold);
+}
+
+/* Filter bar */
+.cc-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+    margin-bottom: 1.25rem;
+}
+.cc-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 180px;
+}
+.cc-filter-group label {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.cc-filter-group select {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+.cc-filter-group select:focus {
+    outline: 1px solid var(--color-gold);
+    border-color: var(--color-gold);
+}
+
+/* Search */
+.cc-search {
+    flex: 1;
+    min-width: 220px;
+    max-width: 340px;
+}
+.cc-search-input-wrap {
+    position: relative;
+}
+.cc-search-input-wrap input {
+    width: 100%;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+.cc-search-input-wrap input:focus {
+    outline: 1px solid var(--color-gold);
+    border-color: var(--color-gold);
+}
+.cc-search-clear {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: none;
+    line-height: 1;
+}
+
+/* Layout: recipe list + drill-down */
+.cc-body {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+/* Recipe list */
+.cc-recipe-list {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.cc-recipe-list__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+.cc-recipe-list__count {
+    font-weight: 600;
+    color: var(--color-gold);
+}
+.cc-recipe-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid #2a2a2e;
+    cursor: pointer;
+    transition: background 0.1s;
+    font-size: 0.95rem;
+}
+.cc-recipe-item:last-child {
+    border-bottom: none;
+}
+.cc-recipe-item:hover {
+    background: rgba(212, 168, 75, 0.08);
+}
+.cc-recipe-item--active {
+    background: rgba(212, 168, 75, 0.15);
+    color: var(--color-gold);
+}
+.cc-recipe-item__name {
+    flex: 1;
+}
+.cc-recipe-item__count {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    background: #2a2a2e;
+    padding: 0.1rem 0.5rem;
+    border-radius: 10px;
+    margin-left: 0.5rem;
+}
+.cc-recipe-item__profession {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-left: 0.5rem;
+}
+.cc-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+/* Drill-down panel */
+.cc-drilldown {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    display: none;
+}
+.cc-drilldown--visible {
+    display: block;
+}
+.cc-drilldown__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.cc-drilldown__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1.1rem;
+    margin: 0;
+}
+.cc-drilldown__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.cc-btn-wowhead {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 4px;
+    background: #333;
+    color: #e8e8e8;
+    text-decoration: none;
+    border: 1px solid #444;
+    transition: background 0.15s;
+}
+.cc-btn-wowhead:hover {
+    background: #444;
+}
+.cc-btn-order {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 4px;
+    background: var(--color-gold);
+    color: #0a0a0b;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.15s;
+}
+.cc-btn-order:hover {
+    opacity: 0.85;
+}
+.cc-btn-order:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Rank groups in drill-down */
+.cc-rank-group {
+    margin-bottom: 1rem;
+}
+.cc-rank-group__title {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+.cc-crafter-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.cc-crafter {
+    font-size: 0.9rem;
+    background: #1e1e22;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    color: var(--color-text);
+}
+.cc-crafter__class {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+}
+.cc-no-crafters {
+    color: var(--color-text-muted);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+/* Guild order modal */
+.cc-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+.cc-modal-overlay--visible {
+    display: flex;
+}
+.cc-modal {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    max-width: 420px;
+    width: 90%;
+}
+.cc-modal__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1.1rem;
+    margin: 0 0 0.75rem 0;
+}
+.cc-modal__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+.cc-modal textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: #1a1a1d;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    resize: vertical;
+    min-height: 70px;
+    margin-bottom: 1rem;
+}
+.cc-modal__buttons {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+.cc-btn-cancel {
+    background: #333;
+    color: #ccc;
+    border: 1px solid #444;
+    padding: 0.4rem 0.9rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.cc-btn-submit {
+    background: var(--color-gold);
+    color: #0a0a0b;
+    border: none;
+    padding: 0.4rem 0.9rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.cc-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: #1e1e22;
+    border: 1px solid var(--color-gold);
+    color: var(--color-gold);
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+}
+.cc-toast--visible {
+    opacity: 1;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cc-page">
+    <!-- Header -->
+    <div class="cc-header">
+        <h1 class="cc-header__title">&#x2692; Crafting Corner</h1>
+        <p class="cc-header__season" id="cc-season-name">Loading...</p>
+        <div class="cc-sync-meta" id="cc-sync-meta" style="display:none">
+            <span id="cc-last-sync"></span>
+            <span id="cc-cadence-info"></span>
+        </div>
+    </div>
+
+    <!-- Notification preference (logged-in users with Discord only) -->
+    {% if current_member %}
+    <div class="cc-notify-row" id="cc-notify-row" style="display:none">
+        <label class="cc-notify-toggle">
+            <input type="checkbox" id="cc-notify-check">
+            <span>Notify me when someone requests an item I can craft</span>
+        </label>
+    </div>
+    {% endif %}
+
+    <!-- Filters -->
+    <div class="cc-filters">
+        <div class="cc-filter-group">
+            <label for="cc-prof-select">Profession</label>
+            <select id="cc-prof-select">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+        <div class="cc-filter-group">
+            <label for="cc-tier-select">Expansion</label>
+            <select id="cc-tier-select">
+                <option value="">Loading...</option>
+            </select>
+        </div>
+        <div class="cc-filter-group cc-search">
+            <label for="cc-search-input">Search All Recipes</label>
+            <div class="cc-search-input-wrap">
+                <input type="text" id="cc-search-input" placeholder="Search recipes...">
+                <button class="cc-search-clear" id="cc-search-clear" title="Clear search">&times;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recipe list -->
+    <div class="cc-body">
+        <div class="cc-recipe-list">
+            <div class="cc-recipe-list__header">
+                <span id="cc-list-label">Recipes</span>
+                <span class="cc-recipe-list__count" id="cc-recipe-count">—</span>
+            </div>
+            <div id="cc-recipe-list-body">
+                <div class="cc-empty">Select a profession to browse recipes.</div>
+            </div>
+        </div>
+
+        <!-- Drill-down panel -->
+        <div class="cc-drilldown" id="cc-drilldown">
+            <div class="cc-drilldown__header">
+                <h2 class="cc-drilldown__title" id="cc-drilldown-title">—</h2>
+                <div class="cc-drilldown__actions">
+                    <a href="#" class="cc-btn-wowhead" id="cc-wowhead-link" target="_blank" rel="noopener">
+                        &#x1f517; Wowhead
+                    </a>
+                    {% if current_member %}
+                    <button class="cc-btn-order" id="cc-order-btn">
+                        &#x1f4e2; Request Guild Order
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            <div id="cc-crafter-groups"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Guild Order Modal -->
+{% if current_member %}
+<div class="cc-modal-overlay" id="cc-modal-overlay">
+    <div class="cc-modal">
+        <h3 class="cc-modal__title" id="cc-modal-recipe-name">Guild Order</h3>
+        <p class="cc-modal__subtitle">Your request will be posted to <strong>#crafters-corner</strong> on Discord. Opted-in crafters will be @mentioned.</p>
+        <textarea id="cc-modal-message" placeholder="Optional note (e.g. 'can tip materials', 'no rush')"></textarea>
+        <div class="cc-modal__buttons">
+            <button class="cc-btn-cancel" id="cc-modal-cancel">Cancel</button>
+            <button class="cc-btn-submit" id="cc-modal-submit">Post Order</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Toast notification -->
+<div class="cc-toast" id="cc-toast"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ============================================================
+   Crafting Corner — Vanilla JS
+   ============================================================ */
+(function() {
+    'use strict';
+
+    let currentProfessionId = null;
+    let currentTierId = null;
+    let currentRecipeId = null;
+    let currentRecipeData = null;
+    let searchTimeout = null;
+    let isSearchMode = false;
+    {% if current_member %}const isLoggedIn = true;{% else %}const isLoggedIn = false;{% endif %}
+
+    // ── Utilities ──────────────────────────────────────────────────────────
+
+    function showToast(msg, duration = 3000) {
+        const t = document.getElementById('cc-toast');
+        t.textContent = msg;
+        t.classList.add('cc-toast--visible');
+        setTimeout(() => t.classList.remove('cc-toast--visible'), duration);
+    }
+
+    function fmtDate(iso) {
+        if (!iso) return 'Never';
+        const d = new Date(iso);
+        return d.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+        });
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────────
+
+    async function init() {
+        await loadSyncStatus();
+        {% if current_member %}
+        await loadNotifyPref();
+        {% endif %}
+        await loadProfessions();
+    }
+
+    async function loadSyncStatus() {
+        try {
+            const resp = await fetch('/api/crafting/sync-status');
+            const data = await resp.json();
+            if (!data.ok) return;
+            const s = data.data;
+            document.getElementById('cc-season-name').textContent = s.season_name || 'No season configured';
+            const lastEl = document.getElementById('cc-last-sync');
+            lastEl.textContent = '&#x1f504; Last sync: ' + fmtDate(s.last_sync_at);
+            lastEl.innerHTML = '&#x1f504; Last sync: ' + fmtDate(s.last_sync_at);
+            const cadEl = document.getElementById('cc-cadence-info');
+            if (s.current_cadence === 'daily') {
+                cadEl.innerHTML = '<span class="cc-cadence-badge">Daily</span> ' +
+                    (s.daily_days_remaining > 0 ? s.daily_days_remaining + ' days remaining' : '');
+            } else {
+                cadEl.innerHTML = '<span class="cc-cadence-badge cc-cadence-badge--weekly">Weekly</span>';
+            }
+            document.getElementById('cc-sync-meta').style.display = 'flex';
+        } catch (e) {
+            console.warn('Could not load sync status', e);
+        }
+    }
+
+    {% if current_member %}
+    async function loadNotifyPref() {
+        try {
+            const resp = await fetch('/api/crafting/preferences');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data.ok) return;
+            const row = document.getElementById('cc-notify-row');
+            if (row) {
+                row.style.display = 'flex';
+                document.getElementById('cc-notify-check').checked =
+                    data.data.crafting_notifications_enabled;
+            }
+        } catch (e) { /* not logged in or no discord */ }
+    }
+
+    document.getElementById('cc-notify-check')?.addEventListener('change', async function() {
+        try {
+            const resp = await fetch('/api/crafting/preferences', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: this.checked}),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                showToast(this.checked ? '&#x1f514; Crafting notifications enabled' : '&#x1f515; Crafting notifications disabled');
+            } else {
+                this.checked = !this.checked; // revert
+                showToast('Could not update preference.');
+            }
+        } catch (e) {
+            this.checked = !this.checked;
+            showToast('Error updating preference.');
+        }
+    });
+    {% endif %}
+
+    // ── Professions ────────────────────────────────────────────────────────
+
+    async function loadProfessions() {
+        try {
+            const resp = await fetch('/api/crafting/professions');
+            const data = await resp.json();
+            if (!data.ok || !data.data.length) {
+                document.getElementById('cc-prof-select').innerHTML =
+                    '<option value="">No professions synced yet</option>';
+                return;
+            }
+            const sel = document.getElementById('cc-prof-select');
+            sel.innerHTML = data.data.map(p =>
+                `<option value="${p.id}">${p.name}</option>`
+            ).join('');
+            await selectProfession(data.data[0].id);
+        } catch (e) {
+            console.error('Failed to load professions', e);
+        }
+    }
+
+    document.getElementById('cc-prof-select').addEventListener('change', async function() {
+        if (this.value) await selectProfession(parseInt(this.value));
+    });
+
+    async function selectProfession(profId) {
+        currentProfessionId = profId;
+        await loadExpansions(profId);
+    }
+
+    // ── Expansions ─────────────────────────────────────────────────────────
+
+    async function loadExpansions(profId) {
+        try {
+            const resp = await fetch(`/api/crafting/expansions/${profId}`);
+            const data = await resp.json();
+            const sel = document.getElementById('cc-tier-select');
+            if (!data.ok || !data.data.length) {
+                sel.innerHTML = '<option value="">No tiers found</option>';
+                return;
+            }
+            sel.innerHTML = data.data.map(t =>
+                `<option value="${t.id}">${t.expansion_name || t.name}</option>`
+            ).join('');
+            await selectTier(data.data[0].id);
+        } catch (e) {
+            console.error('Failed to load expansions', e);
+        }
+    }
+
+    document.getElementById('cc-tier-select').addEventListener('change', async function() {
+        if (this.value) await selectTier(parseInt(this.value));
+    });
+
+    async function selectTier(tierId) {
+        currentTierId = tierId;
+        await loadRecipes(currentProfessionId, tierId);
+    }
+
+    // ── Recipes ────────────────────────────────────────────────────────────
+
+    async function loadRecipes(profId, tierId) {
+        try {
+            const resp = await fetch(`/api/crafting/recipes/${profId}/${tierId}`);
+            const data = await resp.json();
+            renderRecipeList(data.data || [], false);
+        } catch (e) {
+            console.error('Failed to load recipes', e);
+        }
+    }
+
+    function renderRecipeList(recipes, isSearch) {
+        isSearchMode = isSearch;
+        const body = document.getElementById('cc-recipe-list-body');
+        const countEl = document.getElementById('cc-recipe-count');
+        const labelEl = document.getElementById('cc-list-label');
+
+        countEl.textContent = recipes.length + ' recipe' + (recipes.length !== 1 ? 's' : '');
+        labelEl.textContent = isSearch ? 'Search Results' : 'Recipes';
+
+        if (!recipes.length) {
+            body.innerHTML = '<div class="cc-empty">No recipes found.</div>';
+            return;
+        }
+
+        body.innerHTML = recipes.map(r => {
+            const profInfo = isSearch
+                ? `<span class="cc-recipe-item__profession">${r.expansion_name || ''} ${r.profession_name || ''}</span>`
+                : '';
+            return `<div class="cc-recipe-item" data-recipe-id="${r.id}" data-recipe-wowhead="${r.wowhead_url}">
+                <span class="cc-recipe-item__name">${escHtml(r.name)}</span>
+                ${profInfo}
+                <span class="cc-recipe-item__count">${r.crafter_count}</span>
+            </div>`;
+        }).join('');
+
+        body.querySelectorAll('.cc-recipe-item').forEach(el => {
+            el.addEventListener('click', () => selectRecipe(
+                parseInt(el.dataset.recipeId),
+                el.dataset.recipeWowhead
+            ));
+        });
+
+        // Clear active state on drilldown when list reloads
+        hideDrilldown();
+    }
+
+    async function selectRecipe(recipeId, wowheadUrl) {
+        currentRecipeId = recipeId;
+        document.querySelectorAll('.cc-recipe-item').forEach(el => {
+            el.classList.toggle('cc-recipe-item--active',
+                parseInt(el.dataset.recipeId) === recipeId);
+        });
+        await loadCrafters(recipeId, wowheadUrl);
+    }
+
+    // ── Crafters / Drill-down ──────────────────────────────────────────────
+
+    async function loadCrafters(recipeId, wowheadUrl) {
+        try {
+            const resp = await fetch(`/api/crafting/recipe/${recipeId}/crafters`);
+            const data = await resp.json();
+            if (!data.ok) return;
+            currentRecipeData = data.data;
+            renderDrilldown(data.data, wowheadUrl);
+        } catch (e) {
+            console.error('Failed to load crafters', e);
+        }
+    }
+
+    function renderDrilldown(data, wowheadUrl) {
+        const dd = document.getElementById('cc-drilldown');
+        document.getElementById('cc-drilldown-title').textContent = data.recipe.name;
+        document.getElementById('cc-wowhead-link').href = wowheadUrl || data.recipe.wowhead_url || '#';
+
+        const groupsEl = document.getElementById('cc-crafter-groups');
+        if (!data.rank_groups.length) {
+            groupsEl.innerHTML = '<p class="cc-no-crafters">No known crafters in the guild.</p>';
+        } else {
+            groupsEl.innerHTML = data.rank_groups.map(g => `
+                <div class="cc-rank-group">
+                    <div class="cc-rank-group__title">${escHtml(g.rank_name)}</div>
+                    <div class="cc-crafter-list">
+                        ${g.crafters.map(c => `
+                            <span class="cc-crafter">
+                                ${escHtml(c.character_name)}
+                                <span class="cc-crafter__class">(${escHtml(c.character_class || '?')})</span>
+                            </span>`).join('')}
+                    </div>
+                </div>`).join('');
+        }
+
+        dd.classList.add('cc-drilldown--visible');
+    }
+
+    function hideDrilldown() {
+        document.getElementById('cc-drilldown').classList.remove('cc-drilldown--visible');
+        currentRecipeId = null;
+        currentRecipeData = null;
+    }
+
+    // ── Search ─────────────────────────────────────────────────────────────
+
+    const searchInput = document.getElementById('cc-search-input');
+    const searchClear = document.getElementById('cc-search-clear');
+
+    searchInput.addEventListener('input', function() {
+        const q = this.value.trim();
+        searchClear.style.display = q ? 'block' : 'none';
+        clearTimeout(searchTimeout);
+        if (q.length >= 3) {
+            searchTimeout = setTimeout(() => doSearch(q), 300);
+        } else if (q.length === 0) {
+            clearSearch();
+        }
+    });
+
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const q = this.value.trim();
+            if (q.length >= 2) {
+                clearTimeout(searchTimeout);
+                doSearch(q);
+            }
+        } else if (e.key === 'Escape') {
+            clearSearch();
+        }
+    });
+
+    searchClear.addEventListener('click', clearSearch);
+
+    async function doSearch(query) {
+        try {
+            const resp = await fetch(`/api/crafting/search?q=${encodeURIComponent(query)}`);
+            const data = await resp.json();
+            renderRecipeList(data.data || [], true);
+        } catch (e) {
+            console.error('Search failed', e);
+        }
+    }
+
+    function clearSearch() {
+        searchInput.value = '';
+        searchClear.style.display = 'none';
+        if (currentProfessionId && currentTierId) {
+            loadRecipes(currentProfessionId, currentTierId);
+        }
+    }
+
+    // ── Guild Order Modal ──────────────────────────────────────────────────
+
+    {% if current_member %}
+    const orderBtn = document.getElementById('cc-order-btn');
+    const modalOverlay = document.getElementById('cc-modal-overlay');
+    const modalCancel = document.getElementById('cc-modal-cancel');
+    const modalSubmit = document.getElementById('cc-modal-submit');
+    const modalMessage = document.getElementById('cc-modal-message');
+    const modalRecipeName = document.getElementById('cc-modal-recipe-name');
+
+    orderBtn?.addEventListener('click', function() {
+        if (!currentRecipeData) return;
+        modalRecipeName.textContent = 'Guild Order: ' + currentRecipeData.recipe.name;
+        modalMessage.value = '';
+        modalOverlay.classList.add('cc-modal-overlay--visible');
+    });
+
+    modalCancel?.addEventListener('click', () => {
+        modalOverlay.classList.remove('cc-modal-overlay--visible');
+    });
+
+    modalOverlay?.addEventListener('click', function(e) {
+        if (e.target === modalOverlay) {
+            modalOverlay.classList.remove('cc-modal-overlay--visible');
+        }
+    });
+
+    modalSubmit?.addEventListener('click', async function() {
+        if (!currentRecipeId) return;
+        this.disabled = true;
+        this.textContent = 'Posting...';
+        try {
+            const resp = await fetch('/api/crafting/guild-order', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    recipe_id: currentRecipeId,
+                    message: modalMessage.value.trim(),
+                }),
+            });
+            const data = await resp.json();
+            modalOverlay.classList.remove('cc-modal-overlay--visible');
+            if (data.ok) {
+                showToast('&#x2705; Guild order posted to #crafters-corner!');
+            } else {
+                showToast('&#x26A0; ' + (data.error || 'Could not post order.'));
+            }
+        } catch (e) {
+            showToast('&#x26A0; Error posting order.');
+        } finally {
+            this.disabled = false;
+            this.textContent = 'Post Order';
+        }
+    });
+    {% endif %}
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    function escHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Boot ───────────────────────────────────────────────────────────────
+
+    init().catch(console.error);
+
+})();
+</script>
+{% endblock %}

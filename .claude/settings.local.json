@@ -40,7 +40,8 @@
       "Bash(cd \"H:/Development/PullAllTheThings-site\" && python -c \"from patt.pages.public_pages import router; print\\('public_pages OK'\\)\" 2>&1)",
       "WebFetch(domain:raid-helper.dev)",
       "WebSearch",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(git:*)"
     ]
   }
 }

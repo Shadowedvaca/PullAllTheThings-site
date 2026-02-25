@@ -366,6 +366,7 @@ def create_app() -> FastAPI:
         public_campaign_router,
     )
     from sv_common.guild_sync.api.routes import guild_sync_router, identity_router
+    from sv_common.guild_sync.api.crafting_routes import crafting_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
@@ -376,6 +377,7 @@ def create_app() -> FastAPI:
     app.include_router(public_campaign_router)
     app.include_router(guild_sync_router)
     app.include_router(identity_router)
+    app.include_router(crafting_router)
 
     # Register page routes (server-rendered HTML)
     from patt.pages.auth_pages import router as auth_page_router

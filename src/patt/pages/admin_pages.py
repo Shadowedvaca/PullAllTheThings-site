@@ -1346,6 +1346,19 @@ async def admin_audit_log(
     return templates.TemplateResponse("admin/audit_log.html", ctx)
 
 
+@router.get("/crafting-sync", response_class=HTMLResponse)
+async def admin_crafting_sync(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/crafting-sync")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/crafting_sync.html", ctx)
+
+
 @router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)
 async def admin_audit_resolve(
     request: Request,

@@ -44,6 +44,14 @@ class GuildMemberData:
 
 
 @dataclass
+class CharacterProfessionData:
+    """Professions data from the character professions endpoint."""
+    character_name: str
+    realm_slug: str
+    professions: list[dict]  # Raw profession+tier+recipe structure
+
+
+@dataclass
 class CharacterProfileData:
     """Enriched character data from the profile endpoint."""
     character_name: str
@@ -264,6 +272,63 @@ class BlizzardClient:
             return None
 
         return data.get("equipped_item_level")
+
+    async def get_character_professions(
+        self, realm_slug: str, character_name: str
+    ) -> Optional["CharacterProfessionData"]:
+        """
+        Fetch profession data including known recipes for a character.
+
+        Endpoint: /profile/wow/character/{realmSlug}/{characterName}/professions
+        Returns: CharacterProfessionData or None if character not found / no professions
+        """
+        name_lower = character_name.lower()
+        name_encoded = quote(name_lower, safe='')
+
+        path = f"/profile/wow/character/{realm_slug}/{name_encoded}/professions"
+        data = await self._api_get(path)
+
+        if not data:
+            return None
+
+        professions = []
+        for section in ("primaries", "secondaries"):
+            for entry in data.get(section, []):
+                prof = entry.get("profession", {})
+                tiers = entry.get("tiers", [])
+
+                # Skip professions with no recipe tiers (gathering profs)
+                recipe_tiers = [t for t in tiers if t.get("known_recipes")]
+                if not recipe_tiers:
+                    continue
+
+                professions.append({
+                    "profession_name": prof.get("name"),
+                    "profession_id": prof.get("id"),
+                    "is_primary": section == "primaries",
+                    "tiers": [
+                        {
+                            "tier_name": t["tier"]["name"],
+                            "tier_id": t["tier"]["id"],
+                            "skill_points": t.get("skill_points", 0),
+                            "max_skill_points": t.get("max_skill_points", 0),
+                            "known_recipes": [
+                                {"name": r["name"], "id": r["id"]}
+                                for r in t.get("known_recipes", [])
+                            ],
+                        }
+                        for t in recipe_tiers
+                    ],
+                })
+
+        if not professions:
+            return None
+
+        return CharacterProfessionData(
+            character_name=character_name,
+            realm_slug=realm_slug,
+            professions=professions,
+        )
 
     async def sync_full_roster(self) -> list[CharacterProfileData]:
         """

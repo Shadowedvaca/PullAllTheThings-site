@@ -235,6 +235,22 @@ async def landing_page(
     return templates.TemplateResponse("public/index.html", ctx)
 
 
+@router.get("/crafting-corner", response_class=HTMLResponse)
+async def crafting_corner_page(
+    request: Request,
+    current_member: Player | None = Depends(get_page_member),
+):
+    """Public crafting corner page — no auth required to browse."""
+    return templates.TemplateResponse(
+        "public/crafting_corner.html",
+        {
+            "request": request,
+            "current_member": current_member,
+            "active_campaigns": [],
+        },
+    )
+
+
 @router.get("/roster", response_class=HTMLResponse)
 async def roster_page(
     request: Request,
