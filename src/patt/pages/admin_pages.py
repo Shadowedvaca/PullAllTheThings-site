@@ -77,12 +77,16 @@ _BARE_FILE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{25,}$")
 
 
 def _normalize_image_url(url: str) -> str:
-    """Convert any Google Drive URL format to the uc?id=...&export=view embed form.
+    """Convert any Google Drive URL format to the thumbnail embed form.
+
+    Uses drive.google.com/thumbnail?id={id}&sz=w2000 which is reliable for
+    'anyone with the link' files and bypasses Google's virus-scan redirect.
 
     Accepts:
       - drive.google.com/file/d/{id}/view
       - drive.google.com/open?id={id}
-      - drive.google.com/uc?id={id}  (adds export=view if missing)
+      - drive.google.com/uc?id={id}
+      - drive.google.com/thumbnail?id={id}  (updates sz if missing)
       - Bare file IDs (25+ alphanumeric/_/- chars)
       - Non-Drive URLs are returned unchanged.
     """
@@ -92,9 +96,9 @@ def _normalize_image_url(url: str) -> str:
     m = _DRIVE_FILE_ID_RE.search(url)
     if m:
         file_id = m.group(1) or m.group(2) or m.group(3)
-        return f"https://drive.google.com/uc?id={file_id}&export=view"
+        return f"https://drive.google.com/thumbnail?id={file_id}&sz=w2000"
     if _BARE_FILE_ID_RE.match(url):
-        return f"https://drive.google.com/uc?id={url}&export=view"
+        return f"https://drive.google.com/thumbnail?id={url}&sz=w2000"
     return url
 
 

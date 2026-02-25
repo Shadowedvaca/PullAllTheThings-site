@@ -106,7 +106,7 @@
         for (const re of patterns) {
             const m = val.match(re);
             if (m) {
-                input.value = `https://drive.google.com/uc?id=${m[1]}&export=view`;
+                input.value = `https://drive.google.com/thumbnail?id=${m[1]}&sz=w2000`;
                 input.style.borderColor = 'var(--color-success)';
                 return;
             }
@@ -114,7 +114,7 @@
 
         // Accept bare file IDs (25+ alphanumeric chars)
         if (/^[A-Za-z0-9_-]{25,}$/.test(val)) {
-            input.value = `https://drive.google.com/uc?id=${val}&export=view`;
+            input.value = `https://drive.google.com/thumbnail?id=${val}&sz=w2000`;
             input.style.borderColor = 'var(--color-success)';
         }
     };
