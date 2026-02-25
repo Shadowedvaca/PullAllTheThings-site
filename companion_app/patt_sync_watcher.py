@@ -345,16 +345,18 @@ class SyncWatcher(FileSystemEventHandler):
             }
 
             # Upload to API
-            self._upload(api_payload)
-
-            self.last_export_time = export_time
-            self.last_upload_time = now
+            if self._upload(api_payload):
+                self.last_export_time = export_time
+                self.last_upload_time = now
+                self._archive(filepath)
+            else:
+                self.last_upload_time = now  # still debounce on failure
 
         except Exception as e:
             logger.error("Error processing SavedVariables: %s", e, exc_info=True)
 
-    def _upload(self, payload: dict):
-        """Upload parsed data to the PATT API."""
+    def _upload(self, payload: dict) -> bool:
+        """Upload parsed data to the PATT API. Returns True on success."""
         url = f"{API_URL}/guild-sync/addon-upload"
 
         try:
@@ -374,17 +376,34 @@ class SyncWatcher(FileSystemEventHandler):
                     "Upload successful: %d characters processed",
                     result.get("characters_received", 0),
                 )
+                return True
             else:
                 logger.error(
                     "Upload failed (HTTP %d): %s",
                     response.status_code,
                     response.text[:500],
                 )
+                return False
 
         except httpx.ConnectError:
             logger.error("Cannot connect to API at %s — is the server running?", API_URL)
+            return False
         except Exception as e:
             logger.error("Upload error: %s", e, exc_info=True)
+            return False
+
+    def _archive(self, filepath: str):
+        """Move the uploaded file to an archive subfolder."""
+        try:
+            archive_dir = os.path.join(os.path.dirname(filepath), "archive")
+            os.makedirs(archive_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            stem = os.path.splitext(os.path.basename(filepath))[0]
+            dest = os.path.join(archive_dir, f"{stem}_{timestamp}.lua")
+            os.rename(filepath, dest)
+            logger.info("Archived to %s", dest)
+        except Exception as e:
+            logger.warning("Could not archive file: %s", e)
 
 
 def validate_config():
