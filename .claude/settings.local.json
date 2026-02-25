@@ -42,7 +42,8 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "Bash(git:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebFetch(domain:www.wowhead.com)"
     ]
   }
 }
