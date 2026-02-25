@@ -258,8 +258,8 @@ function renderPlayers() {
                 ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value">${escHtml(regMainChar.name)} — ${escHtml(regMainChar.class)}${p.main_spec_name ? ' ' + escHtml(p.main_spec_name) : ''}</span></div>`
                 : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Main</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
             ${regOffspecChar
-                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value">${escHtml(regOffspecChar.name)} — ${escHtml(regOffspecChar.class)}${p.offspec_spec_name ? ' ' + escHtml(p.offspec_spec_name) : ''}</span></div>`
-                : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Off-spec</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
+                ? `<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Secondary Character</span><span class="pm-reg-panel__value">${escHtml(regOffspecChar.name)} — ${escHtml(regOffspecChar.class)}${p.offspec_spec_name ? ' ' + escHtml(p.offspec_spec_name) : ''}</span></div>`
+                : '<div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Secondary Character</span><span class="pm-reg-panel__value pm-reg-panel__none">not set</span></div>'}
             <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Auto sign-up</span><span class="pm-reg-panel__value ${p.auto_invite_events ? 'pm-reg-panel__pref-on' : 'pm-reg-panel__pref-off'}">${p.auto_invite_events ? '✓ On' : '✗ Off'}</span></div>
             <div class="pm-reg-panel__row"><span class="pm-reg-panel__label">Craft notify</span><span class="pm-reg-panel__value ${p.crafting_notifications_enabled ? 'pm-reg-panel__pref-on' : 'pm-reg-panel__pref-off'}">${p.crafting_notifications_enabled ? '✓ On' : '✗ Off'}</span></div>
         </div>` : '';
