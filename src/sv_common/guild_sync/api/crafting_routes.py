@@ -190,26 +190,36 @@ async def post_guild_order(
 
         channel = await get_discord_channel(pool, bot, channel_id)
 
-        embed = discord.Embed(
-            title=f"\U0001f528 Guild Order: {recipe['name']}",
-            url=recipe["wowhead_url"],
-            description=f"Requested by <@{requester['discord_id']}>",
-            color=0xD4A84B,
-        )
-
-        if order.message:
-            embed.add_field(name="Note", value=order.message, inline=False)
-
-        crafter_names = ", ".join(c["character_name"] for c in all_crafters) or "None found"
-        embed.add_field(name="Known Crafters", value=crafter_names, inline=False)
-        embed.set_footer(text="View recipe on Wowhead \u2191 \u2022 Crafting Corner on pullallthethings.com")
-
-        opted_in_mentions = " ".join(
+        # Build the conversational message
+        crafter_mentions = " ".join(
             f"<@{c['player_discord_id']}>"
             for c in all_crafters
-            if c.get("crafting_notifications_enabled") and c.get("player_discord_id")
+            if c.get("player_discord_id")
         )
-        content = opted_in_mentions if opted_in_mentions else None
+        no_discord = ", ".join(
+            c["character_name"] for c in all_crafters if not c.get("player_discord_id")
+        )
+
+        content = (
+            f"<@{requester['discord_id']}> needs someone to make "
+            f"**{recipe['name']}**, who can do this?"
+        )
+        if order.message:
+            content += f"\n> {order.message}"
+        if crafter_mentions:
+            content += f"\n{crafter_mentions}"
+        if no_discord:
+            content += f"\n*(Also known crafters without Discord: {no_discord})*"
+        if not crafter_mentions and not no_discord:
+            content += "\n*(No known crafters found — recipe may need a sync)*"
+
+        # Minimal embed for the Wowhead link
+        embed = discord.Embed(
+            title=recipe["name"],
+            url=recipe["wowhead_url"],
+            color=0xD4A84B,
+        )
+        embed.set_footer(text="Crafting Corner \u2022 pullallthethings.com")
 
         await channel.send(content=content, embed=embed)
 
