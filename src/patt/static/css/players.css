@@ -790,3 +790,6 @@
     color: var(--color-text-muted);
     font-style: italic;
 }
+
+.pm-reg-panel__pref-on  { color: var(--color-success); }
+.pm-reg-panel__pref-off { color: var(--color-text-muted); }

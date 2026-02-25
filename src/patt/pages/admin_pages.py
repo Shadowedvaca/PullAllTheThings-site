@@ -635,6 +635,8 @@ async def admin_players_data(
                     "offspec_character_id": p.offspec_character_id,
                     "main_spec_name": p.main_spec.name if p.main_spec else None,
                     "offspec_spec_name": p.offspec_spec.name if p.offspec_spec else None,
+                    "auto_invite_events": p.auto_invite_events,
+                    "crafting_notifications_enabled": p.crafting_notifications_enabled,
                 }
                 for p in players
             ],
