@@ -84,16 +84,22 @@ async def _upsert_issue(
 
 async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
     """
-    Detect linked characters whose current guild note no longer matches their player.
+    Detect linked characters whose guild note key doesn't match the player's Discord identity.
 
-    This catches pre-existing mismatches that existed before Phase 2.9 was deployed,
-    as well as any case where sync_addon_data() missed a change.
+    We compare the note key against Discord username and display_name only — NOT against
+    player.display_name, because display_name is often derived from the note key itself
+    (when run_matching creates a stub player from an unmatched note group). Using
+    display_name as a signal would cause false negatives for exactly those cases.
+
+    Characters whose player has no Discord user linked are skipped — we cannot
+    reliably detect a mismatch without a Discord identity to compare against.
 
     Returns count of new issues created.
     """
-    from .identity_engine import _extract_note_key, _note_still_matches_player
+    import re
+    from .identity_engine import _extract_note_key, normalize_name
 
-    # Load all linked characters with their player + discord info
+    # Load all linked characters that have a discord user on their player
     rows = await conn.fetch(
         """SELECT
                wc.id          AS char_id,
@@ -104,38 +110,56 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
                du.username             AS discord_username,
                du.display_name         AS discord_display_name
            FROM guild_identity.player_characters pc
-           JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
-           JOIN guild_identity.players p         ON p.id  = pc.player_id
-           LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+           JOIN guild_identity.wow_characters wc  ON wc.id = pc.character_id
+           JOIN guild_identity.players p           ON p.id  = pc.player_id
+           JOIN guild_identity.discord_users du    ON du.id = p.discord_user_id
            WHERE wc.removed_at IS NULL
              AND wc.guild_note IS NOT NULL
-             AND wc.guild_note != ''"""
+             AND wc.guild_note != ''
+             AND du.is_present = TRUE"""
     )
 
     new_count = 0
     for row in rows:
-        note_key = _extract_note_key(dict(row))
+        note_key = _extract_note_key({"guild_note": row["guild_note"]})
         if not note_key:
             continue
 
-        still_matches = _note_still_matches_player(
-            note_key,
-            row["player_display_name"],
-            row["discord_username"],
-            row["discord_display_name"],
-        )
+        # Check note key against Discord identities only (not player.display_name,
+        # which is often the note key itself for stub players).
+        discord_candidates = [
+            normalize_name(row["discord_username"] or ""),
+            normalize_name(row["discord_display_name"] or ""),
+        ]
+
+        still_matches = False
+        for name in discord_candidates:
+            if not name:
+                continue
+            if name == note_key:
+                still_matches = True
+                break
+            words = re.split(r"[/\-\s]+", name)
+            if note_key in words:
+                still_matches = True
+                break
+            if len(note_key) >= 3 and note_key in name:
+                still_matches = True
+                break
+
         if still_matches:
             continue
 
         h = make_issue_hash("note_mismatch", row["char_id"])
+        discord_identity = row["discord_display_name"] or row["discord_username"] or "?"
         created = await _upsert_issue(
             conn,
             issue_type="note_mismatch",
             severity="warning",
             wow_character_id=row["char_id"],
             summary=(
-                f"Guild note for '{row['character_name']}' (note key: '{note_key}') "
-                f"does not match linked player '{row['player_display_name']}'"
+                f"'{row['character_name']}' note says '{note_key}' "
+                f"but is linked to Discord user '{discord_identity}'"
             ),
             details={
                 "character_name": row["character_name"],
@@ -143,14 +167,16 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
                 "guild_note": row["guild_note"],
                 "player_id": row["player_id"],
                 "player_display_name": row["player_display_name"],
+                "discord_username": row["discord_username"],
+                "discord_display_name": row["discord_display_name"],
             },
             issue_hash=h,
         )
         if created:
             new_count += 1
             logger.info(
-                "note_mismatch detected: '%s' note key '%s' doesn't match player '%s'",
-                row["character_name"], note_key, row["player_display_name"],
+                "note_mismatch detected: '%s' note key '%s' doesn't match Discord '%s'",
+                row["character_name"], note_key, discord_identity,
             )
 
     return new_count
