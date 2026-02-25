@@ -127,15 +127,16 @@
     line-height: 1;
 }
 
-/* Layout: recipe list + drill-down */
+/* Layout: recipe list + drill-down — fixed height, independent scroll */
 .cc-body {
     display: grid;
     grid-template-columns: 2fr 3fr;
     gap: 1.5rem;
-    align-items: start;
+    height: calc(100vh - 320px);
+    min-height: 480px;
 }
 @media (max-width: 720px) {
-    .cc-body { grid-template-columns: 1fr; }
+    .cc-body { grid-template-columns: 1fr; height: auto; }
 }
 
 /* Recipe list */
@@ -144,6 +145,9 @@
     border: 1px solid var(--color-border);
     border-radius: 8px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 .cc-recipe-list__header {
     display: flex;
@@ -153,6 +157,11 @@
     border-bottom: 1px solid var(--color-border);
     font-size: 0.85rem;
     color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+#cc-recipe-list-body {
+    overflow-y: auto;
+    flex: 1;
 }
 .cc-recipe-list__count {
     font-weight: 600;
@@ -207,7 +216,9 @@
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 1.25rem;
-    min-height: 200px;
+    height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
 }
 .cc-drilldown__placeholder {
     display: flex;

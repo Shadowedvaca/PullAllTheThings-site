@@ -28,6 +28,10 @@ from .blizzard_client import BlizzardClient
 
 logger = logging.getLogger(__name__)
 
+# Only sync tiers from this sort_order and above (80 = Dragon Isles+).
+# Classic, Outland, Northrend, etc. are excluded — not useful for current guild crafting.
+SYNC_MIN_SORT_ORDER = 80
+
 # Expansion sort order: higher = newer (for tier filtering on the frontend)
 EXPANSION_SORT_ORDER = {
     "Khaz Algar": 90,
@@ -342,6 +346,12 @@ async def run_crafting_sync(
                     )
 
                     for tier in prof["tiers"]:
+                        _, sort_order = derive_expansion_name(
+                            tier["tier_name"], prof["profession_name"]
+                        )
+                        if sort_order < SYNC_MIN_SORT_ORDER:
+                            continue  # Skip old-expansion tiers
+
                         tier_db_id = await _upsert_tier(
                             conn,
                             prof_db_id,
