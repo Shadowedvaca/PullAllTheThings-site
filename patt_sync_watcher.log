@@ -24,3 +24,66 @@
 2026-02-25 14:53:59,295 [INFO] Upload successful: 321 characters processed
 2026-02-25 14:54:03,564 [INFO] Shutting down...
 2026-02-25 14:54:03,564 [INFO] Companion app stopped.
+2026-02-25 15:01:56,902 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:01:56,902 [INFO] Target file: PATTSync.lua
+2026-02-25 15:01:56,902 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:01:56,903 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 15:01:57,934 [INFO] New export detected: 321 characters, exported at 2026-02-25T08:03:13Z
+2026-02-25 15:01:58,789 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:01:58,790 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:06:05,616 [INFO] Shutting down...
+2026-02-25 15:06:05,617 [INFO] Companion app stopped.
+2026-02-25 15:06:08,204 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:06:08,204 [INFO] Target file: PATTSync.lua
+2026-02-25 15:06:08,204 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:06:08,204 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 15:06:09,231 [INFO] New export detected: 321 characters, exported at 2026-02-25T22:02:06Z
+2026-02-25 15:06:09,962 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:06:09,963 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:06:12,080 [INFO] Shutting down...
+2026-02-25 15:06:12,081 [INFO] Companion app stopped.
+2026-02-25 15:06:13,557 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:06:13,558 [INFO] Target file: PATTSync.lua
+2026-02-25 15:06:13,558 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:06:13,558 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 15:06:14,585 [INFO] New export detected: 321 characters, exported at 2026-02-25T22:02:06Z
+2026-02-25 15:06:15,318 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:06:15,319 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:06:17,031 [INFO] Shutting down...
+2026-02-25 15:06:17,032 [INFO] Companion app stopped.
+2026-02-25 15:06:18,342 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:06:18,342 [INFO] Target file: PATTSync.lua
+2026-02-25 15:06:18,343 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:06:18,343 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 15:06:19,371 [INFO] New export detected: 321 characters, exported at 2026-02-25T22:02:06Z
+2026-02-25 15:06:20,082 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:06:20,082 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:06:21,704 [INFO] Shutting down...
+2026-02-25 15:06:21,705 [INFO] Companion app stopped.
+2026-02-25 15:06:23,410 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:06:23,411 [INFO] Target file: PATTSync.lua
+2026-02-25 15:06:23,411 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:06:23,411 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 15:06:24,440 [INFO] New export detected: 321 characters, exported at 2026-02-25T22:02:06Z
+2026-02-25 15:06:25,225 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:06:25,226 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:07:08,557 [INFO] Shutting down...
+2026-02-25 15:07:08,558 [INFO] Companion app stopped.
+2026-02-25 15:09:23,876 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:09:23,877 [INFO] Target file: PATTSync.lua
+2026-02-25 15:09:23,877 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:09:23,877 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 15:09:24,908 [INFO] New export detected: 321 characters, exported at 2026-02-25T22:02:06Z
+2026-02-25 15:09:25,774 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:09:25,775 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:09:25,776 [INFO] Archived to H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables\archive\PATTSync_20260225_150925.lua
+2026-02-25 15:09:30,113 [INFO] Shutting down...
+2026-02-25 15:09:30,114 [INFO] Companion app stopped.
+2026-02-25 15:09:33,054 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 15:09:33,055 [INFO] Target file: PATTSync.lua
+2026-02-25 15:09:33,055 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 15:09:33,055 [INFO] No existing file found — waiting for first export from WoW addon
+2026-02-25 15:12:04,095 [INFO] New export detected: 321 characters, exported at 2026-02-25T22:11:32Z
+2026-02-25 15:12:04,867 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 15:12:04,868 [INFO] Upload successful: 321 characters processed
+2026-02-25 15:12:04,870 [INFO] Archived to H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables\archive\PATTSync_20260225_151204.lua

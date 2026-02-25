@@ -43,7 +43,7 @@ This means Claude Code never needs conversation history. It reads the repo.
 ### Current Phase
 | File | Phase | Summary |
 |------|-------|---------|
-| `reference/PHASE_2_8_SCHEDULING_AND_ATTENDANCE.md` | 2.8 | Weighted scheduling, time-window availability, attendance/season tables, admin reference table editor |
+| `reference/PHASE_2_9_DATA_QUALITY_ENGINE.md` | 2.9 | Rules-based data quality engine — targeted mitigations, admin Data Quality tab, no more bulk run_matching on every upload |
 
 ### Reference Documents (still useful context)
 | File | Purpose |
