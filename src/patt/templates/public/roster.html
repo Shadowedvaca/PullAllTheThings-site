@@ -166,10 +166,8 @@ function buildRows(showSecondary, showAlts, searchText) {
 
     for (const player of allPlayers) {
         const mc = player.main_character;
-        const secondaryId = player.offspec_character_id;
+        const sc = player.secondary_character;
         if (mc) {
-            const classColor = CLASS_COLORS[mc.class_name] || '#e8e8e8';
-            const roleEmoji = ROLE_EMOJIS[mc.role_name] || '';
             rows.push({
                 player_id: player.player_id,
                 display_name: player.display_name,
@@ -181,17 +179,35 @@ function buildRows(showSecondary, showAlts, searchText) {
                 rank_level: player.rank_level,
                 item_level: mc.item_level || 0,
                 armory_url: mc.armory_url,
-                class_color: classColor,
-                role_emoji: roleEmoji,
+                class_color: CLASS_COLORS[mc.class_name] || '#e8e8e8',
+                role_emoji: ROLE_EMOJIS[mc.role_name] || '',
                 is_alt: false,
             });
         }
-        if (player.characters) {
+        if (showSecondary && sc) {
+            rows.push({
+                player_id: player.player_id,
+                display_name: player.display_name,
+                character_name: sc.character_name,
+                class_name: sc.class_name || '',
+                spec_name: sc.spec_name || '',
+                role_name: sc.role_name || '',
+                rank_name: player.rank_name,
+                rank_level: player.rank_level,
+                item_level: sc.item_level || 0,
+                armory_url: sc.armory_url,
+                class_color: CLASS_COLORS[sc.class_name] || '#e8e8e8',
+                role_emoji: ROLE_EMOJIS[sc.role_name] || '',
+                is_alt: true,
+            });
+        }
+        if (showAlts && player.characters) {
+            const skipIds = new Set([
+                mc ? mc.character_id : null,
+                sc ? sc.character_id : null,
+            ]);
             for (const char of player.characters) {
-                if (mc && char.character_id === mc.character_id) continue;
-                const isSecondary = secondaryId && char.character_id === secondaryId;
-                if (!isSecondary && !showAlts) continue;
-                if (isSecondary && !showSecondary) continue;
+                if (skipIds.has(char.character_id)) continue;
                 rows.push({
                     player_id: player.player_id,
                     display_name: player.display_name,

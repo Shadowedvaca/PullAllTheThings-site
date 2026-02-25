@@ -54,6 +54,11 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
             .selectinload(WowCharacter.active_spec)
             .selectinload(Specialization.default_role),
             selectinload(Player.main_spec).selectinload(Specialization.default_role),
+            selectinload(Player.offspec_character).selectinload(WowCharacter.wow_class),
+            selectinload(Player.offspec_character)
+            .selectinload(WowCharacter.active_spec)
+            .selectinload(Specialization.default_role),
+            selectinload(Player.offspec_spec).selectinload(Specialization.default_role),
             selectinload(Player.characters)
             .selectinload(PlayerCharacter.character)
             .selectinload(WowCharacter.wow_class),
@@ -91,6 +96,25 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 "armory_url": armory_url,
             }
 
+        sc = p.offspec_character
+        sec_spec = p.offspec_spec or (sc.active_spec if sc else None)
+        sec_role = sec_spec.default_role if sec_spec else None
+        secondary_char_data = None
+        if sc:
+            secondary_char_data = {
+                "character_id": sc.id,
+                "character_name": sc.character_name,
+                "realm_slug": sc.realm_slug,
+                "class_name": sc.wow_class.name if sc.wow_class else None,
+                "spec_name": sec_spec.name if sec_spec else None,
+                "role_name": sec_role.name if sec_role else None,
+                "item_level": sc.item_level,
+                "armory_url": (
+                    f"https://worldofwarcraft.blizzard.com/en-us/character/us"
+                    f"/{sc.realm_slug}/{sc.character_name.lower()}"
+                ),
+            }
+
         all_chars = []
         for pc in p.characters:
             char = pc.character
@@ -122,7 +146,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 "rank_name": p.guild_rank.name if p.guild_rank else "Unknown",
                 "rank_level": p.guild_rank.level if p.guild_rank else 0,
                 "main_character": main_char_data,
-                "offspec_character_id": p.offspec_character_id,
+                "secondary_character": secondary_char_data,
                 "characters": all_chars,
             }
         )
