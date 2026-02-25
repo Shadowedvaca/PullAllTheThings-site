@@ -157,6 +157,8 @@ async def cast_vote(
         db.add(vote)
         votes.append(vote)
     await db.flush()
+    # Update live standings immediately so results panel is never empty while live
+    await calculate_results(db, campaign_id)
     return votes
 
 

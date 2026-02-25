@@ -28,9 +28,8 @@ from .blizzard_client import BlizzardClient
 
 logger = logging.getLogger(__name__)
 
-# Only sync tiers from this sort_order and above (80 = Dragon Isles+).
-# Classic, Outland, Northrend, etc. are excluded — not useful for current guild crafting.
-SYNC_MIN_SORT_ORDER = 80
+# Sync all expansion tiers (0 = include Classic and everything newer).
+SYNC_MIN_SORT_ORDER = 0
 
 # Expansion sort order: higher = newer (for tier filtering on the frontend)
 EXPANSION_SORT_ORDER = {
