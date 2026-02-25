@@ -45,7 +45,10 @@
                             <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">Results</a>
                         {% endif %}
                         {% if c.status != 'live' %}
-                            <button class="btn btn-danger btn-sm" onclick="deleteCampaign({{ c.id }}, {{ c.title|tojson }})">Delete</button>
+                            <button class="btn btn-danger btn-sm"
+                                    data-campaign-id="{{ c.id }}"
+                                    data-campaign-title="{{ c.title }}"
+                                    onclick="deleteCampaign(this.dataset.campaignId, this.dataset.campaignTitle)">Delete</button>
                         {% endif %}
                     </div>
                 </td>
