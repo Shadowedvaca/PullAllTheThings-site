@@ -110,15 +110,8 @@ async def get_recipe_crafters(pool: asyncpg.Pool, recipe_id: int) -> dict:
             recipe_id,
         )
 
-    # Group into rank tiers
-    # Display groups: GL/Officer (0-1), Veteran (2), Member (3), Initiate (4+)
-    GROUP_MAP = {
-        0: "Guild Leader / Officer",
-        1: "Guild Leader / Officer",
-        2: "Veteran",
-        3: "Member",
-        4: "Initiate",
-    }
+    # Group into rank tiers.
+    # common.guild_ranks uses ascending levels: 1=Initiate … 5=Guild Leader.
     GROUP_ORDER = ["Guild Leader / Officer", "Veteran", "Member", "Initiate", "Unknown"]
 
     groups: dict[str, list[dict]] = {g: [] for g in GROUP_ORDER}
@@ -127,11 +120,11 @@ async def get_recipe_crafters(pool: asyncpg.Pool, recipe_id: int) -> dict:
         level = row["guild_rank_level"]
         if level is None:
             group_name = "Unknown"
-        elif level <= 1:
+        elif level >= 4:
             group_name = "Guild Leader / Officer"
-        elif level == 2:
-            group_name = "Veteran"
         elif level == 3:
+            group_name = "Veteran"
+        elif level == 2:
             group_name = "Member"
         else:
             group_name = "Initiate"
