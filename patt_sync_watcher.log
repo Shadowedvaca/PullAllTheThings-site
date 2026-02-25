@@ -15,3 +15,12 @@
 2026-02-22 23:29:41,308 [INFO] Upload successful: 321 characters processed
 2026-02-22 23:30:35,730 [INFO] Shutting down...
 2026-02-22 23:30:35,730 [INFO] Companion app stopped.
+2026-02-25 14:53:56,889 [INFO] Watching: H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables
+2026-02-25 14:53:56,889 [INFO] Target file: PATTSync.lua
+2026-02-25 14:53:56,889 [INFO] API endpoint: https://pullallthethings.com/api
+2026-02-25 14:53:56,890 [INFO] Found existing SavedVariables file, checking for unuploaded data...
+2026-02-25 14:53:57,923 [INFO] New export detected: 321 characters, exported at 2026-02-25T08:03:13Z
+2026-02-25 14:53:59,294 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
+2026-02-25 14:53:59,295 [INFO] Upload successful: 321 characters processed
+2026-02-25 14:54:03,564 [INFO] Shutting down...
+2026-02-25 14:54:03,564 [INFO] Companion app stopped.
