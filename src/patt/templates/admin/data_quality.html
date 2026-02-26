@@ -209,6 +209,101 @@
     padding: 0.5rem 0;
 }
 
+/* ------------------------------------------------------------------ Drift detection panel */
+.drift-panel {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+}
+.drift-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.drift-panel-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+}
+.drift-rule-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+}
+.drift-rule-row {
+    display: grid;
+    grid-template-columns: 1.5rem 180px 80px 100px 80px;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+    font-size: 0.82rem;
+}
+.drift-rule-status { text-align: center; font-size: 1rem; }
+.drift-rule-name {
+    font-family: var(--font-mono);
+    color: var(--color-text);
+    font-size: 0.8rem;
+}
+.drift-rule-open {
+    font-weight: 600;
+    color: var(--color-text);
+}
+.drift-rule-open--warn { color: var(--color-warning); }
+.drift-rule-resolved { color: var(--color-text-muted); font-size: 0.78rem; }
+.drift-rule-mode {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 100px;
+    border: 1px solid;
+    white-space: nowrap;
+}
+.drift-rule-mode--auto { border-color: var(--color-success); color: var(--color-success); }
+.drift-rule-mode--manual { border-color: rgba(251,191,36,0.4); color: var(--color-warning); }
+.drift-rule-mode--info { border-color: var(--color-info); color: var(--color-info); }
+.drift-last-scan {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+}
+.drift-scan-results {
+    margin-top: 0.75rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.82rem;
+    display: none;
+}
+.drift-scan-result-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    padding: 0.2rem 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.drift-scan-result-row:last-child { border-bottom: none; }
+.drift-result-type {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--color-accent);
+    min-width: 180px;
+}
+.drift-result-detected {
+    color: var(--color-text);
+    font-size: 0.78rem;
+}
+.drift-result-mitigated {
+    color: var(--color-success);
+    font-size: 0.78rem;
+}
+
 /* ------------------------------------------------------------------ Unmatched tables */
 .unmatched-section {
     margin-bottom: 2rem;
@@ -565,6 +660,24 @@
         <div id="matching-results" style="display:none"></div>
     </div>
     <div id="coverage-error" class="coverage-error" style="display:none"></div>
+</div>
+
+{# ------------------------------------------------------------------ Drift detection panel #}
+<div class="drift-panel" id="drift-panel">
+    <div class="drift-panel-header">
+        <span class="drift-panel-title">Drift Detection</span>
+        <button class="btn btn-secondary btn-sm" onclick="runDriftScan(this)">
+            Run Drift Scan
+        </button>
+    </div>
+    <div id="drift-loading" class="coverage-loading" style="display:none">Running drift scan…</div>
+    <div id="drift-rules-content">
+        <div class="drift-rule-list" id="drift-rule-rows">
+            {# Populated by loadDriftSummary() #}
+        </div>
+        <div class="drift-last-scan" id="drift-last-scan"></div>
+    </div>
+    <div class="drift-scan-results" id="drift-scan-results"></div>
 </div>
 
 {# ------------------------------------------------------------------ Unmatched tables (populated by JS) #}
@@ -1053,7 +1166,121 @@ function renderMatchingResults(data, el) {
     el.style.display = '';
 }
 
-document.addEventListener('DOMContentLoaded', loadCoverage);
+document.addEventListener('DOMContentLoaded', () => {
+    loadCoverage();
+    loadDriftSummary();
+});
+
+// --------------------------------------------------------------------------
+// Drift detection
+// --------------------------------------------------------------------------
+
+const DRIFT_RULE_META = {
+    note_mismatch:         { label: 'note_mismatch',         mode: 'auto',   modeLabel: '⚡ Auto-fix' },
+    link_contradicts_note: { label: 'link_contradicts_note', mode: 'manual', modeLabel: '👤 Manual' },
+    duplicate_discord:     { label: 'duplicate_discord',     mode: 'manual', modeLabel: '👤 Manual' },
+    stale_discord_link:    { label: 'stale_discord_link',    mode: 'info',   modeLabel: 'ℹ Info' },
+};
+
+async function loadDriftSummary() {
+    try {
+        const r = await fetch('/admin/drift/summary');
+        const d = await r.json();
+        if (!d.ok) return;
+        renderDriftRules(d.data);
+    } catch(e) {
+        // silently fail — drift summary is non-critical
+    }
+}
+
+function renderDriftRules(data) {
+    const container = document.getElementById('drift-rule-rows');
+    const lastEl = document.getElementById('drift-last-scan');
+    if (!container) return;
+
+    let latestScan = null;
+    const rows = Object.entries(DRIFT_RULE_META).map(([type, meta]) => {
+        const s = data[type] || { open_count: 0, resolved_30d: 0, last_triggered: null };
+        const hasOpen = s.open_count > 0;
+        const statusIcon = hasOpen ? '⚠️' : '✅';
+        if (s.last_triggered && (!latestScan || s.last_triggered > latestScan)) {
+            latestScan = s.last_triggered;
+        }
+        return `<div class="drift-rule-row">
+            <span class="drift-rule-status">${statusIcon}</span>
+            <span class="drift-rule-name">${meta.label}</span>
+            <span class="drift-rule-open ${hasOpen ? 'drift-rule-open--warn' : ''}">${s.open_count} open</span>
+            <span class="drift-rule-resolved">${s.resolved_30d} fixed (30d)</span>
+            <span class="drift-rule-mode drift-rule-mode--${meta.mode}">${meta.modeLabel}</span>
+        </div>`;
+    }).join('');
+    container.innerHTML = rows;
+
+    if (latestScan) {
+        const dt = new Date(latestScan);
+        const now = new Date();
+        const diffH = Math.round((now - dt) / 3600000);
+        const ago = diffH < 1 ? 'just now'
+                  : diffH < 24 ? `${diffH}h ago`
+                  : `${Math.round(diffH/24)}d ago`;
+        lastEl.textContent = `Last drift issue detected: ${ago}`;
+    } else {
+        lastEl.textContent = 'No drift issues detected yet.';
+    }
+}
+
+async function runDriftScan(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Scanning…';
+    const loadingEl = document.getElementById('drift-loading');
+    const resultsEl = document.getElementById('drift-scan-results');
+    loadingEl.style.display = '';
+    resultsEl.style.display = 'none';
+    resultsEl.innerHTML = '';
+    try {
+        const r = await fetch('/admin/drift/scan', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            renderDriftScanResults(d.data, resultsEl);
+            await loadDriftSummary();
+        } else {
+            showToast('Drift scan error: ' + (d.error || 'Unknown'), true);
+        }
+    } catch(e) {
+        showToast('Drift scan request failed', true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Drift Scan';
+        loadingEl.style.display = 'none';
+    }
+}
+
+function renderDriftScanResults(data, el) {
+    const nm = data.note_mismatch || {};
+    const lc = data.link_contradicts_note || {};
+    const dd = data.duplicate_discord || {};
+
+    let html = '';
+
+    html += `<div class="drift-scan-result-row">
+        <span class="drift-result-type">note_mismatch</span>
+        <span class="drift-result-detected">${nm.detected || 0} detected</span>
+        ${(nm.mitigated || 0) > 0 ? `<span class="drift-result-mitigated">${nm.mitigated} auto-fixed</span>` : ''}
+    </div>`;
+
+    html += `<div class="drift-scan-result-row">
+        <span class="drift-result-type">link_contradicts_note</span>
+        <span class="drift-result-detected">${lc.detected || 0} detected</span>
+    </div>`;
+
+    html += `<div class="drift-scan-result-row">
+        <span class="drift-result-type">duplicate_discord / stale</span>
+        <span class="drift-result-detected">${dd.detected || 0} detected</span>
+    </div>`;
+
+    el.innerHTML = html;
+    el.style.display = '';
+}
 
 // --------------------------------------------------------------------------
 // Existing rule / fix / alias functions

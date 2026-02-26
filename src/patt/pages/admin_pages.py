@@ -1834,6 +1834,69 @@ async def admin_matching_coverage(
     })
 
 
+@router.post("/drift/scan")
+async def admin_drift_scan(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run a drift scan now and return results synchronously."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.drift_scanner import run_drift_scan
+    try:
+        results = await run_drift_scan(pool)
+        return JSONResponse({"ok": True, "data": results})
+    except Exception as exc:
+        logger.error("Drift scan failed: %s", exc, exc_info=True)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+@router.get("/drift/summary")
+async def admin_drift_summary(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return open issue counts for all drift rule types."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.drift_scanner import DRIFT_RULE_TYPES
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT
+                   issue_type,
+                   COUNT(*) FILTER (WHERE resolved_at IS NULL)            AS open_count,
+                   COUNT(*) FILTER (WHERE resolved_at IS NOT NULL
+                                      AND resolved_at > NOW() - INTERVAL '30 days') AS resolved_30d,
+                   MAX(created_at) AS last_triggered
+               FROM guild_identity.audit_issues
+               WHERE issue_type = ANY($1::text[])
+               GROUP BY issue_type""",
+            list(DRIFT_RULE_TYPES),
+        )
+    by_type = {r["issue_type"]: r for r in rows}
+    summary = {}
+    for issue_type in DRIFT_RULE_TYPES:
+        r = by_type.get(issue_type)
+        summary[issue_type] = {
+            "open_count": r["open_count"] if r else 0,
+            "resolved_30d": r["resolved_30d"] if r else 0,
+            "last_triggered": r["last_triggered"].isoformat() if r and r["last_triggered"] else None,
+        }
+    return JSONResponse({"ok": True, "data": summary})
+
+
 @router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)
 async def admin_audit_resolve(
     request: Request,

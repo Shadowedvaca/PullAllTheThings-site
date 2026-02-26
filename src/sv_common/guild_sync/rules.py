@@ -105,4 +105,39 @@ RULES: dict[str, RuleDefinition] = {
         auto_mitigate=False,
         mitigate_fn=None,
     ),
+    # --- Drift detection rules (Phase 3.0C) ---
+    "link_contradicts_note": RuleDefinition(
+        issue_type="link_contradicts_note",
+        name="Link Contradicts Note",
+        description=(
+            "A character's guild note key doesn't match any known identity for the "
+            "linked player (Discord username, display name, or known aliases). "
+            "The link may be stale. Manual review required."
+        ),
+        severity="info",
+        auto_mitigate=False,
+        mitigate_fn=None,
+    ),
+    "duplicate_discord": RuleDefinition(
+        issue_type="duplicate_discord",
+        name="Duplicate Discord Link",
+        description=(
+            "Two active players point to the same Discord account — an impossible state. "
+            "Manual admin action required to determine the correct player record."
+        ),
+        severity="error",
+        auto_mitigate=False,
+        mitigate_fn=None,
+    ),
+    "stale_discord_link": RuleDefinition(
+        issue_type="stale_discord_link",
+        name="Stale Discord Link",
+        description=(
+            "A player is linked to a Discord account that is no longer in the server. "
+            "Informational — the person may return. Resolves automatically if they rejoin."
+        ),
+        severity="info",
+        auto_mitigate=False,
+        mitigate_fn=None,
+    ),
 }

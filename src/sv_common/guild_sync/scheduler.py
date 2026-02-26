@@ -28,8 +28,8 @@ import discord
 from .blizzard_client import BlizzardClient
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members
+from .drift_scanner import run_drift_scan
 from .integrity_checker import run_integrity_check
-from .mitigations import run_auto_mitigations
 from .reporter import send_new_issues_report, send_sync_summary
 from .sync_logger import SyncLogEntry
 
@@ -115,8 +115,8 @@ class GuildSyncScheduler:
 
         Pipeline:
           1. sync_blizzard_roster()     — update characters from Blizzard API
-          2. run_integrity_check()      — detect new issues
-          3. run_auto_mitigations()     — fix what can be auto-fixed
+          2. run_integrity_check()      — detect orphans, role mismatches, stale chars
+          3. run_drift_scan()           — detect note mismatches + link contradictions + auto-fix
           4. send_sync_summary()        — Discord report if notable
         """
         channel = self._get_audit_channel()
@@ -129,14 +129,15 @@ class GuildSyncScheduler:
             sync_stats = await sync_blizzard_roster(self.db_pool, characters)
             log.stats = sync_stats
 
-            # Step 2: Run integrity check
+            # Step 2: Run integrity check (orphans, role mismatches, stale chars)
             integrity_stats = await run_integrity_check(self.db_pool)
 
-            # Step 3: Auto-mitigate what we can
-            await run_auto_mitigations(self.db_pool)
+            # Step 3: Drift scan + auto-mitigations
+            drift_stats = await run_drift_scan(self.db_pool)
 
             # Step 4: Report new issues
-            if channel and integrity_stats.get("total_new", 0) > 0:
+            total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
+            if channel and total_new > 0:
                 await send_new_issues_report(self.db_pool, channel)
 
             # Step 5: Retry onboarding verifications (new roster data may unlock matches)
@@ -146,7 +147,7 @@ class GuildSyncScheduler:
 
             # Send sync summary if notable
             if channel:
-                combined_stats = {**sync_stats, **integrity_stats}
+                combined_stats = {**sync_stats, **integrity_stats, "drift": drift_stats}
                 await send_sync_summary(channel, "Blizzard API", combined_stats, duration)
 
     async def run_discord_sync(self):
@@ -155,7 +156,7 @@ class GuildSyncScheduler:
         Pipeline:
           1. sync_discord_members()     — update discord_users table
           2. run_integrity_check()      — detect new issues (especially role_mismatch)
-          3. run_auto_mitigations()     — fix auto-mitigatable issues
+          3. run_drift_scan()           — detect note mismatches + stale links + auto-fix
         """
         async with SyncLogEntry(self.db_pool, "discord_bot") as log:
             # Find the guild that contains our audit channel
@@ -172,7 +173,7 @@ class GuildSyncScheduler:
             log.stats = sync_stats
 
             await run_integrity_check(self.db_pool)
-            await run_auto_mitigations(self.db_pool)
+            await run_drift_scan(self.db_pool)
 
     async def run_addon_sync(self, addon_data: list[dict]):
         """Process addon upload and run downstream pipeline.
@@ -180,7 +181,7 @@ class GuildSyncScheduler:
         Pipeline:
           1. sync_addon_data()          — write notes, log note_mismatch issues
           2. run_integrity_check()      — detect orphans and other issues
-          3. run_auto_mitigations()     — auto-fix note_mismatch and others
+          3. run_drift_scan()           — detect note mismatches + link contradictions + auto-fix
           4. send_sync_summary()        — Discord report if notable
 
         Note: run_matching() is NOT called here. Use POST /api/identity/run-matching
@@ -198,16 +199,17 @@ class GuildSyncScheduler:
             # Step 2: Detect all other issue types
             integrity_stats = await run_integrity_check(self.db_pool)
 
-            # Step 3: Auto-mitigate (processes note_mismatch issues logged above)
-            await run_auto_mitigations(self.db_pool)
+            # Step 3: Drift scan + auto-mitigations
+            drift_stats = await run_drift_scan(self.db_pool)
 
             duration = time.time() - start
 
-            if channel and integrity_stats.get("total_new", 0) > 0:
+            total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
+            if channel and total_new > 0:
                 await send_new_issues_report(self.db_pool, channel)
 
             if channel:
-                combined_stats = {**addon_stats, **integrity_stats}
+                combined_stats = {**addon_stats, **integrity_stats, "drift": drift_stats}
                 await send_sync_summary(channel, "WoW Addon Upload", combined_stats, duration)
 
     async def run_onboarding_check(self):

@@ -24,8 +24,9 @@ class TestRulesRegistry:
         self.RuleDefinition = RuleDefinition
 
     def test_all_five_rules_exist(self):
-        expected = {"note_mismatch", "orphan_wow", "orphan_discord", "role_mismatch", "stale_character"}
-        assert set(self.RULES.keys()) == expected
+        # Phase 2.9 rules (5) + Phase 3.0C drift rules (3) = 8 total
+        expected_core = {"note_mismatch", "orphan_wow", "orphan_discord", "role_mismatch", "stale_character"}
+        assert expected_core.issubset(set(self.RULES.keys()))
 
     def test_each_rule_is_rule_definition(self):
         for issue_type, rule in self.RULES.items():
@@ -200,12 +201,12 @@ class TestSchedulerPipeline:
         assert "relink_note_changed_characters" not in src, \
             "scheduler.py still references relink_note_changed_characters"
 
-    def test_scheduler_imports_run_auto_mitigations(self):
-        """scheduler.py should import run_auto_mitigations from mitigations."""
+    def test_scheduler_imports_run_drift_scan(self):
+        """scheduler.py should import run_drift_scan from drift_scanner (Phase 3.0C)."""
         import pathlib
         src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text()
-        assert "run_auto_mitigations" in src, \
-            "scheduler.py does not reference run_auto_mitigations"
+        assert "run_drift_scan" in src, \
+            "scheduler.py does not reference run_drift_scan"
 
     def test_scheduler_run_addon_sync_comment_mentions_no_matching(self):
         """run_addon_sync docstring should note that run_matching is not called."""

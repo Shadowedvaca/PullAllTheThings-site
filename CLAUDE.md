@@ -760,6 +760,7 @@ CREATE TABLE patt.mito_titles (
 - Phase 2.5A–D: Guild identity system (Blizzard API, Discord sync, addon, integrity checker)
 - Phase 3.0A: Matching transparency — link_source/confidence on player_characters, coverage dashboard
 - Phase 3.0B: Iterative rule runner — pluggable matching rules, progressive discovery, per-rule results UI
+- Phase 3.0C: Drift Detection — note_mismatch, link_contradicts_note, duplicate_discord, stale_discord_link rules; drift_scanner.py orchestrator; drift panel on Data Quality page
 - Phase 2.6: Onboarding system (built but NOT activated — on_member_join not wired)
 - Phase 2.7: Data Model Migration — Clean 3NF rebuild (complete)
   - `common.guild_members` and `common.characters` eliminated from all code
@@ -771,17 +772,17 @@ CREATE TABLE patt.mito_titles (
   - 202 unit tests pass, 59 skipped (DB-dependent or legacy script tests)
 
 ### Current Phase
-- Phase 3.0B: Iterative Rule Runner — **COMPLETE**
+- Phase 3.0C: Drift Detection — **COMPLETE**
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
 - sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting (`src/sv_common/discord/`)
-- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, attribution functions (Phase 3.0A), **matching_rules package: NoteGroupRule + NameMatchRule + iterative runner with per-rule result tracking (Phase 3.0B)**
+- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, attribution functions (Phase 3.0A), matching_rules package (Phase 3.0B), **drift_scanner.py + detect_link_note_contradictions + detect_duplicate_discord_links (Phase 3.0C)**
 - Crafting Corner: `/crafting-corner` public page, `/api/crafting/*` routes, profession/recipe DB tables, adaptive sync cadence
 - Admin Crafting Sync page: `/admin/crafting-sync` — force refresh, season config, sync stats
-- Data Quality Engine: `rules.py` (5-rule registry), `mitigations.py` (targeted fix functions + `run_auto_mitigations`), refactored `integrity_checker.py` (named detect functions)
-- Admin Data Quality page: `/admin/data-quality` — rule stats, open counts, recent findings, manual scan/fix triggers
+- Data Quality Engine: `rules.py` (8-rule registry including 3 drift rules), `mitigations.py` (targeted fix functions + `run_auto_mitigations`), refactored `integrity_checker.py` (named detect functions + drift detectors), `drift_scanner.py` (orchestrates drift rules)
+- Admin Data Quality page: `/admin/data-quality` — rule stats, open counts, recent findings, manual scan/fix triggers; **Drift Detection panel** with per-rule status, Run Drift Scan button (`POST /admin/drift/scan`, `GET /admin/drift/summary`)
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Auth middleware: `get_current_player()`, `require_rank(level)` deps in `src/patt/deps.py`
 - Cookie-based auth for page routes: `get_page_player()`, `require_page_rank(level)` in deps.py

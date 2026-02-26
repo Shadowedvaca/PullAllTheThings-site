@@ -433,13 +433,223 @@ async def detect_stale_character(conn: asyncpg.Connection) -> int:
     return new_count
 
 
+async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
+    """
+    Find characters where the guild note key doesn't match ANY known identity
+    for their linked player. A full periodic scan (not triggered by a note change).
+
+    Skips:
+    - Characters with no guild note
+    - Characters where note key matches Discord username/display_name
+    - Characters where note key is in player_note_aliases
+    - Characters with link_source = 'manual' AND confidence = 'confirmed'
+      (human overrode the note — trust the human)
+
+    Returns count of new issues created.
+    """
+    import re
+    from .identity_engine import _extract_note_key, normalize_name
+
+    rows = await conn.fetch(
+        """SELECT
+               wc.id          AS char_id,
+               wc.character_name,
+               wc.guild_note,
+               pc.player_id,
+               pc.link_source,
+               pc.confidence,
+               p.display_name          AS player_display_name,
+               du.username             AS discord_username,
+               du.display_name         AS discord_display_name
+           FROM guild_identity.player_characters pc
+           JOIN guild_identity.wow_characters wc  ON wc.id = pc.character_id
+           JOIN guild_identity.players p           ON p.id  = pc.player_id
+           JOIN guild_identity.discord_users du    ON du.id = p.discord_user_id
+           WHERE wc.removed_at IS NULL
+             AND wc.guild_note IS NOT NULL
+             AND wc.guild_note != ''
+             AND du.is_present = TRUE
+             AND NOT (pc.link_source = 'manual' AND pc.confidence = 'confirmed')"""
+    )
+
+    alias_rows = await conn.fetch(
+        "SELECT player_id, alias FROM guild_identity.player_note_aliases"
+    )
+    aliases_by_player: dict[int, set] = {}
+    for ar in alias_rows:
+        aliases_by_player.setdefault(ar["player_id"], set()).add(ar["alias"])
+
+    new_count = 0
+    for row in rows:
+        note_key = _extract_note_key({"guild_note": row["guild_note"]})
+        if not note_key:
+            continue
+
+        # Known alias for this player → not a contradiction
+        if note_key in aliases_by_player.get(row["player_id"], set()):
+            continue
+
+        # Check against Discord identities
+        discord_candidates = [
+            normalize_name(row["discord_username"] or ""),
+            normalize_name(row["discord_display_name"] or ""),
+        ]
+        still_matches = False
+        for name in discord_candidates:
+            if not name:
+                continue
+            if name == note_key:
+                still_matches = True
+                break
+            words = re.split(r"[/\-\s]+", name)
+            if note_key in words:
+                still_matches = True
+                break
+            if len(note_key) >= 3 and note_key in name:
+                still_matches = True
+                break
+
+        if still_matches:
+            continue
+
+        h = make_issue_hash("link_contradicts_note", row["char_id"])
+        discord_identity = row["discord_display_name"] or row["discord_username"] or "?"
+        created = await _upsert_issue(
+            conn,
+            issue_type="link_contradicts_note",
+            severity="info",
+            wow_character_id=row["char_id"],
+            summary=(
+                f"'{row['character_name']}' note says '{note_key}' "
+                f"but is linked to '{discord_identity}' — may be stale"
+            ),
+            details={
+                "character_name": row["character_name"],
+                "note_key": note_key,
+                "guild_note": row["guild_note"],
+                "old_player_id": row["player_id"],
+                "old_player_name": row["player_display_name"],
+                "discord_username": row["discord_username"],
+                "discord_display_name": row["discord_display_name"],
+                "link_source": row["link_source"],
+                "confidence": row["confidence"],
+            },
+            issue_hash=h,
+        )
+        if created:
+            new_count += 1
+            logger.info(
+                "link_contradicts_note: '%s' note key '%s' doesn't match player '%s' (Discord: '%s')",
+                row["character_name"], note_key, row["player_display_name"], discord_identity,
+            )
+
+    return new_count
+
+
+async def detect_duplicate_discord_links(conn: asyncpg.Connection) -> int:
+    """
+    Detect impossible states in Discord ↔ Player links.
+
+    Sub-checks:
+    1. Two active players with the same discord_user_id (constraint violation edge case)
+    2. Player's discord_user_id points to a Discord user who left (is_present = FALSE)
+
+    Returns count of new issues created.
+    """
+    new_count = 0
+
+    # Check 1: Duplicate discord links
+    dupe_rows = await conn.fetch(
+        """SELECT discord_user_id, COUNT(*) AS cnt, array_agg(id) AS player_ids
+           FROM guild_identity.players
+           WHERE discord_user_id IS NOT NULL
+             AND is_active = TRUE
+           GROUP BY discord_user_id
+           HAVING COUNT(*) > 1"""
+    )
+    for row in dupe_rows:
+        du = await conn.fetchrow(
+            "SELECT username, display_name FROM guild_identity.discord_users WHERE id = $1",
+            row["discord_user_id"],
+        )
+        discord_name = (
+            (du["display_name"] or du["username"]) if du else f"id={row['discord_user_id']}"
+        )
+        for player_id in row["player_ids"]:
+            h = make_issue_hash("duplicate_discord", row["discord_user_id"], player_id)
+            created = await _upsert_issue(
+                conn,
+                issue_type="duplicate_discord",
+                severity="error",
+                discord_member_id=row["discord_user_id"],
+                summary=(
+                    f"Discord user '{discord_name}' is linked to {row['cnt']} players — "
+                    f"impossible state (player id={player_id})"
+                ),
+                details={
+                    "discord_user_id": row["discord_user_id"],
+                    "discord_name": discord_name,
+                    "player_id": player_id,
+                    "total_linked_players": row["cnt"],
+                },
+                issue_hash=h,
+            )
+            if created:
+                new_count += 1
+                logger.warning(
+                    "duplicate_discord: Discord user id=%d linked to %d players: %s",
+                    row["discord_user_id"], row["cnt"], list(row["player_ids"]),
+                )
+
+    # Check 2: Stale Discord links (user left server)
+    stale_rows = await conn.fetch(
+        """SELECT p.id AS player_id, p.display_name,
+                  du.id AS discord_user_id, du.username, du.display_name AS discord_display
+           FROM guild_identity.players p
+           JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+           WHERE du.is_present = FALSE
+             AND p.is_active = TRUE"""
+    )
+    for row in stale_rows:
+        h = make_issue_hash("stale_discord_link", row["player_id"])
+        discord_name = row["discord_display"] or row["username"] or f"id={row['discord_user_id']}"
+        created = await _upsert_issue(
+            conn,
+            issue_type="stale_discord_link",
+            severity="info",
+            discord_member_id=row["discord_user_id"],
+            summary=(
+                f"Player '{row['display_name']}' is linked to '{discord_name}' "
+                f"who is no longer in the server"
+            ),
+            details={
+                "player_id": row["player_id"],
+                "player_display_name": row["display_name"],
+                "discord_user_id": row["discord_user_id"],
+                "discord_name": discord_name,
+            },
+            issue_hash=h,
+        )
+        if created:
+            new_count += 1
+            logger.info(
+                "stale_discord_link: player '%s' linked to departed Discord user '%s'",
+                row["display_name"], discord_name,
+            )
+
+    return new_count
+
+
 # Mapping for admin scan-by-type endpoint
 DETECT_FUNCTIONS = {
     "note_mismatch": detect_note_mismatch,
     "orphan_wow": detect_orphan_wow,
     "orphan_discord": detect_orphan_discord,
     "stale_character": detect_stale_character,
+    "link_contradicts_note": detect_link_note_contradictions,
+    "duplicate_discord": detect_duplicate_discord_links,
     # role_mismatch handled specially (returns tuple)
+    # stale_discord_link is part of detect_duplicate_discord_links (combined check)
 }
 
 
@@ -541,4 +751,43 @@ async def _auto_resolve_fixed_issues(conn: asyncpg.Connection):
                  WHERE last_login_timestamp >= $2
              )""",
         now, stale_ts,
+    )
+
+    # Resolve stale_discord_link issues where the user has returned to the server
+    await conn.execute(
+        """UPDATE guild_identity.audit_issues SET
+            resolved_at = $1, resolved_by = 'auto'
+           WHERE issue_type = 'stale_discord_link'
+             AND resolved_at IS NULL
+             AND discord_member_id IN (
+                 SELECT id FROM guild_identity.discord_users
+                 WHERE is_present = TRUE
+             )""",
+        now,
+    )
+
+    # Resolve link_contradicts_note issues where the character is now unlinked
+    await conn.execute(
+        """UPDATE guild_identity.audit_issues SET
+            resolved_at = $1, resolved_by = 'auto'
+           WHERE issue_type = 'link_contradicts_note'
+             AND resolved_at IS NULL
+             AND wow_character_id NOT IN (
+                 SELECT character_id FROM guild_identity.player_characters
+             )""",
+        now,
+    )
+
+    # Resolve duplicate_discord issues where only one active player remains per discord user
+    await conn.execute(
+        """UPDATE guild_identity.audit_issues SET
+            resolved_at = $1, resolved_by = 'auto'
+           WHERE issue_type = 'duplicate_discord'
+             AND resolved_at IS NULL
+             AND discord_member_id IN (
+                 SELECT discord_user_id FROM guild_identity.players
+                 WHERE discord_user_id IS NOT NULL AND is_active = TRUE
+                 GROUP BY discord_user_id HAVING COUNT(*) = 1
+             )""",
+        now,
     )
