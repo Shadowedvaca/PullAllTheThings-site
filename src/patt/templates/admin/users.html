@@ -1,65 +1,306 @@
 {% extends "base_admin.html" %}
-{% block title %}User Accounts — Admin{% endblock %}
+{% block title %}User Accounts — Admin — Pull All The Things{% endblock %}
 {% block nav_users %}active{% endblock %}
 
+{% block head %}
+<style>
+/* ------------------------------------------------------------------ layout */
+.ua-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+}
+.ua-title {
+    font-family: var(--font-display);
+    color: var(--color-accent);
+    font-size: 1.6rem;
+    margin: 0 0 0.25rem 0;
+}
+.ua-subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* ------------------------------------------------------------------ stat pills */
+.ua-stats {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.75rem;
+}
+.ua-stat {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 0.6rem 1.1rem;
+    text-align: center;
+    min-width: 90px;
+}
+.ua-stat__num {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1;
+}
+.ua-stat__label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+}
+.ua-stat--active .ua-stat__num  { color: var(--color-success); }
+.ua-stat--disabled .ua-stat__num { color: var(--color-danger); }
+.ua-stat--orphan .ua-stat__num  { color: var(--color-warning); }
+
+/* ------------------------------------------------------------------ table */
+.ua-table-wrap {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+.ua-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+.ua-table thead th {
+    padding: 0.65rem 1rem;
+    text-align: left;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-card);
+    white-space: nowrap;
+}
+.ua-table thead th:last-child { text-align: right; }
+.ua-table tbody tr {
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.12s;
+}
+.ua-table tbody tr:last-child { border-bottom: none; }
+.ua-table tbody tr:hover { background: var(--color-bg-card); }
+
+.ua-table td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+}
+.ua-td-email {
+    font-family: var(--font-mono);
+    font-size: 0.83rem;
+    color: var(--color-text);
+}
+.ua-td-player a {
+    color: var(--color-accent);
+    text-decoration: none;
+    font-weight: 600;
+}
+.ua-td-player a:hover { text-decoration: underline; }
+.ua-td-muted {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+}
+.ua-td-joined {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+.ua-td-actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ status badge */
+.ua-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.ua-badge--active {
+    background: rgba(74, 222, 128, 0.12);
+    color: var(--color-success);
+    border: 1px solid rgba(74, 222, 128, 0.25);
+}
+.ua-badge--disabled {
+    background: rgba(248, 113, 113, 0.12);
+    color: var(--color-danger);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+}
+.ua-badge__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ buttons */
+.ua-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
+    line-height: 1.4;
+}
+.ua-btn--toggle {
+    background: transparent;
+    border-color: var(--color-border-light);
+    color: var(--color-text-muted);
+}
+.ua-btn--toggle:hover {
+    border-color: var(--color-accent-dim);
+    color: var(--color-text);
+}
+.ua-btn--delete {
+    background: transparent;
+    border-color: rgba(248, 113, 113, 0.3);
+    color: var(--color-danger);
+    margin-left: 0.4rem;
+}
+.ua-btn--delete:hover {
+    background: rgba(248, 113, 113, 0.1);
+    border-color: var(--color-danger);
+}
+
+/* ------------------------------------------------------------------ empty state */
+.ua-empty {
+    padding: 3.5rem 2rem;
+    text-align: center;
+    color: var(--color-text-muted);
+}
+.ua-empty__icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.4;
+}
+.ua-empty__text {
+    font-size: 0.95rem;
+}
+
+/* ------------------------------------------------------------------ toast */
+#ua-toast {
+    display: none;
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-family: var(--font-body);
+    z-index: 9999;
+    max-width: 340px;
+    box-shadow: var(--shadow);
+    animation: ua-fadein 0.2s ease;
+}
+@keyframes ua-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="padding: 2rem;">
-    <h1 style="font-family: var(--font-display); color: var(--gold); margin-bottom: 0.25rem;">User Accounts</h1>
-    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Registered website accounts. Delete an account to let a player re-register.</p>
 
-    <div id="toast" style="display:none; position:fixed; bottom:1.5rem; right:1.5rem; padding:0.75rem 1.25rem;
-         border-radius:6px; font-size:0.9rem; z-index:999; font-family: var(--font-body);"></div>
+<div id="ua-toast"></div>
 
+<div class="ua-header">
+    <div>
+        <h1 class="ua-title">User Accounts</h1>
+        <p class="ua-subtitle">Registered website logins. Delete an account to let a player re-register with a new password.</p>
+    </div>
+</div>
+
+{% set total    = users | length %}
+{% set active   = users | selectattr('is_active') | list | length %}
+{% set disabled = total - active %}
+{% set orphaned = users | selectattr('player_id', 'none') | list | length %}
+
+<div class="ua-stats">
+    <div class="ua-stat">
+        <div class="ua-stat__num">{{ total }}</div>
+        <div class="ua-stat__label">Total</div>
+    </div>
+    <div class="ua-stat ua-stat--active">
+        <div class="ua-stat__num">{{ active }}</div>
+        <div class="ua-stat__label">Active</div>
+    </div>
+    {% if disabled %}
+    <div class="ua-stat ua-stat--disabled">
+        <div class="ua-stat__num">{{ disabled }}</div>
+        <div class="ua-stat__label">Disabled</div>
+    </div>
+    {% endif %}
+    {% if orphaned %}
+    <div class="ua-stat ua-stat--orphan">
+        <div class="ua-stat__num">{{ orphaned }}</div>
+        <div class="ua-stat__label">No Player</div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="ua-table-wrap">
     {% if users %}
-    <table style="width:100%; border-collapse:collapse; font-family: var(--font-body); font-size:0.9rem;">
+    <table class="ua-table">
         <thead>
-            <tr style="border-bottom: 2px solid var(--border-accent);">
-                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Email</th>
-                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Player</th>
-                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Rank</th>
-                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Status</th>
-                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Joined</th>
-                <th style="padding:0.6rem 0.75rem;"></th>
+            <tr>
+                <th>Email</th>
+                <th>Player</th>
+                <th>Rank</th>
+                <th>Status</th>
+                <th>Joined</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
         {% for u in users %}
-        <tr id="user-row-{{ u.id }}" style="border-bottom: 1px solid var(--border); transition: background 0.15s;"
-            onmouseover="this.style.background='var(--bg-card)'" onmouseout="this.style.background=''">
-            <td style="padding:0.6rem 0.75rem; color:var(--text-primary); font-family:var(--font-mono);">{{ u.email or '—' }}</td>
-            <td style="padding:0.6rem 0.75rem; color:var(--text-primary);">
+        <tr id="user-row-{{ u.id }}">
+            <td class="ua-td-email">{{ u.email or '—' }}</td>
+            <td class="ua-td-player">
                 {% if u.player_id %}
-                    <a href="/admin/players" style="color:var(--gold); text-decoration:none;">{{ u.display_name }}</a>
+                    <a href="/admin/players">{{ u.display_name }}</a>
                 {% else %}
-                    <span style="color:var(--text-secondary);">—</span>
+                    <span class="ua-td-muted">—</span>
                 {% endif %}
             </td>
-            <td style="padding:0.6rem 0.75rem; color:var(--text-secondary);">{{ u.rank_name or '—' }}</td>
-            <td style="padding:0.6rem 0.75rem;">
-                <span id="status-{{ u.id }}" style="padding:0.2rem 0.6rem; border-radius:12px; font-size:0.8rem;
-                    background: {% if u.is_active %}rgba(74,222,128,0.15){% else %}rgba(248,113,113,0.15){% endif %};
-                    color: {% if u.is_active %}#4ade80{% else %}#f87171{% endif %};">
+            <td class="ua-td-muted">{{ u.rank_name or '—' }}</td>
+            <td>
+                <span id="status-{{ u.id }}"
+                      class="ua-badge {% if u.is_active %}ua-badge--active{% else %}ua-badge--disabled{% endif %}">
+                    <span class="ua-badge__dot"></span>
                     {% if u.is_active %}Active{% else %}Disabled{% endif %}
                 </span>
             </td>
-            <td style="padding:0.6rem 0.75rem; color:var(--text-secondary); font-family:var(--font-mono); font-size:0.8rem;">
+            <td class="ua-td-joined">
                 {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}
             </td>
-            <td style="padding:0.6rem 0.75rem; text-align:right; white-space:nowrap;">
-                <button onclick="toggleActive({{ u.id }})"
+            <td class="ua-td-actions">
+                <button class="ua-btn ua-btn--toggle"
                         id="toggle-btn-{{ u.id }}"
-                        style="padding:0.3rem 0.75rem; border-radius:4px; border:1px solid var(--border-accent);
-                               background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem;
-                               margin-right:0.5rem;"
-                        onmouseover="this.style.color='var(--text-primary)'"
-                        onmouseout="this.style.color='var(--text-secondary)'">
+                        onclick="toggleActive({{ u.id }})">
                     {% if u.is_active %}Disable{% else %}Enable{% endif %}
                 </button>
-                <button onclick="deleteUser({{ u.id }}, '{{ u.email or u.display_name or 'this user' }}')"
-                        style="padding:0.3rem 0.75rem; border-radius:4px; border:1px solid rgba(248,113,113,0.4);
-                               background:transparent; color:#f87171; cursor:pointer; font-size:0.8rem;"
-                        onmouseover="this.style.background='rgba(248,113,113,0.1)'"
-                        onmouseout="this.style.background='transparent'">
+                <button class="ua-btn ua-btn--delete"
+                        onclick="deleteUser({{ u.id }}, {{ (u.email or u.display_name or 'this user') | tojson }})">
                     Delete
                 </button>
             </td>
@@ -68,47 +309,58 @@
         </tbody>
     </table>
     {% else %}
-    <p style="color:var(--text-secondary); text-align:center; padding:3rem;">No registered user accounts found.</p>
+    <div class="ua-empty">
+        <div class="ua-empty__icon">👤</div>
+        <div class="ua-empty__text">No registered user accounts found.</div>
+    </div>
     {% endif %}
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
 function showToast(msg, type) {
-    const t = document.getElementById('toast');
+    const t = document.getElementById('ua-toast');
     t.textContent = msg;
-    t.style.background = type === 'success' ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)';
-    t.style.border = type === 'success' ? '1px solid #4ade80' : '1px solid #f87171';
-    t.style.color = type === 'success' ? '#4ade80' : '#f87171';
+    const ok = type === 'success';
+    t.style.background = ok ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)';
+    t.style.border = `1px solid ${ok ? '#4ade80' : '#f87171'}`;
+    t.style.color = ok ? '#4ade80' : '#f87171';
     t.style.display = 'block';
     clearTimeout(t._timer);
     t._timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
 }
 
 async function toggleActive(userId) {
+    const btn = document.getElementById(`toggle-btn-${userId}`);
+    const prev = btn.textContent.trim();
+    btn.disabled = true;
+    btn.textContent = '…';
     try {
         const res = await fetch(`/admin/users/${userId}/toggle-active`, { method: 'PATCH' });
         const data = await res.json();
         if (data.ok) {
             const isActive = data.data.is_active;
-            const span = document.getElementById(`status-${userId}`);
-            const btn = document.getElementById(`toggle-btn-${userId}`);
-            span.textContent = isActive ? 'Active' : 'Disabled';
-            span.style.background = isActive ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)';
-            span.style.color = isActive ? '#4ade80' : '#f87171';
+            const badge = document.getElementById(`status-${userId}`);
+            badge.className = `ua-badge ${isActive ? 'ua-badge--active' : 'ua-badge--disabled'}`;
+            badge.innerHTML = `<span class="ua-badge__dot"></span>${isActive ? 'Active' : 'Disabled'}`;
             btn.textContent = isActive ? 'Disable' : 'Enable';
             showToast(`Account ${isActive ? 'enabled' : 'disabled'}`, 'success');
         } else {
+            btn.textContent = prev;
             showToast('Error: ' + (data.error || '?'), 'error');
         }
     } catch (e) {
+        btn.textContent = prev;
         showToast('Network error', 'error');
+    } finally {
+        btn.disabled = false;
     }
 }
 
 async function deleteUser(userId, label) {
-    if (!confirm(`Delete account for "${label}"?\n\nThis removes their login credentials. Their player record will remain and they can re-register.`)) return;
+    if (!confirm(`Delete account for "${label}"?\n\nThis removes their login credentials. Their player record stays and they can re-register.`)) return;
     try {
         const res = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
         const data = await res.json();
