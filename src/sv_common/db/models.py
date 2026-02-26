@@ -7,7 +7,8 @@ patt schema: campaigns, campaign_entries, votes, campaign_results,
              recurring_events
 guild_identity schema: roles, classes, specializations, players,
                        wow_characters, discord_users, player_characters,
-                       audit_issues, sync_log, onboarding_sessions
+                       player_note_aliases, audit_issues, sync_log,
+                       onboarding_sessions
 """
 
 from datetime import date, datetime, time
@@ -661,6 +662,7 @@ class Player(Base):
         foreign_keys=[offspec_spec_id]
     )
     characters: Mapped[list["PlayerCharacter"]] = relationship(back_populates="player")
+    note_aliases: Mapped[list["PlayerNoteAlias"]] = relationship(back_populates="player")
     availability: Mapped[list["PlayerAvailability"]] = relationship(back_populates="player")
     invite_codes: Mapped[list[InviteCode]] = relationship(
         back_populates="player", foreign_keys="InviteCode.player_id"
@@ -706,6 +708,32 @@ class PlayerCharacter(Base):
 # ---------------------------------------------------------------------------
 # guild_identity schema — system tables
 # ---------------------------------------------------------------------------
+
+
+class PlayerNoteAlias(Base):
+    """Confirmed note_key → player mappings, built up as characters are linked."""
+
+    __tablename__ = "player_note_aliases"
+    __table_args__ = (
+        UniqueConstraint("player_id", "alias"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.players.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    alias: Mapped[str] = mapped_column(String(50), nullable=False)
+    source: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="note_match"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    player: Mapped["Player"] = relationship(back_populates="note_aliases")
 
 
 class AuditIssue(Base):

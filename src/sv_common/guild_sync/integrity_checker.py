@@ -37,6 +37,23 @@ def make_issue_hash(issue_type: str, *identifiers) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+async def upsert_note_alias(
+    conn: asyncpg.Connection,
+    player_id: int,
+    alias: str,
+    source: str = "note_match",
+) -> None:
+    """Record a confirmed note key → player mapping (idempotent)."""
+    if not alias or not player_id:
+        return
+    await conn.execute(
+        """INSERT INTO guild_identity.player_note_aliases (player_id, alias, source)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (player_id, alias) DO NOTHING""",
+        player_id, alias, source,
+    )
+
+
 async def _upsert_issue(
     conn: asyncpg.Connection,
     issue_type: str,
@@ -119,10 +136,22 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
              AND du.is_present = TRUE"""
     )
 
+    # Load all player aliases in one query (avoids N+1 per character)
+    alias_rows = await conn.fetch(
+        "SELECT player_id, alias FROM guild_identity.player_note_aliases"
+    )
+    aliases_by_player: dict[int, set] = {}
+    for ar in alias_rows:
+        aliases_by_player.setdefault(ar["player_id"], set()).add(ar["alias"])
+
     new_count = 0
     for row in rows:
         note_key = _extract_note_key({"guild_note": row["guild_note"]})
         if not note_key:
+            continue
+
+        # Check note key against known aliases for this player first
+        if note_key in aliases_by_player.get(row["player_id"], set()):
             continue
 
         # Check note key against Discord identities only (not player.display_name,

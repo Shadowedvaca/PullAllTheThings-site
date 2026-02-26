@@ -237,3 +237,80 @@ class TestDbSyncStatKeys:
             "db_sync.py stats should have note_changed count key"
         assert "note_changed_ids" not in src, \
             "db_sync.py should not have note_changed_ids"
+
+
+# ---------------------------------------------------------------------------
+# Note alias registry
+# ---------------------------------------------------------------------------
+
+class TestNoteAliases:
+    def test_upsert_note_alias_is_importable(self):
+        """upsert_note_alias should be importable from integrity_checker."""
+        from sv_common.guild_sync.integrity_checker import upsert_note_alias
+        assert callable(upsert_note_alias)
+
+    def test_upsert_note_alias_is_async(self):
+        import inspect
+        from sv_common.guild_sync.integrity_checker import upsert_note_alias
+        assert inspect.iscoroutinefunction(upsert_note_alias)
+
+    def test_upsert_note_alias_signature(self):
+        import inspect
+        from sv_common.guild_sync.integrity_checker import upsert_note_alias
+        sig = inspect.signature(upsert_note_alias)
+        params = list(sig.parameters.keys())
+        assert "conn" in params
+        assert "player_id" in params
+        assert "alias" in params
+        assert "source" in params
+
+    def test_alias_registry_orm_model(self):
+        """PlayerNoteAlias ORM model should have correct tablename and schema."""
+        from sv_common.db.models import PlayerNoteAlias
+        assert PlayerNoteAlias.__tablename__ == "player_note_aliases"
+        assert PlayerNoteAlias.__table_args__[-1]["schema"] == "guild_identity"
+
+    def test_alias_registry_orm_has_required_columns(self):
+        """PlayerNoteAlias should have id, player_id, alias, source, created_at columns."""
+        from sv_common.db.models import PlayerNoteAlias
+        cols = {c.name for c in PlayerNoteAlias.__table__.columns}
+        assert "id" in cols
+        assert "player_id" in cols
+        assert "alias" in cols
+        assert "source" in cols
+        assert "created_at" in cols
+
+    def test_player_model_has_note_aliases_relationship(self):
+        """Player model should have a note_aliases relationship."""
+        from sv_common.db.models import Player
+        assert hasattr(Player, "note_aliases")
+
+    def test_detect_note_mismatch_loads_aliases(self):
+        """detect_note_mismatch source should reference player_note_aliases table."""
+        import inspect
+        from sv_common.guild_sync.integrity_checker import detect_note_mismatch
+        src = inspect.getsource(detect_note_mismatch)
+        assert "player_note_aliases" in src, \
+            "detect_note_mismatch should query player_note_aliases"
+
+    def test_mitigations_import_upsert_note_alias(self):
+        """mitigations.py should import upsert_note_alias."""
+        import pathlib
+        src = pathlib.Path("src/sv_common/guild_sync/mitigations.py").read_text()
+        assert "upsert_note_alias" in src, \
+            "mitigations.py should use upsert_note_alias"
+
+    def test_identity_engine_import_upsert_note_alias(self):
+        """identity_engine.py should import upsert_note_alias."""
+        import pathlib
+        src = pathlib.Path("src/sv_common/guild_sync/identity_engine.py").read_text()
+        assert "upsert_note_alias" in src, \
+            "identity_engine.py should use upsert_note_alias"
+
+    def test_migration_0025_exists(self):
+        """Migration 0025 for player_note_aliases should exist."""
+        import pathlib
+        migrations = list(pathlib.Path("alembic/versions").glob("0025_*.py"))
+        assert len(migrations) == 1, "Expected exactly one 0025_*.py migration"
+        content = migrations[0].read_text()
+        assert "player_note_aliases" in content

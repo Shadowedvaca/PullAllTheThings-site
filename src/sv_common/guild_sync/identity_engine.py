@@ -36,6 +36,7 @@ from collections import defaultdict
 from typing import Optional
 
 import asyncpg
+from .integrity_checker import upsert_note_alias
 
 logger = logging.getLogger(__name__)
 
@@ -459,3 +460,8 @@ async def _create_player_group(
                 char["id"],
             )
             stats["chars_linked"] += 1
+
+            # Record this note key as a confirmed alias for this player
+            note_key = _extract_note_key(char)
+            if note_key:
+                await upsert_note_alias(conn, player_id, note_key, source="note_match")

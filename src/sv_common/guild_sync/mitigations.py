@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import asyncpg
 
 from .identity_engine import _extract_note_key, _find_discord_for_key, _note_still_matches_player
+from .integrity_checker import upsert_note_alias
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,7 @@ async def mitigate_note_mismatch(pool: asyncpg.Pool, issue_row: dict) -> bool:
                        VALUES ($1, $2) ON CONFLICT DO NOTHING""",
                     new_player_id, char_id,
                 )
+                await upsert_note_alias(conn, new_player_id, note_key, source="mitigation")
                 logger.info(
                     "note_mismatch: re-linked '%s' to player %d via note key '%s'",
                     row["character_name"], new_player_id, note_key,
@@ -215,6 +217,7 @@ async def mitigate_orphan_wow(pool: asyncpg.Pool, issue_row: dict) -> bool:
                    WHERE id = $3""",
                 now, f"mitigate_orphan_wow:linked_to_{player_id}", issue_row["id"],
             )
+        await upsert_note_alias(conn, player_id, note_key, source="note_match")
 
         logger.info(
             "orphan_wow: linked '%s' to player %d via note key '%s'",
@@ -320,6 +323,12 @@ async def mitigate_orphan_discord(pool: asyncpg.Pool, issue_row: dict) -> bool:
                    WHERE id = $3""",
                 now, f"mitigate_orphan_discord:created_player_{player_id}", issue_row["id"],
             )
+
+        # Record note aliases for all linked characters
+        for char in matched_chars:
+            char_note_key = _extract_note_key(dict(char))
+            if char_note_key:
+                await upsert_note_alias(conn, player_id, char_note_key, source="note_match")
 
         logger.info(
             "orphan_discord: created player '%s' (id=%d) for Discord '%s', linked %d char(s)",
