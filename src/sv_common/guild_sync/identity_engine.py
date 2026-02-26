@@ -29,10 +29,8 @@ Rules:
 - Multiple characters CAN belong to the same player (alts)
 """
 
-import hashlib
 import logging
 import re
-from collections import defaultdict
 from typing import Optional
 
 import asyncpg
@@ -288,109 +286,16 @@ async def relink_note_changed_characters(pool: asyncpg.Pool, char_ids: list[int]
 
 async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) -> dict:
     """
-    Run the note-group matching engine.
+    Run the iterative matching engine.  Delegates to the rule runner.
 
-    Steps:
-    1. Load unlinked characters (optionally rank-filtered).
-    2. Group them by their guild_note key.
-    3. For each group, find the best Discord user match.
-    4. Create one Player per group (with or without Discord link).
-    5. For characters with no note, fall back to character-name matching.
-
-    Returns stats dict.
+    Returns a stats dict that includes both the new structured format
+    (passes, converged, results, totals) and the old flat keys
+    (players_created, chars_linked, discord_linked, no_discord_match, skipped)
+    for backward compatibility.
     """
-    stats = {
-        "players_created": 0,
-        "chars_linked": 0,
-        "discord_linked": 0,
-        "no_discord_match": 0,
-        "skipped": 0,
-    }
+    from .matching_rules.runner import run_matching_rules
 
-    async with pool.acquire() as conn:
-
-        # --- Load unlinked characters ---
-        if min_rank_level is not None:
-            unlinked_chars = await conn.fetch(
-                """SELECT wc.id, wc.character_name, wc.guild_note, wc.officer_note,
-                          wc.guild_rank_id
-                   FROM guild_identity.wow_characters wc
-                   JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
-                   WHERE wc.removed_at IS NULL
-                     AND gr.level >= $1
-                     AND wc.id NOT IN (
-                         SELECT character_id FROM guild_identity.player_characters
-                     )""",
-                min_rank_level,
-            )
-        else:
-            unlinked_chars = await conn.fetch(
-                """SELECT id, character_name, guild_note, officer_note, guild_rank_id
-                   FROM guild_identity.wow_characters
-                   WHERE removed_at IS NULL
-                     AND id NOT IN (
-                         SELECT character_id FROM guild_identity.player_characters
-                     )"""
-            )
-
-        # --- Load all Discord users (guild members only) ---
-        all_discord = await conn.fetch(
-            """SELECT du.id, du.discord_id, du.username, du.display_name,
-                      p.id AS player_id
-               FROM guild_identity.discord_users du
-               LEFT JOIN guild_identity.players p ON p.discord_user_id = du.id
-               WHERE du.is_present = TRUE
-                 AND du.highest_guild_role IS NOT NULL"""
-        )
-
-        # --- Group characters by guild note key ---
-        note_groups: dict[str, list] = defaultdict(list)
-        no_note_chars = []
-
-        for char in unlinked_chars:
-            key = _extract_note_key(char)
-            if key:
-                note_groups[key].append(char)
-            else:
-                no_note_chars.append(char)
-
-        # discord_user_id → player_id: tracks assignments made THIS run
-        # so we reuse the same player when multiple note groups match one Discord user
-        discord_player_cache: dict[int, int] = {}
-        for du in all_discord:
-            if du["player_id"]:
-                discord_player_cache[du["id"]] = du["player_id"]
-
-        # --- Process each note group ---
-        for note_key, chars in note_groups.items():
-            discord_user, match_type = _find_discord_for_key(note_key, all_discord)
-            await _create_player_group(
-                conn, chars, discord_user, note_key, discord_player_cache, stats,
-                match_type=match_type, from_note=True,
-            )
-
-        # --- Fallback: chars with no note → try character-name matching ---
-        for char in no_note_chars:
-            char_norm = normalize_name(char["character_name"])
-            discord_user, match_type = _find_discord_for_key(char_norm, all_discord)
-            if discord_user:
-                await _create_player_group(
-                    conn, [char], discord_user, char_norm, discord_player_cache, stats,
-                    match_type=match_type, from_note=False,
-                )
-            else:
-                stats["skipped"] += 1
-
-    logger.info(
-        "Matching complete: %d players created, %d chars linked, "
-        "%d with Discord, %d stubs (no Discord), %d skipped (no note/name match)",
-        stats["players_created"],
-        stats["chars_linked"],
-        stats["discord_linked"],
-        stats["no_discord_match"],
-        stats["skipped"],
-    )
-    return stats
+    return await run_matching_rules(pool, min_rank_level=min_rank_level)
 
 
 async def _create_player_group(

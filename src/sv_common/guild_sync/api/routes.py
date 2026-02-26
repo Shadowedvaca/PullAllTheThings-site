@@ -282,6 +282,42 @@ async def trigger_crafting_sync(
 
 
 # ---------------------------------------------------------------------------
+# Matching trigger (synchronous — returns full per-rule results)
+# ---------------------------------------------------------------------------
+
+@guild_sync_router.post("/matching/trigger")
+async def trigger_matching_sync(
+    request: Request,
+    min_rank_level: int | None = None,
+    pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """
+    Run the iterative matching engine and return per-rule results.
+
+    Unlike /api/identity/run-matching (which fires a background task),
+    this endpoint awaits the full run and returns the structured results
+    so the admin UI can display a per-rule breakdown.
+    """
+    from sv_common.guild_sync.identity_engine import run_matching
+
+    try:
+        stats = await run_matching(pool, min_rank_level=min_rank_level)
+        logger.info(
+            "Matching trigger complete (min_rank=%s): %d passes, converged=%s, "
+            "%d players created, %d chars linked",
+            min_rank_level,
+            stats.get("passes", 1),
+            stats.get("converged", True),
+            stats.get("players_created", 0),
+            stats.get("chars_linked", 0),
+        )
+        return {"ok": True, "data": stats}
+    except Exception as e:
+        logger.error("Matching trigger failed: %s", e)
+        return {"ok": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
 # Identity Routes
 # ---------------------------------------------------------------------------
 
