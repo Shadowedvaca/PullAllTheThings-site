@@ -14,6 +14,7 @@ Issue Types:
 """
 
 import hashlib
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -77,9 +78,9 @@ async def _upsert_issue(
     if existing:
         # Update summary/details in case they've changed
         await conn.execute(
-            """UPDATE guild_identity.audit_issues SET summary = $2, details = $3
+            """UPDATE guild_identity.audit_issues SET summary = $2, details = $3::jsonb
                WHERE id = $1""",
-            existing, summary, details,
+            existing, summary, json.dumps(details),
         )
         return False
 
@@ -87,9 +88,9 @@ async def _upsert_issue(
         """INSERT INTO guild_identity.audit_issues
            (issue_type, severity, wow_character_id, discord_member_id,
             summary, details, issue_hash)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)""",
         issue_type, severity, wow_character_id, discord_member_id,
-        summary, details, issue_hash,
+        summary, json.dumps(details), issue_hash,
     )
     return True
 
