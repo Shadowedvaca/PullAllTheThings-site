@@ -544,11 +544,12 @@ async function linkDiscord(memberId, discordId, discordUsername) {
         const data = await res.json();
         if (data.ok) {
             const p = players.find(pl => pl.id === memberId);
+            const oldDiscordId = p ? p.discord_id : null;
             if (p) p.discord_id = discordId;
-            // Update linked flag on discord user
+            // Update linked flags on discord users
             discordUsers.forEach(u => {
-                if (u.id === discordId) u.linked = true;
-                // If this player previously had a different discord, unlink that
+                if (u.id === discordId) u.linked = true;       // newly linked
+                if (u.id === oldDiscordId && !discordId) u.linked = false; // unlinked
             });
             render();
             showStatus(discordId ? 'Discord account linked' : 'Discord account unlinked', 'success');

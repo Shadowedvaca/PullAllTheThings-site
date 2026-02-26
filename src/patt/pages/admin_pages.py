@@ -58,7 +58,7 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | N
     """
     p_result = await db.execute(
         select(Player)
-        .options(selectinload(Player.discord_user), selectinload(Player.player_characters))
+        .options(selectinload(Player.discord_user), selectinload(Player.characters))
         .where(Player.id == player_id)
     )
     p = p_result.scalar_one_or_none()
@@ -79,8 +79,8 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | N
             candidates.append(dr)
 
     # WoW character ranks via player_characters bridge
-    if p.player_characters:
-        char_ids = [pc.character_id for pc in p.player_characters]
+    if p.characters:
+        char_ids = [pc.character_id for pc in p.characters]
         chars_result = await db.execute(
             select(WowCharacter).where(WowCharacter.id.in_(char_ids))
         )
