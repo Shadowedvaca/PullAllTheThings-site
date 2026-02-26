@@ -468,7 +468,7 @@
         <span class="alias-registry-title">Known Note Aliases</span>
         <span class="alias-registry-meta">
             {{ alias_registry | length }} player(s),
-            {{ alias_registry | sum(attribute='aliases') | list | length }} alias(es) tracked
+            {{ alias_total_count }} alias(es) tracked
         </span>
     </summary>
     <div class="table-wrapper" style="margin-top:0.75rem">

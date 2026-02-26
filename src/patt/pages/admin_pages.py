@@ -1381,6 +1381,7 @@ async def admin_data_quality(
     rules_with_stats = []
     recent_issues = []
     alias_registry = []
+    alias_total_count = 0
 
     if pool:
         async with pool.acquire() as conn:
@@ -1438,6 +1439,7 @@ async def admin_data_quality(
                     "source": ar["source"],
                 })
             alias_registry = list(alias_registry_map.values())
+            alias_total_count = sum(len(e["aliases"]) for e in alias_registry)
 
         for issue_type, rule in RULES.items():
             s = stats_by_type.get(issue_type)
@@ -1453,6 +1455,7 @@ async def admin_data_quality(
         "rules_with_stats": rules_with_stats,
         "recent_issues": recent_issues,
         "alias_registry": alias_registry,
+        "alias_total_count": alias_total_count,
         "pool_available": pool is not None,
     })
     return templates.TemplateResponse("admin/data_quality.html", ctx)
