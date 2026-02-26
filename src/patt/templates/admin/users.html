@@ -1,0 +1,127 @@
+{% extends "base_admin.html" %}
+{% block title %}User Accounts — Admin{% endblock %}
+{% block nav_users %}active{% endblock %}
+
+{% block content %}
+<div style="padding: 2rem;">
+    <h1 style="font-family: var(--font-display); color: var(--gold); margin-bottom: 0.25rem;">User Accounts</h1>
+    <p style="color: var(--text-secondary); margin-bottom: 2rem;">Registered website accounts. Delete an account to let a player re-register.</p>
+
+    <div id="toast" style="display:none; position:fixed; bottom:1.5rem; right:1.5rem; padding:0.75rem 1.25rem;
+         border-radius:6px; font-size:0.9rem; z-index:999; font-family: var(--font-body);"></div>
+
+    {% if users %}
+    <table style="width:100%; border-collapse:collapse; font-family: var(--font-body); font-size:0.9rem;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border-accent);">
+                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Email</th>
+                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Player</th>
+                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Rank</th>
+                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Status</th>
+                <th style="text-align:left; padding:0.6rem 0.75rem; color:var(--gold); font-family:var(--font-display); font-weight:400;">Joined</th>
+                <th style="padding:0.6rem 0.75rem;"></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for u in users %}
+        <tr id="user-row-{{ u.id }}" style="border-bottom: 1px solid var(--border); transition: background 0.15s;"
+            onmouseover="this.style.background='var(--bg-card)'" onmouseout="this.style.background=''">
+            <td style="padding:0.6rem 0.75rem; color:var(--text-primary); font-family:var(--font-mono);">{{ u.email or '—' }}</td>
+            <td style="padding:0.6rem 0.75rem; color:var(--text-primary);">
+                {% if u.player_id %}
+                    <a href="/admin/players" style="color:var(--gold); text-decoration:none;">{{ u.display_name }}</a>
+                {% else %}
+                    <span style="color:var(--text-secondary);">—</span>
+                {% endif %}
+            </td>
+            <td style="padding:0.6rem 0.75rem; color:var(--text-secondary);">{{ u.rank_name or '—' }}</td>
+            <td style="padding:0.6rem 0.75rem;">
+                <span id="status-{{ u.id }}" style="padding:0.2rem 0.6rem; border-radius:12px; font-size:0.8rem;
+                    background: {% if u.is_active %}rgba(74,222,128,0.15){% else %}rgba(248,113,113,0.15){% endif %};
+                    color: {% if u.is_active %}#4ade80{% else %}#f87171{% endif %};">
+                    {% if u.is_active %}Active{% else %}Disabled{% endif %}
+                </span>
+            </td>
+            <td style="padding:0.6rem 0.75rem; color:var(--text-secondary); font-family:var(--font-mono); font-size:0.8rem;">
+                {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}
+            </td>
+            <td style="padding:0.6rem 0.75rem; text-align:right; white-space:nowrap;">
+                <button onclick="toggleActive({{ u.id }})"
+                        id="toggle-btn-{{ u.id }}"
+                        style="padding:0.3rem 0.75rem; border-radius:4px; border:1px solid var(--border-accent);
+                               background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem;
+                               margin-right:0.5rem;"
+                        onmouseover="this.style.color='var(--text-primary)'"
+                        onmouseout="this.style.color='var(--text-secondary)'">
+                    {% if u.is_active %}Disable{% else %}Enable{% endif %}
+                </button>
+                <button onclick="deleteUser({{ u.id }}, '{{ u.email or u.display_name or 'this user' }}')"
+                        style="padding:0.3rem 0.75rem; border-radius:4px; border:1px solid rgba(248,113,113,0.4);
+                               background:transparent; color:#f87171; cursor:pointer; font-size:0.8rem;"
+                        onmouseover="this.style.background='rgba(248,113,113,0.1)'"
+                        onmouseout="this.style.background='transparent'">
+                    Delete
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-secondary); text-align:center; padding:3rem;">No registered user accounts found.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showToast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = type === 'success' ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)';
+    t.style.border = type === 'success' ? '1px solid #4ade80' : '1px solid #f87171';
+    t.style.color = type === 'success' ? '#4ade80' : '#f87171';
+    t.style.display = 'block';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+
+async function toggleActive(userId) {
+    try {
+        const res = await fetch(`/admin/users/${userId}/toggle-active`, { method: 'PATCH' });
+        const data = await res.json();
+        if (data.ok) {
+            const isActive = data.data.is_active;
+            const span = document.getElementById(`status-${userId}`);
+            const btn = document.getElementById(`toggle-btn-${userId}`);
+            span.textContent = isActive ? 'Active' : 'Disabled';
+            span.style.background = isActive ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)';
+            span.style.color = isActive ? '#4ade80' : '#f87171';
+            btn.textContent = isActive ? 'Disable' : 'Enable';
+            showToast(`Account ${isActive ? 'enabled' : 'disabled'}`, 'success');
+        } else {
+            showToast('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+    }
+}
+
+async function deleteUser(userId, label) {
+    if (!confirm(`Delete account for "${label}"?\n\nThis removes their login credentials. Their player record will remain and they can re-register.`)) return;
+    try {
+        const res = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById(`user-row-${userId}`)?.remove();
+            const name = data.data.player_display_name;
+            showToast(name ? `Account deleted — ${name} can now re-register` : 'Account deleted', 'success');
+        } else {
+            showToast('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+    }
+}
+</script>
+{% endblock %}

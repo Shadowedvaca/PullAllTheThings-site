@@ -15,7 +15,7 @@ from patt.deps import get_db, get_page_member
 from patt.services import campaign_service, vote_service
 from patt.templating import templates
 from sv_common.db.models import (
-    AuditIssue, DiscordUser, GuildRank, Player, Specialization, WowCharacter, PlayerCharacter,
+    AuditIssue, DiscordUser, GuildRank, Player, Specialization, User, WowCharacter, PlayerCharacter,
 )
 from sv_common.identity import members as member_service
 
@@ -48,6 +48,53 @@ async def _base_ctx(request: Request, player: Player, db: AsyncSession) -> dict:
         "current_member": player,
         "active_campaigns": active,
     }
+
+
+async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | None":
+    """Return the highest GuildRank the player qualifies for.
+
+    Considers: Discord user's highest_guild_role, and all linked WoW character ranks.
+    Does NOT override admin_override source — callers must check.
+    """
+    p_result = await db.execute(
+        select(Player)
+        .options(selectinload(Player.discord_user), selectinload(Player.player_characters))
+        .where(Player.id == player_id)
+    )
+    p = p_result.scalar_one_or_none()
+    if not p:
+        return None
+
+    candidates: list[GuildRank] = []
+
+    # Discord rank
+    if p.discord_user and p.discord_user.highest_guild_role:
+        dr_result = await db.execute(
+            select(GuildRank).where(
+                sa_func.lower(GuildRank.name) == p.discord_user.highest_guild_role.lower()
+            )
+        )
+        dr = dr_result.scalar_one_or_none()
+        if dr:
+            candidates.append(dr)
+
+    # WoW character ranks via player_characters bridge
+    if p.player_characters:
+        char_ids = [pc.character_id for pc in p.player_characters]
+        chars_result = await db.execute(
+            select(WowCharacter).where(WowCharacter.id.in_(char_ids))
+        )
+        chars = list(chars_result.scalars().all())
+        rank_ids = {c.guild_rank_id for c in chars if c.guild_rank_id}
+        if rank_ids:
+            ranks_result = await db.execute(
+                select(GuildRank).where(GuildRank.id.in_(rank_ids))
+            )
+            candidates.extend(ranks_result.scalars().all())
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda r: r.level)
 
 
 def _player_tz_from_name(tz_name: str) -> ZoneInfo:
@@ -693,6 +740,7 @@ async def admin_assign_character(
     )
 
     player_name = "Unlinked"
+    p = None
     if player_id:
         bridge = PlayerCharacter(
             player_id=player_id,
@@ -708,6 +756,18 @@ async def admin_assign_character(
 
     await db.commit()
 
+    # Re-compute rank after character assignment
+    rank_updated = False
+    new_rank_name = None
+    if player_id and p and p.guild_rank_source != "admin_override":
+        best_rank = await _compute_best_rank(db, player_id)
+        if best_rank:
+            p.guild_rank_id = best_rank.id
+            p.guild_rank_source = "discord_sync"
+            await db.commit()
+            rank_updated = True
+            new_rank_name = best_rank.name
+
     return JSONResponse({
         "ok": True,
         "data": {
@@ -715,6 +775,8 @@ async def admin_assign_character(
             "char_name": char.character_name,
             "player_id": player_id,
             "player_name": player_name,
+            "rank_updated": rank_updated,
+            "new_rank": new_rank_name,
         },
     })
 
@@ -890,9 +952,27 @@ async def admin_link_discord(
         p.discord_user_id = None
 
     await db.commit()
+
+    # Re-compute rank after Discord link change
+    rank_updated = False
+    new_rank_name = None
+    if p.guild_rank_source != "admin_override":
+        best_rank = await _compute_best_rank(db, player_id)
+        if best_rank:
+            p.guild_rank_id = best_rank.id
+            p.guild_rank_source = "discord_sync"
+            await db.commit()
+            rank_updated = True
+            new_rank_name = best_rank.name
+
     return JSONResponse({
         "ok": True,
-        "data": {"player_id": player_id, "discord_id": discord_id},
+        "data": {
+            "player_id": player_id,
+            "discord_id": discord_id,
+            "rank_updated": rank_updated,
+            "new_rank": new_rank_name,
+        },
     })
 
 
@@ -910,6 +990,13 @@ async def admin_delete_player(
     p = result.scalar_one_or_none()
     if not p:
         return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    if p.website_user_id is not None:
+        return JSONResponse({
+            "ok": False,
+            "error": "This player has a registered account. Delete their user account first (Admin → Users).",
+            "registered": True,
+        }, status_code=409)
 
     name = p.display_name
     await db.execute(
@@ -1914,3 +2001,85 @@ async def admin_audit_resolve(
         issue.resolved_by = player.display_name
 
     return RedirectResponse(url="/admin/audit-log", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# User Accounts page
+# ---------------------------------------------------------------------------
+
+
+@router.get("/users", response_class=HTMLResponse)
+async def admin_users(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    player = await _require_admin(request, db)
+    if player is None:
+        return _redirect_login("/admin/users")
+
+    rows = await db.execute(
+        text("""
+            SELECT u.id, u.email, u.is_active, u.created_at,
+                   p.id        AS player_id,
+                   p.display_name,
+                   gr.name     AS rank_name
+            FROM common.users u
+            LEFT JOIN guild_identity.players p ON p.website_user_id = u.id
+            LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            ORDER BY u.created_at DESC
+        """)
+    )
+    users = [dict(r._mapping) for r in rows]
+
+    ctx = await _base_ctx(request, player, db)
+    ctx["users"] = users
+    return templates.TemplateResponse("admin/users.html", ctx)
+
+
+@router.patch("/users/{user_id}/toggle-active")
+async def admin_toggle_user_active(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    u = result.scalar_one_or_none()
+    if not u:
+        return JSONResponse({"ok": False, "error": "User not found"}, status_code=404)
+
+    u.is_active = not u.is_active
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"user_id": user_id, "is_active": u.is_active}})
+
+
+@router.delete("/users/{user_id}")
+async def admin_delete_user(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(
+        select(User).options(selectinload(User.player)).where(User.id == user_id)
+    )
+    u = result.scalar_one_or_none()
+    if not u:
+        return JSONResponse({"ok": False, "error": "User not found"}, status_code=404)
+
+    # Unlink from player before deleting
+    player_name = None
+    if u.player:
+        player_name = u.player.display_name
+        u.player.website_user_id = None
+        await db.flush()
+
+    await db.delete(u)
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"user_id": user_id, "player_display_name": player_name}})

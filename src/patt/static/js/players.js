@@ -637,6 +637,8 @@ async function deletePlayer(event, memberId, name) {
             allChars.forEach(c => { if (c.player_id === memberId) c.player_id = null; });
             render();
             showStatus(`"${name}" deleted`, 'success');
+        } else if (data.registered) {
+            showStatus(`Cannot delete — ${name} has a registered account. Go to Admin → Users to remove it first.`, 'error');
         } else {
             showStatus('Error: ' + (data.error || '?'), 'error');
         }
