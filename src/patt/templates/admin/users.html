@@ -300,7 +300,9 @@
                     {% if u.is_active %}Disable{% else %}Enable{% endif %}
                 </button>
                 <button class="ua-btn ua-btn--delete"
-                        onclick="deleteUser({{ u.id }}, {{ (u.email or u.display_name or 'this user') | tojson }})">
+                        data-uid="{{ u.id }}"
+                        data-label="{{ u.email or u.display_name or 'this user' }}"
+                        onclick="deleteUser(this)">
                     Delete
                 </button>
             </td>
@@ -359,7 +361,9 @@ async function toggleActive(userId) {
     }
 }
 
-async function deleteUser(userId, label) {
+async function deleteUser(btn) {
+    const userId = btn.dataset.uid;
+    const label = btn.dataset.label;
     if (!confirm(`Delete account for "${label}"?\n\nThis removes their login credentials. Their player record stays and they can re-register.`)) return;
     try {
         const res = await fetch(`/admin/users/${userId}`, { method: 'DELETE' });
