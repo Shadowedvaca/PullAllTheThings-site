@@ -87,3 +87,10 @@
 2026-02-25 15:12:04,867 [INFO] HTTP Request: POST https://pullallthethings.com/api/guild-sync/addon-upload "HTTP/1.1 200 OK"
 2026-02-25 15:12:04,868 [INFO] Upload successful: 321 characters processed
 2026-02-25 15:12:04,870 [INFO] Archived to H:\World of Warcraft\_retail_\WTF\Account\SHADOWEDVACA2\SavedVariables\archive\PATTSync_20260225_151204.lua
+2026-02-25 16:12:36,823 [INFO] Detected modified on PATTSync.lua
+2026-02-25 17:13:07,358 [INFO] Detected modified on PATTSync.lua
+2026-02-25 18:13:37,688 [INFO] Detected modified on PATTSync.lua
+2026-02-25 19:14:07,968 [INFO] Detected modified on PATTSync.lua
+2026-02-25 20:14:38,257 [INFO] Detected modified on PATTSync.lua
+2026-02-25 21:15:08,521 [INFO] Detected modified on PATTSync.lua
+2026-02-25 22:15:38,862 [INFO] Detected modified on PATTSync.lua
