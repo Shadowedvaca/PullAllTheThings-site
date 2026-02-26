@@ -20,6 +20,139 @@
     flex-shrink: 0;
 }
 
+/* ------------------------------------------------------------------ Coverage panel */
+.coverage-panel {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+}
+.coverage-panel-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+}
+.coverage-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+}
+.coverage-bar-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 70px;
+    gap: 0.75rem;
+    align-items: center;
+}
+.coverage-bar-label {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+.coverage-bar-track {
+    height: 8px;
+    background: var(--color-bg-card);
+    border-radius: 100px;
+    overflow: hidden;
+}
+.coverage-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    transition: width 0.4s ease;
+}
+.coverage-bar-fill--green  { background: var(--color-success); }
+.coverage-bar-fill--amber  { background: var(--color-warning); }
+.coverage-bar-fill--red    { background: var(--color-danger); }
+.coverage-bar-pct {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.coverage-breakdowns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.coverage-breakdown {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+}
+.coverage-breakdown-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.5rem;
+}
+.coverage-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    padding: 0.1rem 0;
+}
+.coverage-breakdown-key {
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+}
+.coverage-breakdown-val {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.coverage-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.coverage-loading {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+}
+.coverage-error {
+    color: var(--color-danger);
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+}
+
+/* ------------------------------------------------------------------ Unmatched tables */
+.unmatched-section {
+    margin-bottom: 2rem;
+}
+.unmatched-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.unmatched-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.unmatched-count {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.12rem 0.5rem;
+    border-radius: 100px;
+    background: rgba(251,191,36,0.12);
+    color: var(--color-warning);
+    border: 1px solid rgba(251,191,36,0.4);
+}
+
 /* ------------------------------------------------------------------ Rule cards */
 .dq-rules {
     display: flex;
@@ -288,6 +421,21 @@
     opacity: 1;
     transform: translateY(0);
 }
+
+/* ------------------------------------------------------------------ Section divider */
+.section-divider {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 2rem 0;
+}
+.section-heading {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+}
 </style>
 {% endblock %}
 
@@ -296,7 +444,7 @@
     <div>
         <h1 class="admin-title">Data Quality</h1>
         <p class="text-muted text-sm" style="margin-top:0.25rem">
-            Rules-based detection and targeted mitigations for guild identity issues.
+            Matching coverage and rules-based detection for guild identity issues.
         </p>
     </div>
     {% if pool_available %}
@@ -317,6 +465,71 @@
     to enable data quality operations.
 </div>
 {% else %}
+
+{# ------------------------------------------------------------------ Coverage panel #}
+<div class="coverage-panel">
+    <div class="coverage-panel-title">Matching Coverage</div>
+    <div id="coverage-loading" class="coverage-loading">Loading coverage stats…</div>
+    <div id="coverage-content" style="display:none">
+        <div class="coverage-bars" id="coverage-bars"></div>
+        <div class="coverage-breakdowns" id="coverage-breakdowns"></div>
+        <div class="coverage-actions">
+            <button class="btn btn-secondary btn-sm" onclick="runMatchingNow(this)">
+                Run Matching
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="loadCoverage()">
+                Refresh Stats
+            </button>
+        </div>
+    </div>
+    <div id="coverage-error" class="coverage-error" style="display:none"></div>
+</div>
+
+{# ------------------------------------------------------------------ Unmatched tables (populated by JS) #}
+<div id="unmatched-section" style="display:none">
+    <div id="unmatched-chars-section" class="unmatched-section" style="display:none">
+        <div class="unmatched-header">
+            <span class="unmatched-title">Unmatched Characters</span>
+            <span class="unmatched-count" id="unmatched-chars-count">0</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Rank</th>
+                        <th>Guild Note</th>
+                        <th>Last Login</th>
+                    </tr>
+                </thead>
+                <tbody id="unmatched-chars-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="unmatched-discord-section" class="unmatched-section" style="display:none">
+        <div class="unmatched-header">
+            <span class="unmatched-title">Unmatched Discord Users</span>
+            <span class="unmatched-count" id="unmatched-discord-count">0</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Display Name</th>
+                        <th>Role</th>
+                        <th>Joined</th>
+                    </tr>
+                </thead>
+                <tbody id="unmatched-discord-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<hr class="section-divider">
+<div class="section-heading">Audit Rules</div>
 
 {# ------------------------------------------------------------------ Rules panel #}
 {% if rules_with_stats %}
@@ -380,11 +593,13 @@
 </div>
 {% endif %}
 
+<hr class="section-divider">
+<div class="section-heading">Recent Findings</div>
+
 {# ------------------------------------------------------------------ Recent findings #}
 <div class="dq-findings-header">
     <div>
-        <span class="dq-findings-title">Recent Findings</span>
-        <span class="dq-findings-subtitle" style="margin-left:0.5rem">last 50 issues</span>
+        <span class="dq-findings-subtitle">last 50 issues</span>
     </div>
 </div>
 
@@ -537,6 +752,162 @@ function showToast(msg, isError) {
     el.classList.add('visible');
     setTimeout(() => el.classList.remove('visible'), 3000);
 }
+
+// --------------------------------------------------------------------------
+// Coverage dashboard
+// --------------------------------------------------------------------------
+
+function coverageColor(pct) {
+    if (pct >= 80) return 'green';
+    if (pct >= 50) return 'amber';
+    return 'red';
+}
+
+function renderBar(label, matched, total, pct) {
+    const cls = coverageColor(pct);
+    return `<div class="coverage-bar-row">
+        <span class="coverage-bar-label">${label}</span>
+        <div class="coverage-bar-track">
+            <div class="coverage-bar-fill coverage-bar-fill--${cls}" style="width:${pct}%"></div>
+        </div>
+        <span class="coverage-bar-pct">${matched}/${total} (${pct}%)</span>
+    </div>`;
+}
+
+function renderBreakdown(title, data) {
+    const rows = Object.entries(data)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => `<div class="coverage-breakdown-row">
+            <span class="coverage-breakdown-key">${k}</span>
+            <span class="coverage-breakdown-val">${v}</span>
+        </div>`)
+        .join('');
+    return `<div class="coverage-breakdown">
+        <div class="coverage-breakdown-title">${title}</div>
+        ${rows || '<div class="coverage-breakdown-row" style="color:var(--color-text-muted)">No data yet</div>'}
+    </div>`;
+}
+
+function renderUnmatchedChars(chars) {
+    const section = document.getElementById('unmatched-chars-section');
+    const body = document.getElementById('unmatched-chars-body');
+    const count = document.getElementById('unmatched-chars-count');
+    if (!chars || chars.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    count.textContent = chars.length;
+    body.innerHTML = chars.map(c => {
+        const login = c.last_login_days_ago !== null
+            ? (c.last_login_days_ago === 0 ? 'Today' : `${c.last_login_days_ago}d ago`)
+            : '—';
+        const note = c.guild_note || '<span style="color:var(--color-text-muted)">—</span>';
+        const rank = c.guild_rank || '<span style="color:var(--color-text-muted)">—</span>';
+        return `<tr>
+            <td><strong>${c.character_name}</strong> <span style="font-size:0.75rem;color:var(--color-text-muted)">${c.realm}</span></td>
+            <td>${rank}</td>
+            <td style="font-family:var(--font-mono);font-size:0.8rem">${note}</td>
+            <td style="font-size:0.78rem;color:var(--color-text-muted)">${login}</td>
+        </tr>`;
+    }).join('');
+    section.style.display = '';
+}
+
+function renderUnmatchedDiscord(users) {
+    const section = document.getElementById('unmatched-discord-section');
+    const body = document.getElementById('unmatched-discord-body');
+    const count = document.getElementById('unmatched-discord-count');
+    if (!users || users.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+    count.textContent = users.length;
+    body.innerHTML = users.map(u => {
+        const joined = u.joined_server_at
+            ? new Date(u.joined_server_at).toLocaleDateString('en-US', {month:'short', year:'numeric'})
+            : '—';
+        return `<tr>
+            <td style="font-family:var(--font-mono);font-size:0.85rem">${u.username}</td>
+            <td>${u.display_name || '<span style="color:var(--color-text-muted)">—</span>'}</td>
+            <td style="font-size:0.8rem;color:var(--color-text-muted)">${u.highest_guild_role || '—'}</td>
+            <td style="font-size:0.78rem;color:var(--color-text-muted)">${joined}</td>
+        </tr>`;
+    }).join('');
+    section.style.display = '';
+}
+
+async function loadCoverage() {
+    const loading = document.getElementById('coverage-loading');
+    const content = document.getElementById('coverage-content');
+    const errorEl = document.getElementById('coverage-error');
+    const unmatchedSection = document.getElementById('unmatched-section');
+
+    loading.style.display = '';
+    content.style.display = 'none';
+    errorEl.style.display = 'none';
+
+    try {
+        const r = await fetch('/admin/matching/coverage');
+        const d = await r.json();
+        if (!d.ok) {
+            errorEl.textContent = 'Error: ' + (d.error || 'Unknown error');
+            errorEl.style.display = '';
+            loading.style.display = 'none';
+            return;
+        }
+
+        const s = d.data.summary;
+        const barsEl = document.getElementById('coverage-bars');
+        barsEl.innerHTML =
+            renderBar('Characters', s.matched_characters, s.total_characters, s.character_coverage_pct) +
+            renderBar('Discord Users', s.matched_discord_users, s.total_discord_users, s.discord_coverage_pct) +
+            renderBar('Players w/ Discord', s.players_with_discord, s.total_players, s.discord_link_pct);
+
+        const breakdownsEl = document.getElementById('coverage-breakdowns');
+        breakdownsEl.innerHTML =
+            renderBreakdown('By Link Source', d.data.by_link_source) +
+            renderBreakdown('By Confidence', d.data.by_confidence);
+
+        loading.style.display = 'none';
+        content.style.display = '';
+
+        renderUnmatchedChars(d.data.unmatched_characters);
+        renderUnmatchedDiscord(d.data.unmatched_discord_users);
+        const hasUnmatched = (d.data.unmatched_characters && d.data.unmatched_characters.length > 0) ||
+                             (d.data.unmatched_discord_users && d.data.unmatched_discord_users.length > 0);
+        unmatchedSection.style.display = hasUnmatched ? '' : 'none';
+
+    } catch(e) {
+        errorEl.textContent = 'Failed to load coverage stats.';
+        errorEl.style.display = '';
+        loading.style.display = 'none';
+    }
+}
+
+async function runMatchingNow(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    try {
+        const r = await fetch('/api/guild-sync/matching/trigger', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            showToast('Matching run triggered — reload in a moment.');
+        } else {
+            showToast('Error: ' + (d.error || 'Unknown error'), true);
+        }
+    } catch(e) {
+        showToast('Request failed', true);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Matching';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadCoverage);
+
+// --------------------------------------------------------------------------
+// Existing rule / fix / alias functions
+// --------------------------------------------------------------------------
 
 async function runScanAll(btn) {
     btn.disabled = true;

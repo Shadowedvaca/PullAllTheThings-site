@@ -697,6 +697,12 @@ class PlayerCharacter(Base):
         nullable=False,
         unique=True,
     )
+    link_source: Mapped[str] = mapped_column(
+        String(30), nullable=False, server_default="unknown"
+    )
+    confidence: Mapped[str] = mapped_column(
+        String(15), nullable=False, server_default="unknown"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

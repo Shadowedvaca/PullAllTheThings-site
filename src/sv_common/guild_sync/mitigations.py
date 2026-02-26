@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 
 import asyncpg
 
-from .identity_engine import _extract_note_key, _find_discord_for_key, _note_still_matches_player
+from .identity_engine import (
+    _attribution_for_match,
+    _extract_note_key,
+    _find_discord_for_key,
+    _note_still_matches_player,
+)
 from .integrity_checker import upsert_note_alias
 
 logger = logging.getLogger(__name__)
@@ -115,13 +120,17 @@ async def mitigate_note_mismatch(pool: asyncpg.Pool, issue_row: dict) -> bool:
                    JOIN guild_identity.players p ON p.discord_user_id = du.id
                    WHERE du.is_present = TRUE"""
             )
-            discord_match = _find_discord_for_key(note_key, [dict(r) for r in all_discord])
+            discord_match, match_type = _find_discord_for_key(
+                note_key, [dict(r) for r in all_discord]
+            )
             if discord_match and discord_match.get("player_id"):
                 new_player_id = discord_match["player_id"]
+                _, confidence = _attribution_for_match(match_type, discord_match, from_note=True)
                 await conn.execute(
-                    """INSERT INTO guild_identity.player_characters (player_id, character_id)
-                       VALUES ($1, $2) ON CONFLICT DO NOTHING""",
-                    new_player_id, char_id,
+                    """INSERT INTO guild_identity.player_characters
+                           (player_id, character_id, link_source, confidence)
+                       VALUES ($1, $2, $3, $4) ON CONFLICT (character_id) DO NOTHING""",
+                    new_player_id, char_id, "auto_relink", confidence,
                 )
                 await upsert_note_alias(conn, new_player_id, note_key, source="mitigation")
                 logger.info(
@@ -196,7 +205,9 @@ async def mitigate_orphan_wow(pool: asyncpg.Pool, issue_row: dict) -> bool:
                JOIN guild_identity.players p ON p.discord_user_id = du.id
                WHERE du.is_present = TRUE"""
         )
-        discord_match = _find_discord_for_key(note_key, [dict(r) for r in all_discord])
+        discord_match, match_type = _find_discord_for_key(
+            note_key, [dict(r) for r in all_discord]
+        )
         if not discord_match or not discord_match.get("player_id"):
             logger.info(
                 "orphan_wow: '%s' note key '%s' — no matching player found",
@@ -205,11 +216,13 @@ async def mitigate_orphan_wow(pool: asyncpg.Pool, issue_row: dict) -> bool:
             return False
 
         player_id = discord_match["player_id"]
+        _, confidence = _attribution_for_match(match_type, discord_match, from_note=True)
         async with conn.transaction():
             await conn.execute(
-                """INSERT INTO guild_identity.player_characters (player_id, character_id)
-                   VALUES ($1, $2) ON CONFLICT DO NOTHING""",
-                player_id, char_id,
+                """INSERT INTO guild_identity.player_characters
+                       (player_id, character_id, link_source, confidence)
+                   VALUES ($1, $2, $3, $4) ON CONFLICT (character_id) DO NOTHING""",
+                player_id, char_id, "note_key", confidence,
             )
             await conn.execute(
                 """UPDATE guild_identity.audit_issues SET
@@ -313,9 +326,10 @@ async def mitigate_orphan_discord(pool: asyncpg.Pool, issue_row: dict) -> bool:
             )
             for char in matched_chars:
                 await conn.execute(
-                    """INSERT INTO guild_identity.player_characters (player_id, character_id)
-                       VALUES ($1, $2) ON CONFLICT DO NOTHING""",
-                    player_id, char["id"],
+                    """INSERT INTO guild_identity.player_characters
+                           (player_id, character_id, link_source, confidence)
+                       VALUES ($1, $2, $3, $4) ON CONFLICT (character_id) DO NOTHING""",
+                    player_id, char["id"], "note_key", "medium",
                 )
             await conn.execute(
                 """UPDATE guild_identity.audit_issues SET

@@ -694,7 +694,12 @@ async def admin_assign_character(
 
     player_name = "Unlinked"
     if player_id:
-        bridge = PlayerCharacter(player_id=player_id, character_id=char_id)
+        bridge = PlayerCharacter(
+            player_id=player_id,
+            character_id=char_id,
+            link_source="manual",
+            confidence="confirmed",
+        )
         db.add(bridge)
         p_result = await db.execute(select(Player).where(Player.id == player_id))
         p = p_result.scalar_one_or_none()
@@ -869,6 +874,18 @@ async def admin_link_discord(
         )
         du = du_result.scalar_one_or_none()
         p.discord_user_id = du.id if du else None
+
+        # Upgrade any low-confidence character links for this player
+        # (stub players had confidence='low'; now that Discord is linked, bump to 'medium')
+        if du:
+            await db.execute(
+                text(
+                    """UPDATE guild_identity.player_characters
+                       SET confidence = 'medium'
+                       WHERE player_id = :pid AND confidence = 'low'"""
+                ),
+                {"pid": player_id},
+            )
     else:
         p.discord_user_id = None
 
@@ -1678,6 +1695,143 @@ async def admin_add_note_alias(
             player_id, alias,
         )
     return JSONResponse({"ok": True, "alias": {"id": row["id"], "alias": row["alias"], "source": row["source"]}})
+
+
+@router.get("/matching/coverage")
+async def admin_matching_coverage(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Coverage metrics for the matching engine — Admin only."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        total_chars = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.wow_characters WHERE removed_at IS NULL"
+        )
+        matched_chars = await conn.fetchval(
+            """SELECT COUNT(DISTINCT wc.id)
+               FROM guild_identity.wow_characters wc
+               JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
+               WHERE wc.removed_at IS NULL"""
+        )
+        total_discord = await conn.fetchval(
+            """SELECT COUNT(*) FROM guild_identity.discord_users
+               WHERE is_present = TRUE AND highest_guild_role IS NOT NULL"""
+        )
+        matched_discord = await conn.fetchval(
+            """SELECT COUNT(DISTINCT du.id)
+               FROM guild_identity.discord_users du
+               JOIN guild_identity.players p ON p.discord_user_id = du.id
+               WHERE du.is_present = TRUE AND du.highest_guild_role IS NOT NULL"""
+        )
+        total_players = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.players WHERE is_active = TRUE"
+        )
+        players_with_discord = await conn.fetchval(
+            """SELECT COUNT(*) FROM guild_identity.players
+               WHERE is_active = TRUE AND discord_user_id IS NOT NULL"""
+        )
+        source_rows = await conn.fetch(
+            """SELECT link_source, COUNT(*) AS cnt
+               FROM guild_identity.player_characters
+               GROUP BY link_source ORDER BY cnt DESC"""
+        )
+        by_link_source = {r["link_source"]: r["cnt"] for r in source_rows}
+        conf_rows = await conn.fetch(
+            """SELECT confidence, COUNT(*) AS cnt
+               FROM guild_identity.player_characters
+               GROUP BY confidence ORDER BY cnt DESC"""
+        )
+        by_confidence = {r["confidence"]: r["cnt"] for r in conf_rows}
+
+        unmatched_char_rows = await conn.fetch(
+            """SELECT wc.id, wc.character_name,
+                      wc.realm_name, wc.realm_slug,
+                      gr.name AS guild_rank,
+                      wc.guild_note,
+                      wc.last_login_timestamp
+               FROM guild_identity.wow_characters wc
+               LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
+               WHERE wc.removed_at IS NULL
+                 AND wc.id NOT IN (SELECT character_id FROM guild_identity.player_characters)
+               ORDER BY wc.character_name"""
+        )
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        unmatched_characters = []
+        for r in unmatched_char_rows:
+            last_login_days = None
+            if r["last_login_timestamp"]:
+                diff_ms = now_ms - r["last_login_timestamp"]
+                last_login_days = max(0, diff_ms // 86_400_000)
+            unmatched_characters.append({
+                "id": r["id"],
+                "character_name": r["character_name"],
+                "realm": r["realm_name"] or r["realm_slug"],
+                "guild_rank": r["guild_rank"],
+                "guild_note": r["guild_note"] or "",
+                "last_login_days_ago": last_login_days,
+            })
+
+        unmatched_discord_rows = await conn.fetch(
+            """SELECT du.id, du.username, du.display_name,
+                      du.highest_guild_role, du.joined_server_at
+               FROM guild_identity.discord_users du
+               WHERE du.is_present = TRUE
+                 AND du.highest_guild_role IS NOT NULL
+                 AND du.id NOT IN (
+                     SELECT discord_user_id FROM guild_identity.players
+                     WHERE discord_user_id IS NOT NULL
+                 )
+               ORDER BY du.username"""
+        )
+        unmatched_discord_users = [
+            {
+                "id": r["id"],
+                "username": r["username"],
+                "display_name": r["display_name"],
+                "highest_guild_role": r["highest_guild_role"],
+                "joined_server_at": r["joined_server_at"].isoformat() if r["joined_server_at"] else None,
+            }
+            for r in unmatched_discord_rows
+        ]
+
+    def pct(matched: int, total: int) -> float:
+        return round(matched / total * 100, 1) if total else 0.0
+
+    unmatched_chars_count = (total_chars or 0) - (matched_chars or 0)
+    unmatched_discord_count = (total_discord or 0) - (matched_discord or 0)
+    players_without_discord = (total_players or 0) - (players_with_discord or 0)
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "summary": {
+                "total_characters": total_chars or 0,
+                "matched_characters": matched_chars or 0,
+                "unmatched_characters": unmatched_chars_count,
+                "character_coverage_pct": pct(matched_chars or 0, total_chars or 0),
+                "total_discord_users": total_discord or 0,
+                "matched_discord_users": matched_discord or 0,
+                "unmatched_discord_users": unmatched_discord_count,
+                "discord_coverage_pct": pct(matched_discord or 0, total_discord or 0),
+                "total_players": total_players or 0,
+                "players_with_discord": players_with_discord or 0,
+                "players_without_discord": players_without_discord,
+                "discord_link_pct": pct(players_with_discord or 0, total_players or 0),
+            },
+            "by_link_source": by_link_source,
+            "by_confidence": by_confidence,
+            "unmatched_characters": unmatched_characters,
+            "unmatched_discord_users": unmatched_discord_users,
+        },
+    })
 
 
 @router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)

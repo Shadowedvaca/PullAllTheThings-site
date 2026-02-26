@@ -89,9 +89,13 @@ def _extract_note_key(char: dict) -> str:
     return key if len(key) >= 2 else ""
 
 
-def _find_discord_for_key(key: str, all_discord: list) -> Optional[dict]:
+def _find_discord_for_key(key: str, all_discord: list) -> tuple[Optional[dict], str]:
     """
     Find the Discord user that best matches the given key string.
+
+    Returns (discord_user_or_None, match_type).
+    match_type is one of: "exact_username", "exact_display", "word_in_display",
+                          "substring_username", "substring_display", "none"
 
     Strategies (in priority order):
       1. Exact match on username
@@ -101,17 +105,17 @@ def _find_discord_for_key(key: str, all_discord: list) -> Optional[dict]:
       5. Key is a substring of display_name      (key >= 3 chars)
     """
     if not key or len(key) < 2:
-        return None
+        return None, "none"
 
     # Pass 1: exact username
     for du in all_discord:
         if normalize_name(du["username"]) == key:
-            return du
+            return du, "exact_username"
 
     # Pass 2: exact display_name
     for du in all_discord:
         if du["display_name"] and normalize_name(du["display_name"]) == key:
-            return du
+            return du, "exact_display"
 
     # Pass 3: key matches any word/part of display_name
     for du in all_discord:
@@ -122,22 +126,48 @@ def _find_discord_for_key(key: str, all_discord: list) -> Optional[dict]:
                 if p.strip()
             ]
             if key in parts:
-                return du
+                return du, "word_in_display"
 
     if len(key) < 3:
-        return None  # Don't do substring matching for very short keys
+        return None, "none"  # Don't do substring matching for very short keys
 
     # Pass 4: key is substring of username
     for du in all_discord:
         if key in normalize_name(du["username"]):
-            return du
+            return du, "substring_username"
 
     # Pass 5: key is substring of display_name
     for du in all_discord:
         if du["display_name"] and key in normalize_name(du["display_name"]):
-            return du
+            return du, "substring_display"
 
-    return None
+    return None, "none"
+
+
+def _attribution_for_match(
+    match_type: str,
+    discord_user: Optional[dict],
+    from_note: bool,
+) -> tuple[str, str]:
+    """
+    Derive (link_source, confidence) from how the match was made.
+
+    from_note=True  → character was grouped by guild note key
+    from_note=False → character had no note; matched by character name
+    """
+    if discord_user is None:
+        return "note_key_stub", "low"
+
+    if from_note:
+        if match_type in ("exact_username", "exact_display"):
+            return "note_key", "high"
+        # word_in_display, substring_username, substring_display
+        return "note_key", "medium"
+    else:
+        # No-note path: character name was the key
+        if match_type in ("exact_username", "exact_display"):
+            return "exact_name", "high"
+        return "fuzzy_name", "medium"
 
 
 def _note_still_matches_player(note_key: str, player_display: str, discord_username: str, discord_display: str) -> bool:
@@ -333,18 +363,20 @@ async def run_matching(pool: asyncpg.Pool, min_rank_level: int | None = None) ->
 
         # --- Process each note group ---
         for note_key, chars in note_groups.items():
-            discord_user = _find_discord_for_key(note_key, all_discord)
+            discord_user, match_type = _find_discord_for_key(note_key, all_discord)
             await _create_player_group(
-                conn, chars, discord_user, note_key, discord_player_cache, stats
+                conn, chars, discord_user, note_key, discord_player_cache, stats,
+                match_type=match_type, from_note=True,
             )
 
         # --- Fallback: chars with no note → try character-name matching ---
         for char in no_note_chars:
             char_norm = normalize_name(char["character_name"])
-            discord_user = _find_discord_for_key(char_norm, all_discord)
+            discord_user, match_type = _find_discord_for_key(char_norm, all_discord)
             if discord_user:
                 await _create_player_group(
-                    conn, [char], discord_user, char_norm, discord_player_cache, stats
+                    conn, [char], discord_user, char_norm, discord_player_cache, stats,
+                    match_type=match_type, from_note=False,
                 )
             else:
                 stats["skipped"] += 1
@@ -368,6 +400,8 @@ async def _create_player_group(
     display_hint: str,
     discord_player_cache: dict[int, int],
     stats: dict,
+    match_type: str = "none",
+    from_note: bool = True,
 ):
     """
     Create (or find) one Player for a group of characters and link them all.
@@ -439,6 +473,9 @@ async def _create_player_group(
                 # Existing player found in DB
                 discord_player_cache[discord_user["id"]] = player_id
 
+        # Determine attribution for all characters in this group
+        link_source, confidence = _attribution_for_match(match_type, discord_user, from_note)
+
         # Link all characters to this player
         for char in chars:
             existing_owner = await conn.fetchval(
@@ -454,10 +491,13 @@ async def _create_player_group(
                 continue
 
             await conn.execute(
-                """INSERT INTO guild_identity.player_characters (player_id, character_id)
-                   VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                """INSERT INTO guild_identity.player_characters
+                       (player_id, character_id, link_source, confidence)
+                   VALUES ($1, $2, $3, $4) ON CONFLICT (character_id) DO NOTHING""",
                 player_id,
                 char["id"],
+                link_source,
+                confidence,
             )
             stats["chars_linked"] += 1
 

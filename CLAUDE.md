@@ -758,6 +758,7 @@ CREATE TABLE patt.mito_titles (
 ### Completed Phases
 - Phase 0 through 7: Platform complete and live
 - Phase 2.5A–D: Guild identity system (Blizzard API, Discord sync, addon, integrity checker)
+- Phase 3.0A: Matching transparency — link_source/confidence on player_characters, coverage dashboard
 - Phase 2.6: Onboarding system (built but NOT activated — on_member_join not wired)
 - Phase 2.7: Data Model Migration — Clean 3NF rebuild (complete)
   - `common.guild_members` and `common.characters` eliminated from all code
@@ -769,13 +770,13 @@ CREATE TABLE patt.mito_titles (
   - 202 unit tests pass, 59 skipped (DB-dependent or legacy script tests)
 
 ### Current Phase
-- Phase 2.9: Data Quality Engine — **COMPLETE**
+- Phase 3.0A: Matching Transparency & Coverage Metrics — **COMPLETE**
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
 - sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting (`src/sv_common/discord/`)
-- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, **rules registry + mitigations engine (Phase 2.9)**
+- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, **attribution functions: `_attribution_for_match`, `_find_discord_for_key` (now returns tuple) (Phase 3.0A)**
 - Crafting Corner: `/crafting-corner` public page, `/api/crafting/*` routes, profession/recipe DB tables, adaptive sync cadence
 - Admin Crafting Sync page: `/admin/crafting-sync` — force refresh, season config, sync stats
 - Data Quality Engine: `rules.py` (5-rule registry), `mitigations.py` (targeted fix functions + `run_auto_mitigations`), refactored `integrity_checker.py` (named detect functions)
