@@ -468,8 +468,7 @@ async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
            WHERE wc.removed_at IS NULL
              AND wc.guild_note IS NOT NULL
              AND wc.guild_note != ''
-             AND du.is_present = TRUE
-             AND NOT (pc.link_source = 'manual' AND pc.confidence = 'confirmed')"""
+             AND du.is_present = TRUE"""
     )
 
     alias_rows = await conn.fetch(

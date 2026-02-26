@@ -50,7 +50,7 @@ async def _base_ctx(request: Request, player: Player, db: AsyncSession) -> dict:
     }
 
 
-async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | None":
+async def _compute_best_rank(db: AsyncSession, player_id: int) -> "tuple[GuildRank, str] | tuple[None, None]":
     """Return the highest GuildRank the player qualifies for.
 
     Considers: Discord user's highest_guild_role, and all linked WoW character ranks.
@@ -65,7 +65,8 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | N
     if not p:
         return None
 
-    candidates: list[GuildRank] = []
+    # (rank, source_label) pairs
+    candidates: list[tuple[GuildRank, str]] = []
 
     # Discord rank
     if p.discord_user and p.discord_user.highest_guild_role:
@@ -76,7 +77,7 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | N
         )
         dr = dr_result.scalar_one_or_none()
         if dr:
-            candidates.append(dr)
+            candidates.append((dr, "discord_sync"))
 
     # WoW character ranks via player_characters bridge
     if p.characters:
@@ -90,11 +91,12 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "GuildRank | N
             ranks_result = await db.execute(
                 select(GuildRank).where(GuildRank.id.in_(rank_ids))
             )
-            candidates.extend(ranks_result.scalars().all())
+            candidates.extend((r, "wow_character") for r in ranks_result.scalars().all())
 
     if not candidates:
-        return None
-    return max(candidates, key=lambda r: r.level)
+        return None, None
+    best_rank, best_source = max(candidates, key=lambda pair: pair[0].level)
+    return best_rank, best_source
 
 
 def _player_tz_from_name(tz_name: str) -> ZoneInfo:
@@ -760,10 +762,10 @@ async def admin_assign_character(
     rank_updated = False
     new_rank_name = None
     if player_id and p and p.guild_rank_source != "admin_override":
-        best_rank = await _compute_best_rank(db, player_id)
+        best_rank, best_source = await _compute_best_rank(db, player_id)
         if best_rank:
             p.guild_rank_id = best_rank.id
-            p.guild_rank_source = "discord_sync"
+            p.guild_rank_source = best_source
             await db.commit()
             rank_updated = True
             new_rank_name = best_rank.name
@@ -957,10 +959,10 @@ async def admin_link_discord(
     rank_updated = False
     new_rank_name = None
     if p.guild_rank_source != "admin_override":
-        best_rank = await _compute_best_rank(db, player_id)
+        best_rank, best_source = await _compute_best_rank(db, player_id)
         if best_rank:
             p.guild_rank_id = best_rank.id
-            p.guild_rank_source = "discord_sync"
+            p.guild_rank_source = best_source
             await db.commit()
             rank_updated = True
             new_rank_name = best_rank.name
@@ -1960,7 +1962,7 @@ async def admin_drift_summary(
 
     from sv_common.guild_sync.drift_scanner import DRIFT_RULE_TYPES
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
+        count_rows = await conn.fetch(
             """SELECT
                    issue_type,
                    COUNT(*) FILTER (WHERE resolved_at IS NULL)            AS open_count,
@@ -1972,7 +1974,18 @@ async def admin_drift_summary(
                GROUP BY issue_type""",
             list(DRIFT_RULE_TYPES),
         )
-    by_type = {r["issue_type"]: r for r in rows}
+        log_rows = await conn.fetch(
+            """SELECT id, issue_type, severity, summary,
+                      created_at, resolved_at, resolved_by
+               FROM guild_identity.audit_issues
+               WHERE issue_type = ANY($1::text[])
+                 AND (resolved_at IS NULL
+                      OR resolved_at > NOW() - INTERVAL '30 days')
+               ORDER BY created_at DESC
+               LIMIT 100""",
+            list(DRIFT_RULE_TYPES),
+        )
+    by_type = {r["issue_type"]: r for r in count_rows}
     summary = {}
     for issue_type in DRIFT_RULE_TYPES:
         r = by_type.get(issue_type)
@@ -1981,7 +1994,19 @@ async def admin_drift_summary(
             "resolved_30d": r["resolved_30d"] if r else 0,
             "last_triggered": r["last_triggered"].isoformat() if r and r["last_triggered"] else None,
         }
-    return JSONResponse({"ok": True, "data": summary})
+    log = [
+        {
+            "id": r["id"],
+            "issue_type": r["issue_type"],
+            "severity": r["severity"],
+            "summary": r["summary"],
+            "created_at": r["created_at"].isoformat(),
+            "resolved_at": r["resolved_at"].isoformat() if r["resolved_at"] else None,
+            "resolved_by": r["resolved_by"],
+        }
+        for r in log_rows
+    ]
+    return JSONResponse({"ok": True, "data": {"summary": summary, "log": log}})
 
 
 @router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)

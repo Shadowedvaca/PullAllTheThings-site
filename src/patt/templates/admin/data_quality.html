@@ -304,30 +304,60 @@
     font-size: 0.78rem;
 }
 
-/* ------------------------------------------------------------------ Unmatched tables */
-.unmatched-section {
-    margin-bottom: 2rem;
+/* ------------------------------------------------------------------ Drift event log */
+.drift-log {
+    margin-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.75rem;
 }
-.unmatched-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-}
-.unmatched-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--color-text);
-}
-.unmatched-count {
-    font-size: 0.75rem;
+.drift-log-title {
+    font-size: 0.72rem;
     font-weight: 700;
-    padding: 0.12rem 0.5rem;
-    border-radius: 100px;
-    background: rgba(251,191,36,0.12);
-    color: var(--color-warning);
-    border: 1px solid rgba(251,191,36,0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.6rem;
 }
+.drift-log-empty {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+}
+.drift-log-entry {
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    gap: 0.5rem 0.75rem;
+    align-items: baseline;
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.85rem;
+}
+.drift-log-entry:last-child { border-bottom: none; }
+.drift-log-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 0.3rem;
+    flex-shrink: 0;
+    align-self: start;
+}
+.drift-log-dot--open     { background: var(--color-warning); }
+.drift-log-dot--resolved { background: var(--color-success); }
+.drift-log-body { min-width: 0; }
+.drift-log-type {
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    color: var(--color-text-muted);
+    margin-bottom: 0.15rem;
+}
+.drift-log-summary { color: var(--color-text); line-height: 1.4; }
+.drift-log-meta {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    text-align: right;
+}
+.drift-log-meta--resolved { color: var(--color-success); }
 
 /* ------------------------------------------------------------------ Rule cards */
 .dq-rules {
@@ -678,48 +708,9 @@
         <div class="drift-last-scan" id="drift-last-scan"></div>
     </div>
     <div class="drift-scan-results" id="drift-scan-results"></div>
-</div>
-
-{# ------------------------------------------------------------------ Unmatched tables (populated by JS) #}
-<div id="unmatched-section" style="display:none">
-    <div id="unmatched-chars-section" class="unmatched-section" style="display:none">
-        <div class="unmatched-header">
-            <span class="unmatched-title">Unmatched Characters</span>
-            <span class="unmatched-count" id="unmatched-chars-count">0</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Rank</th>
-                        <th>Guild Note</th>
-                        <th>Last Login</th>
-                    </tr>
-                </thead>
-                <tbody id="unmatched-chars-body"></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="unmatched-discord-section" class="unmatched-section" style="display:none">
-        <div class="unmatched-header">
-            <span class="unmatched-title">Unmatched Discord Users</span>
-            <span class="unmatched-count" id="unmatched-discord-count">0</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Username</th>
-                        <th>Display Name</th>
-                        <th>Role</th>
-                        <th>Joined</th>
-                    </tr>
-                </thead>
-                <tbody id="unmatched-discord-body"></tbody>
-            </table>
-        </div>
+    <div class="drift-log" id="drift-log" style="display:none">
+        <div class="drift-log-title">Recent Events (30 days)</div>
+        <div id="drift-log-entries"></div>
     </div>
 </div>
 
@@ -983,59 +974,10 @@ function renderBreakdown(title, data) {
     </div>`;
 }
 
-function renderUnmatchedChars(chars) {
-    const section = document.getElementById('unmatched-chars-section');
-    const body = document.getElementById('unmatched-chars-body');
-    const count = document.getElementById('unmatched-chars-count');
-    if (!chars || chars.length === 0) {
-        section.style.display = 'none';
-        return;
-    }
-    count.textContent = chars.length;
-    body.innerHTML = chars.map(c => {
-        const login = c.last_login_days_ago !== null
-            ? (c.last_login_days_ago === 0 ? 'Today' : `${c.last_login_days_ago}d ago`)
-            : '—';
-        const note = c.guild_note || '<span style="color:var(--color-text-muted)">—</span>';
-        const rank = c.guild_rank || '<span style="color:var(--color-text-muted)">—</span>';
-        return `<tr>
-            <td><strong>${c.character_name}</strong> <span style="font-size:0.75rem;color:var(--color-text-muted)">${c.realm}</span></td>
-            <td>${rank}</td>
-            <td style="font-family:var(--font-mono);font-size:0.8rem">${note}</td>
-            <td style="font-size:0.78rem;color:var(--color-text-muted)">${login}</td>
-        </tr>`;
-    }).join('');
-    section.style.display = '';
-}
-
-function renderUnmatchedDiscord(users) {
-    const section = document.getElementById('unmatched-discord-section');
-    const body = document.getElementById('unmatched-discord-body');
-    const count = document.getElementById('unmatched-discord-count');
-    if (!users || users.length === 0) {
-        section.style.display = 'none';
-        return;
-    }
-    count.textContent = users.length;
-    body.innerHTML = users.map(u => {
-        const joined = u.joined_server_at
-            ? new Date(u.joined_server_at).toLocaleDateString('en-US', {month:'short', year:'numeric'})
-            : '—';
-        return `<tr>
-            <td style="font-family:var(--font-mono);font-size:0.85rem">${u.username}</td>
-            <td>${u.display_name || '<span style="color:var(--color-text-muted)">—</span>'}</td>
-            <td style="font-size:0.8rem;color:var(--color-text-muted)">${u.highest_guild_role || '—'}</td>
-            <td style="font-size:0.78rem;color:var(--color-text-muted)">${joined}</td>
-        </tr>`;
-    }).join('');
-    section.style.display = '';
-}
-
 async function loadCoverage() {
     const loading = document.getElementById('coverage-loading');
     const content = document.getElementById('coverage-content');
     const errorEl = document.getElementById('coverage-error');
-    const unmatchedSection = document.getElementById('unmatched-section');
 
     loading.style.display = '';
     content.style.display = 'none';
@@ -1065,12 +1007,6 @@ async function loadCoverage() {
 
         loading.style.display = 'none';
         content.style.display = '';
-
-        renderUnmatchedChars(d.data.unmatched_characters);
-        renderUnmatchedDiscord(d.data.unmatched_discord_users);
-        const hasUnmatched = (d.data.unmatched_characters && d.data.unmatched_characters.length > 0) ||
-                             (d.data.unmatched_discord_users && d.data.unmatched_discord_users.length > 0);
-        unmatchedSection.style.display = hasUnmatched ? '' : 'none';
 
     } catch(e) {
         errorEl.textContent = 'Failed to load coverage stats.';
@@ -1187,7 +1123,8 @@ async function loadDriftSummary() {
         const r = await fetch('/admin/drift/summary');
         const d = await r.json();
         if (!d.ok) return;
-        renderDriftRules(d.data);
+        renderDriftRules(d.data.summary);
+        renderDriftLog(d.data.log || []);
     } catch(e) {
         // silently fail — drift summary is non-critical
     }
@@ -1280,6 +1217,54 @@ function renderDriftScanResults(data, el) {
 
     el.innerHTML = html;
     el.style.display = '';
+}
+
+function renderDriftLog(entries) {
+    const section = document.getElementById('drift-log');
+    const container = document.getElementById('drift-log-entries');
+    if (!section || !container) return;
+
+    if (!entries || entries.length === 0) {
+        container.innerHTML = '<div class="drift-log-empty">No drift events in the last 30 days.</div>';
+        section.style.display = '';
+        return;
+    }
+
+    container.innerHTML = entries.map(e => {
+        const isResolved = !!e.resolved_at;
+        const dotClass = isResolved ? 'drift-log-dot--resolved' : 'drift-log-dot--open';
+        const created = new Date(e.created_at);
+        const age = formatAge(created);
+        let meta = age;
+        if (isResolved) {
+            const by = e.resolved_by ? ` by ${e.resolved_by}` : '';
+            meta = `auto-fixed${by} · ${age}`;
+        }
+        return `<div class="drift-log-entry">
+            <span class="drift-log-dot ${dotClass}"></span>
+            <div class="drift-log-body">
+                <div class="drift-log-type">${e.issue_type}</div>
+                <div class="drift-log-summary">${escHtml(e.summary)}</div>
+            </div>
+            <div class="drift-log-meta ${isResolved ? 'drift-log-meta--resolved' : ''}">${meta}</div>
+        </div>`;
+    }).join('');
+
+    section.style.display = '';
+}
+
+function formatAge(date) {
+    const diffMs = Date.now() - date.getTime();
+    const diffH = Math.floor(diffMs / 3600000);
+    if (diffH < 1) return 'just now';
+    if (diffH < 24) return `${diffH}h ago`;
+    const diffD = Math.floor(diffH / 24);
+    if (diffD < 7) return `${diffD}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // --------------------------------------------------------------------------
