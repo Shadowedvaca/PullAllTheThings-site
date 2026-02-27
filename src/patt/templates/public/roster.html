@@ -112,20 +112,22 @@ const ROLE_EMOJIS = {
 const ROLE_TARGETS = { "Tank": 2, "Healer": 4, "Melee DPS": 7, "Ranged DPS": 7 };
 const DPS_TOTAL_TARGET = 14;
 
+// Single-character spec codes used by Wowhead's raid-composition tool
+// Format: https://www.wowhead.com/raid-composition#0[codes];Name1;Name2
 const SPEC_CODES = {
-    "Death Knight/Blood": "K1", "Death Knight/Frost": "K2", "Death Knight/Unholy": "K3",
-    "Demon Hunter/Havoc": "Y1", "Demon Hunter/Vengeance": "Y2", "Demon Hunter/Devourer": "0Y",
-    "Druid/Balance": "D1", "Druid/Feral": "D2", "Druid/Guardian": "D3", "Druid/Restoration": "D4",
-    "Evoker/Devastation": "V1", "Evoker/Preservation": "V2", "Evoker/Augmentation": "V3",
-    "Hunter/Beast Mastery": "H1", "Hunter/Marksmanship": "H2", "Hunter/Survival": "H3",
-    "Mage/Arcane": "M1", "Mage/Fire": "M2", "Mage/Frost": "M3",
-    "Monk/Brewmaster": "O1", "Monk/Mistweaver": "O2", "Monk/Windwalker": "O3",
-    "Paladin/Holy": "P1", "Paladin/Protection": "P2", "Paladin/Retribution": "P3",
-    "Priest/Discipline": "R1", "Priest/Holy": "R2", "Priest/Shadow": "R3",
-    "Rogue/Assassination": "U1", "Rogue/Outlaw": "U2", "Rogue/Subtlety": "U3",
-    "Shaman/Elemental": "S1", "Shaman/Enhancement": "S2", "Shaman/Restoration": "S3",
-    "Warlock/Affliction": "W1", "Warlock/Demonology": "W2", "Warlock/Destruction": "W3",
-    "Warrior/Arms": "A1", "Warrior/Fury": "A2", "Warrior/Protection": "A3"
+    "Death Knight/Blood": "s", "Death Knight/Frost": "t", "Death Knight/Unholy": "v",
+    "Demon Hunter/Havoc": "S", "Demon Hunter/Vengeance": "T",
+    "Druid/Balance": "n", "Druid/Feral": "p", "Druid/Guardian": "q", "Druid/Restoration": "r",
+    "Evoker/Devastation": "V", "Evoker/Preservation": "W", "Evoker/Augmentation": "X",
+    "Hunter/Beast Mastery": "w", "Hunter/Marksmanship": "x", "Hunter/Survival": "y",
+    "Mage/Arcane": "b", "Mage/Fire": "c", "Mage/Frost": "d",
+    "Monk/Brewmaster": "P", "Monk/Mistweaver": "R", "Monk/Windwalker": "Q",
+    "Paladin/Holy": "f", "Paladin/Protection": "g", "Paladin/Retribution": "h",
+    "Priest/Discipline": "z", "Priest/Holy": "B", "Priest/Shadow": "C",
+    "Rogue/Assassination": "D", "Rogue/Outlaw": "F", "Rogue/Subtlety": "G",
+    "Shaman/Elemental": "H", "Shaman/Enhancement": "J", "Shaman/Restoration": "K",
+    "Warlock/Affliction": "L", "Warlock/Demonology": "M", "Warlock/Destruction": "N",
+    "Warrior/Arms": "j", "Warrior/Fury": "k", "Warrior/Protection": "m"
 };
 
 // ---------------------------------------------------------------------------
@@ -380,21 +382,22 @@ function renderComposition() {
         `;
     }).join('');
 
-    // Wowhead link — format: CODE:CharacterName/CODE:CharacterName/...
-    const wowheadEntries = allPlayers
-        .filter(p => p.main_character?.class_name && p.main_character?.spec_name)
-        .map(p => {
-            const code = SPEC_CODES[`${p.main_character.class_name}/${p.main_character.spec_name}`];
-            if (!code) return null;
-            const name = encodeURIComponent(p.main_character.character_name || p.display_name);
-            return `${code}:${name}`;
-        })
-        .filter(Boolean);
+    // Wowhead link — format: https://www.wowhead.com/raid-composition#0[codes];Name1;Name2
+    let specCodeStr = '';
+    const wowheadNames = [];
+    for (const p of allPlayers) {
+        const mc = p.main_character;
+        if (!mc?.class_name || !mc?.spec_name) continue;
+        const code = SPEC_CODES[`${mc.class_name}/${mc.spec_name}`];
+        if (!code) continue;
+        specCodeStr += code;
+        wowheadNames.push(mc.character_name || p.display_name);
+    }
     const btn = document.getElementById('wowhead-btn');
-    if (wowheadEntries.length) {
-        btn.href = `https://www.wowhead.com/raid-comp#${wowheadEntries.join('/')}`;
+    if (specCodeStr.length) {
+        btn.href = `https://www.wowhead.com/raid-composition#0${specCodeStr};${wowheadNames.join(';')}`;
     } else {
-        btn.href = 'https://www.wowhead.com/raid-comp';
+        btn.href = 'https://www.wowhead.com/raid-composition';
         btn.textContent = '🔗 View Comp on Wowhead (spec data unavailable)';
     }
 }
