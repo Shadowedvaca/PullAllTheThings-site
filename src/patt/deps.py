@@ -76,7 +76,10 @@ async def get_current_player(
 
     result = await db.execute(
         select(Player)
-        .options(selectinload(Player.guild_rank))
+        .options(
+            selectinload(Player.guild_rank),
+            selectinload(Player.main_character),
+        )
         .where(Player.website_user_id == user_id)
     )
     player = result.scalar_one_or_none()
@@ -125,7 +128,10 @@ async def get_page_member(
             return None
         result = await db.execute(
             select(Player)
-            .options(selectinload(Player.guild_rank))
+            .options(
+                selectinload(Player.guild_rank),
+                selectinload(Player.main_character),
+            )
             .where(Player.website_user_id == user_id)
         )
         return result.scalar_one_or_none()
