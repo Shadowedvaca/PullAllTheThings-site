@@ -666,6 +666,19 @@ async def admin_players_data(
     """))
     chars = chars_result.mappings().all()
 
+    # Load aliases grouped by player_id
+    aliases_result = await db.execute(text("""
+        SELECT id, player_id, alias, source
+        FROM guild_identity.player_note_aliases
+        ORDER BY alias
+    """))
+    aliases_by_player: dict = {}
+    for ar in aliases_result.mappings().all():
+        pid = ar["player_id"]
+        if pid not in aliases_by_player:
+            aliases_by_player[pid] = []
+        aliases_by_player[pid].append({"id": ar["id"], "alias": ar["alias"], "source": ar["source"]})
+
     return JSONResponse({
         "ok": True,
         "data": {
@@ -686,6 +699,7 @@ async def admin_players_data(
                     "offspec_spec_name": p.offspec_spec.name if p.offspec_spec else None,
                     "auto_invite_events": p.auto_invite_events,
                     "crafting_notifications_enabled": p.crafting_notifications_enabled,
+                    "aliases": aliases_by_player.get(p.id, []),
                 }
                 for p in players
             ],
@@ -1486,8 +1500,6 @@ async def admin_data_quality(
     pool = getattr(request.app.state, "guild_sync_pool", None)
     rules_with_stats = []
     recent_issues = []
-    alias_registry = []
-    alias_total_count = 0
 
     if pool:
         async with pool.acquire() as conn:
@@ -1519,34 +1531,6 @@ async def admin_data_quality(
             )
             recent_issues = [dict(r) for r in recent_rows]
 
-            alias_rows = await conn.fetch(
-                """SELECT pna.id AS alias_id, p.id AS player_id, p.display_name,
-                          du.username AS discord_username,
-                          pna.alias, pna.source
-                   FROM guild_identity.player_note_aliases pna
-                   JOIN guild_identity.players p ON p.id = pna.player_id
-                   LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
-                   ORDER BY p.display_name, pna.alias"""
-            )
-            # Aggregate into per-player groups
-            alias_registry_map: dict = {}
-            for ar in alias_rows:
-                pid = ar["player_id"]
-                if pid not in alias_registry_map:
-                    alias_registry_map[pid] = {
-                        "player_id": pid,
-                        "display_name": ar["display_name"],
-                        "discord_username": ar["discord_username"],
-                        "aliases": [],
-                    }
-                alias_registry_map[pid]["aliases"].append({
-                    "id": ar["alias_id"],
-                    "alias": ar["alias"],
-                    "source": ar["source"],
-                })
-            alias_registry = list(alias_registry_map.values())
-            alias_total_count = sum(len(e["aliases"]) for e in alias_registry)
-
         for issue_type, rule in RULES.items():
             s = stats_by_type.get(issue_type)
             rules_with_stats.append({
@@ -1560,8 +1544,6 @@ async def admin_data_quality(
     ctx.update({
         "rules_with_stats": rules_with_stats,
         "recent_issues": recent_issues,
-        "alias_registry": alias_registry,
-        "alias_total_count": alias_total_count,
         "pool_available": pool is not None,
     })
     return templates.TemplateResponse("admin/data_quality.html", ctx)
@@ -1728,6 +1710,62 @@ async def admin_data_quality_fix_all_type(
     asyncio.create_task(_run_all())
     return JSONResponse({"ok": True, "status": "fix_all_started", "issue_type": issue_type})
 
+
+
+@router.post("/players/{player_id}/aliases")
+async def admin_add_player_alias(
+    request: Request,
+    player_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a manual alias for a player (Player Manager)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    body = await request.json()
+    alias = (body.get("alias") or "").strip().lower()
+    if not alias:
+        return JSONResponse({"ok": False, "error": "alias required"}, status_code=400)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """INSERT INTO guild_identity.player_note_aliases (player_id, alias, source)
+               VALUES ($1, $2, 'manual')
+               ON CONFLICT (player_id, alias) DO UPDATE SET source = EXCLUDED.source
+               RETURNING id, player_id, alias, source""",
+            player_id, alias,
+        )
+    return JSONResponse({"ok": True, "alias": {"id": row["id"], "alias": row["alias"], "source": row["source"]}})
+
+
+@router.delete("/players/aliases/{alias_id}")
+async def admin_delete_player_alias(
+    request: Request,
+    alias_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a player alias by id (Player Manager)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        deleted = await conn.fetchval(
+            "DELETE FROM guild_identity.player_note_aliases WHERE id = $1 RETURNING id",
+            alias_id,
+        )
+    if not deleted:
+        return JSONResponse({"ok": False, "error": "Alias not found"}, status_code=404)
+    return JSONResponse({"ok": True})
 
 
 @router.delete("/data-quality/aliases/{alias_id}")

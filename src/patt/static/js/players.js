@@ -308,9 +308,100 @@ function renderPlayers() {
                 </select>
                 ${isRoleOverride && overrideSpec ? `<span class="pm-role-spec-hint">${escHtml(overrideSpec)}</span>` : ''}
             </div>
+            ${renderAliasRow(p)}
             ${regPanelHtml}
         </div>`;
     }).join('') + unzoneHtml;
+}
+
+// ── Alias row (chips + add button) ─────────────────────────────────────────
+
+function renderAliasRow(p) {
+    const aliases = p.aliases || [];
+    const chips = aliases.map(a =>
+        `<span class="pm-alias-chip" id="pm-alias-chip-${a.id}" title="source: ${escAttr(a.source)}">
+            ${escHtml(a.alias)}
+            <button class="pm-alias-chip__remove"
+                    onclick="deleteAlias(event,${a.id},${p.id})"
+                    title="Remove alias">×</button>
+        </span>`
+    ).join('');
+    return `
+        <div class="pm-alias-row" id="pm-alias-row-${p.id}">
+            <span class="pm-alias-label">Aliases</span>
+            ${chips}
+            <span id="pm-alias-input-wrap-${p.id}" style="display:none" class="pm-alias-input-row">
+                <input class="pm-alias-input" id="pm-alias-input-${p.id}"
+                       placeholder="alias…" maxlength="50"
+                       onkeydown="if(event.key==='Enter')saveAlias(event,${p.id});if(event.key==='Escape')cancelAliasInput(${p.id})">
+                <button class="pm-alias-save-btn" onclick="saveAlias(event,${p.id})">Add</button>
+                <button class="pm-alias-cancel-btn" onclick="cancelAliasInput(${p.id})">✕</button>
+            </span>
+            <button class="pm-alias-add-btn" id="pm-alias-add-btn-${p.id}"
+                    onclick="showAliasInput(event,${p.id})">+ alias</button>
+        </div>`;
+}
+
+function showAliasInput(event, playerId) {
+    event.stopPropagation();
+    document.getElementById(`pm-alias-add-btn-${playerId}`).style.display = 'none';
+    const wrap = document.getElementById(`pm-alias-input-wrap-${playerId}`);
+    wrap.style.display = '';
+    document.getElementById(`pm-alias-input-${playerId}`)?.focus();
+}
+
+function cancelAliasInput(playerId) {
+    document.getElementById(`pm-alias-input-wrap-${playerId}`).style.display = 'none';
+    document.getElementById(`pm-alias-add-btn-${playerId}`).style.display = '';
+    const input = document.getElementById(`pm-alias-input-${playerId}`);
+    if (input) input.value = '';
+}
+
+async function saveAlias(event, playerId) {
+    event.stopPropagation();
+    const input = document.getElementById(`pm-alias-input-${playerId}`);
+    const alias = (input?.value || '').trim().toLowerCase();
+    if (!alias) return;
+
+    const resp = await fetch(`/admin/players/${playerId}/aliases`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ alias }),
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+        alert('Failed to add alias: ' + (data.error || 'unknown error'));
+        return;
+    }
+    // Update local players array and re-render
+    const p = players.find(p => p.id === playerId);
+    if (p) {
+        if (!p.aliases) p.aliases = [];
+        const a = data.alias;
+        if (!p.aliases.some(x => x.id === a.id)) p.aliases.push(a);
+        renderPlayers();
+    }
+}
+
+async function deleteAlias(event, aliasId, playerId) {
+    event.stopPropagation();
+    if (!confirm('Remove this alias?')) return;
+
+    const resp = await fetch(`/admin/players/aliases/${aliasId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    });
+    const data = await resp.json();
+    if (!data.ok) {
+        alert('Failed to remove alias: ' + (data.error || 'unknown error'));
+        return;
+    }
+    const p = players.find(p => p.id === playerId);
+    if (p && p.aliases) {
+        p.aliases = p.aliases.filter(a => a.id !== aliasId);
+        renderPlayers();
+    }
 }
 
 // ── Reg panel toggle ───────────────────────────────────────────────────────
