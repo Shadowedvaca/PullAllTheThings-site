@@ -544,6 +544,11 @@
               {% endfor %}
             </tbody>
           </table>
+          <div id="unclaimed-pagination" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0;font-size:0.875rem">
+            <button id="pg-prev" class="btn btn-secondary btn-sm" onclick="changePage(-1)" disabled>&#8592; Prev</button>
+            <span id="pg-info" style="color:var(--color-text-muted)"></span>
+            <button id="pg-next" class="btn btn-secondary btn-sm" onclick="changePage(1)">Next &#8594;</button>
+          </div>
           <p id="unclaimed-empty" style="display:none;color:var(--color-text-muted);font-size:0.875rem">
             No characters match your search.
           </p>
@@ -675,19 +680,63 @@ function toggleDayRow(dayIdx, checked) {
   row.classList.toggle('row-unavailable', !checked);
 }
 
+const PAGE_SIZE = 10;
+let _currentPage = 0;
+let _filteredRows = [];
+
 function filterChars(query) {
   const tbody = document.getElementById('unclaimed-tbody');
   if (!tbody) return;
   const q = query.trim().toLowerCase();
-  let visible = 0;
-  for (const row of tbody.querySelectorAll('tr')) {
-    const match = !q || row.dataset.name.includes(q);
-    row.style.display = match ? '' : 'none';
-    if (match) visible++;
-  }
-  const emptyMsg = document.getElementById('unclaimed-empty');
-  if (emptyMsg) emptyMsg.style.display = visible === 0 ? '' : 'none';
+  _filteredRows = Array.from(tbody.querySelectorAll('tr')).filter(
+    r => !q || r.dataset.name.includes(q)
+  );
+  _currentPage = 0;
+  renderPage();
 }
+
+function changePage(delta) {
+  const maxPage = Math.ceil(_filteredRows.length / PAGE_SIZE) - 1;
+  _currentPage = Math.max(0, Math.min(_currentPage + delta, maxPage));
+  renderPage();
+}
+
+function renderPage() {
+  const tbody = document.getElementById('unclaimed-tbody');
+  if (!tbody) return;
+  const allRows = tbody.querySelectorAll('tr');
+  allRows.forEach(r => r.style.display = 'none');
+
+  const start = _currentPage * PAGE_SIZE;
+  const pageRows = _filteredRows.slice(start, start + PAGE_SIZE);
+  pageRows.forEach(r => r.style.display = '');
+
+  const emptyMsg = document.getElementById('unclaimed-empty');
+  const pagination = document.getElementById('unclaimed-pagination');
+  const info = document.getElementById('pg-info');
+  const prevBtn = document.getElementById('pg-prev');
+  const nextBtn = document.getElementById('pg-next');
+
+  if (_filteredRows.length === 0) {
+    if (emptyMsg) emptyMsg.style.display = '';
+    if (pagination) pagination.style.display = 'none';
+  } else {
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    const totalPages = Math.ceil(_filteredRows.length / PAGE_SIZE);
+    if (pagination) pagination.style.display = totalPages > 1 ? 'flex' : 'none';
+    if (info) info.textContent = `Page ${_currentPage + 1} of ${totalPages} (${_filteredRows.length} results)`;
+    if (prevBtn) prevBtn.disabled = _currentPage === 0;
+    if (nextBtn) nextBtn.disabled = _currentPage >= totalPages - 1;
+  }
+}
+
+// Initialise on load
+(function() {
+  const tbody = document.getElementById('unclaimed-tbody');
+  if (!tbody) return;
+  _filteredRows = Array.from(tbody.querySelectorAll('tr'));
+  renderPage();
+})();
 
 function updateSpecDropdown(prefix) {
   const charSelect = document.getElementById(prefix + '_character_id');
