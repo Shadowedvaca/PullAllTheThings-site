@@ -16,20 +16,19 @@
             <nav class="site-nav">
                 {% if current_member %}
                     <a href="/" class="nav-link">Home</a>
+                    <a href="/roster" class="nav-link">Roster</a>
                     <a href="/crafting-corner" class="nav-link">Crafting</a>
-                    {% if active_campaigns %}
-                        <a href="/vote/{{ active_campaigns[0].id }}" class="nav-link">Vote</a>
-                    {% endif %}
                     <a href="/profile" class="nav-link">Settings</a>
-                    <div class="nav-user">
-                        <span class="nav-username">{{ current_member.display_name or current_member.discord_username }}</span>
-                        {% if current_member.guild_rank %}
-                            <span class="nav-rank">{{ current_member.guild_rank.name }}</span>
-                        {% endif %}
-                        <a href="/logout" class="btn btn-secondary btn-sm">Logout</a>
-                    </div>
+                    {% if current_member.main_character %}
+                        <span class="nav-badge nav-badge--char">{{ current_member.main_character.character_name }}</span>
+                    {% endif %}
+                    {% if current_member.guild_rank %}
+                        <span class="nav-badge nav-badge--rank">{{ current_member.guild_rank.name }}</span>
+                    {% endif %}
+                    <a href="/logout" class="btn btn-secondary btn-sm">Log Out</a>
                 {% else %}
                     <a href="/" class="nav-link">Home</a>
+                    <a href="/roster" class="nav-link">Roster</a>
                     <a href="/crafting-corner" class="nav-link">Crafting</a>
                     <a href="/login" class="btn btn-primary btn-sm">Login or Register</a>
                 {% endif %}

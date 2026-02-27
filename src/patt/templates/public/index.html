@@ -17,6 +17,9 @@
         <span class="lp-badge lp-badge--gold">🏰 Est. BC</span>
     </div>
     <p class="lp-realm-info">Based on Sen'jin &bull; Cross-Realm Welcome</p>
+    <a href="https://discord.gg/jgSSRBvjHM" target="_blank" rel="noopener" class="btn btn-discord btn-lg">
+        💬 Join our Discord
+    </a>
 </section>
 
 <div class="lp-container">
@@ -50,25 +53,7 @@
 </section>
 {% endif %}
 
-{# ── Recent Results ── #}
-{% if closed_campaigns %}
-<section class="lp-campaigns-section">
-    <h2 class="lp-section-title">Recent Results</h2>
-    <div class="campaign-cards">
-        {% for c in closed_campaigns %}
-        <div class="campaign-card">
-            <div class="campaign-card__title">{{ c.title }}</div>
-            <div class="campaign-card__meta"><span class="badge badge-closed">Closed</span></div>
-            <div class="campaign-card__actions">
-                <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">View Results</a>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
-
-{% if live_campaigns or closed_campaigns %}
+{% if live_campaigns %}
 <hr class="lp-divider">
 {% endif %}
 
@@ -134,28 +119,6 @@
     {% endif %}
 </section>
 
-{# ── Join Us ── #}
-<section class="lp-section">
-    <h2 class="lp-section-title">Join Us</h2>
-    <div class="lp-links">
-        <a href="https://discord.gg/jgSSRBvjHM" target="_blank" rel="noopener" class="lp-link-card">
-            <span class="lp-link-icon">💬</span>
-            <span class="lp-link-title">Discord</span>
-            <span class="lp-link-desc">Hop in, grab a guest role, and say hi!</span>
-        </a>
-        <a href="https://us.forums.blizzard.com/en/wow/t/ah-pull-all-the-things-recruiting-casual-heroic-raiding-with-real-life-balance-immaculate-vibes/2060891" target="_blank" rel="noopener" class="lp-link-card">
-            <span class="lp-link-icon">📜</span>
-            <span class="lp-link-title">Forum Post</span>
-            <span class="lp-link-desc">Our official recruitment thread</span>
-        </a>
-        <a href="/roster" class="lp-link-card">
-            <span class="lp-link-icon">👥</span>
-            <span class="lp-link-title">View Roster</span>
-            <span class="lp-link-desc">See who's on the team</span>
-        </a>
-    </div>
-</section>
-
 {# ── Guild Officers ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Guild Officers</h2>
@@ -190,6 +153,24 @@
     {% endif %}
 </section>
 
+{# ── Recent Results ── #}
+{% if closed_campaigns %}
+<section class="lp-campaigns-section">
+    <h2 class="lp-section-title">Recent Results</h2>
+    <div class="campaign-cards">
+        {% for c in closed_campaigns %}
+        <div class="campaign-card">
+            <div class="campaign-card__title">{{ c.title }}</div>
+            <div class="campaign-card__meta"><span class="badge badge-closed">Closed</span></div>
+            <div class="campaign-card__actions">
+                <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">View Results</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 {# ── Mito's Quote of the Day ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Mito's Quote of the Day</h2>
@@ -207,6 +188,11 @@
     </div>
 </section>
 
+
+<div class="lp-recruiting-link">
+    <a href="https://us.forums.blizzard.com/en/wow/t/ah-pull-all-the-things-recruiting-casual-heroic-raiding-with-real-life-balance-immaculate-vibes/2060891"
+       target="_blank" rel="noopener">📜 View our WoW recruitment post</a>
+</div>
 
 </div>{# /lp-container #}
 {% endblock %}
