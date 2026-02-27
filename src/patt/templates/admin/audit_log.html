@@ -99,9 +99,75 @@
            class="audit-tab {% if show == 'resolved' %}active{% endif %}">
             Resolved
         </a>
+        <a href="/admin/audit-log?show=claims"
+           class="audit-tab {% if show == 'claims' %}active{% endif %}">
+            Character Claims
+        </a>
     </div>
 </div>
 
+{% if show == 'claims' %}
+
+{# ── Character claims log ── #}
+{% if claims %}
+<div class="table-wrapper">
+    <table class="table audit-table">
+        <thead>
+            <tr>
+                <th>When</th>
+                <th>Player</th>
+                <th>Action</th>
+                <th>Character</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in claims %}
+            <tr>
+                <td class="td-age">
+                    {{ entry.created_at.strftime('%Y-%m-%d') }}<br>
+                    <span class="text-xs">{{ entry.created_at.strftime('%H:%M UTC') }}</span>
+                </td>
+                <td style="font-weight:600">
+                    {{ entry.player.display_name if entry.player else '—' }}
+                </td>
+                <td>
+                    {% if entry.action == 'claim_character' %}
+                        <span class="sev sev-info">Claimed</span>
+                    {% elif entry.action == 'unclaim_character' %}
+                        <span class="sev sev-warning">Unclaimed</span>
+                    {% else %}
+                        <span class="issue-type">{{ entry.action }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <strong>{{ entry.character_name or '—' }}</strong>
+                    {% if entry.realm_slug %}
+                        <span style="color:var(--color-text-muted)"> — {{ entry.realm_slug }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-muted text-sm">
+                    {% if entry.details and entry.details.get('character_deleted') %}
+                        <span style="color:var(--color-danger)">Character record deleted (no Blizzard sync)</span>
+                    {% elif entry.details and entry.details.get('confidence') %}
+                        {{ entry.details.confidence }} confidence
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-audit">
+    <div class="empty-audit__icon">&#8203;</div>
+    No character claims on record.
+</div>
+{% endif %}
+
+{% else %}
+
+{# ── Integrity audit issues ── #}
 {% if issues %}
 <div class="table-wrapper">
     <table class="table audit-table">
@@ -181,5 +247,7 @@
         No resolved issues on record.
     {% endif %}
 </div>
+{% endif %}
+
 {% endif %}
 {% endblock %}

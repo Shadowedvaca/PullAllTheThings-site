@@ -1,12 +1,12 @@
 """User profile / settings page routes."""
 
 import logging
-from datetime import time
+from datetime import datetime, time, timezone
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,8 +19,15 @@ from patt.services.availability_service import (
 )
 from patt.templating import templates
 from sv_common.auth.passwords import hash_password, verify_password
-from sv_common.db.models import Player, PlayerCharacter, Specialization, User, WowCharacter
-from sv_common.db.models import WowClass
+from sv_common.db.models import (
+    Player,
+    PlayerActionLog,
+    PlayerCharacter,
+    Specialization,
+    User,
+    WowCharacter,
+    WowClass,
+)
 from sv_common.identity import members as member_service
 
 logger = logging.getLogger(__name__)
@@ -74,6 +81,21 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
     )
     player_chars = list(result.scalars().all())
 
+    # Unclaimed active guild characters (not in player_characters, not removed)
+    claimed_char_ids_result = await db.execute(select(PlayerCharacter.character_id))
+    claimed_char_ids = set(claimed_char_ids_result.scalars().all())
+
+    unclaimed_result = await db.execute(
+        select(WowCharacter)
+        .options(selectinload(WowCharacter.wow_class))
+        .where(
+            WowCharacter.removed_at.is_(None),
+            WowCharacter.id.notin_(claimed_char_ids) if claimed_char_ids else True,
+        )
+        .order_by(WowCharacter.character_name)
+    )
+    unclaimed_chars = list(unclaimed_result.scalars().all())
+
     # All specs grouped by class_id for JS-driven dropdown
     spec_result = await db.execute(
         select(Specialization)
@@ -93,6 +115,7 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
 
     return {
         "player_chars": player_chars,
+        "unclaimed_chars": unclaimed_chars,
         "specs_by_class": specs_by_class,
         "all_specs": all_specs,
         "avail_by_day": avail_by_day,
@@ -352,3 +375,147 @@ async def profile_update_password(
         return RedirectResponse(url="/profile?error=Failed+to+update+password", status_code=302)
 
     return RedirectResponse(url="/profile?success=Password+updated+successfully", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# POST /profile/characters/claim  — self-service: link an unclaimed character
+# ---------------------------------------------------------------------------
+
+
+@router.post("/profile/characters/claim", response_class=HTMLResponse)
+async def profile_claim_character(
+    request: Request,
+    character_id: int = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    if current_member is None:
+        return RedirectResponse(url="/login?next=/profile", status_code=302)
+
+    # Load the character — must exist and not be removed
+    result = await db.execute(
+        select(WowCharacter).where(
+            WowCharacter.id == character_id,
+            WowCharacter.removed_at.is_(None),
+        )
+    )
+    char = result.scalar_one_or_none()
+    if char is None:
+        return RedirectResponse(url="/profile?error=Character+not+found", status_code=302)
+
+    # Verify not already claimed
+    existing = await db.execute(
+        select(PlayerCharacter).where(PlayerCharacter.character_id == character_id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        return RedirectResponse(url="/profile?error=That+character+is+already+claimed", status_code=302)
+
+    try:
+        pc = PlayerCharacter(
+            player_id=current_member.id,
+            character_id=character_id,
+            link_source="self_service",
+            confidence="medium",
+        )
+        db.add(pc)
+
+        log_entry = PlayerActionLog(
+            player_id=current_member.id,
+            action="claim_character",
+            character_id=character_id,
+            character_name=char.character_name,
+            realm_slug=char.realm_slug,
+            details={"link_source": "self_service", "confidence": "medium"},
+        )
+        db.add(log_entry)
+        await db.flush()
+    except Exception as exc:
+        logger.error("claim_character failed for player %s char %s: %s", current_member.id, character_id, exc)
+        return RedirectResponse(url="/profile?error=Failed+to+claim+character", status_code=302)
+
+    return RedirectResponse(
+        url=f"/profile?success={char.character_name}+claimed+successfully",
+        status_code=302,
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /profile/characters/unclaim  — self-service: remove a claimed character
+# ---------------------------------------------------------------------------
+
+
+@router.post("/profile/characters/unclaim", response_class=HTMLResponse)
+async def profile_unclaim_character(
+    request: Request,
+    character_id: int = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    if current_member is None:
+        return RedirectResponse(url="/login?next=/profile", status_code=302)
+
+    # Verify this character belongs to this player
+    result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.character_id == character_id,
+            PlayerCharacter.player_id == current_member.id,
+        )
+    )
+    pc = result.scalar_one_or_none()
+    if pc is None:
+        return RedirectResponse(url="/profile?error=Character+not+linked+to+your+account", status_code=302)
+
+    # Load the character for log denormalization + deletion check
+    char_result = await db.execute(
+        select(WowCharacter).where(WowCharacter.id == character_id)
+    )
+    char = char_result.scalar_one_or_none()
+    char_name = char.character_name if char else "Unknown"
+    char_realm = char.realm_slug if char else ""
+
+    try:
+        # Clear main/offspec pointers if they reference this character
+        player_result = await db.execute(
+            select(Player).where(Player.id == current_member.id)
+        )
+        player = player_result.scalar_one_or_none()
+        if player is not None:
+            changed = False
+            if player.main_character_id == character_id:
+                player.main_character_id = None
+                player.main_spec_id = None
+                changed = True
+            if player.offspec_character_id == character_id:
+                player.offspec_character_id = None
+                player.offspec_spec_id = None
+                changed = True
+            if changed:
+                player.updated_at = datetime.now(timezone.utc)
+
+        # Remove the player_characters bridge row
+        await db.delete(pc)
+
+        # If character has never been seen by Blizzard API, delete it entirely
+        deleted_char = False
+        if char is not None and char.blizzard_last_sync is None:
+            await db.delete(char)
+            deleted_char = True
+
+        log_entry = PlayerActionLog(
+            player_id=current_member.id,
+            action="unclaim_character",
+            character_id=None if deleted_char else character_id,
+            character_name=char_name,
+            realm_slug=char_realm,
+            details={"character_deleted": deleted_char},
+        )
+        db.add(log_entry)
+        await db.flush()
+    except Exception as exc:
+        logger.error("unclaim_character failed for player %s char %s: %s", current_member.id, character_id, exc)
+        return RedirectResponse(url="/profile?error=Failed+to+unclaim+character", status_code=302)
+
+    return RedirectResponse(
+        url=f"/profile?success={char_name}+unclaimed+successfully",
+        status_code=302,
+    )

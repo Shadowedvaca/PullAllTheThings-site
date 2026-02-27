@@ -445,6 +445,119 @@
     </form>
   </div>
 
+  {# ── Manage Characters ───────────────────────────────────────── #}
+  <div class="settings-section">
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Manage Characters</h2>
+    </div>
+    <div class="settings-section__body" style="padding-bottom:0">
+
+      {# — Claimed characters — #}
+      {% if player_chars %}
+      <p class="field-group__hint" style="margin-bottom:0.75rem">
+        These characters are currently linked to your account. You can unclaim any you don't own.
+      </p>
+      <table class="table" style="margin-bottom:1.25rem">
+        <thead>
+          <tr>
+            <th>Character</th>
+            <th>Realm</th>
+            <th>Class</th>
+            <th style="text-align:right">ilvl</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pc in player_chars %}
+          <tr>
+            <td style="font-weight:600">{{ pc.character.character_name }}</td>
+            <td style="color:var(--color-text-muted)">{{ pc.character.realm_name or pc.character.realm_slug }}</td>
+            <td style="color:var(--color-text-muted)">
+              {% if pc.character.wow_class %}{{ pc.character.wow_class.name }}{% else %}—{% endif %}
+            </td>
+            <td style="text-align:right;color:var(--color-text-muted)">
+              {{ pc.character.item_level or '—' }}
+            </td>
+            <td style="text-align:right">
+              <form method="post" action="/profile/characters/unclaim"
+                    onsubmit="return confirm('Unclaim {{ pc.character.character_name }}? This will remove it from your account.')">
+                <input type="hidden" name="character_id" value="{{ pc.character.id }}">
+                <button type="submit" class="btn btn-danger btn-sm">Unclaim</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="field-group__hint" style="margin-bottom:1.25rem">
+        No characters are linked to your account yet. Use the section below to claim yours.
+      </p>
+      {% endif %}
+
+      {# — Claim a character — #}
+      <div style="border-top:1px solid var(--color-border);padding:1.25rem 0 0">
+        <p class="field-group__hint" style="margin-bottom:0.75rem">
+          Claim any unclaimed guild character that belongs to you.
+          Changes are logged for admin review.
+        </p>
+        <div style="margin-bottom:0.75rem">
+          <input
+            type="text"
+            id="char-search"
+            class="form-control"
+            placeholder="Search by character name…"
+            oninput="filterChars(this.value)"
+            style="max-width:320px"
+          >
+        </div>
+        <div id="unclaimed-list">
+          {% if unclaimed_chars %}
+          <table class="table" id="unclaimed-table">
+            <thead>
+              <tr>
+                <th>Character</th>
+                <th>Realm</th>
+                <th>Class</th>
+                <th style="text-align:right">ilvl</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="unclaimed-tbody">
+              {% for char in unclaimed_chars %}
+              <tr data-name="{{ char.character_name | lower }}">
+                <td style="font-weight:600">{{ char.character_name }}</td>
+                <td style="color:var(--color-text-muted)">{{ char.realm_name or char.realm_slug }}</td>
+                <td style="color:var(--color-text-muted)">
+                  {% if char.wow_class %}{{ char.wow_class.name }}{% else %}—{% endif %}
+                </td>
+                <td style="text-align:right;color:var(--color-text-muted)">
+                  {{ char.item_level or '—' }}
+                </td>
+                <td style="text-align:right">
+                  <form method="post" action="/profile/characters/claim">
+                    <input type="hidden" name="character_id" value="{{ char.id }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">Claim</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <p id="unclaimed-empty" style="display:none;color:var(--color-text-muted);font-size:0.875rem">
+            No characters match your search.
+          </p>
+          {% else %}
+          <p style="color:var(--color-text-muted);font-size:0.875rem">
+            All guild characters are already claimed.
+          </p>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   {# ── Raid Availability ───────────────────────────────────────── #}
   <div class="settings-section">
     <div class="settings-section__header">
@@ -560,6 +673,20 @@ function toggleDayRow(dayIdx, checked) {
   const inputs = row.querySelectorAll('input[type="time"], input[type="number"]');
   inputs.forEach(function(inp) { inp.disabled = !checked; });
   row.classList.toggle('row-unavailable', !checked);
+}
+
+function filterChars(query) {
+  const tbody = document.getElementById('unclaimed-tbody');
+  if (!tbody) return;
+  const q = query.trim().toLowerCase();
+  let visible = 0;
+  for (const row of tbody.querySelectorAll('tr')) {
+    const match = !q || row.dataset.name.includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  }
+  const emptyMsg = document.getElementById('unclaimed-empty');
+  if (emptyMsg) emptyMsg.style.display = visible === 0 ? '' : 'none';
 }
 
 function updateSpecDropdown(prefix) {

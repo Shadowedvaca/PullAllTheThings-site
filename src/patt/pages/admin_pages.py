@@ -15,7 +15,7 @@ from patt.deps import get_db, get_page_member
 from patt.services import campaign_service, vote_service
 from patt.templating import templates
 from sv_common.db.models import (
-    AuditIssue, DiscordUser, GuildRank, Player, Specialization, User, WowCharacter, PlayerCharacter,
+    AuditIssue, DiscordUser, GuildRank, Player, PlayerActionLog, Specialization, User, WowCharacter, PlayerCharacter,
 )
 from sv_common.identity import members as member_service
 
@@ -1437,32 +1437,48 @@ async def admin_raid_tools(
 @router.get("/audit-log", response_class=HTMLResponse)
 async def admin_audit_log(
     request: Request,
-    show: str = "open",  # "open" or "resolved"
+    show: str = "open",  # "open", "resolved", or "claims"
     db: AsyncSession = Depends(get_db),
 ):
     player = await _require_admin(request, db)
     if player is None:
         return _redirect_login("/admin/audit-log")
 
-    q = (
-        select(AuditIssue)
-        .options(
-            selectinload(AuditIssue.wow_character),
-            selectinload(AuditIssue.discord_member),
-        )
-        .order_by(AuditIssue.created_at.desc())
-    )
-    if show == "resolved":
-        q = q.where(AuditIssue.resolved_at.is_not(None))
-    else:
-        q = q.where(AuditIssue.resolved_at.is_(None))
+    issues = []
+    claims = []
 
-    result = await db.execute(q)
-    issues = list(result.scalars().all())
+    if show == "claims":
+        claims_result = await db.execute(
+            select(PlayerActionLog)
+            .options(
+                selectinload(PlayerActionLog.player),
+                selectinload(PlayerActionLog.character),
+            )
+            .order_by(PlayerActionLog.created_at.desc())
+            .limit(200)
+        )
+        claims = list(claims_result.scalars().all())
+    else:
+        q = (
+            select(AuditIssue)
+            .options(
+                selectinload(AuditIssue.wow_character),
+                selectinload(AuditIssue.discord_member),
+            )
+            .order_by(AuditIssue.created_at.desc())
+        )
+        if show == "resolved":
+            q = q.where(AuditIssue.resolved_at.is_not(None))
+        else:
+            q = q.where(AuditIssue.resolved_at.is_(None))
+
+        result = await db.execute(q)
+        issues = list(result.scalars().all())
 
     ctx = await _base_ctx(request, player, db)
     ctx.update({
         "issues": issues,
+        "claims": claims,
         "show": show,
     })
     return templates.TemplateResponse("admin/audit_log.html", ctx)

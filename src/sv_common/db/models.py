@@ -742,6 +742,36 @@ class PlayerNoteAlias(Base):
     player: Mapped["Player"] = relationship(back_populates="note_aliases")
 
 
+class PlayerActionLog(Base):
+    """Self-service character claim/unclaim events logged for admin review."""
+
+    __tablename__ = "player_action_log"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.players.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    character_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.wow_characters.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Denormalized — survives character deletion
+    character_name: Mapped[Optional[str]] = mapped_column(String(50))
+    realm_slug: Mapped[Optional[str]] = mapped_column(String(50))
+    details: Mapped[Optional[dict]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    player: Mapped["Player"] = relationship()
+    character: Mapped[Optional["WowCharacter"]] = relationship()
+
+
 class AuditIssue(Base):
     __tablename__ = "audit_issues"
     __table_args__ = (
