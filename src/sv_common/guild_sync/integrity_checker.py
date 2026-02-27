@@ -500,12 +500,17 @@ async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
             if name == note_key:
                 still_matches = True
                 break
-            words = re.split(r"[/\-\s]+", name)
-            if note_key in words:
-                still_matches = True
-                break
-            if len(note_key) >= 3 and note_key in name:
-                still_matches = True
+            # Split only on "/" and "-" — NOT spaces. Display names can contain
+            # arbitrary phrases like "Still Not Mito" where space-splitting would
+            # produce false word matches.
+            segments = [s for s in re.split(r"[/\-]+", name) if s]
+            for seg in segments:
+                # Exact segment match, or note_key is a prefix of the segment
+                # (handles "trog" matching "trogmoon")
+                if seg == note_key or (len(note_key) >= 3 and seg.startswith(note_key)):
+                    still_matches = True
+                    break
+            if still_matches:
                 break
 
         if still_matches:
