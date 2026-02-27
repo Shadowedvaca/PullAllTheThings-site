@@ -15,7 +15,7 @@ from sqlalchemy import text
 from patt.deps import get_db, require_rank
 from sv_common.db.models import (
     DiscordConfig, GuildRank, Player, RaidAttendance, RaidEvent, RecurringEvent,
-    Role, RaidSeason, Specialization, WowClass,
+    Role, RaidSeason, ScreenPermission, Specialization, WowClass,
 )
 from sv_common.identity import ranks as rank_service
 from sv_common.identity import members as member_service
@@ -1074,5 +1074,44 @@ async def create_raid_event(
             "raid_event_id": raid_event.id,
             "raid_helper_event_id": rh_result.get("event_id"),
             "event_url": rh_result.get("event_url", ""),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Screen Permissions (Settings nav visibility)
+# ---------------------------------------------------------------------------
+
+
+class ScreenPermUpdate(BaseModel):
+    min_rank_level: Optional[int] = None
+
+
+@router.patch("/screen-permissions/{perm_id}")
+async def update_screen_permission(
+    perm_id: int,
+    body: ScreenPermUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: Player = Depends(require_rank(4)),
+):
+    result = await db.execute(
+        select(ScreenPermission).where(ScreenPermission.id == perm_id)
+    )
+    perm = result.scalar_one_or_none()
+    if not perm:
+        return {"ok": False, "error": "Screen permission not found"}
+
+    if body.min_rank_level is not None:
+        if body.min_rank_level < 1 or body.min_rank_level > 5:
+            return {"ok": False, "error": "min_rank_level must be between 1 and 5"}
+        perm.min_rank_level = body.min_rank_level
+
+    perm.updated_at = datetime.now(timezone.utc)
+    return {
+        "ok": True,
+        "data": {
+            "id": perm.id,
+            "screen_key": perm.screen_key,
+            "min_rank_level": perm.min_rank_level,
         },
     }

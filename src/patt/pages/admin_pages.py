@@ -12,10 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from patt.deps import get_db, get_page_member
+from patt.nav import get_min_rank_for_screen, load_nav_items
 from patt.services import campaign_service, vote_service
 from patt.templating import templates
 from sv_common.db.models import (
-    AuditIssue, DiscordUser, GuildRank, Player, PlayerActionLog, Specialization, User, WowCharacter, PlayerCharacter,
+    AuditIssue, DiscordUser, GuildRank, Player, PlayerActionLog,
+    ScreenPermission, Specialization, User, WowCharacter, PlayerCharacter,
 )
 from sv_common.identity import members as member_service
 
@@ -23,30 +25,64 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin-pages"])
 
-MIN_ADMIN_RANK = 4  # Officer+
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-async def _require_admin(request: Request, db: AsyncSession) -> Player | None:
-    """Return player if Officer+, else None."""
+async def _require_screen(
+    screen_key: str, request: Request, db: AsyncSession
+) -> Player | None:
+    """Return player if they have the required rank for this screen, else None."""
     player = await get_page_member(request, db)
     if player is None:
         return None
-    if not player.guild_rank or player.guild_rank.level < MIN_ADMIN_RANK:
+    min_level = await get_min_rank_for_screen(db, screen_key)
+    rank_level = player.guild_rank.level if player.guild_rank else 0
+    if rank_level < min_level:
         return None
     return player
 
 
+# Keep _require_admin as a convenience alias (Officer+ check, used by
+# API-style sub-routes that don't map to a single screen).
+async def _require_admin(request: Request, db: AsyncSession) -> Player | None:
+    return await _require_screen("player_manager", request, db)
+
+
+_PATH_TO_SCREEN: list[tuple[str, str]] = [
+    ("/admin/campaigns",       "campaigns"),
+    ("/admin/players",         "player_manager"),
+    ("/admin/users",           "users"),
+    ("/admin/availability",    "availability"),
+    ("/admin/raid-tools",      "raid_tools"),
+    ("/admin/reference-tables","reference_tables"),
+    ("/admin/bot-settings",    "bot_settings"),
+    ("/admin/crafting-sync",   "crafting_sync"),
+    ("/admin/data-quality",    "data_quality"),
+    ("/admin/audit-log",       "audit_log"),
+    ("/admin/drift",           "data_quality"),
+    ("/admin/matching",        "data_quality"),
+]
+
+
+def _screen_for_path(path: str) -> str:
+    for prefix, key in _PATH_TO_SCREEN:
+        if path.startswith(prefix):
+            return key
+    return ""
+
+
 async def _base_ctx(request: Request, player: Player, db: AsyncSession) -> dict:
     active = await campaign_service.list_campaigns(db, status="live")
+    nav_items = await load_nav_items(db, player)
     return {
         "request": request,
         "current_member": player,
         "active_campaigns": active,
+        "nav_items": nav_items,
+        "current_screen": _screen_for_path(request.url.path),
     }
 
 
@@ -1132,12 +1168,19 @@ async def admin_reference_tables(
     )
     classes = list(classes_result.scalars().all())
 
+    screen_perms_result = await db.execute(
+        select(ScreenPermission)
+        .order_by(ScreenPermission.category_order, ScreenPermission.nav_order)
+    )
+    screen_permissions = list(screen_perms_result.scalars().all())
+
     ctx = await _base_ctx(request, player, db)
     ctx.update({
         "ranks": ranks,
         "roles": roles,
         "classes": classes,
         "seasons": seasons,
+        "screen_permissions": screen_permissions,
     })
     return templates.TemplateResponse("admin/reference_tables.html", ctx)
 
@@ -1401,7 +1444,7 @@ async def admin_raid_tools(
 ):
     from sv_common.db.models import DiscordConfig
 
-    player = await _require_admin(request, db)
+    player = await _require_screen("raid_tools", request, db)
     if player is None:
         return _redirect_login("/admin/raid-tools")
 

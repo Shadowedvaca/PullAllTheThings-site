@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Admin — Pull All The Things{% endblock %}</title>
+    <title>{% block title %}Settings — Pull All The Things{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/main.css">
@@ -19,38 +19,23 @@
                     onclick="toggleAdminNav()" title="Collapse sidebar">&#x276E;</button>
         </div>
 
-        <div class="admin-sidenav__section-label">Admin</div>
+        <div class="admin-sidenav__section-label">Settings</div>
         <nav class="admin-sidenav__nav">
-            <a href="/admin/campaigns" class="admin-sidenav__link {% block nav_campaigns %}{% endblock %}">
-                Campaigns
-            </a>
-<a href="/admin/players" class="admin-sidenav__link {% block nav_players %}{% endblock %}">
-                Player Manager
-            </a>
-            <a href="/admin/users" class="admin-sidenav__link {% block nav_users %}{% endblock %}">
-                Users
-            </a>
-            <a href="/admin/availability" class="admin-sidenav__link {% block nav_availability %}{% endblock %}">
-                Availability
-            </a>
-            <a href="/admin/raid-tools" class="admin-sidenav__link {% block nav_raid_tools %}{% endblock %}">
-                Raid Tools
-            </a>
-            <a href="/admin/reference-tables" class="admin-sidenav__link {% block nav_reference_tables %}{% endblock %}">
-                Reference Tables
-            </a>
-            <a href="/admin/bot-settings" class="admin-sidenav__link {% block nav_bot_settings %}{% endblock %}">
-                Bot Settings
-            </a>
-            <a href="/admin/crafting-sync" class="admin-sidenav__link {% block nav_crafting_sync %}{% endblock %}">
-                Crafting Sync
-            </a>
-            <a href="/admin/data-quality" class="admin-sidenav__link {% block nav_data_quality %}{% endblock %}">
-                Data Quality
-            </a>
-            <a href="/admin/audit-log" class="admin-sidenav__link {% block nav_audit_log %}{% endblock %}">
-                Audit Log
-            </a>
+            {# Dynamic nav from screen_permissions — grouped by category #}
+            {% set ns = namespace(last_cat=None) %}
+            {% for item in nav_items %}
+                {% if item.category != ns.last_cat %}
+                    {% if ns.last_cat is not none %}
+                        <div class="admin-sidenav__cat-spacer"></div>
+                    {% endif %}
+                    <div class="admin-sidenav__cat-label">{{ item.category_label }}</div>
+                    {% set ns.last_cat = item.category %}
+                {% endif %}
+                <a href="{{ item.url_path }}"
+                   class="admin-sidenav__link {% if current_screen == item.screen_key %}active{% endif %}">
+                    {{ item.display_name }}
+                </a>
+            {% endfor %}
         </nav>
 
         <div class="admin-sidenav__spacer"></div>
@@ -85,6 +70,26 @@
 
         {% block content %}{% endblock %}
     </div>
+
+    <style>
+    .admin-sidenav__cat-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-dim, #555);
+        padding: 0.5rem 1rem 0.2rem;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .admin-sidenav__cat-spacer {
+        height: 0.35rem;
+    }
+    .admin-sidenav.collapsed .admin-sidenav__cat-label,
+    .admin-sidenav.collapsed .admin-sidenav__cat-spacer {
+        display: none;
+    }
+    </style>
 
     <script>
     const SIDENAV_KEY = 'admin-sidenav-collapsed';

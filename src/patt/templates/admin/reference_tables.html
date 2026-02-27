@@ -368,6 +368,48 @@
     </div>
 </div>
 
+{# ── Settings Screen Permissions ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Settings Menu Permissions</h2>
+        <span style="font-size:0.8rem;color:var(--color-text-muted);">Controls which rank can see each Settings page — changes take effect immediately</span>
+    </div>
+    <table class="rt-table">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Screen</th>
+                <th>Min Rank to View</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for perm in screen_permissions %}
+        <tr class="rt-row" data-id="{{ perm.id }}" data-type="screen-permissions">
+            <td style="color:var(--color-text-muted);font-size:0.85rem">{{ perm.category_label }}</td>
+            <td style="font-weight:600">{{ perm.display_name }}</td>
+            <td>
+                <select class="rt-editable rt-field" name="min_rank_level"
+                        data-orig="{{ perm.min_rank_level }}"
+                        style="max-width:180px">
+                    {% for rank in ranks %}
+                    <option value="{{ rank.level }}"
+                            {% if rank.level == perm.min_rank_level %}selected{% endif %}>
+                        {{ rank.name }} ({{ rank.level }}+)
+                    </option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
+                <span class="rt-status"></span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 {# ── WoW Classes & Specs (read-only, collapsible) ── #}
 <div class="rt-section">
     <details class="rt-collapsible">

@@ -81,6 +81,29 @@ class User(Base):
     player: Mapped[Optional["Player"]] = relationship(back_populates="website_user")
 
 
+class ScreenPermission(Base):
+    """DB-driven Settings nav — maps screen keys to minimum rank levels."""
+
+    __tablename__ = "screen_permissions"
+    __table_args__ = {"schema": "common"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    screen_key: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    url_path: Mapped[str] = mapped_column(String(100), nullable=False)
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    category_label: Mapped[str] = mapped_column(String(100), nullable=False)
+    category_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    nav_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    min_rank_level: Mapped[int] = mapped_column(Integer, nullable=False, server_default="4")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
 class DiscordConfig(Base):
     __tablename__ = "discord_config"
     __table_args__ = {"schema": "common"}

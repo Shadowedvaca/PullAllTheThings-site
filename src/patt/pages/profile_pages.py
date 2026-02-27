@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from patt.deps import get_db, get_page_member
+from patt.nav import load_nav_items
 from patt.services import campaign_service
 from patt.services.availability_service import (
     clear_player_availability,
@@ -61,10 +62,13 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 
 async def _base_ctx(request: Request, player: Player, db: AsyncSession) -> dict:
     active = await campaign_service.list_campaigns(db, status="live")
+    nav_items = await load_nav_items(db, player)
     return {
         "request": request,
         "current_member": player,
         "active_campaigns": active,
+        "nav_items": nav_items,
+        "current_screen": "my_profile",
     }
 
 
