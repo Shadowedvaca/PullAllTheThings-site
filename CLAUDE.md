@@ -708,6 +708,13 @@ CREATE TABLE patt.mito_titles (
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
 
+### Known Deploy Quirk — Chrome "GitHub 404" After Restart
+
+If you reload the site in Chrome during or immediately after a deployment and get a GitHub Pages 404:
+- This is Chrome serving a stale cached connection from when the repo used GitHub Pages
+- **Fix:** Go to `chrome://net-internals/#sockets` → click **Flush socket pools**, then reload
+- Not a server or code problem — happens occasionally at night when deploys coincide with Chrome reusing old socket connections
+
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)
 - Run tests: `.venv/Scripts/pytest tests/unit/ -v`
