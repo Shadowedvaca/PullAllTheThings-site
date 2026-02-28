@@ -22,6 +22,7 @@
         <section class="comp-section">
             <h2 class="comp-section-title">Role Distribution</h2>
             <div class="role-cards" id="role-cards"></div>
+            <div class="new-members-box" id="new-members-box"></div>
         </section>
 
         <section class="comp-section">
@@ -42,6 +43,10 @@
                     placeholder="Search by name, class, spec…"
                     autocomplete="off"
                 >
+                <label class="roster-alts-label">
+                    <input type="checkbox" id="show-initiates" checked>
+                    Show Initiates
+                </label>
                 <label class="roster-alts-label">
                     <input type="checkbox" id="show-secondary">
                     Show Secondary
@@ -162,11 +167,12 @@ async function loadRoster() {
 // ---------------------------------------------------------------------------
 // Roster section
 // ---------------------------------------------------------------------------
-function buildRows(showSecondary, showAlts, searchText) {
+function buildRows(showSecondary, showAlts, searchText, showInitiates) {
     const rows = [];
     const q = searchText.toLowerCase();
 
     for (const player of allPlayers) {
+        if (!showInitiates && player.rank_level === 1) continue;
         const mc = player.main_character;
         const sc = player.secondary_character;
         if (mc) {
@@ -257,10 +263,11 @@ function buildRows(showSecondary, showAlts, searchText) {
 }
 
 function renderRoster() {
+    const showInitiates = document.getElementById('show-initiates').checked;
     const showSecondary = document.getElementById('show-secondary').checked;
     const showAlts = document.getElementById('show-alts').checked;
     const searchText = document.getElementById('roster-search').value;
-    const rows = buildRows(showSecondary, showAlts, searchText);
+    const rows = buildRows(showSecondary, showAlts, searchText, showInitiates);
     const tbody = document.getElementById('roster-tbody');
     const empty = document.getElementById('roster-empty');
 
@@ -301,18 +308,18 @@ function renderRoster() {
 // Composition section
 // ---------------------------------------------------------------------------
 function renderComposition() {
-    // Role counts from mains only
-    const roleCounts = { "Tank": 0, "Healer": 0, "Melee DPS": 0, "Ranged DPS": 0 };
-    const classCounts = {};
+    // Split roster: main raiders (rank > 1) vs initiates (rank === 1)
+    const mainRoster = allPlayers.filter(p => p.rank_level > 1);
+    const initiates = allPlayers.filter(p => p.rank_level === 1);
 
-    for (const player of allPlayers) {
+    // Role counts from main roster mains only
+    const roleCounts = { "Tank": 0, "Healer": 0, "Melee DPS": 0, "Ranged DPS": 0 };
+
+    for (const player of mainRoster) {
         const mc = player.main_character;
         if (!mc) continue;
         if (mc.role_name && roleCounts.hasOwnProperty(mc.role_name)) {
             roleCounts[mc.role_name]++;
-        }
-        if (mc.class_name) {
-            classCounts[mc.class_name] = (classCounts[mc.class_name] || 0) + 1;
         }
     }
 
@@ -326,9 +333,9 @@ function renderComposition() {
         effectiveTargets["Melee DPS"] = Math.max(0, DPS_TOTAL_TARGET - rangedCnt);
     }
 
-    // Build class → spec → count per role (mains only)
+    // Build class → spec → count per role (main roster mains only)
     const classSpecByRole = {};
-    for (const player of allPlayers) {
+    for (const player of mainRoster) {
         const mc = player.main_character;
         if (!mc || !mc.role_name) continue;
         const role = mc.role_name;
@@ -382,10 +389,39 @@ function renderComposition() {
         `;
     }).join('');
 
+    // New Members box — initiates grouped by role
+    const initiatesByRole = {};
+    for (const p of initiates) {
+        const mc = p.main_character;
+        const role = mc?.role_name || 'Unknown';
+        if (!initiatesByRole[role]) initiatesByRole[role] = [];
+        initiatesByRole[role].push(p.display_name);
+    }
+    const newMembersEl = document.getElementById('new-members-box');
+    if (initiates.length === 0) {
+        newMembersEl.innerHTML = `
+            <div class="new-members-box__title">🌱 New Members (Initiates)</div>
+            <p class="new-members-empty">No initiates in the roster.</p>`;
+    } else {
+        const roleOrder = ["Tank", "Healer", "Melee DPS", "Ranged DPS", "Unknown"];
+        const rolesHtml = roleOrder
+            .filter(r => initiatesByRole[r])
+            .map(r => `
+                <div class="new-members-role">
+                    <span class="new-members-role__label">${ROLE_EMOJIS[r] || ''} ${esc(r)} (${initiatesByRole[r].length})</span>
+                    <div class="new-members-names">${initiatesByRole[r].map(esc).join(', ')}</div>
+                </div>`)
+            .join('');
+        newMembersEl.innerHTML = `
+            <div class="new-members-box__title">🌱 New Members (Initiates)</div>
+            <div class="new-members-box__roles">${rolesHtml}</div>`;
+    }
+
     // Wowhead link — format: https://www.wowhead.com/raid-composition#0[codes];Name1;Name2
+    // Uses mainRoster only (excludes initiates)
     let specCodeStr = '';
     const wowheadNames = [];
-    for (const p of allPlayers) {
+    for (const p of mainRoster) {
         const mc = p.main_character;
         if (!mc?.class_name || !mc?.spec_name) continue;
         const code = SPEC_CODES[`${mc.class_name}/${mc.spec_name}`];
@@ -423,6 +459,7 @@ document.querySelectorAll('.sort-col').forEach(th => {
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
+document.getElementById('show-initiates').addEventListener('change', renderRoster);
 document.getElementById('show-secondary').addEventListener('change', renderRoster);
 document.getElementById('show-alts').addEventListener('change', renderRoster);
 document.getElementById('roster-search').addEventListener('input', renderRoster);

@@ -283,6 +283,11 @@ function renderPlayers() {
                 ${!p.registered && p.discord_id ? `<button class="pm-invite-btn" onclick="sendInvite(event,${p.id},'${escAttr(effectiveName)}')" title="Send Discord invite DM">✉</button>` : ''}
                 <button class="pm-delete-player-btn" onclick="deletePlayer(event,${p.id},'${escAttr(effectiveName)}')"
                         title="Delete player">🗑</button>
+                <label class="pm-hiatus-toggle" title="Raid Hiatus — hides player from public roster and calendar">
+                    <input type="checkbox" class="pm-hiatus-cb" ${p.on_raid_hiatus ? 'checked' : ''}
+                           onchange="toggleRaidHiatus(${p.id}, this.checked)">
+                    Hiatus
+                </label>
             </div>
             <div id="pm-name-editor-${p.id}" class="pm-name-editor" style="display:none;">
                 <input class="pm-name-input form-control" id="pm-name-input-${p.id}"
@@ -868,6 +873,21 @@ function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function escAttr(s) { return escHtml(s); }
+
+// ── Raid hiatus toggle ─────────────────────────────────────────────────────
+
+async function toggleRaidHiatus(playerId, enabled) {
+    const res = await fetch(`/admin/players/${playerId}/raid-hiatus`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+        alert('Failed to update hiatus status');
+        loadData();
+    }
+}
 
 // ── Search / filter wiring ─────────────────────────────────────────────────
 

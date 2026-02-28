@@ -251,6 +251,20 @@
 .pm-invite-btn:hover { color: #93c5fd; }
 .pm-invite-btn:disabled { opacity: 0.5; cursor: default; }
 
+.pm-hiatus-toggle {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-left: auto;
+    user-select: none;
+}
+.pm-hiatus-toggle input { cursor: pointer; }
+.pm-hiatus-toggle:has(input:checked) { color: var(--color-warning, #fbbf24); }
+
 .pm-edit-name-btn {
     background: none;
     border: none;

@@ -69,6 +69,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         )
         .where(Player.main_character_id.is_not(None))
         .where(Player.is_active.is_(True))
+        .where(Player.on_raid_hiatus.is_(False))
         .order_by(Player.display_name)
     )
     players = list(result.unique().scalars().all())

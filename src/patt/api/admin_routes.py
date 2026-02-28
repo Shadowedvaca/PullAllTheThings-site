@@ -709,6 +709,7 @@ async def get_availability_by_day(db: AsyncSession = Depends(get_db)):
     for dow in range(7):
         avail_result = await db.execute(
             select(PlayerAvailability)
+            .join(Player, Player.id == PlayerAvailability.player_id)
             .options(
                 selectinload(PlayerAvailability.player)
                 .selectinload(Player.guild_rank),
@@ -717,6 +718,7 @@ async def get_availability_by_day(db: AsyncSession = Depends(get_db)):
                 .selectinload(Specialization.default_role),
             )
             .where(PlayerAvailability.day_of_week == dow)
+            .where(Player.on_raid_hiatus.is_(False))
         )
         avail_rows = list(avail_result.scalars().all())
 

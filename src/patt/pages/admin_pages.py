@@ -735,6 +735,7 @@ async def admin_players_data(
                     "offspec_spec_name": p.offspec_spec.name if p.offspec_spec else None,
                     "auto_invite_events": p.auto_invite_events,
                     "crafting_notifications_enabled": p.crafting_notifications_enabled,
+                    "on_raid_hiatus": p.on_raid_hiatus,
                     "aliases": aliases_by_player.get(p.id, []),
                 }
                 for p in players
@@ -1096,6 +1097,32 @@ async def admin_update_display_name(
         "ok": True,
         "data": {"player_id": player_id, "display_name": p.display_name},
     })
+
+
+@router.patch("/players/{player_id}/raid-hiatus")
+async def admin_toggle_raid_hiatus(
+    request: Request,
+    player_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    try:
+        body = await request.json()
+        enabled = bool(body.get("enabled", False))
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON body"}, status_code=400)
+
+    result = await db.execute(select(Player).where(Player.id == player_id))
+    player = result.scalar_one_or_none()
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    player.on_raid_hiatus = enabled
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"on_raid_hiatus": enabled}})
 
 
 @router.post("/players/{player_id}/send-invite")

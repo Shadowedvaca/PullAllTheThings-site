@@ -660,6 +660,7 @@ class Player(Base):
     )
     auto_invite_events: Mapped[bool] = mapped_column(Boolean, server_default="false")
     crafting_notifications_enabled: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    on_raid_hiatus: Mapped[bool] = mapped_column(Boolean, server_default="false")
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
