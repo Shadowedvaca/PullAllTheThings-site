@@ -33,26 +33,31 @@ def set_db_pool(pool):
 async def on_ready():
     logger.info("PATT-Bot connected as %s (id=%s)", bot.user, bot.user.id)
 
-    # Register onboarding slash commands
+    from patt.config import get_settings
+    settings = get_settings()
+    discord_guild = None
+    if settings.discord_guild_id:
+        discord_guild = bot.get_guild(int(settings.discord_guild_id))
+
+    # Register slash commands — guild-scoped so they appear instantly
     if _db_pool is not None:
         try:
             from sv_common.guild_sync.onboarding.commands import register_onboarding_commands
             register_onboarding_commands(bot.tree, _db_pool)
-            await bot.tree.sync()
-            logger.info("Onboarding slash commands registered")
+            if discord_guild:
+                await bot.tree.sync(guild=discord_guild)
+                logger.info("Slash commands synced to guild %s", discord_guild.name)
+            else:
+                await bot.tree.sync()
+                logger.info("Slash commands synced globally (guild ID not configured)")
         except Exception as e:
-            logger.warning("Failed to register onboarding commands: %s", e)
+            logger.warning("Failed to register slash commands: %s", e)
 
     # Sync Discord channel list to DB
-    if _db_pool is not None:
+    if _db_pool is not None and discord_guild is not None:
         try:
             from sv_common.discord.channel_sync import sync_channels
-            from patt.config import get_settings
-            settings = get_settings()
-            if settings.discord_guild_id:
-                guild = bot.get_guild(int(settings.discord_guild_id))
-                if guild:
-                    await sync_channels(_db_pool, guild)
+            await sync_channels(_db_pool, discord_guild)
         except Exception as e:
             logger.warning("Channel sync on_ready failed: %s", e)
 
