@@ -9,6 +9,7 @@ Runs after every Blizzard sync (and on a 30-min interval) to:
 Called by GuildSyncScheduler.run_onboarding_check().
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -117,16 +118,19 @@ class OnboardingDeadlineChecker:
             from .conversation import OnboardingConversation
             conv = OnboardingConversation(self.bot, member, self.db_pool)
             conv.session_id = session["id"]
-            try:
-                await conv._send_welcome()
-                resumed += 1
-            except Exception as e:
-                logger.warning(
-                    "Failed to resume DM for discord_id=%s: %s",
-                    session["discord_id"], e,
-                )
+            # Fire-and-forget: _send_welcome blocks waiting for a user reply
+            # (up to 5 min timeout), so it must not be awaited here.
+            asyncio.create_task(self._dm_and_log(conv, session["discord_id"]))
+            resumed += 1
 
         return resumed
+
+    async def _dm_and_log(self, conv, discord_id: str) -> None:
+        """Background task: send the welcome DM and log any failures."""
+        try:
+            await conv._send_welcome()
+        except Exception as e:
+            logger.warning("Failed to resume DM for discord_id=%s: %s", discord_id, e)
 
     async def _find_discord_member(self, discord_id: str) -> Optional[discord.Member]:
         """Find a Discord Member object by discord_id string."""
