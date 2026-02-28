@@ -329,7 +329,7 @@ async function loadAuditChannelDropdown() {
         sel.innerHTML = '<option value="">— none —</option>' +
             Object.entries(byCategory).map(([cat, chs]) =>
                 `<optgroup label="${cat}">${chs.map(ch =>
-                    `<option value="${ch.discord_id}"${ch.discord_id === savedId ? ' selected' : ''}>#${ch.name}</option>`
+                    `<option value="${ch.discord_channel_id}"${ch.discord_channel_id === savedId ? ' selected' : ''}>#${ch.name}</option>`
                 ).join('')}</optgroup>`
             ).join('');
     } catch (e) {
