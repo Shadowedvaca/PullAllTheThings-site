@@ -523,3 +523,22 @@ async def profile_unclaim_character(
         url=f"/profile?success={char_name}+unclaimed+successfully",
         status_code=302,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /guide
+# ---------------------------------------------------------------------------
+
+
+@router.get("/guide", response_class=HTMLResponse)
+async def guide_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    if current_member is None:
+        return RedirectResponse(url="/login?next=/guide", status_code=302)
+    ctx = await _base_ctx(request, current_member, db)
+    ctx["current_screen"] = "guide"
+    ctx["rank_level"] = current_member.guild_rank.level if current_member.guild_rank else 1
+    return templates.TemplateResponse("profile/guide.html", ctx)

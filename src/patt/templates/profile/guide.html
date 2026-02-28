@@ -1,0 +1,503 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Guide — Pull All The Things{% endblock %}
+
+{% block head %}
+<style>
+  .guide-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1rem 3rem;
+  }
+
+  .guide-page__title {
+    font-family: var(--font-display);
+    font-size: 1.75rem;
+    color: var(--color-accent);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .guide-page__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    margin-bottom: 2rem;
+  }
+
+  .guide-category {
+    margin-bottom: 2rem;
+  }
+
+  .guide-category__label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .guide-section {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+  }
+
+  .guide-section summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1.1rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--color-text);
+    list-style: none;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .guide-section summary::-webkit-details-marker { display: none; }
+
+  .guide-section summary:hover {
+    background: var(--color-bg-panel);
+  }
+
+  .guide-section[open] summary {
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-accent);
+  }
+
+  .guide-section summary .guide-arrow {
+    margin-left: auto;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    transition: transform 0.2s;
+  }
+
+  .guide-section[open] summary .guide-arrow {
+    transform: rotate(90deg);
+  }
+
+  .guide-section__body {
+    padding: 1.25rem 1.25rem 1.5rem;
+    color: var(--color-text);
+    line-height: 1.7;
+    font-size: 0.9rem;
+  }
+
+  .guide-section__body h4 {
+    font-family: var(--font-display);
+    color: var(--color-accent);
+    font-size: 0.85rem;
+    margin: 1rem 0 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .guide-section__body h4:first-child {
+    margin-top: 0;
+  }
+
+  .guide-section__body p {
+    margin: 0 0 0.6rem;
+  }
+
+  .guide-section__body ul {
+    margin: 0.3rem 0 0.8rem 1.2rem;
+    padding: 0;
+  }
+
+  .guide-section__body li {
+    margin-bottom: 0.3rem;
+  }
+
+  .guide-section__body code {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    padding: 0.1em 0.4em;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.85em;
+    color: var(--color-accent);
+  }
+
+  .guide-tip {
+    background: var(--color-bg-panel);
+    border-left: 3px solid var(--color-accent);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    padding: 0.6rem 1rem;
+    margin: 0.75rem 0;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .guide-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15em 0.5em;
+    border-radius: 3px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  .guide-badge--officer { background: rgba(212,168,75,0.15); color: var(--color-accent); border: 1px solid rgba(212,168,75,0.3); }
+  .guide-badge--veteran { background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="guide-page">
+  <h1 class="guide-page__title">📖 Guide</h1>
+  <p class="guide-page__subtitle">
+    Showing sections for your access level: <strong>{{ current_member.guild_rank.name if current_member.guild_rank else "Member" }}</strong>.
+    Click any section to expand it.
+  </p>
+
+  {# ── Member Features (rank 1+) ── #}
+  <div class="guide-category">
+    <div class="guide-category__label">Member Features</div>
+
+    <details class="guide-section">
+      <summary>
+        🚀 Getting Started
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>What is the PATT website?</h4>
+        <p>The Pull All The Things website is the guild's hub — it tracks your characters, lets you vote on campaigns, shows the raid schedule, and lets you browse what guildies can craft. You're looking at it right now.</p>
+
+        <h4>How do I get an account?</h4>
+        <p>You should already have one if you're reading this! Accounts are created via invite code — either DM the PATT bot on Discord and ask for an invite, or ask an officer to generate one for you. The bot will send you a registration link via DM.</p>
+
+        <h4>What can my account do?</h4>
+        <ul>
+          <li>Set up your profile with your main character and spec</li>
+          <li>Mark your weekly availability for raid planning</li>
+          <li>Vote in guild campaigns (art votes, polls, book club picks, etc.)</li>
+          <li>Request guild crafting orders via the Crafting Corner</li>
+          <li>Opt in to crafting notifications when someone requests something you can make</li>
+        </ul>
+
+        <div class="guide-tip">💡 Your rank in the Settings sidebar matches your in-game guild rank and Discord role — it's kept in sync automatically.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        👤 Your Profile
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → My Profile</h4>
+        <p>This is your personal settings page. Here you can:</p>
+        <ul>
+          <li><strong>Display Name</strong> — What your name shows as across the site. Defaults to your Discord server name.</li>
+          <li><strong>Main Character</strong> — Your primary raiding character. Shows up on the public roster and is used for Wowhead comp links.</li>
+          <li><strong>Main Spec</strong> — Your preferred spec for the main character.</li>
+          <li><strong>Secondary Character / Spec</strong> — Optional offspec or alt you raid on.</li>
+          <li><strong>Timezone</strong> — Used to display event times in your local time.</li>
+          <li><strong>Auto-invite to events</strong> — When checked, you'll automatically be added as Accepted on Raid-Helper events. Uncheck if you prefer to sign up manually.</li>
+          <li><strong>Crafting notifications</strong> — When checked, the bot will @mention you in #crafters-corner when someone requests something you can craft.</li>
+        </ul>
+
+        <h4>Claiming Characters</h4>
+        <p>If your character doesn't appear linked yet, you can claim an unclaimed guild character from the dropdown at the bottom of the profile page. Officers can also link characters to you via the Player Manager.</p>
+
+        <div class="guide-tip">💡 Your main character's item level and spec are pulled automatically from the Blizzard API and stay current after each sync.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        🗳️ Voting &amp; Campaigns
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>How voting works</h4>
+        <p>When a campaign is active, you'll see a voting card on the home page. Click it to go to the voting page. Campaigns use <strong>ranked-choice voting</strong> — you rank your top picks in order of preference (1st, 2nd, 3rd, etc.).</p>
+
+        <h4>Submitting your vote</h4>
+        <p>Drag entries into your ranking order, or use the rank selectors. You can change your vote any time while the campaign is still open. Once you submit, your current rankings are saved — submitting again overwrites the previous vote.</p>
+
+        <h4>Results</h4>
+        <p>Results are shown after a campaign closes. Ranked-choice works by eliminating the lowest-ranked entry each round and redistributing votes until a winner emerges.</p>
+
+        <h4>Campaign types</h4>
+        <ul>
+          <li><strong>Image vote</strong> — Pick from artwork submissions (e.g. guild banner art)</li>
+          <li><strong>Poll</strong> — Vote on options like raid nights, event ideas, etc.</li>
+        </ul>
+
+        <div class="guide-tip">💡 The Discord bot posts announcements to the campaign channel at voting milestones — keep an eye out for those.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        📅 Your Availability
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → My Profile (Availability section)</h4>
+        <p>The availability grid is at the bottom of your Profile page. For each day of the week, you can mark:</p>
+        <ul>
+          <li>Whether you're generally available that day</li>
+          <li>Your earliest start time (in your timezone)</li>
+          <li>How many hours you can play</li>
+        </ul>
+
+        <h4>What it's used for</h4>
+        <p>Officers see a 7-day availability grid in the admin panel that aggregates all members' availability. This helps with scheduling raid nights — the grid shows role distribution and weighted scores per day so officers can pick optimal nights.</p>
+
+        <div class="guide-tip">💡 This is general weekly availability, not a per-event signup. Set it once and update it when your schedule changes.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        ⚒️ Crafting Corner
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Browsing recipes</h4>
+        <p>Go to <code>/crafting-corner</code> (linked in the top nav as "Crafting"). Browse by profession and expansion tier. Each recipe shows which guild members can craft it.</p>
+
+        <h4>Placing a guild order</h4>
+        <p>Find the recipe you need and click <strong>"Request Guild Order"</strong>. The bot will immediately post an embed in #crafters-corner on Discord, tagging all guild members who know that recipe. They can respond directly in Discord to arrange the craft.</p>
+
+        <h4>Crafting notifications</h4>
+        <p>If you're a crafter, go to your Profile (Settings → My Profile) and enable <strong>Crafting notifications</strong>. When that's on, the bot will @mention you specifically when someone requests something you can make.</p>
+
+        <h4>Recipe data</h4>
+        <p>The recipe directory is synced automatically from the Blizzard API. It stays current as guild members learn new recipes.</p>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        🤖 The Discord Bot
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>What the bot does automatically</h4>
+        <ul>
+          <li><strong>Role sync</strong> — Your Discord rank stays in sync with your in-game guild rank. When your rank changes, the bot updates your Discord roles automatically.</li>
+          <li><strong>Crafting orders</strong> — Posts embeds in #crafters-corner when a guild order is placed on the website, tagging relevant crafters.</li>
+          <li><strong>Campaign announcements</strong> — Posts milestone updates in the campaign channel when voting is active.</li>
+          <li><strong>Raid event booking</strong> — After a raid event starts, the bot auto-creates next week's Raid-Helper signup sheet so it's ready before you log off for the night.</li>
+        </ul>
+
+        <h4>Getting an invite</h4>
+        <p>DM the PATT bot directly and ask for a website invite — it will send you a registration code and link automatically. You can also ask an officer and they'll generate one from the admin panel.</p>
+
+        <div class="guide-tip">💡 Don't see the PATT bot in your DMs? Make sure your Discord privacy settings allow DMs from server members, then try again.</div>
+      </div>
+    </details>
+  </div>
+
+  {# ── Veteran+ Features (rank 3+) ── #}
+  {% if rank_level >= 3 %}
+  <div class="guide-category">
+    <div class="guide-category__label">Raid Tools <span class="guide-badge guide-badge--veteran">Veteran+</span></div>
+
+    <details class="guide-section">
+      <summary>
+        ⚔️ Raid Tools
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Raid Tools</h4>
+        <p>The Raid Tools page is for creating and managing Raid-Helper events directly from the website, without needing to paste commands into Discord.</p>
+
+        <h4>Availability Grid</h4>
+        <p>At the top of the page is a 7-day availability grid. Each card shows:</p>
+        <ul>
+          <li>How many members are available that day and what percentage of the active roster that is</li>
+          <li>A weighted score (Officers and Veterans count more than Initiates)</li>
+          <li>Role breakdown (Tank / Healer / Melee / Ranged counts)</li>
+          <li>If a recurring event is scheduled that day, it shows at the top of the card</li>
+        </ul>
+        <p>Click any day card to expand it and see the list of available players with their role and rank.</p>
+
+        <h4>Event Builder</h4>
+        <p>Clicking a day card pre-fills the event builder form with that day's recurring event details. You can then adjust the title, type, date, time, duration, and description before creating the event.</p>
+
+        <h4>Roster Preview</h4>
+        <p>Below the form, the Roster Preview shows all active players with their auto-invite status (Accepted / Tentative / Bench). You can override individual players' status before creating the event.</p>
+
+        <h4>Creating the event</h4>
+        <p>Click <strong>"Create Event"</strong> to submit to Raid-Helper and create the signup sheet in Discord. The event is also saved in the database for attendance tracking.</p>
+
+        <h4>Manual Fallback</h4>
+        <p>If Raid-Helper is unavailable, there's a collapsible "Manual Fallback" section at the bottom that generates a Discord-formatted event description you can paste manually.</p>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+
+  {# ── Officer+ Features (rank 4+) ── #}
+  {% if rank_level >= 4 %}
+  <div class="guide-category">
+    <div class="guide-category__label">Admin Features <span class="guide-badge guide-badge--officer">Officer+</span></div>
+
+    <details class="guide-section">
+      <summary>
+        🛡️ Player Manager
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Player Manager</h4>
+        <p>The Player Manager is the primary tool for maintaining the guild roster identity. It has three columns:</p>
+        <ul>
+          <li><strong>Discord</strong> — Live Discord server members, pulled directly from the bot</li>
+          <li><strong>Players</strong> — Guild identity records (the player entities that own characters and have ranks)</li>
+          <li><strong>Characters</strong> — WoW characters from the guild roster (synced via Blizzard API and the PATTSync addon)</li>
+        </ul>
+
+        <h4>Linking Discord to Players</h4>
+        <p>Drag a Discord member from the left column onto a Player card in the middle column to link their Discord identity. This enables role sync and bot DMs for that player.</p>
+
+        <h4>Linking Characters to Players</h4>
+        <p>Drag a Character from the right column onto a Player card to assign ownership. You can also toggle whether a character is the player's Main or an Alt.</p>
+
+        <h4>Drill-down</h4>
+        <p>Click the ◎ button on any card to filter all three columns to only show items related to that player. A gold banner shows the active filter — click ✕ to clear it.</p>
+
+        <h4>Aliases</h4>
+        <p>Player cards can have alias chips — alternate names (nicknames, old character names) that help the identity engine match guild notes to the right player. Add aliases using the <code>+ alias</code> button on a player card.</p>
+
+        <h4>Characters with ? badge</h4>
+        <p>A <code>?</code> badge on a character means it wasn't found in the Blizzard API scan. This usually means a realm slug mismatch. You can delete these placeholder characters with the ✕ button.</p>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        📊 Data Quality
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Data Quality</h4>
+        <p>The Data Quality page monitors the health of the guild identity data — character links, Discord connections, and role assignments.</p>
+
+        <h4>Coverage Dashboard</h4>
+        <p>The top section shows overall matching coverage — what percentage of guild characters are linked to players, broken down by confidence level (High / Medium / Low) and link source (note key, name match, manual, etc.).</p>
+
+        <h4>Audit Rules</h4>
+        <p>Eight automated rules run after each guild sync:</p>
+        <ul>
+          <li><strong>note_mismatch</strong> — A character's guild note doesn't match the player it's linked to (auto-fixed)</li>
+          <li><strong>orphan_wow</strong> — A WoW character with no linked player</li>
+          <li><strong>orphan_discord</strong> — A Discord member with no linked player</li>
+          <li><strong>role_mismatch</strong> — Player's recorded rank doesn't match their Discord role</li>
+          <li><strong>stale_character</strong> — Character hasn't been seen in a long time</li>
+          <li><strong>link_contradicts_note</strong> — Existing link doesn't match the guild note key</li>
+          <li><strong>duplicate_discord</strong> — Two players linked to the same Discord user</li>
+          <li><strong>stale_discord_link</strong> — Player linked to a Discord user who left the server</li>
+        </ul>
+
+        <h4>Drift Detection</h4>
+        <p>The Drift Detection panel at the bottom tracks things that <em>were</em> correct and have since changed. Run a drift scan manually with the "Run Drift Scan" button, or it runs automatically after each sync.</p>
+
+        <div class="guide-tip">💡 The <code>note_mismatch</code> rule is the only one with auto-fix enabled. Everything else requires manual review or use of the Fix buttons.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        📅 Availability Dashboard
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Availability</h4>
+        <p>Two things live here: the availability analysis grid (read-only) and the event day configuration table (editable).</p>
+
+        <h4>7-Day Grid</h4>
+        <p>Each day card shows available count, percentage bar (green/amber/red), weighted score, and a collapsible player list. Click a card to expand the player list with role icons and ranks.</p>
+
+        <h4>Event Day Configuration</h4>
+        <p>The table below the grid lets you mark which days have recurring events. For each active day, set a label (e.g. "Heroic Raid Night"), start time, duration, and whether it shows on the public home page. Changes auto-save on blur.</p>
+
+        <p>Event days configured here show up on:</p>
+        <ul>
+          <li>The public home page schedule section</li>
+          <li>The public <code>/roster</code> Schedule tab</li>
+          <li>The Raid Tools availability grid (cards show the event label)</li>
+          <li>The Event Builder (pre-fills form when you click a day card)</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        ⚙️ Crafting Sync
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Crafting Sync</h4>
+        <p>This page manages the automated profession data sync from the Blizzard API.</p>
+
+        <h4>Sync Cadence</h4>
+        <p>The sync cadence adapts automatically based on the season:</p>
+        <ul>
+          <li><strong>New expansion:</strong> Daily for 28 days after season start (recipes change frequently)</li>
+          <li><strong>Established season:</strong> Daily for 14 days after season start, then weekly</li>
+          <li><strong>Ongoing:</strong> Weekly</li>
+        </ul>
+
+        <h4>Season Configuration</h4>
+        <p>Set the current expansion name, season number, and season start date. This drives the adaptive cadence logic.</p>
+
+        <h4>Force Refresh</h4>
+        <p>Use the "Force Refresh" button to trigger an immediate full sync — useful right after a new patch drops and recipes change.</p>
+
+        <h4>Sync Stats</h4>
+        <p>The page shows the last sync time, duration, how many characters were processed, and how many recipes were found.</p>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        📣 Campaigns
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Campaigns</h4>
+        <p>Create and manage guild voting campaigns from this page.</p>
+
+        <h4>Campaign lifecycle</h4>
+        <ul>
+          <li><strong>Draft</strong> — Not visible to members yet. Set it up and add entries.</li>
+          <li><strong>Live</strong> — Members can vote. Shows on the home page as an active campaign.</li>
+          <li><strong>Closed</strong> — Voting has ended. Results are calculated and displayed.</li>
+        </ul>
+
+        <h4>Creating a campaign</h4>
+        <p>Set the title, description, type (ranked choice / poll), how many picks voters get, minimum rank to vote, start time, and duration. You can also link a Discord channel for bot announcements.</p>
+
+        <h4>Agent chattiness</h4>
+        <p>The contest agent posts milestone updates to Discord (e.g. "halfway there!", "one hour left!"). Set chattiness to:</p>
+        <ul>
+          <li><strong>Normal</strong> — Milestone posts at standard intervals</li>
+          <li><strong>Quiet</strong> — Fewer posts</li>
+          <li><strong>Off</strong> — No Discord posts</li>
+        </ul>
+
+        <h4>Early close</h4>
+        <p>If "Close early if all eligible members have voted" is checked, the campaign closes automatically once everyone with voting access has submitted.</p>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

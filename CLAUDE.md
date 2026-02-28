@@ -765,9 +765,6 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 ### Completed Phases
 - Phase 0 through 7: Platform complete and live
 - Phase 2.5A–D: Guild identity system (Blizzard API, Discord sync, addon, integrity checker)
-- Phase 3.0A: Matching transparency — link_source/confidence on player_characters, coverage dashboard
-- Phase 3.0B: Iterative rule runner — pluggable matching rules, progressive discovery, per-rule results UI
-- Phase 3.0C: Drift Detection — note_mismatch, link_contradicts_note, duplicate_discord, stale_discord_link rules; drift_scanner.py orchestrator; drift panel on Data Quality page
 - Phase 2.6: Onboarding system (built but NOT activated — on_member_join not wired)
 - Phase 2.7: Data Model Migration — Clean 3NF rebuild (complete)
   - `common.guild_members` and `common.characters` eliminated from all code
@@ -776,20 +773,34 @@ If you reload the site in Chrome during or immediately after a deployment and ge
   - `guild_identity.player_characters` bridge table added
   - All FKs repointed from guild_members → players across models, services, routes, templates, tests
   - Alembic migration 0007 created; data migration script at `scripts/migrate_to_players.py`
-  - 202 unit tests pass, 59 skipped (DB-dependent or legacy script tests)
+- Phase 2.8: Crafting Corner — profession/recipe DB, `/crafting-corner` public page, adaptive sync cadence, admin sync page
+- Phase 2.9: Data Quality Engine — 8-rule registry, targeted mitigations, admin `/admin/data-quality` page
+- Phase 3.0A: Matching transparency — link_source/confidence on player_characters, coverage dashboard
+- Phase 3.0B: Iterative rule runner — pluggable matching rules, progressive discovery, per-rule results UI
+- Phase 3.0C: Drift Detection — note_mismatch, link_contradicts_note, duplicate_discord, stale_discord_link rules; drift_scanner.py orchestrator; drift panel on Data Quality page
+- Phase 3.1: Admin Availability Dashboard — `patt.recurring_events` table, 7-day availability grid, event day config, `GET /admin/availability`
+- Phase 3.2: Index Page Revamp — officers, recruiting needs, and weekly schedule all live from DB
+- Phase 3.3: Public Roster View — `/roster` page with Full Roster, Composition, and Schedule tabs; Wowhead comp link; legacy redirects
+- Phase 3.4: Admin Raid Tools — Raid-Helper API integration, event builder with roster preview, `GET /admin/raid-tools`
+- Phase 3.5: Auto-Booking Scheduler — background loop creates next week's Raid-Helper event 10–20 min after raid starts, posts Discord announcement
 
 ### Current Phase
-- Phase 3.0C: Drift Detection — **COMPLETE**
+- Phase 3.5: Auto-Booking Scheduler — **COMPLETE**
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
 - sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting (`src/sv_common/discord/`)
-- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, attribution functions (Phase 3.0A), matching_rules package (Phase 3.0B), **drift_scanner.py + detect_link_note_contradictions + detect_duplicate_discord_links (Phase 3.0C)**
+- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, attribution functions, matching_rules package, drift_scanner.py
 - Crafting Corner: `/crafting-corner` public page, `/api/crafting/*` routes, profession/recipe DB tables, adaptive sync cadence
 - Admin Crafting Sync page: `/admin/crafting-sync` — force refresh, season config, sync stats
-- Data Quality Engine: `rules.py` (8-rule registry including 3 drift rules), `mitigations.py` (targeted fix functions + `run_auto_mitigations`), refactored `integrity_checker.py` (named detect functions + drift detectors), `drift_scanner.py` (orchestrates drift rules)
-- Admin Data Quality page: `/admin/data-quality` — rule stats, open counts, recent findings, manual scan/fix triggers; **Drift Detection panel** with per-rule status, Run Drift Scan button (`POST /admin/drift/scan`, `GET /admin/drift/summary`)
+- Data Quality Engine: `rules.py` (8-rule registry including 3 drift rules), `mitigations.py`, refactored `integrity_checker.py`, `drift_scanner.py`
+- Admin Data Quality page: `/admin/data-quality` — rule stats, open counts, recent findings, manual scan/fix triggers, Drift Detection panel
+- Admin Availability page: `/admin/availability` — 7-day availability grid with role breakdown, event day configuration table (auto-save)
+- Admin Raid Tools page: `/admin/raid-tools` — Raid-Helper config, availability grid, event builder, roster preview, manual fallback
+- Public Roster page: `/roster` — Full Roster tab, Composition tab (Wowhead comp link), Schedule tab; no login required
+- Auto-booking: `raid_booking_service.py` — background loop polls every 5 min, books next week's raid 10–20 min after start
+- Public index page: officers, recruiting needs, weekly schedule all live from DB
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Auth middleware: `get_current_player()`, `require_rank(level)` deps in `src/patt/deps.py`
 - Cookie-based auth for page routes: `get_page_player()`, `require_page_rank(level)` in deps.py
