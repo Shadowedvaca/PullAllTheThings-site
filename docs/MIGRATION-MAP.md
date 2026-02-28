@@ -1,6 +1,12 @@
 # Phase 5: Google Sheets → PostgreSQL Migration Map
 
-> Documents the field-by-field mapping from the Google Apps Script API response
+> **HISTORICAL REFERENCE ONLY.** This migration was completed in Phase 5 (2025).
+> The Google Sheets data is fully in PostgreSQL. This document is kept for audit
+> purposes only — the schema it references (`common.guild_members`, `common.characters`)
+> has since been superseded by the Phase 2.7 3NF rebuild (`guild_identity.players`,
+> `guild_identity.wow_characters`).
+>
+> Original field-by-field mapping from the Google Apps Script API response
 > to the PostgreSQL schema. Created during Phase 5 data assessment.
 
 ---

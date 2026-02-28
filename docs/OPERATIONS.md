@@ -12,9 +12,26 @@
 | Guild website | https://pullallthethings.com |
 | Admin panel | https://pullallthethings.com/admin/campaigns |
 | Health check | https://pullallthethings.com/api/health |
-| Server SSH | `ssh root@5.78.114.224` |
+| Server SSH | `ssh hetzner` |
+| App directory | `/opt/patt-platform/` |
 | App logs | `journalctl -u patt -f` |
 | Restart app | `sudo systemctl restart patt` |
+| Run migration | `cd /opt/patt-platform && .venv/bin/alembic upgrade head` |
+
+---
+
+## Admin Panel Pages
+
+| Page | URL | Purpose |
+|------|-----|---------|
+| Campaigns | `/admin/campaigns` | Create/manage voting campaigns |
+| Player Manager | `/admin/players` | Link Discord ↔ players ↔ characters; set hiatus |
+| Users | `/admin/users` | Website account management |
+| Availability | `/admin/availability` | 7-day raid availability grid + event day config |
+| Raid Tools | `/admin/raid-tools` | Raid-Helper event builder, roster preview |
+| Data Quality | `/admin/data-quality` | Coverage stats, unmatched players/chars, drift issues |
+| Crafting Sync | `/admin/crafting-sync` | Force recipe sync, configure season |
+| Bot Settings | `/admin/bot-settings` | DM feature toggles |
 
 ---
 
@@ -36,9 +53,7 @@
    - **Early close** — checked by default (closes when 100% have voted)
    - **Contest agent** — enabled by default with "hype" chattiness
 4. Click **Save as Draft**
-5. Go to the Entries section and add each entry:
-   - Name
-   - Image URL (see Google Drive section below)
+5. Go to the Entries section and add each entry (name + image URL)
 6. When ready, click **Activate** — voting opens immediately
 
 ### Getting Google Drive Image URLs
@@ -47,56 +62,61 @@ Images must be shared publicly ("Anyone with the link can view").
 
 1. Upload the image to Google Drive
 2. Right-click → **Share** → **Anyone with the link** → Copy link
-3. The share link looks like:
-   `https://drive.google.com/file/d/1abc123XYZ.../view`
-4. Extract the file ID (the part between `/d/` and `/view`):
-   `1abc123XYZ...`
-5. Build the direct image URL:
-   `https://drive.google.com/uc?id=1abc123XYZ...&export=view`
-6. Paste that URL into the Image URL field in the admin form
-
-### Via Script (for the art vote)
-
-The art vote has a pre-built setup script. Once you have all 10 image URLs:
-
-1. Open `scripts/setup_art_vote.py` in a text editor
-2. Fill in the `FILE_IDS` dictionary at the top with each character's Drive file ID
-3. Run the script on the server:
-   ```bash
-   ssh root@5.78.114.224
-   cd /var/www/patt
-   source .venv/bin/activate
-   python scripts/setup_art_vote.py
-   ```
-4. Review the campaign at `/admin/campaigns/{id}`
-5. Activate it when ready
+3. Extract the file ID (the part between `/d/` and `/view`)
+4. Build the direct image URL:
+   `https://drive.google.com/uc?id=FILE_ID&export=view`
+5. Paste that URL into the Image URL field
 
 ---
 
 ## Inviting a New Member
 
-1. Go to **Admin → Roster**
-2. Find the member (they should already be in the roster from Discord sync)
-   - If not, click **Add Member** and fill in their Discord username and ID
-3. Click **Send Invite** next to their name
-4. They'll receive a DM from PATT-Bot with:
-   - Their personal invite code
-   - A link to https://pullallthethings.com/register
+1. Go to **Admin → Player Manager**
+2. Find the player card (they should already be visible from Discord sync)
+3. If not present, use the **+ Add Player** button
+4. Click the **✉** (envelope) button on their card to send a Discord DM invite
+5. They'll receive their personal registration link
 
-The invite code expires in 7 days. If it expires, send a new one.
+Invite codes expire in 7 days. If it expires, click ✉ again.
 
 ---
 
 ## Managing the Roster
 
 **Rank changes:** Discord is the source of truth. Change their Discord role,
-and the bot syncs it on the next sync cycle (default: every 24 hours).
+and the bot syncs it automatically on the next sync cycle (default: every 24 hours).
 To force an immediate sync, restart the app:
 ```bash
 sudo systemctl restart patt
 ```
 
-**Removing a member:** Contacts Trog — this requires a DB change. (Future: admin UI for this.)
+**Putting someone on raid hiatus:** In **Admin → Player Manager**, find their card
+and check the **Hiatus** checkbox. This hides them from the public roster and the
+availability grid without deactivating their account.
+
+**Removing a member:** Set `is_active = false` via the DB or deactivate their
+website account in **Admin → Users**.
+
+---
+
+## Raid Tools & Auto-Booking
+
+### Raid-Helper Configuration
+Go to **Admin → Raid Tools** → **Raid-Helper Configuration** and ensure these are set:
+- API Key (from `/apikey show` in Discord)
+- Server ID
+- Raid Leader Discord ID
+- Raid Channel
+- Raid Voice Channel
+
+### Manual Event Creation
+Use the **Event Builder** section in Admin → Raid Tools to preview roster availability
+and create a Raid-Helper event with one click.
+
+### Auto-Booking
+The platform automatically creates next week's raid event 10–20 minutes after the
+current raid's start time on each raid day. It posts an announcement in the configured
+raid channel. No action needed from you — just ensure Raid-Helper config is set.
 
 ---
 
@@ -104,7 +124,7 @@ sudo systemctl restart patt
 
 ### Is the bot online?
 - Look for PATT-Bot in your Discord server member list — it should appear online
-- If offline, restart the app: `sudo systemctl restart patt`
+- If offline: `sudo systemctl restart patt`
 
 ### Is the platform healthy?
 ```bash
@@ -114,19 +134,16 @@ Should return: `{"status": "ok"}`
 
 ### View live logs
 ```bash
-ssh root@5.78.114.224
+ssh hetzner
 journalctl -u patt -f
 ```
-Press `Ctrl+C` to stop. Press `q` to exit the log viewer.
+Press `Ctrl+C` to stop.
 
 ### Check app status
 ```bash
-ssh root@5.78.114.224
+ssh hetzner
 systemctl status patt
 ```
-
-### View campaign votes (admin)
-Go to `/admin/campaigns/{id}` in your browser — shows vote counts, stats, entries.
 
 ---
 
@@ -137,50 +154,32 @@ The GitHub Actions workflow:
 1. SSH into the server
 2. `git pull` latest code
 3. Install any new dependencies
-4. Run database migrations
+4. Run database migrations (`alembic upgrade head`)
 5. Restart the app
 6. Verify the health check passes
 
-You can watch it at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
+Watch it at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
 
 To deploy manually:
 ```bash
-ssh root@5.78.114.224
-cd /var/www/patt
+ssh hetzner
+cd /opt/patt-platform
 git pull
-source .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
+.venv/bin/pip install -r requirements.txt
+.venv/bin/alembic upgrade head
 sudo systemctl restart patt
 ```
 
 ---
 
-## Restarting the Platform
+## Backups
 
-```bash
-ssh root@5.78.114.224
-sudo systemctl restart patt
-```
+See `docs/BACKUPS.md` for full backup and restore procedures.
 
-The app typically comes back online in about 5 seconds. Check with:
-```bash
-curl https://pullallthethings.com/api/health
-```
-
----
-
-## Database Migrations
-
-Only needed when deploying a new code version that adds DB tables or columns.
-The auto-deploy script runs this for you. To run manually:
-
-```bash
-ssh root@5.78.114.224
-cd /var/www/patt
-source .venv/bin/activate
-alembic upgrade head
-```
+**Quick version:**
+- Automatic nightly backup at 3:00 AM UTC → `/opt/backups/patt-db/`
+- Manual backup: `ssh hetzner && patt-backup.sh`
+- Restore: `ssh hetzner && patt-restore.sh`
 
 ---
 
@@ -199,61 +198,60 @@ The agent checks every 5 minutes. It never posts the same event twice.
 
 ---
 
-## Backup and Recovery
-
-The database lives on the Hetzner server at PostgreSQL 16.
-There is no automated backup configured yet (future task).
-
-To manually export the database:
-```bash
-ssh root@5.78.114.224
-pg_dump -U patt_user patt_db > patt_backup_$(date +%Y%m%d).sql
-```
-
----
-
 ## Common Issues
 
 ### "PATT-Bot is offline"
 ```bash
 sudo systemctl restart patt
 ```
-If it keeps going offline, check the logs: `journalctl -u patt -n 50`
+If it keeps going offline: `journalctl -u patt -n 50`
 
 ### "The website isn't loading"
 1. Check if the app is running: `systemctl status patt`
 2. Check Nginx: `systemctl status nginx`
-3. Check the health endpoint from the server: `curl http://localhost:8100/api/health`
+3. Check health from the server: `curl http://localhost:8100/api/health`
 
 ### "Someone can't log in"
-- Verify their Discord username matches exactly (case-insensitive)
-- Check if they registered — they need to use the invite flow first
-- If their invite code expired, send a new one from the admin roster page
+- Verify their Discord username matches (case-insensitive — stored as email)
+- They may not have registered yet — send a new invite from Player Manager
+- If their invite code expired, click ✉ again on their player card
 
 ### "A campaign isn't showing up"
 - Check if it's in draft status — only live campaigns show on the homepage
-- Check the min_rank_to_view setting — if set, low-rank members won't see it
+- Check the min_rank_to_view setting
+
+### Chrome shows "GitHub 404" after a deploy
+Chrome is serving a stale connection from when the repo used GitHub Pages.
+Fix: Go to `chrome://net-internals/#sockets` → click **Flush socket pools**, then reload.
 
 ---
 
 ## Environment Variables
 
-These live in `/var/www/patt/.env` on the server. Never commit this file.
+These live in `/opt/patt-platform/.env` on the server. Never commit this file.
 
 ```bash
 DATABASE_URL=postgresql+asyncpg://patt_user:PASSWORD@localhost:5432/patt_db
 JWT_SECRET_KEY=your-secret-key
 DISCORD_BOT_TOKEN=your-bot-token
 DISCORD_GUILD_ID=your-server-id
+BLIZZARD_CLIENT_ID=your-blizzard-client-id
+BLIZZARD_CLIENT_SECRET=your-blizzard-client-secret
+PATT_GUILD_REALM_SLUG=senjin
+PATT_GUILD_NAME_SLUG=pull-all-the-things
+PATT_API_KEY=your-companion-app-api-key
 APP_ENV=production
 APP_PORT=8100
 ```
+
+> **Note:** Channel IDs (audit channel, crafters corner, raid channel) are configured
+> via the Admin UI and stored in `common.discord_config` — not in `.env`.
 
 ---
 
 ## Contact
 
-If something is deeply broken and you can't figure it out, the codebase is at:
+If something is deeply broken:
 - GitHub: https://github.com/Shadowedvaca/PullAllTheThings-site
 - Logs: `journalctl -u patt -n 200`
-- DB: `psql -U patt_user patt_db` (requires being on the server)
+- DB: `ssh hetzner && sudo -u postgres psql patt_db`

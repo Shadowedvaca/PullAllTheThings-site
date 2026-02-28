@@ -42,12 +42,15 @@ Hetzner Server (5.78.114.224)
 │   └── pullallthething.com → proxy to PATT app (uvicorn, port 8100)
 │
 ├── PostgreSQL 16
-│   ├── common.*         (users, guild_ranks, discord_config, invite_codes, member_availability)
-│   ├── patt.*           (campaigns, votes, entries, results, contest_agent_log, mito content)
+│   ├── common.*         (users, guild_ranks, discord_config, invite_codes, screen_permissions)
+│   ├── patt.*           (campaigns, votes, entries, results, contest_agent_log, mito content,
+│   │                     player_availability, raid_seasons, raid_events, raid_attendance,
+│   │                     recurring_events)
 │   └── guild_identity.* (players, wow_characters, discord_users, player_characters,
-│                          classes, specializations, roles, audit_issues, sync_log,
-│                          onboarding_sessions, professions, profession_tiers,
-│                          recipes, character_recipes, crafting_sync_config)
+│                          player_note_aliases, player_action_log, classes, specializations,
+│                          roles, audit_issues, sync_log, onboarding_sessions, professions,
+│                          profession_tiers, recipes, character_recipes, crafting_sync_config,
+│                          discord_channels)
 │
 ├── PATT Application (Python 3.11+ / FastAPI)
 │   ├── API routes
@@ -70,7 +73,8 @@ Hetzner Server (5.78.114.224)
 │   ├── sv_common.identity
 │   ├── sv_common.notify
 │   └── sv_common.guild_sync (Blizzard API, identity engine, addon processor, scheduler,
-│                              crafting sync, crafting service)
+│                              crafting sync, crafting service, matching_rules package,
+│                              drift_scanner, raid_booking_service)
 │
 ├── PATTSync WoW Addon (wow_addon/PATTSync/)
 │   └── Exports guild roster + notes from in-game
@@ -314,25 +318,26 @@ APP_HOST=0.0.0.0
 BLIZZARD_CLIENT_ID=your-blizzard-client-id
 BLIZZARD_CLIENT_SECRET=your-blizzard-client-secret
 
-# Guild sync config (Phase 2.5)
+# Guild sync config
 PATT_GUILD_REALM_SLUG=senjin
 PATT_GUILD_NAME_SLUG=pull-all-the-things
-PATT_AUDIT_CHANNEL_ID=your-discord-audit-channel-id
 
-# Companion app API key (Phase 2.5)
+# Companion app API key
 PATT_API_KEY=generate-a-strong-random-key
 
-# Crafting Corner (Phase 2.8)
-PATT_CRAFTERS_CORNER_CHANNEL_ID=your-discord-crafters-corner-channel-id
+# NOTE: audit_channel_id and crafters_corner_channel_id are configured
+# via the Admin UI (Admin → Raid Tools and Admin → Crafting Sync).
+# They are stored in common.discord_config, NOT in .env.
 ```
 
 ---
 
 ## Database Schema
 
-> **Phase 2.7 target schema + Phase 2.8 additions.** Clean 3NF design with players as the core entity.
+> **Current schema through migration 0030.** Clean 3NF design with players as the core entity.
 > Reference tables normalize WoW classes, specializations, and combat roles.
-> Bridge table tracks character ownership. Direct 1:1 FKs for Discord and website accounts.
+> Bridge table tracks character ownership with attribution metadata.
+> Direct 1:1 FKs for Discord and website accounts.
 
 ### guild_identity schema — Reference Tables
 
@@ -419,20 +424,47 @@ CREATE TABLE guild_identity.players (
     main_spec_id INTEGER REFERENCES guild_identity.specializations(id),
     offspec_character_id INTEGER REFERENCES guild_identity.wow_characters(id),
     offspec_spec_id INTEGER REFERENCES guild_identity.specializations(id),
-    crafting_notifications_enabled BOOLEAN DEFAULT FALSE,  -- Phase 2.8: opt-in for @mentions
+    timezone VARCHAR(50) DEFAULT 'America/Chicago',
+    auto_invite_events BOOLEAN DEFAULT FALSE,       -- auto-sign-up for raid events
+    crafting_notifications_enabled BOOLEAN DEFAULT FALSE,
+    on_raid_hiatus BOOLEAN DEFAULT FALSE,           -- hide from public roster + availability grid
     is_active BOOLEAN DEFAULT TRUE,
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Character ownership bridge
+-- Character ownership bridge — with attribution metadata
 CREATE TABLE guild_identity.player_characters (
     id SERIAL PRIMARY KEY,
     player_id INTEGER NOT NULL REFERENCES guild_identity.players(id) ON DELETE CASCADE,
     character_id INTEGER NOT NULL UNIQUE REFERENCES guild_identity.wow_characters(id) ON DELETE CASCADE,
+    link_source VARCHAR(30) DEFAULT 'unknown',  -- note_key, exact_name, fuzzy_name, manual, etc.
+    confidence VARCHAR(15) DEFAULT 'unknown',   -- high, medium, low, confirmed, unknown
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(player_id, character_id)
+);
+
+-- Confirmed note-key → player aliases (built up as characters are linked)
+CREATE TABLE guild_identity.player_note_aliases (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER NOT NULL REFERENCES guild_identity.players(id) ON DELETE CASCADE,
+    alias VARCHAR(50) NOT NULL,
+    source VARCHAR(30) DEFAULT 'note_match',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(player_id, alias)
+);
+
+-- Self-service character claim/unclaim audit log
+CREATE TABLE guild_identity.player_action_log (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER NOT NULL REFERENCES guild_identity.players(id) ON DELETE CASCADE,
+    action VARCHAR(30) NOT NULL,
+    character_id INTEGER REFERENCES guild_identity.wow_characters(id) ON DELETE SET NULL,
+    character_name VARCHAR(50),  -- denormalized, survives character deletion
+    realm_slug VARCHAR(50),
+    details JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
@@ -572,7 +604,9 @@ CREATE TABLE common.guild_ranks (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
     level INTEGER NOT NULL UNIQUE,
+    scheduling_weight INTEGER NOT NULL DEFAULT 0,  -- used in availability weighted scores
     discord_role_id VARCHAR(20),
+    wow_rank_index INTEGER UNIQUE,                 -- maps to Blizzard guild rank index
     description TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -581,19 +615,45 @@ CREATE TABLE common.guild_ranks (
 CREATE TABLE common.users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE,
-    phone VARCHAR(20),
     password_hash VARCHAR(255) NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- All channel IDs stored here; configured via Admin UI (no .env IDs)
 CREATE TABLE common.discord_config (
     id SERIAL PRIMARY KEY,
     guild_discord_id VARCHAR(20) NOT NULL,
     role_sync_interval_hours INTEGER DEFAULT 24,
-    default_announcement_channel_id VARCHAR(20),
-    last_role_sync_at TIMESTAMPTZ,
+    bot_dm_enabled BOOLEAN DEFAULT FALSE,
+    feature_invite_dm BOOLEAN DEFAULT FALSE,
+    feature_onboarding_dm BOOLEAN DEFAULT FALSE,
+    raid_helper_api_key VARCHAR(200),
+    raid_helper_server_id VARCHAR(25),
+    raid_creator_discord_id VARCHAR(25),
+    raid_channel_id VARCHAR(25),
+    raid_voice_channel_id VARCHAR(25),
+    raid_default_template_id VARCHAR(50) DEFAULT 'wowretail2',
+    audit_channel_id VARCHAR(25),
+    raid_event_timezone VARCHAR(50) DEFAULT 'America/New_York',
+    raid_default_start_time VARCHAR(5) DEFAULT '21:00',
+    raid_default_duration_minutes INTEGER DEFAULT 120,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- DB-driven Settings nav — screen visibility by rank level
+CREATE TABLE common.screen_permissions (
+    id SERIAL PRIMARY KEY,
+    screen_key VARCHAR(50) NOT NULL UNIQUE,
+    display_name VARCHAR(100) NOT NULL,
+    url_path VARCHAR(100) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    category_label VARCHAR(100) NOT NULL,
+    category_order INTEGER DEFAULT 0,
+    nav_order INTEGER DEFAULT 0,
+    min_rank_level INTEGER NOT NULL DEFAULT 4,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -608,18 +668,6 @@ CREATE TABLE common.invite_codes (
     generated_by VARCHAR(30) DEFAULT 'manual',
     onboarding_session_id INTEGER REFERENCES guild_identity.onboarding_sessions(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE common.member_availability (
-    id SERIAL PRIMARY KEY,
-    player_id INTEGER NOT NULL REFERENCES guild_identity.players(id),
-    day_of_week VARCHAR(10) NOT NULL,
-    available BOOLEAN DEFAULT TRUE,
-    notes TEXT,
-    auto_signup BOOLEAN DEFAULT FALSE,
-    wants_reminders BOOLEAN DEFAULT FALSE,
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(player_id, day_of_week)
 );
 ```
 
@@ -686,16 +734,85 @@ CREATE TABLE patt.contest_agent_log (
 CREATE TABLE patt.mito_quotes (
     id SERIAL PRIMARY KEY,
     quote TEXT NOT NULL,
-    context TEXT,
-    added_by_player_id INTEGER REFERENCES guild_identity.players(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE patt.mito_titles (
     id SERIAL PRIMARY KEY,
-    title VARCHAR(200) NOT NULL,
-    added_by_player_id INTEGER REFERENCES guild_identity.players(id),
+    title TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Player availability: time windows per day of week (0=Mon … 6=Sun)
+CREATE TABLE patt.player_availability (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER NOT NULL REFERENCES guild_identity.players(id),
+    day_of_week INTEGER NOT NULL,          -- 0=Monday … 6=Sunday
+    earliest_start TIME NOT NULL,
+    available_hours NUMERIC(3,1) NOT NULL, -- e.g. 2.5 = 2h30m
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(player_id, day_of_week)
+);
+
+-- WoW content season (e.g. The War Within Season 2)
+CREATE TABLE patt.raid_seasons (
+    id SERIAL PRIMARY KEY,
+    expansion_name VARCHAR(50),
+    season_number INTEGER,
+    start_date DATE NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_new_expansion BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+    -- display_name computed in code as "{expansion_name} Season {season_number}"
+);
+
+-- Event-day config: drives schedule, raid tools, and auto-booking
+CREATE TABLE patt.recurring_events (
+    id SERIAL PRIMARY KEY,
+    label VARCHAR(100) NOT NULL,
+    event_type VARCHAR(30) DEFAULT 'raid',
+    day_of_week INTEGER NOT NULL,          -- 0=Monday … 6=Sunday
+    default_start_time TIME NOT NULL,
+    default_duration_minutes INTEGER DEFAULT 120,
+    discord_channel_id VARCHAR(25),
+    raid_helper_template_id VARCHAR(50) DEFAULT 'wowretail2',
+    is_active BOOLEAN DEFAULT TRUE,
+    display_on_public BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- A single scheduled raid night
+CREATE TABLE patt.raid_events (
+    id SERIAL PRIMARY KEY,
+    season_id INTEGER REFERENCES patt.raid_seasons(id),
+    title VARCHAR(200) NOT NULL,
+    event_date DATE NOT NULL,
+    start_time_utc TIMESTAMPTZ NOT NULL,
+    end_time_utc TIMESTAMPTZ NOT NULL,
+    raid_helper_event_id VARCHAR(30),
+    discord_channel_id VARCHAR(25),
+    log_url VARCHAR(500),
+    notes TEXT,
+    created_by_player_id INTEGER REFERENCES guild_identity.players(id),
+    recurring_event_id INTEGER REFERENCES patt.recurring_events(id),
+    auto_booked BOOLEAN DEFAULT FALSE,
+    raid_helper_payload JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Signup and attendance tracking per event
+CREATE TABLE patt.raid_attendance (
+    id SERIAL PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES patt.raid_events(id),
+    player_id INTEGER NOT NULL REFERENCES guild_identity.players(id),
+    signed_up BOOLEAN DEFAULT FALSE,
+    attended BOOLEAN DEFAULT FALSE,
+    character_id INTEGER REFERENCES guild_identity.wow_characters(id),
+    noted_absence BOOLEAN DEFAULT FALSE,
+    source VARCHAR(20) DEFAULT 'manual',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(event_id, player_id)
 );
 ```
 
@@ -703,7 +820,7 @@ CREATE TABLE patt.mito_titles (
 
 ## Operations & Deployment
 
-- **Tests:** 228+ pass (24 skip when no DB); regression suite at `tests/regression/` requires live DB
+- **Tests:** 409 pass, 69 skip (skips are pre-existing: identity_engine import error, legacy migrate_sheets model refs, one bot DM gate test); regression suite at `tests/regression/` requires live DB
 - **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
@@ -766,64 +883,62 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - Phase 0 through 7: Platform complete and live
 - Phase 2.5A–D: Guild identity system (Blizzard API, Discord sync, addon, integrity checker)
 - Phase 2.6: Onboarding system (built but NOT activated — on_member_join not wired)
-- Phase 2.7: Data Model Migration — Clean 3NF rebuild (complete)
-  - `common.guild_members` and `common.characters` eliminated from all code
-  - Reference tables added: `guild_identity.roles`, `classes`, `specializations`
-  - `guild_identity.persons` renamed to `players` with main/offspec FKs, discord_user_id, website_user_id
-  - `guild_identity.player_characters` bridge table added
-  - All FKs repointed from guild_members → players across models, services, routes, templates, tests
-  - Alembic migration 0007 created; data migration script at `scripts/migrate_to_players.py`
+- Phase 2.7: Data Model Migration — Clean 3NF rebuild; `players` table as central entity; reference tables; player_characters bridge
 - Phase 2.8: Crafting Corner — profession/recipe DB, `/crafting-corner` public page, adaptive sync cadence, admin sync page
 - Phase 2.9: Data Quality Engine — 8-rule registry, targeted mitigations, admin `/admin/data-quality` page
 - Phase 3.0A: Matching transparency — link_source/confidence on player_characters, coverage dashboard
-- Phase 3.0B: Iterative rule runner — pluggable matching rules, progressive discovery, per-rule results UI
-- Phase 3.0C: Drift Detection — note_mismatch, link_contradicts_note, duplicate_discord, stale_discord_link rules; drift_scanner.py orchestrator; drift panel on Data Quality page
+- Phase 3.0B: Iterative rule runner — pluggable matching_rules package, progressive discovery, per-rule results UI
+- Phase 3.0C: Drift Detection — link_contradicts_note, duplicate_discord, stale_discord_link rules; drift_scanner.py; drift panel on Data Quality page
+- Phase 3.0D: Player Manager QoL — player deletion guard, `/admin/users` page, alias chips, `_compute_best_rank` helper
 - Phase 3.1: Admin Availability Dashboard — `patt.recurring_events` table, 7-day availability grid, event day config, `GET /admin/availability`
 - Phase 3.2: Index Page Revamp — officers, recruiting needs, and weekly schedule all live from DB
 - Phase 3.3: Public Roster View — `/roster` page with Full Roster, Composition, and Schedule tabs; Wowhead comp link; legacy redirects
 - Phase 3.4: Admin Raid Tools — Raid-Helper API integration, event builder with roster preview, `GET /admin/raid-tools`
 - Phase 3.5: Auto-Booking Scheduler — background loop creates next week's Raid-Helper event 10–20 min after raid starts, posts Discord announcement
+- Roster Initiate Filtering + Raid Hiatus (migration 0030) — `on_raid_hiatus` flag on players; initiates filtered from comp tab; New Members box; Show Initiates checkbox on roster
 
 ### Current Phase
-- Phase 3.5: Auto-Booking Scheduler — **COMPLETE**
+- **Platform is feature-complete.** No active phase. Next work should start a new phase in `reference/`.
 
 ### What Exists
 - sv_common.identity package: ranks, players, characters CRUD (`src/sv_common/identity/`)
 - sv_common.auth package: passwords (bcrypt), JWT (PyJWT), invite codes (`src/sv_common/auth/`)
-- sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting (`src/sv_common/discord/`)
-- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, attribution functions, matching_rules package, drift_scanner.py
-- Crafting Corner: `/crafting-corner` public page, `/api/crafting/*` routes, profession/recipe DB tables, adaptive sync cadence
-- Admin Crafting Sync page: `/admin/crafting-sync` — force refresh, season config, sync stats
-- Data Quality Engine: `rules.py` (8-rule registry including 3 drift rules), `mitigations.py`, refactored `integrity_checker.py`, `drift_scanner.py`
-- Admin Data Quality page: `/admin/data-quality` — rule stats, open counts, recent findings, manual scan/fix triggers, Drift Detection panel
-- Admin Availability page: `/admin/availability` — 7-day availability grid with role breakdown, event day configuration table (auto-save)
-- Admin Raid Tools page: `/admin/raid-tools` — Raid-Helper config, availability grid, event builder, roster preview, manual fallback
-- Public Roster page: `/roster` — Full Roster tab, Composition tab (Wowhead comp link), Schedule tab; no login required
-- Auto-booking: `raid_booking_service.py` — background loop polls every 5 min, books next week's raid 10–20 min after start
-- Public index page: officers, recruiting needs, weekly schedule all live from DB
+- sv_common.discord package: bot client, role sync (DiscordUser+Player), DM dispatch, channel posting, channel_sync (`src/sv_common/discord/`)
+- sv_common.guild_sync package: Blizzard API client, identity engine, integrity checker, Discord sync, addon processor, scheduler, crafting sync + service, rules registry + mitigations engine, matching_rules package, drift_scanner, raid_booking_service
+- Public pages: `/` (index), `/roster`, `/crafting-corner`, `/guide`; no login required for any of these
+- Crafting Corner: `/crafting-corner`, `/api/crafting/*`, profession/recipe DB tables, adaptive sync cadence
+- Admin pages (Officer+ rank required):
+  - `/admin/campaigns` — campaign lifecycle (draft→live→closed), ranked-choice voting
+  - `/admin/players` — Player Manager (drag-and-drop linking, alias chips, hiatus toggle, invite DM)
+  - `/admin/users` — website account management (enable/disable/delete)
+  - `/admin/availability` — 7-day availability grid with role breakdown, event day config
+  - `/admin/raid-tools` — Raid-Helper config, availability grid, event builder, roster preview
+  - `/admin/data-quality` — coverage dashboard, unmatched tables, rule stats, drift detection panel
+  - `/admin/crafting-sync` — force refresh, season config, sync stats
+  - `/admin/bot-settings` — DM feature toggles
+  - `/admin/reference-tables` — view roles, classes, specializations
+  - `/admin/audit-log` — sync log viewer
+- Auto-booking: `raid_booking_service.py` — background loop, books next week's raid 10–20 min after current raid starts
+- Settings pages (rank-gated via screen_permissions): Availability, Character Claims, Guide
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- Auth middleware: `get_current_player()`, `require_rank(level)` deps in `src/patt/deps.py`
-- Cookie-based auth for page routes: `get_page_player()`, `require_page_rank(level)` in deps.py
+- Cookie-based auth: `get_page_player()`, `require_page_rank(level)` in `src/patt/deps.py`
 - Admin API: `/api/v1/admin/*` — all routes protected (Officer+ rank required)
-- Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster` (public, no auth required)
+- Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
-- Campaign service: full lifecycle (draft→live→closed) with ranked-choice voting
 - Contest agent: Discord milestone posts, auto-activate/close campaigns
-- Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant)
+- Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — needs activation)
 - PATTSync WoW addon + companion app (functional, syncing guild notes)
-- Full regression test suite
-- Web UI: login, register, vote, admin campaigns, admin roster, public landing page
-- Art vote campaign configured and previously run
+- Screen permissions: DB-driven Settings nav — all screens configurable by rank level via `common.screen_permissions`
 
-### Key Data State
-- `guild_identity.players`: **EMPTY** — run `scripts/migrate_to_players.py` to populate from guild_members
-- `guild_identity.wow_characters`: ~320 rows from Blizzard API syncs
+### Key Data State (as of 2026-02-28)
+- `guild_identity.players`: populated (migrated from guild_members)
+- `guild_identity.wow_characters`: ~320+ rows from Blizzard API syncs
 - `guild_identity.discord_users`: populated from Discord bot syncs
-- `common.guild_members`: ~40 rows (legacy — source for migration script)
-- `common.characters`: legacy data (source for migration script, to be dropped post-migration)
+- `common.guild_members` / `common.characters`: legacy tables still in DB but removed from all ORM/code
 - Reference tables (roles, classes, specializations): seeded via Alembic migration 0007
+- Alembic: at migration 0030 (head)
 
-### Pending / Known Gaps
-- `scripts/migrate_to_players.py`: run on prod to migrate guild_members → players
-- `guild_identity.identity_engine`: still references pre-2.7 schema (persons/discord_members/identity_links) — tests skipped, needs update
-- `scripts/migrate_sheets.py`: legacy Phase 5 script still imports removed models — tests skipped
+### Known Gaps / Dormant Features
+- Onboarding flow: code exists (`sv_common.guild_sync.onboarding`), not activated — `on_member_join` not wired
+- `scripts/migrate_sheets.py`: legacy Phase 5 script, still imports removed models — tests skipped, safe to ignore
+- `guild_identity.identity_engine`: some tests skipped due to import error — pre-existing, non-blocking
