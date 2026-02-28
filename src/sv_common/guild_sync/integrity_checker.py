@@ -644,6 +644,85 @@ async def detect_duplicate_discord_links(conn: asyncpg.Connection) -> int:
     return new_count
 
 
+async def detect_main_char_not_linked(conn: asyncpg.Connection) -> int:
+    """
+    Detect players where main_character_id or offspec_character_id points to a character
+    that has no corresponding row in player_characters.
+
+    This is an impossible state under normal operation — guards in admin_pages and
+    profile_pages prevent it. This rule catches any edge case that slips through.
+    """
+    new_count = 0
+
+    rows = await conn.fetch(
+        """SELECT p.id AS player_id,
+                  p.display_name,
+                  p.main_character_id,
+                  p.offspec_character_id,
+                  CASE
+                      WHEN p.main_character_id IS NOT NULL
+                           AND NOT EXISTS (
+                               SELECT 1 FROM guild_identity.player_characters pc
+                               WHERE pc.player_id = p.id AND pc.character_id = p.main_character_id
+                           ) THEN TRUE ELSE FALSE
+                  END AS main_broken,
+                  CASE
+                      WHEN p.offspec_character_id IS NOT NULL
+                           AND NOT EXISTS (
+                               SELECT 1 FROM guild_identity.player_characters pc
+                               WHERE pc.player_id = p.id AND pc.character_id = p.offspec_character_id
+                           ) THEN TRUE ELSE FALSE
+                  END AS offspec_broken
+           FROM guild_identity.players p
+           WHERE p.is_active = TRUE
+             AND (
+                 (p.main_character_id IS NOT NULL AND NOT EXISTS (
+                     SELECT 1 FROM guild_identity.player_characters pc
+                     WHERE pc.player_id = p.id AND pc.character_id = p.main_character_id
+                 ))
+                 OR
+                 (p.offspec_character_id IS NOT NULL AND NOT EXISTS (
+                     SELECT 1 FROM guild_identity.player_characters pc
+                     WHERE pc.player_id = p.id AND pc.character_id = p.offspec_character_id
+                 ))
+             )"""
+    )
+
+    for row in rows:
+        broken_fields = []
+        if row["main_broken"]:
+            broken_fields.append(f"main_character_id={row['main_character_id']}")
+        if row["offspec_broken"]:
+            broken_fields.append(f"offspec_character_id={row['offspec_character_id']}")
+
+        h = make_issue_hash("main_char_not_linked", row["player_id"])
+        created = await _upsert_issue(
+            conn,
+            issue_type="main_char_not_linked",
+            severity="error",
+            summary=(
+                f"Player '{row['display_name']}' has pointer(s) to unowned character(s): "
+                + ", ".join(broken_fields)
+            ),
+            details={
+                "player_id": row["player_id"],
+                "player_display_name": row["display_name"],
+                "main_character_id": row["main_character_id"],
+                "offspec_character_id": row["offspec_character_id"],
+                "broken_fields": [f.split("=")[0] for f in broken_fields],
+            },
+            issue_hash=h,
+        )
+        if created:
+            new_count += 1
+            logger.error(
+                "main_char_not_linked: player '%s' (id=%d) — %s",
+                row["display_name"], row["player_id"], ", ".join(broken_fields),
+            )
+
+    return new_count
+
+
 # Mapping for admin scan-by-type endpoint
 DETECT_FUNCTIONS = {
     "note_mismatch": detect_note_mismatch,
@@ -652,6 +731,7 @@ DETECT_FUNCTIONS = {
     "stale_character": detect_stale_character,
     "link_contradicts_note": detect_link_note_contradictions,
     "duplicate_discord": detect_duplicate_discord_links,
+    "main_char_not_linked": detect_main_char_not_linked,
     # role_mismatch handled specially (returns tuple)
     # stale_discord_link is part of detect_duplicate_discord_links (combined check)
 }
@@ -675,6 +755,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         "role_mismatch": 0,
         "stale": 0,
         "no_guild_role": 0,
+        "main_char_not_linked": 0,
         "total_new": 0,
     }
 
@@ -688,6 +769,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         stats["no_guild_role"] = no_role_new
 
         stats["stale"] = await detect_stale_character(conn)
+        stats["main_char_not_linked"] = await detect_main_char_not_linked(conn)
 
         stats["total_new"] = (
             stats["note_mismatch"]
@@ -696,6 +778,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
             + stats["role_mismatch"]
             + stats["no_guild_role"]
             + stats["stale"]
+            + stats["main_char_not_linked"]
         )
 
         # Auto-resolve issues where the underlying problem no longer exists
@@ -703,9 +786,10 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
 
     logger.info(
         "Integrity check: %d note_mismatch, %d orphan_wow, %d orphan_discord, "
-        "%d role_mismatch, %d stale, %d no_role — %d total new issues",
+        "%d role_mismatch, %d stale, %d no_role, %d main_char_not_linked — %d total new issues",
         stats["note_mismatch"], stats["orphan_wow"], stats["orphan_discord"],
-        stats["role_mismatch"], stats["stale"], stats["no_guild_role"], stats["total_new"],
+        stats["role_mismatch"], stats["stale"], stats["no_guild_role"],
+        stats["main_char_not_linked"], stats["total_new"],
     )
     return stats
 

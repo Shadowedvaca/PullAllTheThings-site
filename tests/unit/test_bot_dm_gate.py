@@ -126,7 +126,7 @@ async def test_conversation_start_calls_send_welcome_when_dm_enabled():
     bot = MagicMock()
     conv = OnboardingConversation(bot, member, pool)
 
-    with patch("sv_common.discord.dm.is_bot_dm_enabled", new=AsyncMock(return_value=True)):
+    with patch("sv_common.discord.dm.is_onboarding_dm_enabled", new=AsyncMock(return_value=True)):
         with patch.object(conv, "_send_welcome", new=AsyncMock()) as mock_welcome:
             await conv.start()
 

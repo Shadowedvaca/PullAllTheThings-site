@@ -29,6 +29,7 @@ Rules:
 - Multiple characters CAN belong to the same player (alts)
 """
 
+import difflib
 import logging
 import re
 from typing import Optional
@@ -50,6 +51,59 @@ def normalize_name(name: str) -> str:
     )
     normalized = normalized.translate(accent_map)
     return normalized
+
+
+def extract_discord_hints_from_note(note: str | None) -> list[str]:
+    """
+    Extract Discord username hints from a guild note.
+
+    Recognises patterns officers use to identify members:
+      "Discord: Trog", "DC: Trog", "Disc: Trog"
+      "@Trog"
+      "alt of Trogmoon"
+      "Main: Trogmoon"
+
+    Returns a list of candidate hint strings (original case, trailing
+    punctuation stripped).  Returns [] if note is empty or has no matches.
+    """
+    if not note or not note.strip():
+        return []
+
+    patterns = [
+        r'(?:discord|disc|dc)\s*:\s*(\S+)',
+        r'@(\S+)',
+        r'alt\s+of\s+(\S+)',
+        r'main\s*:\s*(\S+)',
+    ]
+    hints = []
+    for pattern in patterns:
+        for match in re.finditer(pattern, note, re.IGNORECASE):
+            hint = match.group(1).rstrip('.,;:!?').strip()
+            if hint:
+                hints.append(hint)
+    return hints
+
+
+def fuzzy_match_score(a: str, b: str) -> float:
+    """
+    Score the similarity between two names, returning a value in [0.0, 1.0].
+
+    Rules (in priority order):
+      - Either empty → 0.0
+      - Equal (case-insensitive, accent-stripped) → 1.0
+      - One is a substring of the other → len(shorter) / len(longer)
+      - Otherwise → difflib.SequenceMatcher ratio
+    """
+    a_norm = normalize_name(a)
+    b_norm = normalize_name(b)
+    if not a_norm or not b_norm:
+        return 0.0
+    if a_norm == b_norm:
+        return 1.0
+    shorter, longer = (a_norm, b_norm) if len(a_norm) <= len(b_norm) else (b_norm, a_norm)
+    if shorter in longer:
+        return len(shorter) / len(longer)
+    return difflib.SequenceMatcher(None, a_norm, b_norm).ratio()
 
 
 def _extract_note_key(char: dict) -> str:

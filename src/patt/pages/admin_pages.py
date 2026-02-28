@@ -785,6 +785,17 @@ async def admin_assign_character(
             {"ok": False, "error": f"Character {char_id} not found"}, status_code=404
         )
 
+    # Null out main/offspec pointers on any player that currently owns this character,
+    # so the pointer is cleared before the bridge row is removed.
+    await db.execute(
+        text("UPDATE guild_identity.players SET main_character_id = NULL WHERE main_character_id = :cid"),
+        {"cid": char_id},
+    )
+    await db.execute(
+        text("UPDATE guild_identity.players SET offspec_character_id = NULL WHERE offspec_character_id = :cid"),
+        {"cid": char_id},
+    )
+
     # Remove existing bridge row
     await db.execute(
         text("DELETE FROM guild_identity.player_characters WHERE character_id = :cid"),

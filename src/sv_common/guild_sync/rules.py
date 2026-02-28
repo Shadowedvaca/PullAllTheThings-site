@@ -140,4 +140,16 @@ RULES: dict[str, RuleDefinition] = {
         auto_mitigate=False,
         mitigate_fn=None,
     ),
+    "main_char_not_linked": RuleDefinition(
+        issue_type="main_char_not_linked",
+        name="Main/Offspec Pointer Orphaned",
+        description=(
+            "A player's main_character_id or offspec_character_id points to a character "
+            "that is not in their player_characters bridge table. "
+            "This should not be possible under normal operation. Manual admin action required."
+        ),
+        severity="error",
+        auto_mitigate=False,
+        mitigate_fn=None,
+    ),
 }

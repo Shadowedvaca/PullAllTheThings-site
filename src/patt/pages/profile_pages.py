@@ -478,23 +478,23 @@ async def profile_unclaim_character(
     char_realm = char.realm_slug if char else ""
 
     try:
-        # Clear main/offspec pointers if they reference this character
+        # Block unclaim if the character is the player's current main or offspec.
+        # The player must set a different main/offspec first, then remove this character.
         player_result = await db.execute(
             select(Player).where(Player.id == current_member.id)
         )
         player = player_result.scalar_one_or_none()
         if player is not None:
-            changed = False
             if player.main_character_id == character_id:
-                player.main_character_id = None
-                player.main_spec_id = None
-                changed = True
+                return RedirectResponse(
+                    url=f"/profile?error={char_name}+is+your+main+character.+Set+a+different+main+first,+then+remove+it.",
+                    status_code=302,
+                )
             if player.offspec_character_id == character_id:
-                player.offspec_character_id = None
-                player.offspec_spec_id = None
-                changed = True
-            if changed:
-                player.updated_at = datetime.now(timezone.utc)
+                return RedirectResponse(
+                    url=f"/profile?error={char_name}+is+your+secondary+character.+Set+a+different+secondary+first,+then+remove+it.",
+                    status_code=302,
+                )
 
         # Remove the player_characters bridge row
         await db.delete(pc)
