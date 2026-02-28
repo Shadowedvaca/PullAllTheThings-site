@@ -193,6 +193,23 @@ input:checked + .bs-slider::before {
     <p class="admin-page-subtitle">Control Discord bot messaging and onboarding behavior.</p>
 </div>
 
+{# Audit Channel Card #}
+<div class="bs-card">
+    <h2 class="bs-card__title">Audit Channel</h2>
+    <p class="bs-card__subtitle">The channel where sync alerts and onboarding escalations are posted. Required for the guild sync scheduler to run.</p>
+
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <select id="audit-channel-select" style="flex: 1; min-width: 220px; max-width: 380px;">
+            <option value="">— loading channels —</option>
+        </select>
+        <button class="btn btn--secondary" id="audit-save-btn" onclick="saveAuditChannel()">Save</button>
+        <span id="audit-save-status" style="font-size: 0.85rem; color: var(--color-text-muted);"></span>
+    </div>
+    <p class="bs-info" style="margin-top: 0.75rem;">
+        If no channel is set, the background sync scheduler will not start after the next restart.
+    </p>
+</div>
+
 {# Bot DM Toggle Card #}
 <div class="bs-card">
     <h2 class="bs-card__title">Discord DM Messaging</h2>
@@ -205,7 +222,7 @@ input:checked + .bs-slider::before {
                    onchange="toggleBotDm(this.checked)">
             <span class="bs-slider"></span>
         </label>
-        <span class="bs-toggle-label">Onboarding DMs</span>
+        <span class="bs-toggle-label">Enable Bot DMs</span>
         <span class="bs-toggle-status {% if discord_config and discord_config.bot_dm_enabled %}bs-toggle-status--on{% else %}bs-toggle-status--off{% endif %}"
               id="dm-status">
             {% if discord_config and discord_config.bot_dm_enabled %}ON{% else %}OFF{% endif %}
@@ -263,7 +280,7 @@ input:checked + .bs-slider::before {
 {# Onboarding Queue Card #}
 <div class="bs-card">
     <h2 class="bs-card__title">Onboarding Queue</h2>
-    <p class="bs-card__subtitle">Active sessions — flip the DM toggle to start processing.</p>
+    <p class="bs-card__subtitle">Active sessions. The scheduler checks every 30 minutes, or process immediately below.</p>
 
     <div class="bs-stats" id="onboarding-stats">
         <div class="bs-stat">
@@ -271,9 +288,80 @@ input:checked + .bs-slider::before {
             <div class="bs-stat__label">Loading…</div>
         </div>
     </div>
+
+    <div style="margin-top: 1rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <button class="btn btn--secondary" id="process-queue-btn" onclick="processQueue()">
+            Process Queue Now
+        </button>
+        <span id="process-result" style="font-size: 0.85rem; color: var(--color-text-muted);"></span>
+    </div>
 </div>
 
 <script>
+// ── Channel dropdown ───────────────────────────────────────────────────────
+
+let _channelCache = null;
+
+async function _fetchChannels() {
+    if (_channelCache) return _channelCache;
+    const resp = await fetch('/api/guild-sync/channels');
+    const data = await resp.json();
+    _channelCache = data.data || [];
+    return _channelCache;
+}
+
+async function loadAuditChannelDropdown() {
+    const sel = document.getElementById('audit-channel-select');
+    const savedId = '{{ discord_config.audit_channel_id or "" }}';
+    try {
+        const channels = await _fetchChannels();
+        const text_channels = channels.filter(ch =>
+            ch.channel_type === 'text' || ch.channel_type === 'announcement');
+        if (!text_channels.length) {
+            sel.innerHTML = '<option value="">No channels synced — sync in Reference Tables</option>';
+            return;
+        }
+        const byCategory = {};
+        text_channels.forEach(ch => {
+            const cat = ch.category_name || 'Uncategorized';
+            (byCategory[cat] = byCategory[cat] || []).push(ch);
+        });
+        sel.innerHTML = '<option value="">— none —</option>' +
+            Object.entries(byCategory).map(([cat, chs]) =>
+                `<optgroup label="${cat}">${chs.map(ch =>
+                    `<option value="${ch.discord_id}"${ch.discord_id === savedId ? ' selected' : ''}>#${ch.name}</option>`
+                ).join('')}</optgroup>`
+            ).join('');
+    } catch (e) {
+        sel.innerHTML = '<option value="">Failed to load channels</option>';
+    }
+}
+
+async function saveAuditChannel() {
+    const btn = document.getElementById('audit-save-btn');
+    const status = document.getElementById('audit-save-status');
+    const val = document.getElementById('audit-channel-select').value || null;
+    btn.disabled = true;
+    status.textContent = 'Saving…';
+    try {
+        const data = await patchSettings({audit_channel_id: val});
+        if (data.ok) {
+            status.style.color = 'var(--color-gold)';
+            status.textContent = 'Saved';
+        } else {
+            status.style.color = '#f87171';
+            status.textContent = data.error || 'Failed';
+        }
+    } catch (e) {
+        status.style.color = '#f87171';
+        status.textContent = 'Network error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ── Bot DM toggles ─────────────────────────────────────────────────────────
+
 async function patchSettings(payload) {
     const resp = await fetch('/api/v1/admin/bot-settings', {
         method: 'PATCH',
@@ -379,6 +467,34 @@ async function loadOnboardingStats() {
     }
 }
 
+async function processQueue() {
+    const btn = document.getElementById('process-queue-btn');
+    const result = document.getElementById('process-result');
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+    result.textContent = '';
+    try {
+        const resp = await fetch('/api/v1/admin/onboarding/process-queue', {method: 'POST'});
+        const data = await resp.json();
+        if (data.ok) {
+            const s = data.data;
+            result.style.color = 'var(--color-gold)';
+            result.textContent = `Done — resumed: ${s.dm_resumed}, verified: ${s.verified}, provisioned: ${s.provisioned}, escalated: ${s.escalated}`;
+            await loadOnboardingStats();
+        } else {
+            result.style.color = '#f87171';
+            result.textContent = data.error || 'Failed';
+        }
+    } catch (e) {
+        result.style.color = '#f87171';
+        result.textContent = 'Network error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Process Queue Now';
+    }
+}
+
 loadOnboardingStats();
+loadAuditChannelDropdown();
 </script>
 {% endblock %}

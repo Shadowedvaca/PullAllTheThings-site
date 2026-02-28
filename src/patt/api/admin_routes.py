@@ -449,7 +449,7 @@ async def update_bot_settings(
     db: AsyncSession = Depends(get_db),
     admin: Player = Depends(require_rank(4)),
 ):
-    """Update bot configuration — supports bot_dm_enabled, feature_invite_dm, feature_onboarding_dm."""
+    """Update bot configuration — supports bot_dm_enabled, feature_invite_dm, feature_onboarding_dm, audit_channel_id."""
     from patt.config import get_settings
     result = await db.execute(select(DiscordConfig).limit(1))
     row = result.scalar_one_or_none()
@@ -458,11 +458,14 @@ async def update_bot_settings(
         guild_id = get_settings().discord_guild_id or "0"
         row = DiscordConfig(guild_discord_id=guild_id)
         db.add(row)
-        await db.flush()  # get the row into the session before setting fields
+        await db.flush()
 
     for field in _BOT_BOOL_FIELDS:
         if field in payload:
             setattr(row, field, bool(payload[field]))
+
+    if "audit_channel_id" in payload:
+        row.audit_channel_id = payload["audit_channel_id"] or None
 
     await db.commit()
     logger.info(
@@ -476,8 +479,42 @@ async def update_bot_settings(
             "bot_dm_enabled": row.bot_dm_enabled,
             "feature_invite_dm": row.feature_invite_dm,
             "feature_onboarding_dm": row.feature_onboarding_dm,
+            "audit_channel_id": row.audit_channel_id,
         },
     }
+
+
+@router.post("/onboarding/process-queue")
+async def process_onboarding_queue(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Immediately run the onboarding deadline checker — resumes awaiting_dm sessions,
+    retries pending verification, escalates overdue sessions."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        raise HTTPException(status_code=503, detail="Guild sync pool not available")
+
+    from sv_common.guild_sync.onboarding.deadline_checker import OnboardingDeadlineChecker
+    from sv_common.discord.bot import get_bot
+
+    # Fetch audit_channel_id from DB (same logic as scheduler startup)
+    result = await db.execute(select(DiscordConfig).limit(1))
+    config = result.scalar_one_or_none()
+    audit_channel_id = None
+    if config and config.audit_channel_id:
+        try:
+            audit_channel_id = int(config.audit_channel_id)
+        except (ValueError, TypeError):
+            pass
+
+    checker = OnboardingDeadlineChecker(
+        db_pool=pool,
+        bot=get_bot(),
+        audit_channel_id=audit_channel_id,
+    )
+    stats = await checker.run()
+    return {"ok": True, "data": stats}
 
 
 @router.get("/onboarding-stats")
