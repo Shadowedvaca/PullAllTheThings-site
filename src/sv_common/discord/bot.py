@@ -115,6 +115,28 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         logger.warning("on_member_update sync failed for %s: %s", after.name, e)
 
 
+@bot.event
+async def on_message(message: discord.Message):
+    """Respond to DMs with a help message listing available commands."""
+    if message.author.bot:
+        return
+    if not isinstance(message.channel, discord.DMChannel):
+        return
+
+    embed = discord.Embed(
+        title="Pull All The Things Bot",
+        description="Here's what I can do for you:",
+        color=0xD4A84B,
+    )
+    embed.add_field(
+        name="/get-account",
+        value="Get your website invite code or log in link. Use this to create your account on pullallthethings.com.",
+        inline=False,
+    )
+    embed.set_footer(text="Pull All The Things • Sen'jin")
+    await message.channel.send(embed=embed)
+
+
 async def start_bot(token: str) -> None:
     """Start the bot. Intended to be run as an asyncio background task."""
     await bot.start(token)
