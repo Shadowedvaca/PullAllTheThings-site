@@ -265,17 +265,30 @@ def register_onboarding_commands(
 
             # 3. Already has a website account — tell them and stop
             if website_user_id:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="You already have an account!",
-                        description=(
-                            "You're already registered on the Pull All The Things website.\n\n"
-                            "**Log in here:** https://pullallthethings.com/login"
-                        ),
-                        color=PATT_GOLD,
+                mito_q = mito_t = None
+                if discord_id not in _mito_seen:
+                    mito_q = await conn.fetchval(
+                        "SELECT quote FROM patt.mito_quotes ORDER BY RANDOM() LIMIT 1"
+                    )
+                    mito_t = await conn.fetchval(
+                        "SELECT title FROM patt.mito_titles ORDER BY RANDOM() LIMIT 1"
+                    )
+                    if mito_q or mito_t:
+                        _mito_seen.add(discord_id)
+                already_embed = discord.Embed(
+                    title="You already have an account!",
+                    description=(
+                        "You're already registered on the Pull All The Things website.\n\n"
+                        "**Log in here:** https://pullallthethings.com/login"
                     ),
-                    ephemeral=True,
+                    color=PATT_GOLD,
                 )
+                if mito_q:
+                    quote_text = f'*"{mito_q}"*'
+                    if mito_t:
+                        quote_text += f"\n— *Mito, {mito_t}*"
+                    already_embed.add_field(name="\u200b", value=quote_text, inline=False)
+                await interaction.followup.send(embed=already_embed, ephemeral=True)
                 return
 
             # 4. Find an existing unused invite code, or generate a new one
