@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 PATT_GOLD = 0xD4A84B
 
+# In-memory set of discord IDs that have received a Mito quote this session
+_mito_seen: set[str] = set()
+
 
 def register_onboarding_commands(
     tree: app_commands.CommandTree,
@@ -298,6 +301,22 @@ def register_onboarding_commands(
                     code, player_id, expires_at,
                 )
 
+        # Mito quote — shown once per session (in-memory tracking)
+        mito_quote = mito_title = None
+        if discord_id not in _mito_seen:
+            try:
+                async with db_pool.acquire() as conn:
+                    mito_quote = await conn.fetchval(
+                        "SELECT quote FROM patt.mito_quotes ORDER BY RANDOM() LIMIT 1"
+                    )
+                    mito_title = await conn.fetchval(
+                        "SELECT title FROM patt.mito_titles ORDER BY RANDOM() LIMIT 1"
+                    )
+                if mito_quote or mito_title:
+                    _mito_seen.add(discord_id)
+            except Exception:
+                pass  # Mito is quiet today
+
         embed = discord.Embed(
             title="Your Pull All The Things Account",
             description=(
@@ -308,6 +327,11 @@ def register_onboarding_commands(
             ),
             color=PATT_GOLD,
         )
+        if mito_quote:
+            quote_text = f'*"{mito_quote}"*'
+            if mito_title:
+                quote_text += f"\n— *Mito, {mito_title}*"
+            embed.add_field(name="\u200b", value=quote_text, inline=False)
         embed.set_footer(text="Pull All The Things • Sen'jin • This message is only visible to you")
         await interaction.followup.send(embed=embed, ephemeral=True)
         logger.info(

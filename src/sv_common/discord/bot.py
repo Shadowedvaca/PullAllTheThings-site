@@ -44,6 +44,8 @@ async def on_ready():
         try:
             from sv_common.guild_sync.onboarding.commands import register_onboarding_commands
             register_onboarding_commands(bot.tree, _db_pool)
+            from patt.bot.mito_commands import register_mito_commands
+            register_mito_commands(bot.tree, _db_pool)
             if discord_guild:
                 await bot.tree.sync(guild=discord_guild)
                 logger.info("Slash commands synced to guild %s", discord_guild.name)
