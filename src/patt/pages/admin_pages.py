@@ -687,7 +687,8 @@ async def admin_players_data(
             wc.guild_note, wc.officer_note,
             gr.name AS guild_rank_name,
             (wc.id IS NOT NULL) AS in_wow_scan,
-            CASE WHEN p.main_character_id = wc.id THEN 'main'
+            CASE WHEN p.main_character_id = wc.id AND p.offspec_character_id = wc.id THEN 'main+offspec'
+                 WHEN p.main_character_id = wc.id THEN 'main'
                  WHEN p.offspec_character_id = wc.id THEN 'offspec'
                  ELSE 'alt' END AS main_alt
         FROM guild_identity.wow_characters wc

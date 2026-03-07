@@ -113,23 +113,14 @@ async def _get_recruiting_needs(db) -> dict[str, int]:
     rows = await db.execute(
         text(
             """
-            SELECT
-                CASE
-                    WHEN p.preferred_role = 'tank'       THEN 'Tank'
-                    WHEN p.preferred_role = 'healer'     THEN 'Healer'
-                    WHEN p.preferred_role = 'melee_dps'  THEN 'Melee DPS'
-                    WHEN p.preferred_role = 'ranged_dps' THEN 'Ranged DPS'
-                    ELSE r.name
-                END AS role_name,
-                COUNT(p.id) AS cnt
+            SELECT r.name AS role_name, COUNT(p.id) AS cnt
             FROM guild_identity.players p
-            LEFT JOIN guild_identity.specializations s ON p.main_spec_id = s.id
-            LEFT JOIN guild_identity.roles r ON s.default_role_id = r.id
+            JOIN guild_identity.specializations s ON p.main_spec_id = s.id
+            JOIN guild_identity.roles r ON s.default_role_id = r.id
             WHERE p.is_active = TRUE
               AND p.main_character_id IS NOT NULL
-              AND p.on_raid_hiatus = FALSE
-              AND (p.preferred_role IS NOT NULL OR p.main_spec_id IS NOT NULL)
-            GROUP BY role_name
+              AND p.on_raid_hiatus IS NOT TRUE
+            GROUP BY r.name
             """
         )
     )

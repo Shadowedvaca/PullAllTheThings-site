@@ -198,7 +198,7 @@ function renderPlayers() {
         // Audit filters (OR — show player if they fail any checked condition)
         if (auditActive) {
             const charCount = allChars.filter(c => c.player_id === p.id).length;
-            const hasMain   = allChars.some(c => c.player_id === p.id && c.main_alt === 'main');
+            const hasMain   = allChars.some(c => c.player_id === p.id && (c.main_alt === 'main' || c.main_alt === 'main+offspec'));
             const hit = (noChars   && charCount === 0) ||
                         (noDiscord && !p.discord_id)   ||
                         (noMain    && charCount > 0 && !hasMain);
@@ -514,8 +514,8 @@ function renderChars() {
     list.innerHTML = filtered.map(c => {
         const roleIcon  = c.role === 'tank' ? '🛡️' : c.role === 'healer' ? '💚' : '⚔️';
         const roleClass = c.role === 'tank' ? 'tank' : c.role === 'healer' ? 'healer' : 'dps';
-        const isMain    = c.main_alt === 'main';
-        const isOffspec = c.main_alt === 'offspec';
+        const isMain    = c.main_alt === 'main' || c.main_alt === 'main+offspec';
+        const isOffspec = c.main_alt === 'offspec' || c.main_alt === 'main+offspec';
         const owner     = c.player_id ? players.find(p => p.id === c.player_id) : null;
         const ownerLabel = owner
             ? `<span class="pm-char-owner">→ ${escHtml(owner.display_name || owner.discord_username)}</span>`
