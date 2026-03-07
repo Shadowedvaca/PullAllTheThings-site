@@ -33,6 +33,7 @@ SYNC_MIN_SORT_ORDER = 0
 
 # Expansion sort order: higher = newer (for tier filtering on the frontend)
 EXPANSION_SORT_ORDER = {
+    "Midnight": 100,
     "Khaz Algar": 90,
     "Dragon Isles": 80,
     "Shadowlands": 70,
