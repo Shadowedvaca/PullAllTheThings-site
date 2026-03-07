@@ -115,11 +115,14 @@ async def _get_recruiting_needs(db) -> dict[str, int]:
             """
             SELECT r.name AS role_name, COUNT(p.id) AS cnt
             FROM guild_identity.players p
-            JOIN guild_identity.specializations s ON p.main_spec_id = s.id
-            JOIN guild_identity.roles r ON s.default_role_id = r.id
+            JOIN guild_identity.wow_characters wc ON wc.id = p.main_character_id
+            JOIN guild_identity.specializations s
+              ON s.id = COALESCE(p.main_spec_id, wc.active_spec_id)
+            JOIN guild_identity.roles r ON r.id = s.default_role_id
+            JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
             WHERE p.is_active = TRUE
-              AND p.main_character_id IS NOT NULL
               AND p.on_raid_hiatus IS NOT TRUE
+              AND gr.level > 1
             GROUP BY r.name
             """
         )

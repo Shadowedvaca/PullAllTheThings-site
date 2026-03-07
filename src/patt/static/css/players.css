@@ -430,8 +430,15 @@
     white-space: nowrap;
 }
 
-.pm-main-badge {
+.pm-char-badges {
     margin-left: auto;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.pm-main-badge {
     font-size: 0.68rem;
     font-weight: 700;
     padding: 1px 5px;
@@ -439,11 +446,9 @@
     background: #2a2005;
     color: var(--color-accent);
     border: 1px solid var(--color-accent);
-    flex-shrink: 0;
 }
 
 .pm-offspec-badge {
-    margin-left: auto;
     font-size: 0.68rem;
     font-weight: 700;
     padding: 1px 5px;
@@ -451,7 +456,6 @@
     background: transparent;
     color: #60a5fa;
     border: 1px solid #60a5fa44;
-    flex-shrink: 0;
 }
 
 /* ── Right pane rows ── */

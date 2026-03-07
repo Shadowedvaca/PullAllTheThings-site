@@ -548,7 +548,7 @@ function renderChars() {
                     <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
                     ${mismatchBadge}
                     ${c.guild_rank_name ? `<span class="pm-char-guild-rank">${escHtml(c.guild_rank_name)}</span>` : ''}
-                    ${isMain ? '<span class="pm-main-badge">Main</span>' : isOffspec ? '<span class="pm-offspec-badge">Off</span>' : ''}
+                    ${(isMain || isOffspec) ? `<span class="pm-char-badges">${isMain ? '<span class="pm-main-badge">Main</span>' : ''}${isOffspec ? '<span class="pm-offspec-badge">Off</span>' : ''}</span>` : ''}
                     ${notInScanBadge}
                 </div>
                 <div class="pm-char-row2">${ownerLabel}${noteHtml}</div>
