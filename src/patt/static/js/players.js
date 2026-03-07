@@ -515,6 +515,7 @@ function renderChars() {
         const roleIcon  = c.role === 'tank' ? '🛡️' : c.role === 'healer' ? '💚' : '⚔️';
         const roleClass = c.role === 'tank' ? 'tank' : c.role === 'healer' ? 'healer' : 'dps';
         const isMain    = c.main_alt === 'main';
+        const isOffspec = c.main_alt === 'offspec';
         const owner     = c.player_id ? players.find(p => p.id === c.player_id) : null;
         const ownerLabel = owner
             ? `<span class="pm-char-owner">→ ${escHtml(owner.display_name || owner.discord_username)}</span>`
@@ -547,10 +548,8 @@ function renderChars() {
                     <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
                     ${mismatchBadge}
                     ${c.guild_rank_name ? `<span class="pm-char-guild-rank">${escHtml(c.guild_rank_name)}</span>` : ''}
-                    ${isMain ? '<span class="pm-main-badge">M</span>' : '<span class="pm-alt-badge">A</span>'}
+                    ${isMain ? '<span class="pm-main-badge">Main</span>' : isOffspec ? '<span class="pm-offspec-badge">Off</span>' : ''}
                     ${notInScanBadge}
-                    <button class="pm-toggle-btn" onclick="toggleMain(event,${c.id})"
-                            title="Toggle Main/Alt">${isMain ? 'Alt?' : 'Main?'}</button>
                 </div>
                 <div class="pm-char-row2">${ownerLabel}${noteHtml}</div>
             </div>
