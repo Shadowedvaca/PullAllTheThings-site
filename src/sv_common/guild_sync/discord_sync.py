@@ -84,7 +84,12 @@ async def sync_discord_members(
                             all_guild_roles = $5,
                             last_sync = $6,
                             is_present = TRUE,
-                            removed_at = NULL
+                            removed_at = NULL,
+                            no_guild_role_since = CASE
+                                WHEN $4 IS NOT NULL THEN NULL
+                                WHEN $4 IS NULL AND highest_guild_role IS NOT NULL THEN $6
+                                ELSE no_guild_role_since
+                            END
                            WHERE discord_id = $1""",
                         discord_id,
                         member.name,
@@ -98,8 +103,10 @@ async def sync_discord_members(
                     await conn.execute(
                         """INSERT INTO guild_identity.discord_users
                            (discord_id, username, display_name, highest_guild_role,
-                            all_guild_roles, joined_server_at, last_sync, is_present)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)""",
+                            all_guild_roles, joined_server_at, last_sync, is_present,
+                            no_guild_role_since)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE,
+                                   CASE WHEN $4 IS NULL THEN $7 ELSE NULL END)""",
                         discord_id,
                         member.name,
                         display,
@@ -379,3 +386,163 @@ async def on_member_update(pool: asyncpg.Pool, before: discord.Member, after: di
                 "Discord role change for %s: %s → %s",
                 after.name, old_roles, new_roles,
             )
+
+
+# ---------------------------------------------------------------------------
+# Roleless member prune
+# ---------------------------------------------------------------------------
+
+NO_ROLE_PRUNE_DAYS = 30
+
+
+async def prune_roleless_members(
+    pool: asyncpg.Pool,
+    guild: Optional[discord.Guild],
+    prune_days: int = NO_ROLE_PRUNE_DAYS,
+) -> dict:
+    """Kick Discord members who have had no guild role for prune_days days.
+
+    Only acts on members whose linked player record has NO characters attached.
+    For those members:
+      1. Null out any dangling FKs in patt.* tables
+      2. Delete the player record (cascades aliases, action_log, player_characters)
+      3. Kick the Discord member
+      4. Log the action
+
+    Members with characters linked are never touched, even if roleless.
+    Members not linked to any player record are also never touched.
+    """
+    stats = {"checked": 0, "pruned": 0, "skipped_has_chars": 0, "skipped_no_player": 0, "errors": 0}
+
+    if not guild:
+        logger.warning("prune_roleless_members: no guild available, skipping")
+        return stats
+
+    now = datetime.now(timezone.utc)
+    cutoff = now.replace(tzinfo=now.tzinfo) if now.tzinfo else now
+    # Use interval arithmetic in SQL for the cutoff
+
+    async with pool.acquire() as conn:
+        candidates = await conn.fetch(
+            """
+            SELECT
+                du.id AS discord_user_id,
+                du.discord_id,
+                du.username,
+                du.display_name,
+                du.no_guild_role_since,
+                p.id AS player_id,
+                (
+                    SELECT COUNT(*) FROM guild_identity.player_characters pc
+                    WHERE pc.player_id = p.id
+                ) AS character_count
+            FROM guild_identity.discord_users du
+            JOIN guild_identity.players p ON p.discord_user_id = du.id
+            WHERE du.is_present = TRUE
+              AND du.highest_guild_role IS NULL
+              AND du.no_guild_role_since IS NOT NULL
+              AND du.no_guild_role_since < NOW() - ($1 || ' days')::INTERVAL
+            """,
+            str(prune_days),
+        )
+
+        for row in candidates:
+            stats["checked"] += 1
+            player_id = row["player_id"]
+            discord_id = row["discord_id"]
+            username = row["username"] or row["display_name"] or discord_id
+
+            if row["character_count"] > 0:
+                stats["skipped_has_chars"] += 1
+                logger.info(
+                    "Prune skipped for %s (player %d): has %d character(s) linked",
+                    username, player_id, row["character_count"],
+                )
+                continue
+
+            try:
+                # Null out NO ACTION FK references before deleting the player
+                await conn.execute(
+                    "UPDATE common.invite_codes SET player_id = NULL WHERE player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE common.invite_codes SET created_by_player_id = NULL WHERE created_by_player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE guild_identity.onboarding_sessions SET verified_player_id = NULL WHERE verified_player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE patt.campaign_entries SET player_id = NULL WHERE player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE patt.campaigns SET created_by_player_id = NULL WHERE created_by_player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "DELETE FROM patt.player_availability WHERE player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE patt.raid_attendance SET player_id = NULL WHERE player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE patt.raid_events SET created_by_player_id = NULL WHERE created_by_player_id = $1",
+                    player_id,
+                )
+                await conn.execute(
+                    "UPDATE patt.votes SET player_id = NULL WHERE player_id = $1",
+                    player_id,
+                )
+
+                # Delete the player record (cascades player_characters, aliases, action_log)
+                await conn.execute(
+                    "DELETE FROM guild_identity.players WHERE id = $1",
+                    player_id,
+                )
+
+                # Kick from Discord
+                kicked = False
+                try:
+                    discord_member = guild.get_member(int(discord_id))
+                    if discord_member is None:
+                        discord_member = await guild.fetch_member(int(discord_id))
+                    await discord_member.kick(
+                        reason=f"No guild role for {prune_days}+ days (auto-prune)"
+                    )
+                    kicked = True
+                    logger.info(
+                        "Kicked Discord member %s (player %d was deleted)",
+                        username, player_id,
+                    )
+                except discord.NotFound:
+                    logger.info(
+                        "Discord member %s already gone, player %d deleted",
+                        username, player_id,
+                    )
+                    kicked = True  # Already gone, treat as success
+                except discord.Forbidden:
+                    logger.error(
+                        "Missing Kick Members permission for %s", username
+                    )
+                    stats["errors"] += 1
+
+                if kicked:
+                    stats["pruned"] += 1
+
+            except Exception as exc:
+                logger.error(
+                    "Prune failed for discord_id=%s player_id=%s: %s",
+                    discord_id, player_id, exc,
+                )
+                stats["errors"] += 1
+
+    logger.info(
+        "Roleless prune: %d checked, %d pruned, %d skipped (has chars), %d errors",
+        stats["checked"], stats["pruned"], stats["skipped_has_chars"], stats["errors"],
+    )
+    return stats

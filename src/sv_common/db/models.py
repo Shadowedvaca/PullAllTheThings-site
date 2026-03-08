@@ -571,6 +571,7 @@ class DiscordUser(Base):
     last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     is_present: Mapped[bool] = mapped_column(Boolean, server_default="true")
     removed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    no_guild_role_since: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     first_seen: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

@@ -27,7 +27,7 @@ import discord
 
 from .blizzard_client import BlizzardClient
 from .db_sync import sync_blizzard_roster, sync_addon_data
-from .discord_sync import sync_discord_members, reconcile_player_ranks
+from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members
 from .drift_scanner import run_drift_scan
 from .integrity_checker import run_integrity_check
 from .reporter import send_new_issues_report, send_sync_summary
@@ -95,6 +95,15 @@ class GuildSyncScheduler:
             CronTrigger(hour=3, minute=0),
             id="crafting_sync",
             name="Crafting Professions Sync",
+            misfire_grace_time=3600,
+        )
+
+        # Roleless member prune: weekly on Sunday at 4 AM
+        self.scheduler.add_job(
+            self.run_roleless_prune,
+            CronTrigger(day_of_week="sun", hour=4, minute=0),
+            id="roleless_prune",
+            name="Roleless Discord Member Prune",
             misfire_grace_time=3600,
         )
 
@@ -240,6 +249,16 @@ class GuildSyncScheduler:
             logger.info("Crafting sync complete: %s", stats)
         except Exception as exc:
             logger.error("Crafting sync failed: %s", exc, exc_info=True)
+
+    async def run_roleless_prune(self):
+        """Prune Discord members with no guild role for 30+ days and no linked characters."""
+        channel = self._get_audit_channel()
+        guild = channel.guild if channel else None
+        try:
+            stats = await prune_roleless_members(self.db_pool, guild)
+            logger.info("Roleless prune complete: %s", stats)
+        except Exception as exc:
+            logger.error("Roleless prune failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""
