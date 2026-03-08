@@ -4,6 +4,7 @@ Discord server member and role synchronization.
 Writes to guild_identity.discord_users (renamed from discord_members).
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -128,6 +129,192 @@ async def sync_discord_members(
     logger.info(
         "Discord sync: %d found, %d updated, %d new, %d departed",
         stats["found"], stats["updated"], stats["new"], stats["departed"],
+    )
+    return stats
+
+
+async def reconcile_player_ranks(
+    pool: asyncpg.Pool,
+    guild: Optional[discord.Guild],
+) -> dict:
+    """Scan all active players and ensure guild_rank_id reflects the correct rank.
+
+    Priority:
+      1. Highest guild_rank_id across all linked wow_characters (primary source of truth)
+      2. discord_user.highest_guild_role name lookup (fallback — only if no characters)
+
+    If the DB rank is wrong, it is updated and logged to player_action_log.
+    If a Discord user is linked, their Discord roles are also corrected via the bot.
+
+    Players with guild_rank_source = 'admin_override' are never touched.
+    """
+    stats = {"checked": 0, "db_updated": 0, "discord_updated": 0, "skipped": 0, "errors": 0}
+    now = datetime.now(timezone.utc)
+
+    # Build a map of all guild role IDs so we can strip non-guild roles safely
+    all_guild_role_ids: set[str] = set()
+
+    async with pool.acquire() as conn:
+        # Load all guild ranks
+        ranks = await conn.fetch(
+            "SELECT id, name, level, discord_role_id FROM common.guild_ranks ORDER BY level DESC"
+        )
+        rank_by_id: dict[int, dict] = {r["id"]: dict(r) for r in ranks}
+        rank_by_name: dict[str, dict] = {r["name"].lower(): dict(r) for r in ranks}
+        all_guild_role_ids = {r["discord_role_id"] for r in ranks if r["discord_role_id"]}
+
+        # Load all active players with their best character rank and discord info in one query
+        players = await conn.fetch(
+            """
+            SELECT
+                p.id,
+                p.display_name,
+                p.guild_rank_id,
+                p.guild_rank_source,
+                du.discord_id,
+                du.highest_guild_role,
+                (
+                    SELECT gr.id
+                    FROM guild_identity.player_characters pc
+                    JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
+                    JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
+                    WHERE pc.player_id = p.id
+                    ORDER BY gr.level DESC
+                    LIMIT 1
+                ) AS best_char_rank_id
+            FROM guild_identity.players p
+            LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+            WHERE p.is_active = TRUE
+            """
+        )
+
+        for row in players:
+            stats["checked"] += 1
+            player_id = row["id"]
+            current_rank_id = row["guild_rank_id"]
+            current_source = row["guild_rank_source"]
+
+            # Never touch admin overrides
+            if current_source == "admin_override":
+                stats["skipped"] += 1
+                continue
+
+            # Determine correct rank using priority rules
+            correct_rank: Optional[dict] = None
+            correct_source: Optional[str] = None
+
+            if row["best_char_rank_id"]:
+                correct_rank = rank_by_id.get(row["best_char_rank_id"])
+                correct_source = "wow_character"
+            elif row["highest_guild_role"]:
+                correct_rank = rank_by_name.get(row["highest_guild_role"].lower())
+                correct_source = "discord_sync"
+
+            if correct_rank is None:
+                stats["skipped"] += 1
+                continue
+
+            correct_rank_id = correct_rank["id"]
+
+            # --- Fix DB rank if wrong ---
+            if current_rank_id != correct_rank_id:
+                old_rank = rank_by_id.get(current_rank_id, {})
+
+                await conn.execute(
+                    """
+                    UPDATE guild_identity.players
+                    SET guild_rank_id = $2, guild_rank_source = $3, updated_at = $4
+                    WHERE id = $1
+                    """,
+                    player_id, correct_rank_id, correct_source, now,
+                )
+
+                await conn.execute(
+                    """
+                    INSERT INTO guild_identity.player_action_log
+                        (player_id, action, details, created_at)
+                    VALUES ($1, 'rank_auto_corrected', $2::json, $3)
+                    """,
+                    player_id,
+                    json.dumps({
+                        "old_rank_id": current_rank_id,
+                        "old_rank_name": old_rank.get("name"),
+                        "new_rank_id": correct_rank_id,
+                        "new_rank_name": correct_rank["name"],
+                        "source": correct_source,
+                    }),
+                    now,
+                )
+
+                stats["db_updated"] += 1
+                logger.info(
+                    "Rank auto-corrected for player %d (%s): %s → %s (source: %s)",
+                    player_id, row["display_name"],
+                    old_rank.get("name"), correct_rank["name"], correct_source,
+                )
+
+            # --- Fix Discord role if wrong ---
+            if not row["discord_id"] or not guild:
+                continue
+
+            target_discord_role_id = correct_rank.get("discord_role_id")
+            if not target_discord_role_id:
+                continue
+
+            try:
+                discord_member = guild.get_member(int(row["discord_id"]))
+                if discord_member is None:
+                    try:
+                        discord_member = await guild.fetch_member(int(row["discord_id"]))
+                    except discord.NotFound:
+                        logger.warning(
+                            "Discord member not found for player %d (%s)",
+                            player_id, row["display_name"],
+                        )
+                        continue
+
+                # Find which guild roles the member currently has
+                member_guild_roles = [
+                    r for r in discord_member.roles
+                    if str(r.id) in all_guild_role_ids
+                ]
+                member_guild_role_ids = {str(r.id) for r in member_guild_roles}
+
+                if member_guild_role_ids == {target_discord_role_id}:
+                    continue  # Already correct
+
+                # Remove wrong guild roles
+                roles_to_remove = [r for r in member_guild_roles if str(r.id) != target_discord_role_id]
+                if roles_to_remove:
+                    await discord_member.remove_roles(*roles_to_remove, reason="Rank auto-correction")
+
+                # Add correct guild role if missing
+                if target_discord_role_id not in member_guild_role_ids:
+                    target_role = guild.get_role(int(target_discord_role_id))
+                    if target_role:
+                        await discord_member.add_roles(target_role, reason="Rank auto-correction")
+
+                stats["discord_updated"] += 1
+                logger.info(
+                    "Discord role corrected for player %d (%s): set to %s",
+                    player_id, row["display_name"], correct_rank["name"],
+                )
+
+            except discord.Forbidden:
+                logger.error(
+                    "Missing permissions to update Discord roles for player %d", player_id
+                )
+                stats["errors"] += 1
+            except Exception as exc:
+                logger.error(
+                    "Discord role update failed for player %d: %s", player_id, exc
+                )
+                stats["errors"] += 1
+
+    logger.info(
+        "Rank reconciliation: %d checked, %d DB updated, %d Discord updated, %d skipped, %d errors",
+        stats["checked"], stats["db_updated"], stats["discord_updated"],
+        stats["skipped"], stats["errors"],
     )
     return stats
 

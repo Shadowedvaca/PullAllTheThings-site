@@ -87,9 +87,12 @@ async def _base_ctx(request: Request, player: Player, db: AsyncSession) -> dict:
 
 
 async def _compute_best_rank(db: AsyncSession, player_id: int) -> "tuple[GuildRank, str] | tuple[None, None]":
-    """Return the highest GuildRank the player qualifies for.
+    """Return the GuildRank the player qualifies for.
 
-    Considers: Discord user's highest_guild_role, and all linked WoW character ranks.
+    Priority:
+      1. Highest rank across all linked WoW characters (primary source of truth)
+      2. Discord user's highest_guild_role (fallback — only if no characters have ranks)
+
     Does NOT override admin_override source — callers must check.
     """
     p_result = await db.execute(
@@ -99,23 +102,9 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "tuple[GuildRa
     )
     p = p_result.scalar_one_or_none()
     if not p:
-        return None
+        return None, None
 
-    # (rank, source_label) pairs
-    candidates: list[tuple[GuildRank, str]] = []
-
-    # Discord rank
-    if p.discord_user and p.discord_user.highest_guild_role:
-        dr_result = await db.execute(
-            select(GuildRank).where(
-                sa_func.lower(GuildRank.name) == p.discord_user.highest_guild_role.lower()
-            )
-        )
-        dr = dr_result.scalar_one_or_none()
-        if dr:
-            candidates.append((dr, "discord_sync"))
-
-    # WoW character ranks via player_characters bridge
+    # WoW character ranks are primary source of truth
     if p.characters:
         char_ids = [pc.character_id for pc in p.characters]
         chars_result = await db.execute(
@@ -127,12 +116,22 @@ async def _compute_best_rank(db: AsyncSession, player_id: int) -> "tuple[GuildRa
             ranks_result = await db.execute(
                 select(GuildRank).where(GuildRank.id.in_(rank_ids))
             )
-            candidates.extend((r, "wow_character") for r in ranks_result.scalars().all())
+            char_ranks = list(ranks_result.scalars().all())
+            if char_ranks:
+                return max(char_ranks, key=lambda r: r.level), "wow_character"
 
-    if not candidates:
-        return None, None
-    best_rank, best_source = max(candidates, key=lambda pair: pair[0].level)
-    return best_rank, best_source
+    # Discord is fallback only (no linked characters with a known rank)
+    if p.discord_user and p.discord_user.highest_guild_role:
+        dr_result = await db.execute(
+            select(GuildRank).where(
+                sa_func.lower(GuildRank.name) == p.discord_user.highest_guild_role.lower()
+            )
+        )
+        dr = dr_result.scalar_one_or_none()
+        if dr:
+            return dr, "discord_sync"
+
+    return None, None
 
 
 def _player_tz_from_name(tz_name: str) -> ZoneInfo:
