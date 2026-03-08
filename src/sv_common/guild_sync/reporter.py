@@ -134,9 +134,21 @@ async def send_new_issues_report(
             )
             embeds.append(embed)
 
-        # Send in batches of 10 embeds (Discord limit)
-        for i in range(0, len(embeds), 10):
-            batch = embeds[i:i + 10]
+        # Send in batches: max 10 embeds per message, max 6000 total chars per message
+        def embed_char_count(e: discord.Embed) -> int:
+            return len(e.title or "") + len(e.description or "")
+
+        batch: list[discord.Embed] = []
+        batch_chars = 0
+        for embed in embeds:
+            ec = embed_char_count(embed)
+            if batch and (len(batch) >= 10 or batch_chars + ec > 5900):
+                await channel.send(embeds=batch)
+                batch = []
+                batch_chars = 0
+            batch.append(embed)
+            batch_chars += ec
+        if batch:
             await channel.send(embeds=batch)
 
         # Mark all reported issues as notified
