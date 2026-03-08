@@ -30,7 +30,7 @@ from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members
 from .drift_scanner import run_drift_scan
 from .integrity_checker import run_integrity_check
-from .reporter import send_new_issues_report, send_sync_summary
+from .reporter import send_new_issues_report, send_sync_summary, send_error
 from .sync_logger import SyncLogEntry
 
 logger = logging.getLogger(__name__)
@@ -132,40 +132,58 @@ class GuildSyncScheduler:
         channel = self._get_audit_channel()
         guild = channel.guild if channel else None
 
-        async with SyncLogEntry(self.db_pool, "blizzard_api") as log:
-            start = time.time()
+        try:
+            async with SyncLogEntry(self.db_pool, "blizzard_api") as log:
+                start = time.time()
 
-            # Step 1: Fetch and store roster
-            characters = await self.blizzard_client.sync_full_roster()
-            sync_stats = await sync_blizzard_roster(self.db_pool, characters)
-            log.stats = sync_stats
+                # Step 1: Fetch and store roster
+                characters = await self.blizzard_client.sync_full_roster()
+                sync_stats = await sync_blizzard_roster(self.db_pool, characters)
+                log.stats = sync_stats
 
-            # Step 2: Run integrity check (orphans, role mismatches, stale chars)
-            integrity_stats = await run_integrity_check(self.db_pool)
+                # Step 2: Run integrity check (orphans, role mismatches, stale chars)
+                integrity_stats = await run_integrity_check(self.db_pool)
 
-            # Step 3: Drift scan + auto-mitigations
-            drift_stats = await run_drift_scan(self.db_pool)
+                # Step 3: Drift scan + auto-mitigations
+                drift_stats = await run_drift_scan(self.db_pool)
 
-            # Step 4: Reconcile player ranks (character ranks may have changed)
-            reconcile_stats = await reconcile_player_ranks(self.db_pool, guild)
+                # Step 4: Reconcile player ranks (character ranks may have changed)
+                reconcile_stats = await reconcile_player_ranks(self.db_pool, guild)
+                if channel and reconcile_stats.get("errors", 0) > 0:
+                    await send_error(
+                        channel,
+                        "Rank Reconciliation Errors (Blizzard Sync)",
+                        f"{reconcile_stats['errors']} Discord role update(s) failed.\n"
+                        "Check that the bot has **Manage Roles** permission and its role "
+                        "is above all guild rank roles in the server role list.",
+                    )
 
-            # Step 5: Report new issues
-            total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
-            if channel and total_new > 0:
-                await send_new_issues_report(self.db_pool, channel)
+                # Step 5: Report new issues
+                total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
+                if channel and total_new > 0:
+                    await send_new_issues_report(self.db_pool, channel)
 
-            # Step 6: Retry onboarding verifications (new roster data may unlock matches)
-            await self.run_onboarding_check()
+                # Step 6: Retry onboarding verifications (new roster data may unlock matches)
+                await self.run_onboarding_check()
 
-            duration = time.time() - start
+                duration = time.time() - start
 
-            # Send sync summary if notable
+                # Send sync summary if notable
+                if channel:
+                    combined_stats = {
+                        **sync_stats, **integrity_stats,
+                        "drift": drift_stats, "rank_reconcile": reconcile_stats,
+                    }
+                    await send_sync_summary(channel, "Blizzard API", combined_stats, duration)
+
+        except Exception as exc:
+            logger.error("Blizzard sync pipeline failed: %s", exc, exc_info=True)
             if channel:
-                combined_stats = {
-                    **sync_stats, **integrity_stats,
-                    "drift": drift_stats, "rank_reconcile": reconcile_stats,
-                }
-                await send_sync_summary(channel, "Blizzard API", combined_stats, duration)
+                await send_error(
+                    channel,
+                    "Blizzard Sync Failed",
+                    f"The Blizzard API sync pipeline encountered an unexpected error:\n```{exc}```",
+                )
 
     async def run_discord_sync(self):
         """Discord member sync pipeline.
@@ -176,23 +194,39 @@ class GuildSyncScheduler:
           3. run_drift_scan()           — detect note mismatches + stale links + auto-fix
           4. reconcile_player_ranks()   — fix DB ranks + Discord roles (chars-first, discord fallback)
         """
-        async with SyncLogEntry(self.db_pool, "discord_bot") as log:
-            # Find the guild that contains our audit channel
-            guild = None
-            audit_channel = self.discord_bot.get_channel(self.audit_channel_id)
+        audit_channel = self.discord_bot.get_channel(self.audit_channel_id)
+        guild = audit_channel.guild if audit_channel else None
+
+        if not guild:
+            logger.error("Could not find Discord guild with audit channel")
+            return
+
+        try:
+            async with SyncLogEntry(self.db_pool, "discord_bot") as log:
+                sync_stats = await sync_discord_members(self.db_pool, guild)
+                log.stats = sync_stats
+
+                await run_integrity_check(self.db_pool)
+                await run_drift_scan(self.db_pool)
+
+                reconcile_stats = await reconcile_player_ranks(self.db_pool, guild)
+                if audit_channel and reconcile_stats.get("errors", 0) > 0:
+                    await send_error(
+                        audit_channel,
+                        "Rank Reconciliation Errors (Discord Sync)",
+                        f"{reconcile_stats['errors']} Discord role update(s) failed.\n"
+                        "Check that the bot has **Manage Roles** permission and its role "
+                        "is above all guild rank roles in the server role list.",
+                    )
+
+        except Exception as exc:
+            logger.error("Discord sync pipeline failed: %s", exc, exc_info=True)
             if audit_channel:
-                guild = audit_channel.guild
-
-            if not guild:
-                logger.error("Could not find Discord guild with audit channel")
-                return
-
-            sync_stats = await sync_discord_members(self.db_pool, guild)
-            log.stats = sync_stats
-
-            await run_integrity_check(self.db_pool)
-            await run_drift_scan(self.db_pool)
-            await reconcile_player_ranks(self.db_pool, guild)
+                await send_error(
+                    audit_channel,
+                    "Discord Sync Failed",
+                    f"The Discord member sync pipeline encountered an unexpected error:\n```{exc}```",
+                )
 
     async def run_addon_sync(self, addon_data: list[dict]):
         """Process addon upload and run downstream pipeline.
@@ -208,28 +242,38 @@ class GuildSyncScheduler:
         """
         channel = self._get_audit_channel()
 
-        async with SyncLogEntry(self.db_pool, "addon_upload") as log:
-            start = time.time()
+        try:
+            async with SyncLogEntry(self.db_pool, "addon_upload") as log:
+                start = time.time()
 
-            # Step 1: Write notes, log note_mismatch issues for changed notes
-            addon_stats = await sync_addon_data(self.db_pool, addon_data)
-            log.stats = {"found": addon_stats["processed"], "updated": addon_stats["updated"]}
+                # Step 1: Write notes, log note_mismatch issues for changed notes
+                addon_stats = await sync_addon_data(self.db_pool, addon_data)
+                log.stats = {"found": addon_stats["processed"], "updated": addon_stats["updated"]}
 
-            # Step 2: Detect all other issue types
-            integrity_stats = await run_integrity_check(self.db_pool)
+                # Step 2: Detect all other issue types
+                integrity_stats = await run_integrity_check(self.db_pool)
 
-            # Step 3: Drift scan + auto-mitigations
-            drift_stats = await run_drift_scan(self.db_pool)
+                # Step 3: Drift scan + auto-mitigations
+                drift_stats = await run_drift_scan(self.db_pool)
 
-            duration = time.time() - start
+                duration = time.time() - start
 
-            total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
-            if channel and total_new > 0:
-                await send_new_issues_report(self.db_pool, channel)
+                total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
+                if channel and total_new > 0:
+                    await send_new_issues_report(self.db_pool, channel)
 
+                if channel:
+                    combined_stats = {**addon_stats, **integrity_stats, "drift": drift_stats}
+                    await send_sync_summary(channel, "WoW Addon Upload", combined_stats, duration)
+
+        except Exception as exc:
+            logger.error("Addon sync pipeline failed: %s", exc, exc_info=True)
             if channel:
-                combined_stats = {**addon_stats, **integrity_stats, "drift": drift_stats}
-                await send_sync_summary(channel, "WoW Addon Upload", combined_stats, duration)
+                await send_error(
+                    channel,
+                    "Addon Upload Sync Failed",
+                    f"The WoW addon upload pipeline encountered an unexpected error:\n```{exc}```",
+                )
 
     async def run_onboarding_check(self):
         """Run onboarding deadline checks and resume stalled sessions."""
@@ -257,8 +301,31 @@ class GuildSyncScheduler:
         try:
             stats = await prune_roleless_members(self.db_pool, guild)
             logger.info("Roleless prune complete: %s", stats)
+            if channel and stats.get("errors", 0) > 0:
+                await send_error(
+                    channel,
+                    "Roleless Member Prune Errors",
+                    f"{stats['errors']} member(s) could not be kicked.\n"
+                    "Check that the bot has **Kick Members** permission.",
+                )
+            if channel and stats.get("pruned", 0) > 0:
+                embed = discord.Embed(
+                    title="🧹 Roleless Member Prune Complete",
+                    description=(
+                        f"**{stats['pruned']}** member(s) removed after 30+ days without a guild role.\n"
+                        f"**{stats.get('skipped_has_chars', 0)}** skipped (had characters linked)."
+                    ),
+                    color=0xFFA500,
+                )
+                await channel.send(embed=embed)
         except Exception as exc:
             logger.error("Roleless prune failed: %s", exc, exc_info=True)
+            if channel:
+                await send_error(
+                    channel,
+                    "Roleless Member Prune Failed",
+                    f"The roleless member prune encountered an unexpected error:\n```{exc}```",
+                )
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

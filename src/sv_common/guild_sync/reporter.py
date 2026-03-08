@@ -153,6 +153,24 @@ async def send_new_issues_report(
         return len(issues)
 
 
+async def send_error(
+    channel: discord.TextChannel,
+    title: str,
+    detail: str,
+):
+    """Post a red error embed to the audit channel."""
+    embed = discord.Embed(
+        title=f"🚨 {title}",
+        description=detail,
+        color=0xFF0000,
+        timestamp=datetime.now(timezone.utc),
+    )
+    try:
+        await channel.send(embed=embed)
+    except Exception as exc:
+        logger.error("Failed to post error to audit channel: %s", exc)
+
+
 async def send_sync_summary(
     channel: discord.TextChannel,
     source: str,
