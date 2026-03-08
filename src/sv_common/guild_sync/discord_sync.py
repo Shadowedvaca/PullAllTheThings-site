@@ -86,8 +86,8 @@ async def sync_discord_members(
                             is_present = TRUE,
                             removed_at = NULL,
                             no_guild_role_since = CASE
-                                WHEN $4::text IS NOT NULL THEN NULL
-                                WHEN $4::text IS NULL AND highest_guild_role IS NOT NULL THEN $6
+                                WHEN $4::varchar IS NOT NULL THEN NULL
+                                WHEN $4::varchar IS NULL AND highest_guild_role IS NOT NULL THEN $6
                                 ELSE no_guild_role_since
                             END
                            WHERE discord_id = $1""",
@@ -106,7 +106,7 @@ async def sync_discord_members(
                             all_guild_roles, joined_server_at, last_sync, is_present,
                             no_guild_role_since)
                            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE,
-                                   CASE WHEN $4::text IS NULL THEN $7 ELSE NULL END)""",
+                                   CASE WHEN $4::varchar IS NULL THEN $7 ELSE NULL END)""",
                         discord_id,
                         member.name,
                         display,
