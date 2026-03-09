@@ -179,6 +179,7 @@ async def reconcile_player_ranks(
                 p.guild_rank_id,
                 p.guild_rank_source,
                 du.discord_id,
+                du.is_present,
                 du.highest_guild_role,
                 (
                     SELECT gr.id
@@ -261,7 +262,8 @@ async def reconcile_player_ranks(
                 )
 
             # --- Fix Discord role if wrong ---
-            if not row["discord_id"] or not guild:
+            # Skip departed members — they're no longer in the server
+            if not row["discord_id"] or not guild or not row.get("is_present", True):
                 continue
 
             target_discord_role_id = correct_rank.get("discord_role_id")
@@ -386,6 +388,102 @@ async def on_member_update(pool: asyncpg.Pool, before: discord.Member, after: di
                 "Discord role change for %s: %s → %s",
                 after.name, old_roles, new_roles,
             )
+
+
+# ---------------------------------------------------------------------------
+# Fully-departed player purge
+# ---------------------------------------------------------------------------
+
+
+async def purge_fully_departed_players(pool: asyncpg.Pool) -> dict:
+    """Delete player records that have no Discord presence AND no characters.
+
+    When someone leaves both Discord and the WoW guild roster their player
+    record is dead weight — no rank, no chars, no Discord link.  This purge
+    removes them immediately (no waiting period).
+
+    Cascade order:
+      1. Null out NO-ACTION FK references in patt.* and common.* tables
+      2. Delete the player row (cascades player_characters, aliases, action_log)
+      3. Delete the linked discord_users row (if present)
+      4. Delete the linked common.users row (website account) (if present)
+
+    Players with guild_rank_source = 'admin_override' are NOT protected —
+    if they have no chars and no Discord, they're gone.
+    """
+    stats = {"purged": 0, "errors": 0, "names": []}
+
+    async with pool.acquire() as conn:
+        candidates = await conn.fetch(
+            """
+            SELECT
+                p.id           AS player_id,
+                p.display_name,
+                p.website_user_id,
+                du.id          AS discord_user_id,
+                du.username    AS discord_username
+            FROM guild_identity.players p
+            LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+            WHERE p.is_active = TRUE
+              AND (du.id IS NULL OR du.is_present = FALSE)
+              AND NOT EXISTS (
+                  SELECT 1 FROM guild_identity.player_characters pc
+                  WHERE pc.player_id = p.id
+              )
+            """
+        )
+
+        for row in candidates:
+            player_id = row["player_id"]
+            name = row["display_name"] or row["discord_username"] or str(player_id)
+
+            try:
+                # Null out NO ACTION FK refs before deleting player
+                for stmt, param in [
+                    ("UPDATE common.invite_codes SET player_id = NULL WHERE player_id = $1", player_id),
+                    ("UPDATE common.invite_codes SET created_by_player_id = NULL WHERE created_by_player_id = $1", player_id),
+                    ("UPDATE guild_identity.onboarding_sessions SET verified_player_id = NULL WHERE verified_player_id = $1", player_id),
+                    ("UPDATE patt.campaign_entries SET player_id = NULL WHERE player_id = $1", player_id),
+                    ("UPDATE patt.campaigns SET created_by_player_id = NULL WHERE created_by_player_id = $1", player_id),
+                    ("DELETE FROM patt.player_availability WHERE player_id = $1", player_id),
+                    ("UPDATE patt.raid_attendance SET player_id = NULL WHERE player_id = $1", player_id),
+                    ("UPDATE patt.raid_events SET created_by_player_id = NULL WHERE created_by_player_id = $1", player_id),
+                    ("UPDATE patt.votes SET player_id = NULL WHERE player_id = $1", player_id),
+                ]:
+                    await conn.execute(stmt, param)
+
+                await conn.execute(
+                    "DELETE FROM guild_identity.players WHERE id = $1", player_id
+                )
+
+                if row["discord_user_id"]:
+                    await conn.execute(
+                        "DELETE FROM guild_identity.discord_users WHERE id = $1",
+                        row["discord_user_id"],
+                    )
+
+                if row["website_user_id"]:
+                    await conn.execute(
+                        "DELETE FROM common.users WHERE id = $1",
+                        row["website_user_id"],
+                    )
+
+                stats["purged"] += 1
+                stats["names"].append(name)
+                logger.info("Purged fully-departed player %d (%s)", player_id, name)
+
+            except Exception as exc:
+                logger.error(
+                    "Purge failed for player %d (%s): %s", player_id, name, exc
+                )
+                stats["errors"] += 1
+
+    if stats["purged"]:
+        logger.info(
+            "Departed player purge: %d removed, %d errors — %s",
+            stats["purged"], stats["errors"], ", ".join(stats["names"]),
+        )
+    return stats
 
 
 # ---------------------------------------------------------------------------

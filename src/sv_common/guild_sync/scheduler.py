@@ -27,7 +27,7 @@ import discord
 
 from .blizzard_client import BlizzardClient
 from .db_sync import sync_blizzard_roster, sync_addon_data
-from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members
+from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
 from .drift_scanner import run_drift_scan
 from .integrity_checker import run_integrity_check
 from .reporter import send_new_issues_report, send_sync_summary, send_error
@@ -158,12 +158,25 @@ class GuildSyncScheduler:
                         "is above all guild rank roles in the server role list.",
                     )
 
-                # Step 5: Report new issues
+                # Step 5: Purge fully-departed players (no chars + no Discord presence)
+                purge_stats = await purge_fully_departed_players(self.db_pool)
+                if channel and purge_stats.get("purged", 0) > 0:
+                    names = ", ".join(purge_stats["names"])
+                    await channel.send(embed=discord.Embed(
+                        title="🗑️ Departed Players Removed",
+                        description=(
+                            f"**{purge_stats['purged']}** player record(s) purged "
+                            f"(no characters, no Discord):\n{names}"
+                        ),
+                        color=0x888888,
+                    ))
+
+                # Step 6: Report new issues
                 total_new = integrity_stats.get("total_new", 0) + drift_stats.get("total_new", 0)
                 if channel and total_new > 0:
                     await send_new_issues_report(self.db_pool, channel)
 
-                # Step 6: Retry onboarding verifications (new roster data may unlock matches)
+                # Step 8: Retry onboarding verifications (new roster data may unlock matches)
                 await self.run_onboarding_check()
 
                 duration = time.time() - start
@@ -218,6 +231,18 @@ class GuildSyncScheduler:
                         "Check that the bot has **Manage Roles** permission and its role "
                         "is above all guild rank roles in the server role list.",
                     )
+
+                purge_stats = await purge_fully_departed_players(self.db_pool)
+                if audit_channel and purge_stats.get("purged", 0) > 0:
+                    names = ", ".join(purge_stats["names"])
+                    await audit_channel.send(embed=discord.Embed(
+                        title="🗑️ Departed Players Removed",
+                        description=(
+                            f"**{purge_stats['purged']}** player record(s) purged "
+                            f"(no characters, no Discord):\n{names}"
+                        ),
+                        color=0x888888,
+                    ))
 
         except Exception as exc:
             logger.error("Discord sync pipeline failed: %s", exc, exc_info=True)
