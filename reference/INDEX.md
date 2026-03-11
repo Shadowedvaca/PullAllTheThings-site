@@ -39,6 +39,18 @@ This means Claude Code never needs conversation history. It reads the repo.
 | `CLAUDE.md` | Master project context — read this first, always |
 | `TESTING.md` | Testing strategy, conventions, framework setup |
 
+### Phase 4: Guild Portal — Multi-Guild Release (Active)
+| File | Purpose |
+|------|---------|
+| `reference/PHASE_4_OVERVIEW.md` | Master plan — timeline, dependencies, architecture changes |
+| `reference/PHASE_4_0_CONFIG_EXTRACTION.md` | Extract hardcoded values, genericize features |
+| `reference/PHASE_4_1_SETUP_WIZARD.md` | First-run web-based setup wizard |
+| `reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md` | Docker packaging, Caddy, dev/test/prod |
+| `reference/PHASE_4_3_BLIZZARD_EXPANSION.md` | Last-login optimization, raids, M+, achievements |
+| `reference/PHASE_4_4_RAIDERIO_INTEGRATION.md` | Raider.IO M+ and raid progression |
+| `reference/PHASE_4_5_WARCRAFT_LOGS.md` | Warcraft Logs parses, reports, attendance |
+| `reference/PHASE_4_6_AH_PRICING.md` | Blizzard Auction House price tracking |
+
 ### Reference Documents (useful context)
 | File | Purpose |
 |------|---------|
@@ -81,6 +93,13 @@ This means Claude Code never needs conversation history. It reads the repo.
 | 3.4 | ✅ Complete | Admin Raid Tools — Raid-Helper integration, event builder |
 | 3.5 | ✅ Complete | Auto-Booking Scheduler — background loop, auto-creates weekly raid |
 | 3.6 | ✅ Complete | Roster Initiate Filtering + Raid Hiatus — on_raid_hiatus flag, New Members box, Show Initiates checkbox |
+| 4.0 | 📋 Planned | Config Extraction & Genericization |
+| 4.1 | 📋 Planned | First-Run Setup Wizard |
+| 4.2 | 📋 Planned | Docker Packaging & Environments |
+| 4.3 | 📋 Planned | Blizzard API Expansion & Last-Login Optimization |
+| 4.4 | 📋 Planned | Raider.IO Integration |
+| 4.5 | 📋 Planned | Warcraft Logs Integration |
+| 4.6 | 📋 Planned | Auction House Pricing |
 
 ---
 
