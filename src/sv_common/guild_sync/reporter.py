@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 import asyncpg
 import discord
 
+from sv_common.config_cache import get_accent_color_int
+
 logger = logging.getLogger(__name__)
 
 # Colors for embed severity
@@ -97,7 +99,7 @@ async def send_new_issues_report(
                 f"**{len(issues)} {'total' if force_full else 'new'} issue(s) detected**\n"
                 f"Run at: <t:{int(datetime.now(timezone.utc).timestamp())}:F>"
             ),
-            color=0xD4A84B,  # PATT gold
+            color=get_accent_color_int(),
         )
         embeds.append(header)
 

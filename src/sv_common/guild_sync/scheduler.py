@@ -25,7 +25,8 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncpg
 import discord
 
-from .blizzard_client import BlizzardClient
+from sv_common.config_cache import get_site_config
+from .blizzard_client import BlizzardClient, get_rank_name_map
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
 from .drift_scanner import run_drift_scan
@@ -49,11 +50,20 @@ class GuildSyncScheduler:
         self.discord_bot = discord_bot
         self.audit_channel_id = audit_channel_id
 
+        _cfg = get_site_config()
+        realm_slug = (
+            _cfg.get("home_realm_slug")
+            or os.environ.get("GUILD_REALM_SLUG", "senjin")
+        )
+        guild_slug = (
+            _cfg.get("guild_name_slug")
+            or os.environ.get("GUILD_NAME_SLUG", "pull-all-the-things")
+        )
         self.blizzard_client = BlizzardClient(
             client_id=os.environ["BLIZZARD_CLIENT_ID"],
             client_secret=os.environ["BLIZZARD_CLIENT_SECRET"],
-            realm_slug=os.environ.get("PATT_GUILD_REALM_SLUG", "senjin"),
-            guild_slug=os.environ.get("PATT_GUILD_NAME_SLUG", "pull-all-the-things"),
+            realm_slug=realm_slug,
+            guild_slug=guild_slug,
         )
 
         self.scheduler = AsyncIOScheduler()
@@ -137,7 +147,8 @@ class GuildSyncScheduler:
                 start = time.time()
 
                 # Step 1: Fetch and store roster
-                characters = await self.blizzard_client.sync_full_roster()
+                rank_map = await get_rank_name_map(self.db_pool)
+                characters = await self.blizzard_client.sync_full_roster(rank_map=rank_map)
                 sync_stats = await sync_blizzard_roster(self.db_pool, characters)
                 log.stats = sync_stats
 

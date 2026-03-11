@@ -17,11 +17,10 @@ from typing import Optional
 import asyncpg
 import discord
 
+from sv_common.config_cache import get_accent_color_int
 from .provisioner import AutoProvisioner
 
 logger = logging.getLogger(__name__)
-
-PATT_GOLD = 0xD4A84B
 
 
 class OnboardingDeadlineChecker:

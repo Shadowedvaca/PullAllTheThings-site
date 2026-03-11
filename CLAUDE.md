@@ -183,7 +183,7 @@ PullAllTheThings-site/          (repo root)
 │   │           ├── deadline_checker.py
 │   │           └── commands.py
 │   │
-│   └── patt/                          ← PATT application package
+│   └── guild_portal/                  ← Guild platform application package
 │       ├── __init__.py
 │       ├── app.py
 │       ├── config.py
@@ -271,7 +271,7 @@ PullAllTheThings-site/          (repo root)
 ### Legacy Files
 
 Root-level HTML files (index.html, roster.html, etc.) are legacy GitHub Pages files.
-They are served by FastAPI from `src/patt/static/legacy/` at their original URLs.
+They are served by FastAPI from `src/guild_portal/static/legacy/` at their original URLs.
 
 ### Google Drive Images
 
@@ -326,13 +326,13 @@ PATT_API_KEY=generate-a-strong-random-key
 
 > Full DDL for all tables lives in **`reference/SCHEMA.md`**. Summary below.
 
-Three PostgreSQL schemas, current through **migration 0030**:
+Three PostgreSQL schemas, current through **migration 0032**:
 
 | Schema | Key tables |
 |--------|-----------|
-| `common` | `guild_ranks`, `users`, `discord_config`, `invite_codes`, `screen_permissions` |
+| `common` | `guild_ranks`, `users`, `discord_config`, `invite_codes`, `screen_permissions`, `site_config`, `rank_wow_mapping` |
 | `guild_identity` | `players` (central entity), `wow_characters`, `discord_users`, `player_characters` (bridge), `player_note_aliases`, `player_action_log`, `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels` |
-| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `mito_quotes`, `mito_titles`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
+| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes`, `guild_quote_titles`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
 
 **Key design notes:**
 - `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`
@@ -341,12 +341,14 @@ Three PostgreSQL schemas, current through **migration 0030**:
 - `common.guild_members` and `common.characters` are legacy tables — still in DB but removed from all ORM/code
 - All Discord channel IDs stored in `common.discord_config`, configured via Admin UI (no hardcoded IDs)
 - `crafting_sync_config` is a single-row table; display name built in code as `"{expansion_name} Season {season_number}"`
+- `site_config` is a single-row table loaded at startup into `sv_common.config_cache`; all modules read guild name/color/flags from cache
+- `rank_wow_mapping` maps WoW guild rank indices (0–9) to platform rank IDs; replaces hardcoded `RANK_NAME_MAP` in blizzard_client.py
 
 ---
 
 ## Operations & Deployment
 
-- **Tests:** 409 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test); regression suite at `tests/regression/` requires live DB
+- **Tests:** 418 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test); regression suite at `tests/regression/` requires live DB
 - **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
   - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
@@ -422,6 +424,7 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - Phase 3.4: Admin Raid Tools — Raid-Helper API integration, event builder with roster preview, `GET /admin/raid-tools`
 - Phase 3.5: Auto-Booking Scheduler — background loop creates next week's Raid-Helper event 10–20 min after raid starts, posts Discord announcement
 - Roster Initiate Filtering + Raid Hiatus (migration 0030) — `on_raid_hiatus` flag on players; initiates filtered from comp tab; New Members box; Show Initiates checkbox on roster
+- Phase 4.0: Config Extraction & Genericization (migration 0032) — `common.site_config` single-row table, `sv_common.config_cache` in-process cache, `common.rank_wow_mapping`, mito tables renamed to guild_quotes/guild_quote_titles, `/quote` bot command, `/admin/site-config` GL-only page, all hardcoded guild name/color/realm refs removed from code
 
 ### Current Phase
 - **Platform is feature-complete.** No active phase. Next work should start a new phase in `reference/`.
@@ -455,16 +458,17 @@ If you reload the site in Chrome during or immediately after a deployment and ge
   - `/admin/bot-settings` — DM feature toggles
   - `/admin/reference-tables` — view roles, classes, specializations
   - `/admin/audit-log` — sync log viewer
+  - `/admin/site-config` — guild identity, branding, and feature flags (Guild Leader only)
 - Auto-booking: `raid_booking_service.py` — background loop, books next week's raid 10–20 min after current raid starts
 - Settings pages (rank-gated via screen_permissions): Availability, Character Claims, Guide
 - Auth API: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- Cookie-based auth: `get_page_player()`, `require_page_rank(level)` in `src/patt/deps.py`
+- Cookie-based auth: `get_page_player()`, `require_page_rank(level)` in `src/guild_portal/deps.py`
 - Admin API: `/api/v1/admin/*` — all routes protected (Officer+ rank required)
 - Public API: `/api/v1/guild/ranks`, `/api/v1/guild/roster`
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
 - Contest agent: Discord milestone posts, auto-activate/close campaigns
 - Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — needs activation)
-- PATTSync WoW addon + companion app (functional, syncing guild notes)
+- GuildSync WoW addon + companion app (functional, syncing guild notes)
 - Screen permissions: DB-driven Settings nav — all screens configurable by rank level via `common.screen_permissions`
 
 ### Known Gaps / Dormant Features

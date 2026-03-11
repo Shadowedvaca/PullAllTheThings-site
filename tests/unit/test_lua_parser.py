@@ -11,7 +11,7 @@ import tempfile
 
 import pytest
 
-from companion_app.patt_sync_watcher import LuaParser
+from companion_app.guild_sync_watcher import LuaParser
 
 
 class TestParseSimpleTable:
@@ -121,7 +121,7 @@ class TestBracketKeySyntax:
 
 class TestParseFile:
     def test_realistic_saved_variables(self):
-        lua_content = '''PATTSyncDB = {
+        lua_content = '''GuildSyncDB = {
             lastExportTime = 1740153600,
             totalExports = 3,
             lastExport = {
@@ -196,7 +196,7 @@ class TestParseFile:
             tmppath = f.name
 
         try:
-            with pytest.raises(ValueError, match="PATTSyncDB"):
+            with pytest.raises(ValueError, match="GuildSyncDB"):
                 LuaParser.parse_file(tmppath)
         finally:
             os.unlink(tmppath)
@@ -206,7 +206,7 @@ class TestParseFile:
             LuaParser.parse_file("/nonexistent/path/file.lua")
 
     def test_lua_line_comments_ignored(self):
-        lua_content = '''PATTSyncDB = {
+        lua_content = '''GuildSyncDB = {
             -- This is a comment
             count = 5, -- inline comment
         }'''

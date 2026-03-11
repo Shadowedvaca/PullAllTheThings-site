@@ -123,7 +123,7 @@ raid channel. No action needed from you — just ensure Raid-Helper config is se
 ## Checking on Things
 
 ### Is the bot online?
-- Look for PATT-Bot in your Discord server member list — it should appear online
+- Look for Guild Bot in your Discord server member list — it should appear online
 - If offline: `sudo systemctl restart patt`
 
 ### Is the platform healthy?
@@ -185,7 +185,7 @@ See `docs/BACKUPS.md` for full backup and restore procedures.
 
 ## What the Contest Agent Does
 
-When a campaign has **Agent Enabled** checked, PATT-Bot automatically posts
+When a campaign has **Agent Enabled** checked, Guild Bot automatically posts
 updates to the campaign's Discord channel as milestones are reached:
 
 | Chattiness | What it posts |
@@ -200,7 +200,7 @@ The agent checks every 5 minutes. It never posts the same event twice.
 
 ## Common Issues
 
-### "PATT-Bot is offline"
+### "Guild Bot is offline"
 ```bash
 sudo systemctl restart patt
 ```
@@ -237,9 +237,9 @@ DISCORD_BOT_TOKEN=your-bot-token
 DISCORD_GUILD_ID=your-server-id
 BLIZZARD_CLIENT_ID=your-blizzard-client-id
 BLIZZARD_CLIENT_SECRET=your-blizzard-client-secret
-PATT_GUILD_REALM_SLUG=senjin
-PATT_GUILD_NAME_SLUG=pull-all-the-things
-PATT_API_KEY=your-companion-app-api-key
+GUILD_REALM_SLUG=senjin
+GUILD_NAME_SLUG=pull-all-the-things
+GUILD_SYNC_API_KEY=your-companion-app-api-key
 APP_ENV=production
 APP_PORT=8100
 ```

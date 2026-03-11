@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}{{ site().guild_name }} — WoW Guild{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/landing.css">
+{% endblock %}
+
+{% block content %}
+
+{# ── Hero ── #}
+<section class="lp-hero">
+    <h1 class="lp-hero__title">{{ site().guild_name }}</h1>
+    <p class="lp-hero__tagline">{{ site().guild_tagline or "A WoW Guild" }}</p>
+    <div class="lp-faction-badges">
+        <span class="lp-badge lp-badge--horde">🔥 Horde</span>
+        <span class="lp-badge">⚔️ Alliance</span>
+        <span class="lp-badge lp-badge--gold">🏰 Est. BC</span>
+    </div>
+    {% if site().realm_display_name %}
+    <p class="lp-realm-info">Based on {{ site().realm_display_name }} &bull; Cross-Realm Welcome</p>
+    {% endif %}
+    {% if site().discord_invite_url %}
+    <a href="{{ site().discord_invite_url }}" target="_blank" rel="noopener" class="btn btn-discord btn-lg">
+        💬 Join our Discord
+    </a>
+    {% endif %}
+</section>
+
+<div class="lp-container">
+
+{# ── Active Campaigns ── #}
+{% if live_campaigns %}
+<section class="lp-campaigns-section">
+    <h2 class="lp-section-title">🗳 Active Votes</h2>
+    <div class="campaign-cards">
+        {% for c in live_campaigns %}
+        <div class="campaign-card">
+            <div class="campaign-card__title">{{ c.title }}</div>
+            {% if c.description %}
+                <div class="campaign-card__meta">{{ c.description[:100] }}{% if c.description|length > 100 %}…{% endif %}</div>
+            {% endif %}
+            <div class="campaign-card__meta">
+                {% if c.entries %}{{ c.entries|length }} entries{% endif %}
+                &bull; Ends in
+                <span class="countdown" data-end-ts="{{ (c.start_at.timestamp() + c.duration_hours * 3600)|int }}">…</span>
+            </div>
+            <div class="campaign-card__actions">
+                {% if current_member %}
+                    <a href="/vote/{{ c.id }}" class="btn btn-primary btn-sm">Vote Now</a>
+                {% else %}
+                    <a href="/login?next=/vote/{{ c.id }}" class="btn btn-secondary btn-sm">Login to Vote</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if live_campaigns %}
+<hr class="lp-divider">
+{% endif %}
+
+{# ── Who We Are ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Who We Are</h2>
+    <div class="lp-about">
+        <p>
+            <span class="lp-highlight">Tired of pug chaos?</span> Want a guild that values progression
+            <em>and</em> your IRL commitments? Come pull all the things with us.
+        </p>
+        <p>
+            Pull All The Things is a tight-knit guild run by adult gamers who log in to make progress
+            and most importantly enjoy downtime. We raid Heroic content weekly, push Mythic+ keys,
+            go on mount runs, knock out achievements, and chill in Discord with all of the memes.
+        </p>
+        <p>
+            But honestly? <span class="lp-highlight">We care more about people who mesh with our group than class/spec.</span>
+        </p>
+        <div class="lp-values">
+            <div class="lp-value"><span class="lp-value__icon">🏠</span><span><strong>Real-Life First</strong> — Life happens, we get it</span></div>
+            <div class="lp-value"><span class="lp-value__icon">🤝</span><span><strong>Inclusive</strong> — Any role, any skill level</span></div>
+            <div class="lp-value"><span class="lp-value__icon">💚</span><span><strong>Community</strong> — M+, crafting, achievements</span></div>
+            <div class="lp-value"><span class="lp-value__icon">✨</span><span><strong>Zero Toxicity</strong> — Good vibes only</span></div>
+        </div>
+    </div>
+</section>
+
+{# ── Currently Recruiting ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Currently Recruiting</h2>
+    {% if recruiting_needs %}
+    <div class="lp-needs">
+        <div class="lp-needs-grid">
+            {% for role, needed in recruiting_needs.items() %}
+            <div class="lp-need-item high-need">
+                <div class="lp-need-role role-{{ role | lower | replace(' ', '-') }}">{{ role_emojis[role] }} {{ role }}</div>
+                <div class="lp-need-count">{{ needed }} needed</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <p class="roster-full">✅ Roster Full — not actively recruiting</p>
+    {% endif %}
+</section>
+
+{# ── Weekly Schedule ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Weekly Schedule</h2>
+    {% if event_days %}
+    <div class="lp-schedule">
+        {% for event in event_days %}
+        <div class="lp-sched-item">
+            <div class="lp-sched-day">{{ day_names[event.day_of_week] }}</div>
+            <div class="lp-sched-time">{{ event.default_start_time.strftime('%I:%M %p') }} EST</div>
+            <div class="lp-sched-desc">{{ event.label }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="no-schedule">No events currently scheduled.</p>
+    {% endif %}
+</section>
+
+{# ── Guild Officers ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Guild Officers</h2>
+    {% if officers %}
+    <div class="lp-officers">
+        {% for officer in officers %}
+        <div class="lp-officer-card{% if officer.guild_rank.level == 5 %} lp-gl-card{% endif %}">
+            <div class="lp-officer-avatar">
+                {% if officer.guild_rank.level == 5 %}👑{% else %}{{ officer.class_emoji }}{% endif %}
+            </div>
+            <div>
+                {% if officer.guild_rank.level == 5 %}
+                <div class="lp-gl-rank">Guild Leader</div>
+                {% else %}
+                <div class="lp-officer-rank">{{ officer.guild_rank.name }}</div>
+                {% endif %}
+                <div class="lp-officer-name">{{ officer.display_name }}</div>
+                {% if officer.main_character %}
+                <div class="lp-officer-char">
+                    <a href="{{ officer.armory_url }}" target="_blank" rel="noopener"
+                       style="color: {{ officer.class_color }}">
+                        {{ officer.main_character.character_name }}{% if officer.main_character.active_spec %} — {{ officer.main_character.active_spec.name }}{% endif %}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="lp-officers-empty">Officer information not available.</p>
+    {% endif %}
+</section>
+
+{# ── Recent Results ── #}
+{% if closed_campaigns %}
+<section class="lp-campaigns-section">
+    <h2 class="lp-section-title">Recent Results</h2>
+    <div class="campaign-cards">
+        {% for c in closed_campaigns %}
+        <div class="campaign-card">
+            <div class="campaign-card__title">{{ c.title }}</div>
+            <div class="campaign-card__meta"><span class="badge badge-closed">Closed</span></div>
+            <div class="campaign-card__actions">
+                <a href="/vote/{{ c.id }}" class="btn btn-secondary btn-sm">View Results</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% if site().enable_guild_quotes and (guild_quote or guild_quote_title) %}
+{# ── Guild Quote of the Day ── #}
+<section class="lp-section">
+    <h2 class="lp-section-title">Guild Quote of the Day</h2>
+    <div class="lp-quote">
+        <div class="lp-quote-char">
+            <div class="lp-quote-avatar">💬</div>
+        </div>
+        <div class="lp-quote-bubble">
+            <div class="lp-quote-text">
+                {{ guild_quote or "" }}
+            </div>
+            {% if guild_quote_title %}
+            <div class="lp-quote-label">— {{ guild_quote_title }}</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+
+<div class="lp-recruiting-link">
+    <a href="https://us.forums.blizzard.com/en/wow/t/ah-pull-all-the-things-recruiting-casual-heroic-raiding-with-real-life-balance-immaculate-vibes/2060891"
+       target="_blank" rel="noopener">📜 View our WoW recruitment post</a>
+</div>
+
+</div>{# /lp-container #}
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/countdown.js"></script>
+{% endblock %}

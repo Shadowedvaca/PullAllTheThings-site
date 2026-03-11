@@ -61,7 +61,13 @@
       "WebFetch(domain:raider.io)",
       "WebFetch(domain:www.warcraftlogs.com)",
       "WebFetch(domain:support.tradeskillmaster.com)",
-      "WebFetch(domain:forums.combatlogforums.com)"
+      "WebFetch(domain:forums.combatlogforums.com)",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/PATT-Bot/Guild Bot/g' docs/OPERATIONS.md docs/DISCORD-BOT-SETUP.md)",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/PATT platform/guild platform/g; s/PATT Discord Server/your Discord server/g; s/PATT server icon/server icon/g' docs/DISCORD-BOT-SETUP.md && sed -i 's/# PATT Database/# Guild Database/g; s/Available PATT database/Available guild database/g' docs/BACKUPS.md && sed -i 's/PATT-Bot Contest Agent/Guild Bot Contest Agent/g; s/PATT-Bot communicates/Guild Bot communicates/g; s/PATT-Bot is the guild/Guild Bot is the guild/g; s/PATT gold/guild gold/g; s/PATT-Bot • pullallthething.com/Guild Bot • your site URL/g' context/contest_agent_personality.md)",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && find . -name \"*.py\" -not -path \"./.venv/*\" -not -path \"./.git/*\" -not -path \"*/__pycache__/*\" | xargs sed -i 's/from patt\\\\./from guild_portal\\\\./g; s/import patt\\\\./import guild_portal\\\\./g')",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/\"patt\\\\.services\\\\./\"guild_portal.services./g; s/\"patt\\\\.pages\\\\./\"guild_portal.pages./g; s/\"patt\\\\.bot\\\\./\"guild_portal.bot./g; s/\"patt\\\\.config/\"guild_portal.config/g; s/\"patt\\\\.deps/\"guild_portal.deps/g' tests/unit/test_campaign_service.py tests/unit/test_contest_agent.py tests/unit/test_smoke.py tests/unit/test_profile_pages.py tests/unit/test_vote_scoring.py tests/unit/test_availability.py tests/unit/test_seasons.py tests/conftest.py)",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's|src/patt/static/legacy/|src/guild_portal/static/legacy/|g; s|src/patt/deps\\\\.py|src/guild_portal/deps.py|g' CLAUDE.md)",
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/PATTSync WoW addon/GuildSync WoW addon/g' CLAUDE.md && sed -i 's|│   └── patt/|│   └── guild_portal/|g' CLAUDE.md)"
     ]
   }
 }

@@ -8,7 +8,7 @@ Adaptive cadence driven by patt.raid_seasons (the existing season reference tabl
 - Manual override via cadence_override_until in crafting_sync_config
 
 The sync:
-1. Loads the current active season from patt.raid_seasons
+1. Loads the current active season from guild_portal.raid_seasons
 2. Fetches profession data for every non-removed character in wow_characters
 3. Upserts professions, tiers, and recipes into reference tables
 4. Updates the character_recipes junction table
@@ -60,7 +60,7 @@ class CraftingSyncConfig:
 
 @dataclass
 class SeasonData:
-    """Current season info from patt.raid_seasons."""
+    """Current season info from guild_portal.raid_seasons."""
     id: int
     expansion_name: str
     season_number: int
@@ -90,7 +90,7 @@ def compute_sync_cadence(
     """
     Determine if we should sync daily or weekly.
 
-    Season data comes from patt.raid_seasons (the shared reference table).
+    Season data comes from guild_portal.raid_seasons (the shared reference table).
 
     Returns: (cadence, daily_days_remaining)
         cadence: 'daily' or 'weekly'
@@ -145,7 +145,7 @@ async def _load_config(conn: asyncpg.Connection) -> Optional[CraftingSyncConfig]
 
 
 async def _load_current_season(conn: asyncpg.Connection) -> Optional[SeasonData]:
-    """Load the current active season from patt.raid_seasons.
+    """Load the current active season from guild_portal.raid_seasons.
 
     Returns the most recent active season regardless of whether its start_date
     has arrived — an upcoming season is still "the active season" for display

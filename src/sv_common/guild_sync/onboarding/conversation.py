@@ -22,11 +22,12 @@ from typing import Optional
 import asyncpg
 import discord
 
+from sv_common.config_cache import get_accent_color_int, get_guild_name
+
 logger = logging.getLogger(__name__)
 
 RESPONSE_TIMEOUT = 300   # 5 min per question before saving state
 DEADLINE_HOURS   = 24    # hours before #audit-channel escalation
-PATT_GOLD        = 0xD4A84B
 
 
 class OnboardingConversation:
@@ -114,15 +115,15 @@ class OnboardingConversation:
 
     async def _send_welcome(self):
         embed = discord.Embed(
-            title="Welcome to Pull All The Things! 🎮",
+            title=f"Welcome to {get_guild_name()}! 🎮",
             description=(
-                "Hey there! Welcome to the PATT Discord!\n\n"
+                f"Hey there! Welcome to the {get_guild_name()} Discord!\n\n"
                 "**Have you already joined the guild in World of Warcraft?**\n\n"
                 "Just reply **yes** or **no** — no rush!"
             ),
-            color=PATT_GOLD,
+            color=get_accent_color_int(),
         )
-        embed.set_footer(text="Pull All The Things • Sen'jin")
+        embed.set_footer(text=get_guild_name())
 
         dm = await self.member.create_dm()
         await dm.send(embed=embed)
@@ -213,7 +214,7 @@ class OnboardingConversation:
                 "• Your characters will be pre-loaded in the roster\n\n"
                 "You'll hear from me shortly! Feel free to chat in the Discord. 🎮"
             ),
-            color=PATT_GOLD,
+            color=get_accent_color_int(),
         )
         await dm.send(embed=embed)
 
@@ -242,7 +243,7 @@ class OnboardingConversation:
                 "If you need a guild invite, ask any officer — they'll sort you out. 🎮\n\n"
                 "*I'll check back in with you in about 24 hours!*"
             ),
-            color=PATT_GOLD,
+            color=get_accent_color_int(),
         )
         await dm.send(embed=embed)
 

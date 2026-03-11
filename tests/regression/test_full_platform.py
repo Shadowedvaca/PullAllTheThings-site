@@ -39,8 +39,8 @@ from sv_common.db.models import (
 )
 from sv_common.auth.jwt import create_access_token
 from sv_common.auth.passwords import hash_password
-from patt.services import campaign_service, vote_service
-from patt.services.contest_agent import detect_milestone
+from guild_portal.services import campaign_service, vote_service
+from guild_portal.services.contest_agent import detect_milestone
 
 
 # ---------------------------------------------------------------------------

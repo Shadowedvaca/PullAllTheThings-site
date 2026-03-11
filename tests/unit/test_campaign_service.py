@@ -89,14 +89,14 @@ class TestCreateCampaignDefaults:
 
 class TestCampaignStatusTransitions:
     async def test_campaign_status_transitions_draft_to_live(self):
-        from patt.services.campaign_service import activate_campaign
+        from guild_portal.services.campaign_service import activate_campaign
 
         future = datetime.now(timezone.utc) + timedelta(hours=2)
         campaign = _make_campaign(status="draft", start_at=future)
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             result = await activate_campaign(db, 1)
@@ -105,13 +105,13 @@ class TestCampaignStatusTransitions:
         db.flush.assert_awaited_once()
 
     async def test_activate_already_live_raises(self):
-        from patt.services.campaign_service import activate_campaign
+        from guild_portal.services.campaign_service import activate_campaign
 
         campaign = _make_campaign(status="live")
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             with pytest.raises(ValueError, match="already live"):
@@ -119,7 +119,7 @@ class TestCampaignStatusTransitions:
 
     async def test_activate_sets_start_time_if_in_past(self):
         """If start_at is in the past, it is reset to now on activation."""
-        from patt.services.campaign_service import activate_campaign
+        from guild_portal.services.campaign_service import activate_campaign
 
         past = datetime.now(timezone.utc) - timedelta(hours=1)
         campaign = _make_campaign(status="draft", start_at=past)
@@ -128,7 +128,7 @@ class TestCampaignStatusTransitions:
         before_activation = datetime.now(timezone.utc)
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             result = await activate_campaign(db, 1)
@@ -137,25 +137,25 @@ class TestCampaignStatusTransitions:
         assert result.start_at >= before_activation
 
     async def test_close_draft_raises(self):
-        from patt.services.campaign_service import close_campaign
+        from guild_portal.services.campaign_service import close_campaign
 
         campaign = _make_campaign(status="draft")
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             with pytest.raises(ValueError, match="cannot close"):
                 await close_campaign(db, 1)
 
     async def test_campaign_not_found_raises(self):
-        from patt.services.campaign_service import update_campaign
+        from guild_portal.services.campaign_service import update_campaign
 
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=None),
         ):
             with pytest.raises(ValueError, match="not found"):
@@ -169,64 +169,64 @@ class TestCampaignStatusTransitions:
 
 class TestEntryEditingBlocked:
     async def test_campaign_cannot_add_entry_when_live(self):
-        from patt.services.campaign_service import add_entry
+        from guild_portal.services.campaign_service import add_entry
 
         campaign = _make_campaign(status="live")
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             with pytest.raises(ValueError, match="draft"):
                 await add_entry(db, 1, name="New Entry")
 
     async def test_campaign_cannot_add_entry_when_closed(self):
-        from patt.services.campaign_service import add_entry
+        from guild_portal.services.campaign_service import add_entry
 
         campaign = _make_campaign(status="closed")
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             with pytest.raises(ValueError, match="draft"):
                 await add_entry(db, 1, name="New Entry")
 
     async def test_campaign_cannot_remove_entry_when_live(self):
-        from patt.services.campaign_service import remove_entry
+        from guild_portal.services.campaign_service import remove_entry
 
         campaign = _make_campaign(status="live")
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             with pytest.raises(ValueError, match="draft"):
                 await remove_entry(db, 1, entry_id=1)
 
     async def test_campaign_cannot_update_settings_when_live(self):
-        from patt.services.campaign_service import update_campaign
+        from guild_portal.services.campaign_service import update_campaign
 
         campaign = _make_campaign(status="live")
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=campaign),
         ):
             with pytest.raises(ValueError, match="draft"):
                 await update_campaign(db, 1, title="New Title")
 
     async def test_update_campaign_not_found_raises(self):
-        from patt.services.campaign_service import update_campaign
+        from guild_portal.services.campaign_service import update_campaign
 
         db = _make_db()
 
         with patch(
-            "patt.services.campaign_service.get_campaign",
+            "guild_portal.services.campaign_service.get_campaign",
             new=AsyncMock(return_value=None),
         ):
             with pytest.raises(ValueError, match="not found"):
@@ -241,7 +241,7 @@ class TestEntryEditingBlocked:
 class TestVotingStatusValidation:
     async def _mock_cast_vote_with_campaign_status(self, status: str, picks=None):
         """Helper: mock cast_vote so campaign is in given status."""
-        from patt.services.vote_service import cast_vote
+        from guild_portal.services.vote_service import cast_vote
 
         campaign = _make_campaign(status=status)
         db = _make_db()

@@ -8,7 +8,7 @@ Phase 2.8 (revised) — Crafting Corner season integration
 - Add is_new_expansion to patt.raid_seasons (replaces crafting_sync_config.is_first_season)
 - Drop redundant season fields from guild_identity.crafting_sync_config:
     expansion_name, season_number, season_start_date, is_first_season
-  These are now sourced directly from patt.raid_seasons.
+  These are now sourced directly from guild_portal.raid_seasons.
 - Keep cadence_override_until for admin manual overrides.
 """
 

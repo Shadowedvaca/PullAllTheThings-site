@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sv_common.db.models import (
     Campaign, CampaignEntry, ContestAgentLog, GuildRank, Player, Vote
 )
-from patt.services.contest_agent import check_campaign_updates
+from guild_portal.services.contest_agent import check_campaign_updates
 
 
 # ---------------------------------------------------------------------------

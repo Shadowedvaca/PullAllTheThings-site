@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 
-from patt.config import get_settings
+from guild_portal.config import get_settings
 
 _ALGORITHM = "HS256"
 

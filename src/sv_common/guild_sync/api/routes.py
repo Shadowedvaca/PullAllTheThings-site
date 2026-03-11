@@ -56,10 +56,10 @@ async def get_sync_scheduler(request: Request):
 
 async def verify_addon_key(x_api_key: str = Header(None)):
     """Simple API key auth for addon uploads."""
-    from patt.config import get_settings
-    api_key = get_settings().patt_api_key
+    from guild_portal.config import get_settings
+    api_key = get_settings().guild_sync_api_key
     if not api_key:
-        raise HTTPException(500, "PATT_API_KEY not configured")
+        raise HTTPException(500, "GUILD_SYNC_API_KEY not configured")
     if x_api_key != api_key:
         raise HTTPException(401, "Invalid API key")
 
@@ -124,7 +124,7 @@ async def trigger_discord_sync(
     """
     from sv_common.discord.bot import get_bot
     from sv_common.guild_sync.discord_sync import sync_discord_members
-    from patt.config import get_settings
+    from guild_portal.config import get_settings
     import asyncio
 
     bot = get_bot()
@@ -564,7 +564,7 @@ async def trigger_channel_sync(request: Request, pool: asyncpg.Pool = Depends(ge
     try:
         from sv_common.discord.bot import get_bot
         from sv_common.discord.channel_sync import sync_channels
-        from patt.config import get_settings
+        from guild_portal.config import get_settings
 
         bot = get_bot()
         settings = get_settings()

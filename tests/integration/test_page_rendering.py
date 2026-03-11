@@ -22,7 +22,7 @@ from sv_common.db.models import (
 )
 from sv_common.auth.passwords import hash_password
 from sv_common.auth.jwt import create_access_token
-from patt.deps import COOKIE_NAME
+from guild_portal.deps import COOKIE_NAME
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ async def live_campaign_with_entries(db_session: AsyncSession, member_with_user)
     await db_session.flush()
 
     # Reload with entries
-    from patt.services.campaign_service import get_campaign
+    from guild_portal.services.campaign_service import get_campaign
     return await get_campaign(db_session, campaign.id)
 
 

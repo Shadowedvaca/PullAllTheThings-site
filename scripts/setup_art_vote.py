@@ -127,7 +127,7 @@ async def setup_campaign() -> None:
     from sqlalchemy import select
     from sv_common.db.engine import get_session_factory
     from sv_common.db.models import Campaign, CampaignEntry, GuildMember, GuildRank
-    from patt.services import campaign_service
+    from guild_portal.services import campaign_service
 
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:

@@ -1,14 +1,14 @@
-# PATT Sync Companion App
+# Guild Sync Companion App
 
 Watches for World of Warcraft addon exports and uploads guild roster data
-to the Pull All The Things API server automatically.
+to the guild API server automatically.
 
 ## Setup
 
 1. Install Python 3.10+
 2. Install dependencies: `pip install -r requirements.txt`
 3. Copy `.env.example` to `.env` and fill in your values
-4. Run: `python patt_sync_watcher.py`
+4. Run: `python guild_sync_watcher.py`
 
 ## Finding Your SavedVariables Path
 
@@ -25,31 +25,31 @@ to the Pull All The Things API server automatically.
 
 **Option 1 — Startup folder:**
 1. Press `Win+R`, type `shell:startup`, hit Enter
-2. Create a shortcut to `patt_sync_watcher.py` in that folder
+2. Create a shortcut to `guild_sync_watcher.py` in that folder
 
 **Option 2 — Batch file:**
 Create a `.bat` file with:
 ```batch
 @echo off
 cd /d "C:\path\to\companion_app"
-python patt_sync_watcher.py
+python guild_sync_watcher.py
 ```
 Place the `.bat` file in your startup folder.
 
 ## How It Works
 
-1. The PATTSync WoW addon exports guild roster data to SavedVariables
+1. The GuildSync WoW addon exports guild roster data to SavedVariables
 2. SavedVariables are written to disk on `/reload` or logout
 3. This companion app detects the file change via `watchdog`
-4. It parses the Lua data and uploads it to the PATT API
+4. It parses the Lua data and uploads it to the guild API
 5. The server processes the data and updates the identity system
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| "No existing file found" | Export from the addon first (`/pattsync` in WoW) |
-| "Cannot connect to API" | Check `PATT_API_URL` in `.env` |
-| "Invalid API key" | Check `PATT_API_KEY` in `.env` |
+| "No existing file found" | Export from the addon first (`/guildsync` in WoW) |
+| "Cannot connect to API" | Check `GUILD_SYNC_API_URL` in `.env` |
+| "Invalid API key" | Check `GUILD_SYNC_API_KEY` in `.env` |
 | Data not updating | Do `/reload` or log out after exporting to flush SavedVariables to disk |
-| Seeing stale data | Run `/pattsync force` in WoW to bypass the 6-hour cooldown |
+| Seeing stale data | Run `/guildsync force` in WoW to bypass the 6-hour cooldown |

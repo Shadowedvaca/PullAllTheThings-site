@@ -1,6 +1,6 @@
-# PATT-Bot — Discord Developer Portal Setup
+# Guild Bot — Discord Developer Portal Setup
 
-Follow these steps to create the Discord bot and connect it to the PATT platform.
+Follow these steps to create the Discord bot and connect it to the guild platform.
 
 ---
 
@@ -8,7 +8,7 @@ Follow these steps to create the Discord bot and connect it to the PATT platform
 
 1. Go to https://discord.com/developers/applications
 2. Click **"New Application"**
-3. Name it **"PATT-Bot"** → click **Create**
+3. Name it **"Guild Bot"** → click **Create**
 
 ---
 
@@ -35,7 +35,7 @@ Leave **Message Content Intent** disabled (the bot doesn't read messages).
 
 ---
 
-## Step 4 — Invite the Bot to the PATT Discord Server
+## Step 4 — Invite the Bot to the your Discord server
 
 1. In the left sidebar, click **OAuth2 → URL Generator**
 2. Under **Scopes**, check: `bot`
@@ -55,7 +55,7 @@ The bot will now appear in the server's member list as offline (it goes online w
 ## Step 5 — Get the Discord Guild (Server) ID
 
 1. In the Discord app, go to **User Settings → Advanced** and enable **Developer Mode**
-2. Right-click the PATT server icon in the sidebar
+2. Right-click the server icon in the sidebar
 3. Click **"Copy Server ID"**
 4. Save it to your `.env` file:
    ```
@@ -92,7 +92,7 @@ Body: { "discord_role_id": "123456789012345678" }
 Once the platform is running with the bot token configured, the bot will:
 
 1. Connect to Discord and appear **Online**
-2. Log: `PATT-Bot connected as PATT-Bot#XXXX (id=...)`
+2. Log: `Guild Bot connected as Guild Bot#XXXX (id=...)`
 
 Check the platform logs:
 ```bash

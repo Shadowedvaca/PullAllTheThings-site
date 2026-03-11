@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import uvicorn
 
 uvicorn.run(
-    "patt.app:create_app",
+    "guild_portal.app:create_app",
     host="127.0.0.1",
     port=8100,
     reload=True,

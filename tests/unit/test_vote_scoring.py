@@ -10,7 +10,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "unit-test-secret-key-for-scoring")
 os.environ.setdefault("APP_ENV", "testing")
 
 import pytest
-from patt.services.vote_service import compute_scores, rank_results
+from guild_portal.services.vote_service import compute_scores, rank_results
 
 
 # ---------------------------------------------------------------------------

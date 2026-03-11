@@ -43,7 +43,7 @@ This means Claude Code never needs conversation history. It reads the repo.
 | File | Purpose |
 |------|---------|
 | `reference/PHASE_4_OVERVIEW.md` | Master plan — timeline, dependencies, architecture changes |
-| `reference/PHASE_4_0_CONFIG_EXTRACTION.md` | Extract hardcoded values, genericize features |
+| ~~`reference/PHASE_4_0_CONFIG_EXTRACTION.md`~~ | ✅ Complete — archived |
 | `reference/PHASE_4_1_SETUP_WIZARD.md` | First-run web-based setup wizard |
 | `reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md` | Docker packaging, Caddy, dev/test/prod |
 | `reference/PHASE_4_3_BLIZZARD_EXPANSION.md` | Last-login optimization, raids, M+, achievements |
@@ -93,7 +93,7 @@ This means Claude Code never needs conversation history. It reads the repo.
 | 3.4 | ✅ Complete | Admin Raid Tools — Raid-Helper integration, event builder |
 | 3.5 | ✅ Complete | Auto-Booking Scheduler — background loop, auto-creates weekly raid |
 | 3.6 | ✅ Complete | Roster Initiate Filtering + Raid Hiatus — on_raid_hiatus flag, New Members box, Show Initiates checkbox |
-| 4.0 | 📋 Planned | Config Extraction & Genericization |
+| 4.0 | ✅ Complete | Config Extraction & Genericization — site_config table, config_cache, rank_wow_mapping, guild_quotes, /admin/site-config |
 | 4.1 | 📋 Planned | First-Run Setup Wizard |
 | 4.2 | 📋 Planned | Docker Packaging & Environments |
 | 4.3 | 📋 Planned | Blizzard API Expansion & Last-Login Optimization |
@@ -116,4 +116,5 @@ to understand what was originally specified for a completed phase.
 | PHASE_2_7_DATA_MODEL_MIGRATION.md | Phase 2.7 |
 | PHASE_2_8_CRAFTING_CORNER.md | Phase 2.8 |
 | PHASE_2_9_DATA_QUALITY_ENGINE.md | Phase 2.9 |
+| PHASE_4_0_CONFIG_EXTRACTION.md | Phase 4.0 |
 | ADMIN-SETUP-GUIDE.md | Legacy Google Sheets admin system (fully replaced) |

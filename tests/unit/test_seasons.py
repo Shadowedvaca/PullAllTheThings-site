@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sv_common.db.models import RaidSeason
-from patt.services import season_service
+from guild_portal.services import season_service
 
 
 async def _create_season(

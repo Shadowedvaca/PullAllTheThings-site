@@ -1,8 +1,9 @@
-"""SQLAlchemy ORM models for the PATT platform.
+"""SQLAlchemy ORM models for the guild platform.
 
-common schema: guild_ranks, users, discord_config, invite_codes
+common schema: guild_ranks, users, discord_config, invite_codes,
+               site_config, rank_wow_mapping
 patt schema: campaigns, campaign_entries, votes, campaign_results,
-             contest_agent_log, mito_quotes, mito_titles,
+             contest_agent_log, guild_quotes, guild_quote_titles,
              player_availability, raid_seasons, raid_events, raid_attendance,
              recurring_events
 guild_identity schema: roles, classes, specializations, players,
@@ -147,6 +148,48 @@ class DiscordConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class SiteConfig(Base):
+    """Single-row guild configuration table."""
+
+    __tablename__ = "site_config"
+    __table_args__ = {"schema": "common"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    guild_name: Mapped[str] = mapped_column(String(100), default="My Guild")
+    guild_tagline: Mapped[Optional[str]] = mapped_column(String(255))
+    guild_mission: Mapped[Optional[str]] = mapped_column(Text)
+    discord_invite_url: Mapped[Optional[str]] = mapped_column(String(255))
+    accent_color_hex: Mapped[str] = mapped_column(String(7), default="#d4a84b")
+    realm_display_name: Mapped[Optional[str]] = mapped_column(String(50))
+    home_realm_slug: Mapped[Optional[str]] = mapped_column(String(50))
+    guild_name_slug: Mapped[Optional[str]] = mapped_column(String(100))
+    logo_url: Mapped[Optional[str]] = mapped_column(String(500))
+    enable_guild_quotes: Mapped[bool] = mapped_column(Boolean, default=False)
+    enable_contests: Mapped[bool] = mapped_column(Boolean, default=True)
+    setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RankWowMapping(Base):
+    """Maps WoW in-game rank indices (0–9) to platform rank IDs."""
+
+    __tablename__ = "rank_wow_mapping"
+    __table_args__ = {"schema": "common"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    wow_rank_index: Mapped[int] = mapped_column(Integer, unique=True)
+    guild_rank_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("common.guild_ranks.id")
+    )
+
+    guild_rank: Mapped["GuildRank"] = relationship()
 
 
 class InviteCode(Base):
@@ -316,8 +359,8 @@ class ContestAgentLog(Base):
     campaign: Mapped[Campaign] = relationship(back_populates="agent_log")
 
 
-class MitoQuote(Base):
-    __tablename__ = "mito_quotes"
+class GuildQuote(Base):
+    __tablename__ = "guild_quotes"
     __table_args__ = {"schema": "patt"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -327,8 +370,8 @@ class MitoQuote(Base):
     )
 
 
-class MitoTitle(Base):
-    __tablename__ = "mito_titles"
+class GuildQuoteTitle(Base):
+    __tablename__ = "guild_quote_titles"
     __table_args__ = {"schema": "patt"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -580,7 +623,7 @@ class DiscordUser(Base):
 
 
 class WowCharacter(Base):
-    """WoW character from guild roster (Blizzard API + PATTSync addon)."""
+    """WoW character from guild roster (Blizzard API + GuildSync addon)."""
 
     __tablename__ = "wow_characters"
     __table_args__ = (

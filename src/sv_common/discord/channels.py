@@ -1,4 +1,4 @@
-"""Discord channel posting utilities for PATT-Bot."""
+"""Discord channel posting utilities for Guild Bot."""
 
 import logging
 from typing import Optional

@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
+import asyncpg
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -76,9 +77,8 @@ CLASS_ID_MAP = {
     13: "Evoker",
 }
 
-# Guild rank index → rank name mapping for PATT
+# Guild rank index → rank name mapping (fallback when DB is unavailable)
 # WoW rank 0 is always Guild Master. Lower rank index = more access (WoW standard).
-# 1 = Officer, 2 = Veteran, 3 = Member, 4 = Initiate (lowest)
 RANK_NAME_MAP = {
     0: "Guild Leader",
     1: "Officer",
@@ -86,6 +86,28 @@ RANK_NAME_MAP = {
     3: "Member",
     4: "Initiate",
 }
+
+
+async def get_rank_name_map(pool: asyncpg.Pool) -> dict[int, str]:
+    """Load WoW rank index → platform rank name mapping from DB (common.rank_wow_mapping).
+
+    Returns a dict like {0: "Guild Leader", 1: "Officer", ...}.
+    Falls back to the hardcoded RANK_NAME_MAP if the table is empty or unavailable.
+    """
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT rwm.wow_rank_index, gr.name
+                FROM common.rank_wow_mapping rwm
+                JOIN common.guild_ranks gr ON gr.id = rwm.guild_rank_id
+                """
+            )
+        if rows:
+            return {row["wow_rank_index"]: row["name"] for row in rows}
+    except Exception as exc:
+        logger.warning("Could not load rank_wow_mapping from DB: %s — using fallback", exc)
+    return dict(RANK_NAME_MAP)
 
 
 class BlizzardClient:
@@ -330,13 +352,23 @@ class BlizzardClient:
             professions=professions,
         )
 
-    async def sync_full_roster(self) -> list[CharacterProfileData]:
+    async def sync_full_roster(
+        self,
+        rank_map: dict[int, str] | None = None,
+    ) -> list[CharacterProfileData]:
         """
         Full sync: fetch roster, then enrich each member with profile data.
 
         This is the main method called by the scheduler.
         Batches character profile requests to be respectful of rate limits.
+
+        Args:
+            rank_map: WoW rank index → rank name mapping. If None, falls back
+                      to the hardcoded RANK_NAME_MAP. Load from DB via
+                      get_rank_name_map(pool) before calling for full config support.
         """
+        effective_rank_map = rank_map if rank_map is not None else RANK_NAME_MAP
+
         roster = await self.get_guild_roster()
         if not roster:
             return []
@@ -366,12 +398,16 @@ class BlizzardClient:
                         character_class=member.character_class,
                         level=member.level,
                         guild_rank=member.guild_rank,
-                        guild_rank_name=RANK_NAME_MAP.get(member.guild_rank, f"Rank {member.guild_rank}"),
+                        guild_rank_name=effective_rank_map.get(
+                            member.guild_rank, f"Rank {member.guild_rank}"
+                        ),
                     ))
                 elif result is not None:
                     # Merge guild rank from roster (profile doesn't include it)
                     result.guild_rank = member.guild_rank
-                    result.guild_rank_name = RANK_NAME_MAP.get(member.guild_rank, f"Rank {member.guild_rank}")
+                    result.guild_rank_name = effective_rank_map.get(
+                        member.guild_rank, f"Rank {member.guild_rank}"
+                    )
                     enriched.append(result)
 
             # Small delay between batches to be nice

@@ -1,0 +1,310 @@
+{% extends "base_admin.html" %}
+{% block title %}Site Config — Admin — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+.sc-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    max-width: 720px;
+}
+.sc-card__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1.1rem;
+    margin: 0 0 0.25rem 0;
+}
+.sc-card__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+.sc-field {
+    margin-bottom: 1rem;
+}
+.sc-field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.sc-field input[type="text"],
+.sc-field input[type="url"],
+.sc-field input[type="color"],
+.sc-field textarea {
+    width: 100%;
+    background: var(--color-bg-dark);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+.sc-field textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+.sc-field input[type="color"] {
+    width: 60px;
+    height: 36px;
+    padding: 2px;
+    cursor: pointer;
+}
+.sc-color-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.sc-color-hex {
+    flex: 1;
+    max-width: 120px;
+}
+.sc-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+.sc-toggle-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.sc-toggle-desc {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    flex: 1;
+}
+.sc-switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+}
+.sc-switch input { opacity: 0; width: 0; height: 0; }
+.sc-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #3a3a3e;
+    border-radius: 28px;
+    transition: background 0.2s;
+    border: 2px solid #4a4a4e;
+}
+.sc-slider::before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: #888;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+input:checked + .sc-slider {
+    background: rgba(212, 168, 75, 0.25);
+    border-color: var(--color-gold);
+}
+input:checked + .sc-slider::before {
+    transform: translateX(24px);
+    background: var(--color-gold);
+}
+.sc-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+}
+.sc-status {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page-header">
+    <h1 class="admin-page-title">Site Config</h1>
+    <p class="admin-page-subtitle">Guild identity, branding, and feature flags. Guild Leader access only.</p>
+</div>
+
+{# Identity Card #}
+<div class="sc-card">
+    <h2 class="sc-card__title">Guild Identity</h2>
+    <p class="sc-card__subtitle">Displayed on the front page, nav header, and Discord embeds.</p>
+
+    <div class="sc-field">
+        <label>Guild Name</label>
+        <input type="text" id="sc-guild-name" value="{{ config.guild_name or '' }}" maxlength="100" placeholder="My Guild">
+    </div>
+    <div class="sc-field">
+        <label>Tagline</label>
+        <input type="text" id="sc-guild-tagline" value="{{ config.guild_tagline or '' }}" maxlength="255" placeholder="A short tagline for the front page">
+    </div>
+    <div class="sc-field">
+        <label>Guild Mission</label>
+        <textarea id="sc-guild-mission">{{ config.guild_mission or '' }}</textarea>
+    </div>
+    <div class="sc-field">
+        <label>Discord Invite URL</label>
+        <input type="url" id="sc-discord-invite" value="{{ config.discord_invite_url or '' }}" placeholder="https://discord.gg/...">
+    </div>
+
+    <div class="sc-actions">
+        <button class="btn btn--primary" onclick="saveIdentity()">Save Identity</button>
+        <span class="sc-status" id="identity-status"></span>
+    </div>
+</div>
+
+{# Realm & WoW Config Card #}
+<div class="sc-card">
+    <h2 class="sc-card__title">WoW Realm & Guild</h2>
+    <p class="sc-card__subtitle">Used for Blizzard API sync and public display. Changes take effect on next app restart.</p>
+
+    <div class="sc-field">
+        <label>Realm Display Name</label>
+        <input type="text" id="sc-realm-display" value="{{ config.realm_display_name or '' }}" maxlength="50" placeholder="Sen'jin">
+    </div>
+    <div class="sc-field">
+        <label>Home Realm Slug (API)</label>
+        <input type="text" id="sc-realm-slug" value="{{ config.home_realm_slug or '' }}" maxlength="50" placeholder="senjin">
+    </div>
+    <div class="sc-field">
+        <label>Guild Name Slug (API)</label>
+        <input type="text" id="sc-guild-slug" value="{{ config.guild_name_slug or '' }}" maxlength="100" placeholder="pull-all-the-things">
+    </div>
+
+    <div class="sc-actions">
+        <button class="btn btn--primary" onclick="saveRealm()">Save Realm Config</button>
+        <span class="sc-status" id="realm-status"></span>
+    </div>
+</div>
+
+{# Branding Card #}
+<div class="sc-card">
+    <h2 class="sc-card__title">Branding</h2>
+    <p class="sc-card__subtitle">Accent color used in CSS and Discord embeds. Takes effect immediately after save.</p>
+
+    <div class="sc-field">
+        <label>Accent Color</label>
+        <div class="sc-color-row">
+            <input type="color" id="sc-color-picker" value="{{ config.accent_color_hex or '#d4a84b' }}"
+                   oninput="document.getElementById('sc-color-hex').value = this.value">
+            <input type="text" class="sc-color-hex" id="sc-color-hex" value="{{ config.accent_color_hex or '#d4a84b' }}"
+                   maxlength="7" placeholder="#d4a84b"
+                   oninput="syncColorPicker(this.value)">
+        </div>
+    </div>
+
+    <div class="sc-actions">
+        <button class="btn btn--primary" onclick="saveBranding()">Save Branding</button>
+        <span class="sc-status" id="branding-status"></span>
+    </div>
+</div>
+
+{# Feature Flags Card #}
+<div class="sc-card">
+    <h2 class="sc-card__title">Feature Flags</h2>
+    <p class="sc-card__subtitle">Enable or disable optional platform features.</p>
+
+    <div class="sc-toggle-row">
+        <label class="sc-switch">
+            <input type="checkbox" id="sc-guild-quotes"
+                   {% if config.enable_guild_quotes %}checked{% endif %}>
+            <span class="sc-slider"></span>
+        </label>
+        <span class="sc-toggle-label">Guild Quotes</span>
+        <span class="sc-toggle-desc">Enables the /quote Discord slash command and the "Quote of the Day" section on the front page.</span>
+    </div>
+
+    <div class="sc-toggle-row">
+        <label class="sc-switch">
+            <input type="checkbox" id="sc-contests"
+                   {% if config.enable_contests %}checked{% endif %}>
+            <span class="sc-slider"></span>
+        </label>
+        <span class="sc-toggle-label">Contests</span>
+        <span class="sc-toggle-desc">Enables the ranked-choice voting campaign system.</span>
+    </div>
+
+    <div class="sc-actions">
+        <button class="btn btn--primary" onclick="saveFeatures()">Save Features</button>
+        <span class="sc-status" id="features-status"></span>
+    </div>
+</div>
+
+<script>
+function syncColorPicker(hex) {
+    if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+        document.getElementById('sc-color-picker').value = hex;
+    }
+}
+
+async function patchConfig(payload, statusId) {
+    const status = document.getElementById(statusId);
+    status.style.color = 'var(--color-text-muted)';
+    status.textContent = 'Saving…';
+    try {
+        const resp = await fetch('/api/v1/admin/site-config', {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            status.style.color = 'var(--color-gold)';
+            status.textContent = 'Saved';
+        } else {
+            status.style.color = '#f87171';
+            status.textContent = data.error || 'Failed';
+        }
+    } catch (e) {
+        status.style.color = '#f87171';
+        status.textContent = 'Network error: ' + e.message;
+    }
+}
+
+function saveIdentity() {
+    patchConfig({
+        guild_name: document.getElementById('sc-guild-name').value.trim(),
+        guild_tagline: document.getElementById('sc-guild-tagline').value.trim() || null,
+        guild_mission: document.getElementById('sc-guild-mission').value.trim() || null,
+        discord_invite_url: document.getElementById('sc-discord-invite').value.trim() || null,
+    }, 'identity-status');
+}
+
+function saveRealm() {
+    patchConfig({
+        realm_display_name: document.getElementById('sc-realm-display').value.trim() || null,
+        home_realm_slug: document.getElementById('sc-realm-slug').value.trim() || null,
+        guild_name_slug: document.getElementById('sc-guild-slug').value.trim() || null,
+    }, 'realm-status');
+}
+
+function saveBranding() {
+    const hex = document.getElementById('sc-color-hex').value.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+        document.getElementById('branding-status').textContent = 'Invalid hex color (e.g. #d4a84b)';
+        document.getElementById('branding-status').style.color = '#f87171';
+        return;
+    }
+    patchConfig({ accent_color_hex: hex }, 'branding-status');
+}
+
+function saveFeatures() {
+    patchConfig({
+        enable_guild_quotes: document.getElementById('sc-guild-quotes').checked,
+        enable_contests: document.getElementById('sc-contests').checked,
+    }, 'features-status');
+}
+</script>
+{% endblock %}

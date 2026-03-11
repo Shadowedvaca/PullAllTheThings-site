@@ -1,4 +1,4 @@
-# PATT Database — Backup & Restore
+# Guild Database — Backup & Restore
 
 ## Overview
 
@@ -33,7 +33,7 @@ patt-restore.sh --list
 Example output:
 
 ```
-Available PATT database backups:
+Available guild database backups:
 
 Num   Backup file                         Size
 ---   -----------                         ----

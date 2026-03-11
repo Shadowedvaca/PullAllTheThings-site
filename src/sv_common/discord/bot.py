@@ -1,4 +1,4 @@
-"""PATT-Bot Discord client.
+"""Guild Bot Discord client.
 
 Provides the bot instance used throughout the application.
 The bot is started as a background task during FastAPI lifespan.
@@ -9,6 +9,8 @@ import logging
 
 import discord
 from discord.ext import commands
+
+from sv_common.config_cache import get_accent_color_int, get_guild_name
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +33,9 @@ def set_db_pool(pool):
 
 @bot.event
 async def on_ready():
-    logger.info("PATT-Bot connected as %s (id=%s)", bot.user, bot.user.id)
+    logger.info("Guild Bot connected as %s (id=%s)", bot.user, bot.user.id)
 
-    from patt.config import get_settings
+    from guild_portal.config import get_settings
     settings = get_settings()
     discord_guild = None
     if settings.discord_guild_id:
@@ -44,8 +46,8 @@ async def on_ready():
         try:
             from sv_common.guild_sync.onboarding.commands import register_onboarding_commands
             register_onboarding_commands(bot.tree, _db_pool)
-            from patt.bot.mito_commands import register_mito_commands
-            register_mito_commands(bot.tree, _db_pool)
+            from guild_portal.bot.guild_quote_commands import register_guild_quote_commands
+            register_guild_quote_commands(bot.tree, _db_pool)
             if discord_guild:
                 bot.tree.copy_global_to(guild=discord_guild)
                 await bot.tree.sync(guild=discord_guild)
@@ -132,16 +134,16 @@ async def on_message(message: discord.Message):
         return
 
     embed = discord.Embed(
-        title="Pull All The Things Bot",
+        title=f"{get_guild_name()} Bot",
         description="Here's what I can do for you:",
-        color=0xD4A84B,
+        color=get_accent_color_int(),
     )
     embed.add_field(
         name="/get-account",
-        value="Get your website invite code or log in link. Use this to create your account on pullallthethings.com.",
+        value="Get your website invite code or log in link.",
         inline=False,
     )
-    embed.set_footer(text="Pull All The Things • Sen'jin")
+    embed.set_footer(text=get_guild_name())
     await message.channel.send(embed=embed)
 
 

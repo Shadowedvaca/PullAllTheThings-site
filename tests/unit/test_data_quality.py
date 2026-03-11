@@ -197,21 +197,21 @@ class TestSchedulerPipeline:
         """run_addon_sync should not call relink_note_changed_characters."""
         import ast
         import pathlib
-        src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text()
+        src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text(encoding="utf-8")
         assert "relink_note_changed_characters" not in src, \
             "scheduler.py still references relink_note_changed_characters"
 
     def test_scheduler_imports_run_drift_scan(self):
         """scheduler.py should import run_drift_scan from drift_scanner (Phase 3.0C)."""
         import pathlib
-        src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text()
+        src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text(encoding="utf-8")
         assert "run_drift_scan" in src, \
             "scheduler.py does not reference run_drift_scan"
 
     def test_scheduler_run_addon_sync_comment_mentions_no_matching(self):
         """run_addon_sync docstring should note that run_matching is not called."""
         import pathlib
-        src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text()
+        src = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text(encoding="utf-8")
         assert "run_matching" in src, \
             "scheduler.py should mention run_matching (it's still available as admin action)"
 

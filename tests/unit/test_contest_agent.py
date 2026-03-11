@@ -10,7 +10,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "unit-test-secret-key-for-agent")
 os.environ.setdefault("APP_ENV", "testing")
 
 import pytest
-from patt.services.contest_agent import (
+from guild_portal.services.contest_agent import (
     CHATTINESS_TRIGGERS,
     detect_milestone,
     generate_message,

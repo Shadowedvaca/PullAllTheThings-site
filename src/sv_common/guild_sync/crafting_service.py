@@ -216,7 +216,7 @@ async def get_sync_status(pool: asyncpg.Pool) -> dict:
 async def get_full_config(pool: asyncpg.Pool) -> Optional[dict]:
     """
     Return crafting sync config combined with the current season for the admin page.
-    Season data is sourced from patt.raid_seasons.
+    Season data is sourced from guild_portal.raid_seasons.
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

@@ -17,15 +17,14 @@ import asyncpg
 import discord
 from discord import app_commands
 
+from sv_common.config_cache import get_accent_color_int, get_guild_name
 from .provisioner import AutoProvisioner
 from .deadline_checker import OnboardingDeadlineChecker
 
 logger = logging.getLogger(__name__)
 
-PATT_GOLD = 0xD4A84B
-
-# In-memory set of discord IDs that have received a Mito quote this session
-_mito_seen: set[str] = set()
+# In-memory set of discord IDs that have received a guild quote this session
+_quote_seen: set[str] = set()
 
 
 def register_onboarding_commands(
@@ -80,7 +79,7 @@ def register_onboarding_commands(
         embed = discord.Embed(
             title=f"Pending Onboarding Sessions ({len(sessions)})",
             description="\n".join(lines),
-            color=PATT_GOLD,
+            color=get_accent_color_int(),
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -217,7 +216,7 @@ def register_onboarding_commands(
 
     @tree.command(
         name="get-account",
-        description="Get your Pull All The Things website account or invite code",
+        description="Get your guild website account or invite code",
     )
     async def get_account(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -266,22 +265,22 @@ def register_onboarding_commands(
             # 3. Already has a website account — tell them and stop
             if website_user_id:
                 mito_q = mito_t = None
-                if discord_id not in _mito_seen:
+                if discord_id not in _quote_seen:
                     mito_q = await conn.fetchval(
-                        "SELECT quote FROM patt.mito_quotes ORDER BY RANDOM() LIMIT 1"
+                        "SELECT quote FROM patt.guild_quotes ORDER BY RANDOM() LIMIT 1"
                     )
                     mito_t = await conn.fetchval(
-                        "SELECT title FROM patt.mito_titles ORDER BY RANDOM() LIMIT 1"
+                        "SELECT title FROM patt.guild_quote_titles ORDER BY RANDOM() LIMIT 1"
                     )
                     if mito_q or mito_t:
-                        _mito_seen.add(discord_id)
+                        _quote_seen.add(discord_id)
                 already_embed = discord.Embed(
                     title="You already have an account!",
                     description=(
-                        "You're already registered on the Pull All The Things website.\n\n"
+                        f"You're already registered on the {get_guild_name()} website.\n\n"
                         "**Log in here:** https://pullallthethings.com/login"
                     ),
-                    color=PATT_GOLD,
+                    color=get_accent_color_int(),
                 )
                 if mito_q:
                     quote_text = f'*"{mito_q}"*'
@@ -316,36 +315,36 @@ def register_onboarding_commands(
 
         # Mito quote — shown once per session (in-memory tracking)
         mito_quote = mito_title = None
-        if discord_id not in _mito_seen:
+        if discord_id not in _quote_seen:
             try:
                 async with db_pool.acquire() as conn:
                     mito_quote = await conn.fetchval(
-                        "SELECT quote FROM patt.mito_quotes ORDER BY RANDOM() LIMIT 1"
+                        "SELECT quote FROM patt.guild_quotes ORDER BY RANDOM() LIMIT 1"
                     )
                     mito_title = await conn.fetchval(
-                        "SELECT title FROM patt.mito_titles ORDER BY RANDOM() LIMIT 1"
+                        "SELECT title FROM patt.guild_quote_titles ORDER BY RANDOM() LIMIT 1"
                     )
                 if mito_quote or mito_title:
-                    _mito_seen.add(discord_id)
+                    _quote_seen.add(discord_id)
             except Exception:
                 pass  # Mito is quiet today
 
         embed = discord.Embed(
-            title="Your Pull All The Things Account",
+            title=f"Your {get_guild_name()} Account",
             description=(
                 f"**Your invite code:** `{code}`\n"
                 f"**Register here:** https://pullallthethings.com/register\n\n"
                 "Use this code to create your account. It expires in 7 days.\n"
                 "Your characters will be pre-loaded once you log in!"
             ),
-            color=PATT_GOLD,
+            color=get_accent_color_int(),
         )
         if mito_quote:
             quote_text = f'*"{mito_quote}"*'
             if mito_title:
                 quote_text += f"\n— *Mito, {mito_title}*"
             embed.add_field(name="\u200b", value=quote_text, inline=False)
-        embed.set_footer(text="Pull All The Things • Sen'jin • This message is only visible to you")
+        embed.set_footer(text=f"{get_guild_name()} • This message is only visible to you")
         await interaction.followup.send(embed=embed, ephemeral=True)
         logger.info(
             "self-service account request: discord_id=%s player=%d code=%s",

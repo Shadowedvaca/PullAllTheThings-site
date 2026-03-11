@@ -16,7 +16,7 @@ from sv_common.db.models import (
     GuildRank,
     Player,
 )
-from patt.services import campaign_service, vote_service
+from guild_portal.services import campaign_service, vote_service
 
 
 # ---------------------------------------------------------------------------

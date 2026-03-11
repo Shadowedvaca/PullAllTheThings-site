@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sv_common.db.models import GuildRank, Player, PlayerAvailability
-from patt.services import availability_service
+from guild_portal.services import availability_service
 
 
 async def _make_rank(db: AsyncSession, name: str, level: int, weight: int = 1) -> GuildRank:

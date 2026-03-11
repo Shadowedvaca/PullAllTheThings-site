@@ -3,7 +3,7 @@
 
 def test_app_imports():
     """Verify the app module can be imported without errors."""
-    from patt.app import create_app
+    from guild_portal.app import create_app
 
     app = create_app()
     assert app is not None
@@ -11,7 +11,7 @@ def test_app_imports():
 
 def test_settings_load():
     """Verify settings can be constructed with defaults."""
-    from patt.config import Settings
+    from guild_portal.config import Settings
 
     settings = Settings(
         database_url="postgresql+asyncpg://test:test@localhost/test",

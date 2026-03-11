@@ -74,8 +74,8 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client with database session override."""
-    from patt.app import create_app
-    from patt.deps import get_db
+    from guild_portal.app import create_app
+    from guild_portal.deps import get_db
 
     app = create_app()
 

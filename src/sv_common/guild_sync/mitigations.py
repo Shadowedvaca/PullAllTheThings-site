@@ -388,7 +388,7 @@ async def mitigate_role_mismatch(pool: asyncpg.Pool, issue_row: dict) -> bool:
             return False
 
         try:
-            from patt.config import get_settings
+            from guild_portal.config import get_settings
             settings = get_settings()
             if not settings.discord_guild_id:
                 return False

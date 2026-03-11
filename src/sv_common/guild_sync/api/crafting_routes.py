@@ -12,6 +12,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from sv_common.config_cache import get_accent_color_int, get_guild_name
 from sv_common.guild_sync import crafting_service
 
 logger = logging.getLogger(__name__)
@@ -34,9 +35,9 @@ async def get_db_pool(request: Request) -> asyncpg.Pool:
 
 async def _get_current_player_id(request: Request) -> Optional[int]:
     """Extract player_id from JWT cookie if present. Returns None if not logged in."""
-    from patt.deps import get_page_member
+    from guild_portal.deps import get_page_member
     from sv_common.db.engine import get_session_factory
-    from patt.config import get_settings
+    from guild_portal.config import get_settings
 
     settings = get_settings()
     factory = get_session_factory(settings.database_url)
@@ -217,9 +218,9 @@ async def post_guild_order(
         embed = discord.Embed(
             title=recipe["name"],
             url=recipe["wowhead_url"],
-            color=0xD4A84B,
+            color=get_accent_color_int(),
         )
-        embed.set_footer(text="Crafting Corner \u2022 pullallthethings.com")
+        embed.set_footer(text=f"Crafting Corner \u2022 {get_guild_name()}")
 
         await channel.send(content=content, embed=embed)
 
