@@ -27,7 +27,7 @@ A web platform for the PATT guild that provides:
 - **Admin tools** — campaign management, roster management, rank configuration, crafting sync
 - **Blizzard API integration** — guild roster sync, character profiles, item levels, profession/recipe data
 - **Crafting Corner** — guild-wide recipe directory with Discord guild order system
-- **PATTSync addon** — WoW Lua addon + companion app for guild/officer note sync
+- **GuildSync addon** — WoW Lua addon + companion app for guild/officer note sync
 
 The platform is built with **shared common services** that will be reused by other sites (shadowedvaca.com, Salt All The Things site). The common layer handles auth, Discord integration, identity, and notifications.
 
@@ -221,13 +221,13 @@ PullAllTheThings-site/          (repo root)
 │           └── contest_cog.py
 │
 ├── wow_addon/
-│   └── PATTSync/
-│       ├── PATTSync.toc
-│       ├── PATTSync.lua
+│   └── GuildSync/
+│       ├── GuildSync.toc
+│       ├── GuildSync.lua
 │       └── README.md
 │
 ├── companion_app/
-│   ├── patt_sync_watcher.py
+│   ├── guild_sync_watcher.py
 │   ├── requirements.txt
 │   └── README.md
 │
@@ -308,12 +308,12 @@ APP_HOST=0.0.0.0
 BLIZZARD_CLIENT_ID=your-blizzard-client-id
 BLIZZARD_CLIENT_SECRET=your-blizzard-client-secret
 
-# Guild sync config
-PATT_GUILD_REALM_SLUG=senjin
-PATT_GUILD_NAME_SLUG=pull-all-the-things
+# Guild sync config (realm/name also configurable via Admin → Site Config)
+GUILD_REALM_SLUG=senjin
+GUILD_NAME_SLUG=pull-all-the-things
 
 # Companion app API key
-PATT_API_KEY=generate-a-strong-random-key
+GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 # NOTE: audit_channel_id and crafters_corner_channel_id are configured
 # via the Admin UI (Admin → Raid Tools and Admin → Crafting Sync).
@@ -429,6 +429,11 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 ### Current Phase
 - **Platform is feature-complete.** No active phase. Next work should start a new phase in `reference/`.
 
+### Recent Changes (2026-03-11, no migration)
+- **Admin nav revamp**: `base_admin.html` now includes the same `site-header` as public pages (guild name, Home/Roster/Crafting/Admin links, character badge, rank badge, Log Out). Sidebar footer removed. Admin layout changed to column flex with app-shell scrolling — header spans full width, sidebar+content row fills remaining height, each scrolls independently.
+- **Nginx static path**: `/static/` alias in nginx was hardcoded to `src/patt/static/` — updated to `src/guild_portal/static/` in both live config and `deploy/nginx/pullallthething.com.conf`.
+- **Phase 4.0 complete**: genericization, config extraction, migration 0032 all deployed. 418 tests pass, 69 skip.
+
 ### Recent Bug Fixes (2026-03-07, no migration)
 - **Player Manager character badges**: replaced legacy `M`/`A` letter badges + toggle button with read-only text labels. Gold `Main` / blue `Off` / nothing for alts. If a character is both main and offspec, both badges render via a `.pm-char-badges` flex wrapper. SQL CASE now returns `'main+offspec'` when `main_character_id = offspec_character_id`.
 - **Front page recruiting needs**: query now uses `COALESCE(p.main_spec_id, wc.active_spec_id)` (matching roster API logic), excludes initiates (`gr.level > 1`), and filters `on_raid_hiatus IS NOT TRUE`. `preferred_role` does NOT exist on `guild_identity.players` — never add it to SQL against that table.
@@ -468,7 +473,7 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - Discord bot starts as background task during FastAPI lifespan (skipped if no token configured)
 - Contest agent: Discord milestone posts, auto-activate/close campaigns
 - Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — needs activation)
-- GuildSync WoW addon + companion app (functional, syncing guild notes)
+- GuildSync WoW addon (`wow_addon/GuildSync/`) + companion app (`companion_app/guild_sync_watcher.py`) — functional, syncing guild notes via `/guildsync` slash command in WoW
 - Screen permissions: DB-driven Settings nav — all screens configurable by rank level via `common.screen_permissions`
 
 ### Known Gaps / Dormant Features
