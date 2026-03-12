@@ -170,25 +170,27 @@
     <div class="prog-card">
         <h2 class="prog-card__title">M+ Season</h2>
         <p class="prog-card__subtitle">
-            Set the Blizzard Mythic+ season ID used for the keystone profile endpoint.
-            Find the current season ID on
-            <a href="https://us.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-us&locale=en_US" target="_blank" rel="noopener" style="color:var(--color-gold)">Blizzard API</a>
-            or via Wowhead.
+            The Blizzard M+ season ID is set on the active raid season.
         </p>
 
-        <div class="prog-season-input">
-            <label style="color:var(--color-text-muted);font-size:0.85rem">Current Season ID</label>
-            <input type="number" id="mplus-season-id" class="form-control"
-                   style="width:120px;font-size:0.9rem" placeholder="e.g. 13" min="1">
-            <button class="btn btn-primary" id="mplus-season-save" style="padding:0.4rem 1rem;font-size:0.85rem">
-                Save
-            </button>
-            <span id="mplus-season-status" style="font-size:0.85rem"></span>
-        </div>
-
-        <p style="margin-top:1rem;font-size:0.82rem;color:var(--color-text-muted)">
-            Progression sync runs every 6 hours alongside the Blizzard roster sync.
-            Achievement sync runs weekly (Sunday at 4:30 AM UTC) with full snapshots.
+        <p style="font-size:0.88rem;color:var(--color-text);line-height:1.6">
+            Go to
+            <a href="/admin/reference-tables" style="color:var(--color-gold)">Admin → Reference Tables</a>
+            and enter the Blizzard integer season ID in the <strong>M+ Season ID</strong> column
+            of the active raid season row.
+        </p>
+        <p style="font-size:0.82rem;color:var(--color-text-muted);margin-top:0.75rem;line-height:1.5">
+            Blizzard uses plain integers (13, 14, 15…), not dot notation.
+            Find the current season ID at the
+            <a href="https://us.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-us&locale=en_US"
+               target="_blank" rel="noopener" style="color:var(--color-gold)">Blizzard API season index</a>
+            (requires a valid access token, or check Wowhead).
+        </p>
+        <p style="font-size:0.82rem;color:var(--color-text-muted);margin-top:0.75rem">
+            Progression syncs every 6 hours. Achievement sync + snapshots run weekly (Sunday 4:30 AM UTC).
+        </p>
+        <p style="font-size:0.82rem;color:var(--color-text-muted);margin-top:0.5rem" id="stat-mplus-season">
+            Current season ID: <strong id="mplus-season-display">—</strong>
         </p>
     </div>
 
@@ -289,41 +291,14 @@
             document.getElementById('stat-snap').textContent = d.snapshot_rows ?? '—';
             document.getElementById('stat-snap-date').textContent = fmtDateOnly(d.latest_snapshot_date);
 
-            if (d.current_mplus_season_id) {
-                document.getElementById('mplus-season-id').value = d.current_mplus_season_id;
+            const seasonEl = document.getElementById('mplus-season-display');
+            if (seasonEl) {
+                seasonEl.textContent = d.current_mplus_season_id ?? 'Not configured';
             }
         } catch (e) {
             console.error('Failed to load progression stats', e);
         }
     }
-
-    // ── M+ season save ─────────────────────────────────────────────────────
-
-    document.getElementById('mplus-season-save').addEventListener('click', async function() {
-        const seasonId = parseInt(document.getElementById('mplus-season-id').value, 10) || null;
-        const statusEl = document.getElementById('mplus-season-status');
-        this.disabled = true;
-        try {
-            const resp = await fetch('/api/v1/admin/progression/mplus-season', {
-                method: 'PATCH',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({current_mplus_season_id: seasonId}),
-            });
-            const data = await resp.json();
-            if (data.ok) {
-                statusEl.textContent = '✓ Saved';
-                statusEl.style.color = 'var(--color-success)';
-            } else {
-                statusEl.textContent = '✗ ' + (data.error || data.detail || 'Save failed');
-                statusEl.style.color = 'var(--color-danger)';
-            }
-        } catch (e) {
-            statusEl.textContent = '✗ Network error';
-            statusEl.style.color = 'var(--color-danger)';
-        }
-        this.disabled = false;
-        setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    });
 
     // ── Tracked achievements ───────────────────────────────────────────────
 

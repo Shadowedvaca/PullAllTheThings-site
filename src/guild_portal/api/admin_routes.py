@@ -70,6 +70,7 @@ class SeasonUpdate(BaseModel):
     season_number: int | None = None
     is_new_expansion: bool | None = None
     is_active: bool | None = None
+    blizzard_mplus_season_id: int | None = None
 
 
 class PlayerCreate(BaseModel):
@@ -324,6 +325,8 @@ async def update_season(
         season.is_new_expansion = body.is_new_expansion
     if body.is_active is not None:
         season.is_active = body.is_active
+    if "blizzard_mplus_season_id" in body.model_fields_set:
+        season.blizzard_mplus_season_id = body.blizzard_mplus_season_id
     await db.commit()
     return {
         "ok": True,
@@ -335,6 +338,7 @@ async def update_season(
             "start_date": season.start_date.isoformat(),
             "is_new_expansion": season.is_new_expansion,
             "is_active": season.is_active,
+            "blizzard_mplus_season_id": season.blizzard_mplus_season_id,
         },
     }
 

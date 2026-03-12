@@ -319,6 +319,7 @@
                 <th>Start Date</th>
                 <th>New Expansion</th>
                 <th>Active</th>
+                <th title="Blizzard API integer ID for M+ keystone season. Find at: us.api.blizzard.com/data/wow/mythic-keystone/season/index">M+ Season ID</th>
                 <th></th>
             </tr>
         </thead>
@@ -346,6 +347,12 @@
                     <option value="true" {% if season.is_active %}selected{% endif %}>Active</option>
                     <option value="false" {% if not season.is_active %}selected{% endif %}>Inactive</option>
                 </select>
+            </td>
+            <td>
+                <input class="rt-editable rt-field rt-editable--number" type="number" name="blizzard_mplus_season_id"
+                       value="{{ season.blizzard_mplus_season_id or '' }}"
+                       data-orig="{{ season.blizzard_mplus_season_id or '' }}"
+                       placeholder="e.g. 13" style="width:70px;">
             </td>
             <td>
                 <button class="rt-save-btn" onclick="saveRow(this)">Save</button>

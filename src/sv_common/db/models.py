@@ -427,6 +427,7 @@ class RaidSeason(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
     is_new_expansion: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    blizzard_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

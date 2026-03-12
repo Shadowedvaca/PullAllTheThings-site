@@ -2494,9 +2494,18 @@ async def admin_progression_sync_stats(
             "SELECT MAX(snapshot_date) FROM guild_identity.progression_snapshots"
         )
 
-    # M+ season from site_config
-    from sv_common.config_cache import get_site_config
-    cfg = get_site_config()
+    # M+ season ID: prefer active season row, fall back to site_config
+    mplus_season_id = None
+    async with pool.acquire() as conn:
+        season_row = await conn.fetchrow(
+            """SELECT blizzard_mplus_season_id FROM patt.raid_seasons
+               WHERE is_active = TRUE ORDER BY start_date DESC LIMIT 1"""
+        )
+        if season_row and season_row["blizzard_mplus_season_id"]:
+            mplus_season_id = season_row["blizzard_mplus_season_id"]
+    if mplus_season_id is None:
+        from sv_common.config_cache import get_site_config
+        mplus_season_id = get_site_config().get("current_mplus_season_id")
 
     return JSONResponse({
         "ok": True,
@@ -2509,6 +2518,6 @@ async def admin_progression_sync_stats(
             "achievement_rows": ach_rows,
             "snapshot_rows": snapshot_rows,
             "latest_snapshot_date": latest_snapshot.isoformat() if latest_snapshot else None,
-            "current_mplus_season_id": cfg.get("current_mplus_season_id"),
+            "current_mplus_season_id": mplus_season_id,
         },
     })
