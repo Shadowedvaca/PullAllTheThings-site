@@ -985,28 +985,32 @@ textarea.form-control {
    ADMIN LAYOUT — full-height sidebar
    ============================================================ */
 
-/* Body override for admin pages */
+/* Body override for admin pages — column so site-header spans full width */
 .admin-body {
     display: flex;
-    flex-direction: row;
-    min-height: 100vh;
-    overflow-x: hidden;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
 }
 
-/* Full-height fixed sidebar */
+/* Row container below the header */
+.admin-main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Sidebar */
 .admin-sidenav {
     width: var(--admin-nav-width, 200px);
-    min-height: 100vh;
     background: var(--color-bg-card);
     border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
     transition: width 0.2s ease;
-    overflow: hidden;
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .admin-sidenav.collapsed {
@@ -1017,20 +1021,11 @@ textarea.form-control {
 .admin-sidenav__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 1rem 0.75rem 0.75rem;
+    justify-content: flex-end;
+    padding: 0.5rem 0.5rem 0.5rem 0.75rem;
     border-bottom: 1px solid var(--color-border);
     white-space: nowrap;
 }
-
-.admin-sidenav__brand {
-    font-family: var(--font-display);
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--color-accent);
-    text-decoration: none;
-}
-.admin-sidenav__brand:hover { text-decoration: none; }
 
 .admin-sidenav__toggle {
     background: none;
@@ -1093,26 +1088,6 @@ textarea.form-control {
 
 .admin-sidenav__spacer { flex: 1; }
 
-.admin-sidenav__footer {
-    padding: 0.75rem;
-    border-top: 1px solid var(--color-border);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    white-space: nowrap;
-}
-
-.admin-sidenav__user {
-    color: var(--color-accent);
-    font-weight: 600;
-    font-size: 0.85rem;
-}
-.admin-sidenav__rank {
-    color: var(--color-text-muted);
-    font-size: 0.75rem;
-    margin-bottom: 0.25rem;
-}
-
 /* Expand tab — only visible when sidebar is collapsed */
 .admin-sidenav__expand-tab {
     display: none;
@@ -1135,11 +1110,12 @@ textarea.form-control {
 .admin-sidenav__expand-tab.visible { display: flex; align-items: center; justify-content: center; }
 .admin-sidenav__expand-tab:hover { color: var(--color-accent); background: var(--color-bg-panel); }
 
-/* Main content fills all remaining width */
+/* Main content fills remaining width and scrolls independently */
 .admin-content {
     flex: 1;
     min-width: 0;
     padding: 1.5rem 2rem;
+    overflow-y: auto;
     transition: none;
 }
 
