@@ -63,7 +63,7 @@ def build_armory_url(name: str) -> str:
 def fetch_sheets_data(url: str) -> dict:
     """Fetch data from the Google Apps Script endpoint."""
     print(f"Fetching data from Apps Script: {url}")
-    req = urllib.request.Request(url, headers={"User-Agent": "PATT-Migration/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "GuildPortal-Migration/1.0"})
     with urllib.request.urlopen(req, timeout=30) as response:
         raw = response.read().decode("utf-8")
     data = json.loads(raw)

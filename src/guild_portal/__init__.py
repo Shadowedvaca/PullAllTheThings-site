@@ -1,1 +1,1 @@
-# patt application package
+# guild_portal application package

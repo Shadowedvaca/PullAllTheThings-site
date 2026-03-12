@@ -1,0 +1,90 @@
+services:
+  # --- DATABASES ---
+  db-prod:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: guild_user
+      POSTGRES_PASSWORD: ${PROD_DB_PASSWORD}
+      POSTGRES_DB: guild_db
+    volumes:
+      - guild_pgdata_prod:/var/lib/postgresql/data
+      - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guild_user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db-test:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: guild_user
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD}
+      POSTGRES_DB: guild_db_test
+    volumes:
+      - guild_pgdata_test:/var/lib/postgresql/data
+      - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guild_user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db-dev:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: guild_user
+      POSTGRES_PASSWORD: ${DEV_DB_PASSWORD}
+      POSTGRES_DB: guild_db_dev
+    volumes:
+      - guild_pgdata_dev:/var/lib/postgresql/data
+      - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guild_user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- APPS ---
+  # Ports are exposed for the nginx reverse proxy on the host.
+  # Caddyfile.guild is available as an alternative if/when nginx is retired.
+  app-prod:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db-prod:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    ports:
+      - "8100:8100"
+
+  app-test:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db-test:
+        condition: service_healthy
+    env_file:
+      - .env.test
+    ports:
+      - "8101:8100"
+
+  app-dev:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db-dev:
+        condition: service_healthy
+    env_file:
+      - .env.dev
+    ports:
+      - "8102:8100"
+
+volumes:
+  guild_pgdata_prod:
+  guild_pgdata_test:
+  guild_pgdata_dev:

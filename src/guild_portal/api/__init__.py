@@ -1,1 +1,1 @@
-# patt.api
+# guild_portal.api

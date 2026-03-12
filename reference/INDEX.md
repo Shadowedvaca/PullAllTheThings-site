@@ -45,7 +45,7 @@ This means Claude Code never needs conversation history. It reads the repo.
 | `reference/PHASE_4_OVERVIEW.md` | Master plan — timeline, dependencies, architecture changes |
 | ~~`reference/PHASE_4_0_CONFIG_EXTRACTION.md`~~ | ✅ Complete — archived |
 | `reference/PHASE_4_1_SETUP_WIZARD.md` | First-run web-based setup wizard |
-| `reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md` | Docker packaging, Caddy, dev/test/prod |
+| ~~`reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md`~~ | ✅ Complete — archived |
 | `reference/PHASE_4_3_BLIZZARD_EXPANSION.md` | Last-login optimization, raids, M+, achievements |
 | `reference/PHASE_4_4_RAIDERIO_INTEGRATION.md` | Raider.IO M+ and raid progression |
 | `reference/PHASE_4_5_WARCRAFT_LOGS.md` | Warcraft Logs parses, reports, attendance |
@@ -94,8 +94,8 @@ This means Claude Code never needs conversation history. It reads the repo.
 | 3.5 | ✅ Complete | Auto-Booking Scheduler — background loop, auto-creates weekly raid |
 | 3.6 | ✅ Complete | Roster Initiate Filtering + Raid Hiatus — on_raid_hiatus flag, New Members box, Show Initiates checkbox |
 | 4.0 | ✅ Complete | Config Extraction & Genericization — site_config table, config_cache, rank_wow_mapping, guild_quotes, /admin/site-config |
-| 4.1 | 📋 Planned | First-Run Setup Wizard |
-| 4.2 | 📋 Planned | Docker Packaging & Environments |
+| 4.1 | ✅ Complete | First-Run Setup Wizard |
+| 4.2 | ✅ Complete | Docker Packaging & Environments |
 | 4.3 | 📋 Planned | Blizzard API Expansion & Last-Login Optimization |
 | 4.4 | 📋 Planned | Raider.IO Integration |
 | 4.5 | 📋 Planned | Warcraft Logs Integration |

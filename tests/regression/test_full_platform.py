@@ -1,4 +1,4 @@
-"""End-to-end regression suite for the PATT platform.
+"""End-to-end regression suite for the Guild Portal platform.
 
 Tests the complete lifecycle in one connected flow:
   1. Create ranks and players

@@ -349,9 +349,14 @@ Three PostgreSQL schemas, current through **migration 0033**:
 ## Operations & Deployment
 
 - **Tests:** 418 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test); regression suite at `tests/regression/` requires live DB
-- **CI/CD:** GitHub Actions workflow at `.github/workflows/deploy.yml` — auto-deploys on every push to main
+- **CI/CD:** Three GitHub Actions workflows — each environment has its own trigger:
+  - `deploy-dev.yml` — triggers on push to **any branch except main** → deploys to `dev.pullallthethings.com` (port 8102)
+  - `deploy-test.yml` — triggers on push to **main** (i.e. PR merge) → deploys to `test.pullallthethings.com` (port 8101)
+  - `deploy-prod.yml` — triggers on **version tag** (`v*`) → deploys to `pullallthethings.com` (port 8100)
   - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519 key authorized on server)
-  - Deploy steps: git pull → pip install → alembic upgrade → systemctl restart → health check
+  - Deploy steps: git fetch/checkout → docker build → docker up -d → health check
+- **Branch strategy:** Feature branches → dev auto-deploys. Merge to main → test auto-deploys. Tag release → prod deploys.
+- **Environments:** All three run as Docker containers on Hetzner. Dev/test behind nginx basic auth (username: `admin`). Passwords in server `/etc/nginx/htpasswd/`.
 
 ### Known Deploy Quirk — Chrome "GitHub 404" After Restart
 
@@ -426,11 +431,13 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - Roster Initiate Filtering + Raid Hiatus (migration 0030) — `on_raid_hiatus` flag on players; initiates filtered from comp tab; New Members box; Show Initiates checkbox on roster
 - Phase 4.0: Config Extraction & Genericization (migration 0032) — `common.site_config` single-row table, `sv_common.config_cache` in-process cache, `common.rank_wow_mapping`, mito tables renamed to guild_quotes/guild_quote_titles, `/quote` bot command, `/admin/site-config` GL-only page, all hardcoded guild name/color/realm refs removed from code
 - Phase 4.1: First-Run Setup Wizard (migration 0033) — 9-step web wizard activated when `setup_complete=FALSE`; encryped credential storage (Fernet/JWT_SECRET_KEY); Discord token/guild verification; Blizzard API verification; rank naming + WoW rank mapping UI; Discord role/channel assignment; admin account bootstrap; guard middleware redirects all routes to `/setup` until complete; setup routes become 404 after completion
+- Phase 4.2: Docker Packaging & Environments — `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.yml` (generic), `docker-compose.patt.yml` (PATT 3-env), `Caddyfile` + `Caddyfile.patt`, `.env.template`, `.dockerignore`; updated `setup_postgres.sql` to be Docker-generic; updated GitHub Actions deploy workflow to use Docker
 
 ### Current Phase
-- **Platform is feature-complete through Phase 4.1.** Next: Phase 4.2 Docker Packaging.
+- **Platform is feature-complete through Phase 4.2.** Next: Phase 4.3 Blizzard API Expansion.
 
-### Recent Changes (2026-03-11, migration 0033)
+### Recent Changes (2026-03-11, no migration)
+- **Phase 4.2 complete**: Docker packaging. `Dockerfile` + `docker-entrypoint.sh` (uses `guild_portal.app:create_app`, `PYTHONPATH=/app/src`). Generic `docker-compose.yml` (app + postgres + caddy). `docker-compose.guild.yml` (3 envs: prod/test/dev, isolated DBs, nginx routing). `Caddyfile` (generic `{$DOMAIN}` routing) + `Caddyfile.guild` (subdomain routing with basic auth on test/dev, username `admin`). `.env.template` for new guild deployments. `.dockerignore` keeps image lean. `deploy/setup_postgres.sql` genericized. GitHub Actions workflow updated to use `docker compose -f docker-compose.guild.yml` against `/opt/guild-portal`. Production migrated from systemd to Docker. Old systemd `patt` service disabled. PATT references scrubbed from all code, comments, templates, and config files (legacy static HTML files excluded).
 - **Phase 4.1 complete**: First-Run Setup Wizard. 430 tests pass, 69 skip.
 - **Admin nav revamp**: `base_admin.html` now includes the same `site-header` as public pages (guild name, Home/Roster/Crafting/Admin links, character badge, rank badge, Log Out). Sidebar footer removed. Admin layout changed to column flex with app-shell scrolling — header spans full width, sidebar+content row fills remaining height, each scrolls independently.
 - **Nginx static path**: `/static/` alias in nginx was hardcoded to `src/patt/static/` — updated to `src/guild_portal/static/` in both live config and `deploy/nginx/pullallthething.com.conf`.

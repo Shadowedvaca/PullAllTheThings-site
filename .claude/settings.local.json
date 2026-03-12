@@ -67,7 +67,15 @@
       "Bash(cd \"H:/Development/PullAllTheThings-site\" && find . -name \"*.py\" -not -path \"./.venv/*\" -not -path \"./.git/*\" -not -path \"*/__pycache__/*\" | xargs sed -i 's/from patt\\\\./from guild_portal\\\\./g; s/import patt\\\\./import guild_portal\\\\./g')",
       "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/\"patt\\\\.services\\\\./\"guild_portal.services./g; s/\"patt\\\\.pages\\\\./\"guild_portal.pages./g; s/\"patt\\\\.bot\\\\./\"guild_portal.bot./g; s/\"patt\\\\.config/\"guild_portal.config/g; s/\"patt\\\\.deps/\"guild_portal.deps/g' tests/unit/test_campaign_service.py tests/unit/test_contest_agent.py tests/unit/test_smoke.py tests/unit/test_profile_pages.py tests/unit/test_vote_scoring.py tests/unit/test_availability.py tests/unit/test_seasons.py tests/conftest.py)",
       "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's|src/patt/static/legacy/|src/guild_portal/static/legacy/|g; s|src/patt/deps\\\\.py|src/guild_portal/deps.py|g' CLAUDE.md)",
-      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/PATTSync WoW addon/GuildSync WoW addon/g' CLAUDE.md && sed -i 's|│   └── patt/|│   └── guild_portal/|g' CLAUDE.md)"
+      "Bash(cd \"H:/Development/PullAllTheThings-site\" && sed -i 's/PATTSync WoW addon/GuildSync WoW addon/g' CLAUDE.md && sed -i 's|│   └── patt/|│   └── guild_portal/|g' CLAUDE.md)",
+      "Bash(sleep 45 && ssh hetzner \"systemctl status patt --no-pager | head -15 && echo '---' && journalctl -u patt -n 10 --no-pager --since '2 minutes ago'\")",
+      "Bash(sleep 60 && ssh hetzner \"systemctl status patt --no-pager | head -6 && echo '---' && journalctl -u patt --no-pager --since '3 minutes ago' | grep -E 'started|startup|restart|alembic|migration|ERROR|error' | head -20\")",
+      "Bash(scp H:/Development/PullAllTheThings-site/Dockerfile \\\\\n    H:/Development/PullAllTheThings-site/docker-entrypoint.sh \\\\\n    H:/Development/PullAllTheThings-site/docker-compose.yml \\\\\n    H:/Development/PullAllTheThings-site/docker-compose.patt.yml \\\\\n    H:/Development/PullAllTheThings-site/Caddyfile \\\\\n    H:/Development/PullAllTheThings-site/Caddyfile.patt \\\\\n    H:/Development/PullAllTheThings-site/.dockerignore \\\\\n    hetzner:/opt/guild-portal/ 2>&1)",
+      "Bash(scp H:/Development/PullAllTheThings-site/deploy/setup_postgres.sql hetzner:/opt/guild-portal/deploy/setup_postgres.sql 2>&1)",
+      "Bash(scp H:/Development/PullAllTheThings-site/Dockerfile hetzner:/opt/guild-portal/Dockerfile && ssh hetzner \"cd /opt/guild-portal && docker compose -f docker-compose.patt.yml build app-prod 2>&1 | tail -10\")",
+      "Bash(scp H:/Development/PullAllTheThings-site/docker-compose.patt.yml hetzner:/opt/guild-portal/docker-compose.patt.yml && ssh hetzner \"cd /opt/guild-portal && docker compose -f docker-compose.patt.yml up -d app-prod 2>&1\")",
+      "Bash(cd H:/Development/PullAllTheThings-site && mv docker-compose.patt.yml docker-compose.guild.yml && mv Caddyfile.patt Caddyfile.guild 2>&1)",
+      "Bash(scp H:/Development/PullAllTheThings-site/docker-compose.guild.yml hetzner:/opt/guild-portal/docker-compose.guild.yml && echo \"Uploaded docker-compose.guild.yml\")"
     ]
   }
 }

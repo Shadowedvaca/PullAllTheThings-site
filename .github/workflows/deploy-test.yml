@@ -1,0 +1,48 @@
+name: Deploy to Test
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to test.pullallthethings.com
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 5.78.114.224
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/guild-portal
+
+            echo "==> Pulling main..."
+            git checkout main
+            git pull origin main
+
+            echo "==> Building test image..."
+            docker compose -f docker-compose.guild.yml build app-test
+
+            echo "==> Restarting test app..."
+            docker compose -f docker-compose.guild.yml up -d app-test
+
+            echo "==> Waiting for test to be ready..."
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              sleep 3
+              if curl -sf http://localhost:8101/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ok') else 1)" 2>/dev/null; then
+                echo "==> Test healthy after ${i}x3s"
+                break
+              fi
+              if [ $i -eq 10 ]; then
+                echo "ERROR: Test did not become healthy"
+                docker compose -f docker-compose.guild.yml logs app-test --tail 30
+                exit 1
+              fi
+            done
+
+            echo "==> Test deploy complete! https://test.pullallthethings.com"

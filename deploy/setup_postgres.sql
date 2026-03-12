@@ -1,16 +1,19 @@
--- PATT Platform PostgreSQL setup
--- Run as postgres superuser: sudo -u postgres psql < deploy/setup_postgres.sql
+-- Guild Portal PostgreSQL schema setup
+-- For Docker: mounted as /docker-entrypoint-initdb.d/01-setup.sql
+-- For manual setup: run as postgres superuser after creating the database and user
+--
+-- Docker handles user/database creation via POSTGRES_USER / POSTGRES_DB env vars.
+-- This script only creates the schemas and grants permissions.
 
-CREATE USER patt_user WITH PASSWORD 'CHANGEME';
-CREATE DATABASE patt_db OWNER patt_user;
+CREATE SCHEMA IF NOT EXISTS common;
+CREATE SCHEMA IF NOT EXISTS guild_identity;
+CREATE SCHEMA IF NOT EXISTS patt;
 
--- Connect to patt_db and create schemas
-\c patt_db
-CREATE SCHEMA common AUTHORIZATION patt_user;
-CREATE SCHEMA patt AUTHORIZATION patt_user;
-
--- Test database for pytest
-CREATE DATABASE patt_test_db OWNER patt_user;
-\c patt_test_db
-CREATE SCHEMA common AUTHORIZATION patt_user;
-CREATE SCHEMA patt AUTHORIZATION patt_user;
+-- Grant permissions to the current user (set by POSTGRES_USER in Docker)
+DO $$
+BEGIN
+    EXECUTE format('GRANT ALL ON SCHEMA common TO %I', current_user);
+    EXECUTE format('GRANT ALL ON SCHEMA guild_identity TO %I', current_user);
+    EXECUTE format('GRANT ALL ON SCHEMA patt TO %I', current_user);
+END
+$$;

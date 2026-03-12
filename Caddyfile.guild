@@ -1,0 +1,19 @@
+pullallthethings.com {
+    reverse_proxy app-prod:8100
+}
+
+test.pullallthethings.com {
+    reverse_proxy app-test:8100
+    basicauth {
+        # Protect test env from public access
+        # Username: admin  Password: set via TEST_AUTH_HASH / DEV_AUTH_HASH env vars
+        admin {$TEST_AUTH_HASH}
+    }
+}
+
+dev.pullallthethings.com {
+    reverse_proxy app-dev:8100
+    basicauth {
+        admin {$DEV_AUTH_HASH}
+    }
+}

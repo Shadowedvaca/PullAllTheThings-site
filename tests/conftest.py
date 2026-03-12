@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the PATT platform test suite."""
+"""Shared pytest fixtures for the Guild Portal test suite."""
 
 import os
 from collections.abc import AsyncGenerator
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Test database URL — separate from production
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://patt_user:CHANGEME@localhost:5432/patt_test_db",
+    "postgresql+asyncpg://guild_user:CHANGEME@localhost:5432/guild_test_db",
 )
 
 # Override settings before any app import

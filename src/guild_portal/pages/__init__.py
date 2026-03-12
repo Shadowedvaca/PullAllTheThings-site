@@ -1,1 +1,1 @@
-# patt.pages
+# guild_portal.pages

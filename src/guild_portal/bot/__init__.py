@@ -1,1 +1,1 @@
-# patt.bot
+# guild_portal.bot

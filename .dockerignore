@@ -1,0 +1,15 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.env.*
+*.md
+tests/
+reference/
+memory/
+docs/
+wow_addon/
+companion_app/
+node_modules/
+.github/
