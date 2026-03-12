@@ -24,7 +24,7 @@ from typing import Optional
 
 import asyncpg
 
-from .blizzard_client import BlizzardClient
+from .blizzard_client import BlizzardClient, should_sync_character
 
 logger = logging.getLogger(__name__)
 
@@ -302,16 +302,32 @@ async def run_crafting_sync(
                 )
                 return {"skipped": True, "reason": "cadence_weekly"}
 
-        characters = await conn.fetch(
-            """SELECT id, character_name, realm_slug
+        all_characters = await conn.fetch(
+            """SELECT id, character_name, realm_slug,
+                      last_login_timestamp, last_profession_sync
                FROM guild_identity.wow_characters
                WHERE removed_at IS NULL
                ORDER BY character_name"""
         )
 
+    # Last-login optimization: skip characters that haven't logged in since
+    # their last profession sync. force=True bypasses this filter.
+    if force:
+        characters = list(all_characters)
+    else:
+        characters = [
+            c for c in all_characters
+            if should_sync_character(
+                c["last_login_timestamp"],
+                c["last_profession_sync"],
+            )
+        ]
+
+    skipped_login = len(all_characters) - len(characters)
     logger.info(
-        "Crafting sync starting for %d characters (season: %s, cadence: %s)",
-        len(characters),
+        "Crafting sync starting for %d of %d characters "
+        "(%d skipped — no login change; season: %s, cadence: %s)",
+        len(characters), len(all_characters), skipped_login,
         season.display_name if season else "none",
         cadence,
     )
@@ -343,6 +359,11 @@ async def run_crafting_sync(
             if result is None:
                 async with pool.acquire() as conn:
                     await sync_character_recipes(conn, char["id"], [])
+                    await conn.execute(
+                        """UPDATE guild_identity.wow_characters
+                           SET last_profession_sync = $1 WHERE id = $2""",
+                        datetime.now(timezone.utc), char["id"],
+                    )
                 continue
 
             async with pool.acquire() as conn:
@@ -382,6 +403,13 @@ async def run_crafting_sync(
 
                 await sync_character_recipes(conn, char["id"], char_recipe_ids)
 
+                # Stamp last_profession_sync so this character is skipped next run
+                await conn.execute(
+                    """UPDATE guild_identity.wow_characters
+                       SET last_profession_sync = $1 WHERE id = $2""",
+                    datetime.now(timezone.utc), char["id"],
+                )
+
         if i + batch_size < len(characters):
             await asyncio.sleep(0.5)
 
@@ -416,12 +444,15 @@ async def run_crafting_sync(
         )
 
     logger.info(
-        "Crafting sync complete: %d characters processed, %d recipes found, %.1fs",
-        chars_processed, recipes_found, duration,
+        "Crafting sync complete: %d characters processed, %d recipes found, %.1fs "
+        "(%d skipped — no login change)",
+        chars_processed, recipes_found, duration, skipped_login,
     )
     return {
-        "characters_total": len(characters),
+        "characters_total": len(all_characters),
+        "characters_synced": len(characters),
         "characters_processed": chars_processed,
+        "characters_skipped_login": skipped_login,
         "recipes_found": recipes_found,
         "duration_seconds": duration,
     }

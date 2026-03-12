@@ -1,0 +1,459 @@
+{% extends "base_admin.html" %}
+{% block title %}Progression — Admin — {{ site().guild_name }}{% endblock %}
+{% block nav_progression %}active{% endblock %}
+
+{% block head %}
+<style>
+.prog-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+@media (max-width: 700px) { .prog-grid { grid-template-columns: 1fr; } }
+
+.prog-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+}
+.prog-card--wide { grid-column: 1 / -1; }
+.prog-card__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0 0 0.25rem 0;
+}
+.prog-card__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+}
+.prog-stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #2a2a2e;
+    font-size: 0.9rem;
+}
+.prog-stat-row:last-child { border-bottom: none; }
+.prog-stat-row__label { color: var(--color-text-muted); }
+.prog-stat-row__val { font-weight: 600; color: var(--color-text); }
+
+/* Tracked achievements table */
+.prog-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+.prog-table th {
+    text-align: left;
+    padding: 0.4rem 0.6rem;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.prog-table td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid #1e1e22;
+    vertical-align: middle;
+}
+.prog-table tr:last-child td { border-bottom: none; }
+.prog-table tr.inactive td { opacity: 0.45; }
+
+.prog-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.prog-badge--raid    { background: #7f1d1d; color: #fca5a5; }
+.prog-badge--mplus   { background: #1e3a5f; color: #93c5fd; }
+.prog-badge--general { background: #2a2a2e; color: #888; }
+
+.prog-btn-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+/* Add form */
+.prog-add-form {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+}
+.prog-add-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.prog-add-form label {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.prog-season-input {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1 class="admin-title">Progression</h1>
+    <p style="color:var(--color-text-muted);font-size:0.9rem;margin:0">
+        Raid encounters, M+ ratings, and achievement tracking.
+    </p>
+</div>
+
+<div class="prog-grid">
+
+    <!-- Sync Status -->
+    <div class="prog-card">
+        <h2 class="prog-card__title">Sync Status</h2>
+        <p class="prog-card__subtitle">Progression data is synced for characters that have logged in since the last sync.</p>
+
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Characters (total)</span>
+            <span class="prog-stat-row__val" id="stat-total">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Characters synced</span>
+            <span class="prog-stat-row__val" id="stat-synced">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Last progression sync</span>
+            <span class="prog-stat-row__val" id="stat-last-sync">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Raid boss records</span>
+            <span class="prog-stat-row__val" id="stat-raid">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">M+ dungeon records</span>
+            <span class="prog-stat-row__val" id="stat-mplus">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Achievement records</span>
+            <span class="prog-stat-row__val" id="stat-ach">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Weekly snapshots</span>
+            <span class="prog-stat-row__val" id="stat-snap">—</span>
+        </div>
+        <div class="prog-stat-row">
+            <span class="prog-stat-row__label">Latest snapshot date</span>
+            <span class="prog-stat-row__val" id="stat-snap-date">—</span>
+        </div>
+    </div>
+
+    <!-- M+ Season Config -->
+    <div class="prog-card">
+        <h2 class="prog-card__title">M+ Season</h2>
+        <p class="prog-card__subtitle">
+            Set the Blizzard Mythic+ season ID used for the keystone profile endpoint.
+            Find the current season ID on
+            <a href="https://us.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-us&locale=en_US" target="_blank" rel="noopener" style="color:var(--color-gold)">Blizzard API</a>
+            or via Wowhead.
+        </p>
+
+        <div class="prog-season-input">
+            <label style="color:var(--color-text-muted);font-size:0.85rem">Current Season ID</label>
+            <input type="number" id="mplus-season-id" class="form-control"
+                   style="width:120px;font-size:0.9rem" placeholder="e.g. 13" min="1">
+            <button class="btn btn-primary" id="mplus-season-save" style="padding:0.4rem 1rem;font-size:0.85rem">
+                Save
+            </button>
+            <span id="mplus-season-status" style="font-size:0.85rem"></span>
+        </div>
+
+        <p style="margin-top:1rem;font-size:0.82rem;color:var(--color-text-muted)">
+            Progression sync runs every 6 hours alongside the Blizzard roster sync.
+            Achievement sync runs weekly (Sunday at 4:30 AM UTC) with full snapshots.
+        </p>
+    </div>
+
+    <!-- Tracked Achievements -->
+    <div class="prog-card prog-card--wide">
+        <h2 class="prog-card__title">Tracked Achievements</h2>
+        <p class="prog-card__subtitle">
+            Only achievements in this list are fetched and stored per character.
+            Achievement IDs change each tier — update them when a new raid or M+ season launches.
+        </p>
+
+        <table class="prog-table" id="ach-table">
+            <thead>
+                <tr>
+                    <th>Achievement ID</th>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th style="text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="ach-tbody">
+                <tr><td colspan="5" style="color:var(--color-text-muted);font-style:italic">Loading…</td></tr>
+            </tbody>
+        </table>
+
+        <div class="prog-add-form" id="ach-add-form">
+            <div class="form-group">
+                <label>Achievement ID</label>
+                <input type="number" id="add-ach-id" class="form-control"
+                       style="width:120px;font-size:0.9rem" placeholder="e.g. 40681" min="1">
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="add-ach-name" class="form-control"
+                       style="width:260px;font-size:0.9rem" placeholder="Ahead of the Curve: …">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <select id="add-ach-cat" class="form-control" style="width:120px;font-size:0.9rem">
+                    <option value="raid">raid</option>
+                    <option value="mythic_plus">mythic_plus</option>
+                    <option value="general">general</option>
+                    <option value="pvp">pvp</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" id="add-ach-btn" style="padding:0.4rem 1rem;font-size:0.85rem">
+                Add
+            </button>
+            <span id="add-ach-status" style="font-size:0.85rem"></span>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    function fmtDate(iso) {
+        if (!iso) return 'Never';
+        return new Date(iso).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+        });
+    }
+    function fmtDateOnly(iso) {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+        });
+    }
+
+    function categoryBadge(cat) {
+        const cls = cat === 'raid' ? 'prog-badge--raid'
+                  : cat === 'mythic_plus' ? 'prog-badge--mplus'
+                  : 'prog-badge--general';
+        const label = cat === 'mythic_plus' ? 'M+' : cat;
+        return `<span class="prog-badge ${cls}">${label}</span>`;
+    }
+
+    // ── Stats ──────────────────────────────────────────────────────────────
+
+    async function loadStats() {
+        try {
+            const resp = await fetch('/admin/progression/sync-stats');
+            const data = await resp.json();
+            if (!data.ok) return;
+            const d = data.data;
+            document.getElementById('stat-total').textContent = d.total_chars ?? '—';
+            document.getElementById('stat-synced').textContent = d.synced_chars ?? '—';
+            document.getElementById('stat-last-sync').textContent = fmtDate(d.last_progression_sync);
+            document.getElementById('stat-raid').textContent = d.raid_progress_rows ?? '—';
+            document.getElementById('stat-mplus').textContent = d.mplus_rows ?? '—';
+            document.getElementById('stat-ach').textContent = d.achievement_rows ?? '—';
+            document.getElementById('stat-snap').textContent = d.snapshot_rows ?? '—';
+            document.getElementById('stat-snap-date').textContent = fmtDateOnly(d.latest_snapshot_date);
+
+            if (d.current_mplus_season_id) {
+                document.getElementById('mplus-season-id').value = d.current_mplus_season_id;
+            }
+        } catch (e) {
+            console.error('Failed to load progression stats', e);
+        }
+    }
+
+    // ── M+ season save ─────────────────────────────────────────────────────
+
+    document.getElementById('mplus-season-save').addEventListener('click', async function() {
+        const seasonId = parseInt(document.getElementById('mplus-season-id').value, 10) || null;
+        const statusEl = document.getElementById('mplus-season-status');
+        this.disabled = true;
+        try {
+            const resp = await fetch('/api/v1/admin/progression/mplus-season', {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({current_mplus_season_id: seasonId}),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                statusEl.textContent = '✓ Saved';
+                statusEl.style.color = 'var(--color-success)';
+            } else {
+                statusEl.textContent = '✗ ' + (data.error || data.detail || 'Save failed');
+                statusEl.style.color = 'var(--color-danger)';
+            }
+        } catch (e) {
+            statusEl.textContent = '✗ Network error';
+            statusEl.style.color = 'var(--color-danger)';
+        }
+        this.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    });
+
+    // ── Tracked achievements ───────────────────────────────────────────────
+
+    let achievements = [];
+
+    function renderTable() {
+        const tbody = document.getElementById('ach-tbody');
+        if (!achievements.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="color:var(--color-text-muted);font-style:italic">No tracked achievements configured.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = achievements.map(a => `
+            <tr class="${a.is_active ? '' : 'inactive'}" data-id="${a.id}">
+                <td><code>${a.achievement_id}</code></td>
+                <td>${a.achievement_name}</td>
+                <td>${categoryBadge(a.category)}</td>
+                <td>
+                    <span style="color:${a.is_active ? 'var(--color-success)' : 'var(--color-text-muted)'}">
+                        ${a.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td style="text-align:right">
+                    <button class="btn btn-sm btn-outline"
+                            onclick="toggleAch(${a.id}, ${!a.is_active})"
+                            style="font-size:0.78rem;padding:0.2rem 0.5rem;margin-right:0.25rem">
+                        ${a.is_active ? 'Disable' : 'Enable'}
+                    </button>
+                    <button class="btn btn-sm"
+                            onclick="deleteAch(${a.id})"
+                            style="font-size:0.78rem;padding:0.2rem 0.5rem;background:#7f1d1d;color:#fca5a5;border-color:#7f1d1d">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function loadAchievements() {
+        try {
+            const resp = await fetch('/admin/progression/tracked-achievements');
+            const data = await resp.json();
+            if (data.ok) {
+                achievements = data.data;
+                renderTable();
+            }
+        } catch (e) {
+            console.error('Failed to load tracked achievements', e);
+        }
+    }
+
+    window.toggleAch = async function(id, newState) {
+        try {
+            const resp = await fetch(`/admin/progression/tracked-achievements/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({is_active: newState}),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                const idx = achievements.findIndex(a => a.id === id);
+                if (idx >= 0) achievements[idx] = data.data;
+                renderTable();
+            }
+        } catch (e) {
+            console.error('Toggle failed', e);
+        }
+    };
+
+    window.deleteAch = async function(id) {
+        if (!confirm('Delete this tracked achievement? Character data already synced will remain.')) return;
+        try {
+            const resp = await fetch(`/admin/progression/tracked-achievements/${id}`, {method: 'DELETE'});
+            const data = await resp.json();
+            if (data.ok) {
+                achievements = achievements.filter(a => a.id !== id);
+                renderTable();
+            }
+        } catch (e) {
+            console.error('Delete failed', e);
+        }
+    };
+
+    document.getElementById('add-ach-btn').addEventListener('click', async function() {
+        const achId = parseInt(document.getElementById('add-ach-id').value, 10);
+        const achName = document.getElementById('add-ach-name').value.trim();
+        const achCat = document.getElementById('add-ach-cat').value;
+        const statusEl = document.getElementById('add-ach-status');
+
+        if (!achId || !achName) {
+            statusEl.textContent = 'Achievement ID and Name are required.';
+            statusEl.style.color = 'var(--color-danger)';
+            return;
+        }
+
+        this.disabled = true;
+        try {
+            const resp = await fetch('/admin/progression/tracked-achievements', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({achievement_id: achId, achievement_name: achName, category: achCat}),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                const existing = achievements.findIndex(a => a.achievement_id === data.data.achievement_id);
+                if (existing >= 0) {
+                    achievements[existing] = data.data;
+                } else {
+                    achievements.push(data.data);
+                }
+                renderTable();
+                document.getElementById('add-ach-id').value = '';
+                document.getElementById('add-ach-name').value = '';
+                statusEl.textContent = '✓ Added';
+                statusEl.style.color = 'var(--color-success)';
+            } else {
+                statusEl.textContent = '✗ ' + (data.error || 'Failed');
+                statusEl.style.color = 'var(--color-danger)';
+            }
+        } catch (e) {
+            statusEl.textContent = '✗ Network error';
+            statusEl.style.color = 'var(--color-danger)';
+        }
+        this.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    });
+
+    // ── Init ───────────────────────────────────────────────────────────────
+
+    loadStats().catch(console.error);
+    loadAchievements().catch(console.error);
+})();
+</script>
+{% endblock %}

@@ -65,6 +65,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/drift",           "data_quality"),
     ("/admin/matching",        "data_quality"),
     ("/admin/site-config",     "site_config"),
+    ("/admin/progression",     "progression"),
 ]
 
 
@@ -2274,3 +2275,240 @@ async def site_config_page(
     ctx = await _base_ctx(request, player, db)
     ctx["config"] = config
     return templates.TemplateResponse("admin/site_config.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Progression — Phase 4.3
+# ---------------------------------------------------------------------------
+
+
+@router.get("/progression", response_class=HTMLResponse)
+async def progression_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin page for managing tracked achievements and viewing progression sync status."""
+    player = await _require_screen("progression", request, db)
+    if player is None:
+        return RedirectResponse(url="/login")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/progression.html", ctx)
+
+
+@router.get("/progression/tracked-achievements")
+async def admin_list_tracked_achievements(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tracked achievements."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, achievement_id, achievement_name, category, is_active
+               FROM guild_identity.tracked_achievements
+               ORDER BY category, achievement_name"""
+        )
+
+    achievements = [
+        {
+            "id": r["id"],
+            "achievement_id": r["achievement_id"],
+            "achievement_name": r["achievement_name"],
+            "category": r["category"],
+            "is_active": r["is_active"],
+        }
+        for r in rows
+    ]
+    return JSONResponse({"ok": True, "data": achievements})
+
+
+@router.post("/progression/tracked-achievements")
+async def admin_add_tracked_achievement(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new tracked achievement."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    body = await request.json()
+    achievement_id = body.get("achievement_id")
+    achievement_name = (body.get("achievement_name") or "").strip()
+    category = (body.get("category") or "general").strip()
+
+    if not achievement_id or not achievement_name:
+        return JSONResponse(
+            {"ok": False, "error": "achievement_id and achievement_name required"},
+            status_code=400,
+        )
+
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                """INSERT INTO guild_identity.tracked_achievements
+                       (achievement_id, achievement_name, category)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT (achievement_id) DO UPDATE
+                       SET achievement_name = EXCLUDED.achievement_name,
+                           category         = EXCLUDED.category
+                   RETURNING id, achievement_id, achievement_name, category, is_active""",
+                int(achievement_id), achievement_name, category,
+            )
+        except Exception as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "id": row["id"],
+            "achievement_id": row["achievement_id"],
+            "achievement_name": row["achievement_name"],
+            "category": row["category"],
+            "is_active": row["is_active"],
+        },
+    })
+
+
+@router.patch("/progression/tracked-achievements/{achievement_db_id}")
+async def admin_toggle_tracked_achievement(
+    request: Request,
+    achievement_db_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle is_active on a tracked achievement."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    body = await request.json()
+    is_active = body.get("is_active")
+    if is_active is None:
+        return JSONResponse({"ok": False, "error": "is_active required"}, status_code=400)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """UPDATE guild_identity.tracked_achievements
+               SET is_active = $1
+               WHERE id = $2
+               RETURNING id, achievement_id, achievement_name, category, is_active""",
+            bool(is_active), achievement_db_id,
+        )
+
+    if not row:
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "id": row["id"],
+            "achievement_id": row["achievement_id"],
+            "achievement_name": row["achievement_name"],
+            "category": row["category"],
+            "is_active": row["is_active"],
+        },
+    })
+
+
+@router.delete("/progression/tracked-achievements/{achievement_db_id}")
+async def admin_delete_tracked_achievement(
+    request: Request,
+    achievement_db_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a tracked achievement."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        deleted = await conn.fetchval(
+            "DELETE FROM guild_identity.tracked_achievements WHERE id = $1 RETURNING id",
+            achievement_db_id,
+        )
+
+    if not deleted:
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+    return JSONResponse({"ok": True})
+
+
+@router.get("/progression/sync-stats")
+async def admin_progression_sync_stats(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return progression sync stats for the admin page."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        total_chars = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.wow_characters WHERE removed_at IS NULL"
+        )
+        synced_chars = await conn.fetchval(
+            """SELECT COUNT(*) FROM guild_identity.wow_characters
+               WHERE removed_at IS NULL AND last_progression_sync IS NOT NULL"""
+        )
+        last_sync = await conn.fetchval(
+            """SELECT MAX(last_progression_sync) FROM guild_identity.wow_characters
+               WHERE removed_at IS NULL"""
+        )
+        raid_rows = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.character_raid_progress"
+        )
+        mplus_rows = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.character_mythic_plus"
+        )
+        ach_rows = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.character_achievements"
+        )
+        snapshot_rows = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.progression_snapshots"
+        )
+        latest_snapshot = await conn.fetchval(
+            "SELECT MAX(snapshot_date) FROM guild_identity.progression_snapshots"
+        )
+
+    # M+ season from site_config
+    from sv_common.config_cache import get_site_config
+    cfg = get_site_config()
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "total_chars": total_chars,
+            "synced_chars": synced_chars,
+            "last_progression_sync": last_sync.isoformat() if last_sync else None,
+            "raid_progress_rows": raid_rows,
+            "mplus_rows": mplus_rows,
+            "achievement_rows": ach_rows,
+            "snapshot_rows": snapshot_rows,
+            "latest_snapshot_date": latest_snapshot.isoformat() if latest_snapshot else None,
+            "current_mplus_season_id": cfg.get("current_mplus_season_id"),
+        },
+    })

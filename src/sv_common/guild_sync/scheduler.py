@@ -31,6 +31,14 @@ from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
 from .drift_scanner import run_drift_scan
 from .integrity_checker import run_integrity_check
+from .progression_sync import (
+    load_characters_for_progression_sync,
+    sync_raid_progress,
+    sync_mythic_plus,
+    sync_achievements,
+    create_weekly_snapshot,
+    update_last_progression_sync,
+)
 from .reporter import send_new_issues_report, send_sync_summary, send_error
 from .sync_logger import SyncLogEntry
 
@@ -117,6 +125,16 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # Weekly progression sweep: Sunday at 4:30 AM (after roleless prune)
+        # Creates snapshots then syncs achievements for all characters (force_full)
+        self.scheduler.add_job(
+            self.run_weekly_progression_sweep,
+            CronTrigger(day_of_week="sun", hour=4, minute=30),
+            id="weekly_progression_sweep",
+            name="Weekly Progression Snapshot & Achievement Sync",
+            misfire_grace_time=3600,
+        )
+
         self.scheduler.start()
         logger.info("Guild sync scheduler started")
 
@@ -137,7 +155,10 @@ class GuildSyncScheduler:
           2. run_integrity_check()      — detect orphans, role mismatches, stale chars
           3. run_drift_scan()           — detect note mismatches + link contradictions + auto-fix
           4. reconcile_player_ranks()   — fix DB ranks + Discord roles (chars-first, discord fallback)
-          5. send_sync_summary()        — Discord report if notable
+          5. purge_fully_departed_players() — remove ghosts with no chars + no Discord
+          6. [NEW] sync_raid_progress() — boss kill counts (last-login filtered)
+          7. [NEW] sync_mythic_plus()   — M+ ratings (last-login filtered)
+          8. send_sync_summary()        — Discord report if notable
         """
         channel = self._get_audit_channel()
         guild = channel.guild if channel else None
@@ -187,7 +208,37 @@ class GuildSyncScheduler:
                 if channel and total_new > 0:
                     await send_new_issues_report(self.db_pool, channel)
 
-                # Step 8: Retry onboarding verifications (new roster data may unlock matches)
+                # Step 7: Progression sync (raid + M+) — skip unchanged characters
+                try:
+                    cfg = get_site_config()
+                    mplus_season_id = cfg.get("current_mplus_season_id")
+                    progression_chars, total_chars = await load_characters_for_progression_sync(
+                        self.db_pool
+                    )
+                    skipped_count = total_chars - len(progression_chars)
+                    logger.info(
+                        "Progression sync: %d of %d characters (skipped %d — no login change)",
+                        len(progression_chars), total_chars, skipped_count,
+                    )
+
+                    if progression_chars:
+                        raid_stats = await sync_raid_progress(
+                            self.db_pool, self.blizzard_client, progression_chars
+                        )
+                        mplus_stats = await sync_mythic_plus(
+                            self.db_pool, self.blizzard_client, progression_chars,
+                            season_id=mplus_season_id,
+                        )
+                        synced_ids = [c["id"] for c in progression_chars]
+                        await update_last_progression_sync(self.db_pool, synced_ids)
+                        logger.info(
+                            "Progression sync complete — raid: %s, M+: %s",
+                            raid_stats, mplus_stats,
+                        )
+                except Exception as prog_exc:
+                    logger.error("Progression sync failed: %s", prog_exc, exc_info=True)
+
+                # Step 8: Retry onboarding verifications
                 await self.run_onboarding_check()
 
                 duration = time.time() - start
@@ -362,6 +413,26 @@ class GuildSyncScheduler:
                     "Roleless Member Prune Failed",
                     f"The roleless member prune encountered an unexpected error:\n```{exc}```",
                 )
+
+    async def run_weekly_progression_sweep(self):
+        """Weekly full progression sweep: snapshots + achievement sync (all characters).
+
+        Runs Sunday at 4:30 AM UTC. Uses force_full=True so every character gets
+        achievement data refreshed regardless of last_login_timestamp.
+        """
+        try:
+            snapshot_count = await create_weekly_snapshot(self.db_pool)
+            logger.info("Weekly snapshot: %d characters snapshotted", snapshot_count)
+
+            all_chars, _ = await load_characters_for_progression_sync(
+                self.db_pool, force_full=True
+            )
+            ach_stats = await sync_achievements(
+                self.db_pool, self.blizzard_client, all_chars, force_full=True
+            )
+            logger.info("Weekly achievement sync complete: %s", ach_stats)
+        except Exception as exc:
+            logger.error("Weekly progression sweep failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

@@ -110,6 +110,33 @@ async def get_rank_name_map(pool: asyncpg.Pool) -> dict[int, str]:
     return dict(RANK_NAME_MAP)
 
 
+def should_sync_character(
+    last_login_ts: Optional[int],
+    last_sync: Optional[datetime],
+    force_full: bool = False,
+) -> bool:
+    """Return True if character needs a progression or profession sync.
+
+    Compares the character's Blizzard last_login_timestamp (ms since epoch)
+    against when we last synced that category. If the character hasn't logged
+    in since our last sync, nothing can have changed — skip it.
+
+    Args:
+        last_login_ts: Blizzard last_login_timestamp in milliseconds, or None.
+        last_sync: When we last synced this category (last_progression_sync or
+                   last_profession_sync), or None if never synced.
+        force_full: If True, always sync regardless of timestamps.
+    """
+    if force_full:
+        return True
+    if last_login_ts is None:
+        return True  # No login data — sync to be safe
+    if last_sync is None:
+        return True  # Never synced — must sync
+    last_login_dt = datetime.fromtimestamp(last_login_ts / 1000, tz=timezone.utc)
+    return last_login_dt > last_sync
+
+
 class BlizzardClient:
     """Async client for Blizzard's Battle.net API."""
 
@@ -351,6 +378,49 @@ class BlizzardClient:
             realm_slug=realm_slug,
             professions=professions,
         )
+
+    async def get_character_encounters_raids(
+        self, realm_slug: str, character_name: str
+    ) -> Optional[dict]:
+        """
+        Fetch raid encounter progress (boss kill counts per difficulty).
+
+        Endpoint: /profile/wow/character/{realm}/{name}/encounters/raids
+        Returns the raw API response dict, or None if the character is not found.
+        """
+        name_encoded = quote(character_name.lower(), safe="")
+        path = f"/profile/wow/character/{realm_slug}/{name_encoded}/encounters/raids"
+        return await self._api_get(path)
+
+    async def get_character_mythic_keystone_profile(
+        self, realm_slug: str, character_name: str, season_id: Optional[int] = None
+    ) -> Optional[dict]:
+        """
+        Fetch Mythic+ keystone profile (overall rating + best runs per dungeon).
+
+        Endpoint: /profile/wow/character/{realm}/{name}/mythic-keystone-profile
+        Optional season-specific endpoint when season_id is provided.
+        Returns None if character not found or has no M+ data.
+        """
+        name_encoded = quote(character_name.lower(), safe="")
+        path = f"/profile/wow/character/{realm_slug}/{name_encoded}/mythic-keystone-profile"
+        if season_id:
+            path += f"/season/{season_id}"
+        return await self._api_get(path)
+
+    async def get_character_achievements(
+        self, realm_slug: str, character_name: str
+    ) -> Optional[dict]:
+        """
+        Fetch all earned achievements for a character.
+
+        WARNING: Large payload — filter to tracked_achievements IDs only when storing.
+        Endpoint: /profile/wow/character/{realm}/{name}/achievements
+        Returns None if character not found.
+        """
+        name_encoded = quote(character_name.lower(), safe="")
+        path = f"/profile/wow/character/{realm_slug}/{name_encoded}/achievements"
+        return await self._api_get(path)
 
     async def sync_full_roster(
         self,

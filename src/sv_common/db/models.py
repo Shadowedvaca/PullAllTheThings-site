@@ -9,7 +9,9 @@ patt schema: campaigns, campaign_entries, votes, campaign_results,
 guild_identity schema: roles, classes, specializations, players,
                        wow_characters, discord_users, player_characters,
                        player_note_aliases, audit_issues, sync_log,
-                       onboarding_sessions
+                       onboarding_sessions, character_raid_progress,
+                       character_mythic_plus, tracked_achievements,
+                       character_achievements, progression_snapshots
 """
 
 from datetime import date, datetime, time
@@ -172,6 +174,7 @@ class SiteConfig(Base):
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     blizzard_client_id: Mapped[Optional[str]] = mapped_column(String(100))
     blizzard_client_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text)
+    current_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -655,6 +658,8 @@ class WowCharacter(Base):
     addon_last_seen: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     blizzard_last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     addon_last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_progression_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_profession_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     first_seen: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -932,3 +937,126 @@ class OnboardingSession(Base):
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema — Phase 4.3 progression tables
+# ---------------------------------------------------------------------------
+
+
+class CharacterRaidProgress(Base):
+    """Boss kill counts per difficulty for each character."""
+
+    __tablename__ = "character_raid_progress"
+    __table_args__ = (
+        UniqueConstraint("character_id", "boss_id", "difficulty",
+                         name="uq_raid_progress_char_boss_diff"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    raid_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    raid_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(20), nullable=False)
+    boss_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    boss_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    kill_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped[WowCharacter] = relationship()
+
+
+class CharacterMythicPlus(Base):
+    """M+ rating and best-run-per-dungeon for each character per season."""
+
+    __tablename__ = "character_mythic_plus"
+    __table_args__ = (
+        UniqueConstraint("character_id", "season_id", "dungeon_id",
+                         name="uq_mplus_char_season_dungeon"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    season_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    overall_rating: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
+    dungeon_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    dungeon_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    best_level: Mapped[Optional[int]] = mapped_column(Integer, server_default="0")
+    best_timed: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    best_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped[WowCharacter] = relationship()
+
+
+class TrackedAchievement(Base):
+    """Admin-configured list of achievement IDs to track per character."""
+
+    __tablename__ = "tracked_achievements"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    achievement_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    achievement_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    category: Mapped[str] = mapped_column(String(50), server_default="general")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+
+class CharacterAchievement(Base):
+    """Tracked achievements earned by each character."""
+
+    __tablename__ = "character_achievements"
+    __table_args__ = (
+        UniqueConstraint("character_id", "achievement_id", name="uq_char_achievement"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    achievement_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    achievement_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped[WowCharacter] = relationship()
+
+
+class ProgressionSnapshot(Base):
+    """Weekly snapshot of raid kills + M+ rating per character for diff tracking."""
+
+    __tablename__ = "progression_snapshots"
+    __table_args__ = (
+        UniqueConstraint("character_id", "snapshot_date", name="uq_snapshot_char_date"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    raid_kills_json: Mapped[Optional[dict]] = mapped_column(JSONB)
+    mythic_rating: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped[WowCharacter] = relationship()

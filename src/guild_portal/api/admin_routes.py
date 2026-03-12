@@ -1174,6 +1174,7 @@ class SiteConfigUpdate(BaseModel):
     logo_url: str | None = None
     enable_guild_quotes: bool | None = None
     enable_contests: bool | None = None
+    current_mplus_season_id: int | None = None
 
 
 @router.patch(
@@ -1214,3 +1215,37 @@ async def update_site_config(
     set_site_config(updated)
 
     return {"ok": True, "data": {"guild_name": cfg.guild_name}}
+
+
+# ---------------------------------------------------------------------------
+# Progression Config (Officer+) — Phase 4.3
+# ---------------------------------------------------------------------------
+
+
+class MplusSeasonUpdate(BaseModel):
+    current_mplus_season_id: int | None = None
+
+
+@router.patch("/progression/mplus-season")
+async def update_mplus_season(
+    body: MplusSeasonUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current M+ season ID in site_config. Officer+ only."""
+    result = await db.execute(select(SiteConfig).limit(1))
+    cfg = result.scalar_one_or_none()
+    if cfg is None:
+        return {"ok": False, "error": "No site_config row found"}
+
+    cfg.current_mplus_season_id = body.current_mplus_season_id
+    cfg.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(cfg)
+
+    updated = {
+        col.key: getattr(cfg, col.key)
+        for col in SiteConfig.__table__.columns
+    }
+    set_site_config(updated)
+
+    return {"ok": True, "data": {"current_mplus_season_id": cfg.current_mplus_season_id}}
