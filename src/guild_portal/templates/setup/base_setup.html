@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Setup — Guild Portal{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/setup.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="setup-body">
+
+<div class="setup-shell">
+
+    <header class="setup-header">
+        <div class="setup-logo">
+            <span class="setup-logo__icon">&#9876;</span>
+            <span class="setup-logo__text">Guild Portal Setup</span>
+        </div>
+    </header>
+
+    <!-- Progress bar -->
+    <nav class="setup-progress" aria-label="Setup progress">
+        {% for step in steps %}
+        <div class="setup-progress__step {% if step.active %}is-active{% endif %}"
+             title="{{ step.label }}">
+            <div class="setup-progress__dot">
+                {% if step.active %}&#9679;{% else %}&#9675;{% endif %}
+            </div>
+            <div class="setup-progress__label">{{ step.label }}</div>
+        </div>
+        {% if not loop.last %}
+        <div class="setup-progress__line"></div>
+        {% endif %}
+        {% endfor %}
+    </nav>
+
+    <main class="setup-main">
+        {% block content %}{% endblock %}
+    </main>
+
+</div>
+
+<script src="/static/js/setup.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

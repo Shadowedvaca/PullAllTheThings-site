@@ -331,6 +331,21 @@ def create_app() -> FastAPI:
                 )
         return await call_next(request)
 
+    # Setup guard middleware — redirects to /setup if first-run not complete
+    @app.middleware("http")
+    async def setup_guard(request: Request, call_next: Callable) -> Response:
+        path = request.url.path
+        if not get_site_config().get("setup_complete"):
+            exempt = (
+                path.startswith("/setup")
+                or path.startswith("/static")
+                or path.startswith("/api/v1/setup")
+                or path.startswith("/api/health")
+            )
+            if not exempt:
+                return RedirectResponse("/setup")
+        return await call_next(request)
+
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -423,6 +438,12 @@ def create_app() -> FastAPI:
     app.include_router(vote_page_router)
     app.include_router(admin_page_router)
     app.include_router(profile_page_router)
+
+    # Setup wizard routes (API + pages)
+    from guild_portal.api.setup_routes import router as setup_api_router
+    from guild_portal.pages.setup_pages import router as setup_page_router
+    app.include_router(setup_api_router)
+    app.include_router(setup_page_router)
 
     return app
 

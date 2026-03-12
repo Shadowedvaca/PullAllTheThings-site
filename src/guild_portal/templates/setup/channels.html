@@ -1,0 +1,83 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Channel Assignment — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Channel Assignment</h1>
+    <p class="setup-card__subtitle">Assign Discord channels for bot posts. All optional — configurable later in Admin.</p>
+
+    <p style="margin-bottom:1rem">
+        <button class="btn btn--secondary btn--sm" onclick="loadChannels()" id="load-ch-btn">Load Discord Channels</button>
+        <span id="ch-status" style="margin-left:0.75rem; font-size:0.85rem; color: var(--color-text-muted)"></span>
+    </p>
+
+    <div class="setup-field">
+        <label for="audit-channel">Audit Reports Channel</label>
+        <select id="audit-channel" data-current="{{ discord_config.audit_channel_id if discord_config and discord_config.audit_channel_id else '' }}">
+            <option value="">— None —</option>
+        </select>
+        <p class="setup-field-hint">Where the bot posts guild sync audit reports</p>
+    </div>
+
+    <div class="setup-field">
+        <label for="crafters-channel">Crafters Corner Channel</label>
+        <select id="crafters-channel" data-current="">
+            <option value="">— None —</option>
+        </select>
+        <p class="setup-field-hint">Where the bot posts crafting order announcements</p>
+    </div>
+
+    <div class="setup-field">
+        <label for="raid-channel">Raid Announcements Channel</label>
+        <select id="raid-channel" data-current="{{ discord_config.default_announcement_channel_id if discord_config and discord_config.default_announcement_channel_id else '' }}">
+            <option value="">— None —</option>
+        </select>
+        <p class="setup-field-hint">Where the bot posts raid booking announcements</p>
+    </div>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup/discord-roles" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" onclick="saveChannels()">Save &amp; Continue &#8594;</button>
+    </div>
+</div>
+
+<script>
+async function loadChannels() {
+    document.getElementById('load-ch-btn').disabled = true;
+    document.getElementById('ch-status').textContent = 'Loading...';
+
+    const resp = await fetch('/api/v1/setup/discord-channels');
+    const data = await resp.json();
+    document.getElementById('load-ch-btn').disabled = false;
+
+    if (!data.ok) {
+        document.getElementById('ch-status').textContent = data.detail || 'Failed';
+        return;
+    }
+
+    document.getElementById('ch-status').textContent = data.channels.length + ' channels loaded';
+
+    ['audit-channel', 'crafters-channel', 'raid-channel'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        const currentId = sel.dataset.current;
+        data.channels.forEach(ch => {
+            const opt = document.createElement('option');
+            opt.value = ch.id;
+            opt.textContent = '#' + ch.name;
+            if (ch.id === currentId) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+async function saveChannels() {
+    await apiPost('/api/v1/setup/channels', {
+        audit_channel_id: document.getElementById('audit-channel').value || null,
+        crafters_corner_channel_id: document.getElementById('crafters-channel').value || null,
+        raid_announcement_channel_id: document.getElementById('raid-channel').value || null,
+    }, '/setup/admin-account');
+}
+</script>
+{% endblock %}

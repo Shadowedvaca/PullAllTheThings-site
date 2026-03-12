@@ -1,0 +1,94 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Blizzard API — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Blizzard API</h1>
+    <p class="setup-card__subtitle">Connect to the Blizzard API to sync your guild roster.</p>
+
+    <ol class="setup-steps-list">
+        <li>
+            <strong>Open the Blizzard Developer Portal</strong><br>
+            <a href="https://develop.battle.net/access/clients" target="_blank" rel="noopener" class="setup-link">
+                develop.battle.net/access/clients &#8594;
+            </a>
+        </li>
+        <li>Click <strong>Create Client</strong> &#8594; give it a name (e.g., "Guild Portal")</li>
+        <li>Copy your <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+    </ol>
+
+    <div class="setup-field">
+        <label for="bliz-client-id">Client ID <span class="setup-required">*</span></label>
+        <input type="text" id="bliz-client-id" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+               value="{{ config.blizzard_client_id if config and config.blizzard_client_id else '' }}">
+    </div>
+    <div class="setup-field">
+        <label for="bliz-client-secret">Client Secret <span class="setup-required">*</span></label>
+        <input type="password" id="bliz-client-secret" placeholder="Your client secret" autocomplete="off">
+    </div>
+
+    <hr class="setup-divider">
+
+    <div class="setup-field">
+        <label for="realm-slug">Realm Name <span class="setup-required">*</span></label>
+        <input type="text" id="realm-slug" placeholder="senjin" maxlength="50"
+               value="{{ config.home_realm_slug if config and config.home_realm_slug else '' }}">
+        <p class="setup-field-hint">Use the API slug format: lowercase, no apostrophes (e.g., "senjin" for Sen'jin, "illidan" for Illidan)</p>
+    </div>
+    <div class="setup-field">
+        <label for="guild-slug">Guild Name <span class="setup-required">*</span></label>
+        <input type="text" id="guild-slug" placeholder="pull-all-the-things" maxlength="100"
+               value="{{ config.guild_name_slug if config and config.guild_name_slug else '' }}">
+        <p class="setup-field-hint">Use lowercase with hyphens (e.g., "pull-all-the-things")</p>
+    </div>
+
+    <div class="setup-verify-row">
+        <button class="btn btn--secondary" onclick="verifyBlizzard()" id="verify-btn">Verify &amp; Connect</button>
+        <div id="verify-status" class="setup-verify-status"></div>
+    </div>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup/discord" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" id="next-btn" disabled onclick="window.location.href='/setup/ranks'">Save &amp; Continue &#8594;</button>
+    </div>
+</div>
+
+<script>
+async function verifyBlizzard() {
+    const clientId = document.getElementById('bliz-client-id').value.trim();
+    const clientSecret = document.getElementById('bliz-client-secret').value.trim();
+    const realmSlug = document.getElementById('realm-slug').value.trim();
+    const guildSlug = document.getElementById('guild-slug').value.trim();
+
+    if (!clientId || !clientSecret) { showError('Client ID and Secret are required'); return; }
+    if (!realmSlug || !guildSlug) { showError('Realm and guild name are required'); return; }
+
+    setVerifyStatus('verify-status', 'loading', 'Verifying credentials...');
+    document.getElementById('verify-btn').disabled = true;
+
+    const resp = await fetch('/api/v1/setup/verify-blizzard', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            client_id: clientId,
+            client_secret: clientSecret,
+            realm_slug: realmSlug,
+            guild_slug: guildSlug,
+        }),
+    });
+    const data = await resp.json();
+    document.getElementById('verify-btn').disabled = false;
+
+    if (!data.ok) {
+        setVerifyStatus('verify-status', 'error', data.detail || 'Verification failed');
+        return;
+    }
+
+    setVerifyStatus('verify-status', 'success',
+        '\u2713 Connected to "' + data.guild_name + '" on ' + data.realm_slug + ' \u2014 ' + data.member_count + ' characters');
+    document.getElementById('next-btn').disabled = false;
+}
+</script>
+{% endblock %}

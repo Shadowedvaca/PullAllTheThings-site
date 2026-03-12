@@ -1,0 +1,71 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Guild Identity — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Guild Identity</h1>
+    <p class="setup-card__subtitle">How your guild appears on the site and in Discord embeds.</p>
+
+    <div class="setup-field">
+        <label for="guild-name">Guild Name <span class="setup-required">*</span></label>
+        <input type="text" id="guild-name" maxlength="100" placeholder="Pull All The Things"
+               value="{{ config.guild_name if config else '' }}">
+    </div>
+    <div class="setup-field">
+        <label for="guild-tagline">Tagline <span class="setup-optional">(optional)</span></label>
+        <input type="text" id="guild-tagline" maxlength="255" placeholder="Casual heroic raiding with real-life balance"
+               value="{{ config.guild_tagline if config and config.guild_tagline else '' }}">
+    </div>
+    <div class="setup-field">
+        <label for="guild-mission">Mission Statement <span class="setup-optional">(optional)</span></label>
+        <textarea id="guild-mission" placeholder="A brief description of your guild's values and goals...">{{ config.guild_mission if config and config.guild_mission else '' }}</textarea>
+    </div>
+    <div class="setup-field">
+        <label for="accent-color">Accent Color</label>
+        <div class="setup-color-row">
+            <input type="color" id="accent-color-picker"
+                   value="{{ config.accent_color_hex if config and config.accent_color_hex else '#d4a84b' }}"
+                   oninput="document.getElementById('accent-color').value = this.value">
+            <input type="text" id="accent-color" maxlength="7" placeholder="#d4a84b"
+                   value="{{ config.accent_color_hex if config and config.accent_color_hex else '#d4a84b' }}"
+                   oninput="syncColorPicker('accent-color-picker', this.value)">
+        </div>
+    </div>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" onclick="saveGuildIdentity()">Save &amp; Continue &#8594;</button>
+    </div>
+</div>
+
+<script>
+function syncColorPicker(pickerId, hex) {
+    if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+        document.getElementById(pickerId).value = hex;
+    }
+}
+
+async function saveGuildIdentity() {
+    const name = document.getElementById('guild-name').value.trim();
+    if (!name) {
+        showError('Guild name is required');
+        return;
+    }
+
+    const hex = document.getElementById('accent-color').value.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+        showError('Accent color must be a valid hex color (e.g. #d4a84b)');
+        return;
+    }
+
+    await apiPost('/api/v1/setup/guild-identity', {
+        guild_name: name,
+        guild_tagline: document.getElementById('guild-tagline').value.trim() || null,
+        guild_mission: document.getElementById('guild-mission').value.trim() || null,
+        accent_color_hex: hex,
+    }, '/setup/discord');
+}
+</script>
+{% endblock %}

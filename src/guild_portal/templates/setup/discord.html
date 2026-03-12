@@ -1,0 +1,154 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Discord Bot — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Discord Bot</h1>
+    <p class="setup-card__subtitle">Connect a Discord bot for role sync, DMs, and announcements.</p>
+
+    <ol class="setup-steps-list">
+        <li>
+            <strong>Open the Discord Developer Portal</strong><br>
+            <a href="https://discord.com/developers/applications" target="_blank" rel="noopener" class="setup-link">
+                discord.com/developers/applications &#8594;
+            </a>
+        </li>
+        <li><strong>Create a New Application</strong> &#8594; click "Bot" in the sidebar &#8594; click "Add Bot"</li>
+        <li>Under <strong>Privileged Gateway Intents</strong>, enable <strong>Server Members Intent</strong></li>
+        <li>Click <strong>Reset Token</strong> &#8594; copy the token and paste it below</li>
+    </ol>
+
+    <div class="setup-field">
+        <label for="bot-token">Bot Token <span class="setup-required">*</span></label>
+        <input type="password" id="bot-token" placeholder="Paste your bot token here" autocomplete="off">
+    </div>
+
+    <div class="setup-verify-row">
+        <button class="btn btn--secondary" onclick="verifyToken()" id="verify-btn">Verify Token</button>
+        <div id="verify-status" class="setup-verify-status"></div>
+    </div>
+
+    <div id="post-verify" style="display:none">
+        <div class="setup-success-box" id="bot-info"></div>
+
+        <div class="setup-field" style="margin-top:1.5rem">
+            <label>Add Bot to Your Server</label>
+            <p class="setup-field-hint">Use the invite link below to add the bot to your Discord server. Once added, select your server below.</p>
+            <a id="invite-url" href="#" target="_blank" class="btn btn--secondary btn--sm">Open Invite Link &#8594;</a>
+        </div>
+
+        <div class="setup-field" style="margin-top:1rem">
+            <label for="guild-select">Discord Server <span class="setup-required">*</span></label>
+            <select id="guild-select">
+                <option value="">Loading servers...</option>
+            </select>
+            <button class="btn btn--secondary btn--sm" style="margin-top:0.5rem" onclick="refreshGuilds()">Refresh List</button>
+        </div>
+
+        <div class="setup-verify-row">
+            <button class="btn btn--secondary" onclick="verifyGuild()" id="verify-guild-btn">Verify Server</button>
+            <div id="guild-verify-status" class="setup-verify-status"></div>
+        </div>
+    </div>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup/guild-identity" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" id="next-btn" disabled onclick="goNext()">Save &amp; Continue &#8594;</button>
+    </div>
+</div>
+
+<script>
+let verifiedToken = null;
+let verifiedGuildId = null;
+
+async function verifyToken() {
+    const token = document.getElementById('bot-token').value.trim();
+    if (!token) { showError('Paste your bot token first'); return; }
+
+    setVerifyStatus('verify-status', 'loading', 'Checking token...');
+    document.getElementById('verify-btn').disabled = true;
+
+    const resp = await fetch('/api/v1/setup/verify-discord-token', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token}),
+    });
+    const data = await resp.json();
+    document.getElementById('verify-btn').disabled = false;
+
+    if (!data.ok) {
+        setVerifyStatus('verify-status', 'error', data.detail || 'Verification failed');
+        return;
+    }
+
+    setVerifyStatus('verify-status', 'success', '\u2713 Connected as ' + data.bot_username);
+    verifiedToken = token;
+
+    // Store the token
+    await fetch('/api/v1/setup/store-discord-token', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({token}),
+    });
+
+    document.getElementById('bot-info').textContent = 'Bot: ' + data.bot_username + ' (ID: ' + data.bot_id + ')';
+    const inviteLink = document.getElementById('invite-url');
+    inviteLink.href = data.invite_url;
+    document.getElementById('post-verify').style.display = 'block';
+
+    await loadGuilds();
+}
+
+async function loadGuilds() {
+    const sel = document.getElementById('guild-select');
+    sel.innerHTML = '<option value="">Loading...</option>';
+    const resp = await fetch('/api/v1/setup/discord-guilds');
+    const data = await resp.json();
+    if (!data.ok || !data.guilds.length) {
+        sel.innerHTML = '<option value="">No servers found — add the bot first, then refresh</option>';
+        return;
+    }
+    sel.innerHTML = '<option value="">Select your server...</option>';
+    data.guilds.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.name;
+        sel.appendChild(opt);
+    });
+}
+
+async function refreshGuilds() { await loadGuilds(); }
+
+async function verifyGuild() {
+    const guildId = document.getElementById('guild-select').value;
+    if (!guildId) { showError('Select a server first'); return; }
+
+    setVerifyStatus('guild-verify-status', 'loading', 'Checking server...');
+    document.getElementById('verify-guild-btn').disabled = true;
+
+    const resp = await fetch('/api/v1/setup/verify-discord-guild', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({guild_id: guildId}),
+    });
+    const data = await resp.json();
+    document.getElementById('verify-guild-btn').disabled = false;
+
+    if (!data.ok) {
+        setVerifyStatus('guild-verify-status', 'error', data.detail || 'Failed');
+        return;
+    }
+
+    setVerifyStatus('guild-verify-status', 'success', '\u2713 ' + data.guild_name + ' (' + data.member_count + ' members)');
+    verifiedGuildId = guildId;
+    document.getElementById('next-btn').disabled = false;
+}
+
+async function goNext() {
+    if (!verifiedGuildId) { showError('Verify your Discord server first'); return; }
+    window.location.href = '/setup/blizzard';
+}
+</script>
+{% endblock %}

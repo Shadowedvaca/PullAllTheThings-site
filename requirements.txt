@@ -12,6 +12,7 @@ alembic>=1.13.0
 # Auth
 pyjwt>=2.8.0
 bcrypt>=4.1.0
+cryptography>=41.0.0
 
 # Discord
 discord.py>=2.3.0

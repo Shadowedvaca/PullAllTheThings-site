@@ -1,0 +1,79 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Discord Roles — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Discord Role Mapping</h1>
+    <p class="setup-card__subtitle">Map each platform rank to a Discord role for automatic role sync.</p>
+
+    <p style="margin-bottom:1rem">
+        <button class="btn btn--secondary btn--sm" onclick="loadRoles()" id="load-roles-btn">Load Discord Roles</button>
+        <span id="roles-status" style="margin-left:0.75rem; font-size:0.85rem; color: var(--color-text-muted)"></span>
+    </p>
+
+    <table class="setup-table" id="roles-table" style="display:none">
+        <thead>
+            <tr><th>Platform Rank</th><th>Discord Role</th></tr>
+        </thead>
+        <tbody>
+            {% for rank in ranks %}
+            <tr>
+                <td><strong>{{ rank.name }}</strong> <span class="setup-field-hint">(level {{ rank.level }})</span></td>
+                <td>
+                    <select class="discord-role-select" data-rank-id="{{ rank.id }}"
+                            data-current="{{ rank.discord_role_id or '' }}">
+                        <option value="">— None —</option>
+                    </select>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup/ranks" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" onclick="saveDiscordRoles()">Save &amp; Continue &#8594;</button>
+    </div>
+</div>
+
+<script>
+async function loadRoles() {
+    document.getElementById('load-roles-btn').disabled = true;
+    document.getElementById('roles-status').textContent = 'Loading...';
+
+    const resp = await fetch('/api/v1/setup/discord-roles');
+    const data = await resp.json();
+
+    document.getElementById('load-roles-btn').disabled = false;
+
+    if (!data.ok) {
+        document.getElementById('roles-status').textContent = data.detail || 'Failed to load roles';
+        return;
+    }
+
+    document.getElementById('roles-status').textContent = data.roles.length + ' roles loaded';
+    document.getElementById('roles-table').style.display = 'table';
+
+    document.querySelectorAll('.discord-role-select').forEach(sel => {
+        const currentId = sel.dataset.current;
+        data.roles.forEach(role => {
+            const opt = document.createElement('option');
+            opt.value = role.id;
+            opt.textContent = '@' + role.name;
+            if (role.id === currentId) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+async function saveDiscordRoles() {
+    const roles = [];
+    document.querySelectorAll('.discord-role-select').forEach(sel => {
+        roles.push({ guild_rank_id: parseInt(sel.dataset.rankId), discord_role_id: sel.value || null });
+    });
+    await apiPost('/api/v1/setup/discord-roles', { roles }, '/setup/channels');
+}
+</script>
+{% endblock %}

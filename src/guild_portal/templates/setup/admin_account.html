@@ -1,0 +1,67 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Admin Account — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Create Admin Account</h1>
+    <p class="setup-card__subtitle">This will be the Guild Leader account used to log in and manage the platform.</p>
+
+    <div class="setup-field">
+        <label for="display-name">Display Name <span class="setup-required">*</span></label>
+        <input type="text" id="display-name" maxlength="100" placeholder="Your name as shown on the site">
+    </div>
+    <div class="setup-field">
+        <label for="discord-username">Discord Username <span class="setup-required">*</span></label>
+        <input type="text" id="discord-username" maxlength="100" placeholder="yourusername"
+               autocomplete="username">
+        <p class="setup-field-hint">Used as your login identifier (stored in lowercase)</p>
+    </div>
+    <div class="setup-field">
+        <label for="password">Password <span class="setup-required">*</span></label>
+        <input type="password" id="password" minlength="8" placeholder="At least 8 characters"
+               autocomplete="new-password">
+    </div>
+    <div class="setup-field">
+        <label for="confirm-password">Confirm Password <span class="setup-required">*</span></label>
+        <input type="password" id="confirm-password" placeholder="Re-enter your password"
+               autocomplete="new-password">
+    </div>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup/channels" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" onclick="createAdmin()">Create Account &amp; Finish &#8594;</button>
+    </div>
+</div>
+
+<script>
+async function createAdmin() {
+    const displayName = document.getElementById('display-name').value.trim();
+    const discordUsername = document.getElementById('discord-username').value.trim();
+    const password = document.getElementById('password').value;
+    const confirm = document.getElementById('confirm-password').value;
+
+    if (!displayName) { showError('Display name is required'); return; }
+    if (!discordUsername) { showError('Discord username is required'); return; }
+    if (password.length < 8) { showError('Password must be at least 8 characters'); return; }
+    if (password !== confirm) { showError('Passwords do not match'); return; }
+
+    const resp = await fetch('/api/v1/setup/create-admin', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({display_name: displayName, discord_username: discordUsername, password}),
+    });
+    const data = await resp.json();
+
+    if (!data.ok) {
+        showError(data.detail || 'Failed to create account');
+        return;
+    }
+
+    // Mark setup complete
+    await fetch('/api/v1/setup/complete', { method: 'POST' });
+    window.location.href = '/setup/complete';
+}
+</script>
+{% endblock %}

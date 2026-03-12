@@ -1,0 +1,36 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Setup Complete — Guild Portal{% endblock %}
+
+{% block content %}
+<div class="setup-card setup-card--complete">
+    <div class="setup-complete-icon">&#10003;</div>
+    <h1 class="setup-card__title">Setup Complete!</h1>
+    <p class="setup-card__lead">Your guild portal is ready. Log in with the admin account you just created.</p>
+
+    {% if config %}
+    <div class="setup-summary">
+        <div class="setup-summary-row">
+            <span class="setup-summary-label">Guild</span>
+            <span>{{ config.guild_name }}</span>
+        </div>
+        {% if config.guild_tagline %}
+        <div class="setup-summary-row">
+            <span class="setup-summary-label">Tagline</span>
+            <span>{{ config.guild_tagline }}</span>
+        </div>
+        {% endif %}
+        {% if config.home_realm_slug %}
+        <div class="setup-summary-row">
+            <span class="setup-summary-label">Realm</span>
+            <span>{{ config.home_realm_slug }}</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="setup-actions" style="justify-content:center; margin-top:2rem">
+        <a href="/login" class="btn btn--primary btn--lg">Go to Login &#8594;</a>
+        <a href="/admin/players" class="btn btn--secondary">Admin Dashboard</a>
+    </div>
+</div>
+{% endblock %}

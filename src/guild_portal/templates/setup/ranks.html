@@ -1,0 +1,131 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Rank Configuration — Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Rank Configuration</h1>
+    <p class="setup-card__subtitle">Name your five platform ranks and map them to your WoW guild ranks.</p>
+
+    <h2 class="setup-section-title">Platform Rank Names</h2>
+    <p class="setup-field-hint" style="margin-bottom:1rem">These are the rank tiers used across the platform. Customize the names to match your guild's terminology.</p>
+
+    <table class="setup-table">
+        <thead>
+            <tr><th>Level</th><th>Name</th></tr>
+        </thead>
+        <tbody>
+            {% for rank in ranks %}
+            <tr>
+                <td class="setup-table__level">{{ rank.level }}</td>
+                <td><input type="text" class="setup-rank-name" data-level="{{ rank.level }}"
+                           value="{{ rank.name }}" maxlength="50"></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <hr class="setup-divider">
+
+    <h2 class="setup-section-title">WoW Rank Mapping</h2>
+    <p class="setup-field-hint" style="margin-bottom:1rem">
+        Map each of your WoW in-game ranks to a platform tier.
+        <button class="btn btn--ghost btn--sm" onclick="loadWowRanks()" id="load-wow-btn">Load from Blizzard API</button>
+    </p>
+
+    <div id="wow-ranks-loading" style="display:none" class="setup-field-hint">Loading from Blizzard...</div>
+    <div id="wow-ranks-error" class="setup-error" style="display:none"></div>
+    <div id="wow-ranks-container"></div>
+
+    <div id="step-error" class="setup-error" style="display:none"></div>
+
+    <div class="setup-actions">
+        <a href="/setup/blizzard" class="btn btn--ghost">&#8592; Back</a>
+        <button class="btn btn--primary" onclick="saveRanks()">Save &amp; Continue &#8594;</button>
+    </div>
+</div>
+
+<script>
+const platformRanks = [
+    {% for rank in ranks %}
+    { id: {{ rank.id }}, level: {{ rank.level }}, name: "{{ rank.name }}" },
+    {% endfor %}
+];
+
+const existingMappings = {{ existing_mappings | tojson }};
+
+async function loadWowRanks() {
+    document.getElementById('wow-ranks-loading').style.display = 'block';
+    document.getElementById('wow-ranks-error').style.display = 'none';
+    document.getElementById('load-wow-btn').disabled = true;
+
+    const resp = await fetch('/api/v1/setup/wow-ranks');
+    const data = await resp.json();
+
+    document.getElementById('wow-ranks-loading').style.display = 'none';
+    document.getElementById('load-wow-btn').disabled = false;
+
+    if (!data.ok) {
+        document.getElementById('wow-ranks-error').style.display = 'block';
+        document.getElementById('wow-ranks-error').textContent = data.detail || 'Failed to load WoW ranks';
+        return;
+    }
+
+    const container = document.getElementById('wow-ranks-container');
+    container.innerHTML = '';
+
+    if (!data.ranks.length) {
+        container.innerHTML = '<p class="setup-field-hint">No ranks found in roster.</p>';
+        return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'setup-table';
+    table.innerHTML = '<thead><tr><th>WoW Rank</th><th>Sample Characters</th><th>Map To</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    data.ranks.forEach(r => {
+        const tr = document.createElement('tr');
+        const defaultRankId = existingMappings[r.wow_rank_index] || platformRanks[platformRanks.length - 1]?.id || '';
+        const selectOpts = platformRanks.map(pr =>
+            '<option value="' + pr.id + '"' + (pr.id == defaultRankId ? ' selected' : '') + '>' + pr.level + ' \u2014 ' + pr.name + '</option>'
+        ).join('');
+
+        tr.innerHTML =
+            '<td class="setup-table__level">Rank ' + r.wow_rank_index + '</td>' +
+            '<td class="setup-field-hint">' + r.sample_names.join(', ') + '</td>' +
+            '<td><select class="wow-rank-select" data-wow-index="' + r.wow_rank_index + '">' + selectOpts + '</select></td>';
+        tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    container.appendChild(table);
+}
+
+async function saveRanks() {
+    const rankNames = {};
+    document.querySelectorAll('.setup-rank-name').forEach(el => {
+        rankNames[el.dataset.level] = el.value.trim();
+    });
+
+    for (const [level, name] of Object.entries(rankNames)) {
+        if (!name) {
+            showError('Rank level ' + level + ' must have a name');
+            return;
+        }
+    }
+
+    const wowMappings = [];
+    document.querySelectorAll('.wow-rank-select').forEach(sel => {
+        wowMappings.push({
+            wow_rank_index: parseInt(sel.dataset.wowIndex),
+            guild_rank_id: parseInt(sel.value),
+        });
+    });
+
+    await apiPost('/api/v1/setup/ranks', {
+        rank_names: rankNames,
+        wow_mappings: wowMappings,
+    }, '/setup/discord-roles');
+}
+</script>
+{% endblock %}

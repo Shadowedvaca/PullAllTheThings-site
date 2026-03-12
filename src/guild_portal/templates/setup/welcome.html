@@ -1,0 +1,48 @@
+{% extends "setup/base_setup.html" %}
+{% block title %}Welcome — Guild Portal Setup{% endblock %}
+
+{% block content %}
+<div class="setup-card">
+    <h1 class="setup-card__title">Welcome to Guild Portal</h1>
+    <p class="setup-card__lead">
+        This wizard will guide you through configuring your guild's platform.
+        You'll set up your guild identity, Discord bot, Blizzard API access,
+        rank structure, and your first admin account.
+    </p>
+
+    <div class="setup-info-list">
+        <div class="setup-info-item">
+            <span class="setup-info-item__icon">&#127984;</span>
+            <div>
+                <strong>Guild Identity</strong>
+                <p>Set your guild name, tagline, and accent color</p>
+            </div>
+        </div>
+        <div class="setup-info-item">
+            <span class="setup-info-item__icon">&#129302;</span>
+            <div>
+                <strong>Discord Integration</strong>
+                <p>Connect your Discord bot for role sync and announcements</p>
+            </div>
+        </div>
+        <div class="setup-info-item">
+            <span class="setup-info-item__icon">&#9876;</span>
+            <div>
+                <strong>Blizzard API</strong>
+                <p>Link your guild roster via the Blizzard Developer API</p>
+            </div>
+        </div>
+        <div class="setup-info-item">
+            <span class="setup-info-item__icon">&#128081;</span>
+            <div>
+                <strong>Ranks &amp; Admin Account</strong>
+                <p>Configure your rank structure and create your first admin login</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="setup-actions">
+        <a href="/setup/guild-identity" class="btn btn--primary btn--lg">Let's Get Started</a>
+    </div>
+</div>
+{% endblock %}

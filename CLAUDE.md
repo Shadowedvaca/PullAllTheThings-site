@@ -326,11 +326,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 > Full DDL for all tables lives in **`reference/SCHEMA.md`**. Summary below.
 
-Three PostgreSQL schemas, current through **migration 0032**:
+Three PostgreSQL schemas, current through **migration 0033**:
 
 | Schema | Key tables |
 |--------|-----------|
-| `common` | `guild_ranks`, `users`, `discord_config`, `invite_codes`, `screen_permissions`, `site_config`, `rank_wow_mapping` |
+| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id`, `blizzard_client_secret_encrypted`), `rank_wow_mapping` |
 | `guild_identity` | `players` (central entity), `wow_characters`, `discord_users`, `player_characters` (bridge), `player_note_aliases`, `player_action_log`, `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels` |
 | `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes`, `guild_quote_titles`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
 
@@ -425,11 +425,13 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - Phase 3.5: Auto-Booking Scheduler — background loop creates next week's Raid-Helper event 10–20 min after raid starts, posts Discord announcement
 - Roster Initiate Filtering + Raid Hiatus (migration 0030) — `on_raid_hiatus` flag on players; initiates filtered from comp tab; New Members box; Show Initiates checkbox on roster
 - Phase 4.0: Config Extraction & Genericization (migration 0032) — `common.site_config` single-row table, `sv_common.config_cache` in-process cache, `common.rank_wow_mapping`, mito tables renamed to guild_quotes/guild_quote_titles, `/quote` bot command, `/admin/site-config` GL-only page, all hardcoded guild name/color/realm refs removed from code
+- Phase 4.1: First-Run Setup Wizard (migration 0033) — 9-step web wizard activated when `setup_complete=FALSE`; encryped credential storage (Fernet/JWT_SECRET_KEY); Discord token/guild verification; Blizzard API verification; rank naming + WoW rank mapping UI; Discord role/channel assignment; admin account bootstrap; guard middleware redirects all routes to `/setup` until complete; setup routes become 404 after completion
 
 ### Current Phase
-- **Platform is feature-complete.** No active phase. Next work should start a new phase in `reference/`.
+- **Platform is feature-complete through Phase 4.1.** Next: Phase 4.2 Docker Packaging.
 
-### Recent Changes (2026-03-11, no migration)
+### Recent Changes (2026-03-11, migration 0033)
+- **Phase 4.1 complete**: First-Run Setup Wizard. 430 tests pass, 69 skip.
 - **Admin nav revamp**: `base_admin.html` now includes the same `site-header` as public pages (guild name, Home/Roster/Crafting/Admin links, character badge, rank badge, Log Out). Sidebar footer removed. Admin layout changed to column flex with app-shell scrolling — header spans full width, sidebar+content row fills remaining height, each scrolls independently.
 - **Nginx static path**: `/static/` alias in nginx was hardcoded to `src/patt/static/` — updated to `src/guild_portal/static/` in both live config and `deploy/nginx/pullallthething.com.conf`.
 - **Phase 4.0 complete**: genericization, config extraction, migration 0032 all deployed. 418 tests pass, 69 skip.
@@ -475,6 +477,7 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - Onboarding system: conversation.py, provisioner.py, deadline_checker.py, commands.py (dormant — needs activation)
 - GuildSync WoW addon (`wow_addon/GuildSync/`) + companion app (`companion_app/guild_sync_watcher.py`) — functional, syncing guild notes via `/guildsync` slash command in WoW
 - Screen permissions: DB-driven Settings nav — all screens configurable by rank level via `common.screen_permissions`
+- Setup wizard: `/setup` through `/setup/complete` — 9-step first-run wizard; guard middleware redirects all traffic until `setup_complete=TRUE`; setup API at `/api/v1/setup/*`; `sv_common.crypto` for Fernet encryption of bot token + Blizzard secret
 
 ### Known Gaps / Dormant Features
 - Onboarding flow: code exists (`sv_common.guild_sync.onboarding`), not activated — `on_member_join` not wired

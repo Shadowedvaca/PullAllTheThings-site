@@ -142,6 +142,7 @@ class DiscordConfig(Base):
     raid_default_duration_minutes: Mapped[Optional[int]] = mapped_column(
         Integer, server_default="120"
     )
+    bot_token_encrypted: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -169,6 +170,8 @@ class SiteConfig(Base):
     enable_guild_quotes: Mapped[bool] = mapped_column(Boolean, default=False)
     enable_contests: Mapped[bool] = mapped_column(Boolean, default=True)
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    blizzard_client_id: Mapped[Optional[str]] = mapped_column(String(100))
+    blizzard_client_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
