@@ -1,7 +1,7 @@
 # Issue: Hetzner Server Resolves pullallthethings.com to GitHub Pages IPs
 
 ## Status
-Open — not yet root-caused
+**Resolved** — root-caused and hardened (2026-03-11)
 
 ## What Happened
 
@@ -41,54 +41,66 @@ curl -sf https://pullallthethings.com/api/health \
   `http://localhost:8100/api/health` (bypasses DNS entirely). CI/CD passes.
 - **Not the app itself.** `curl http://localhost:8100/api/health` returns healthy.
   Nginx is configured correctly and the SSL cert exists on the server.
+- **Not GitHub Pages being active.** `GET /repos/Shadowedvaca/PullAllTheThings-site/pages`
+  returns 404 — GitHub Pages is not configured on this repo.
 
-## Hypotheses to Investigate
+## Root Cause
 
-1. **Hetzner server DNS cache.** The server's resolver (`/etc/resolv.conf`) may be
-   caching old GitHub Pages A records. The repo previously used GitHub Pages. Check
-   whether the Hetzner server's upstream DNS resolver has stale cached entries.
-   ```bash
-   cat /etc/resolv.conf
-   resolvectl status
-   # Try flushing systemd-resolved cache:
-   resolvectl flush-caches
-   # Re-check:
-   dig +short pullallthethings.com
-   ```
+**Partial DNS propagation + Google DNS caching stale GitHub Pages A records.**
 
-2. **GitHub Pages still configured somewhere.** GitHub Pages for this repo returns
-   a 404 API response (not enabled), but GitHub may still be answering for the
-   domain if it was previously configured — check the repo's Pages settings in
-   GitHub UI directly, not just via API.
+The server uses `systemd-resolved` (`/etc/resolv.conf` → `127.0.0.53` stub).
+`resolvectl status` shows two sets of resolvers:
 
-3. **Registrar propagation lag.** The user's DNS update may be correct but not yet
-   propagated to the resolvers the Hetzner server uses. DNS TTL on the old GitHub
-   Pages records may still be in effect on some resolvers.
-   ```bash
-   # Check from multiple resolvers:
-   dig +short pullallthethings.com @8.8.8.8
-   dig +short pullallthethings.com @1.1.1.1
-   dig +short pullallthethings.com @9.9.9.9
-   # If any return 5.78.114.224, propagation is partial
-   ```
+- **eth0 link resolvers** (Hetzner's): `185.12.64.2`, `185.12.64.1` (+ IPv6 equivalents)
+  — marked `+DefaultRoute`, so used for all general DNS lookups
+- **Global resolvers**: `8.8.8.8`, `1.1.1.1` (fallback)
 
-4. **Split-horizon DNS / local override needed.** Even if external DNS is correct,
-   the server resolving its own domain name externally is fragile. A robust fix is
-   an `/etc/hosts` entry so the server always routes the domain to itself:
-   ```
-   5.78.114.224    pullallthethings.com www.pullallthethings.com
-   ```
-   This is a good hardening step regardless of root cause.
+At the time of the incident, systemd-resolved had a cached stale result (GitHub Pages IPs)
+from a prior lookup that went through 8.8.8.8. Google DNS (8.8.8.8) still has stale records
+even after investigation — it appears Google's resolver had a longer TTL window for the old
+GitHub Pages A records. Confirmed resolver results at time of investigation:
+
+```
+dig +short pullallthethings.com               → 5.78.114.224   ✓ (via Hetzner resolver)
+dig +short pullallthethings.com @8.8.8.8      → 185.199.x.x    ✗ (still stale!)
+dig +short pullallthethings.com @1.1.1.1      → 5.78.114.224   ✓
+dig +short pullallthethings.com @9.9.9.9      → 5.78.114.224   ✓
+dig +short pullallthethings.com @185.12.64.2  → 5.78.114.224   ✓
+```
+
+The issue resolved itself once systemd-resolved's stale cache expired and queries began
+going through Hetzner's link resolvers (which have the correct records). However, the
+server remains vulnerable to this scenario any time 8.8.8.8 is used.
 
 ## Immediate Workaround (Already Applied)
 
 The CI/CD prod health check now uses `http://localhost:8100/api/health` instead of
 `https://pullallthethings.com/api/health`. This bypasses the DNS issue entirely for
-deployments. The smoke test in this issue document is a separate manual step and is
-where the issue manifests.
+deployments.
 
-## Recommended Fix
+## Fix Applied (2026-03-11)
 
-After root-causing, apply the `/etc/hosts` entry on the Hetzner server as a permanent
-hardening measure so the server never relies on external DNS to reach itself.
-Also update the prod smoke test in the deploy workflow (if added) to use localhost.
+Added `/etc/hosts` entry on the Hetzner server to force local resolution, bypassing
+external DNS entirely when the server resolves its own domain:
+
+```
+5.78.114.224    pullallthethings.com www.pullallthethings.com
+```
+
+Because the server runs `cloud-init` with `manage_etc_hosts: True`, a direct edit to
+`/etc/hosts` will be overwritten on next boot. The entry was added to **both**:
+
+1. `/etc/hosts` — immediate effect
+2. `/etc/cloud/templates/hosts.debian.tmpl` — persists across reboots/cloud-init runs
+
+Post-fix smoke test passes:
+```bash
+curl -sf https://pullallthethings.com/api/health
+# {"ok":true,"data":{"db":"connected","version":"0.1.0"}}
+
+curl -sv https://pullallthethings.com/ 2>&1 | grep Connected
+# * Connected to pullallthethings.com (5.78.114.224) port 443
+```
+
+The server will now always route `pullallthethings.com` to itself regardless of what
+any external DNS resolver returns.

@@ -365,6 +365,31 @@ If you reload the site in Chrome during or immediately after a deployment and ge
 - **Fix:** Go to `chrome://net-internals/#sockets` → click **Flush socket pools**, then reload
 - Not a server or code problem — happens occasionally at night when deploys coincide with Chrome reusing old socket connections
 
+### CRITICAL: `/etc/hosts` Override on the Hetzner Server
+
+> **Full details and migration checklist: `docs/SERVER-IP-MIGRATION.md`**
+
+The Hetzner server has a **mandatory `/etc/hosts` entry** that forces the domain to resolve
+to the server's own IP, bypassing external DNS:
+
+```
+5.78.114.224    pullallthethings.com www.pullallthethings.com
+```
+
+**Why this exists:** This repo previously used GitHub Pages. After the DNS migration,
+Google DNS (8.8.8.8) served stale GitHub Pages A records for 24+ hours. During that
+window the server resolved its own domain to GitHub's IPs, causing self-directed `curl`
+calls (smoke tests, health checks) to get GitHub 404s instead of reaching the app.
+
+**Why it's in two places:** The server runs `cloud-init` with `manage_etc_hosts: True`,
+which regenerates `/etc/hosts` from a template on every boot. The entry lives in both:
+- `/etc/hosts` — active immediately
+- `/etc/cloud/templates/hosts.debian.tmpl` — survives reboots
+
+**If you change the server IP or migrate to a new server:** You MUST update this entry
+on the new server before running any smoke tests. See `docs/SERVER-IP-MIGRATION.md` for
+the full checklist. Skipping this step will reproduce the original outage scenario.
+
 ### Local Dev Notes
 - Python venv: `.venv/` (created, not committed)
 - Run tests: `.venv/Scripts/pytest tests/unit/ -v`
