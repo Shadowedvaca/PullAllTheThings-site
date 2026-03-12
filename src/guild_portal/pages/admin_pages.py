@@ -1000,7 +1000,12 @@ async def admin_link_discord(
             select(DiscordUser).where(DiscordUser.discord_id == discord_id)
         )
         du = du_result.scalar_one_or_none()
-        p.discord_user_id = du.id if du else None
+        if not du:
+            return JSONResponse(
+                {"ok": False, "error": f"Discord user {discord_id} not found in database. Run a Discord sync first."},
+                status_code=404,
+            )
+        p.discord_user_id = du.id
 
         # Upgrade any low-confidence character links for this player
         # (stub players had confidence='low'; now that Discord is linked, bump to 'medium')
