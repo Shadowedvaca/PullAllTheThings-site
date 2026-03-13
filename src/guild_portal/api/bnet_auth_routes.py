@@ -33,14 +33,23 @@ _STATE_COOKIE = "bnet_oauth_state"
 
 
 def _get_blizzard_credentials() -> tuple[str, str]:
-    """Return (client_id, client_secret) from site_config. Raises RuntimeError if missing."""
-    cfg = get_site_config()
-    client_id = cfg.get("blizzard_client_id", "")
-    encrypted_secret = cfg.get("blizzard_client_secret_encrypted", "")
-    if not client_id or not encrypted_secret:
-        raise RuntimeError("Blizzard API credentials not configured")
+    """Return (client_id, client_secret) from site_config, falling back to env vars.
+
+    Raises RuntimeError if credentials are not available from either source.
+    """
     settings = get_settings()
-    client_secret = decrypt_secret(encrypted_secret, settings.jwt_secret_key)
+    cfg = get_site_config()
+
+    client_id = cfg.get("blizzard_client_id", "") or settings.blizzard_client_id
+    encrypted_secret = cfg.get("blizzard_client_secret_encrypted", "")
+
+    if encrypted_secret:
+        client_secret = decrypt_secret(encrypted_secret, settings.jwt_secret_key)
+    else:
+        client_secret = settings.blizzard_client_secret
+
+    if not client_id or not client_secret:
+        raise RuntimeError("Blizzard API credentials not configured")
     return client_id, client_secret
 
 
