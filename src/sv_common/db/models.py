@@ -1091,8 +1091,8 @@ class RaiderIOProfile(Base):
     tank_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
     score_color: Mapped[Optional[str]] = mapped_column(String(7))
     raid_progression: Mapped[Optional[str]] = mapped_column(String(100))
-    best_runs: Mapped[Optional[list]] = mapped_column(JSONB, server_default="'[]'::jsonb")
-    recent_runs: Mapped[Optional[list]] = mapped_column(JSONB, server_default="'[]'::jsonb")
+    best_runs: Mapped[Optional[list]] = mapped_column(JSONB)
+    recent_runs: Mapped[Optional[list]] = mapped_column(JSONB)
     profile_url: Mapped[Optional[str]] = mapped_column(String(255))
     last_synced: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()

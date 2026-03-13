@@ -32,8 +32,8 @@ def upgrade():
         sa.Column("tank_score", sa.Numeric(7, 1), server_default="0"),
         sa.Column("score_color", sa.String(7)),
         sa.Column("raid_progression", sa.String(100)),
-        sa.Column("best_runs", JSONB, server_default="'[]'::jsonb"),
-        sa.Column("recent_runs", JSONB, server_default="'[]'::jsonb"),
+        sa.Column("best_runs", JSONB, server_default=sa.text("'[]'::jsonb")),
+        sa.Column("recent_runs", JSONB, server_default=sa.text("'[]'::jsonb")),
         sa.Column("profile_url", sa.String(255)),
         sa.Column(
             "last_synced",
