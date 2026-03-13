@@ -21,6 +21,7 @@ from typing import Optional
 import asyncpg
 
 from .blizzard_client import BlizzardClient, should_sync_character
+from .raiderio_client import RaiderIOClient, RaiderIOProfile as RIOProfile
 
 logger = logging.getLogger(__name__)
 
@@ -529,3 +530,78 @@ async def load_characters_for_profession_sync(
         )
     ]
     return eligible, total
+
+
+# ---------------------------------------------------------------------------
+# Raider.IO sync
+# ---------------------------------------------------------------------------
+
+
+async def sync_raiderio_profiles(
+    pool: asyncpg.Pool,
+    raiderio_client: RaiderIOClient,
+    characters: list[dict],
+    default_realm_slug: str,
+) -> dict:
+    """Fetch Raider.IO profiles and upsert into raiderio_profiles table.
+
+    characters: list of {id, character_name, realm_slug}
+    default_realm_slug: fallback realm for characters missing realm_slug
+    Returns stats: {synced, total}
+    """
+    # Map our character dicts to what the RIO client expects
+    rio_chars = [
+        {
+            "id": c["id"],
+            "name": c["character_name"],
+            "realm_slug": c.get("realm_slug", default_realm_slug),
+        }
+        for c in characters
+    ]
+
+    profiles = await raiderio_client.get_guild_profiles(
+        rio_chars, default_realm_slug=default_realm_slug
+    )
+
+    now = datetime.now(timezone.utc)
+
+    async with pool.acquire() as conn:
+        for char_id, profile in profiles.items():
+            await conn.execute(
+                """
+                INSERT INTO guild_identity.raiderio_profiles
+                    (character_id, season, overall_score, dps_score, healer_score,
+                     tank_score, score_color, raid_progression, best_runs,
+                     recent_runs, profile_url, last_synced)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12)
+                ON CONFLICT (character_id, season) DO UPDATE SET
+                    overall_score    = EXCLUDED.overall_score,
+                    dps_score        = EXCLUDED.dps_score,
+                    healer_score     = EXCLUDED.healer_score,
+                    tank_score       = EXCLUDED.tank_score,
+                    score_color      = EXCLUDED.score_color,
+                    raid_progression = EXCLUDED.raid_progression,
+                    best_runs        = EXCLUDED.best_runs,
+                    recent_runs      = EXCLUDED.recent_runs,
+                    profile_url      = EXCLUDED.profile_url,
+                    last_synced      = EXCLUDED.last_synced
+                """,
+                char_id,
+                "current",
+                profile.overall_score,
+                profile.dps_score,
+                profile.healer_score,
+                profile.tank_score,
+                profile.score_color,
+                profile.raid_progression,
+                json.dumps(profile.best_runs),
+                json.dumps(profile.recent_runs),
+                profile.profile_url,
+                now,
+            )
+
+    stats = {"synced": len(profiles), "total": len(characters)}
+    logger.info(
+        "Raider.IO sync: %d/%d profiles stored", stats["synced"], stats["total"]
+    )
+    return stats

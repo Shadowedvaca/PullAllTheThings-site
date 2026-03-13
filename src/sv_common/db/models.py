@@ -11,7 +11,8 @@ guild_identity schema: roles, classes, specializations, players,
                        player_note_aliases, audit_issues, sync_log,
                        onboarding_sessions, character_raid_progress,
                        character_mythic_plus, tracked_achievements,
-                       character_achievements, progression_snapshots
+                       character_achievements, progression_snapshots,
+                       raiderio_profiles
 """
 
 from datetime import date, datetime, time
@@ -1061,3 +1062,40 @@ class ProgressionSnapshot(Base):
     )
 
     character: Mapped[WowCharacter] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema — Phase 4.4 Raider.IO profiles
+# ---------------------------------------------------------------------------
+
+
+class RaiderIOProfile(Base):
+    """Raider.IO M+ scores and raid progression per character per season."""
+
+    __tablename__ = "raiderio_profiles"
+    __table_args__ = (
+        UniqueConstraint("character_id", "season", name="uq_rio_char_season"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    season: Mapped[str] = mapped_column(String(30), nullable=False)
+    overall_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
+    dps_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
+    healer_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
+    tank_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(7, 1), server_default="0")
+    score_color: Mapped[Optional[str]] = mapped_column(String(7))
+    raid_progression: Mapped[Optional[str]] = mapped_column(String(100))
+    best_runs: Mapped[Optional[list]] = mapped_column(JSONB, server_default="'[]'::jsonb")
+    recent_runs: Mapped[Optional[list]] = mapped_column(JSONB, server_default="'[]'::jsonb")
+    profile_url: Mapped[Optional[str]] = mapped_column(String(255))
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped["WowCharacter"] = relationship()

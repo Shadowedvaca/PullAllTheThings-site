@@ -46,8 +46,8 @@ This means Claude Code never needs conversation history. It reads the repo.
 | ~~`reference/PHASE_4_0_CONFIG_EXTRACTION.md`~~ | ✅ Complete — archived |
 | `reference/PHASE_4_1_SETUP_WIZARD.md` | First-run web-based setup wizard |
 | ~~`reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md`~~ | ✅ Complete — archived |
-| `reference/PHASE_4_3_BLIZZARD_EXPANSION.md` | Last-login optimization, raids, M+, achievements |
-| `reference/PHASE_4_4_RAIDERIO_INTEGRATION.md` | Raider.IO M+ and raid progression |
+| ~~`reference/PHASE_4_3_BLIZZARD_EXPANSION.md`~~ | ✅ Complete — archived |
+| ~~`reference/PHASE_4_4_RAIDERIO_INTEGRATION.md`~~ | ✅ Complete — archived |
 | `reference/PHASE_4_5_WARCRAFT_LOGS.md` | Warcraft Logs parses, reports, attendance |
 | `reference/PHASE_4_6_AH_PRICING.md` | Blizzard Auction House price tracking |
 
@@ -96,8 +96,8 @@ This means Claude Code never needs conversation history. It reads the repo.
 | 4.0 | ✅ Complete | Config Extraction & Genericization — site_config table, config_cache, rank_wow_mapping, guild_quotes, /admin/site-config |
 | 4.1 | ✅ Complete | First-Run Setup Wizard |
 | 4.2 | ✅ Complete | Docker Packaging & Environments |
-| 4.3 | 📋 Planned | Blizzard API Expansion & Last-Login Optimization |
-| 4.4 | 📋 Planned | Raider.IO Integration |
+| 4.3 | ✅ Complete | Blizzard API Expansion & Last-Login Optimization |
+| 4.4 | ✅ Complete | Raider.IO Integration |
 | 4.5 | 📋 Planned | Warcraft Logs Integration |
 | 4.6 | 📋 Planned | Auction House Pricing |
 

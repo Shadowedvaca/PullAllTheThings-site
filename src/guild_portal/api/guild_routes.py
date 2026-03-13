@@ -1,10 +1,11 @@
 """Public guild API routes — roster, rank info, availability, and guild quote content."""
 
+import statistics
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,6 +16,7 @@ from sv_common.db.models import (
     Player,
     PlayerAvailability,
     PlayerCharacter,
+    RaiderIOProfile,
     Specialization,
     WowCharacter,
 )
@@ -74,6 +76,37 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
     )
     players = list(result.unique().scalars().all())
 
+    # Collect all character IDs for a single Raider.IO batch query
+    all_char_ids: set[int] = set()
+    for p in players:
+        if p.main_character:
+            all_char_ids.add(p.main_character.id)
+        if p.offspec_character:
+            all_char_ids.add(p.offspec_character.id)
+        for pc in p.characters:
+            if pc.character:
+                all_char_ids.add(pc.character.id)
+
+    rio_by_char: dict[int, RaiderIOProfile] = {}
+    if all_char_ids:
+        rio_result = await db.execute(
+            select(RaiderIOProfile).where(
+                RaiderIOProfile.season == "current",
+                RaiderIOProfile.character_id.in_(list(all_char_ids)),
+            )
+        )
+        for r in rio_result.scalars():
+            rio_by_char[r.character_id] = r
+
+    def _rio_data(char_id: int | None) -> dict:
+        r = rio_by_char.get(char_id) if char_id else None
+        return {
+            "rio_score": float(r.overall_score) if r and r.overall_score else None,
+            "rio_color": r.score_color if r else None,
+            "rio_raid_prog": r.raid_progression if r else None,
+            "rio_url": r.profile_url if r else None,
+        }
+
     roster = []
     for p in players:
         mc = p.main_character
@@ -95,6 +128,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 "role_name": role.name if role else None,
                 "item_level": mc.item_level,
                 "armory_url": armory_url,
+                **_rio_data(mc.id),
             }
 
         sc = p.offspec_character
@@ -114,6 +148,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                     f"https://worldofwarcraft.blizzard.com/en-us/character/us"
                     f"/{sc.realm_slug}/{sc.character_name.lower()}"
                 ),
+                **_rio_data(sc.id),
             }
 
         all_chars = []
@@ -137,6 +172,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                         f"/{char.realm_slug}/{char.character_name.lower()}"
                     ),
                     "is_main": mc is not None and char.id == mc.id,
+                    **_rio_data(char.id),
                 }
             )
 
@@ -153,6 +189,73 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         )
 
     return {"ok": True, "data": {"players": roster}}
+
+
+# ---------------------------------------------------------------------------
+# Progression endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.get("/progression")
+async def get_progression(db: AsyncSession = Depends(get_db)):
+    """Return aggregated M+ score and raid progression stats for the guild.
+
+    Public endpoint — no auth required.
+    """
+    # M+ stats from Raider.IO profiles (current season, score > 0)
+    rio_result = await db.execute(
+        text("""
+            SELECT r.overall_score, r.score_color, r.raid_progression,
+                   wc.character_name
+            FROM guild_identity.raiderio_profiles r
+            JOIN guild_identity.wow_characters wc ON wc.id = r.character_id
+            WHERE r.season = 'current' AND r.overall_score > 0
+            ORDER BY r.overall_score DESC
+        """)
+    )
+    rio_rows = rio_result.fetchall()
+
+    scores = [float(row.overall_score) for row in rio_rows]
+    avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+    median_score = round(statistics.median(scores), 1) if scores else 0.0
+
+    top_10 = [
+        {
+            "name": row.character_name,
+            "score": float(row.overall_score),
+            "color": row.score_color,
+        }
+        for row in rio_rows[:10]
+    ]
+
+    # Guild best progression string — from the highest-scored character
+    guild_best = rio_rows[0].raid_progression if rio_rows else None
+
+    # Raid clearers from character_raid_progress
+    raid_result = await db.execute(
+        text("""
+            SELECT difficulty, COUNT(DISTINCT character_id) AS cnt
+            FROM guild_identity.character_raid_progress
+            GROUP BY difficulty
+        """)
+    )
+    diff_counts = {row.difficulty: int(row.cnt) for row in raid_result}
+
+    return {
+        "ok": True,
+        "data": {
+            "mythic_plus": {
+                "average_score": avg_score,
+                "median_score": median_score,
+                "top_10": top_10,
+            },
+            "raid_progression": {
+                "guild_best": guild_best,
+                "heroic_clearers": diff_counts.get("heroic", 0),
+                "mythic_progressed": diff_counts.get("mythic", 0),
+            },
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

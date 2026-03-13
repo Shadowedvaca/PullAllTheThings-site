@@ -36,9 +36,11 @@ from .progression_sync import (
     sync_raid_progress,
     sync_mythic_plus,
     sync_achievements,
+    sync_raiderio_profiles,
     create_weekly_snapshot,
     update_last_progression_sync,
 )
+from .raiderio_client import RaiderIOClient
 from .reporter import send_new_issues_report, send_sync_summary, send_error
 from .sync_logger import SyncLogEntry
 
@@ -240,6 +242,28 @@ class GuildSyncScheduler:
                             self.db_pool, self.blizzard_client, progression_chars,
                             season_id=mplus_season_id,
                         )
+
+                        # Raider.IO sync — runs after Blizzard M+, non-fatal
+                        realm_slug = (
+                            _cfg.get("home_realm_slug")
+                            or os.environ.get("GUILD_REALM_SLUG", "senjin")
+                        )
+                        rio_client = RaiderIOClient(region="us")
+                        await rio_client.initialize()
+                        try:
+                            rio_stats = await sync_raiderio_profiles(
+                                self.db_pool, rio_client,
+                                progression_chars, realm_slug,
+                            )
+                            logger.info("Raider.IO sync complete: %s", rio_stats)
+                        except Exception as rio_exc:
+                            logger.warning(
+                                "Raider.IO sync failed (non-fatal): %s", rio_exc,
+                                exc_info=True,
+                            )
+                        finally:
+                            await rio_client.close()
+
                         synced_ids = [c["id"] for c in progression_chars]
                         await update_last_progression_sync(self.db_pool, synced_ids)
                         logger.info(

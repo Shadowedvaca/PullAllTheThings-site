@@ -326,12 +326,12 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 > Full DDL for all tables lives in **`reference/SCHEMA.md`**. Summary below.
 
-Three PostgreSQL schemas, current through **migration 0033**:
+Three PostgreSQL schemas, current through **migration 0036**:
 
 | Schema | Key tables |
 |--------|-----------|
 | `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id`, `blizzard_client_secret_encrypted`), `rank_wow_mapping` |
-| `guild_identity` | `players` (central entity), `wow_characters`, `discord_users`, `player_characters` (bridge), `player_note_aliases`, `player_action_log`, `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels` |
+| `guild_identity` | `players` (central entity), `wow_characters`, `discord_users`, `player_characters` (bridge), `player_note_aliases`, `player_action_log`, `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles` |
 | `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes`, `guild_quote_titles`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
 
 **Key design notes:**
@@ -357,6 +357,9 @@ Three PostgreSQL schemas, current through **migration 0033**:
   - Deploy steps: git fetch/checkout → docker build → docker up -d → health check
 - **Branch strategy:** Feature branches → dev auto-deploys. Merge to main → test auto-deploys. Tag release → prod deploys.
 - **Environments:** All three run as Docker containers on Hetzner. Dev/test behind nginx basic auth (username: `admin`). Passwords in server `/etc/nginx/htpasswd/`.
+
+> **CRITICAL: Never touch prod without explicit permission from Mike.**
+> This means no SSH commands against the prod DB, no direct data modifications, no pushing version tags, and no `docker exec` against prod app/db containers — unless Mike has explicitly said to do so in the current conversation. Dev and test are fair game for iterative work.
 
 ### Known Deploy Quirk — Chrome "GitHub 404" After Restart
 
@@ -458,11 +461,13 @@ the full checklist. Skipping this step will reproduce the original outage scenar
 - Phase 4.1: First-Run Setup Wizard (migration 0033) — 9-step web wizard activated when `setup_complete=FALSE`; encryped credential storage (Fernet/JWT_SECRET_KEY); Discord token/guild verification; Blizzard API verification; rank naming + WoW rank mapping UI; Discord role/channel assignment; admin account bootstrap; guard middleware redirects all routes to `/setup` until complete; setup routes become 404 after completion
 - Phase 4.2: Docker Packaging & Environments — `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.yml` (generic), `docker-compose.patt.yml` (PATT 3-env), `Caddyfile` + `Caddyfile.patt`, `.env.template`, `.dockerignore`; updated `setup_postgres.sql` to be Docker-generic; updated GitHub Actions deploy workflow to use Docker
 - Phase 4.3: Blizzard API Expansion & Last-Login Optimization (migration 0034) — 5 new tables (`character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`); 2 new columns on `wow_characters` (`last_progression_sync`, `last_profession_sync`); `current_mplus_season_id` on `site_config`; `should_sync_character()` helper; 3 new Blizzard API methods (raids, M+, achievements); `progression_sync.py` (sync functions + snapshots + filter helpers); last-login optimization applied to crafting sync; scheduler updated with progression pipeline steps + weekly sweep job (Sunday 4:30 AM); `/admin/progression` page with tracked achievements CRUD + sync stats + M+ season config
+- Phase 4.4: Raider.IO Integration (migration 0036) — `guild_identity.raiderio_profiles` table (per-character per-season M+ scores + raid prog); `raiderio_client.py` (no-auth public API, batched fetching, score color parsing); `sync_raiderio_profiles()` in `progression_sync.py`; scheduler integration after M+ sync (non-fatal, uses last-login filtered chars); roster API includes `rio_score`, `rio_color`, `rio_raid_prog`, `rio_url` on all character dicts; roster page adds sortable M+ Score and Raid Prog columns; composition tab shows avg M+ score per role; `GET /api/v1/guild/progression` public endpoint (avg/median score, top-10, raid clearers). 475 tests pass, 69 skip.
 
 ### Current Phase
-- **Platform is feature-complete through Phase 4.3.** Next: Phase 4.4 Raider.IO Integration.
+- **Platform is feature-complete through Phase 4.4.** Next: Phase 4.5 Warcraft Logs Integration.
 
-### Recent Changes (Phase 4.3, 2026-03-11, migration 0034)
+### Recent Changes (Phase 4.4, 2026-03-12, migration 0036)
+- **Phase 4.4 complete**: Raider.IO Integration. `raiderio_client.py` — `RaiderIOClient` with `get_character_profile()`, `get_guild_profiles()` (batched, rate-limit aware), `_parse_profile()` (scores, color, raid prog, best/recent runs). `sync_raiderio_profiles()` added to `progression_sync.py` — maps `character_name` → `name`, upserts to `raiderio_profiles` with `season='current'`. Scheduler: `RaiderIOClient` created per-sync after M+, non-fatal failure. Roster API: single batch query for all char IDs, adds `rio_*` fields to every character dict (main, secondary, alts). Roster page: M+ Score + Raid Prog columns (sortable, color-coded); avg M+ score per role in composition cards; `rio_score` defaults to desc sort. `/api/v1/guild/progression` endpoint: computes avg/median from raiderio_profiles, top-10 by score, heroic/mythic clearers from character_raid_progress. Migration 0036: 1 new table, 3 indexes. 475 tests pass, 69 skip.
 - **Phase 4.3 complete**: Blizzard API Expansion. `should_sync_character()` in `blizzard_client.py` (last-login optimization). 3 new Blizzard API methods: `get_character_encounters_raids()`, `get_character_mythic_keystone_profile()`, `get_character_achievements()`. New `progression_sync.py` with sync functions for raid/M+/achievements + weekly snapshots + filter helpers. Crafting sync updated to use last-login optimization (stamps `last_profession_sync` per character). Scheduler updated: progression sync runs in Blizzard pipeline (raid + M+ every 6h, filtered); weekly sweep job Sunday 4:30 AM (snapshots + full achievement sync). `/admin/progression` page: tracked achievements CRUD, sync stats dashboard, M+ season ID config. Migration 0034: 5 new `guild_identity` tables, 2 new columns on `wow_characters`, 1 new column on `site_config`, 1 new screen_permission. 455 tests pass, 69 skip.
 - **Phase 4.2 complete**: Docker packaging. `Dockerfile` + `docker-entrypoint.sh` (uses `guild_portal.app:create_app`, `PYTHONPATH=/app/src`). Generic `docker-compose.yml` (app + postgres + caddy). `docker-compose.guild.yml` (3 envs: prod/test/dev, isolated DBs, nginx routing). `Caddyfile` (generic `{$DOMAIN}` routing) + `Caddyfile.guild` (subdomain routing with basic auth on test/dev, username `admin`). `.env.template` for new guild deployments. `.dockerignore` keeps image lean. `deploy/setup_postgres.sql` genericized. GitHub Actions workflow updated to use `docker compose -f docker-compose.guild.yml` against `/opt/guild-portal`. Production migrated from systemd to Docker. Old systemd `patt` service disabled. PATT references scrubbed from all code, comments, templates, and config files (legacy static HTML files excluded).
 - **Phase 4.1 complete**: First-Run Setup Wizard. 430 tests pass, 69 skip.
