@@ -366,6 +366,55 @@
     </form>
   </div>
 
+  {# ── Battle.net Account ──────────────────────────────────────── #}
+  <div class="settings-section">
+    <div class="settings-section__header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+      <h2 class="settings-section__title">Battle.net Account</h2>
+      {% if bnet_account %}
+        <span style="font-size:0.8rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.06em">✓ Linked</span>
+      {% endif %}
+    </div>
+    <div class="settings-section__body">
+      {% if bnet_account %}
+        <div style="margin-bottom:1rem">
+          <div style="font-size:1rem;font-weight:700;color:var(--color-text);margin-bottom:0.25rem">
+            {{ bnet_account.battletag }}
+          </div>
+          <div style="font-size:0.85rem;color:var(--color-text-muted)">
+            Linked {{ bnet_account.linked_at.strftime('%Y-%m-%d') if bnet_account.linked_at else '' }}
+            {% if bnet_char_count > 0 %}
+              · {{ bnet_char_count }} character{{ 's' if bnet_char_count != 1 else '' }} auto-claimed
+            {% endif %}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn btn-danger btn-sm"
+          onclick="confirmUnlink()"
+        >Unlink</button>
+      {% else %}
+        <p class="field-group__hint" style="margin-bottom:1rem">
+          Connect your Battle.net account to automatically claim all your characters.
+        </p>
+        <a href="/auth/battlenet" class="btn btn-secondary">Connect Battle.net</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Unlink confirmation modal ────────────────────────────────── #}
+  <div id="bnet-unlink-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:var(--radius);padding:1.75rem;max-width:400px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,0.5)">
+      <h3 style="font-family:var(--font-display);color:var(--color-accent);margin:0 0 0.75rem">Unlink Battle.net?</h3>
+      <p style="font-size:0.9rem;color:var(--color-text-muted);margin-bottom:1.25rem">
+        This will remove all auto-claimed characters from your profile. They can be re-added manually or by re-linking your Battle.net account.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeUnlinkModal()">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="doUnlink()">Unlink</button>
+      </div>
+    </div>
+  </div>
+
   {# ── Characters ──────────────────────────────────────────────── #}
   <div class="settings-section">
     <div class="settings-section__header">
@@ -693,6 +742,41 @@
 
 {% block scripts %}
 <script>
+// Battle.net unlink modal
+function confirmUnlink() {
+  const modal = document.getElementById('bnet-unlink-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeUnlinkModal() {
+  const modal = document.getElementById('bnet-unlink-modal');
+  if (modal) modal.style.display = 'none';
+}
+async function doUnlink() {
+  try {
+    const resp = await fetch('/api/v1/auth/battlenet', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    if (resp.ok) {
+      window.location.href = '/profile?success=Battle.net+account+unlinked+successfully';
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      window.location.href = '/profile?error=' + encodeURIComponent(data.error || 'Failed to unlink account');
+    }
+  } catch (e) {
+    window.location.href = '/profile?error=Failed+to+unlink+Battle.net+account';
+  }
+}
+// Close modal on backdrop click
+document.addEventListener('DOMContentLoaded', function() {
+  const modal = document.getElementById('bnet-unlink-modal');
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeUnlinkModal();
+    });
+  }
+});
+
 function toggleDayRow(dayIdx, checked) {
   const row = document.getElementById('avail-row-' + dayIdx);
   const inputs = row.querySelectorAll('input[type="time"], input[type="number"]');

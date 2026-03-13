@@ -42,14 +42,18 @@ This means Claude Code never needs conversation history. It reads the repo.
 ### Phase 4: Guild Portal — Multi-Guild Release (Active)
 | File | Purpose |
 |------|---------|
-| `reference/PHASE_4_OVERVIEW.md` | Master plan — timeline, dependencies, architecture changes |
+| `reference/PHASE_4_OVERVIEW.md` | Master plan — dependencies, architecture changes, status |
 | ~~`reference/PHASE_4_0_CONFIG_EXTRACTION.md`~~ | ✅ Complete — archived |
-| `reference/PHASE_4_1_SETUP_WIZARD.md` | First-run web-based setup wizard |
+| ~~`reference/PHASE_4_1_SETUP_WIZARD.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_3_BLIZZARD_EXPANSION.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_4_RAIDERIO_INTEGRATION.md`~~ | ✅ Complete — archived |
-| `reference/PHASE_4_5_WARCRAFT_LOGS.md` | Warcraft Logs parses, reports, attendance |
-| `reference/PHASE_4_6_AH_PRICING.md` | Blizzard Auction House price tracking |
+| ~~`reference/PHASE_4_4_1_BNET_OAUTH_ACCOUNT_LINKING.md`~~ | ✅ Complete — archived |
+| `reference/PHASE_4_4_2_CHARACTER_AUTO_CLAIM.md` | Auto-link characters from `/profile/user/wow` |
+| `reference/PHASE_4_4_3_ONBOARDING_ACTIVATION.md` | Wire on_member_join, OAuth as onboarding finish line |
+| `reference/PHASE_4_4_4_DATA_QUALITY_SIMPLIFICATION.md` | Remove fuzzy matching, simplify DQ page, manual add UI |
+| `reference/PHASE_4_5_WARCRAFT_LOGS.md` | Deferred — Warcraft Logs parses, reports, attendance |
+| `reference/PHASE_4_6_AH_PRICING.md` | Deferred — Blizzard Auction House price tracking |
 
 ### Reference Documents (useful context)
 | File | Purpose |
@@ -98,8 +102,12 @@ This means Claude Code never needs conversation history. It reads the repo.
 | 4.2 | ✅ Complete | Docker Packaging & Environments |
 | 4.3 | ✅ Complete | Blizzard API Expansion & Last-Login Optimization |
 | 4.4 | ✅ Complete | Raider.IO Integration |
-| 4.5 | 📋 Planned | Warcraft Logs Integration |
-| 4.6 | 📋 Planned | Auction House Pricing |
+| 4.4.1 | ✅ Complete | Battle.net OAuth Account Linking |
+| 4.4.2 | 📋 Planned | Character Auto-Claim on OAuth |
+| 4.4.3 | 📋 Planned | Onboarding Activation & OAuth Integration |
+| 4.4.4 | 📋 Planned | Data Quality Simplification |
+| 4.5 | ⏸️ Deferred | Warcraft Logs Integration |
+| 4.6 | ⏸️ Deferred | Auction House Pricing |
 
 ---
 

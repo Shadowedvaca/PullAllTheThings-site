@@ -752,6 +752,9 @@ class Player(Base):
         back_populates="created_by_player"
     )
     votes: Mapped[list[Vote]] = relationship(back_populates="player")
+    battlenet_account: Mapped[Optional["BattlenetAccount"]] = relationship(
+        back_populates="player", uselist=False
+    )
 
 
 class PlayerCharacter(Base):
@@ -1099,3 +1102,35 @@ class RaiderIOProfile(Base):
     )
 
     character: Mapped["WowCharacter"] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema — Phase 4.4.1 Battle.net OAuth account linking
+# ---------------------------------------------------------------------------
+
+
+class BattlenetAccount(Base):
+    """Stores Battle.net OAuth tokens linked to a platform player account."""
+
+    __tablename__ = "battlenet_accounts"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.players.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    bnet_id: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    battletag: Mapped[str] = mapped_column(String(100), nullable=False)
+    access_token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token_encrypted: Mapped[Optional[str]] = mapped_column(Text)
+    token_expires_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    linked_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_refreshed: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_character_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+    player: Mapped["Player"] = relationship(back_populates="battlenet_account")

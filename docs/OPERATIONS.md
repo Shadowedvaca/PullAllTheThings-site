@@ -240,12 +240,39 @@ BLIZZARD_CLIENT_SECRET=your-blizzard-client-secret
 GUILD_REALM_SLUG=senjin
 GUILD_NAME_SLUG=pull-all-the-things
 GUILD_SYNC_API_KEY=your-companion-app-api-key
+BNET_TOKEN_ENCRYPTION_KEY=your-fernet-key
 APP_ENV=production
 APP_PORT=8100
 ```
 
 > **Note:** Channel IDs (audit channel, crafters corner, raid channel) are configured
 > via the Admin UI and stored in `common.discord_config` — not in `.env`.
+
+---
+
+## BNET_TOKEN_ENCRYPTION_KEY
+
+**What it is:** A Fernet symmetric encryption key used exclusively to encrypt
+Battle.net OAuth tokens stored in `guild_identity.battlenet_accounts`. This is
+a **separate key** from `JWT_SECRET_KEY` so that rotating one does not affect
+the other.
+
+**How to generate:**
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+**What happens when you rotate it:** All stored Battle.net tokens become unreadable
+(Fernet will raise `InvalidToken` on decrypt). Members will see their Battle.net
+account as still linked but any attempt to use the tokens will fail silently until
+they re-link. Currently this only affects the stored tokens — the link row itself
+is kept. Members can simply click "Unlink" and then "Connect Battle.net" again to
+re-establish the link with fresh tokens.
+
+**How to rotate safely:**
+1. Generate a new key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+2. Update `BNET_TOKEN_ENCRYPTION_KEY` in `.env` on the server
+3. Redeploy (tokens from before the rotation will fail; members must re-link once)
 
 ---
 

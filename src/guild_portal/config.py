@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # Companion app API key
     guild_sync_api_key: str = ""
 
+    # Battle.net OAuth token encryption (separate key from JWT — see docs/OPERATIONS.md)
+    bnet_token_encryption_key: str = ""
+
 
 _settings: Settings | None = None
 

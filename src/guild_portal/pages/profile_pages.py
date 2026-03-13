@@ -21,6 +21,7 @@ from guild_portal.services.availability_service import (
 from guild_portal.templating import templates
 from sv_common.auth.passwords import hash_password, verify_password
 from sv_common.db.models import (
+    BattlenetAccount,
     Player,
     PlayerActionLog,
     PlayerCharacter,
@@ -127,6 +128,23 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         for r in rio_result.scalars():
             rio_by_char[r.character_id] = r
 
+    # Battle.net account
+    bnet_result = await db.execute(
+        select(BattlenetAccount).where(BattlenetAccount.player_id == player.id)
+    )
+    bnet_account = bnet_result.scalar_one_or_none()
+
+    # Count of OAuth-claimed characters (Phase 4.4.2 populates these)
+    bnet_char_count = 0
+    if bnet_account:
+        bnet_count_result = await db.execute(
+            select(PlayerCharacter).where(
+                PlayerCharacter.player_id == player.id,
+                PlayerCharacter.link_source == "battlenet_oauth",
+            )
+        )
+        bnet_char_count = len(list(bnet_count_result.scalars().all()))
+
     # Availability rows
     availability = await get_player_availability(db, player.id)
     avail_by_day = {row.day_of_week: row for row in availability}
@@ -140,6 +158,8 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         "day_names": DAY_NAMES,
         "timezones": COMMON_TIMEZONES,
         "rio_by_char": rio_by_char,
+        "bnet_account": bnet_account,
+        "bnet_char_count": bnet_char_count,
     }
 
 
