@@ -84,7 +84,8 @@ async def bnet_auth_start(
         )
 
     state = secrets.token_hex(16)
-    base_url = str(request.base_url).rstrip("/")
+    settings = get_settings()
+    base_url = settings.app_url.rstrip("/") if settings.app_url else str(request.base_url).rstrip("/")
     redirect_uri = f"{base_url}/auth/battlenet/callback"
 
     params = (
@@ -159,7 +160,8 @@ async def bnet_auth_callback(
             status_code=302,
         )
 
-    base_url = str(request.base_url).rstrip("/")
+    settings = get_settings()
+    base_url = settings.app_url.rstrip("/") if settings.app_url else str(request.base_url).rstrip("/")
     redirect_uri = f"{base_url}/auth/battlenet/callback"
 
     # Exchange authorization code for tokens

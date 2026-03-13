@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Companion app API key
     guild_sync_api_key: str = ""
 
+    # Public-facing app URL (used for OAuth redirect URIs — no trailing slash)
+    # e.g. https://dev.pullallthethings.com
+    app_url: str = ""
+
     # Battle.net OAuth token encryption (separate key from JWT — see docs/OPERATIONS.md)
     bnet_token_encryption_key: str = ""
 
