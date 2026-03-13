@@ -24,6 +24,7 @@ from sv_common.db.models import (
     Player,
     PlayerActionLog,
     PlayerCharacter,
+    RaiderIOProfile,
     Specialization,
     User,
     WowCharacter,
@@ -113,6 +114,19 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
     for spec in all_specs:
         specs_by_class.setdefault(spec.class_id, []).append(spec)
 
+    # Raider.IO profiles for claimed characters
+    claimed_char_ids = [pc.character.id for pc in player_chars if pc.character]
+    rio_by_char: dict[int, RaiderIOProfile] = {}
+    if claimed_char_ids:
+        rio_result = await db.execute(
+            select(RaiderIOProfile).where(
+                RaiderIOProfile.season == "current",
+                RaiderIOProfile.character_id.in_(claimed_char_ids),
+            )
+        )
+        for r in rio_result.scalars():
+            rio_by_char[r.character_id] = r
+
     # Availability rows
     availability = await get_player_availability(db, player.id)
     avail_by_day = {row.day_of_week: row for row in availability}
@@ -125,6 +139,7 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         "avail_by_day": avail_by_day,
         "day_names": DAY_NAMES,
         "timezones": COMMON_TIMEZONES,
+        "rio_by_char": rio_by_char,
     }
 
 

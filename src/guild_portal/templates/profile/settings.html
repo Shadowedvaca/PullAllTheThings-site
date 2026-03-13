@@ -464,11 +464,14 @@
             <th>Realm</th>
             <th>Class</th>
             <th style="text-align:right">ilvl</th>
+            <th style="text-align:right">M+ Score</th>
+            <th>Raid Prog</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for pc in player_chars %}
+          {% set rio = rio_by_char.get(pc.character.id) %}
           <tr>
             <td style="font-weight:600">{{ pc.character.character_name }}</td>
             <td style="color:var(--color-text-muted)">{{ pc.character.realm_name or pc.character.realm_slug }}</td>
@@ -477,6 +480,23 @@
             </td>
             <td style="text-align:right;color:var(--color-text-muted)">
               {{ pc.character.item_level or '—' }}
+            </td>
+            <td style="text-align:right">
+              {% if rio and rio.overall_score %}
+                <span style="color:{{ rio.score_color or 'var(--color-text-muted)' }};font-weight:600">
+                  {{ rio.overall_score | int }}
+                </span>
+                {% if rio.profile_url %}
+                  <a href="{{ rio.profile_url }}" target="_blank" rel="noopener"
+                     style="color:var(--color-text-muted);font-size:0.8rem;margin-left:0.25rem"
+                     title="View on Raider.IO">⬡</a>
+                {% endif %}
+              {% else %}
+                <span style="color:var(--color-text-muted)">—</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--color-text-muted)">
+              {{ rio.raid_progression if rio and rio.raid_progression else '—' }}
             </td>
             <td style="text-align:right">
               <form method="post" action="/profile/characters/unclaim"
