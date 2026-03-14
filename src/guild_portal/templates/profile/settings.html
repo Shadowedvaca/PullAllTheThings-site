@@ -521,8 +521,14 @@
         <tbody>
           {% for pc in player_chars %}
           {% set rio = rio_by_char.get(pc.character.id) %}
+          {% set is_bnet = pc.link_source == 'battlenet_oauth' %}
           <tr>
-            <td style="font-weight:600">{{ pc.character.character_name }}</td>
+            <td style="font-weight:600">
+              {{ pc.character.character_name }}
+              {% if is_bnet %}
+                <span title="Auto-claimed via Battle.net" style="font-size:0.75rem;color:var(--color-accent);margin-left:0.3rem;font-weight:700">🔒 Battle.net Verified</span>
+              {% endif %}
+            </td>
             <td style="color:var(--color-text-muted)">{{ pc.character.realm_name or pc.character.realm_slug }}</td>
             <td style="color:var(--color-text-muted)">
               {% if pc.character.wow_class %}{{ pc.character.wow_class.name }}{% else %}—{% endif %}
@@ -548,11 +554,15 @@
               {{ rio.raid_progression if rio and rio.raid_progression else '—' }}
             </td>
             <td style="text-align:right">
-              <form method="post" action="/profile/characters/unclaim"
-                    onsubmit="return confirm('Unclaim {{ pc.character.character_name }}? This will remove it from your account.')">
-                <input type="hidden" name="character_id" value="{{ pc.character.id }}">
-                <button type="submit" class="btn btn-danger btn-sm">Unclaim</button>
-              </form>
+              {% if is_bnet %}
+                <span style="font-size:0.78rem;color:var(--color-text-muted)" title="Unlink Battle.net to remove this character">🔒 Locked</span>
+              {% else %}
+                <form method="post" action="/profile/characters/unclaim"
+                      onsubmit="return confirm('Unclaim {{ pc.character.character_name }}? This will remove it from your account.')">
+                  <input type="hidden" name="character_id" value="{{ pc.character.id }}">
+                  <button type="submit" class="btn btn-danger btn-sm">Unclaim</button>
+                </form>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

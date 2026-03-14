@@ -684,7 +684,7 @@ async def admin_players_data(
         SELECT
             wc.id, wc.character_name AS name, wc.realm_slug AS realm,
             cl.name AS class, sp.name AS spec, ro.name AS role,
-            pc.player_id,
+            pc.player_id, pc.link_source,
             wc.guild_note, wc.officer_note,
             gr.name AS guild_rank_name,
             (wc.id IS NOT NULL) AS in_wow_scan,
@@ -752,6 +752,7 @@ async def admin_players_data(
                     "role": c["role"] or "",
                     "main_alt": c["main_alt"],
                     "player_id": c["player_id"],
+                    "link_source": c["link_source"] or "",
                     "guild_note": c["guild_note"] or "",
                     "officer_note": c["officer_note"] or "",
                     "guild_rank_name": c["guild_rank_name"] or "",

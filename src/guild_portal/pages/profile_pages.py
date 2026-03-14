@@ -504,6 +504,13 @@ async def profile_unclaim_character(
     if pc is None:
         return RedirectResponse(url="/profile?error=Character+not+linked+to+your+account", status_code=302)
 
+    # Block unclaim of Battle.net verified characters — unlink Battle.net to remove
+    if pc.link_source == "battlenet_oauth":
+        return RedirectResponse(
+            url="/profile?error=Battle.net+verified+characters+cannot+be+unclaimed+manually.+Unlink+your+Battle.net+account+to+remove+them.",
+            status_code=302,
+        )
+
     # Load the character for log denormalization + deletion check
     char_result = await db.execute(
         select(WowCharacter).where(WowCharacter.id == character_id)

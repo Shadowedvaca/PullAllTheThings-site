@@ -118,6 +118,15 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # Battle.net character refresh: daily at 3:15 AM (after nightly Blizzard sync)
+        self.scheduler.add_job(
+            self.run_bnet_character_refresh,
+            CronTrigger(hour=3, minute=15),
+            id="bnet_character_refresh",
+            name="Battle.net Character List Refresh",
+            misfire_grace_time=3600,
+        )
+
         # Roleless member prune: weekly on Sunday at 4 AM
         self.scheduler.add_job(
             self.run_roleless_prune,
@@ -468,6 +477,57 @@ class GuildSyncScheduler:
             logger.info("Weekly achievement sync complete: %s", ach_stats)
         except Exception as exc:
             logger.error("Weekly progression sweep failed: %s", exc, exc_info=True)
+
+    async def run_bnet_character_refresh(self):
+        """Daily refresh of Battle.net character lists for all linked players.
+
+        Runs at 3:15 AM UTC, after nightly Blizzard sync and crafting sync.
+        Fetches character lists from the Battle.net profile API for every player
+        with a linked Battle.net account, refreshing tokens as needed.
+        """
+        from .bnet_character_sync import get_valid_access_token, sync_bnet_characters
+
+        try:
+            async with self.db_pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT player_id FROM guild_identity.battlenet_accounts"
+                )
+            player_ids = [r["player_id"] for r in rows]
+
+            if not player_ids:
+                logger.info("Battle.net character refresh: no linked accounts")
+                return
+
+            refreshed = 0
+            tokens_refreshed = 0
+            new_chars = 0
+            errors = 0
+
+            for player_id in player_ids:
+                try:
+                    access_token = await get_valid_access_token(self.db_pool, player_id)
+                    if access_token is None:
+                        logger.warning(
+                            "Battle.net refresh: no valid token for player %s — skipping",
+                            player_id,
+                        )
+                        continue
+                    stats = await sync_bnet_characters(self.db_pool, player_id, access_token)
+                    refreshed += 1
+                    new_chars += stats.get("new_characters", 0)
+                except Exception as exc:
+                    logger.error(
+                        "Battle.net character refresh failed for player %s: %s",
+                        player_id, exc, exc_info=True,
+                    )
+                    errors += 1
+
+            logger.info(
+                "Battle.net character refresh complete: players=%d new_chars=%d errors=%d",
+                refreshed, new_chars, errors,
+            )
+        except Exception as exc:
+            logger.error("Battle.net character refresh job failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

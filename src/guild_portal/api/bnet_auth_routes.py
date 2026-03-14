@@ -263,7 +263,7 @@ async def bnet_auth_callback(
         token_expires_at=token_expires_at,
     )
     db.add(bnet_account)
-    await db.flush()
+    await db.commit()
 
     logger.info(
         "Battle.net account linked: player_id=%s battletag=%s",
@@ -271,8 +271,40 @@ async def bnet_auth_callback(
         battletag,
     )
 
+    # Immediately sync characters from the linked Battle.net account
+    char_count = 0
+    try:
+        pool = getattr(request.app.state, "guild_sync_pool", None)
+        if pool is not None:
+            from sv_common.guild_sync.bnet_character_sync import sync_bnet_characters
+            sync_stats = await sync_bnet_characters(pool, current_member.id, access_token)
+            char_count = sync_stats.get("linked", 0)
+            logger.info(
+                "Battle.net character sync on link: player_id=%s stats=%s",
+                current_member.id, sync_stats,
+            )
+        else:
+            logger.warning(
+                "guild_sync_pool not available — skipping character sync for player %s",
+                current_member.id,
+            )
+    except Exception as exc:
+        logger.error(
+            "Battle.net character sync failed for player %s: %s", current_member.id, exc
+        )
+
+    if char_count > 0:
+        realm_display = get_site_config().get("realm_display_name") or "your realm"
+        success_msg = (
+            f"Battle.net+linked!+Found+{char_count}+character"
+            + ("s" if char_count != 1 else "")
+            + f"+on+{realm_display.replace(' ', '+')}."
+        )
+    else:
+        success_msg = "Battle.net+account+linked+successfully"
+
     response = RedirectResponse(
-        url="/profile?success=Battle.net+account+linked+successfully",
+        url=f"/profile?success={success_msg}",
         status_code=302,
     )
     response.delete_cookie(_STATE_COOKIE)

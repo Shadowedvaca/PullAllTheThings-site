@@ -533,20 +533,26 @@ function renderChars() {
                </div>`
             : '';
 
+        const isOAuthLinked = c.link_source === 'battlenet_oauth';
+        const oauthLockBadge = isOAuthLinked
+            ? `<span class="pm-badge pm-badge--bnet" title="Linked via Battle.net — cannot be manually reassigned">🔒 BNet</span>`
+            : '';
+
         return `
         <div class="pm-char-row ${drill && drill.charIds.has(c.id) ? 'pm-drill-active' : ''}">
             <div class="pm-char-chip-wrap">
                 <div class="pm-char-chip pm-char-chip--${roleClass}"
-                     draggable="true"
+                     draggable="${isOAuthLinked ? 'false' : 'true'}"
                      data-char-id="${c.id}"
-                     ondragstart="handleCharDragStart(event, ${c.id})"
-                     ondragend="this.classList.remove('pm-dragging')">
+                     ${isOAuthLinked ? '' : `ondragstart="handleCharDragStart(event, ${c.id})" ondragend="this.classList.remove('pm-dragging')"`}
+                     ${isOAuthLinked ? 'title="Linked via Battle.net — cannot be manually reassigned"' : ''}>
                     <button class="pm-drill-btn ${isDrillActive('char', c.id) ? 'pm-drill-btn--on' : ''}" onclick="drillOn('char',${c.id})" title="${isDrillActive('char', c.id) ? 'Clear filter' : 'Focus on ' + escAttr(c.name)}">◎</button>
                     <span class="pm-role-icon">${roleIcon}</span>
                     <span class="pm-char-name">${escHtml(c.name)}</span>
                     <span class="pm-char-realm text-muted">${escHtml(c.realm)}</span>
                     <span class="pm-char-spec">${escHtml(c.spec || c.class || '')}</span>
                     ${mismatchBadge}
+                    ${oauthLockBadge}
                     ${c.guild_rank_name ? `<span class="pm-char-guild-rank">${escHtml(c.guild_rank_name)}</span>` : ''}
                     ${(isMain || isOffspec) ? `<span class="pm-char-badges">${isMain ? '<span class="pm-main-badge">Main</span>' : ''}${isOffspec ? '<span class="pm-offspec-badge">Off</span>' : ''}</span>` : ''}
                     ${notInScanBadge}
