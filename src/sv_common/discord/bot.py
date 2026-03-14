@@ -131,11 +131,29 @@ async def on_member_update(before: discord.Member, after: discord.Member):
 
 @bot.event
 async def on_message(message: discord.Message):
-    """Respond to DMs with a help message listing available commands."""
+    """Respond to DMs with a help message listing available commands.
+
+    Suppressed when the user is mid-onboarding conversation — their reply
+    belongs to the wait_for in the conversation flow, not to this handler.
+    """
     if message.author.bot:
         return
     if not isinstance(message.channel, discord.DMChannel):
         return
+
+    # Don't fire while the user is actively answering onboarding questions
+    _ACTIVE_ONBOARDING_STATES = {"asked_in_guild", "asked_main", "asked_alts"}
+    if _db_pool is not None:
+        try:
+            async with _db_pool.acquire() as conn:
+                state = await conn.fetchval(
+                    "SELECT state FROM guild_identity.onboarding_sessions WHERE discord_id = $1",
+                    str(message.author.id),
+                )
+            if state in _ACTIVE_ONBOARDING_STATES:
+                return
+        except Exception:
+            pass  # DB not available — fall through and show help
 
     embed = discord.Embed(
         title=f"{get_guild_name()} Bot",
