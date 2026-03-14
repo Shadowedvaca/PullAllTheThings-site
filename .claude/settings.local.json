@@ -75,7 +75,11 @@
       "Bash(scp H:/Development/PullAllTheThings-site/Dockerfile hetzner:/opt/guild-portal/Dockerfile && ssh hetzner \"cd /opt/guild-portal && docker compose -f docker-compose.patt.yml build app-prod 2>&1 | tail -10\")",
       "Bash(scp H:/Development/PullAllTheThings-site/docker-compose.patt.yml hetzner:/opt/guild-portal/docker-compose.patt.yml && ssh hetzner \"cd /opt/guild-portal && docker compose -f docker-compose.patt.yml up -d app-prod 2>&1\")",
       "Bash(cd H:/Development/PullAllTheThings-site && mv docker-compose.patt.yml docker-compose.guild.yml && mv Caddyfile.patt Caddyfile.guild 2>&1)",
-      "Bash(scp H:/Development/PullAllTheThings-site/docker-compose.guild.yml hetzner:/opt/guild-portal/docker-compose.guild.yml && echo \"Uploaded docker-compose.guild.yml\")"
+      "Bash(scp H:/Development/PullAllTheThings-site/docker-compose.guild.yml hetzner:/opt/guild-portal/docker-compose.guild.yml && echo \"Uploaded docker-compose.guild.yml\")",
+      "Bash(cd H:/Development/PullAllTheThings-site && gh pr create --title \"fix: nav badge fallback + link-discord silent fail\" --body \"$\\(cat <<'EOF'\n## Summary\n- Return 404 \\(not silent 200\\) when `link-discord` is called with a discord_id that has no matching DiscordUser in the DB\n- Show `display_name` in the nav badge when no main character is set\n\n## Test plan\n- [ ] Nav badge shows player display name when no WoW character is linked\n- [ ] Dragging an unknown Discord user in Player Manager returns a clear error\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\nEOF\n\\)\")",
+      "Bash(cd H:/Development/PullAllTheThings-site && gh pr merge 7 --squash --delete-branch && echo \"Merged\")",
+      "Bash(cd \"H:\\\\Development\\\\PullAllTheThings-site\" && sed -i 's/| 4.3 | 📋 Planned | Blizzard API Expansion \\\\& Last-Login Optimization |/| 4.3 | ✅ Complete | Blizzard API Expansion \\\\& Last-Login Optimization |/' reference/INDEX.md)",
+      "Bash(ssh hetzner:*)"
     ]
   }
 }
