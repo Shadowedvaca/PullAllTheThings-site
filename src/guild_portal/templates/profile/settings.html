@@ -504,7 +504,7 @@
       {# — Claimed characters — #}
       {% if player_chars %}
       <p class="field-group__hint" style="margin-bottom:0.75rem">
-        These characters are currently linked to your account. You can unclaim any you don't own.
+        These characters are currently linked to your account.{% if not bnet_account %} You can unclaim any you don't own.{% endif %}
       </p>
       <table class="table" style="margin-bottom:1.25rem">
         <thead>
