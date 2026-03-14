@@ -1385,6 +1385,7 @@ async def admin_bot_settings(
 
     ctx = await _base_ctx(request, player, db)
     ctx["discord_config"] = discord_config
+    ctx["has_bot_token"] = bool(discord_config and discord_config.bot_token_encrypted)
     return templates.TemplateResponse("admin/bot_settings.html", ctx)
 
 

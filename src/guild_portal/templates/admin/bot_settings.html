@@ -184,6 +184,24 @@ input:checked + .bs-slider::before {
     color: var(--color-text-muted);
     margin-top: 0.1rem;
 }
+.bs-field-row {
+    margin-bottom: 1rem;
+}
+.bs-field-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+.bs-field-status {
+    font-size: 0.78rem;
+    margin-left: 0.5rem;
+}
+.bs-field-status--ok  { color: #4ade80; }
+.bs-field-status--missing { color: #f87171; }
 </style>
 {% endblock %}
 
@@ -192,6 +210,44 @@ input:checked + .bs-slider::before {
     <h1 class="admin-page-title">Bot Settings</h1>
     <p class="admin-page-subtitle">Control Discord bot messaging and onboarding behavior.</p>
 </div>
+
+{# Bot Connection Card (Guild Leader only) #}
+{% if current_player and current_player.rank and current_player.rank.level >= 5 %}
+<div class="bs-card">
+    <h2 class="bs-card__title">Bot Connection</h2>
+    <p class="bs-card__subtitle">Update the Discord bot token and guild ID. Changes take effect after the next app restart.</p>
+
+    <div class="bs-field-row">
+        <label class="bs-field-label" for="bot-token-input">
+            Bot Token
+            {% if has_bot_token %}
+            <span class="bs-field-status bs-field-status--ok">✓ configured</span>
+            {% else %}
+            <span class="bs-field-status bs-field-status--missing">✗ not set</span>
+            {% endif %}
+        </label>
+        <input type="password" id="bot-token-input" placeholder="Leave blank to keep existing token"
+               style="width: 100%; max-width: 480px; background: var(--color-bg-dark); border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem 0.75rem; color: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">
+    </div>
+
+    <div class="bs-field-row">
+        <label class="bs-field-label" for="guild-id-input">Discord Guild ID</label>
+        <input type="text" id="guild-id-input"
+               value="{{ discord_config.guild_discord_id or '' }}"
+               placeholder="e.g. 1234567890123456789"
+               style="width: 100%; max-width: 320px; background: var(--color-bg-dark); border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem 0.75rem; color: var(--color-text); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <button class="btn btn--secondary" onclick="saveBotConnection()">Save Bot Connection</button>
+        <span id="bot-conn-status" style="font-size: 0.85rem; color: var(--color-text-muted);"></span>
+    </div>
+    <p class="bs-info" style="margin-top: 0.75rem;">
+        ⚠ After saving, restart the app container for the new bot to connect.
+        The token is stored encrypted and is write-only — it cannot be read back.
+    </p>
+</div>
+{% endif %}
 
 {# Audit Channel Card #}
 <div class="bs-card">
@@ -491,6 +547,57 @@ async function processQueue() {
     } finally {
         btn.disabled = false;
         btn.textContent = 'Process Queue Now';
+    }
+}
+
+// ── Bot Connection ─────────────────────────────────────────────────────────
+
+async function saveBotConnection() {
+    const tokenInput = document.getElementById('bot-token-input');
+    const guildIdInput = document.getElementById('guild-id-input');
+    const status = document.getElementById('bot-conn-status');
+    if (!tokenInput) return; // card not visible (non-GL rank)
+
+    const payload = {};
+    if (tokenInput.value.trim()) payload.bot_token = tokenInput.value.trim();
+    const guildId = guildIdInput.value.trim();
+    if (guildId) payload.discord_guild_id = guildId;
+
+    if (Object.keys(payload).length === 0) {
+        status.style.color = '#fbbf24';
+        status.textContent = 'Nothing to save.';
+        return;
+    }
+
+    status.style.color = 'var(--color-text-muted)';
+    status.textContent = 'Saving…';
+    try {
+        const resp = await fetch('/api/v1/admin/bot-connection', {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            status.style.color = '#4ade80';
+            status.textContent = 'Saved. Restart the app to connect the new bot.';
+            tokenInput.value = '';
+            // Update token status badge
+            const tokenLabel = tokenInput.previousElementSibling;
+            if (tokenLabel) {
+                const badge = tokenLabel.querySelector('.bs-field-status');
+                if (badge) {
+                    badge.textContent = '✓ configured';
+                    badge.className = 'bs-field-status bs-field-status--ok';
+                }
+            }
+        } else {
+            status.style.color = '#f87171';
+            status.textContent = data.error || 'Failed to save.';
+        }
+    } catch (e) {
+        status.style.color = '#f87171';
+        status.textContent = 'Network error: ' + e.message;
     }
 }
 
