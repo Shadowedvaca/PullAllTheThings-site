@@ -6,8 +6,11 @@ Commands:
   /onboard-resolve — manually provision a member
   /onboard-dismiss — close a session without provisioning
   /onboard-retry   — re-run verification for one member
+  /onboard-start   — force-start a fresh onboarding conversation (dev/testing)
+  /resend-oauth    — re-send the Battle.net link DM to an oauth_pending member
 """
 
+import asyncio
 import logging
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -453,3 +456,41 @@ def register_onboarding_commands(
                 f"⚠️ Could not DM {member.mention} — they may have DMs disabled.",
                 ephemeral=True,
             )
+
+    @tree.command(
+        name="onboard-start",
+        description="Force-start a fresh onboarding conversation for a member (testing/recovery)",
+    )
+    @app_commands.describe(member="The Discord member to onboard")
+    async def onboard_start(interaction: discord.Interaction, member: discord.Member):
+        if not await _require_officer(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Delete any existing session so start() creates a clean one
+        async with db_pool.acquire() as conn:
+            deleted_id = await conn.fetchval(
+                "DELETE FROM guild_identity.onboarding_sessions WHERE discord_id = $1 RETURNING id",
+                str(member.id),
+            )
+        if deleted_id:
+            logger.info(
+                "Officer cleared session %d for discord_id=%s before force-start (by %s)",
+                deleted_id, member.id, interaction.user.name,
+            )
+
+        from .conversation import OnboardingConversation
+        conv = OnboardingConversation(interaction.client, member, db_pool)
+        asyncio.create_task(conv.start())
+
+        await interaction.followup.send(
+            f"✅ Onboarding conversation started for {member.mention}.\n"
+            "They'll receive a DM shortly (requires **Bot DMs** and **Onboarding DMs** enabled\n"
+            "in Admin → Bot Settings).",
+            ephemeral=True,
+        )
+        logger.info(
+            "Officer force-started onboarding for discord_id=%s by %s",
+            member.id, interaction.user.name,
+        )
