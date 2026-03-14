@@ -262,12 +262,11 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                 # Upsert player_characters with battlenet_oauth (confidence='high')
                 await conn.execute(
                     """INSERT INTO guild_identity.player_characters
-                       (player_id, character_id, link_source, confidence, linked_at)
-                       VALUES ($1, $2, 'battlenet_oauth', 'high', NOW())
+                       (player_id, character_id, link_source, confidence)
+                       VALUES ($1, $2, 'battlenet_oauth', 'high')
                        ON CONFLICT (player_id, character_id) DO UPDATE SET
                            link_source = 'battlenet_oauth',
-                           confidence = 'high',
-                           linked_at = NOW()""",
+                           confidence = 'high'""",
                     player_id, char_id,
                 )
                 linked += 1
