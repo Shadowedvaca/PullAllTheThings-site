@@ -172,6 +172,7 @@ class SiteConfig(Base):
     logo_url: Mapped[Optional[str]] = mapped_column(String(500))
     enable_guild_quotes: Mapped[bool] = mapped_column(Boolean, default=False)
     enable_contests: Mapped[bool] = mapped_column(Boolean, default=True)
+    enable_onboarding: Mapped[bool] = mapped_column(Boolean, default=True)
     setup_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     blizzard_client_id: Mapped[Optional[str]] = mapped_column(String(100))
     blizzard_client_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text)

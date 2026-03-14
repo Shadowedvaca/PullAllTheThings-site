@@ -58,3 +58,18 @@ def is_guild_quotes_enabled() -> bool:
 def is_contests_enabled() -> bool:
     """Return True if the Contests feature is enabled."""
     return bool(_cache.get("enable_contests", True))
+
+
+def is_onboarding_enabled() -> bool:
+    """Return True if the onboarding flow is enabled (on_member_join triggers DM flow)."""
+    return bool(_cache.get("enable_onboarding", True))
+
+
+def set_app_url(url: str) -> None:
+    """Store the app URL (set at startup from settings) so sv_common modules can read it."""
+    _cache["_app_url"] = url.rstrip("/") if url else ""
+
+
+def get_app_url() -> str:
+    """Return the app's base URL (e.g. 'https://pullallthethings.com')."""
+    return _cache.get("_app_url", "")

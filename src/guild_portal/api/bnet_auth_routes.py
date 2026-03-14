@@ -273,8 +273,8 @@ async def bnet_auth_callback(
 
     # Immediately sync characters from the linked Battle.net account
     char_count = 0
+    pool = getattr(request.app.state, "guild_sync_pool", None)
     try:
-        pool = getattr(request.app.state, "guild_sync_pool", None)
         if pool is not None:
             from sv_common.guild_sync.bnet_character_sync import sync_bnet_characters
             sync_stats = await sync_bnet_characters(pool, current_member.id, access_token)
@@ -292,6 +292,21 @@ async def bnet_auth_callback(
         logger.error(
             "Battle.net character sync failed for player %s: %s", current_member.id, exc
         )
+
+    # Signal onboarding session if this player is in oauth_pending state
+    if pool is not None:
+        try:
+            from sv_common.guild_sync.onboarding.conversation import update_onboarding_status
+            updated = await update_onboarding_status(pool, current_member.id, "oauth_complete")
+            if updated:
+                logger.info(
+                    "Onboarding session marked oauth_complete for player_id=%s",
+                    current_member.id,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Failed to update onboarding status for player %s: %s", current_member.id, exc
+            )
 
     if char_count > 0:
         realm_display = get_site_config().get("realm_display_name") or "your realm"

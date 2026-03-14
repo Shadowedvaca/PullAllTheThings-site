@@ -17,7 +17,7 @@ import asyncpg
 import discord
 from discord import app_commands
 
-from sv_common.config_cache import get_accent_color_int, get_guild_name
+from sv_common.config_cache import get_accent_color_int, get_app_url, get_guild_name
 from .provisioner import AutoProvisioner
 from .deadline_checker import OnboardingDeadlineChecker
 
@@ -56,7 +56,10 @@ def register_onboarding_commands(
                           verification_attempts, created_at, deadline_at, escalated_at,
                           verified_player_id
                    FROM guild_identity.onboarding_sessions
-                   WHERE state NOT IN ('provisioned', 'manually_resolved', 'declined')
+                   WHERE state NOT IN (
+                       'provisioned', 'manually_resolved', 'declined',
+                       'oauth_complete', 'abandoned_oauth'
+                   )
                    ORDER BY created_at ASC
                    LIMIT 20""",
             )
@@ -96,7 +99,10 @@ def register_onboarding_commands(
                 """SELECT id, state, discord_id
                    FROM guild_identity.onboarding_sessions
                    WHERE discord_id = $1
-                     AND state NOT IN ('provisioned', 'manually_resolved', 'declined')""",
+                     AND state NOT IN (
+                         'provisioned', 'manually_resolved', 'declined',
+                         'oauth_complete', 'abandoned_oauth'
+                     )""",
                 str(member.id),
             )
             if not session:
@@ -392,5 +398,58 @@ def register_onboarding_commands(
             await interaction.followup.send(
                 f"⚠️ Still couldn't match {member.mention} in the roster. "
                 "The verification attempt counter was incremented.",
+                ephemeral=True,
+            )
+
+    @tree.command(
+        name="resend-oauth",
+        description="Re-send the Battle.net link DM to a member stuck at oauth_pending",
+    )
+    @app_commands.describe(member="The Discord member to re-send the OAuth link to")
+    async def resend_oauth(interaction: discord.Interaction, member: discord.Member):
+        if not await _require_officer(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with db_pool.acquire() as conn:
+            session = await conn.fetchrow(
+                """SELECT id FROM guild_identity.onboarding_sessions
+                   WHERE discord_id = $1 AND state = 'oauth_pending'""",
+                str(member.id),
+            )
+            if not session:
+                await interaction.followup.send(
+                    f"No oauth_pending session found for {member.mention}.",
+                    ephemeral=True,
+                )
+                return
+
+        site_url = get_app_url()
+        try:
+            embed = discord.Embed(
+                title="Connect your Battle.net account 🔗",
+                description=(
+                    "An officer asked me to resend this.\n\n"
+                    "Connect your Battle.net account to automatically find your characters:\n\n"
+                    f"👉 **{site_url}/auth/battlenet**\n\n"
+                    "It takes about 10 seconds — click *Approve* on Blizzard's page."
+                ),
+                color=get_accent_color_int(),
+            )
+            embed.set_footer(text=get_guild_name())
+            dm = await member.create_dm()
+            await dm.send(embed=embed)
+            await interaction.followup.send(
+                f"✅ Battle.net link DM sent to {member.mention}.",
+                ephemeral=True,
+            )
+            logger.info(
+                "Officer resent OAuth DM for discord_id=%s session=%d by %s",
+                member.id, session["id"], interaction.user.name,
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                f"⚠️ Could not DM {member.mention} — they may have DMs disabled.",
                 ephemeral=True,
             )

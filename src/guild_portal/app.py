@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from guild_portal.config import get_settings
-from sv_common.config_cache import set_site_config, get_site_config
+from sv_common.config_cache import set_site_config, get_site_config, set_app_url
 from sv_common.db.engine import get_engine, get_session_factory
 from sv_common.db.seed import seed_ranks
 
@@ -156,6 +156,9 @@ def create_app() -> FastAPI:
             logger.warning("Guild sync pool not created (DB may not be available): %s", exc)
             guild_sync_pool = None
             app.state.guild_sync_pool = None
+
+        # Populate app URL in config cache (used by sv_common modules for DM links)
+        set_app_url(settings.app_url)
 
         # Load site config into the in-process cache
         if guild_sync_pool is not None:

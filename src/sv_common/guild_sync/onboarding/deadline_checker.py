@@ -17,7 +17,7 @@ from typing import Optional
 import asyncpg
 import discord
 
-from sv_common.config_cache import get_accent_color_int
+from sv_common.config_cache import get_accent_color_int, get_app_url, get_guild_name
 from .provisioner import AutoProvisioner
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,8 @@ class OnboardingDeadlineChecker:
             "provisioned": 0,
             "still_pending": 0,
             "dm_resumed": 0,
+            "oauth_reminded": 0,
+            "oauth_abandoned": 0,
         }
 
         # 1. Retry verification for pending_verification sessions
@@ -76,11 +78,15 @@ class OnboardingDeadlineChecker:
             else:
                 stats["still_pending"] += 1
 
-        # 2. Resume awaiting_dm sessions if DMs are now enabled
+        # 2. Handle oauth_pending sessions — remind at 24h, abandon at 48h
+        oauth_stats = await self._check_oauth_pending_sessions()
+        stats.update(oauth_stats)
+
+        # 3. Resume awaiting_dm sessions if DMs are now enabled
         resumed = await self._resume_awaiting_dm_sessions()
         stats["dm_resumed"] = resumed
 
-        if stats["escalated"] > 0 or resumed > 0:
+        if stats["escalated"] > 0 or resumed > 0 or stats.get("oauth_reminded", 0) > 0:
             logger.info(
                 "Onboarding check: verified=%d provisioned=%d escalated=%d pending=%d resumed=%d",
                 stats["verified"], stats["provisioned"],
@@ -263,7 +269,7 @@ class OnboardingDeadlineChecker:
         async with self.db_pool.acquire() as conn:
             await conn.execute(
                 """UPDATE guild_identity.onboarding_sessions SET
-                    state = 'provisioned',
+                    state = 'oauth_pending',
                     website_invite_sent = $2,
                     website_invite_code = $3,
                     roster_entries_created = $4,
@@ -278,6 +284,125 @@ class OnboardingDeadlineChecker:
                 result["discord_role_assigned"],
             )
         logger.info("Deadline check provisioned player=%d session=%d", player_id, session_id)
+
+    async def _check_oauth_pending_sessions(self) -> dict:
+        """
+        Handle sessions stuck in oauth_pending:
+        - At 24h: send a reminder DM with the Battle.net link (uses escalated_at to track)
+        - At 48h: mark abandoned_oauth and send a friendly 'you can do it later' DM
+        """
+        stats = {"oauth_reminded": 0, "oauth_abandoned": 0}
+        now = datetime.now(timezone.utc)
+
+        async with self.db_pool.acquire() as conn:
+            sessions = await conn.fetch(
+                """SELECT id, discord_id, verified_player_id, completed_at, escalated_at
+                   FROM guild_identity.onboarding_sessions
+                   WHERE state = 'oauth_pending'
+                   ORDER BY created_at ASC""",
+            )
+
+        for session in sessions:
+            completed_at = session["completed_at"]
+            if not completed_at:
+                continue
+            hours_since = (now - completed_at).total_seconds() / 3600
+
+            if hours_since >= 48:
+                await self._abandon_oauth(session)
+                stats["oauth_abandoned"] += 1
+            elif hours_since >= 24 and not session["escalated_at"]:
+                await self._send_oauth_reminder(session)
+                stats["oauth_reminded"] += 1
+
+        return stats
+
+    async def _send_oauth_reminder(self, session: asyncpg.Record) -> None:
+        """DM a 24h reminder to a member still in oauth_pending."""
+        async with self.db_pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE guild_identity.onboarding_sessions
+                   SET escalated_at = NOW(), updated_at = NOW()
+                   WHERE id = $1""",
+                session["id"],
+            )
+
+        if not self.bot:
+            return
+
+        member = await self._find_discord_member(session["discord_id"])
+        if not member:
+            logger.warning(
+                "oauth_pending reminder: discord_id=%s not found in guild",
+                session["discord_id"],
+            )
+            return
+
+        site_url = get_app_url()
+        try:
+            embed = discord.Embed(
+                title="Don't forget — connect Battle.net! 🔗",
+                description=(
+                    "You're registered, but haven't connected your Battle.net account yet.\n\n"
+                    "Connect it to automatically link your characters:\n\n"
+                    f"👉 **{site_url}/auth/battlenet**"
+                ),
+                color=get_accent_color_int(),
+            )
+            embed.set_footer(text=get_guild_name())
+            dm = await member.create_dm()
+            await dm.send(embed=embed)
+            logger.info(
+                "Sent oauth_pending 24h reminder to discord_id=%s session=%d",
+                session["discord_id"], session["id"],
+            )
+        except discord.Forbidden:
+            logger.warning(
+                "Cannot DM oauth reminder to discord_id=%s — DMs closed",
+                session["discord_id"],
+            )
+
+    async def _abandon_oauth(self, session: asyncpg.Record) -> None:
+        """Mark an oauth_pending session as abandoned and send a friendly completion DM."""
+        async with self.db_pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE guild_identity.onboarding_sessions
+                   SET state = 'abandoned_oauth', updated_at = NOW()
+                   WHERE id = $1""",
+                session["id"],
+            )
+
+        logger.info(
+            "oauth_pending abandoned after 48h: session=%d discord_id=%s",
+            session["id"], session["discord_id"],
+        )
+
+        if not self.bot:
+            return
+
+        member = await self._find_discord_member(session["discord_id"])
+        if not member:
+            return
+
+        site_url = get_app_url()
+        try:
+            embed = discord.Embed(
+                title="You're all set! ✅",
+                description=(
+                    "You're registered and ready to go!\n\n"
+                    "If you ever want to connect Battle.net to automatically link your\n"
+                    f"characters, you can do it anytime from **{site_url}/profile**"
+                ),
+                color=0x4ADE80,
+            )
+            embed.set_footer(text=get_guild_name())
+            dm = await member.create_dm()
+            await dm.send(embed=embed)
+        except discord.Forbidden:
+            logger.warning(
+                "Cannot DM oauth abandon message to discord_id=%s — DMs closed",
+                session["discord_id"],
+            )
 
     async def _escalate(self, session: asyncpg.Record):
         """Mark session as escalated and post to audit channel."""

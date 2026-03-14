@@ -84,11 +84,15 @@ async def on_member_join(member: discord.Member):
     except Exception as e:
         logger.warning("on_member_join discord_sync failed for %s: %s", member.name, e)
 
-    # Start onboarding conversation (gated by bot_dm_enabled internally)
+    # Start onboarding conversation (gated by enable_onboarding flag and bot_dm_enabled)
     try:
-        from sv_common.guild_sync.onboarding.conversation import OnboardingConversation
-        conv = OnboardingConversation(bot, member, pool)
-        asyncio.create_task(conv.start())
+        from sv_common.config_cache import is_onboarding_enabled
+        if is_onboarding_enabled():
+            from sv_common.guild_sync.onboarding.conversation import OnboardingConversation
+            conv = OnboardingConversation(bot, member, pool)
+            asyncio.create_task(conv.start())
+        else:
+            logger.debug("Onboarding disabled — skipping for %s", member.name)
     except Exception as e:
         logger.warning("on_member_join onboarding start failed for %s: %s", member.name, e)
 
