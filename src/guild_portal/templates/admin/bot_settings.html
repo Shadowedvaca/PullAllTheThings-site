@@ -212,7 +212,7 @@ input:checked + .bs-slider::before {
 </div>
 
 {# Bot Connection Card (Guild Leader only) #}
-{% if current_member and current_member.rank and current_member.rank.level >= 5 %}
+{% if current_member and current_member.guild_rank and current_member.guild_rank.level >= 5 %}
 <div class="bs-card">
     <h2 class="bs-card__title">Bot Connection</h2>
     <p class="bs-card__subtitle">Update the Discord bot token and guild ID. Changes take effect after the next app restart.</p>
