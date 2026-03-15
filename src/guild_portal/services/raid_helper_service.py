@@ -99,21 +99,34 @@ async def create_event(
     if not effective_channel:
         raise RaidHelperError("No channel_id configured for event creation")
 
-    # Date format Raid-Helper expects: D-M-YYYY (no leading zeros)
-    rh_date = f"{start_time_utc.day}-{start_time_utc.month}-{start_time_utc.year}"
-
+    # Raid-Helper v2 expects `time` as a Unix epoch timestamp (seconds).
+    # Sending HH:MM causes it to interpret the time in whatever timezone the
+    # Raid-Helper bot defaults to, which is never what we want.
     payload: dict[str, Any] = {
         "leaderId": config.get("raid_creator_discord_id"),
         "templateId": template_id or config.get("raid_default_template_id") or "wowretail2",
-        "date": rh_date,
-        "time": start_time_utc.strftime("%H:%M"),
+        "date": f"{start_time_utc.day}-{start_time_utc.month}-{start_time_utc.year}",
+        "time": int(start_time_utc.timestamp()),
         "title": title,
         "description": description,
         "duration": duration_minutes,
     }
 
+    # Raid-Helper signup status codes: 1=Signed Up, 2=Bench, 3=Tentative
+    _STATUS_CODE = {"accepted": 1, "bench": 2, "tentative": 3}
+
     if signups:
-        payload["signups"] = signups
+        rh_signups = []
+        for s in signups:
+            entry: dict[str, Any] = {"userId": s["userId"]}
+            if "status" in s:
+                entry["statusId"] = _STATUS_CODE.get(s["status"], 1)
+            if "class" in s:
+                entry["className"] = s["class"]
+            if "spec" in s:
+                entry["specName"] = s["spec"]
+            rh_signups.append(entry)
+        payload["signups"] = rh_signups
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(

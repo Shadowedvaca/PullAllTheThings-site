@@ -1091,6 +1091,11 @@ async def create_raid_event(
     channel_id = body.channel_id or cfg.raid_channel_id or ""
     template_id = cfg.raid_default_template_id or "wowretail2"
 
+    logger.info(
+        "Building Raid-Helper event '%s': %d active players, %d with Discord linked (signups)",
+        body.title, len(active_players), len(signups),
+    )
+
     try:
         rh_result = await create_event(
             config=config,

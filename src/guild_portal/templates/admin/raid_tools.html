@@ -390,6 +390,19 @@
                         <option value="180" {% if def_dur == 180 %}selected{% endif %}>3 hours</option>
                     </select>
 
+                    <label for="ev-timezone">Timezone</label>
+                    <select id="ev-timezone">
+                        {% set tz = discord_config.raid_event_timezone or 'America/New_York' %}
+                        <option value="America/New_York"    {% if tz == 'America/New_York'    %}selected{% endif %}>Eastern</option>
+                        <option value="America/Chicago"     {% if tz == 'America/Chicago'     %}selected{% endif %}>Central</option>
+                        <option value="America/Denver"      {% if tz == 'America/Denver'      %}selected{% endif %}>Mountain</option>
+                        <option value="America/Los_Angeles" {% if tz == 'America/Los_Angeles' %}selected{% endif %}>Pacific</option>
+                        <option value="America/Anchorage"   {% if tz == 'America/Anchorage'   %}selected{% endif %}>Alaska</option>
+                        <option value="Pacific/Honolulu"    {% if tz == 'Pacific/Honolulu'    %}selected{% endif %}>Hawaii</option>
+                        <option value="Europe/London"       {% if tz == 'Europe/London'       %}selected{% endif %}>London</option>
+                        <option value="UTC"                 {% if tz == 'UTC'                 %}selected{% endif %}>UTC</option>
+                    </select>
+
                     <label for="ev-channel">Channel</label>
                     <select id="ev-channel"><option value="">— loading —</option></select>
                 </div>
@@ -723,7 +736,7 @@ async function createRaidEvent() {
         event_type: document.getElementById('ev-type').value,
         event_date: document.getElementById('ev-date').value,
         start_time: document.getElementById('ev-time').value,
-        timezone: document.getElementById('rh-timezone').value || '{{ discord_config.raid_event_timezone or "America/New_York" }}',
+        timezone: document.getElementById('ev-timezone').value,
         duration_minutes: parseInt(document.getElementById('ev-duration').value),
         channel_id: document.getElementById('ev-channel').value || null,
         description: document.getElementById('ev-desc').value,
