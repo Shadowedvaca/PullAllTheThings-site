@@ -1115,6 +1115,15 @@ async def create_raid_event(
         logger.error("Raid-Helper create_event failed: %s", e)
         return {"ok": False, "error": f"Raid-Helper error: {e}"}
 
+    # 4b. Add signups via dedicated per-user endpoint (creation payload ignores them)
+    if signups and rh_result.get("event_id"):
+        from guild_portal.services.raid_helper_service import add_signups_to_event
+        await add_signups_to_event(
+            api_key=config["raid_helper_api_key"],
+            event_id=str(rh_result["event_id"]),
+            signups=signups,
+        )
+
     # 5. Insert patt.raid_events row
     # Determine active season
     season_result = await db.execute(

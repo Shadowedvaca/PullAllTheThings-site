@@ -6,6 +6,7 @@ requests come from the FastAPI server, not the browser.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -123,25 +124,9 @@ async def create_event(
         "duration": duration_minutes,
     }
 
-    # Raid-Helper signup status codes: 1=Signed Up, 2=Bench, 3=Tentative
-    _STATUS_CODE = {"accepted": 1, "bench": 2, "tentative": 3}
-
-    if signups:
-        rh_signups = []
-        for s in signups:
-            entry: dict[str, Any] = {"userId": s["userId"]}
-            if "status" in s:
-                entry["statusId"] = _STATUS_CODE.get(s["status"], 1)
-            if "class" in s:
-                entry["className"] = s["class"]
-            if "spec" in s:
-                entry["specName"] = s["spec"]
-            rh_signups.append(entry)
-        payload["signups"] = rh_signups
-
     logger.info(
         "Raid-Helper create_event payload: date=%s time=%s signups=%d",
-        rh_date, rh_time, len(payload.get("signups", [])),
+        rh_date, rh_time, len(signups) if signups else 0,
     )
 
     async with httpx.AsyncClient() as client:
@@ -167,6 +152,54 @@ async def create_event(
         "event_url": event_url,
         "payload": payload,
     }
+
+
+async def add_signups_to_event(
+    api_key: str,
+    event_id: str,
+    signups: list[dict],
+) -> tuple[int, int]:
+    """Add pre-populated signups to an existing Raid-Helper event.
+
+    Calls PUT /api/v2/events/{eventId}/signup/{userId} for each signup
+    concurrently.  Returns (success_count, fail_count).
+    """
+    # Raid-Helper signup status codes: 1=Signed Up, 2=Bench, 3=Tentative
+    _STATUS_CODE = {"accepted": 1, "bench": 2, "tentative": 3}
+
+    async def _add_one(client: httpx.AsyncClient, s: dict) -> bool:
+        user_id = s["userId"]
+        body: dict[str, Any] = {
+            "statusId": _STATUS_CODE.get(s.get("status", "accepted"), 1),
+        }
+        if s.get("class"):
+            body["className"] = s["class"]
+        if s.get("spec"):
+            body["specName"] = s["spec"]
+        try:
+            resp = await client.put(
+                f"{_BASE_URL}/events/{event_id}/signup/{user_id}",
+                headers={"Authorization": api_key, "Content-Type": "application/json"},
+                json=body,
+                timeout=10.0,
+            )
+            if not resp.is_success:
+                logger.warning(
+                    "Raid-Helper signup failed for user %s: %s %s",
+                    user_id, resp.status_code, resp.text[:100],
+                )
+            return resp.is_success
+        except Exception as exc:
+            logger.warning("Raid-Helper signup error for user %s: %s", user_id, exc)
+            return False
+
+    async with httpx.AsyncClient() as client:
+        results = await asyncio.gather(*[_add_one(client, s) for s in signups])
+
+    ok = sum(results)
+    fail = len(results) - ok
+    logger.info("Raid-Helper signups: %d ok, %d failed (event %s)", ok, fail, event_id)
+    return ok, fail
 
 
 async def test_connection(config: dict[str, Any]) -> dict[str, Any]:
