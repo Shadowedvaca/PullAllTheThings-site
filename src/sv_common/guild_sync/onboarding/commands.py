@@ -470,7 +470,15 @@ def register_onboarding_commands(
         await interaction.response.defer(ephemeral=True)
 
         # Delete any existing session so start() creates a clean one
+        # Must clear the FK reference on invite_codes first
         async with db_pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE common.invite_codes SET onboarding_session_id = NULL
+                   WHERE onboarding_session_id IN (
+                       SELECT id FROM guild_identity.onboarding_sessions WHERE discord_id = $1
+                   )""",
+                str(member.id),
+            )
             deleted_id = await conn.fetchval(
                 "DELETE FROM guild_identity.onboarding_sessions WHERE discord_id = $1 RETURNING id",
                 str(member.id),
