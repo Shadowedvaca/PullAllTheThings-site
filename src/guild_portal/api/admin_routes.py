@@ -1102,6 +1102,7 @@ async def create_raid_event(
             title=body.title,
             event_type=body.event_type,
             start_time_utc=start_utc,
+            start_time_local=local_dt,
             duration_minutes=body.duration_minutes,
             channel_id=channel_id,
             description=body.description,

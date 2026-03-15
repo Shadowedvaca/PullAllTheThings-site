@@ -79,6 +79,7 @@ async def create_event(
     title: str,
     event_type: str,
     start_time_utc: datetime,
+    start_time_local: datetime,
     duration_minutes: int,
     channel_id: str,
     description: str,
@@ -86,6 +87,12 @@ async def create_event(
     signups: list[dict] | None = None,
 ) -> dict[str, Any]:
     """POST to Raid-Helper API to create an event.
+
+    start_time_local is a timezone-aware datetime in the user's chosen timezone.
+    It is used for the Raid-Helper payload (date + time fields), which the
+    Raid-Helper bot interprets in its own configured server timezone.  By
+    sending the local date/time we match what the user expects to appear in
+    Discord regardless of how Raid-Helper's server-side timezone is set.
 
     Returns {"event_id": ..., "event_url": ..., "payload": ...} on success.
     Raises RaidHelperError on failure.
@@ -99,14 +106,18 @@ async def create_event(
     if not effective_channel:
         raise RaidHelperError("No channel_id configured for event creation")
 
-    # Raid-Helper v2 expects `time` as a Unix epoch timestamp (seconds).
-    # Sending HH:MM causes it to interpret the time in whatever timezone the
-    # Raid-Helper bot defaults to, which is never what we want.
+    # Raid-Helper v2 date/time: D-M-YYYY and HH:MM in the LOCAL timezone.
+    # Raid-Helper's Discord bot converts these to a Discord timestamp using its
+    # own server-configured timezone, so we send the local (human-readable)
+    # values, not UTC.
+    rh_date = f"{start_time_local.day}-{start_time_local.month}-{start_time_local.year}"
+    rh_time = start_time_local.strftime("%H:%M")
+
     payload: dict[str, Any] = {
         "leaderId": config.get("raid_creator_discord_id"),
         "templateId": template_id or config.get("raid_default_template_id") or "wowretail2",
-        "date": f"{start_time_utc.day}-{start_time_utc.month}-{start_time_utc.year}",
-        "time": int(start_time_utc.timestamp()),
+        "date": rh_date,
+        "time": rh_time,
         "title": title,
         "description": description,
         "duration": duration_minutes,
@@ -127,6 +138,11 @@ async def create_event(
                 entry["specName"] = s["spec"]
             rh_signups.append(entry)
         payload["signups"] = rh_signups
+
+    logger.info(
+        "Raid-Helper create_event payload: date=%s time=%s signups=%d",
+        rh_date, rh_time, len(payload.get("signups", [])),
+    )
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
