@@ -112,12 +112,17 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
     Characters whose player has no Discord user linked are skipped — we cannot
     reliably detect a mismatch without a Discord identity to compare against.
 
+    Characters linked via battlenet_oauth are skipped — OAuth ownership is authoritative
+    and note mismatches are expected when a player's Discord name differs from their
+    WoW character name.
+
     Returns count of new issues created.
     """
     import re
     from .identity_engine import _extract_note_key, normalize_name
 
-    # Load all linked characters that have a discord user on their player
+    # Load all linked characters that have a discord user on their player.
+    # Skip battlenet_oauth links — OAuth ownership is authoritative.
     rows = await conn.fetch(
         """SELECT
                wc.id          AS char_id,
@@ -134,7 +139,8 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
            WHERE wc.removed_at IS NULL
              AND wc.guild_note IS NOT NULL
              AND wc.guild_note != ''
-             AND du.is_present = TRUE"""
+             AND du.is_present = TRUE
+             AND pc.link_source != 'battlenet_oauth'"""
     )
 
     # Load all player aliases in one query (avoids N+1 per character)
@@ -444,6 +450,8 @@ async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
     - Characters where note key is in player_note_aliases
     - Characters with link_source = 'manual' AND confidence = 'confirmed'
       (human overrode the note — trust the human)
+    - Characters linked via battlenet_oauth (OAuth ownership is authoritative;
+      note mismatches are expected when Discord name differs from WoW name)
 
     Returns count of new issues created.
     """
@@ -468,7 +476,8 @@ async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
            WHERE wc.removed_at IS NULL
              AND wc.guild_note IS NOT NULL
              AND wc.guild_note != ''
-             AND du.is_present = TRUE"""
+             AND du.is_present = TRUE
+             AND pc.link_source != 'battlenet_oauth'"""
     )
 
     alias_rows = await conn.fetch(

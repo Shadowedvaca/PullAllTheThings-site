@@ -717,6 +717,12 @@ async def admin_players_data(
             aliases_by_player[pid] = []
         aliases_by_player[pid].append({"id": ar["id"], "alias": ar["alias"], "source": ar["source"]})
 
+    # Build set of bnet-verified player IDs
+    bnet_result = await db.execute(
+        text("SELECT player_id FROM guild_identity.battlenet_accounts")
+    )
+    bnet_verified_ids = {row[0] for row in bnet_result.all()}
+
     return JSONResponse({
         "ok": True,
         "data": {
@@ -738,6 +744,7 @@ async def admin_players_data(
                     "auto_invite_events": p.auto_invite_events,
                     "crafting_notifications_enabled": p.crafting_notifications_enabled,
                     "on_raid_hiatus": p.on_raid_hiatus,
+                    "bnet_verified": p.id in bnet_verified_ids,
                     "aliases": aliases_by_player.get(p.id, []),
                 }
                 for p in players
@@ -2151,6 +2158,128 @@ async def admin_drift_summary(
         for r in log_rows
     ]
     return JSONResponse({"ok": True, "data": {"summary": summary, "log": log}})
+
+
+@router.get("/oauth-coverage")
+async def admin_oauth_coverage(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """OAuth verification coverage — verified vs unverified active players."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        # Total active players with Discord (these are the members we expect to verify)
+        total = await conn.fetchval(
+            """SELECT COUNT(*) FROM guild_identity.players p
+               JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+               WHERE p.is_active = TRUE AND du.is_present = TRUE"""
+        )
+        # Verified: players with a battlenet_accounts row
+        verified = await conn.fetchval(
+            """SELECT COUNT(DISTINCT p.id) FROM guild_identity.players p
+               JOIN guild_identity.battlenet_accounts ba ON ba.player_id = p.id
+               JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+               WHERE p.is_active = TRUE AND du.is_present = TRUE"""
+        )
+        # Unverified member details
+        unverified_rows = await conn.fetch(
+            """SELECT p.id AS player_id, p.display_name,
+                      du.username AS discord_username, du.display_name AS discord_display_name,
+                      gr.name AS rank_name,
+                      COUNT(pc.character_id) AS char_count
+               FROM guild_identity.players p
+               JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+               LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+               LEFT JOIN guild_identity.player_characters pc ON pc.player_id = p.id
+               WHERE p.is_active = TRUE
+                 AND du.is_present = TRUE
+                 AND p.id NOT IN (
+                     SELECT player_id FROM guild_identity.battlenet_accounts
+                 )
+               GROUP BY p.id, p.display_name, du.username, du.display_name, gr.name
+               ORDER BY p.display_name"""
+        )
+
+    unverified_members = [
+        {
+            "player_id": r["player_id"],
+            "display_name": r["display_name"],
+            "discord_username": r["discord_username"],
+            "rank_name": r["rank_name"],
+            "char_count": r["char_count"],
+        }
+        for r in unverified_rows
+    ]
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "total": total or 0,
+            "verified": verified or 0,
+            "unverified": (total or 0) - (verified or 0),
+            "unverified_members": unverified_members,
+        },
+    })
+
+
+@router.post("/players/{player_id}/send-oauth-reminder")
+async def admin_send_oauth_reminder(
+    request: Request,
+    player_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send an OAuth reminder DM to an unverified player."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    # Load the player's Discord ID
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT du.discord_id FROM guild_identity.players p
+               JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
+               WHERE p.id = $1""",
+            player_id,
+        )
+    if not row:
+        return JSONResponse({"ok": False, "error": "Player not found or not linked to Discord"}, status_code=404)
+
+    # Send DM via bot
+    try:
+        from sv_common.discord.bot import get_bot
+        from sv_common.config_cache import get_app_url
+        bot = get_bot()
+        if not bot or bot.is_closed():
+            return JSONResponse({"ok": False, "error": "Bot not available"}, status_code=503)
+
+        discord_user = await bot.fetch_user(int(row["discord_id"]))
+        if not discord_user:
+            return JSONResponse({"ok": False, "error": "Discord user not found"}, status_code=404)
+
+        app_url = get_app_url() or ""
+        oauth_url = f"{app_url}/auth/battlenet"
+        msg = (
+            "Hey! An officer has sent you a reminder to connect your Battle.net account "
+            "to the guild website.\n\n"
+            f"Click here to verify: {oauth_url}\n\n"
+            "This links your characters automatically and confirms your guild membership."
+        )
+        await discord_user.send(msg)
+        return JSONResponse({"ok": True})
+    except Exception as exc:
+        logger.error("send-oauth-reminder failed for player %d: %s", player_id, exc)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
 
 
 @router.post("/audit-log/{issue_id}/resolve", response_class=HTMLResponse)

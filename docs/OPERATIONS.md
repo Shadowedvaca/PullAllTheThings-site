@@ -35,6 +35,46 @@
 
 ---
 
+## Member Onboarding & Character Verification
+
+When a new member joins the Discord server, the bot automatically starts an onboarding conversation
+(if `enable_onboarding` is enabled in Admin → Site Config).
+
+### Flow overview
+
+1. Member joins Discord → bot sends DM asking for their main character name
+2. Member replies with character name → bot asks for confirmation
+3. Bot sends a Battle.net OAuth link for account verification
+4. Member clicks the link, authorizes on Blizzard's site → their characters are auto-linked
+5. Bot sends a completion DM confirming their account is set up
+
+### Officer commands (Discord slash commands)
+
+| Command | Purpose |
+|---------|---------|
+| `/onboard-start {member}` | Manually start onboarding for a member |
+| `/onboard-simulate-oauth {member}` | Mark as OAuth complete (for testing without second BNet account) |
+| `/resend-oauth {member}` | Resend the Battle.net verification link |
+
+### Data Quality page — OAuth Coverage
+
+`/admin/data-quality` now shows a **Battle.net Verification Coverage** panel at the top:
+
+- Summary bar showing verified vs total active members
+- Table of unverified members (present in Discord but not linked to Battle.net)
+- **Send Reminder** button — sends a DM to the member with their verification link
+
+The bot must be running for Send Reminder to work. If the bot is offline the endpoint returns 503.
+
+### Manual character add (Settings page)
+
+Members can add a character by name via Settings → Characters → "Add by name" form.
+This looks up the character in the local DB first, then falls back to the Blizzard API.
+Manually added characters use `link_source='manual_claim'` and `confidence='medium'`.
+They are visible to officers in Player Manager with the standard character display.
+
+---
+
 ## Creating a Campaign
 
 ### Via the Admin Panel (recommended)

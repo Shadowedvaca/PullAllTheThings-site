@@ -280,6 +280,7 @@ function renderPlayers() {
                         title="Edit display name">✎</button>
                 <span class="pm-player-rank">${escHtml(p.rank_name)}</span>
                 ${regBadge}
+                ${p.bnet_verified ? `<span class="pm-badge pm-badge--bnet" title="Battle.net verified">\uD83D\uDD12 BNet</span>` : ''}
                 ${!p.registered && p.discord_id ? `<button class="pm-invite-btn" onclick="sendInvite(event,${p.id},'${escAttr(effectiveName)}')" title="Send Discord invite DM">✉</button>` : ''}
                 <button class="pm-delete-player-btn" onclick="deletePlayer(event,${p.id},'${escAttr(effectiveName)}')"
                         title="Delete player">🗑</button>
