@@ -137,6 +137,14 @@ class OnboardingDeadlineChecker:
         except Exception as e:
             logger.warning("Failed to resume DM for discord_id=%s: %s", discord_id, e)
 
+    async def _get_site_url_from_db(self) -> str:
+        """Fall back to reading APP_URL from env when config_cache wasn't populated."""
+        from guild_portal.config import get_settings
+        try:
+            return get_settings().app_url.rstrip("/")
+        except Exception:
+            return ""
+
     async def _find_discord_member(self, discord_id: str) -> Optional[discord.Member]:
         """Find a Discord Member object by discord_id string."""
         if not self.bot:
@@ -338,14 +346,14 @@ class OnboardingDeadlineChecker:
             )
             return
 
-        site_url = get_app_url()
+        site_url = get_app_url() or await self._get_site_url_from_db()
         try:
             embed = discord.Embed(
                 title="Don't forget — connect Battle.net! 🔗",
                 description=(
                     "You're registered, but haven't connected your Battle.net account yet.\n\n"
                     "Connect it to automatically link your characters:\n\n"
-                    f"👉 **{site_url}/auth/battlenet**"
+                    f"👉 {site_url}/auth/battlenet"
                 ),
                 color=get_accent_color_int(),
             )
@@ -384,14 +392,14 @@ class OnboardingDeadlineChecker:
         if not member:
             return
 
-        site_url = get_app_url()
+        site_url = get_app_url() or await self._get_site_url_from_db()
         try:
             embed = discord.Embed(
                 title="You're all set! ✅",
                 description=(
                     "You're registered and ready to go!\n\n"
                     "If you ever want to connect Battle.net to automatically link your\n"
-                    f"characters, you can do it anytime from **{site_url}/profile**"
+                    f"characters, you can do it anytime from {site_url}/profile"
                 ),
                 color=0x4ADE80,
             )

@@ -169,19 +169,17 @@ class OnboardingConversation:
             class_name = match["class_name"] or "Unknown class"
             await dm.send(
                 f"Found **{match['character_name']}** on **{match['realm_slug']}** — "
-                f"{class_name}! That you? 🎉\n\n"
-                f"**Do you have any alts in the guild?** "
-                f"List them separated by commas, or say **none**."
+                f"{class_name}! That you? 🎉"
             )
             await self._set_field("reported_main_realm", match["realm_slug"])
         else:
             await dm.send(
                 f"I don't see **{main_name}** in the roster yet — no worries! "
-                f"The roster syncs a few times a day.\n\n"
-                f"**Any alts in the guild?** List them or say **none**."
+                f"The roster syncs a few times a day."
             )
 
-        await self._ask_alts(dm)
+        await self._set_field("reported_alt_names", [])
+        await self._proceed_to_verification(dm)
 
     async def _ask_alts(self, dm: discord.DMChannel):
         await self._set_state("asked_alts")
@@ -201,16 +199,16 @@ class OnboardingConversation:
             ]
 
         await self._set_field("reported_alt_names", alt_names)
+        await self._proceed_to_verification(dm)
 
+    async def _proceed_to_verification(self, dm: discord.DMChannel):
+        """Send the confirmation embed and kick off verification."""
         main_name = await self._get_field("reported_main_name")
-        char_list = f"**Main:** {main_name}"
-        if alt_names:
-            char_list += f"\n**Alts:** {', '.join(alt_names)}"
 
         embed = discord.Embed(
             title="Got it! You're all set on my end 👍",
             description=(
-                f"{char_list}\n\n"
+                f"**Main:** {main_name}\n\n"
                 "I'm verifying this against the guild roster. Once confirmed:\n"
                 "• Your Discord roles will be set\n"
                 "• You'll get a website invite for pullallthethings.com\n"
@@ -412,6 +410,13 @@ class OnboardingConversation:
         if not await is_bot_dm_enabled(self.db_pool):
             return
         site_url = get_app_url()
+        if not site_url:
+            try:
+                from guild_portal.config import get_settings
+                site_url = get_settings().app_url.rstrip("/")
+            except Exception:
+                pass
+        oauth_url = f"{site_url}/auth/battlenet" if site_url else "/auth/battlenet"
         try:
             dm = await self.member.create_dm()
             embed = discord.Embed(
@@ -419,7 +424,7 @@ class OnboardingConversation:
                 description=(
                     "Once you've registered, connect your Battle.net account so we can\n"
                     "automatically find your characters:\n\n"
-                    f"👉 **{site_url}/auth/battlenet**\n\n"
+                    f"👉 {oauth_url}\n\n"
                     "It takes about 10 seconds — click *Approve* on Blizzard's page\n"
                     "and your characters will be linked automatically."
                 ),
