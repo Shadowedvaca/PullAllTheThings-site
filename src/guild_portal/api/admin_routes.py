@@ -16,7 +16,7 @@ from guild_portal.deps import get_db, require_rank
 from sv_common.config_cache import set_site_config
 from sv_common.db.models import (
     DiscordConfig, GuildRank, Player, RaidAttendance, RaidEvent, RecurringEvent,
-    Role, RaidSeason, ScreenPermission, SiteConfig, Specialization, WowClass,
+    Role, RaidSeason, ScreenPermission, SiteConfig, Specialization, WowCharacter, WowClass,
 )
 from sv_common.identity import ranks as rank_service
 from sv_common.identity import members as member_service
@@ -1035,7 +1035,7 @@ async def create_raid_event(
         .options(
             sil(Player.guild_rank),
             sil(Player.discord_user),
-            sil(Player.main_character),
+            sil(Player.main_character).selectinload(WowCharacter.wow_class),
             sil(Player.main_spec).selectinload(Specialization.default_role),
         )
         .where(Player.is_active.is_(True), Player.main_character_id.is_not(None))
