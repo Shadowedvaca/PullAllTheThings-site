@@ -825,8 +825,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // --------------------------------------------------------------------------
 
 const DRIFT_RULE_META = {
-    note_mismatch:         { label: 'note_mismatch',         mode: 'auto',   modeLabel: '\u26a1 Auto-fix' },
-    link_contradicts_note: { label: 'link_contradicts_note', mode: 'manual', modeLabel: '\ud83d\udc64 Manual' },
     duplicate_discord:     { label: 'duplicate_discord',     mode: 'manual', modeLabel: '\ud83d\udc64 Manual' },
     stale_discord_link:    { label: 'stale_discord_link',    mode: 'info',   modeLabel: '\u2139 Info' },
 };
@@ -906,24 +904,9 @@ async function runDriftScan(btn) {
 }
 
 function renderDriftScanResults(data, el) {
-    const nm = data.note_mismatch || {};
-    const lc = data.link_contradicts_note || {};
     const dd = data.duplicate_discord || {};
 
-    let html = '';
-
-    html += `<div class="drift-scan-result-row">
-        <span class="drift-result-type">note_mismatch</span>
-        <span class="drift-result-detected">${nm.detected || 0} detected</span>
-        ${(nm.mitigated || 0) > 0 ? `<span class="drift-result-mitigated">${nm.mitigated} auto-fixed</span>` : ''}
-    </div>`;
-
-    html += `<div class="drift-scan-result-row">
-        <span class="drift-result-type">link_contradicts_note</span>
-        <span class="drift-result-detected">${lc.detected || 0} detected</span>
-    </div>`;
-
-    html += `<div class="drift-scan-result-row">
+    const html = `<div class="drift-scan-result-row">
         <span class="drift-result-type">duplicate_discord / stale</span>
         <span class="drift-result-detected">${dd.detected || 0} detected</span>
     </div>`;
