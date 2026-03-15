@@ -470,7 +470,7 @@
         </table>
 
         <div class="form-actions" style="margin-top:1.25rem;">
-            <button class="btn-gold" onclick="createEvent()">Create Event in Raid-Helper</button>
+            <button class="btn-gold" onclick="createRaidEvent()">Create Event in Raid-Helper</button>
             <span class="status-msg" id="ev-status"></span>
         </div>
     </div>
@@ -713,7 +713,7 @@ function overrideStatus(playerId, value) {
 }
 
 // ── Create Event ─────────────────────────────────────────────────
-async function createEvent() {
+async function createRaidEvent() {
     const status = document.getElementById('ev-status');
     status.textContent = 'Creating…';
     status.className = 'status-msg';
