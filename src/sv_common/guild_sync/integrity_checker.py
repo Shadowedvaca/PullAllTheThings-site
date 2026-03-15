@@ -734,15 +734,14 @@ async def detect_main_char_not_linked(conn: asyncpg.Connection) -> int:
 
 # Mapping for admin scan-by-type endpoint
 DETECT_FUNCTIONS = {
-    "note_mismatch": detect_note_mismatch,
     "orphan_wow": detect_orphan_wow,
     "orphan_discord": detect_orphan_discord,
     "stale_character": detect_stale_character,
-    "link_contradicts_note": detect_link_note_contradictions,
     "duplicate_discord": detect_duplicate_discord_links,
     "main_char_not_linked": detect_main_char_not_linked,
     # role_mismatch handled specially (returns tuple)
     # stale_discord_link is part of detect_duplicate_discord_links (combined check)
+    # note_mismatch and link_contradicts_note retired — note-based matching removed
 }
 
 
@@ -758,7 +757,6 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     Returns stats: {orphan_wow, orphan_discord, role_mismatch, stale, no_guild_role, total_new}
     """
     stats = {
-        "note_mismatch": 0,
         "orphan_wow": 0,
         "orphan_discord": 0,
         "role_mismatch": 0,
@@ -769,7 +767,6 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     }
 
     async with pool.acquire() as conn:
-        stats["note_mismatch"] = await detect_note_mismatch(conn)
         stats["orphan_wow"] = await detect_orphan_wow(conn)
         stats["orphan_discord"] = await detect_orphan_discord(conn)
 
@@ -781,8 +778,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         stats["main_char_not_linked"] = await detect_main_char_not_linked(conn)
 
         stats["total_new"] = (
-            stats["note_mismatch"]
-            + stats["orphan_wow"]
+            stats["orphan_wow"]
             + stats["orphan_discord"]
             + stats["role_mismatch"]
             + stats["no_guild_role"]
