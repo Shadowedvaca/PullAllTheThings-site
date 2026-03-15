@@ -259,6 +259,68 @@ async def get_progression(db: AsyncSession = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Warcraft Logs public endpoint — Phase 4.5
+# ---------------------------------------------------------------------------
+
+
+@router.get("/parses")
+async def get_parses(db: AsyncSession = Depends(get_db)):
+    """Return aggregate WCL parse data (public, no auth required).
+
+    Returns best heroic parses per character per encounter, grouped by zone.
+    Only includes heroic (difficulty=4) parses with percentile > 0.
+    """
+    result = await db.execute(
+        text("""
+            SELECT cp.encounter_name, cp.zone_name, cp.spec,
+                   cp.percentile, cp.amount, cp.difficulty,
+                   wc.character_name
+            FROM guild_identity.character_parses cp
+            JOIN guild_identity.wow_characters wc ON wc.id = cp.character_id
+            WHERE cp.difficulty = 4 AND cp.percentile > 0
+            ORDER BY cp.zone_name, cp.encounter_name, cp.percentile DESC
+        """)
+    )
+    rows = result.fetchall()
+
+    # Group by zone → character → encounters
+    zones: dict[str, dict] = {}
+    char_enc: dict[tuple, dict] = {}  # (char_name, enc_name) → best parse
+
+    for row in rows:
+        key = (row.character_name, row.encounter_name)
+        if key not in char_enc:
+            char_enc[key] = {
+                "boss": row.encounter_name,
+                "percentile": float(row.percentile),
+                "amount": float(row.amount) if row.amount else None,
+                "spec": row.spec,
+            }
+
+    # Build by-character dict
+    char_encounters: dict[str, list] = {}
+    for (char_name, enc_name), parse in char_enc.items():
+        char_encounters.setdefault(char_name, []).append(parse)
+
+    # Detect zone name for response
+    zone_name = rows[0].zone_name if rows else None
+
+    characters = [
+        {"name": char_name, "encounters": encounters}
+        for char_name, encounters in sorted(char_encounters.items())
+    ]
+
+    return {
+        "ok": True,
+        "data": {
+            "zone": zone_name,
+            "difficulty": "Heroic",
+            "characters": characters,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Availability endpoints — new time-window format (patt.player_availability)
 # ---------------------------------------------------------------------------
 

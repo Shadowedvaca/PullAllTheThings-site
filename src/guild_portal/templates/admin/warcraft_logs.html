@@ -1,0 +1,613 @@
+{% extends "base_admin.html" %}
+{% block title %}Warcraft Logs — Admin — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+.wcl-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+@media (max-width: 700px) { .wcl-grid { grid-template-columns: 1fr; } }
+
+.wcl-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+}
+.wcl-card--wide { grid-column: 1 / -1; }
+.wcl-card__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0 0 0.25rem 0;
+}
+.wcl-card__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.wcl-stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #2a2a2e;
+    font-size: 0.9rem;
+}
+.wcl-stat-row:last-child { border-bottom: none; }
+.wcl-stat-row__label { color: var(--color-text-muted); }
+.wcl-stat-row__val { font-weight: 600; color: var(--color-text); }
+
+.wcl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+.wcl-table th {
+    text-align: left;
+    padding: 0.4rem 0.6rem;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.wcl-table td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid #1e1e22;
+    vertical-align: middle;
+}
+.wcl-table tr:last-child td { border-bottom: none; }
+
+.wcl-pct {
+    display: inline-block;
+    min-width: 44px;
+    text-align: center;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+.wcl-diff-heroic { background: #1e3a5f; color: #93c5fd; }
+.wcl-diff-mythic  { background: #3b0764; color: #e9d5ff; }
+.wcl-diff-normal  { background: #1e3b1e; color: #86efac; }
+
+/* Config form */
+.wcl-form-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 0.75rem;
+}
+.wcl-form-row .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.wcl-form-row label {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Attendance grid */
+.att-grid-wrap { overflow-x: auto; }
+.att-grid {
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.att-grid th, .att-grid td {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #2a2a2e;
+    text-align: center;
+}
+.att-grid th:first-child, .att-grid td:first-child {
+    text-align: left;
+    font-weight: 600;
+    min-width: 120px;
+}
+.att-grid .att-yes { color: var(--color-success); }
+.att-grid .att-no  { color: #3a3a3e; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1 class="admin-title">Warcraft Logs</h1>
+    <p style="color:var(--color-text-muted);font-size:0.9rem;margin:0">
+        Parse percentiles, raid reports, and attendance tracking via WCL v2 API.
+    </p>
+</div>
+
+<div class="wcl-grid">
+
+    <!-- Configuration -->
+    <div class="wcl-card">
+        <h2 class="wcl-card__title">Configuration</h2>
+        <p class="wcl-card__subtitle">
+            Create an API client at <a href="https://www.warcraftlogs.com/api/clients/" target="_blank" rel="noopener" style="color:var(--color-gold)">warcraftlogs.com/api/clients</a>.
+            Store a Client Credentials app (not user authorization).
+        </p>
+
+        <div class="wcl-form-row">
+            <div class="form-group" style="flex:1;min-width:180px">
+                <label>Client ID</label>
+                <input type="text" id="wcl-client-id" class="form-control"
+                       style="font-size:0.9rem" placeholder="WCL client ID">
+            </div>
+            <div class="form-group" style="flex:1;min-width:180px">
+                <label>Client Secret <span id="wcl-secret-hint" style="color:var(--color-text-muted);font-size:0.72rem"></span></label>
+                <input type="password" id="wcl-client-secret" class="form-control"
+                       style="font-size:0.9rem" placeholder="Leave blank to keep existing">
+            </div>
+        </div>
+        <div class="wcl-form-row">
+            <div class="form-group" style="flex:2;min-width:160px">
+                <label>Guild Name (as on WCL)</label>
+                <input type="text" id="wcl-guild-name" class="form-control"
+                       style="font-size:0.9rem" placeholder="Pull All The Things">
+            </div>
+            <div class="form-group" style="flex:1;min-width:120px">
+                <label>Server Slug</label>
+                <input type="text" id="wcl-server-slug" class="form-control"
+                       style="font-size:0.9rem" placeholder="senjin">
+            </div>
+            <div class="form-group" style="min-width:80px">
+                <label>Region</label>
+                <select id="wcl-region" class="form-control" style="font-size:0.9rem">
+                    <option value="us">US</option>
+                    <option value="eu">EU</option>
+                    <option value="kr">KR</option>
+                    <option value="tw">TW</option>
+                </select>
+            </div>
+        </div>
+        <div class="wcl-form-row">
+            <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.85rem;color:var(--color-text)">
+                <input type="checkbox" id="wcl-sync-enabled" checked style="width:auto">
+                Enable daily sync (5 AM UTC)
+            </label>
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem">
+            <button class="btn btn-secondary" id="wcl-verify-btn" style="font-size:0.85rem">
+                Verify
+            </button>
+            <button class="btn btn-primary" id="wcl-save-btn" style="font-size:0.85rem">
+                Save
+            </button>
+            <span id="wcl-config-status" style="font-size:0.85rem;align-self:center"></span>
+        </div>
+    </div>
+
+    <!-- Sync Status -->
+    <div class="wcl-card">
+        <h2 class="wcl-card__title">Sync Status</h2>
+        <p class="wcl-card__subtitle">Parses and reports synced daily at 5 AM UTC.</p>
+
+        <div class="wcl-stat-row">
+            <span class="wcl-stat-row__label">Configured</span>
+            <span class="wcl-stat-row__val" id="stat-configured">—</span>
+        </div>
+        <div class="wcl-stat-row">
+            <span class="wcl-stat-row__label">Last sync</span>
+            <span class="wcl-stat-row__val" id="stat-last-sync">—</span>
+        </div>
+        <div class="wcl-stat-row">
+            <span class="wcl-stat-row__label">Last sync status</span>
+            <span class="wcl-stat-row__val" id="stat-status">—</span>
+        </div>
+        <div class="wcl-stat-row" id="stat-error-row" style="display:none">
+            <span class="wcl-stat-row__label">Last error</span>
+            <span class="wcl-stat-row__val" id="stat-error"
+                  style="font-size:0.78rem;color:var(--color-danger);max-width:200px;word-break:break-all">—</span>
+        </div>
+        <div class="wcl-stat-row">
+            <span class="wcl-stat-row__label">Reports stored</span>
+            <span class="wcl-stat-row__val" id="stat-reports">—</span>
+        </div>
+        <div class="wcl-stat-row">
+            <span class="wcl-stat-row__label">Parse records</span>
+            <span class="wcl-stat-row__val" id="stat-parses">—</span>
+        </div>
+
+        <div style="margin-top:1rem">
+            <button class="btn btn-secondary" id="wcl-force-sync-btn" style="font-size:0.85rem">
+                Force Sync Now
+            </button>
+            <span id="wcl-sync-msg" style="font-size:0.82rem;margin-left:0.5rem"></span>
+        </div>
+    </div>
+
+    <!-- Recent Reports -->
+    <div class="wcl-card wcl-card--wide">
+        <h2 class="wcl-card__title">Recent Reports</h2>
+        <p class="wcl-card__subtitle">Last 25 guild raid logs from Warcraft Logs.</p>
+        <table class="wcl-table" id="reports-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Title</th>
+                    <th>Zone</th>
+                    <th>Kills</th>
+                    <th>Attendance</th>
+                    <th>Duration</th>
+                    <th style="text-align:right">Link</th>
+                </tr>
+            </thead>
+            <tbody id="reports-tbody">
+                <tr><td colspan="7" style="color:var(--color-text-muted);font-style:italic">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Attendance Grid -->
+    <div class="wcl-card wcl-card--wide">
+        <h2 class="wcl-card__title">Attendance — Last 10 Reports</h2>
+        <p class="wcl-card__subtitle">Who attended each raid. Cross-referenced by character name.</p>
+        <div class="att-grid-wrap" id="att-grid-wrap">
+            <p style="color:var(--color-text-muted);font-style:italic">Loading…</p>
+        </div>
+    </div>
+
+    <!-- Top Parses -->
+    <div class="wcl-card wcl-card--wide">
+        <h2 class="wcl-card__title">Top Parses</h2>
+        <p class="wcl-card__subtitle">Best parse percentiles per character per encounter (Heroic by default).</p>
+        <table class="wcl-table" id="parses-table">
+            <thead>
+                <tr>
+                    <th>Character</th>
+                    <th>Encounter</th>
+                    <th>Zone</th>
+                    <th>Difficulty</th>
+                    <th>Spec</th>
+                    <th>Percentile</th>
+                    <th>Amount</th>
+                    <th style="text-align:right">Log</th>
+                </tr>
+            </thead>
+            <tbody id="parses-tbody">
+                <tr><td colspan="8" style="color:var(--color-text-muted);font-style:italic">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    'use strict';
+
+    function fmtDate(iso) {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+        });
+    }
+    function fmtDateShort(iso) {
+        if (!iso) return '?';
+        return new Date(iso).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', timeZone: 'UTC',
+        });
+    }
+    function fmtDuration(ms) {
+        if (!ms) return '—';
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+
+    function pctColor(pct) {
+        if (pct >= 95) return '#e268a8';  // legendary
+        if (pct >= 75) return '#ff8000';  // epic
+        if (pct >= 50) return '#1eff00';  // rare
+        if (pct >= 25) return '#0070dd';  // uncommon
+        return '#9d9d9d';                 // common
+    }
+
+    // ── Config ─────────────────────────────────────────────────────────────
+
+    async function loadConfig() {
+        try {
+            const resp = await fetch('/admin/warcraft-logs/config');
+            const data = await resp.json();
+            if (!data.ok) return;
+            const d = data.data;
+            document.getElementById('wcl-client-id').value = d.client_id || '';
+            document.getElementById('wcl-guild-name').value = d.wcl_guild_name || '';
+            document.getElementById('wcl-server-slug').value = d.wcl_server_slug || '';
+            document.getElementById('wcl-region').value = d.wcl_server_region || 'us';
+            document.getElementById('wcl-sync-enabled').checked = d.sync_enabled;
+            const hint = document.getElementById('wcl-secret-hint');
+            hint.textContent = d.secret_configured ? '(stored — leave blank to keep)' : '(not set)';
+
+            // Sync status
+            document.getElementById('stat-configured').textContent =
+                d.is_configured ? '✓ Yes' : '✗ No';
+            document.getElementById('stat-last-sync').textContent =
+                fmtDate(d.last_sync);
+            const statusEl = document.getElementById('stat-status');
+            statusEl.textContent = d.last_sync_status || '—';
+            statusEl.style.color = d.last_sync_status === 'success'
+                ? 'var(--color-success)'
+                : d.last_sync_status === 'error'
+                ? 'var(--color-danger)'
+                : 'var(--color-text)';
+            if (d.last_sync_error) {
+                document.getElementById('stat-error-row').style.display = 'flex';
+                document.getElementById('stat-error').textContent = d.last_sync_error;
+            }
+        } catch (e) {
+            console.error('Failed to load WCL config', e);
+        }
+    }
+
+    async function loadStats() {
+        try {
+            const [rResp, pResp] = await Promise.all([
+                fetch('/admin/warcraft-logs/reports'),
+                fetch('/admin/warcraft-logs/parses'),
+            ]);
+            const rData = await rResp.json();
+            const pData = await pResp.json();
+            document.getElementById('stat-reports').textContent =
+                rData.ok ? rData.data.length : '—';
+            document.getElementById('stat-parses').textContent =
+                pData.ok ? pData.data.length : '—';
+        } catch (e) {}
+    }
+
+    document.getElementById('wcl-verify-btn').addEventListener('click', async function() {
+        const statusEl = document.getElementById('wcl-config-status');
+        const clientId = document.getElementById('wcl-client-id').value.trim();
+        const secret = document.getElementById('wcl-client-secret').value.trim();
+        const guildName = document.getElementById('wcl-guild-name').value.trim();
+        const serverSlug = document.getElementById('wcl-server-slug').value.trim();
+        const region = document.getElementById('wcl-region').value;
+
+        if (!secret) {
+            statusEl.textContent = 'Enter a client secret to verify.';
+            statusEl.style.color = 'var(--color-danger)';
+            return;
+        }
+        this.disabled = true;
+        statusEl.textContent = 'Verifying…';
+        statusEl.style.color = 'var(--color-text-muted)';
+        try {
+            const resp = await fetch('/admin/warcraft-logs/verify', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    client_id: clientId,
+                    client_secret: secret,
+                    wcl_guild_name: guildName,
+                    wcl_server_slug: serverSlug,
+                    wcl_server_region: region,
+                }),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                const d = data.data;
+                const dt = d.latest_report_date
+                    ? new Date(d.latest_report_date * 1000).toLocaleDateString()
+                    : 'No reports';
+                statusEl.textContent = `✓ Connected — ${d.report_count} reports, latest: ${dt}`;
+                statusEl.style.color = 'var(--color-success)';
+            } else {
+                statusEl.textContent = `✗ ${data.error}`;
+                statusEl.style.color = 'var(--color-danger)';
+            }
+        } catch (e) {
+            statusEl.textContent = '✗ Network error';
+            statusEl.style.color = 'var(--color-danger)';
+        }
+        this.disabled = false;
+    });
+
+    document.getElementById('wcl-save-btn').addEventListener('click', async function() {
+        const statusEl = document.getElementById('wcl-config-status');
+        this.disabled = true;
+        statusEl.textContent = 'Saving…';
+        statusEl.style.color = 'var(--color-text-muted)';
+        try {
+            const resp = await fetch('/admin/warcraft-logs/config', {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    client_id: document.getElementById('wcl-client-id').value.trim(),
+                    client_secret: document.getElementById('wcl-client-secret').value.trim(),
+                    wcl_guild_name: document.getElementById('wcl-guild-name').value.trim(),
+                    wcl_server_slug: document.getElementById('wcl-server-slug').value.trim(),
+                    wcl_server_region: document.getElementById('wcl-region').value,
+                    sync_enabled: document.getElementById('wcl-sync-enabled').checked,
+                }),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                statusEl.textContent = '✓ Saved';
+                statusEl.style.color = 'var(--color-success)';
+                document.getElementById('wcl-client-secret').value = '';
+                await loadConfig();
+            } else {
+                statusEl.textContent = `✗ ${data.error}`;
+                statusEl.style.color = 'var(--color-danger)';
+            }
+        } catch (e) {
+            statusEl.textContent = '✗ Network error';
+            statusEl.style.color = 'var(--color-danger)';
+        }
+        this.disabled = false;
+        setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    });
+
+    // ── Force sync ────────────────────────────────────────────────────────
+
+    document.getElementById('wcl-force-sync-btn').addEventListener('click', async function() {
+        const msgEl = document.getElementById('wcl-sync-msg');
+        this.disabled = true;
+        msgEl.textContent = 'Starting…';
+        msgEl.style.color = 'var(--color-text-muted)';
+        try {
+            const resp = await fetch('/admin/warcraft-logs/trigger', {method: 'POST'});
+            const data = await resp.json();
+            if (data.ok) {
+                msgEl.textContent = '✓ Sync started in background';
+                msgEl.style.color = 'var(--color-success)';
+            } else {
+                msgEl.textContent = `✗ ${data.error}`;
+                msgEl.style.color = 'var(--color-danger)';
+            }
+        } catch (e) {
+            msgEl.textContent = '✗ Network error';
+            msgEl.style.color = 'var(--color-danger)';
+        }
+        this.disabled = false;
+        setTimeout(() => { msgEl.textContent = ''; }, 4000);
+    });
+
+    // ── Reports ───────────────────────────────────────────────────────────
+
+    async function loadReports() {
+        try {
+            const resp = await fetch('/admin/warcraft-logs/reports');
+            const data = await resp.json();
+            const tbody = document.getElementById('reports-tbody');
+            if (!data.ok || !data.data.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);font-style:italic">No reports stored yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.data.map(r => `
+                <tr>
+                    <td>${fmtDate(r.raid_date)}</td>
+                    <td>${r.title || '—'}</td>
+                    <td>${r.zone_name || '—'}</td>
+                    <td>${r.boss_kills}</td>
+                    <td>${r.attendee_count}</td>
+                    <td>${fmtDuration(r.duration_ms)}</td>
+                    <td style="text-align:right">
+                        ${r.report_url
+                            ? `<a href="${r.report_url}" target="_blank" rel="noopener"
+                                  style="color:var(--color-gold);font-size:0.8rem">View →</a>`
+                            : '—'}
+                    </td>
+                </tr>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load reports', e);
+        }
+    }
+
+    // ── Attendance ────────────────────────────────────────────────────────
+
+    async function loadAttendance() {
+        try {
+            const resp = await fetch('/admin/warcraft-logs/attendance');
+            const data = await resp.json();
+            const wrap = document.getElementById('att-grid-wrap');
+            if (!data.ok || !data.data.reports.length) {
+                wrap.innerHTML = '<p style="color:var(--color-text-muted);font-style:italic">No attendance data yet.</p>';
+                return;
+            }
+            const { reports, grid } = data.data;
+            const reportCodes = reports.map(r => r.code);
+            const headerCells = reports.map(r =>
+                `<th title="${r.zone_name || ''}">${fmtDateShort(r.raid_date)}</th>`
+            ).join('');
+
+            const bodyRows = grid.map(row => {
+                const cells = reportCodes.map(code =>
+                    row.attended.includes(code)
+                        ? '<td class="att-yes">✓</td>'
+                        : '<td class="att-no">—</td>'
+                ).join('');
+                const pct = Math.round((row.rate || 0) * 100);
+                return `<tr>
+                    <td>${row.name}</td>
+                    ${cells}
+                    <td style="font-weight:600;color:${pct >= 80 ? 'var(--color-success)' : pct >= 50 ? 'var(--color-warning)' : 'var(--color-danger)'}">
+                        ${pct}%
+                    </td>
+                </tr>`;
+            }).join('');
+
+            wrap.innerHTML = `
+                <table class="att-grid">
+                    <thead>
+                        <tr>
+                            <th>Character</th>
+                            ${headerCells}
+                            <th>Rate</th>
+                        </tr>
+                    </thead>
+                    <tbody>${bodyRows}</tbody>
+                </table>
+            `;
+        } catch (e) {
+            console.error('Failed to load attendance', e);
+        }
+    }
+
+    // ── Parses ────────────────────────────────────────────────────────────
+
+    async function loadParses() {
+        try {
+            const resp = await fetch('/admin/warcraft-logs/parses');
+            const data = await resp.json();
+            const tbody = document.getElementById('parses-tbody');
+            if (!data.ok || !data.data.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);font-style:italic">No parse data yet.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.data.map(p => {
+                const pct = p.percentile;
+                const pctHtml = `<span class="wcl-pct" style="background:${pctColor(pct)}22;color:${pctColor(pct)}">${pct.toFixed(1)}</span>`;
+                const diffCls = p.difficulty === 'Heroic' ? 'wcl-diff-heroic'
+                              : p.difficulty === 'Mythic' ? 'wcl-diff-mythic'
+                              : 'wcl-diff-normal';
+                const amtStr = p.amount
+                    ? (p.amount >= 1e6 ? (p.amount / 1e6).toFixed(2) + 'M' : Math.round(p.amount).toLocaleString())
+                    : '—';
+                return `<tr>
+                    <td>${p.character_name}</td>
+                    <td>${p.encounter_name}</td>
+                    <td style="font-size:0.8rem;color:var(--color-text-muted)">${p.zone_name}</td>
+                    <td><span class="wcl-pct ${diffCls}">${p.difficulty}</span></td>
+                    <td>${p.spec}</td>
+                    <td>${pctHtml}</td>
+                    <td style="font-size:0.82rem;color:var(--color-text-muted)">${amtStr}</td>
+                    <td style="text-align:right">
+                        ${p.report_url
+                            ? `<a href="${p.report_url}" target="_blank" rel="noopener"
+                                  style="color:var(--color-gold);font-size:0.8rem">Log →</a>`
+                            : '—'}
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load parses', e);
+        }
+    }
+
+    // ── Init ─────────────────────────────────────────────────────────────
+
+    Promise.all([
+        loadConfig(),
+        loadStats(),
+        loadReports(),
+        loadAttendance(),
+        loadParses(),
+    ]).catch(console.error);
+})();
+</script>
+{% endblock %}

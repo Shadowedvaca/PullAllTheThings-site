@@ -12,7 +12,8 @@ guild_identity schema: roles, classes, specializations, players,
                        onboarding_sessions, character_raid_progress,
                        character_mythic_plus, tracked_achievements,
                        character_achievements, progression_snapshots,
-                       raiderio_profiles
+                       raiderio_profiles, wcl_config, character_parses,
+                       raid_reports
 """
 
 from datetime import date, datetime, time
@@ -1135,3 +1136,108 @@ class BattlenetAccount(Base):
     last_character_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
 
     player: Mapped["Player"] = relationship(back_populates="battlenet_account")
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema — Phase 4.5 Warcraft Logs
+# ---------------------------------------------------------------------------
+
+
+class WclConfig(Base):
+    """Single-row Warcraft Logs configuration (same pattern as crafting_sync_config)."""
+
+    __tablename__ = "wcl_config"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[Optional[str]] = mapped_column(String(100))
+    client_secret_encrypted: Mapped[Optional[str]] = mapped_column(String(500))
+    wcl_guild_name: Mapped[Optional[str]] = mapped_column(String(100))
+    wcl_server_slug: Mapped[Optional[str]] = mapped_column(String(50))
+    wcl_server_region: Mapped[str] = mapped_column(
+        String(5), nullable=False, server_default="us"
+    )
+    is_configured: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_sync_status: Mapped[Optional[str]] = mapped_column(String(20))
+    last_sync_error: Mapped[Optional[str]] = mapped_column(Text)
+    sync_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
+class CharacterParse(Base):
+    """Best WCL parse percentile per character per encounter+difficulty+spec."""
+
+    __tablename__ = "character_parses"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id",
+            "encounter_id",
+            "difficulty",
+            "spec",
+            name="uq_parse_char_enc_diff_spec",
+        ),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    encounter_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    encounter_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    zone_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    zone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
+    spec: Mapped[str] = mapped_column(String(50), nullable=False)
+    percentile: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False)
+    amount: Mapped[Optional[float]] = mapped_column(Numeric(12, 1))
+    report_code: Mapped[Optional[str]] = mapped_column(String(20))
+    fight_id: Mapped[Optional[int]] = mapped_column(Integer)
+    fight_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped["WowCharacter"] = relationship()
+
+
+class RaidReport(Base):
+    """Guild raid report from Warcraft Logs — attendance + kill data."""
+
+    __tablename__ = "raid_reports"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    report_code: Mapped[str] = mapped_column(
+        String(20), nullable=False, unique=True
+    )
+    title: Mapped[Optional[str]] = mapped_column(String(200))
+    raid_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False
+    )
+    zone_id: Mapped[Optional[int]] = mapped_column(Integer)
+    zone_name: Mapped[Optional[str]] = mapped_column(String(100))
+    owner_name: Mapped[Optional[str]] = mapped_column(String(50))
+    boss_kills: Mapped[Optional[int]] = mapped_column(Integer, server_default="0")
+    wipes: Mapped[Optional[int]] = mapped_column(Integer, server_default="0")
+    duration_ms: Mapped[Optional[int]] = mapped_column(BigInteger)
+    attendees: Mapped[Optional[list]] = mapped_column(JSONB)
+    report_url: Mapped[Optional[str]] = mapped_column(String(255))
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )

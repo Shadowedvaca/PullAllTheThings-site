@@ -146,6 +146,15 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # Warcraft Logs sync: daily at 5 AM UTC (independent of Blizzard pipeline)
+        self.scheduler.add_job(
+            self.run_wcl_sync,
+            CronTrigger(hour=5, minute=0),
+            id="wcl_sync",
+            name="Warcraft Logs Parse & Report Sync",
+            misfire_grace_time=3600,
+        )
+
         self.scheduler.start()
         logger.info("Guild sync scheduler started")
 
@@ -528,6 +537,107 @@ class GuildSyncScheduler:
             )
         except Exception as exc:
             logger.error("Battle.net character refresh job failed: %s", exc, exc_info=True)
+
+    async def run_wcl_sync(self):
+        """Warcraft Logs sync pipeline. Runs daily at 5 AM UTC.
+
+        Pipeline:
+          1. Load wcl_config from guild_identity.wcl_config
+          2. If not configured or sync disabled, skip
+          3. Decrypt credentials, initialize WarcraftLogsClient
+          4. Sync guild reports (last 25)
+          5. Sync character parses for active characters
+          6. Update wcl_config timestamps
+        """
+        from .wcl_sync import load_wcl_config, sync_guild_reports, sync_character_parses
+        from .warcraftlogs_client import WarcraftLogsClient, WarcraftLogsError
+
+        config = await load_wcl_config(self.db_pool)
+        if not config:
+            logger.info("WCL sync: no config row found — skipping")
+            return
+        if not config.get("is_configured") or not config.get("sync_enabled"):
+            logger.info("WCL sync: not configured or disabled — skipping")
+            return
+
+        client_id = config.get("client_id") or ""
+        encrypted_secret = config.get("client_secret_encrypted") or ""
+        guild_name = config.get("wcl_guild_name") or ""
+        server_slug = config.get("wcl_server_slug") or ""
+        region = config.get("wcl_server_region") or "us"
+        config_id = config["id"]
+
+        if not client_id or not encrypted_secret or not guild_name:
+            logger.warning("WCL sync: incomplete config — skipping")
+            return
+
+        # Decrypt client secret
+        try:
+            jwt_secret = os.environ.get("JWT_SECRET_KEY", "")
+            from sv_common.crypto import decrypt_secret
+            client_secret = decrypt_secret(encrypted_secret, jwt_secret)
+        except Exception as exc:
+            logger.error("WCL sync: failed to decrypt client secret: %s", exc)
+            return
+
+        wcl_client = WarcraftLogsClient(client_id, client_secret)
+        try:
+            await wcl_client.initialize()
+
+            report_stats = await sync_guild_reports(
+                self.db_pool, wcl_client, guild_name, server_slug, region
+            )
+            logger.info("WCL report sync complete: %s", report_stats)
+
+            # Sync character parses — use currently active characters
+            async with self.db_pool.acquire() as conn:
+                char_rows = await conn.fetch(
+                    """SELECT id, character_name AS name
+                       FROM guild_identity.wow_characters
+                       WHERE removed_at IS NULL
+                       ORDER BY character_name"""
+                )
+            characters = [dict(r) for r in char_rows]
+
+            parse_stats = await sync_character_parses(
+                self.db_pool, wcl_client, characters, server_slug, region
+            )
+            logger.info("WCL parse sync complete: %s", parse_stats)
+
+            # Update sync status
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """UPDATE guild_identity.wcl_config
+                       SET last_sync = NOW(), last_sync_status = 'success',
+                           last_sync_error = NULL, updated_at = NOW()
+                       WHERE id = $1""",
+                    config_id,
+                )
+
+        except WarcraftLogsError as exc:
+            logger.error("WCL sync failed (WCL API error): %s", exc, exc_info=True)
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """UPDATE guild_identity.wcl_config
+                       SET last_sync = NOW(), last_sync_status = 'error',
+                           last_sync_error = $1, updated_at = NOW()
+                       WHERE id = $2""",
+                    str(exc)[:500],
+                    config_id,
+                )
+        except Exception as exc:
+            logger.error("WCL sync pipeline failed: %s", exc, exc_info=True)
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """UPDATE guild_identity.wcl_config
+                       SET last_sync = NOW(), last_sync_status = 'error',
+                           last_sync_error = $1, updated_at = NOW()
+                       WHERE id = $2""",
+                    str(exc)[:500],
+                    config_id,
+                )
+        finally:
+            await wcl_client.close()
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

@@ -66,6 +66,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/matching",        "data_quality"),
     ("/admin/site-config",     "site_config"),
     ("/admin/progression",     "progression"),
+    ("/admin/warcraft-logs",   "warcraft_logs"),
 ]
 
 
@@ -2652,3 +2653,342 @@ async def admin_progression_sync_stats(
             "current_mplus_season_id": mplus_season_id,
         },
     })
+
+
+# ---------------------------------------------------------------------------
+# Warcraft Logs — Phase 4.5
+# ---------------------------------------------------------------------------
+
+
+@router.get("/warcraft-logs", response_class=HTMLResponse)
+async def warcraft_logs_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin page for Warcraft Logs configuration, reports, attendance, and parses."""
+    player = await _require_screen("warcraft_logs", request, db)
+    if player is None:
+        return RedirectResponse(url="/login")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/warcraft_logs.html", ctx)
+
+
+@router.get("/warcraft-logs/config")
+async def admin_wcl_get_config(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return current WCL config (secret masked)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT id, client_id, client_secret_encrypted, wcl_guild_name,
+                      wcl_server_slug, wcl_server_region, is_configured,
+                      sync_enabled, last_sync, last_sync_status, last_sync_error
+               FROM guild_identity.wcl_config LIMIT 1"""
+        )
+
+    if not row:
+        return JSONResponse({"ok": False, "error": "WCL config not found"}, status_code=404)
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "id": row["id"],
+            "client_id": row["client_id"] or "",
+            "secret_configured": bool(row["client_secret_encrypted"]),
+            "wcl_guild_name": row["wcl_guild_name"] or "",
+            "wcl_server_slug": row["wcl_server_slug"] or "",
+            "wcl_server_region": row["wcl_server_region"] or "us",
+            "is_configured": row["is_configured"],
+            "sync_enabled": row["sync_enabled"],
+            "last_sync": row["last_sync"].isoformat() if row["last_sync"] else None,
+            "last_sync_status": row["last_sync_status"],
+            "last_sync_error": row["last_sync_error"],
+        },
+    })
+
+
+@router.patch("/warcraft-logs/config")
+async def admin_wcl_save_config(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Save WCL credentials and guild info. Encrypts the client secret."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    body = await request.json()
+    client_id = (body.get("client_id") or "").strip()
+    client_secret = (body.get("client_secret") or "").strip()
+    guild_name = (body.get("wcl_guild_name") or "").strip()
+    server_slug = (body.get("wcl_server_slug") or "").strip()
+    region = (body.get("wcl_server_region") or "us").strip().lower()
+    sync_enabled = bool(body.get("sync_enabled", True))
+
+    if not client_id or not guild_name or not server_slug:
+        return JSONResponse(
+            {"ok": False, "error": "client_id, guild_name, and server_slug are required"},
+            status_code=400,
+        )
+
+    # Encrypt secret if provided
+    encrypted_secret: str | None = None
+    if client_secret:
+        from guild_portal.config import get_settings
+        from sv_common.crypto import encrypt_secret
+        encrypted_secret = encrypt_secret(client_secret, get_settings().jwt_secret_key)
+
+    async with pool.acquire() as conn:
+        if encrypted_secret:
+            await conn.execute(
+                """UPDATE guild_identity.wcl_config SET
+                       client_id = $1, client_secret_encrypted = $2,
+                       wcl_guild_name = $3, wcl_server_slug = $4,
+                       wcl_server_region = $5, sync_enabled = $6,
+                       is_configured = TRUE, updated_at = NOW()
+                   WHERE id = (SELECT id FROM guild_identity.wcl_config LIMIT 1)""",
+                client_id, encrypted_secret, guild_name, server_slug, region, sync_enabled,
+            )
+        else:
+            # Don't overwrite existing secret if blank submitted
+            await conn.execute(
+                """UPDATE guild_identity.wcl_config SET
+                       client_id = $1, wcl_guild_name = $2,
+                       wcl_server_slug = $3, wcl_server_region = $4,
+                       sync_enabled = $5, is_configured = TRUE, updated_at = NOW()
+                   WHERE id = (SELECT id FROM guild_identity.wcl_config LIMIT 1)""",
+                client_id, guild_name, server_slug, region, sync_enabled,
+            )
+
+    return JSONResponse({"ok": True})
+
+
+@router.post("/warcraft-logs/verify")
+async def admin_wcl_verify(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verify WCL credentials by attempting to fetch guild reports."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    body = await request.json()
+    client_id = (body.get("client_id") or "").strip()
+    client_secret = (body.get("client_secret") or "").strip()
+    guild_name = (body.get("wcl_guild_name") or "").strip()
+    server_slug = (body.get("wcl_server_slug") or "").strip()
+    region = (body.get("wcl_server_region") or "us").strip().lower()
+
+    if not client_id or not client_secret or not guild_name or not server_slug:
+        return JSONResponse(
+            {"ok": False, "error": "All fields required for verification"},
+            status_code=400,
+        )
+
+    from sv_common.guild_sync.warcraftlogs_client import WarcraftLogsClient, WarcraftLogsError
+    client = WarcraftLogsClient(client_id, client_secret)
+    try:
+        await client.initialize()
+        info = await client.verify_credentials(guild_name, server_slug, region)
+        return JSONResponse({"ok": True, "data": info})
+    except WarcraftLogsError as exc:
+        return JSONResponse({"ok": False, "error": f"WCL API error: {exc}"}, status_code=400)
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"Verification failed: {exc}"},
+            status_code=400,
+        )
+    finally:
+        await client.close()
+
+
+@router.post("/warcraft-logs/trigger")
+async def admin_wcl_trigger_sync(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Force a WCL sync run."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler is None:
+        return JSONResponse({"ok": False, "error": "Scheduler not available"}, status_code=503)
+
+    import asyncio
+    asyncio.create_task(scheduler.run_wcl_sync())
+    return JSONResponse({"ok": True, "message": "WCL sync started in background"})
+
+
+@router.get("/warcraft-logs/reports")
+async def admin_wcl_reports(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return recent raid reports."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT report_code, title, raid_date, zone_name, boss_kills,
+                      wipes, duration_ms, report_url,
+                      jsonb_array_length(COALESCE(attendees, '[]'::jsonb)) AS attendee_count
+               FROM guild_identity.raid_reports
+               ORDER BY raid_date DESC
+               LIMIT 25"""
+        )
+
+    reports = [
+        {
+            "code": r["report_code"],
+            "title": r["title"],
+            "raid_date": r["raid_date"].isoformat() if r["raid_date"] else None,
+            "zone_name": r["zone_name"],
+            "boss_kills": r["boss_kills"] or 0,
+            "wipes": r["wipes"] or 0,
+            "duration_ms": r["duration_ms"],
+            "report_url": r["report_url"],
+            "attendee_count": r["attendee_count"] or 0,
+        }
+        for r in rows
+    ]
+    return JSONResponse({"ok": True, "data": reports})
+
+
+@router.get("/warcraft-logs/attendance")
+async def admin_wcl_attendance(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return attendance grid from the last 10 reports."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.wcl_sync import compute_attendance
+    attendance = await compute_attendance(pool, limit_reports=10)
+
+    # Also return the list of recent report dates for the grid header
+    async with pool.acquire() as conn:
+        report_rows = await conn.fetch(
+            """SELECT report_code, raid_date, zone_name, attendees
+               FROM guild_identity.raid_reports
+               ORDER BY raid_date DESC LIMIT 10"""
+        )
+
+    reports_meta = [
+        {
+            "code": r["report_code"],
+            "raid_date": r["raid_date"].isoformat() if r["raid_date"] else None,
+            "zone_name": r["zone_name"],
+        }
+        for r in report_rows
+    ]
+
+    # Build per-player, per-report attendance grid
+    # {player_name: [attended_report_code1, ...]}
+    player_reports: dict[str, list[str]] = {}
+    for row in report_rows:
+        attendees = row["attendees"] or []
+        for a in attendees:
+            name = (a.get("name") or "").lower().strip()
+            if name:
+                player_reports.setdefault(name, [])
+                player_reports[name].append(row["report_code"])
+
+    grid = [
+        {
+            "name": name,
+            "attended": set_of_reports,
+            "rate": attendance.get(name, {}).get("rate", 0),
+            "raids_attended": attendance.get(name, {}).get("raids_attended", 0),
+        }
+        for name, set_of_reports in sorted(
+            player_reports.items(),
+            key=lambda x: -attendance.get(x[0], {}).get("raids_attended", 0),
+        )
+    ]
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "reports": reports_meta,
+            "grid": grid,
+        },
+    })
+
+
+@router.get("/warcraft-logs/parses")
+async def admin_wcl_parses(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return top parse records — all characters, sortable."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT cp.percentile, cp.encounter_name, cp.zone_name,
+                      cp.difficulty, cp.spec, cp.amount, cp.report_code,
+                      wc.character_name, cp.last_synced
+               FROM guild_identity.character_parses cp
+               JOIN guild_identity.wow_characters wc ON wc.id = cp.character_id
+               ORDER BY cp.percentile DESC
+               LIMIT 200"""
+        )
+
+    difficulty_names = {1: "LFR", 3: "Normal", 4: "Heroic", 5: "Mythic"}
+
+    parses = [
+        {
+            "character_name": r["character_name"],
+            "encounter_name": r["encounter_name"],
+            "zone_name": r["zone_name"],
+            "difficulty": difficulty_names.get(r["difficulty"], str(r["difficulty"])),
+            "difficulty_id": r["difficulty"],
+            "spec": r["spec"],
+            "percentile": float(r["percentile"]),
+            "amount": float(r["amount"]) if r["amount"] else None,
+            "report_code": r["report_code"],
+            "report_url": (
+                f"https://www.warcraftlogs.com/reports/{r['report_code']}"
+                if r["report_code"]
+                else None
+            ),
+            "last_synced": r["last_synced"].isoformat() if r["last_synced"] else None,
+        }
+        for r in rows
+    ]
+    return JSONResponse({"ok": True, "data": parses})
