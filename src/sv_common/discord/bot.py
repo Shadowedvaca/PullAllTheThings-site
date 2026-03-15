@@ -38,8 +38,18 @@ async def on_ready():
     from guild_portal.config import get_settings
     settings = get_settings()
     discord_guild = None
-    if settings.discord_guild_id:
-        discord_guild = bot.get_guild(int(settings.discord_guild_id))
+    guild_id_str = settings.discord_guild_id
+    # Fall back to guild_discord_id stored in DB (set via Admin → Bot Settings)
+    if not guild_id_str and _db_pool is not None:
+        try:
+            async with _db_pool.acquire() as _conn:
+                guild_id_str = await _conn.fetchval(
+                    "SELECT guild_discord_id FROM common.discord_config LIMIT 1"
+                )
+        except Exception:
+            pass
+    if guild_id_str:
+        discord_guild = bot.get_guild(int(guild_id_str))
 
     # Register slash commands — guild-scoped so they appear instantly
     if _db_pool is not None:
