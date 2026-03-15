@@ -39,13 +39,15 @@ async def on_ready():
     settings = get_settings()
     discord_guild = None
     guild_id_str = settings.discord_guild_id
-    # Fall back to guild_discord_id stored in DB (set via Admin → Bot Settings)
-    if not guild_id_str and _db_pool is not None:
+    # DB value (set via Admin → Bot Settings) takes precedence over env var
+    if _db_pool is not None:
         try:
             async with _db_pool.acquire() as _conn:
-                guild_id_str = await _conn.fetchval(
+                db_guild_id = await _conn.fetchval(
                     "SELECT guild_discord_id FROM common.discord_config LIMIT 1"
                 )
+            if db_guild_id:
+                guild_id_str = db_guild_id
         except Exception:
             pass
     if guild_id_str:
