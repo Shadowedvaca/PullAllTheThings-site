@@ -29,11 +29,6 @@ class RuleDefinition:
 # rules.py → mitigations.py → integrity_checker.py  (no cycle)
 # The wrapper bodies are NOT executed at import time.
 
-async def _wrap_note_mismatch(pool, issue_row) -> bool:
-    from .mitigations import mitigate_note_mismatch
-    return await mitigate_note_mismatch(pool, issue_row)
-
-
 async def _wrap_orphan_wow(pool, issue_row) -> bool:
     from .mitigations import mitigate_orphan_wow
     return await mitigate_orphan_wow(pool, issue_row)
@@ -50,23 +45,12 @@ async def _wrap_role_mismatch(pool, issue_row) -> bool:
 
 
 RULES: dict[str, RuleDefinition] = {
-    "note_mismatch": RuleDefinition(
-        issue_type="note_mismatch",
-        name="Guild Note Mismatch",
-        description=(
-            "A character's guild note changed and no longer matches the player it is "
-            "linked to. The character is automatically unlinked and re-matched."
-        ),
-        severity="warning",
-        auto_mitigate=True,
-        mitigate_fn=_wrap_note_mismatch,
-    ),
     "orphan_wow": RuleDefinition(
         issue_type="orphan_wow",
         name="Unlinked WoW Character",
         description=(
             "WoW character in the guild has no player record. "
-            "Admin can attempt automatic note-key matching."
+            "Member should connect Battle.net or add the character manually from Settings."
         ),
         severity="warning",
         auto_mitigate=False,
@@ -77,7 +61,7 @@ RULES: dict[str, RuleDefinition] = {
         name="Unlinked Discord Member",
         description=(
             "Discord member has a guild role but no player record. "
-            "Admin can attempt automatic character matching."
+            "Member should register on the website and connect Battle.net."
         ),
         severity="warning",
         auto_mitigate=False,
@@ -100,19 +84,6 @@ RULES: dict[str, RuleDefinition] = {
         description=(
             "WoW character hasn't logged in for more than 30 days. "
             "Informational only — resolves automatically when the character logs in."
-        ),
-        severity="info",
-        auto_mitigate=False,
-        mitigate_fn=None,
-    ),
-    # --- Drift detection rules (Phase 3.0C) ---
-    "link_contradicts_note": RuleDefinition(
-        issue_type="link_contradicts_note",
-        name="Link Contradicts Note",
-        description=(
-            "A character's guild note key doesn't match any known identity for the "
-            "linked player (Discord username, display name, or known aliases). "
-            "The link may be stale. Manual review required."
         ),
         severity="info",
         auto_mitigate=False,

@@ -6,8 +6,12 @@ Commands:
   /onboard-resolve — manually provision a member
   /onboard-dismiss — close a session without provisioning
   /onboard-retry   — re-run verification for one member
+  /onboard-start          — force-start a fresh onboarding conversation (dev/testing)
+  /onboard-simulate-oauth — simulate Battle.net OAuth completion (dev/testing)
+  /resend-oauth           — re-send the Battle.net link DM to an oauth_pending member
 """
 
+import asyncio
 import logging
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -17,7 +21,7 @@ import asyncpg
 import discord
 from discord import app_commands
 
-from sv_common.config_cache import get_accent_color_int, get_guild_name
+from sv_common.config_cache import get_accent_color_int, get_app_url, get_guild_name
 from .provisioner import AutoProvisioner
 from .deadline_checker import OnboardingDeadlineChecker
 
@@ -56,7 +60,10 @@ def register_onboarding_commands(
                           verification_attempts, created_at, deadline_at, escalated_at,
                           verified_player_id
                    FROM guild_identity.onboarding_sessions
-                   WHERE state NOT IN ('provisioned', 'manually_resolved', 'declined')
+                   WHERE state NOT IN (
+                       'provisioned', 'manually_resolved', 'declined',
+                       'oauth_complete', 'abandoned_oauth'
+                   )
                    ORDER BY created_at ASC
                    LIMIT 20""",
             )
@@ -96,7 +103,10 @@ def register_onboarding_commands(
                 """SELECT id, state, discord_id
                    FROM guild_identity.onboarding_sessions
                    WHERE discord_id = $1
-                     AND state NOT IN ('provisioned', 'manually_resolved', 'declined')""",
+                     AND state NOT IN (
+                         'provisioned', 'manually_resolved', 'declined',
+                         'oauth_complete', 'abandoned_oauth'
+                     )""",
                 str(member.id),
             )
             if not session:
@@ -394,3 +404,181 @@ def register_onboarding_commands(
                 "The verification attempt counter was incremented.",
                 ephemeral=True,
             )
+
+    @tree.command(
+        name="resend-oauth",
+        description="Re-send the Battle.net link DM to a member stuck at oauth_pending",
+    )
+    @app_commands.describe(member="The Discord member to re-send the OAuth link to")
+    async def resend_oauth(interaction: discord.Interaction, member: discord.Member):
+        if not await _require_officer(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with db_pool.acquire() as conn:
+            session = await conn.fetchrow(
+                """SELECT id FROM guild_identity.onboarding_sessions
+                   WHERE discord_id = $1 AND state = 'oauth_pending'""",
+                str(member.id),
+            )
+            if not session:
+                await interaction.followup.send(
+                    f"No oauth_pending session found for {member.mention}.",
+                    ephemeral=True,
+                )
+                return
+
+        site_url = get_app_url()
+        try:
+            embed = discord.Embed(
+                title="Connect your Battle.net account 🔗",
+                description=(
+                    "An officer asked me to resend this.\n\n"
+                    "Connect your Battle.net account to automatically find your characters:\n\n"
+                    f"👉 **{site_url}/auth/battlenet**\n\n"
+                    "It takes about 10 seconds — click *Approve* on Blizzard's page."
+                ),
+                color=get_accent_color_int(),
+            )
+            embed.set_footer(text=get_guild_name())
+            dm = await member.create_dm()
+            await dm.send(embed=embed)
+            await interaction.followup.send(
+                f"✅ Battle.net link DM sent to {member.mention}.",
+                ephemeral=True,
+            )
+            logger.info(
+                "Officer resent OAuth DM for discord_id=%s session=%d by %s",
+                member.id, session["id"], interaction.user.name,
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                f"⚠️ Could not DM {member.mention} — they may have DMs disabled.",
+                ephemeral=True,
+            )
+
+    @tree.command(
+        name="onboard-start",
+        description="Force-start a fresh onboarding conversation for a member (testing/recovery)",
+    )
+    @app_commands.describe(member="The Discord member to onboard")
+    async def onboard_start(interaction: discord.Interaction, member: discord.Member):
+        if not await _require_officer(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Delete any existing session so start() creates a clean one
+        # Must clear the FK reference on invite_codes first
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE common.invite_codes SET onboarding_session_id = NULL
+                   WHERE onboarding_session_id IN (
+                       SELECT id FROM guild_identity.onboarding_sessions WHERE discord_id = $1
+                   )""",
+                str(member.id),
+            )
+            deleted_id = await conn.fetchval(
+                "DELETE FROM guild_identity.onboarding_sessions WHERE discord_id = $1 RETURNING id",
+                str(member.id),
+            )
+        if deleted_id:
+            logger.info(
+                "Officer cleared session %d for discord_id=%s before force-start (by %s)",
+                deleted_id, member.id, interaction.user.name,
+            )
+
+        from .conversation import OnboardingConversation
+        conv = OnboardingConversation(interaction.client, member, db_pool)
+        asyncio.create_task(conv.start())
+
+        await interaction.followup.send(
+            f"✅ Onboarding conversation started for {member.mention}.\n"
+            "They'll receive a DM shortly (requires **Bot DMs** and **Onboarding DMs** enabled\n"
+            "in Admin → Bot Settings).",
+            ephemeral=True,
+        )
+        logger.info(
+            "Officer force-started onboarding for discord_id=%s by %s",
+            member.id, interaction.user.name,
+        )
+
+    @tree.command(
+        name="onboard-simulate-oauth",
+        description="Simulate Battle.net OAuth completion for a member (testing only)",
+    )
+    @app_commands.describe(member="The Discord member to simulate OAuth for")
+    async def onboard_simulate_oauth(interaction: discord.Interaction, member: discord.Member):
+        if not await _require_officer(interaction):
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        async with db_pool.acquire() as conn:
+            session = await conn.fetchrow(
+                """SELECT id, verified_player_id
+                   FROM guild_identity.onboarding_sessions
+                   WHERE discord_id = $1 AND state = 'oauth_pending'""",
+                str(member.id),
+            )
+            if not session:
+                await interaction.followup.send(
+                    f"No oauth_pending session found for {member.mention}. "
+                    "They must be provisioned first (session must be in `oauth_pending` state).",
+                    ephemeral=True,
+                )
+                return
+
+            # Mark oauth_complete
+            await conn.execute(
+                """UPDATE guild_identity.onboarding_sessions
+                   SET state = 'oauth_complete', updated_at = NOW()
+                   WHERE id = $1""",
+                session["id"],
+            )
+
+        # Send the completion DM directly (polling loop may have already timed out)
+        player_id = session["verified_player_id"]
+        if player_id:
+            async with db_pool.acquire() as conn:
+                char_count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM guild_identity.player_characters WHERE player_id = $1",
+                    player_id,
+                ) or 0
+        else:
+            char_count = 0
+
+        from sv_common.config_cache import get_accent_color_int, get_app_url, get_guild_name, get_site_config
+        realm = get_site_config().get("realm_display_name") or "your realm"
+        site_url = get_app_url()
+
+        try:
+            embed = discord.Embed(
+                title="You're all set! ✅",
+                description=(
+                    f"Found **{char_count}** character"
+                    + ("s" if char_count != 1 else "")
+                    + f" on **{realm}** linked to your profile.\n\n"
+                    f"Check your roster at **{site_url}/profile**\n\n"
+                    "*(Battle.net simulated by an officer for testing)*"
+                ),
+                color=0x4ADE80,
+            )
+            embed.set_footer(text=get_guild_name())
+            dm = await member.create_dm()
+            await dm.send(embed=embed)
+            await interaction.followup.send(
+                f"✅ OAuth simulated for {member.mention}. Completion DM sent.",
+                ephemeral=True,
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                f"✅ Session marked oauth_complete but couldn't DM {member.mention} (DMs disabled).",
+                ephemeral=True,
+            )
+
+        logger.info(
+            "Officer simulated OAuth for discord_id=%s session=%d by %s",
+            member.id, session["id"], interaction.user.name,
+        )

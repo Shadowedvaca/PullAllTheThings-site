@@ -24,18 +24,13 @@ class TestRulesRegistry:
         self.RuleDefinition = RuleDefinition
 
     def test_all_five_rules_exist(self):
-        # Phase 2.9 rules (5) + Phase 3.0C drift rules (3) = 8 total
-        expected_core = {"note_mismatch", "orphan_wow", "orphan_discord", "role_mismatch", "stale_character"}
+        # Phase 2.9 rules (minus note_mismatch, retired in 4.4.4) + Phase 3.0C drift rules
+        expected_core = {"orphan_wow", "orphan_discord", "role_mismatch", "stale_character"}
         assert expected_core.issubset(set(self.RULES.keys()))
 
     def test_each_rule_is_rule_definition(self):
         for issue_type, rule in self.RULES.items():
             assert isinstance(rule, self.RuleDefinition), f"{issue_type} is not a RuleDefinition"
-
-    def test_note_mismatch_is_auto_mitigate(self):
-        rule = self.RULES["note_mismatch"]
-        assert rule.auto_mitigate is True
-        assert rule.mitigate_fn is not None
 
     def test_orphan_wow_is_manual(self):
         rule = self.RULES["orphan_wow"]
@@ -71,10 +66,11 @@ class TestRulesRegistry:
                 assert inspect.iscoroutinefunction(rule.mitigate_fn), \
                     f"{issue_type}: mitigate_fn is not async"
 
-    def test_only_note_mismatch_is_auto_mitigate(self):
+    def test_no_rules_are_auto_mitigate(self):
+        # note_mismatch retired in 4.4.4 — no rules are auto_mitigate now
         auto_rules = [k for k, v in self.RULES.items() if v.auto_mitigate]
-        assert auto_rules == ["note_mismatch"], \
-            f"Expected only note_mismatch to be auto_mitigate, got: {auto_rules}"
+        assert auto_rules == [], \
+            f"Expected no auto_mitigate rules, got: {auto_rules}"
 
 
 # ---------------------------------------------------------------------------
@@ -140,10 +136,12 @@ class TestDetectFunctions:
     def test_detect_functions_map(self):
         from sv_common.guild_sync.integrity_checker import DETECT_FUNCTIONS
         # Should have entries for all rule types that can be individually scanned
-        assert "note_mismatch" in DETECT_FUNCTIONS
         assert "orphan_wow" in DETECT_FUNCTIONS
         assert "orphan_discord" in DETECT_FUNCTIONS
         assert "stale_character" in DETECT_FUNCTIONS
+        # note_mismatch and link_contradicts_note retired in 4.4.4
+        assert "note_mismatch" not in DETECT_FUNCTIONS
+        assert "link_contradicts_note" not in DETECT_FUNCTIONS
         # role_mismatch uses a tuple-returning combined function, handled separately
         assert "role_mismatch" not in DETECT_FUNCTIONS
 

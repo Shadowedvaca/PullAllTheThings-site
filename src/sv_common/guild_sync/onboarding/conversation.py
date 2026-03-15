@@ -22,7 +22,7 @@ from typing import Optional
 import asyncpg
 import discord
 
-from sv_common.config_cache import get_accent_color_int, get_guild_name
+from sv_common.config_cache import get_accent_color_int, get_app_url, get_guild_name, get_site_config
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,10 @@ class OnboardingConversation:
             existing = await conn.fetchrow(
                 """SELECT id, state FROM guild_identity.onboarding_sessions
                    WHERE discord_id = $1
-                     AND state NOT IN ('provisioned', 'manually_resolved', 'declined')""",
+                     AND state NOT IN (
+                         'provisioned', 'manually_resolved', 'declined',
+                         'oauth_complete', 'abandoned_oauth'
+                     )""",
                 str(self.member.id),
             )
             if existing:
@@ -166,19 +169,17 @@ class OnboardingConversation:
             class_name = match["class_name"] or "Unknown class"
             await dm.send(
                 f"Found **{match['character_name']}** on **{match['realm_slug']}** — "
-                f"{class_name}! That you? 🎉\n\n"
-                f"**Do you have any alts in the guild?** "
-                f"List them separated by commas, or say **none**."
+                f"{class_name}! That you? 🎉"
             )
             await self._set_field("reported_main_realm", match["realm_slug"])
         else:
             await dm.send(
                 f"I don't see **{main_name}** in the roster yet — no worries! "
-                f"The roster syncs a few times a day.\n\n"
-                f"**Any alts in the guild?** List them or say **none**."
+                f"The roster syncs a few times a day."
             )
 
-        await self._ask_alts(dm)
+        await self._set_field("reported_alt_names", [])
+        await self._proceed_to_verification(dm)
 
     async def _ask_alts(self, dm: discord.DMChannel):
         await self._set_state("asked_alts")
@@ -198,16 +199,16 @@ class OnboardingConversation:
             ]
 
         await self._set_field("reported_alt_names", alt_names)
+        await self._proceed_to_verification(dm)
 
+    async def _proceed_to_verification(self, dm: discord.DMChannel):
+        """Send the confirmation embed and kick off verification."""
         main_name = await self._get_field("reported_main_name")
-        char_list = f"**Main:** {main_name}"
-        if alt_names:
-            char_list += f"\n**Alts:** {', '.join(alt_names)}"
 
         embed = discord.Embed(
             title="Got it! You're all set on my end 👍",
             description=(
-                f"{char_list}\n\n"
+                f"**Main:** {main_name}\n\n"
                 "I'm verifying this against the guild roster. Once confirmed:\n"
                 "• Your Discord roles will be set\n"
                 "• You'll get a website invite for pullallthethings.com\n"
@@ -380,7 +381,7 @@ class OnboardingConversation:
         async with self.db_pool.acquire() as conn:
             await conn.execute(
                 """UPDATE guild_identity.onboarding_sessions SET
-                    state = 'provisioned',
+                    state = 'oauth_pending',
                     website_invite_sent = $2,
                     website_invite_code = $3,
                     roster_entries_created = $4,
@@ -394,6 +395,93 @@ class OnboardingConversation:
                 result["characters_linked"] > 0,
                 result["discord_role_assigned"],
             )
+
+        # Send the Battle.net link prompt as a follow-up DM
+        await self._send_oauth_prompt()
+
+        # Poll in the background for OAuth completion (up to 10 min)
+        asyncio.create_task(self._poll_for_oauth_complete(player_id))
+
+    # ── OAuth step ────────────────────────────────────────────────────────────
+
+    async def _send_oauth_prompt(self) -> None:
+        """Send a follow-up DM prompting the member to connect their Battle.net account."""
+        from sv_common.discord.dm import is_bot_dm_enabled
+        if not await is_bot_dm_enabled(self.db_pool):
+            return
+        site_url = get_app_url()
+        if not site_url:
+            try:
+                from guild_portal.config import get_settings
+                site_url = get_settings().app_url.rstrip("/")
+            except Exception:
+                pass
+        oauth_url = f"{site_url}/auth/battlenet" if site_url else "/auth/battlenet"
+        try:
+            dm = await self.member.create_dm()
+            embed = discord.Embed(
+                title="One more step! 🔗",
+                description=(
+                    "Once you've registered, connect your Battle.net account so we can\n"
+                    "automatically find your characters:\n\n"
+                    f"👉 {oauth_url}\n\n"
+                    "It takes about 10 seconds — click *Approve* on Blizzard's page\n"
+                    "and your characters will be linked automatically."
+                ),
+                color=get_accent_color_int(),
+            )
+            embed.set_footer(text=get_guild_name())
+            await dm.send(embed=embed)
+        except discord.Forbidden:
+            logger.warning("Cannot DM OAuth prompt to %s — DMs closed", self.member.name)
+
+    async def _poll_for_oauth_complete(self, player_id: int) -> None:
+        """Poll every 60s for up to 10 min waiting for the member to complete OAuth."""
+        for _ in range(10):
+            await asyncio.sleep(60)
+            async with self.db_pool.acquire() as conn:
+                state = await conn.fetchval(
+                    "SELECT state FROM guild_identity.onboarding_sessions WHERE id = $1",
+                    self.session_id,
+                )
+            if state == "oauth_complete":
+                await self._send_oauth_completion_dm(player_id)
+                return
+            if state != "oauth_pending":
+                # Session was resolved by another path (e.g. officer command)
+                return
+        logger.info(
+            "OAuth polling timed out for session=%s — deadline_checker will follow up",
+            self.session_id,
+        )
+
+    async def _send_oauth_completion_dm(self, player_id: int) -> None:
+        """Send the 'you're all set' DM after OAuth completes."""
+        async with self.db_pool.acquire() as conn:
+            char_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM guild_identity.player_characters WHERE player_id = $1",
+                player_id,
+            ) or 0
+
+        realm = get_site_config().get("realm_display_name") or "your realm"
+        site_url = get_app_url()
+
+        try:
+            dm = await self.member.create_dm()
+            embed = discord.Embed(
+                title="You're all set! ✅",
+                description=(
+                    f"Found **{char_count}** character"
+                    + ("s" if char_count != 1 else "")
+                    + f" on **{realm}** linked to your profile.\n\n"
+                    f"Check your roster at **{site_url}/profile**"
+                ),
+                color=0x4ADE80,
+            )
+            embed.set_footer(text=get_guild_name())
+            await dm.send(embed=embed)
+        except discord.Forbidden:
+            logger.warning("Cannot DM completion message to %s — DMs closed", self.member.name)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -446,3 +534,33 @@ class OnboardingConversation:
                 f"SELECT {field} FROM guild_identity.onboarding_sessions WHERE id = $1",
                 self.session_id,
             )
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers (called by other modules, e.g. bnet_auth_routes)
+# ---------------------------------------------------------------------------
+
+
+async def update_onboarding_status(
+    pool: asyncpg.Pool,
+    player_id: int,
+    new_status: str,
+) -> bool:
+    """
+    Update the onboarding session status for a given player.
+
+    Only updates sessions currently in ``oauth_pending`` state so that
+    already-completed or manually-resolved sessions are unaffected.
+
+    Returns True if a session was updated, False if none matched.
+    """
+    async with pool.acquire() as conn:
+        updated_id = await conn.fetchval(
+            """UPDATE guild_identity.onboarding_sessions
+               SET state = $2, updated_at = NOW()
+               WHERE verified_player_id = $1 AND state = 'oauth_pending'
+               RETURNING id""",
+            player_id,
+            new_status,
+        )
+    return updated_id is not None

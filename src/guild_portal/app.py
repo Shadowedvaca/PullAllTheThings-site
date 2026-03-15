@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from guild_portal.config import get_settings
-from sv_common.config_cache import set_site_config, get_site_config
+from sv_common.config_cache import set_site_config, get_site_config, set_app_url
 from sv_common.db.engine import get_engine, get_session_factory
 from sv_common.db.seed import seed_ranks
 
@@ -131,17 +131,6 @@ def create_app() -> FastAPI:
             except Exception as exc:
                 logger.warning("Seed skipped: %s", exc)
 
-        # Start the Discord bot in a background task (skipped if no token)
-        bot_task = None
-        if settings.discord_bot_token:
-            from sv_common.discord.bot import start_bot
-            bot_task = asyncio.create_task(start_bot(settings.discord_bot_token))
-            logger.info("Discord bot task started")
-        else:
-            logger.info("No DISCORD_BOT_TOKEN — bot not started")
-
-        # Wire db_pool into the bot after the pool is available (below)
-
         # Set up asyncpg pool for guild_sync (raw SQL, separate from SQLAlchemy)
         # Converts postgresql+asyncpg:// DSN to plain postgresql:// for asyncpg
         raw_dsn = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
@@ -156,6 +145,33 @@ def create_app() -> FastAPI:
             logger.warning("Guild sync pool not created (DB may not be available): %s", exc)
             guild_sync_pool = None
             app.state.guild_sync_pool = None
+
+        # Resolve the bot token: prefer encrypted value in discord_config, fall back to env var
+        bot_token = settings.discord_bot_token
+        if guild_sync_pool is not None:
+            try:
+                async with guild_sync_pool.acquire() as _bt_conn:
+                    _dc_row = await _bt_conn.fetchrow(
+                        "SELECT bot_token_encrypted, guild_discord_id FROM common.discord_config LIMIT 1"
+                    )
+                if _dc_row and _dc_row["bot_token_encrypted"]:
+                    from sv_common.crypto import decrypt_secret
+                    bot_token = decrypt_secret(_dc_row["bot_token_encrypted"], settings.jwt_secret_key)
+                    logger.info("Bot token loaded from database")
+            except Exception as exc:
+                logger.warning("Could not load bot token from DB, using env var: %s", exc)
+
+        # Start the Discord bot in a background task (skipped if no token)
+        bot_task = None
+        if bot_token:
+            from sv_common.discord.bot import start_bot
+            bot_task = asyncio.create_task(start_bot(bot_token))
+            logger.info("Discord bot task started")
+        else:
+            logger.info("No bot token configured — bot not started")
+
+        # Populate app URL in config cache (used by sv_common modules for DM links)
+        set_app_url(settings.app_url)
 
         # Load site config into the in-process cache
         if guild_sync_pool is not None:
@@ -211,7 +227,7 @@ def create_app() -> FastAPI:
             guild_sync_pool
             and settings.blizzard_client_id
             and settings.blizzard_client_secret
-            and settings.discord_bot_token
+            and bot_token
             and audit_channel_id_int
         ):
             from sv_common.guild_sync.scheduler import GuildSyncScheduler
@@ -407,6 +423,7 @@ def create_app() -> FastAPI:
     from guild_portal.api.admin_routes import router as admin_router
     from guild_portal.api.guild_routes import router as guild_router
     from guild_portal.api.auth_routes import router as auth_router
+    from guild_portal.api.bnet_auth_routes import router as bnet_auth_router
     from guild_portal.api.campaign_routes import (
         admin_campaign_router,
         vote_router,
@@ -417,6 +434,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
+    app.include_router(bnet_auth_router)
     app.include_router(admin_router)
     app.include_router(admin_campaign_router)
     app.include_router(guild_router)

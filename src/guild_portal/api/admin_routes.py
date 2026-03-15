@@ -16,7 +16,7 @@ from guild_portal.deps import get_db, require_rank
 from sv_common.config_cache import set_site_config
 from sv_common.db.models import (
     DiscordConfig, GuildRank, Player, RaidAttendance, RaidEvent, RecurringEvent,
-    Role, RaidSeason, ScreenPermission, SiteConfig, Specialization, WowClass,
+    Role, RaidSeason, ScreenPermission, SiteConfig, Specialization, WowCharacter, WowClass,
 )
 from sv_common.identity import ranks as rank_service
 from sv_common.identity import members as member_service
@@ -441,6 +441,51 @@ async def get_bot_settings(db: AsyncSession = Depends(get_db)):
             "feature_onboarding_dm": row.feature_onboarding_dm if row else False,
             "role_sync_interval_hours": row.role_sync_interval_hours if row else 24,
             "guild_discord_id": row.guild_discord_id if row else None,
+            "has_bot_token": bool(row.bot_token_encrypted) if row else False,
+        },
+    }
+
+
+@router.patch("/bot-connection")
+async def update_bot_connection(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin: Player = Depends(require_rank(5)),
+):
+    """Update bot token and/or Discord guild ID. Guild Leader only.
+    Changes take effect after the app restarts (bot reconnects on startup).
+    """
+    from sv_common.crypto import encrypt_secret
+    from guild_portal.config import get_settings
+
+    result = await db.execute(select(DiscordConfig).limit(1))
+    row = result.scalar_one_or_none()
+    if not row:
+        settings = get_settings()
+        row = DiscordConfig(guild_discord_id=settings.discord_guild_id or "0")
+        db.add(row)
+        await db.flush()
+
+    if payload.get("bot_token", "").strip():
+        settings = get_settings()
+        row.bot_token_encrypted = encrypt_secret(
+            payload["bot_token"].strip(), settings.jwt_secret_key
+        )
+        logger.info("Bot token updated by %s", admin.display_name)
+
+    if payload.get("discord_guild_id", "").strip():
+        row.guild_discord_id = payload["discord_guild_id"].strip()
+        logger.info(
+            "Discord guild ID updated to %s by %s",
+            row.guild_discord_id, admin.display_name,
+        )
+
+    await db.commit()
+    return {
+        "ok": True,
+        "data": {
+            "has_bot_token": bool(row.bot_token_encrypted),
+            "guild_discord_id": row.guild_discord_id,
         },
     }
 
@@ -990,7 +1035,7 @@ async def create_raid_event(
         .options(
             sil(Player.guild_rank),
             sil(Player.discord_user),
-            sil(Player.main_character),
+            sil(Player.main_character).selectinload(WowCharacter.wow_class),
             sil(Player.main_spec).selectinload(Specialization.default_role),
         )
         .where(Player.is_active.is_(True), Player.main_character_id.is_not(None))

@@ -38,8 +38,20 @@ async def on_ready():
     from guild_portal.config import get_settings
     settings = get_settings()
     discord_guild = None
-    if settings.discord_guild_id:
-        discord_guild = bot.get_guild(int(settings.discord_guild_id))
+    guild_id_str = settings.discord_guild_id
+    # DB value (set via Admin → Bot Settings) takes precedence over env var
+    if _db_pool is not None:
+        try:
+            async with _db_pool.acquire() as _conn:
+                db_guild_id = await _conn.fetchval(
+                    "SELECT guild_discord_id FROM common.discord_config LIMIT 1"
+                )
+            if db_guild_id:
+                guild_id_str = db_guild_id
+        except Exception:
+            pass
+    if guild_id_str:
+        discord_guild = bot.get_guild(int(guild_id_str))
 
     # Register slash commands — guild-scoped so they appear instantly
     if _db_pool is not None:
@@ -84,11 +96,15 @@ async def on_member_join(member: discord.Member):
     except Exception as e:
         logger.warning("on_member_join discord_sync failed for %s: %s", member.name, e)
 
-    # Start onboarding conversation (gated by bot_dm_enabled internally)
+    # Start onboarding conversation (gated by enable_onboarding flag and bot_dm_enabled)
     try:
-        from sv_common.guild_sync.onboarding.conversation import OnboardingConversation
-        conv = OnboardingConversation(bot, member, pool)
-        asyncio.create_task(conv.start())
+        from sv_common.config_cache import is_onboarding_enabled
+        if is_onboarding_enabled():
+            from sv_common.guild_sync.onboarding.conversation import OnboardingConversation
+            conv = OnboardingConversation(bot, member, pool)
+            asyncio.create_task(conv.start())
+        else:
+            logger.debug("Onboarding disabled — skipping for %s", member.name)
     except Exception as e:
         logger.warning("on_member_join onboarding start failed for %s: %s", member.name, e)
 
@@ -127,11 +143,29 @@ async def on_member_update(before: discord.Member, after: discord.Member):
 
 @bot.event
 async def on_message(message: discord.Message):
-    """Respond to DMs with a help message listing available commands."""
+    """Respond to DMs with a help message listing available commands.
+
+    Suppressed when the user is mid-onboarding conversation — their reply
+    belongs to the wait_for in the conversation flow, not to this handler.
+    """
     if message.author.bot:
         return
     if not isinstance(message.channel, discord.DMChannel):
         return
+
+    # Don't fire while the user is actively answering onboarding questions
+    _ACTIVE_ONBOARDING_STATES = {"asked_in_guild", "asked_main", "asked_alts"}
+    if _db_pool is not None:
+        try:
+            async with _db_pool.acquire() as conn:
+                state = await conn.fetchval(
+                    "SELECT state FROM guild_identity.onboarding_sessions WHERE discord_id = $1",
+                    str(message.author.id),
+                )
+            if state in _ACTIVE_ONBOARDING_STATES:
+                return
+        except Exception:
+            pass  # DB not available — fall through and show help
 
     embed = discord.Embed(
         title=f"{get_guild_name()} Bot",

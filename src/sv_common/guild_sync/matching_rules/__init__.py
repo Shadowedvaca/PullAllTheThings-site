@@ -1,22 +1,12 @@
 """
 Matching rules package.
 
-Rules are executed in order (lowest order first) by the runner.
-Adding a new matching pattern means:
-  1. Create a new rule class in a new file
-  2. Import it here and add it to get_registered_rules()
+Rules registry is now empty. Character ownership is established via
+Battle.net OAuth (link_source='battlenet_oauth') during onboarding.
+Manual character adds are done through the Settings → Characters form.
 """
-
-from .name_match_rule import NameMatchRule
-from .note_group_rule import NoteGroupRule
 
 
 def get_registered_rules() -> list:
-    """Return all matching rules sorted by execution order."""
-    return sorted(
-        [
-            NoteGroupRule(),
-            NameMatchRule(),
-        ],
-        key=lambda r: r.order,
-    )
+    """Return all registered matching rules. Currently empty — OAuth provides ownership."""
+    return []

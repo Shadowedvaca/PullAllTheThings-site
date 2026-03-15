@@ -366,6 +366,55 @@
     </form>
   </div>
 
+  {# ── Battle.net Account ──────────────────────────────────────── #}
+  <div class="settings-section">
+    <div class="settings-section__header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+      <h2 class="settings-section__title">Battle.net Account</h2>
+      {% if bnet_account %}
+        <span style="font-size:0.8rem;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:0.06em">✓ Linked</span>
+      {% endif %}
+    </div>
+    <div class="settings-section__body">
+      {% if bnet_account %}
+        <div style="margin-bottom:1rem">
+          <div style="font-size:1rem;font-weight:700;color:var(--color-text);margin-bottom:0.25rem">
+            {{ bnet_account.battletag }}
+          </div>
+          <div style="font-size:0.85rem;color:var(--color-text-muted)">
+            Linked {{ bnet_account.linked_at.strftime('%Y-%m-%d') if bnet_account.linked_at else '' }}
+            {% if bnet_char_count > 0 %}
+              · {{ bnet_char_count }} character{{ 's' if bnet_char_count != 1 else '' }} auto-claimed
+            {% endif %}
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn btn-danger btn-sm"
+          onclick="confirmUnlink()"
+        >Unlink</button>
+      {% else %}
+        <p class="field-group__hint" style="margin-bottom:1rem">
+          Connect your Battle.net account to automatically claim all your characters.
+        </p>
+        <a href="/auth/battlenet" class="btn btn-secondary">Connect Battle.net</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Unlink confirmation modal ────────────────────────────────── #}
+  <div id="bnet-unlink-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:var(--color-bg-card);border:1px solid var(--color-border);border-radius:var(--radius);padding:1.75rem;max-width:400px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,0.5)">
+      <h3 style="font-family:var(--font-display);color:var(--color-accent);margin:0 0 0.75rem">Unlink Battle.net?</h3>
+      <p style="font-size:0.9rem;color:var(--color-text-muted);margin-bottom:1.25rem">
+        This will remove all auto-claimed characters from your profile. They can be re-added manually or by re-linking your Battle.net account.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeUnlinkModal()">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="doUnlink()">Unlink</button>
+      </div>
+    </div>
+  </div>
+
   {# ── Characters ──────────────────────────────────────────────── #}
   <div class="settings-section">
     <div class="settings-section__header">
@@ -455,7 +504,7 @@
       {# — Claimed characters — #}
       {% if player_chars %}
       <p class="field-group__hint" style="margin-bottom:0.75rem">
-        These characters are currently linked to your account. You can unclaim any you don't own.
+        These characters are currently linked to your account.{% if not bnet_account %} You can unclaim any you don't own.{% endif %}
       </p>
       <table class="table" style="margin-bottom:1.25rem">
         <thead>
@@ -464,13 +513,22 @@
             <th>Realm</th>
             <th>Class</th>
             <th style="text-align:right">ilvl</th>
+            <th style="text-align:right">M+ Score</th>
+            <th>Raid Prog</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for pc in player_chars %}
+          {% set rio = rio_by_char.get(pc.character.id) %}
+          {% set is_bnet = pc.link_source == 'battlenet_oauth' %}
           <tr>
-            <td style="font-weight:600">{{ pc.character.character_name }}</td>
+            <td style="font-weight:600">
+              {{ pc.character.character_name }}
+              {% if is_bnet %}
+                <span title="Auto-claimed via Battle.net" style="font-size:0.75rem;color:var(--color-accent);margin-left:0.3rem;font-weight:700">🔒 Battle.net Verified</span>
+              {% endif %}
+            </td>
             <td style="color:var(--color-text-muted)">{{ pc.character.realm_name or pc.character.realm_slug }}</td>
             <td style="color:var(--color-text-muted)">
               {% if pc.character.wow_class %}{{ pc.character.wow_class.name }}{% else %}—{% endif %}
@@ -479,11 +537,32 @@
               {{ pc.character.item_level or '—' }}
             </td>
             <td style="text-align:right">
-              <form method="post" action="/profile/characters/unclaim"
-                    onsubmit="return confirm('Unclaim {{ pc.character.character_name }}? This will remove it from your account.')">
-                <input type="hidden" name="character_id" value="{{ pc.character.id }}">
-                <button type="submit" class="btn btn-danger btn-sm">Unclaim</button>
-              </form>
+              {% if rio and rio.overall_score %}
+                <span style="color:{{ rio.score_color or 'var(--color-text-muted)' }};font-weight:600">
+                  {{ rio.overall_score | int }}
+                </span>
+                {% if rio.profile_url %}
+                  <a href="{{ rio.profile_url }}" target="_blank" rel="noopener"
+                     style="color:var(--color-text-muted);font-size:0.8rem;margin-left:0.25rem"
+                     title="View on Raider.IO">⬡</a>
+                {% endif %}
+              {% else %}
+                <span style="color:var(--color-text-muted)">—</span>
+              {% endif %}
+            </td>
+            <td style="color:var(--color-text-muted)">
+              {{ rio.raid_progression if rio and rio.raid_progression else '—' }}
+            </td>
+            <td style="text-align:right">
+              {% if is_bnet %}
+                <span style="font-size:0.78rem;color:var(--color-text-muted)" title="Unlink Battle.net to remove this character">🔒 Locked</span>
+              {% else %}
+                <form method="post" action="/profile/characters/unclaim"
+                      onsubmit="return confirm('Unclaim {{ pc.character.character_name }}? This will remove it from your account.')">
+                  <input type="hidden" name="character_id" value="{{ pc.character.id }}">
+                  <button type="submit" class="btn btn-danger btn-sm">Unclaim</button>
+                </form>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -491,11 +570,16 @@
       </table>
       {% else %}
       <p class="field-group__hint" style="margin-bottom:1.25rem">
-        No characters are linked to your account yet. Use the section below to claim yours.
+        {% if bnet_account %}
+          No characters have been auto-claimed yet. Try unlinking and re-linking your Battle.net account.
+        {% else %}
+          No characters are linked to your account yet. Use the section below to claim yours.
+        {% endif %}
       </p>
       {% endif %}
 
-      {# — Claim a character — #}
+      {# — Claim a character — only shown when Battle.net is not linked #}
+      {% if not bnet_account %}
       <div style="border-top:1px solid var(--color-border);padding:1.25rem 0 0">
         <p class="field-group__hint" style="margin-bottom:0.75rem">
           Claim any unclaimed guild character that belongs to you.
@@ -559,6 +643,27 @@
           {% endif %}
         </div>
       </div>
+
+      {# — Add a character by name — for chars not in the guild scan #}
+      <div style="border-top:1px solid var(--color-border);padding:1.25rem 0 0;margin-top:1rem">
+        <p class="field-group__hint" style="margin-bottom:0.75rem">
+          Can't find your character above? Add it by name — we'll look it up from Blizzard.
+        </p>
+        <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
+          <div class="field-group" style="flex:1;min-width:180px">
+            <label class="field-group__label" for="manual-char-name">Character Name</label>
+            <input type="text" id="manual-char-name" class="form-control" placeholder="e.g. Trogmoon" maxlength="60">
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="addCharManually(this)" style="align-self:flex-end">
+            Add Character
+          </button>
+        </div>
+        <p class="field-group__hint" style="margin-top:0.5rem">
+          Manually added characters are visible to officers for verification.
+        </p>
+        <div id="manual-char-result" style="margin-top:0.5rem;font-size:0.85rem"></div>
+      </div>
+      {% endif %}
 
     </div>
   </div>
@@ -673,6 +778,41 @@
 
 {% block scripts %}
 <script>
+// Battle.net unlink modal
+function confirmUnlink() {
+  const modal = document.getElementById('bnet-unlink-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeUnlinkModal() {
+  const modal = document.getElementById('bnet-unlink-modal');
+  if (modal) modal.style.display = 'none';
+}
+async function doUnlink() {
+  try {
+    const resp = await fetch('/api/v1/auth/battlenet', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    if (resp.ok) {
+      window.location.href = '/profile?success=Battle.net+account+unlinked+successfully';
+    } else {
+      const data = await resp.json().catch(() => ({}));
+      window.location.href = '/profile?error=' + encodeURIComponent(data.error || 'Failed to unlink account');
+    }
+  } catch (e) {
+    window.location.href = '/profile?error=Failed+to+unlink+Battle.net+account';
+  }
+}
+// Close modal on backdrop click
+document.addEventListener('DOMContentLoaded', function() {
+  const modal = document.getElementById('bnet-unlink-modal');
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) closeUnlinkModal();
+    });
+  }
+});
+
 function toggleDayRow(dayIdx, checked) {
   const row = document.getElementById('avail-row-' + dayIdx);
   const inputs = row.querySelectorAll('input[type="time"], input[type="number"]');
@@ -755,5 +895,42 @@ function updateSpecDropdown(prefix) {
 
 updateSpecDropdown('main');
 updateSpecDropdown('offspec');
+
+async function addCharManually(btn) {
+  const nameInput = document.getElementById('manual-char-name');
+  const resultEl = document.getElementById('manual-char-result');
+  if (!nameInput || !resultEl) return;
+  const name = (nameInput.value || '').trim();
+  if (!name) {
+    resultEl.textContent = 'Please enter a character name.';
+    resultEl.style.color = 'var(--color-warning)';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Adding\u2026';
+  resultEl.textContent = '';
+  try {
+    const r = await fetch('/api/v1/settings/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character_name: name }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      resultEl.textContent = (d.character_name || name) + ' added successfully. Reload to see it.';
+      resultEl.style.color = 'var(--color-success)';
+      nameInput.value = '';
+    } else {
+      resultEl.textContent = 'Error: ' + (d.error || 'Unknown error');
+      resultEl.style.color = 'var(--color-danger)';
+    }
+  } catch(e) {
+    resultEl.textContent = 'Request failed.';
+    resultEl.style.color = 'var(--color-danger)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add Character';
+  }
+}
 </script>
 {% endblock %}

@@ -112,12 +112,17 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
     Characters whose player has no Discord user linked are skipped — we cannot
     reliably detect a mismatch without a Discord identity to compare against.
 
+    Characters linked via battlenet_oauth are skipped — OAuth ownership is authoritative
+    and note mismatches are expected when a player's Discord name differs from their
+    WoW character name.
+
     Returns count of new issues created.
     """
     import re
     from .identity_engine import _extract_note_key, normalize_name
 
-    # Load all linked characters that have a discord user on their player
+    # Load all linked characters that have a discord user on their player.
+    # Skip battlenet_oauth links — OAuth ownership is authoritative.
     rows = await conn.fetch(
         """SELECT
                wc.id          AS char_id,
@@ -134,7 +139,8 @@ async def detect_note_mismatch(conn: asyncpg.Connection) -> int:
            WHERE wc.removed_at IS NULL
              AND wc.guild_note IS NOT NULL
              AND wc.guild_note != ''
-             AND du.is_present = TRUE"""
+             AND du.is_present = TRUE
+             AND pc.link_source != 'battlenet_oauth'"""
     )
 
     # Load all player aliases in one query (avoids N+1 per character)
@@ -444,6 +450,8 @@ async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
     - Characters where note key is in player_note_aliases
     - Characters with link_source = 'manual' AND confidence = 'confirmed'
       (human overrode the note — trust the human)
+    - Characters linked via battlenet_oauth (OAuth ownership is authoritative;
+      note mismatches are expected when Discord name differs from WoW name)
 
     Returns count of new issues created.
     """
@@ -468,7 +476,8 @@ async def detect_link_note_contradictions(conn: asyncpg.Connection) -> int:
            WHERE wc.removed_at IS NULL
              AND wc.guild_note IS NOT NULL
              AND wc.guild_note != ''
-             AND du.is_present = TRUE"""
+             AND du.is_present = TRUE
+             AND pc.link_source != 'battlenet_oauth'"""
     )
 
     alias_rows = await conn.fetch(
@@ -725,15 +734,14 @@ async def detect_main_char_not_linked(conn: asyncpg.Connection) -> int:
 
 # Mapping for admin scan-by-type endpoint
 DETECT_FUNCTIONS = {
-    "note_mismatch": detect_note_mismatch,
     "orphan_wow": detect_orphan_wow,
     "orphan_discord": detect_orphan_discord,
     "stale_character": detect_stale_character,
-    "link_contradicts_note": detect_link_note_contradictions,
     "duplicate_discord": detect_duplicate_discord_links,
     "main_char_not_linked": detect_main_char_not_linked,
     # role_mismatch handled specially (returns tuple)
     # stale_discord_link is part of detect_duplicate_discord_links (combined check)
+    # note_mismatch and link_contradicts_note retired — note-based matching removed
 }
 
 
@@ -749,7 +757,6 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     Returns stats: {orphan_wow, orphan_discord, role_mismatch, stale, no_guild_role, total_new}
     """
     stats = {
-        "note_mismatch": 0,
         "orphan_wow": 0,
         "orphan_discord": 0,
         "role_mismatch": 0,
@@ -760,7 +767,6 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
     }
 
     async with pool.acquire() as conn:
-        stats["note_mismatch"] = await detect_note_mismatch(conn)
         stats["orphan_wow"] = await detect_orphan_wow(conn)
         stats["orphan_discord"] = await detect_orphan_discord(conn)
 
@@ -772,8 +778,7 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         stats["main_char_not_linked"] = await detect_main_char_not_linked(conn)
 
         stats["total_new"] = (
-            stats["note_mismatch"]
-            + stats["orphan_wow"]
+            stats["orphan_wow"]
             + stats["orphan_discord"]
             + stats["role_mismatch"]
             + stats["no_guild_role"]

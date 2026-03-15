@@ -619,6 +619,10 @@ async function createSeason() {
                         <option value="false">Inactive</option>
                     </select>
                 </td>
+                <td>
+                    <input class="rt-editable rt-field rt-editable--number" type="number" name="blizzard_mplus_season_id"
+                           value="" data-orig="" placeholder="e.g. 13" style="width:70px;">
+                </td>
                 <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
             `;
             tbody.prepend(tr);

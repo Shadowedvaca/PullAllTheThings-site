@@ -21,9 +21,11 @@ from guild_portal.services.availability_service import (
 from guild_portal.templating import templates
 from sv_common.auth.passwords import hash_password, verify_password
 from sv_common.db.models import (
+    BattlenetAccount,
     Player,
     PlayerActionLog,
     PlayerCharacter,
+    RaiderIOProfile,
     Specialization,
     User,
     WowCharacter,
@@ -113,6 +115,36 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
     for spec in all_specs:
         specs_by_class.setdefault(spec.class_id, []).append(spec)
 
+    # Raider.IO profiles for claimed characters
+    claimed_char_ids = [pc.character.id for pc in player_chars if pc.character]
+    rio_by_char: dict[int, RaiderIOProfile] = {}
+    if claimed_char_ids:
+        rio_result = await db.execute(
+            select(RaiderIOProfile).where(
+                RaiderIOProfile.season == "current",
+                RaiderIOProfile.character_id.in_(claimed_char_ids),
+            )
+        )
+        for r in rio_result.scalars():
+            rio_by_char[r.character_id] = r
+
+    # Battle.net account
+    bnet_result = await db.execute(
+        select(BattlenetAccount).where(BattlenetAccount.player_id == player.id)
+    )
+    bnet_account = bnet_result.scalar_one_or_none()
+
+    # Count of OAuth-claimed characters (Phase 4.4.2 populates these)
+    bnet_char_count = 0
+    if bnet_account:
+        bnet_count_result = await db.execute(
+            select(PlayerCharacter).where(
+                PlayerCharacter.player_id == player.id,
+                PlayerCharacter.link_source == "battlenet_oauth",
+            )
+        )
+        bnet_char_count = len(list(bnet_count_result.scalars().all()))
+
     # Availability rows
     availability = await get_player_availability(db, player.id)
     avail_by_day = {row.day_of_week: row for row in availability}
@@ -125,6 +157,9 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         "avail_by_day": avail_by_day,
         "day_names": DAY_NAMES,
         "timezones": COMMON_TIMEZONES,
+        "rio_by_char": rio_by_char,
+        "bnet_account": bnet_account,
+        "bnet_char_count": bnet_char_count,
     }
 
 
@@ -469,6 +504,13 @@ async def profile_unclaim_character(
     if pc is None:
         return RedirectResponse(url="/profile?error=Character+not+linked+to+your+account", status_code=302)
 
+    # Block unclaim of Battle.net verified characters — unlink Battle.net to remove
+    if pc.link_source == "battlenet_oauth":
+        return RedirectResponse(
+            url="/profile?error=Battle.net+verified+characters+cannot+be+unclaimed+manually.+Unlink+your+Battle.net+account+to+remove+them.",
+            status_code=302,
+        )
+
     # Load the character for log denormalization + deletion check
     char_result = await db.execute(
         select(WowCharacter).where(WowCharacter.id == character_id)
@@ -523,6 +565,187 @@ async def profile_unclaim_character(
         url=f"/profile?success={char_name}+unclaimed+successfully",
         status_code=302,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /guide
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/settings/characters  — manual character add by name
+# ---------------------------------------------------------------------------
+
+
+@router.post("/api/v1/settings/characters")
+async def api_add_character_manually(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    """Add a character by name. Looks up in DB first, then Blizzard API."""
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    if current_member is None:
+        return _JSONResponse({"ok": False, "error": "Not authenticated"}, status_code=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return _JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    character_name = (body.get("character_name") or "").strip()
+    if not character_name:
+        return _JSONResponse({"ok": False, "error": "character_name required"}, status_code=400)
+
+    from sv_common.config_cache import get_home_realm_slug
+    realm_slug = (body.get("realm_slug") or get_home_realm_slug() or "senjin").strip()
+
+    # Normalize: title-case name, lowercase realm
+    character_name_normalized = character_name.title()
+    realm_slug = realm_slug.lower()
+
+    # 1. Try to find existing character in DB
+    result = await db.execute(
+        select(WowCharacter).where(
+            WowCharacter.character_name == character_name_normalized,
+            WowCharacter.realm_slug == realm_slug,
+            WowCharacter.removed_at.is_(None),
+        )
+    )
+    char = result.scalar_one_or_none()
+
+    if char is None:
+        # 2. Blizzard API lookup
+        try:
+            from sv_common.guild_sync.blizzard_client import BlizzardClient
+            from sv_common.db.models import SiteConfig
+            site_cfg_result = await db.execute(select(SiteConfig))
+            site_cfg = site_cfg_result.scalar_one_or_none()
+            if site_cfg and site_cfg.blizzard_client_id and site_cfg.blizzard_client_secret_encrypted:
+                from sv_common.crypto import decrypt_value
+                from guild_portal.config import get_settings
+                settings = get_settings()
+                bnet_secret = decrypt_value(site_cfg.blizzard_client_secret_encrypted, settings.jwt_secret_key)
+                client = BlizzardClient(
+                    client_id=site_cfg.blizzard_client_id,
+                    client_secret=bnet_secret,
+                )
+                try:
+                    char_data = await client.get_character_profile(realm_slug, character_name_normalized.lower())
+                    if char_data:
+                        char = WowCharacter(
+                            character_name=character_name_normalized,
+                            realm_slug=realm_slug,
+                            realm_name=char_data.get("realm", {}).get("name", realm_slug.title()),
+                            level=char_data.get("level", 0),
+                        )
+                        db.add(char)
+                        await db.flush()
+                finally:
+                    await client.close()
+        except Exception as exc:
+            logger.warning("Blizzard lookup failed for %s-%s: %s", character_name_normalized, realm_slug, exc)
+
+        if char is None:
+            realm_display = realm_slug.replace("-", "'").title()
+            return _JSONResponse(
+                {"ok": False, "error": f"Character '{character_name_normalized}' not found on {realm_display}."},
+                status_code=404,
+            )
+
+    # 3. Check not already claimed by this player
+    existing = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.character_id == char.id,
+            PlayerCharacter.player_id == current_member.id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return _JSONResponse({"ok": False, "error": "You already have this character linked."}, status_code=409)
+
+    # 4. Check not claimed by another player
+    other_claim = await db.execute(
+        select(PlayerCharacter).where(PlayerCharacter.character_id == char.id)
+    )
+    if other_claim.scalar_one_or_none():
+        return _JSONResponse({"ok": False, "error": "This character is already claimed by another player."}, status_code=409)
+
+    try:
+        pc = PlayerCharacter(
+            player_id=current_member.id,
+            character_id=char.id,
+            link_source="manual_claim",
+            confidence="medium",
+        )
+        db.add(pc)
+        log_entry = PlayerActionLog(
+            player_id=current_member.id,
+            action="claim_character",
+            character_id=char.id,
+            character_name=char.character_name,
+            realm_slug=char.realm_slug,
+            details={"link_source": "manual_claim", "confidence": "medium"},
+        )
+        db.add(log_entry)
+        await db.flush()
+    except Exception as exc:
+        logger.error("manual_claim failed for player %s char %s: %s", current_member.id, char.id, exc)
+        return _JSONResponse({"ok": False, "error": "Failed to link character."}, status_code=500)
+
+    return _JSONResponse({
+        "ok": True,
+        "character_name": char.character_name,
+        "realm": char.realm_slug,
+    })
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/settings/characters/{character_id}  — remove manual_claim
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/api/v1/settings/characters/{character_id}")
+async def api_remove_character(
+    request: Request,
+    character_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    """Remove a manually-claimed character. OAuth-linked characters return 403."""
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    if current_member is None:
+        return _JSONResponse({"ok": False, "error": "Not authenticated"}, status_code=401)
+
+    result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.character_id == character_id,
+            PlayerCharacter.player_id == current_member.id,
+        )
+    )
+    pc = result.scalar_one_or_none()
+    if pc is None:
+        return _JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=404)
+
+    if pc.link_source == "battlenet_oauth":
+        return _JSONResponse(
+            {
+                "ok": False,
+                "error": "Battle.net verified characters cannot be removed here. "
+                         "Unlink your Battle.net account to remove them.",
+            },
+            status_code=403,
+        )
+
+    try:
+        await db.delete(pc)
+        await db.flush()
+    except Exception as exc:
+        logger.error("api_remove_character failed for player %s char %s: %s", current_member.id, character_id, exc)
+        return _JSONResponse({"ok": False, "error": "Failed to remove character."}, status_code=500)
+
+    return _JSONResponse({"ok": True})
 
 
 # ---------------------------------------------------------------------------

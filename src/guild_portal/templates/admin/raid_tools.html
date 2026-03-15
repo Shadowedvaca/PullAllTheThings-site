@@ -206,10 +206,37 @@
     color: var(--color-text-muted);
     font-family: var(--font-body);
 }
+
+/* ── Toast notification ──────────────────────────────────────── */
+#rt-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    padding: .75rem 1.25rem;
+    border-radius: var(--radius);
+    font-size: .9rem;
+    font-weight: 500;
+    color: #fff;
+    z-index: 9999;
+    max-width: 420px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+}
+#rt-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+#rt-toast.toast-ok  { background: #143d22; border: 1px solid #4ade80; color: #4ade80; }
+#rt-toast.toast-err { background: #3d1414; border: 1px solid #f87171; color: #f87171; }
 </style>
 {% endblock %}
 
 {% block content %}
+<div id="rt-toast" role="alert" aria-live="polite"></div>
 <div class="admin-header">
     <div>
         <h1 class="admin-title">Raid Tools</h1>
@@ -468,6 +495,18 @@
 
 {% block scripts %}
 <script>
+// ── Toast ─────────────────────────────────────────────────────────
+let _toastTimer = null;
+function showToast(msg, type) {
+    const el = document.getElementById('rt-toast');
+    el.textContent = msg;
+    el.className = `show toast-${type}`;
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => {
+        el.classList.remove('show');
+    }, type === 'err' ? 6000 : 4000);
+}
+
 // ── State ────────────────────────────────────────────────────────
 let availData = null;
 let selectedDow = null;
@@ -693,8 +732,10 @@ async function createEvent() {
     };
 
     if (!body.title || !body.event_date || !body.start_time) {
-        status.textContent = '✗ Title, date, and time are required';
+        const msg = 'Title, date, and time are required';
+        status.textContent = '✗ ' + msg;
         status.className = 'status-msg err';
+        showToast('✗ ' + msg, 'err');
         return;
     }
 
@@ -707,17 +748,23 @@ async function createEvent() {
         const data = await resp.json();
         if (data.ok) {
             const url = data.data.event_url;
+            const successMsg = url ? 'Event created! View in Raid-Helper →' : `Event created (id: ${data.data.raid_helper_event_id})`;
             status.innerHTML = url
                 ? `✓ Event created! <a href="${url}" target="_blank" style="color:var(--color-accent)">View in Raid-Helper</a>`
                 : `✓ Event created (id: ${data.data.raid_helper_event_id})`;
             status.className = 'status-msg ok';
+            showToast('✓ ' + successMsg, 'ok');
         } else {
-            status.textContent = '✗ ' + (data.error || 'Error');
+            const errMsg = '✗ ' + (data.error || 'Failed to create event');
+            status.textContent = errMsg;
             status.className = 'status-msg err';
+            showToast(errMsg, 'err');
         }
     } catch (e) {
-        status.textContent = '✗ ' + e.message;
+        const errMsg = '✗ ' + e.message;
+        status.textContent = errMsg;
         status.className = 'status-msg err';
+        showToast(errMsg, 'err');
     }
 }
 

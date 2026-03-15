@@ -20,191 +20,90 @@
     flex-shrink: 0;
 }
 
-/* ------------------------------------------------------------------ Coverage panel */
-.coverage-panel {
+/* ------------------------------------------------------------------ OAuth Coverage panel */
+.oauth-panel {
     background: var(--color-bg-panel);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     padding: 1.25rem 1.5rem;
     margin-bottom: 2rem;
 }
-.coverage-panel-title {
+.oauth-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.oauth-panel-title {
     font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--color-text-muted);
-    margin-bottom: 1rem;
 }
-.coverage-bars {
+.oauth-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+.oauth-stat {
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
-    margin-bottom: 1.25rem;
+    align-items: flex-start;
 }
-.coverage-bar-row {
-    display: grid;
-    grid-template-columns: 160px 1fr 70px;
-    gap: 0.75rem;
-    align-items: center;
+.oauth-stat__value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--color-text);
+    line-height: 1.1;
 }
-.coverage-bar-label {
-    font-size: 0.82rem;
+.oauth-stat__label {
+    font-size: 0.7rem;
     color: var(--color-text-muted);
-    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
-.coverage-bar-track {
-    height: 8px;
+.oauth-bar-track {
+    flex: 1;
+    min-width: 120px;
+    height: 10px;
     background: var(--color-bg-card);
     border-radius: 100px;
     overflow: hidden;
 }
-.coverage-bar-fill {
+.oauth-bar-fill {
     height: 100%;
     border-radius: 100px;
+    background: var(--color-success);
     transition: width 0.4s ease;
 }
-.coverage-bar-fill--green  { background: var(--color-success); }
-.coverage-bar-fill--amber  { background: var(--color-warning); }
-.coverage-bar-fill--red    { background: var(--color-danger); }
-.coverage-bar-pct {
-    font-size: 0.82rem;
+.oauth-pct {
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--color-text);
-    text-align: right;
-    white-space: nowrap;
 }
 
-.coverage-breakdowns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-.coverage-breakdown {
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 0.75rem 1rem;
-}
-.coverage-breakdown-title {
-    font-size: 0.72rem;
+/* Unverified member table */
+.oauth-unverified-title {
+    font-size: 0.75rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--color-text-muted);
-    margin-bottom: 0.5rem;
-}
-.coverage-breakdown-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-    padding: 0.1rem 0;
-}
-.coverage-breakdown-key {
-    font-family: var(--font-mono);
-    color: var(--color-text-muted);
-}
-.coverage-breakdown-val {
-    font-weight: 600;
-    color: var(--color-text);
-}
-
-.coverage-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-}
-
-/* ------------------------------------------------------------------ Matching results */
-.matching-result-block {
-    margin-top: 1rem;
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 0.85rem 1rem;
-    font-size: 0.82rem;
-}
-.matching-result-header {
-    font-weight: 600;
-    color: var(--color-text);
     margin-bottom: 0.6rem;
-}
-.badge-converged {
-    display: inline-block;
-    background: rgba(74,222,128,0.12);
-    color: var(--color-success);
-    border: 1px solid rgba(74,222,128,0.3);
-    border-radius: 100px;
-    padding: 0.05rem 0.5rem;
-    font-size: 0.72rem;
-    font-weight: 600;
-}
-.badge-warn {
-    display: inline-block;
-    background: rgba(251,191,36,0.12);
-    color: var(--color-warning);
-    border: 1px solid rgba(251,191,36,0.3);
-    border-radius: 100px;
-    padding: 0.05rem 0.5rem;
-    font-size: 0.72rem;
-    font-weight: 600;
-}
-.matching-pass-block {
-    margin-top: 0.5rem;
-}
-.matching-pass-label {
-    font-weight: 700;
-    color: var(--color-text-muted);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-}
-.matching-rule-list {
     margin-top: 0.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
 }
-.matching-rule-row {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    padding: 0.15rem 0.5rem;
-    border-radius: 4px;
-    background: rgba(255,255,255,0.03);
+.oauth-empty {
+    color: var(--color-success);
+    font-size: 0.875rem;
+    padding: 0.4rem 0;
 }
-.rule-name {
-    font-family: var(--font-mono);
-    font-size: 0.78rem;
-    color: var(--color-accent);
-    min-width: 100px;
-}
-.rule-stat {
-    font-size: 0.78rem;
-    color: var(--color-text);
-}
-.rule-discord { color: var(--color-success); }
-.rule-stub    { color: var(--color-text-muted); }
-.rule-nothing { font-size: 0.78rem; color: var(--color-text-muted); font-style: italic; }
-.rule-no-change { opacity: 0.6; }
-.matching-totals {
-    margin-top: 0.65rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid var(--color-border);
-    color: var(--color-text);
-    font-weight: 600;
-    font-size: 0.82rem;
-}
-
-.coverage-loading {
+.oauth-loading {
     color: var(--color-text-muted);
-    font-size: 0.85rem;
-    padding: 0.5rem 0;
-}
-.coverage-error {
-    color: var(--color-danger);
     font-size: 0.85rem;
     padding: 0.5rem 0;
 }
@@ -585,7 +484,7 @@
     <div>
         <h1 class="admin-title">Data Quality</h1>
         <p class="text-muted text-sm" style="margin-top:0.25rem">
-            Matching coverage and rules-based detection for guild identity issues.
+            OAuth verification coverage and operational issue detection.
         </p>
     </div>
     {% if pool_available %}
@@ -594,7 +493,7 @@
             Run Full Scan
         </button>
         <a href="/admin/audit-log" class="btn btn-secondary btn-sm">
-            Audit Log →
+            Audit Log &rarr;
         </a>
     </div>
     {% endif %}
@@ -602,29 +501,55 @@
 
 {% if not pool_available %}
 <div class="no-pool-notice">
-    Guild sync pool not available — configure BLIZZARD_CLIENT_ID/SECRET and restart the app
+    Guild sync pool not available &mdash; configure BLIZZARD_CLIENT_ID/SECRET and restart the app
     to enable data quality operations.
 </div>
 {% else %}
 
-{# ------------------------------------------------------------------ Coverage panel #}
-<div class="coverage-panel">
-    <div class="coverage-panel-title">Matching Coverage</div>
-    <div id="coverage-loading" class="coverage-loading">Loading coverage stats…</div>
-    <div id="coverage-content" style="display:none">
-        <div class="coverage-bars" id="coverage-bars"></div>
-        <div class="coverage-breakdowns" id="coverage-breakdowns"></div>
-        <div class="coverage-actions">
-            <button class="btn btn-secondary btn-sm" onclick="runMatchingNow(this)">
-                Run Matching
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="loadCoverage()">
-                Refresh Stats
-            </button>
-        </div>
-        <div id="matching-results" style="display:none"></div>
+{# ------------------------------------------------------------------ OAuth Coverage panel #}
+<div class="oauth-panel">
+    <div class="oauth-panel-header">
+        <span class="oauth-panel-title">Battle.net Verification Coverage</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadOAuthCoverage()">Refresh</button>
     </div>
-    <div id="coverage-error" class="coverage-error" style="display:none"></div>
+    <div id="oauth-loading" class="oauth-loading">Loading&hellip;</div>
+    <div id="oauth-content" style="display:none">
+        <div class="oauth-summary-row">
+            <div class="oauth-stat">
+                <span class="oauth-stat__value" id="oauth-verified-count">&mdash;</span>
+                <span class="oauth-stat__label">Verified</span>
+            </div>
+            <div class="oauth-stat">
+                <span class="oauth-stat__value" id="oauth-total-count">&mdash;</span>
+                <span class="oauth-stat__label">Total Members</span>
+            </div>
+            <div class="oauth-bar-track">
+                <div class="oauth-bar-fill" id="oauth-bar" style="width:0%"></div>
+            </div>
+            <span class="oauth-pct" id="oauth-pct">0%</span>
+        </div>
+
+        <div id="oauth-unverified-section" style="display:none">
+            <div class="oauth-unverified-title">Unverified Members</div>
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Rank</th>
+                            <th>Characters</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="oauth-unverified-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="oauth-all-verified" class="oauth-empty" style="display:none">
+            All members have verified their Battle.net accounts.
+        </div>
+    </div>
 </div>
 
 {# ------------------------------------------------------------------ Drift detection panel #}
@@ -635,7 +560,7 @@
             Run Drift Scan
         </button>
     </div>
-    <div id="drift-loading" class="coverage-loading" style="display:none">Running drift scan…</div>
+    <div id="drift-loading" class="oauth-loading" style="display:none">Running drift scan&hellip;</div>
     <div id="drift-rules-content">
         <div class="drift-rule-list" id="drift-rule-rows">
             {# Populated by loadDriftSummary() #}
@@ -664,9 +589,9 @@
             <span class="dq-rule-type">{{ rule.issue_type }}</span>
             <span class="sev sev-{{ rule.severity }}">{{ rule.severity }}</span>
             {% if rule.auto_mitigate %}
-                <span class="dq-rule-badge dq-rule-badge--auto">⚡ Auto-fix</span>
+                <span class="dq-rule-badge dq-rule-badge--auto">&#9889; Auto-fix</span>
             {% else %}
-                <span class="dq-rule-badge dq-rule-badge--manual">👤 Manual</span>
+                <span class="dq-rule-badge dq-rule-badge--manual">&#128100; Manual</span>
             {% endif %}
         </div>
 
@@ -754,7 +679,7 @@
                     {% elif issue.discord_display_name or issue.discord_username %}
                         Discord: <strong>{{ issue.discord_display_name or issue.discord_username }}</strong>
                     {% else %}
-                        —
+                        &mdash;
                     {% endif %}
                 </td>
                 <td class="td-age">
@@ -763,7 +688,7 @@
                 </td>
                 <td class="td-status">
                     {% if issue.resolved_at %}
-                        <span class="resolved-label">✓ Resolved</span><br>
+                        <span class="resolved-label">&#10003; Resolved</span><br>
                         <span class="text-xs text-muted">{{ issue.resolved_by or 'auto' }}</span>
                     {% else %}
                         <span class="open-label">Open</span>
@@ -793,7 +718,7 @@
 </div>
 {% else %}
 <div style="text-align:center; padding:2rem 1rem; color:var(--color-text-muted)">
-    No issues recorded yet — run a scan to detect problems.
+    No issues recorded yet &mdash; run a scan to detect problems.
 </div>
 {% endif %}
 
@@ -816,170 +741,82 @@ function showToast(msg, isError) {
 }
 
 // --------------------------------------------------------------------------
-// Coverage dashboard
+// OAuth Coverage
 // --------------------------------------------------------------------------
 
-function coverageColor(pct) {
-    if (pct >= 80) return 'green';
-    if (pct >= 50) return 'amber';
-    return 'red';
-}
-
-function renderBar(label, matched, total, pct) {
-    const cls = coverageColor(pct);
-    return `<div class="coverage-bar-row">
-        <span class="coverage-bar-label">${label}</span>
-        <div class="coverage-bar-track">
-            <div class="coverage-bar-fill coverage-bar-fill--${cls}" style="width:${pct}%"></div>
-        </div>
-        <span class="coverage-bar-pct">${matched}/${total} (${pct}%)</span>
-    </div>`;
-}
-
-function renderBreakdown(title, data) {
-    const rows = Object.entries(data)
-        .sort((a, b) => b[1] - a[1])
-        .map(([k, v]) => `<div class="coverage-breakdown-row">
-            <span class="coverage-breakdown-key">${k}</span>
-            <span class="coverage-breakdown-val">${v}</span>
-        </div>`)
-        .join('');
-    return `<div class="coverage-breakdown">
-        <div class="coverage-breakdown-title">${title}</div>
-        ${rows || '<div class="coverage-breakdown-row" style="color:var(--color-text-muted)">No data yet</div>'}
-    </div>`;
-}
-
-async function loadCoverage() {
-    const loading = document.getElementById('coverage-loading');
-    const content = document.getElementById('coverage-content');
-    const errorEl = document.getElementById('coverage-error');
-
+async function loadOAuthCoverage() {
+    const loading = document.getElementById('oauth-loading');
+    const content = document.getElementById('oauth-content');
+    if (!loading || !content) return;
     loading.style.display = '';
     content.style.display = 'none';
-    errorEl.style.display = 'none';
-
     try {
-        const r = await fetch('/admin/matching/coverage');
+        const r = await fetch('/admin/oauth-coverage');
         const d = await r.json();
-        if (!d.ok) {
-            errorEl.textContent = 'Error: ' + (d.error || 'Unknown error');
-            errorEl.style.display = '';
-            loading.style.display = 'none';
-            return;
+        if (!d.ok) return;
+        const data = d.data;
+
+        document.getElementById('oauth-verified-count').textContent = data.verified;
+        document.getElementById('oauth-total-count').textContent = data.total;
+        const pct = data.total > 0 ? Math.round(data.verified / data.total * 100) : 0;
+        document.getElementById('oauth-bar').style.width = pct + '%';
+        document.getElementById('oauth-pct').textContent = pct + '%';
+
+        const unverified = data.unverified_members || [];
+        const unverifiedSection = document.getElementById('oauth-unverified-section');
+        const allVerifiedMsg = document.getElementById('oauth-all-verified');
+
+        if (unverified.length === 0) {
+            if (unverifiedSection) unverifiedSection.style.display = 'none';
+            if (allVerifiedMsg) allVerifiedMsg.style.display = '';
+        } else {
+            if (allVerifiedMsg) allVerifiedMsg.style.display = 'none';
+            const tbody = document.getElementById('oauth-unverified-tbody');
+            if (tbody) {
+                tbody.innerHTML = unverified.map(m => `
+                    <tr>
+                        <td style="font-weight:600">${escHtml(m.display_name || m.discord_username || '\u2014')}</td>
+                        <td style="color:var(--color-text-muted)">${escHtml(m.rank_name || '\u2014')}</td>
+                        <td style="color:var(--color-text-muted)">${m.char_count} linked</td>
+                        <td style="text-align:right">
+                            ${m.player_id ? `<button class="btn btn-secondary btn-sm" onclick="sendOAuthReminder(${m.player_id}, this)">Send Reminder</button>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            if (unverifiedSection) unverifiedSection.style.display = '';
         }
-
-        const s = d.data.summary;
-        const barsEl = document.getElementById('coverage-bars');
-        barsEl.innerHTML =
-            renderBar('Characters', s.matched_characters, s.total_characters, s.character_coverage_pct) +
-            renderBar('Discord Users', s.matched_discord_users, s.total_discord_users, s.discord_coverage_pct) +
-            renderBar('Players w/ Discord', s.players_with_discord, s.total_players, s.discord_link_pct);
-
-        const breakdownsEl = document.getElementById('coverage-breakdowns');
-        breakdownsEl.innerHTML =
-            renderBreakdown('By Link Source', d.data.by_link_source) +
-            renderBreakdown('By Confidence', d.data.by_confidence);
 
         loading.style.display = 'none';
         content.style.display = '';
-
     } catch(e) {
-        errorEl.textContent = 'Failed to load coverage stats.';
-        errorEl.style.display = '';
         loading.style.display = 'none';
     }
 }
 
-async function runMatchingNow(btn) {
+async function sendOAuthReminder(playerId, btn) {
     btn.disabled = true;
-    btn.textContent = 'Running…';
-    const resultsEl = document.getElementById('matching-results');
-    resultsEl.style.display = 'none';
-    resultsEl.innerHTML = '';
+    btn.textContent = 'Sending\u2026';
     try {
-        const r = await fetch('/api/guild-sync/matching/trigger', { method: 'POST' });
+        const r = await fetch(`/admin/players/${playerId}/send-oauth-reminder`, { method: 'POST' });
         const d = await r.json();
         if (d.ok) {
-            renderMatchingResults(d.data, resultsEl);
-            await loadCoverage();
+            showToast('OAuth reminder sent.');
+            btn.textContent = 'Sent \u2713';
         } else {
-            showToast('Error: ' + (d.error || 'Unknown error'), true);
+            showToast('Error: ' + (d.error || 'Unknown'), true);
+            btn.disabled = false;
+            btn.textContent = 'Send Reminder';
         }
     } catch(e) {
         showToast('Request failed', true);
-    } finally {
         btn.disabled = false;
-        btn.textContent = 'Run Matching';
+        btn.textContent = 'Send Reminder';
     }
-}
-
-function renderMatchingResults(data, el) {
-    const passes = {};
-    for (const r of (data.results || [])) {
-        if (!passes[r.pass]) passes[r.pass] = [];
-        passes[r.pass].push(r);
-    }
-
-    const converged = data.converged;
-    const passCount = data.passes || 0;
-    const totals = data.totals || {};
-
-    let html = '<div class="matching-result-block">';
-    html += `<div class="matching-result-header">`;
-    html += `Matching complete — ${passCount} pass${passCount !== 1 ? 'es' : ''}`;
-    html += converged
-        ? ' <span class="badge-converged">converged ✓</span>'
-        : ' <span class="badge-warn">hit max passes</span>';
-    html += '</div>';
-
-    for (const [passNum, rules] of Object.entries(passes)) {
-        html += `<div class="matching-pass-block">`;
-        html += `<span class="matching-pass-label">Pass ${passNum}</span>`;
-        html += `<div class="matching-rule-list">`;
-        for (const r of rules) {
-            const changed = r.players_created > 0 || r.chars_linked > 0;
-            if (changed) {
-                html += `<div class="matching-rule-row">`;
-                html += `<span class="rule-name">${r.rule}</span>`;
-                html += `<span class="rule-stat">${r.players_created} player${r.players_created !== 1 ? 's' : ''} created</span>`;
-                html += `<span class="rule-stat">${r.chars_linked} char${r.chars_linked !== 1 ? 's' : ''} linked</span>`;
-                if (r.discord_linked > 0) {
-                    html += `<span class="rule-stat rule-discord">${r.discord_linked} with Discord</span>`;
-                }
-                if (r.stubs_created > 0) {
-                    html += `<span class="rule-stat rule-stub">${r.stubs_created} stub${r.stubs_created !== 1 ? 's' : ''}</span>`;
-                }
-                html += '</div>';
-            } else {
-                html += `<div class="matching-rule-row rule-no-change">`;
-                html += `<span class="rule-name">${r.rule}</span>`;
-                html += `<span class="rule-nothing">nothing new</span>`;
-                html += '</div>';
-            }
-        }
-        html += '</div></div>';
-    }
-
-    if (totals.players_created > 0 || totals.chars_linked > 0) {
-        html += `<div class="matching-totals">`;
-        html += `Totals: ${totals.players_created} player${totals.players_created !== 1 ? 's' : ''} created, `;
-        html += `${totals.chars_linked} char${totals.chars_linked !== 1 ? 's' : ''} linked`;
-        if (totals.no_discord_match > 0) {
-            html += `, ${totals.no_discord_match} stub${totals.no_discord_match !== 1 ? 's' : ''}`;
-        }
-        html += '</div>';
-    } else {
-        html += '<div class="matching-totals">Nothing new to link — all characters already matched.</div>';
-    }
-
-    html += '</div>';
-    el.innerHTML = html;
-    el.style.display = '';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadCoverage();
+    loadOAuthCoverage();
     loadDriftSummary();
 });
 
@@ -988,10 +825,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // --------------------------------------------------------------------------
 
 const DRIFT_RULE_META = {
-    note_mismatch:         { label: 'note_mismatch',         mode: 'auto',   modeLabel: '⚡ Auto-fix' },
-    link_contradicts_note: { label: 'link_contradicts_note', mode: 'manual', modeLabel: '👤 Manual' },
-    duplicate_discord:     { label: 'duplicate_discord',     mode: 'manual', modeLabel: '👤 Manual' },
-    stale_discord_link:    { label: 'stale_discord_link',    mode: 'info',   modeLabel: 'ℹ Info' },
+    duplicate_discord:     { label: 'duplicate_discord',     mode: 'manual', modeLabel: '\ud83d\udc64 Manual' },
+    stale_discord_link:    { label: 'stale_discord_link',    mode: 'info',   modeLabel: '\u2139 Info' },
 };
 
 async function loadDriftSummary() {
@@ -1002,7 +837,7 @@ async function loadDriftSummary() {
         renderDriftRules(d.data.summary);
         renderDriftLog(d.data.log || []);
     } catch(e) {
-        // silently fail — drift summary is non-critical
+        // silently fail -- drift summary is non-critical
     }
 }
 
@@ -1015,7 +850,7 @@ function renderDriftRules(data) {
     const rows = Object.entries(DRIFT_RULE_META).map(([type, meta]) => {
         const s = data[type] || { open_count: 0, resolved_30d: 0, last_triggered: null };
         const hasOpen = s.open_count > 0;
-        const statusIcon = hasOpen ? '⚠️' : '✅';
+        const statusIcon = hasOpen ? '\u26a0\ufe0f' : '\u2705';
         if (s.last_triggered && (!latestScan || s.last_triggered > latestScan)) {
             latestScan = s.last_triggered;
         }
@@ -1044,7 +879,7 @@ function renderDriftRules(data) {
 
 async function runDriftScan(btn) {
     btn.disabled = true;
-    btn.textContent = 'Scanning…';
+    btn.textContent = 'Scanning\u2026';
     const loadingEl = document.getElementById('drift-loading');
     const resultsEl = document.getElementById('drift-scan-results');
     loadingEl.style.display = '';
@@ -1069,24 +904,9 @@ async function runDriftScan(btn) {
 }
 
 function renderDriftScanResults(data, el) {
-    const nm = data.note_mismatch || {};
-    const lc = data.link_contradicts_note || {};
     const dd = data.duplicate_discord || {};
 
-    let html = '';
-
-    html += `<div class="drift-scan-result-row">
-        <span class="drift-result-type">note_mismatch</span>
-        <span class="drift-result-detected">${nm.detected || 0} detected</span>
-        ${(nm.mitigated || 0) > 0 ? `<span class="drift-result-mitigated">${nm.mitigated} auto-fixed</span>` : ''}
-    </div>`;
-
-    html += `<div class="drift-scan-result-row">
-        <span class="drift-result-type">link_contradicts_note</span>
-        <span class="drift-result-detected">${lc.detected || 0} detected</span>
-    </div>`;
-
-    html += `<div class="drift-scan-result-row">
+    const html = `<div class="drift-scan-result-row">
         <span class="drift-result-type">duplicate_discord / stale</span>
         <span class="drift-result-detected">${dd.detected || 0} detected</span>
     </div>`;
@@ -1114,7 +934,7 @@ function renderDriftLog(entries) {
         let meta = age;
         if (isResolved) {
             const by = e.resolved_by ? ` by ${e.resolved_by}` : '';
-            meta = `auto-fixed${by} · ${age}`;
+            meta = `auto-fixed${by} \u00b7 ${age}`;
         }
         return `<div class="drift-log-entry">
             <span class="drift-log-dot ${dotClass}"></span>
@@ -1149,12 +969,12 @@ function escHtml(s) {
 
 async function runScanAll(btn) {
     btn.disabled = true;
-    btn.textContent = 'Scanning…';
+    btn.textContent = 'Scanning\u2026';
     try {
         const r = await fetch('/admin/data-quality/scan', { method: 'POST' });
         const d = await r.json();
         if (d.ok) {
-            showToast('Scan started — reload page in a moment to see results.');
+            showToast('Scan started \u2014 reload page in a moment to see results.');
         } else {
             showToast('Error: ' + d.error, true);
         }
@@ -1169,7 +989,7 @@ async function runScanAll(btn) {
 async function runScan(issueType, btn) {
     btn.disabled = true;
     const orig = btn.textContent;
-    btn.textContent = 'Scanning…';
+    btn.textContent = 'Scanning\u2026';
     try {
         const r = await fetch('/admin/data-quality/scan/' + issueType, { method: 'POST' });
         const d = await r.json();
@@ -1188,12 +1008,12 @@ async function runScan(issueType, btn) {
 
 async function runFix(issueId, btn) {
     btn.disabled = true;
-    btn.textContent = 'Fixing…';
+    btn.textContent = 'Fixing\u2026';
     try {
         const r = await fetch('/admin/data-quality/fix/' + issueId, { method: 'POST' });
         const d = await r.json();
         if (d.ok) {
-            showToast('Fix started for issue #' + issueId + ' — reload to check result.');
+            showToast('Fix started for issue #' + issueId + ' \u2014 reload to check result.');
         } else {
             showToast('Error: ' + d.error, true);
             btn.disabled = false;
@@ -1209,12 +1029,12 @@ async function runFix(issueId, btn) {
 async function runFixAll(issueType, btn) {
     btn.disabled = true;
     const orig = btn.textContent;
-    btn.textContent = 'Running…';
+    btn.textContent = 'Running\u2026';
     try {
         const r = await fetch('/admin/data-quality/fix-all/' + issueType, { method: 'POST' });
         const d = await r.json();
         if (d.ok) {
-            showToast('Fix-all for ' + issueType + ' started — reload in a moment.');
+            showToast('Fix-all for ' + issueType + ' started \u2014 reload in a moment.');
         } else {
             showToast('Error: ' + d.error, true);
             btn.disabled = false;
