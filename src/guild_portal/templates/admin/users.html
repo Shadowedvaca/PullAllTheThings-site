@@ -184,6 +184,40 @@
     background: rgba(248, 113, 113, 0.1);
     border-color: var(--color-danger);
 }
+.ua-btn--bnet {
+    background: transparent;
+    border-color: rgba(96, 165, 250, 0.3);
+    color: #60a5fa;
+    margin-left: 0.4rem;
+}
+.ua-btn--bnet:hover {
+    background: rgba(96, 165, 250, 0.1);
+    border-color: #60a5fa;
+}
+.ua-btn--bnet-all {
+    background: rgba(96, 165, 250, 0.08);
+    border-color: rgba(96, 165, 250, 0.3);
+    color: #60a5fa;
+    padding: 0.4rem 1rem;
+    font-size: 0.85rem;
+}
+.ua-btn--bnet-all:hover {
+    background: rgba(96, 165, 250, 0.15);
+    border-color: #60a5fa;
+}
+
+/* ------------------------------------------------------------------ bnet cell */
+.ua-bnet-tag {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: #60a5fa;
+}
+.ua-bnet-sync {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    margin-top: 0.15rem;
+}
 
 /* ------------------------------------------------------------------ empty state */
 .ua-empty {
@@ -228,6 +262,13 @@
         <h1 class="ua-title">User Accounts</h1>
         <p class="ua-subtitle">Registered website logins. Delete an account to let a player re-register with a new password.</p>
     </div>
+    {% if users | selectattr('battletag') | list | length > 0 %}
+    <div>
+        <button class="ua-btn ua-btn--bnet-all" id="sync-all-btn" onclick="syncBnetAll()">
+            Sync All Battle.net
+        </button>
+    </div>
+    {% endif %}
 </div>
 
 {% set total    = users | length %}
@@ -266,6 +307,7 @@
                 <th>Email</th>
                 <th>Player</th>
                 <th>Rank</th>
+                <th>Battle.net</th>
                 <th>Status</th>
                 <th>Joined</th>
                 <th></th>
@@ -284,6 +326,20 @@
             </td>
             <td class="ua-td-muted">{{ u.rank_name or '—' }}</td>
             <td>
+                {% if u.battletag %}
+                    <span class="ua-bnet-tag">{{ u.battletag }}</span>
+                    <span class="ua-bnet-sync" id="bnet-sync-ts-{{ u.id }}">
+                        {%- if u.last_bnet_sync -%}
+                            Synced {{ u.last_bnet_sync.strftime('%Y-%m-%d %H:%M') }} UTC
+                        {%- else -%}
+                            Never synced
+                        {%- endif -%}
+                    </span>
+                {% else %}
+                    <span class="ua-td-muted">—</span>
+                {% endif %}
+            </td>
+            <td>
                 <span id="status-{{ u.id }}"
                       class="ua-badge {% if u.is_active %}ua-badge--active{% else %}ua-badge--disabled{% endif %}">
                     <span class="ua-badge__dot"></span>
@@ -299,6 +355,13 @@
                         onclick="toggleActive({{ u.id }})">
                     {% if u.is_active %}Disable{% else %}Enable{% endif %}
                 </button>
+                {% if u.battletag %}
+                <button class="ua-btn ua-btn--bnet"
+                        id="bnet-btn-{{ u.id }}"
+                        onclick="syncBnet({{ u.id }})">
+                    Sync BNet
+                </button>
+                {% endif %}
                 <button class="ua-btn ua-btn--delete"
                         data-uid="{{ u.id }}"
                         data-label="{{ u.email or u.display_name or 'this user' }}"
@@ -358,6 +421,52 @@ async function toggleActive(userId) {
         showToast('Network error', 'error');
     } finally {
         btn.disabled = false;
+    }
+}
+
+async function syncBnet(userId) {
+    const btn = document.getElementById(`bnet-btn-${userId}`);
+    const prev = btn.textContent.trim();
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        const res = await fetch(`/admin/users/${userId}/bnet-sync`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            const { linked, new_characters, skipped } = data.data;
+            const ts = document.getElementById(`bnet-sync-ts-${userId}`);
+            if (ts) ts.textContent = `Synced just now — ${linked} linked, ${new_characters} new, ${skipped} skipped`;
+            showToast(`BNet sync done: ${linked} character${linked !== 1 ? 's' : ''} linked`, 'success');
+        } else {
+            showToast('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+    }
+}
+
+async function syncBnetAll() {
+    const btn = document.getElementById('sync-all-btn');
+    if (!confirm('Sync Battle.net characters for all linked accounts?\n\nThis will re-fetch character lists from Blizzard for every linked user.')) return;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    try {
+        const res = await fetch('/admin/users/bnet-sync-all', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            const { synced, failed, total_linked } = data.data;
+            showToast(`Sync complete: ${synced} accounts synced, ${total_linked} characters linked${failed ? `, ${failed} failed` : ''}`, 'success');
+        } else {
+            showToast('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sync All Battle.net';
     }
 }
 

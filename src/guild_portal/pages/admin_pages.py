@@ -2367,12 +2367,15 @@ async def admin_users(
     rows = await db.execute(
         text("""
             SELECT u.id, u.email, u.is_active, u.created_at,
-                   p.id        AS player_id,
+                   p.id                    AS player_id,
                    p.display_name,
-                   gr.name     AS rank_name
+                   gr.name                 AS rank_name,
+                   ba.battletag            AS battletag,
+                   ba.last_character_sync  AS last_bnet_sync
             FROM common.users u
             LEFT JOIN guild_identity.players p ON p.website_user_id = u.id
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            LEFT JOIN guild_identity.battlenet_accounts ba ON ba.player_id = p.id
             ORDER BY u.created_at DESC
         """)
     )
@@ -2381,6 +2384,99 @@ async def admin_users(
     ctx = await _base_ctx(request, player, db)
     ctx["users"] = users
     return templates.TemplateResponse("admin/users.html", ctx)
+
+
+@router.post("/users/{user_id}/bnet-sync")
+async def admin_bnet_sync_user(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger Battle.net character sync for a specific user."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if pool is None:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    result = await db.execute(
+        text("""
+            SELECT p.id AS player_id
+            FROM common.users u
+            JOIN guild_identity.players p ON p.website_user_id = u.id
+            JOIN guild_identity.battlenet_accounts ba ON ba.player_id = p.id
+            WHERE u.id = :user_id
+        """),
+        {"user_id": user_id},
+    )
+    row = result.mappings().one_or_none()
+    if row is None:
+        return JSONResponse(
+            {"ok": False, "error": "User not found or no Battle.net account linked"},
+            status_code=404,
+        )
+
+    player_id = row["player_id"]
+
+    from sv_common.guild_sync.bnet_character_sync import (
+        get_valid_access_token,
+        sync_bnet_characters,
+    )
+
+    access_token = await get_valid_access_token(pool, player_id)
+    if access_token is None:
+        return JSONResponse(
+            {"ok": False, "error": "Could not retrieve a valid access token — the token may have expired"},
+            status_code=422,
+        )
+
+    stats = await sync_bnet_characters(pool, player_id, access_token)
+    return JSONResponse({"ok": True, "data": stats})
+
+
+@router.post("/users/bnet-sync-all")
+async def admin_bnet_sync_all(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger Battle.net character sync for every user with a linked account."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if pool is None:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.bnet_character_sync import (
+        get_valid_access_token,
+        sync_bnet_characters,
+    )
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT player_id FROM guild_identity.battlenet_accounts")
+    player_ids = [r["player_id"] for r in rows]
+
+    synced = 0
+    failed = 0
+    total_linked = 0
+
+    for player_id in player_ids:
+        try:
+            access_token = await get_valid_access_token(pool, player_id)
+            if access_token is None:
+                failed += 1
+                continue
+            stats = await sync_bnet_characters(pool, player_id, access_token)
+            synced += 1
+            total_linked += stats.get("linked", 0)
+        except Exception as exc:
+            logger.error("BNet sync-all: failed for player %s: %s", player_id, exc)
+            failed += 1
+
+    return JSONResponse({"ok": True, "data": {"synced": synced, "failed": failed, "total_linked": total_linked}})
 
 
 @router.patch("/users/{user_id}/toggle-active")
