@@ -266,6 +266,10 @@
 <script>
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+function wowheadUrl(name) {
+    return 'https://www.wowhead.com/search?q=' + name.replace(/ /g, '+').replace(/'/g, '%27');
+}
+
 function showMsg(id, text, isError) {
     const el = document.getElementById(id);
     el.textContent = text;
@@ -333,7 +337,7 @@ async function loadItems() {
         const tr = document.createElement('tr');
         tr.dataset.id = item.id;
         tr.innerHTML = `
-            <td><a href="https://www.wowhead.com/item=${item.item_id}" target="_blank" rel="noopener" class="ah-item-link">${item.item_name}</a> <small style="color:var(--color-text-muted)">#${item.item_id}</small></td>
+            <td><a href="${wowheadUrl(item.item_name)}" target="_blank" rel="noopener" class="ah-item-link">${item.item_name}</a> <small style="color:var(--color-text-muted)">#${item.item_id}</small></td>
             <td>${catBadge(item.category)}</td>
             <td class="ah-price">${item.min_buyout_str}</td>
             <td style="color:var(--color-text-muted)">${item.median_price_str}</td>

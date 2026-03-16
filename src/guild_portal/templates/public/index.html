@@ -141,7 +141,7 @@
                 <tr>
                     <td class="lp-market-name">
                         <span class="lp-market-cat lp-market-cat--{{ item.category }}">{{ item.category }}</span>
-                        <a href="https://www.wowhead.com/item={{ item.item_id }}" target="_blank" rel="noopener" class="lp-market-item-link">{{ item.item_name }}</a>
+                        <a href="https://www.wowhead.com/search?q={{ item.item_name | replace(' ', '+') | replace("'", '%27') }}" target="_blank" rel="noopener" class="lp-market-item-link">{{ item.item_name }}</a>
                     </td>
                     <td class="lp-market-price">{{ item.min_buyout | gold }}</td>
                     <td class="lp-market-qty">{{ "{:,}".format(item.quantity_available) }}</td>
