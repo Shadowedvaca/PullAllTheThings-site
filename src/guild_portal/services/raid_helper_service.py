@@ -160,34 +160,30 @@ async def add_signups_to_event(
 ) -> tuple[int, int]:
     """Add pre-populated signups to an existing Raid-Helper event.
 
-    Calls PUT /api/v2/events/{eventId}/signup/{userId} for each signup
-    sequentially with a 200 ms delay between requests to avoid rate limiting.
-    Signup dicts must have keys: discord_id, status, class_name, spec_name.
+    Calls POST /api/v2/events/{eventId}/signups for each signup sequentially
+    with a 200 ms delay between requests to avoid rate limiting.
+    Signup dicts must have keys: discord_id (or userId), and optionally
+    class_name (or class) and spec_name (or spec).
     Returns (success_count, fail_count).
     """
-    # Raid-Helper signup status codes: 1=Signed Up, 2=Bench, 3=Tentative
-    _STATUS_CODE = {"accepted": 1, "bench": 2, "tentative": 3}
-
     ok = 0
     fail = 0
     async with httpx.AsyncClient() as client:
         for s in signups:
-            # Accept both field name conventions: discord_id / userId, class_name / class, spec_name / spec
+            # Accept both field name conventions
             user_id = s.get("discord_id") or s.get("userId")
             if not user_id:
                 continue
-            body: dict[str, Any] = {
-                "statusId": _STATUS_CODE.get(s.get("status", "accepted"), 1),
-            }
             class_name = s.get("class_name") or s.get("class")
             spec_name = s.get("spec_name") or s.get("spec")
+            body: dict[str, Any] = {"userId": user_id}
             if class_name:
                 body["className"] = class_name
             if spec_name:
                 body["specName"] = spec_name
             try:
-                resp = await client.put(
-                    f"{_BASE_URL}/events/{event_id}/signup/{user_id}",
+                resp = await client.post(
+                    f"{_BASE_URL}/events/{event_id}/signups",
                     headers={"Authorization": api_key, "Content-Type": "application/json"},
                     json=body,
                     timeout=10.0,
