@@ -124,8 +124,8 @@ async def create_event(
     }
 
     logger.info(
-        "Raid-Helper create_event payload: date=%s time=%s signups=%d",
-        rh_date, rh_time, len(signups) if signups else 0,
+        "Raid-Helper create_event payload: date=%s time=%s",
+        rh_date, rh_time,
     )
 
     async with httpx.AsyncClient() as client:
