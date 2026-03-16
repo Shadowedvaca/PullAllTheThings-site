@@ -1435,7 +1435,7 @@ async def get_attendance_season(
             SELECT p.id, p.display_name, gr.name AS rank_name, gr.level AS rank_level
             FROM guild_identity.players p
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
-            WHERE p.removed_at IS NULL
+            WHERE p.is_active = TRUE
             ORDER BY gr.level DESC NULLS LAST, p.display_name
             """
         )
@@ -1805,7 +1805,7 @@ async def export_attendance_csv(
             SELECT p.id, p.display_name, gr.name AS rank_name
             FROM guild_identity.players p
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
-            WHERE p.removed_at IS NULL
+            WHERE p.is_active = TRUE
             ORDER BY gr.level DESC NULLS LAST, p.display_name
             """
         )
