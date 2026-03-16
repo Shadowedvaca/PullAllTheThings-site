@@ -163,6 +163,7 @@
 .status-badge--accepted  { background: #143d22; color: #4ade80; }
 .status-badge--tentative { background: #3d2e05; color: #fbbf24; }
 .status-badge--bench     { background: #2a2a2e; color: #888; }
+.status-badge--absence   { background: #3d0a0a; color: #f87171; }
 
 .status-override select {
     background: var(--color-bg);
@@ -438,7 +439,7 @@
             {% set rank_name = p.guild_rank.name if p.guild_rank else '—' %}
             {% set auto_inv = p.auto_invite_events %}
             {% if rank_level == 1 %}
-                {% set default_status = 'bench' %}
+                {% set default_status = 'tentative' %}
             {% elif auto_inv %}
                 {% set default_status = 'accepted' %}
             {% else %}
@@ -474,6 +475,7 @@
                         <option value="accepted">Accepted</option>
                         <option value="tentative">Tentative</option>
                         <option value="bench">Bench</option>
+                        <option value="absence">Absence</option>
                         <option value="skip">Skip</option>
                     </select>
                 </td>
@@ -686,6 +688,7 @@ function selectDay(dow) {
 
     const nextDate = nextOccurrenceOf(dow);
     document.getElementById('ev-date').value = nextDate;
+    updateAbsenceStatuses(dow);
     if (day.recurring_event) {
         document.getElementById('ev-title').value = day.recurring_event.label;
         document.getElementById('ev-time').value = day.recurring_event.default_start_time || '21:00';
@@ -712,12 +715,41 @@ function nextOccurrenceOf(dayOfWeek) {
     return `${y}-${m}-${d}`;
 }
 
+// ── Absence status helpers ────────────────────────────────────────
+function getAbsentPlayerIds(dow) {
+    if (!availData) return { absentIds: new Set(), hasAnyIds: new Set() };
+    const availablePids = new Set(availData.days[dow].players.map(p => p.player_id));
+    const hasAnyIds = new Set();
+    for (const day of availData.days) {
+        for (const p of day.players) hasAnyIds.add(p.player_id);
+    }
+    const absentIds = new Set([...hasAnyIds].filter(id => !availablePids.has(id)));
+    return { absentIds, hasAnyIds };
+}
+
+function autoStatusFor(playerId, dow) {
+    const tr = document.querySelector(`tr[data-player-id="${playerId}"]`);
+    const rankDefault = tr ? tr.dataset.defaultStatus : 'tentative';
+    if (dow === null || !availData) return rankDefault;
+    const { absentIds, hasAnyIds } = getAbsentPlayerIds(dow);
+    if (hasAnyIds.has(playerId) && absentIds.has(playerId)) return 'absence';
+    return rankDefault;
+}
+
+function updateAbsenceStatuses(dow) {
+    document.querySelectorAll('#roster-table tbody tr').forEach(tr => {
+        const pid = parseInt(tr.dataset.playerId);
+        if (playerOverrides[String(pid)]) return; // manual override in place
+        const effective = autoStatusFor(pid, dow);
+        const statusCell = tr.querySelector('.status-cell');
+        statusCell.innerHTML = `<span class="status-badge status-badge--${effective}">${effective.charAt(0).toUpperCase() + effective.slice(1)}</span>`;
+    });
+}
+
 // ── Player status overrides ──────────────────────────────────────
 function overrideStatus(playerId, value) {
     const tr = document.querySelector(`tr[data-player-id="${playerId}"]`);
     const statusCell = tr.querySelector('.status-cell');
-    const defaultStatus = tr.dataset.defaultStatus;
-    const effective = value || defaultStatus;
 
     if (value) {
         playerOverrides[String(playerId)] = value;
@@ -725,6 +757,7 @@ function overrideStatus(playerId, value) {
         delete playerOverrides[String(playerId)];
     }
 
+    const effective = value || autoStatusFor(playerId, selectedDow);
     const cls = `status-badge--${effective}`;
     statusCell.innerHTML = `<span class="status-badge ${cls}">${effective.charAt(0).toUpperCase() + effective.slice(1)}</span>`;
 }
