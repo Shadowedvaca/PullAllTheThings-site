@@ -22,7 +22,7 @@ jobs:
             cd /opt/guild-portal
 
             echo "==> Checking out tag: ${{ github.ref_name }}..."
-            git fetch --tags --force origin
+            git fetch --tags --force --prune origin
             git checkout ${{ github.ref_name }}
 
             echo "==> Building prod image..."
