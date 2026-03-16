@@ -33,10 +33,23 @@
 - **Phase 4.4.3:** Onboarding Activation & OAuth Integration (migration 0038) — `enable_onboarding` on `site_config`; `on_member_join` wired; `_auto_provision()` → `oauth_pending`; `update_onboarding_status()` called from bnet callback; deadline_checker; `/onboard-start`, `/onboard-simulate-oauth`, `/resend-oauth` officer commands; bot token loaded from encrypted DB
 - **Phase 4.4.4:** Data Quality Simplification (no migration) — Fuzzy matching rules (`NameMatchRule`, `NoteGroupRule`) deleted; `matching_rules/` registry returns `[]`; `note_mismatch` and `link_contradicts_note` retired; Data Quality page: OAuth Coverage panel (verified/total bar + "Send Reminder" per member); `GET /admin/oauth-coverage`; Settings → Characters "Add by Name" form
 - **Phase 4.5:** Warcraft Logs Integration (migration 0039) — `wcl_config`, `character_parses`, `raid_reports`; `warcraftlogs_client.py` (OAuth2 + GraphQL); `wcl_sync.py`; scheduler daily 5 AM; `/admin/warcraft-logs` page; `GET /api/v1/guild/parses` public endpoint
+- **Phase 4.6:** Auction House Pricing (migration 0040) — `tracked_items`, `item_price_history`; `connected_realm_id` on `site_config`; `ah_sync.py` (commodities + realm fallback); `ah_service.py` (price helpers); hourly scheduler job at :15; `gold` Jinja2 filter; Market Watch card on index; `/admin/ah-pricing` page
 
 ---
 
 ## Recent Changes
+
+### Phase 4.6 (2026-03-15, migration 0040)
+- **Migration 0040:** 2 new tables in `guild_identity` — `tracked_items` (item tracking with category/display_order), `item_price_history` (hourly snapshots with min/median/mean/qty/auctions). `connected_realm_id` added to `common.site_config`. `screen_permission` for `ah_pricing` (Officer+). Seeds 8 common consumables/enchants/gems.
+- **`blizzard_client.py`:** 3 new methods — `get_connected_realm_id()` (resolves slug → connected realm ID via regex on href), `get_auctions()` (connected-realm non-commodity auctions), `get_commodities()` (region-wide commodity auctions). All use `dynamic-us` namespace.
+- **`ah_sync.py`:** `sync_ah_prices()` (commodities first, falls back to realm auctions for missing items), `_aggregate_auctions()` (handles both `unit_price` and `buyout`), `cleanup_old_prices()` (30-day hourly retention, 180-day max).
+- **`ah_service.py`:** `copper_to_gold_str()`, `get_current_prices()`, `get_tracked_items_with_prices()` (includes 24h change), `get_price_trend()`, `get_price_change()`.
+- **Scheduler:** `run_ah_sync()` — hourly at :15 UTC; auto-resolves and caches `connected_realm_id`; daily cleanup at hour 0.
+- **ORM models:** `TrackedItem`, `ItemPriceHistory` added to `models.py`. `SiteConfig.connected_realm_id` added.
+- **Jinja2 filter:** `gold` filter registered in `app.py` lifespan (copper → "Xg Ys" display).
+- **Index page:** Market Watch card (gated by having priced items); shows min price, qty, snapshot time. CSS in `landing.css`.
+- **Admin page:** `/admin/ah-pricing` — tracked items table with 24h change%, add/remove items, sync status, force sync, resolve realm. All via vanilla JS fetch.
+- **Tests:** 44 new tests in `test_phase_46.py`. **583 tests pass, 69 skip.**
 
 ### Phase 4.5 (2026-03-15, migration 0039)
 - **Migration 0039:** 3 new tables in `guild_identity` — `wcl_config` (single-row), `character_parses` (best WCL percentile per char/encounter/difficulty/spec), `raid_reports` (guild reports with attendee JSONB). `screen_permission` for `warcraft_logs` added.

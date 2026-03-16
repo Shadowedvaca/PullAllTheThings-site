@@ -213,6 +213,7 @@ async def landing_page(
     officers = []
     recruiting_needs: dict[str, int] = {}
     event_days = []
+    ah_prices = []
     try:
         officers = await _get_officers(db)
     except Exception:
@@ -225,6 +226,15 @@ async def landing_page(
         event_days = await _get_event_days(db)
     except Exception:
         logger.warning("Could not load event days from DB", exc_info=True)
+    try:
+        pool = getattr(request.app.state, "guild_sync_pool", None)
+        if pool:
+            from sv_common.guild_sync.ah_service import get_current_prices
+            raw_prices = await get_current_prices(pool)
+            # Only show items that have at least one price snapshot
+            ah_prices = [p for p in raw_prices if p.get("min_buyout") is not None]
+    except Exception:
+        logger.warning("Could not load AH prices from DB", exc_info=True)
 
     ctx = {
         "request": request,
@@ -240,6 +250,7 @@ async def landing_page(
         "class_emojis": CLASS_EMOJIS,
         "role_emojis": ROLE_EMOJIS,
         "day_names": DAY_NAMES,
+        "ah_prices": ah_prices,
     }
     return templates.TemplateResponse("public/index.html", ctx)
 

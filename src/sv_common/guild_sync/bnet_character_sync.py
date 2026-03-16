@@ -188,15 +188,26 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                 level = char_data.get("level", 0)
                 char_name = char_data.get("name", "")
 
-                # Filter: home realm only
-                if realm_slug != home_realm_slug:
-                    skipped += 1
-                    continue
                 # Filter: level 10+ (no bank alts or trial chars)
                 if level < 10:
                     skipped += 1
                     continue
                 if not char_name:
+                    skipped += 1
+                    continue
+
+                # Check if character already exists in wow_characters.
+                # Guild roster sync imports characters from all connected realms, so a character
+                # on a connected realm (e.g. bladefist, malganis) will already be in the table.
+                # We always link known characters; only skip unknown characters not on home realm.
+                existing_char = await conn.fetchrow(
+                    """SELECT id FROM guild_identity.wow_characters
+                       WHERE character_name = $1 AND realm_slug = $2""",
+                    char_name, realm_slug,
+                )
+
+                if not existing_char and realm_slug != home_realm_slug:
+                    # Unknown character on a non-home realm — likely a toon on an unrelated server
                     skipped += 1
                     continue
 
@@ -211,15 +222,9 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                     )
                     class_id = class_row["id"] if class_row else None
 
-                # Check if character already exists in wow_characters
-                existing_char = await conn.fetchrow(
-                    """SELECT id FROM guild_identity.wow_characters
-                       WHERE character_name = $1 AND realm_slug = $2""",
-                    char_name, home_realm_slug,
-                )
                 is_new_char = existing_char is None
 
-                # Upsert into wow_characters
+                # Upsert into wow_characters using the character's actual realm slug
                 char_row = await conn.fetchrow(
                     """INSERT INTO guild_identity.wow_characters
                        (character_name, realm_slug, level, class_id)
@@ -230,7 +235,7 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                                                guild_identity.wow_characters.class_id),
                            removed_at = NULL
                        RETURNING id""",
-                    char_name, home_realm_slug, level, class_id,
+                    char_name, realm_slug, level, class_id,
                 )
                 char_id = char_row["id"]
 

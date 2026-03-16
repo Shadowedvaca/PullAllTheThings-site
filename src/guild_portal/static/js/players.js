@@ -177,6 +177,21 @@ function renderDiscord() {
 
 // ── Col 2: Players ─────────────────────────────────────────────────────────
 
+// ── Attendance dot badge ────────────────────────────────────────────────────
+
+function renderAttendanceDot(p) {
+    const status = p.attendance_status || 'none';
+    if (status === 'none') return '';
+    const dotColors = { good: '#4ade80', at_risk: '#fbbf24', concern: '#f87171', new: '#888' };
+    const color = dotColors[status] || '#888';
+    const label = status === 'good' ? 'Good attendance'
+                : status === 'at_risk' ? 'At risk'
+                : status === 'concern' ? 'Attendance concern'
+                : 'Insufficient data';
+    const summary = p.attendance_summary ? ` (${p.attendance_summary})` : '';
+    return `<span class="pm-att-dot" style="background:${color}" title="${escAttr(label + summary)}"></span>`;
+}
+
 function renderPlayers() {
     const search       = (document.getElementById('player-search').value || '').toLowerCase();
     const noChars      = document.getElementById('player-no-chars')?.checked;
@@ -281,6 +296,7 @@ function renderPlayers() {
                 <span class="pm-player-rank">${escHtml(p.rank_name)}</span>
                 ${regBadge}
                 ${p.bnet_verified ? `<span class="pm-badge pm-badge--bnet" title="Battle.net verified">\uD83D\uDD12 BNet</span>` : ''}
+                ${renderAttendanceDot(p)}
                 ${!p.registered && p.discord_id ? `<button class="pm-invite-btn" onclick="sendInvite(event,${p.id},'${escAttr(effectiveName)}')" title="Send Discord invite DM">✉</button>` : ''}
                 <button class="pm-delete-player-btn" onclick="deletePlayer(event,${p.id},'${escAttr(effectiveName)}')"
                         title="Delete player">🗑</button>

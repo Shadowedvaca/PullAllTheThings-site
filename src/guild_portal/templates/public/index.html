@@ -123,6 +123,39 @@
     {% endif %}
 </section>
 
+{# ── Market Watch ── #}
+{% if ah_prices %}
+<section class="lp-section">
+    <h2 class="lp-section-title">📈 Market Watch</h2>
+    <div class="lp-market-watch">
+        <table class="lp-market-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Min Price</th>
+                    <th>Available</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in ah_prices %}
+                <tr>
+                    <td class="lp-market-name">
+                        <span class="lp-market-cat lp-market-cat--{{ item.category }}">{{ item.category }}</span>
+                        <a href="https://www.wowhead.com/search?q={{ item.item_name | replace(' ', '+') | replace("'", '%27') }}" target="_blank" rel="noopener" class="lp-market-item-link">{{ item.item_name }}</a>
+                    </td>
+                    <td class="lp-market-price">{{ item.min_buyout | gold }}</td>
+                    <td class="lp-market-qty">{{ "{:,}".format(item.quantity_available) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if ah_prices[0].snapshot_at %}
+        <p class="lp-market-updated">Updated {{ ah_prices[0].snapshot_at.strftime('%b %d, %H:%M') }} UTC</p>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
 {# ── Guild Officers ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Guild Officers</h2>
@@ -200,6 +233,13 @@
     <a href="https://us.forums.blizzard.com/en/wow/t/ah-pull-all-the-things-recruiting-casual-heroic-raiding-with-real-life-balance-immaculate-vibes/2060891"
        target="_blank" rel="noopener">📜 View our WoW recruitment post</a>
 </div>
+
+{% if site().realm_display_name %}
+<div class="lp-realm-badge">
+    <span class="lp-realm-badge__icon">🌍</span>
+    <span class="lp-realm-badge__text">{{ site().realm_display_name }} — US</span>
+</div>
+{% endif %}
 
 </div>{# /lp-container #}
 {% endblock %}

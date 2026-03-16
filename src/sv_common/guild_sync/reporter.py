@@ -32,6 +32,8 @@ ISSUE_EMOJI = {
     "stale_character": "💤",
     "auto_link_suggestion": "🔗",
     "rank_change": "📊",
+    "bnet_token_expired": "🔑",
+    "bnet_sync_error": "🔴",
 }
 
 # Human-friendly type names
@@ -42,6 +44,8 @@ ISSUE_TYPE_NAMES = {
     "no_guild_role": "Missing Discord Guild Role",
     "stale_character": "Inactive Characters (30+ days)",
     "auto_link_suggestion": "Suggested Auto-Links (Needs Review)",
+    "bnet_token_expired": "Battle.net Token Expired (Re-Link Required)",
+    "bnet_sync_error": "Battle.net Character Sync Errors",
 }
 
 

@@ -67,6 +67,8 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/site-config",     "site_config"),
     ("/admin/progression",     "progression"),
     ("/admin/warcraft-logs",   "warcraft_logs"),
+    ("/admin/ah-pricing",      "ah_pricing"),
+    ("/admin/attendance",      "attendance_report"),
 ]
 
 
@@ -724,6 +726,50 @@ async def admin_players_data(
     )
     bnet_verified_ids = {row[0] for row in bnet_result.all()}
 
+    # Attendance status per player (feature-gated)
+    attendance_by_player: dict = {}
+    try:
+        att_cfg = await db.execute(text(
+            """
+            SELECT attendance_feature_enabled, attendance_min_pct, attendance_trailing_events
+            FROM common.discord_config LIMIT 1
+            """
+        ))
+        att_cfg_row = att_cfg.mappings().first()
+        if att_cfg_row and att_cfg_row["attendance_feature_enabled"]:
+            min_pct = att_cfg_row["attendance_min_pct"] or 75
+            trailing = att_cfg_row["attendance_trailing_events"] or 8
+            att_rows = await db.execute(text(
+                """
+                SELECT ra.player_id, ra.attended, ra.noted_absence
+                FROM patt.raid_attendance ra
+                JOIN patt.raid_events re ON re.id = ra.event_id
+                WHERE re.attendance_processed_at IS NOT NULL
+                ORDER BY ra.player_id, re.start_time_utc DESC
+                """
+            ))
+            # Group by player_id, take last N
+            from collections import defaultdict
+            raw: dict = defaultdict(list)
+            for row in att_rows.mappings().all():
+                raw[row["player_id"]].append(row)
+            for pid, rows in raw.items():
+                recent = rows[:trailing]
+                attended = sum(1 for r in recent if r["attended"] or r["noted_absence"])
+                total = len(recent)
+                summary = f"{attended}/{total} raids"
+                if total < 3:
+                    status = "new"
+                elif attended / total * 100 >= min_pct:
+                    status = "good"
+                elif attended / total * 100 >= 50:
+                    status = "at_risk"
+                else:
+                    status = "concern"
+                attendance_by_player[pid] = {"status": status, "summary": summary}
+    except Exception as e:
+        logger.warning("Could not load attendance status: %s", e)
+
     return JSONResponse({
         "ok": True,
         "data": {
@@ -747,6 +793,8 @@ async def admin_players_data(
                     "on_raid_hiatus": p.on_raid_hiatus,
                     "bnet_verified": p.id in bnet_verified_ids,
                     "aliases": aliases_by_player.get(p.id, []),
+                    "attendance_status": attendance_by_player.get(p.id, {}).get("status", "none"),
+                    "attendance_summary": attendance_by_player.get(p.id, {}).get("summary", ""),
                 }
                 for p in players
             ],
@@ -2319,12 +2367,15 @@ async def admin_users(
     rows = await db.execute(
         text("""
             SELECT u.id, u.email, u.is_active, u.created_at,
-                   p.id        AS player_id,
+                   p.id                    AS player_id,
                    p.display_name,
-                   gr.name     AS rank_name
+                   gr.name                 AS rank_name,
+                   ba.battletag            AS battletag,
+                   ba.last_character_sync  AS last_bnet_sync
             FROM common.users u
             LEFT JOIN guild_identity.players p ON p.website_user_id = u.id
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            LEFT JOIN guild_identity.battlenet_accounts ba ON ba.player_id = p.id
             ORDER BY u.created_at DESC
         """)
     )
@@ -2333,6 +2384,99 @@ async def admin_users(
     ctx = await _base_ctx(request, player, db)
     ctx["users"] = users
     return templates.TemplateResponse("admin/users.html", ctx)
+
+
+@router.post("/users/{user_id}/bnet-sync")
+async def admin_bnet_sync_user(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger Battle.net character sync for a specific user."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if pool is None:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    result = await db.execute(
+        text("""
+            SELECT p.id AS player_id
+            FROM common.users u
+            JOIN guild_identity.players p ON p.website_user_id = u.id
+            JOIN guild_identity.battlenet_accounts ba ON ba.player_id = p.id
+            WHERE u.id = :user_id
+        """),
+        {"user_id": user_id},
+    )
+    row = result.mappings().one_or_none()
+    if row is None:
+        return JSONResponse(
+            {"ok": False, "error": "User not found or no Battle.net account linked"},
+            status_code=404,
+        )
+
+    player_id = row["player_id"]
+
+    from sv_common.guild_sync.bnet_character_sync import (
+        get_valid_access_token,
+        sync_bnet_characters,
+    )
+
+    access_token = await get_valid_access_token(pool, player_id)
+    if access_token is None:
+        return JSONResponse(
+            {"ok": False, "error": "Could not retrieve a valid access token — the token may have expired"},
+            status_code=422,
+        )
+
+    stats = await sync_bnet_characters(pool, player_id, access_token)
+    return JSONResponse({"ok": True, "data": stats})
+
+
+@router.post("/users/bnet-sync-all")
+async def admin_bnet_sync_all(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger Battle.net character sync for every user with a linked account."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if pool is None:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.bnet_character_sync import (
+        get_valid_access_token,
+        sync_bnet_characters,
+    )
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT player_id FROM guild_identity.battlenet_accounts")
+    player_ids = [r["player_id"] for r in rows]
+
+    synced = 0
+    failed = 0
+    total_linked = 0
+
+    for player_id in player_ids:
+        try:
+            access_token = await get_valid_access_token(pool, player_id)
+            if access_token is None:
+                failed += 1
+                continue
+            stats = await sync_bnet_characters(pool, player_id, access_token)
+            synced += 1
+            total_linked += stats.get("linked", 0)
+        except Exception as exc:
+            logger.error("BNet sync-all: failed for player %s: %s", player_id, exc)
+            failed += 1
+
+    return JSONResponse({"ok": True, "data": {"synced": synced, "failed": failed, "total_linked": total_linked}})
 
 
 @router.patch("/users/{user_id}/toggle-active")
@@ -2992,3 +3136,310 @@ async def admin_wcl_parses(
         for r in rows
     ]
     return JSONResponse({"ok": True, "data": parses})
+
+
+# ===========================================================================
+# AH Pricing — /admin/ah-pricing
+# ===========================================================================
+
+
+@router.get("/ah-pricing", response_class=HTMLResponse)
+async def admin_ah_pricing_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """AH Pricing admin page — Officer+."""
+    player = await _require_screen("ah_pricing", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/ah-pricing")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/ah_pricing.html", ctx)
+
+
+@router.get("/ah-pricing/items")
+async def admin_ah_items(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return tracked items with current prices (JSON)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.ah_service import get_tracked_items_with_prices, copper_to_gold_str
+    items = await get_tracked_items_with_prices(pool)
+
+    data = [
+        {
+            "id": i["id"],
+            "item_id": i["item_id"],
+            "item_name": i["item_name"],
+            "category": i["category"],
+            "display_order": i["display_order"],
+            "is_active": i["is_active"],
+            "min_buyout": i["min_buyout"],
+            "min_buyout_str": copper_to_gold_str(i["min_buyout"]),
+            "median_price": i["median_price"],
+            "median_price_str": copper_to_gold_str(i["median_price"]),
+            "quantity_available": i["quantity_available"],
+            "num_auctions": i["num_auctions"],
+            "change_pct": i["change_pct"],
+            "snapshot_at": i["snapshot_at"].isoformat() if i["snapshot_at"] else None,
+        }
+        for i in items
+    ]
+    return JSONResponse({"ok": True, "data": data})
+
+
+@router.post("/ah-pricing/items")
+async def admin_ah_add_item(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new item to track. Body: {item_id, item_name, category}."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    body = await request.json()
+    item_id = body.get("item_id")
+    item_name = (body.get("item_name") or "").strip()
+    category = (body.get("category") or "consumable").strip()
+
+    if not item_id or not item_name:
+        return JSONResponse({"ok": False, "error": "item_id and item_name are required"}, status_code=400)
+
+    valid_categories = {"consumable", "enchant", "gem", "material", "gear"}
+    if category not in valid_categories:
+        category = "consumable"
+
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO guild_identity.tracked_items
+                    (item_id, item_name, category, added_by_player_id)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (item_id) DO UPDATE
+                    SET item_name = EXCLUDED.item_name,
+                        category = EXCLUDED.category,
+                        is_active = TRUE
+                RETURNING id, item_id, item_name, category, is_active
+                """,
+                int(item_id),
+                item_name,
+                category,
+                admin.id,
+            )
+        except Exception as exc:
+            logger.error("Failed to add tracked item: %s", exc)
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+    return JSONResponse({"ok": True, "data": dict(row)})
+
+
+@router.delete("/ah-pricing/items/{item_id}")
+async def admin_ah_remove_item(
+    item_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a tracked item (hard delete with cascade to price history)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM guild_identity.tracked_items WHERE id = $1", item_id
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    if deleted == 0:
+        return JSONResponse({"ok": False, "error": "Item not found"}, status_code=404)
+    return JSONResponse({"ok": True})
+
+
+async def _get_blizzard_client(request):
+    """Return a ready-to-use BlizzardClient.
+
+    Prefers the scheduler's already-initialized client. Falls back to
+    creating a temporary client from environment variables, which works
+    even when the scheduler is not running (e.g. audit channel not configured).
+    Returns (client, owned) where owned=True means caller must close it.
+    """
+    import os
+    from sv_common.guild_sync.blizzard_client import BlizzardClient
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler and scheduler.blizzard_client:
+        return scheduler.blizzard_client, False
+
+    client_id = os.environ.get("BLIZZARD_CLIENT_ID", "")
+    client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        return None, False
+
+    client = BlizzardClient(client_id, client_secret)
+    await client.initialize()
+    return client, True
+
+
+@router.post("/ah-pricing/sync")
+async def admin_ah_force_sync(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Force an immediate AH price sync."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "DB pool not available"}, status_code=503)
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler:
+        # Scheduler is running — delegate to it (handles realm resolution too)
+        import asyncio
+        asyncio.create_task(scheduler.run_ah_sync())
+        return JSONResponse({"ok": True, "message": "AH sync triggered"})
+
+    # Scheduler not running — run sync inline with a temporary client
+    blizzard_client, owned = await _get_blizzard_client(request)
+    if not blizzard_client:
+        return JSONResponse({"ok": False, "error": "Blizzard API credentials not configured"}, status_code=503)
+
+    try:
+        from sv_common.guild_sync.ah_sync import sync_ah_prices
+        async with pool.acquire() as conn:
+            cfg = await conn.fetchrow(
+                "SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1"
+            )
+        connected_realm_id = cfg["connected_realm_id"] if cfg else None
+        if not connected_realm_id:
+            return JSONResponse({"ok": False, "error": "Connected realm not resolved yet — use Re-Resolve first"}, status_code=400)
+
+        import asyncio
+        asyncio.create_task(sync_ah_prices(pool, blizzard_client, connected_realm_id))
+        return JSONResponse({"ok": True, "message": "AH sync triggered"})
+    except Exception as exc:
+        if owned:
+            await blizzard_client.close()
+        raise exc
+
+
+@router.post("/ah-pricing/resolve-realm")
+async def admin_ah_resolve_realm(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-resolve the connected realm ID from the home realm slug."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "DB pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT home_realm_slug FROM common.site_config LIMIT 1")
+    realm_slug = row["home_realm_slug"] if row else None
+    if not realm_slug:
+        return JSONResponse({"ok": False, "error": "home_realm_slug not configured"}, status_code=400)
+
+    blizzard_client, owned = await _get_blizzard_client(request)
+    if not blizzard_client:
+        return JSONResponse({"ok": False, "error": "Blizzard API credentials not configured"}, status_code=503)
+
+    try:
+        connected_realm_id = await blizzard_client.get_connected_realm_id(realm_slug)
+    finally:
+        if owned:
+            await blizzard_client.close()
+
+    if not connected_realm_id:
+        return JSONResponse({"ok": False, "error": "Could not resolve connected realm ID from Blizzard API"}, status_code=502)
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE common.site_config SET connected_realm_id = $1", connected_realm_id
+        )
+    return JSONResponse({"ok": True, "connected_realm_id": connected_realm_id})
+
+
+@router.get("/ah-pricing/status")
+async def admin_ah_status(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return AH sync status: last snapshot time, item counts, connected realm."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        config_row = await conn.fetchrow(
+            "SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1"
+        )
+        total_items = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.tracked_items WHERE is_active = TRUE"
+        )
+        last_snapshot = await conn.fetchval(
+            "SELECT MAX(snapshot_at) FROM guild_identity.item_price_history"
+        )
+        items_with_prices = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT tracked_item_id)
+            FROM guild_identity.item_price_history
+            WHERE snapshot_at >= NOW() - INTERVAL '2 hours'
+            """
+        )
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "connected_realm_id": config_row["connected_realm_id"] if config_row else None,
+            "realm_slug": config_row["home_realm_slug"] if config_row else None,
+            "total_tracked_items": total_items or 0,
+            "items_with_recent_prices": items_with_prices or 0,
+            "last_snapshot": last_snapshot.isoformat() if last_snapshot else None,
+        },
+    })
+
+
+# ===========================================================================
+# Attendance — /admin/attendance
+# ===========================================================================
+
+
+@router.get("/attendance", response_class=HTMLResponse)
+async def admin_attendance_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Voice attendance tracking admin page — Officer+."""
+    player = await _require_screen("attendance_report", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/attendance")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/attendance.html", ctx)

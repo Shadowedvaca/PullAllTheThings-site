@@ -327,6 +327,94 @@
     text-decoration: none;
 }
 
+/* Market Watch */
+.lp-market-watch {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.lp-market-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.lp-market-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+.lp-market-table td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid #1e1e22;
+    vertical-align: middle;
+}
+.lp-market-table tr:last-child td { border-bottom: none; }
+.lp-market-name { color: var(--color-text); }
+.lp-market-price {
+    font-weight: 700;
+    color: #f5c842;
+    white-space: nowrap;
+}
+.lp-market-qty { color: var(--color-text-muted); font-size: 0.82rem; }
+.lp-market-cat {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-right: 0.35rem;
+    font-weight: 600;
+    opacity: 0.9;
+}
+.lp-market-cat--consumable { background: #1e3a1e; color: #86efac; }
+.lp-market-cat--enchant     { background: #1e2a5f; color: #93c5fd; }
+.lp-market-cat--gem         { background: #3b1a5f; color: #d8b4fe; }
+.lp-market-cat--material    { background: #3a2a10; color: #fcd34d; }
+.lp-market-cat--gear        { background: #2a1e1e; color: #fca5a5; }
+.lp-market-item-link {
+    color: var(--color-text);
+    text-decoration: none;
+}
+.lp-market-item-link:hover { color: var(--color-accent); text-decoration: underline; }
+.lp-market-updated {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    padding: 0.4rem 0.75rem;
+    text-align: right;
+    border-top: 1px solid var(--color-border);
+    margin: 0;
+}
+
+/* Guild realm badge — fixed lower-left */
+.lp-realm-badge {
+    position: fixed;
+    bottom: 18px;
+    left: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    opacity: 0.75;
+    transition: opacity 0.2s;
+    z-index: 10;
+    pointer-events: none;
+}
+.lp-realm-badge:hover { opacity: 1; }
+.lp-realm-badge__icon { font-size: 0.85rem; }
+.lp-realm-badge__text { letter-spacing: 0.02em; }
+
 @media (max-width: 640px) {
     .lp-hero { margin: -1.25rem -1rem 0; padding: 50px 1rem 40px; }
     .lp-needs-grid { grid-template-columns: repeat(2, 1fr); }

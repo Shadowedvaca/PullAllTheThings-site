@@ -17,6 +17,7 @@ Usage:
 
 import asyncio
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -421,6 +422,44 @@ class BlizzardClient:
         name_encoded = quote(character_name.lower(), safe="")
         path = f"/profile/wow/character/{realm_slug}/{name_encoded}/achievements"
         return await self._api_get(path)
+
+    async def get_connected_realm_id(self, realm_slug: str) -> int | None:
+        """
+        Resolve a realm slug to its connected realm ID.
+
+        GET /data/wow/realm/{realmSlug}
+        The response includes a connected_realm href from which we extract the ID.
+        """
+        path = f"/data/wow/realm/{realm_slug}"
+        data = await self._api_get(path, params={"namespace": "dynamic-us", "locale": self.locale})
+        if data and "connected_realm" in data:
+            href = data["connected_realm"]["href"]
+            match = re.search(r"/connected-realm/(\d+)", href)
+            if match:
+                return int(match.group(1))
+        return None
+
+    async def get_auctions(self, connected_realm_id: int) -> dict | None:
+        """
+        GET /data/wow/connected-realm/{connectedRealmId}/auctions
+
+        Returns all non-commodity auctions on the connected realm.
+        WARNING: Large response (can be 10+ MB for busy realms).
+        """
+        path = f"/data/wow/connected-realm/{connected_realm_id}/auctions"
+        return await self._api_get(path, params={"namespace": "dynamic-us", "locale": self.locale})
+
+    async def get_commodities(self) -> dict | None:
+        """
+        GET /data/wow/auctions/commodities
+
+        Returns region-wide commodity auctions (flasks, enchants, gems, mats).
+        Commodities are sold region-wide since patch 9.2.7.
+        """
+        return await self._api_get(
+            "/data/wow/auctions/commodities",
+            params={"namespace": "dynamic-us", "locale": self.locale},
+        )
 
     async def sync_full_roster(
         self,

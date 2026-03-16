@@ -92,7 +92,7 @@ async def bnet_auth_start(
         f"?client_id={client_id}"
         f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
-        f"&scope=openid+wow.profile"
+        f"&scope=openid+wow.profile+offline_access"
         f"&state={state}"
     )
     authorize_url = BNET_AUTHORIZE_URL + params

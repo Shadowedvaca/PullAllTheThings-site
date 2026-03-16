@@ -155,6 +155,25 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # AH price sync: every hour at :15 past the hour
+        self.scheduler.add_job(
+            self.run_ah_sync,
+            CronTrigger(minute=15),
+            id="ah_sync",
+            name="Auction House Price Sync",
+            misfire_grace_time=3600,
+        )
+
+        # Voice attendance post-processing: every 30 minutes
+        # Picks up events that ended ≥30 min ago and haven't been processed yet
+        self.scheduler.add_job(
+            self.run_attendance_processing,
+            IntervalTrigger(minutes=30),
+            id="attendance_processing",
+            name="Voice Attendance Post-Processing",
+            misfire_grace_time=3600,
+        )
+
         self.scheduler.start()
         logger.info("Guild sync scheduler started")
 
@@ -638,6 +657,87 @@ class GuildSyncScheduler:
                 )
         finally:
             await wcl_client.close()
+
+    async def run_ah_sync(self):
+        """Auction House price sync pipeline. Runs every hour at :15.
+
+        Pipeline:
+          1. Load connected_realm_id from site_config (resolve + cache if missing)
+          2. Call sync_ah_prices() — fetch commodities + realm auctions
+          3. Daily cleanup of old price history (runs on the first call each day)
+        """
+        from .ah_sync import sync_ah_prices, cleanup_old_prices
+
+        try:
+            # Load connected realm ID from site_config
+            connected_realm_id: int | None = None
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1")
+            if row:
+                connected_realm_id = row["connected_realm_id"]
+                realm_slug = row["home_realm_slug"]
+
+            # Resolve and cache if not stored yet
+            if not connected_realm_id and realm_slug:
+                logger.info("AH sync: resolving connected realm ID for slug '%s'", realm_slug)
+                connected_realm_id = await self.blizzard_client.get_connected_realm_id(realm_slug)
+                if connected_realm_id:
+                    async with self.db_pool.acquire() as conn:
+                        await conn.execute(
+                            "UPDATE common.site_config SET connected_realm_id = $1",
+                            connected_realm_id,
+                        )
+                    logger.info("AH sync: cached connected realm ID %d", connected_realm_id)
+
+            if not connected_realm_id:
+                logger.warning("AH sync: no connected_realm_id available — skipping")
+                return
+
+            stats = await sync_ah_prices(self.db_pool, self.blizzard_client, connected_realm_id)
+            logger.info("AH sync complete: %s", stats)
+
+            # Run cleanup once per day (on the first sync after midnight)
+            from datetime import datetime, timezone
+            if datetime.now(timezone.utc).hour == 0:
+                cleanup_stats = await cleanup_old_prices(self.db_pool)
+                logger.info("AH cleanup: %s", cleanup_stats)
+
+        except Exception as exc:
+            logger.error("AH sync failed: %s", exc, exc_info=True)
+
+    async def run_attendance_processing(self):
+        """Voice attendance post-processing pipeline. Runs every 30 minutes.
+
+        Picks up events that ended ≥30 minutes ago, have voice_tracking_enabled,
+        and have not yet been processed. Runs both WCL and voice passes.
+        """
+        from .attendance_processor import get_unprocessed_events, process_event
+
+        try:
+            # Check if feature is enabled
+            async with self.db_pool.acquire() as conn:
+                enabled = await conn.fetchval(
+                    "SELECT attendance_feature_enabled FROM common.discord_config LIMIT 1"
+                )
+            if not enabled:
+                return
+
+            events = await get_unprocessed_events(self.db_pool)
+            if not events:
+                return
+
+            audit_channel = self._get_audit_channel()
+            for event in events:
+                logger.info(
+                    "Attendance processing: event %d (%s) ended %s",
+                    event["id"],
+                    event["title"],
+                    event["end_time_utc"],
+                )
+                await process_event(self.db_pool, event["id"], audit_channel)
+
+        except Exception as exc:
+            logger.error("Attendance processing failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

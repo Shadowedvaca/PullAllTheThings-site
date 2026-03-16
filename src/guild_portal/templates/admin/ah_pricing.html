@@ -1,0 +1,430 @@
+{% extends "base_admin.html" %}
+{% block title %}AH Pricing — Admin — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+.ah-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+@media (max-width: 700px) { .ah-grid { grid-template-columns: 1fr; } }
+
+.ah-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+}
+.ah-card--wide { grid-column: 1 / -1; }
+.ah-card__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0 0 0.25rem 0;
+}
+.ah-card__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.ah-stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid #2a2a2e;
+    font-size: 0.9rem;
+}
+.ah-stat-row:last-child { border-bottom: none; }
+.ah-stat-row__label { color: var(--color-text-muted); }
+.ah-stat-row__val { font-weight: 600; color: var(--color-text); }
+
+.ah-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+.ah-table th {
+    text-align: left;
+    padding: 0.4rem 0.6rem;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.ah-table td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid #1e1e22;
+    vertical-align: middle;
+}
+.ah-table tr:last-child td { border-bottom: none; }
+
+.ah-price { font-weight: 700; color: #f5c842; }
+.ah-change-up   { color: #f87171; font-size: 0.8rem; }
+.ah-change-down { color: #4ade80; font-size: 0.8rem; }
+.ah-change-flat { color: var(--color-text-muted); font-size: 0.8rem; }
+
+.ah-cat {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+}
+.ah-cat--consumable { background: #1e3a1e; color: #86efac; }
+.ah-cat--enchant    { background: #1e2a5f; color: #93c5fd; }
+.ah-cat--gem        { background: #3b1a5f; color: #d8b4fe; }
+.ah-cat--material   { background: #3a2a10; color: #fcd34d; }
+.ah-cat--gear       { background: #2a1e1e; color: #fca5a5; }
+
+.ah-btn-remove {
+    background: none;
+    border: 1px solid #444;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0.2rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+}
+.ah-btn-remove:hover { border-color: #f87171; color: #f87171; }
+
+.ah-add-form {
+    display: grid;
+    grid-template-columns: 1fr 2fr auto auto;
+    gap: 0.5rem;
+    align-items: end;
+    margin-top: 1rem;
+}
+@media (max-width: 600px) {
+    .ah-add-form { grid-template-columns: 1fr 1fr; }
+}
+.ah-add-form label {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.25rem;
+    display: block;
+}
+.ah-add-form input,
+.ah-add-form select {
+    background: var(--color-input-bg, #1a1a1e);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    width: 100%;
+}
+.ah-add-form button {
+    background: var(--color-accent);
+    color: #0a0a0b;
+    border: none;
+    padding: 0.4rem 0.9rem;
+    border-radius: 4px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+.ah-add-form button:hover { opacity: 0.85; }
+
+.ah-msg {
+    font-size: 0.82rem;
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 4px;
+    display: none;
+}
+.ah-msg--ok  { background: #1e3a1e; color: #86efac; }
+.ah-msg--err { background: #3a1e1e; color: #fca5a5; }
+
+.ah-force-btn {
+    background: var(--color-accent);
+    color: #0a0a0b;
+    border: none;
+    padding: 0.45rem 1rem;
+    border-radius: 4px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+.ah-force-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ah-item-link {
+    color: var(--color-text);
+    text-decoration: none;
+    font-weight: 600;
+}
+.ah-item-link:hover { color: var(--color-accent); text-decoration: underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-content-header">
+    <h1 class="admin-content-title">AH Pricing</h1>
+    <p class="admin-content-subtitle">Track Auction House prices for guild consumables, enchants, and gems.</p>
+</div>
+
+<div class="ah-grid">
+
+    {# ── Sync Status ────────────────────────────────────────────────────── #}
+    <div class="ah-card">
+        <p class="ah-card__title">Sync Status</p>
+        <p class="ah-card__subtitle">Updated hourly at :15 past the hour</p>
+        <div id="ah-status-rows">
+            <div class="ah-stat-row"><span class="ah-stat-row__label">Loading…</span></div>
+        </div>
+        <div style="margin-top:1rem;">
+            <button class="ah-force-btn" id="ah-force-btn" onclick="forceSync()">⚡ Force Sync Now</button>
+            <span id="ah-sync-msg" class="ah-msg"></span>
+        </div>
+    </div>
+
+    {# ── Connected Realm ────────────────────────────────────────────────── #}
+    <div class="ah-card">
+        <p class="ah-card__title">Connected Realm</p>
+        <p class="ah-card__subtitle">Realm auctions are fetched from the connected realm group</p>
+        <div id="ah-realm-rows">
+            <div class="ah-stat-row"><span class="ah-stat-row__label">Loading…</span></div>
+        </div>
+        <div style="margin-top:1rem;">
+            <button class="ah-force-btn" onclick="resolveRealm()">🔍 Re-Resolve Realm ID</button>
+            <span id="ah-realm-msg" class="ah-msg"></span>
+        </div>
+    </div>
+
+    {# ── Tracked Items ──────────────────────────────────────────────────── #}
+    <div class="ah-card ah-card--wide">
+        <p class="ah-card__title">Tracked Items</p>
+        <p class="ah-card__subtitle">Current prices pulled from the last AH snapshot</p>
+        <div id="ah-items-loading" style="color:var(--color-text-muted);font-size:0.875rem;">Loading…</div>
+        <table class="ah-table" id="ah-items-table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Category</th>
+                    <th>Min Price</th>
+                    <th>Median</th>
+                    <th>24h Δ</th>
+                    <th>Qty</th>
+                    <th>Auctions</th>
+                    <th>Snapshot</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="ah-items-tbody"></tbody>
+        </table>
+        <div id="ah-items-empty" style="display:none;color:var(--color-text-muted);font-size:0.875rem;padding:0.5rem 0;">
+            No tracked items yet. Add some below.
+        </div>
+
+        {# Add Item form #}
+        <hr style="border:none;border-top:1px solid var(--color-border);margin:1.25rem 0 0.75rem;">
+        <p style="font-size:0.9rem;font-weight:600;margin:0 0 0.5rem;">Add Item</p>
+        <p style="font-size:0.78rem;color:var(--color-text-muted);margin:0 0 0.75rem;">
+            Enter the Blizzard item ID (find it on
+            <a href="https://www.wowhead.com" target="_blank" rel="noopener" style="color:var(--color-accent);">Wowhead</a>
+            — it's the number in the item URL).
+        </p>
+        <div class="ah-add-form" id="ah-add-form">
+            <div>
+                <label for="ah-item-id">Item ID</label>
+                <input type="number" id="ah-item-id" placeholder="e.g. 212241" min="1">
+            </div>
+            <div>
+                <label for="ah-item-name">Item Name</label>
+                <input type="text" id="ah-item-name" placeholder="Flask of Alchemical Chaos">
+            </div>
+            <div>
+                <label for="ah-item-cat">Category</label>
+                <select id="ah-item-cat">
+                    <option value="consumable">Consumable</option>
+                    <option value="enchant">Enchant</option>
+                    <option value="gem">Gem</option>
+                    <option value="material">Material</option>
+                    <option value="gear">Gear</option>
+                </select>
+            </div>
+            <div>
+                <label>&nbsp;</label>
+                <button onclick="addItem()">Add Item</button>
+            </div>
+        </div>
+        <span id="ah-add-msg" class="ah-msg"></span>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function wowheadUrl(name) {
+    return 'https://www.wowhead.com/search?q=' + name.replace(/ /g, '+').replace(/'/g, '%27');
+}
+
+function showMsg(id, text, isError) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'ah-msg ' + (isError ? 'ah-msg--err' : 'ah-msg--ok');
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function fmtChange(pct) {
+    if (pct === null || pct === undefined) return '<span class="ah-change-flat">—</span>';
+    const cls = pct > 0 ? 'ah-change-up' : pct < 0 ? 'ah-change-down' : 'ah-change-flat';
+    const sign = pct > 0 ? '+' : '';
+    return `<span class="${cls}">${sign}${pct.toFixed(1)}%</span>`;
+}
+
+function fmtSnapshot(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', {month:'short',day:'numeric'}) + ' ' +
+           d.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',hour12:false}) + ' UTC';
+}
+
+function catBadge(cat) {
+    return `<span class="ah-cat ah-cat--${cat}">${cat}</span>`;
+}
+
+// ── Load status ────────────────────────────────────────────────────────────
+
+async function loadStatus() {
+    const res = await fetch('/admin/ah-pricing/status');
+    const json = await res.json();
+    if (!json.ok) return;
+    const d = json.data;
+
+    document.getElementById('ah-status-rows').innerHTML = `
+        <div class="ah-stat-row"><span class="ah-stat-row__label">Tracked Items</span>
+            <span class="ah-stat-row__val">${d.total_tracked_items}</span></div>
+        <div class="ah-stat-row"><span class="ah-stat-row__label">Items with Recent Prices</span>
+            <span class="ah-stat-row__val">${d.items_with_recent_prices}</span></div>
+        <div class="ah-stat-row"><span class="ah-stat-row__label">Last Snapshot</span>
+            <span class="ah-stat-row__val">${d.last_snapshot ? fmtSnapshot(d.last_snapshot) : '—'}</span></div>
+    `;
+
+    document.getElementById('ah-realm-rows').innerHTML = `
+        <div class="ah-stat-row"><span class="ah-stat-row__label">Realm Slug</span>
+            <span class="ah-stat-row__val">${d.realm_slug || '—'}</span></div>
+        <div class="ah-stat-row"><span class="ah-stat-row__label">Connected Realm ID</span>
+            <span class="ah-stat-row__val">${d.connected_realm_id ?? '<span style="color:#f87171">Not resolved</span>'}</span></div>
+    `;
+}
+
+// ── Load items table ───────────────────────────────────────────────────────
+
+async function loadItems() {
+    const res = await fetch('/admin/ah-pricing/items');
+    const json = await res.json();
+    document.getElementById('ah-items-loading').style.display = 'none';
+    if (!json.ok || !json.data.length) {
+        document.getElementById('ah-items-empty').style.display = 'block';
+        return;
+    }
+    const tbody = document.getElementById('ah-items-tbody');
+    tbody.innerHTML = '';
+    for (const item of json.data) {
+        const tr = document.createElement('tr');
+        tr.dataset.id = item.id;
+        tr.innerHTML = `
+            <td><a href="${wowheadUrl(item.item_name)}" target="_blank" rel="noopener" class="ah-item-link">${item.item_name}</a> <small style="color:var(--color-text-muted)">#${item.item_id}</small></td>
+            <td>${catBadge(item.category)}</td>
+            <td class="ah-price">${item.min_buyout_str}</td>
+            <td style="color:var(--color-text-muted)">${item.median_price_str}</td>
+            <td>${fmtChange(item.change_pct)}</td>
+            <td style="color:var(--color-text-muted)">${item.quantity_available !== null ? item.quantity_available.toLocaleString() : '—'}</td>
+            <td style="color:var(--color-text-muted)">${item.num_auctions !== null ? item.num_auctions : '—'}</td>
+            <td style="color:var(--color-text-muted);font-size:0.78rem">${item.snapshot_at ? fmtSnapshot(item.snapshot_at) : '—'}</td>
+            <td><button class="ah-btn-remove" onclick="removeItem(${item.id}, this)">✕ Remove</button></td>
+        `;
+        tbody.appendChild(tr);
+    }
+    document.getElementById('ah-items-table').style.display = 'table';
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+
+async function addItem() {
+    const itemId = document.getElementById('ah-item-id').value.trim();
+    const itemName = document.getElementById('ah-item-name').value.trim();
+    const category = document.getElementById('ah-item-cat').value;
+    if (!itemId || !itemName) {
+        showMsg('ah-add-msg', 'Item ID and name are required.', true);
+        return;
+    }
+    const res = await fetch('/admin/ah-pricing/items', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({item_id: parseInt(itemId), item_name: itemName, category})
+    });
+    const json = await res.json();
+    if (json.ok) {
+        showMsg('ah-add-msg', `Added: ${itemName}`, false);
+        document.getElementById('ah-item-id').value = '';
+        document.getElementById('ah-item-name').value = '';
+        document.getElementById('ah-items-loading').style.display = 'block';
+        document.getElementById('ah-items-table').style.display = 'none';
+        document.getElementById('ah-items-empty').style.display = 'none';
+        await loadItems();
+        await loadStatus();
+    } else {
+        showMsg('ah-add-msg', json.error || 'Failed to add item.', true);
+    }
+}
+
+async function removeItem(id, btn) {
+    if (!confirm('Remove this item and all its price history?')) return;
+    btn.disabled = true;
+    const res = await fetch(`/admin/ah-pricing/items/${id}`, {method: 'DELETE'});
+    const json = await res.json();
+    if (json.ok) {
+        const tr = document.querySelector(`tr[data-id="${id}"]`);
+        if (tr) tr.remove();
+        await loadStatus();
+    } else {
+        btn.disabled = false;
+        alert(json.error || 'Failed to remove item.');
+    }
+}
+
+async function forceSync() {
+    const btn = document.getElementById('ah-force-btn');
+    btn.disabled = true;
+    const res = await fetch('/admin/ah-pricing/sync', {method: 'POST'});
+    const json = await res.json();
+    if (json.ok) {
+        showMsg('ah-sync-msg', 'Sync triggered — prices will update shortly.', false);
+        setTimeout(() => { loadItems(); loadStatus(); }, 8000);
+    } else {
+        showMsg('ah-sync-msg', json.error || 'Sync failed.', true);
+    }
+    setTimeout(() => { btn.disabled = false; }, 10000);
+}
+
+async function resolveRealm() {
+    const res = await fetch('/admin/ah-pricing/resolve-realm', {method: 'POST'});
+    const json = await res.json();
+    if (json.ok) {
+        showMsg('ah-realm-msg', `Resolved: realm ID ${json.connected_realm_id}`, false);
+        await loadStatus();
+    } else {
+        showMsg('ah-realm-msg', json.error || 'Could not resolve realm.', true);
+    }
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+loadStatus();
+loadItems();
+</script>
+{% endblock %}
