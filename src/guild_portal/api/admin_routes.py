@@ -1047,9 +1047,9 @@ async def create_raid_event(
     avail_result = await db.execute(
         select(PlayerAvailability.player_id, PlayerAvailability.day_of_week)
     )
-    all_avail_rows = avail_result.all()
-    available_on_day = {row.player_id for row in all_avail_rows if row.day_of_week == raid_dow}
-    has_any_avail = {row.player_id for row in all_avail_rows}
+    available_on_day = {
+        row.player_id for row in avail_result.all() if row.day_of_week == raid_dow
+    }
 
     signups = []
     attendance_rows = []
@@ -1062,11 +1062,9 @@ async def create_raid_event(
             continue
         elif override:
             status = override  # explicit override
-        elif p.id in has_any_avail and p.id not in available_on_day:
+        elif p.on_raid_hiatus or p.id not in available_on_day:
             status = "absence"
-        elif rank_level == 1:
-            status = "tentative"
-        elif p.auto_invite_events:
+        elif rank_level >= 2 and p.auto_invite_events:
             status = "accepted"
         else:
             status = "tentative"

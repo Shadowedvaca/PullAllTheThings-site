@@ -447,7 +447,7 @@
             {% endif %}
             {% set spec_name = p.main_spec.name if p.main_spec else '' %}
             {% set role_name = p.main_spec.default_role.name if p.main_spec and p.main_spec.default_role else '' %}
-            <tr data-player-id="{{ p.id }}" data-default-status="{{ default_status }}">
+            <tr data-player-id="{{ p.id }}" data-default-status="{{ default_status }}" data-hiatus="{{ 'true' if p.on_raid_hiatus else 'false' }}">
                 <td>{{ p.display_name }}</td>
                 <td>
                     {% if role_name %}
@@ -716,23 +716,13 @@ function nextOccurrenceOf(dayOfWeek) {
 }
 
 // ── Absence status helpers ────────────────────────────────────────
-function getAbsentPlayerIds(dow) {
-    if (!availData) return { absentIds: new Set(), hasAnyIds: new Set() };
-    const availablePids = new Set(availData.days[dow].players.map(p => p.player_id));
-    const hasAnyIds = new Set();
-    for (const day of availData.days) {
-        for (const p of day.players) hasAnyIds.add(p.player_id);
-    }
-    const absentIds = new Set([...hasAnyIds].filter(id => !availablePids.has(id)));
-    return { absentIds, hasAnyIds };
-}
-
 function autoStatusFor(playerId, dow) {
     const tr = document.querySelector(`tr[data-player-id="${playerId}"]`);
     const rankDefault = tr ? tr.dataset.defaultStatus : 'tentative';
+    if (tr && tr.dataset.hiatus === 'true') return 'absence';
     if (dow === null || !availData) return rankDefault;
-    const { absentIds, hasAnyIds } = getAbsentPlayerIds(dow);
-    if (hasAnyIds.has(playerId) && absentIds.has(playerId)) return 'absence';
+    const availablePids = new Set(availData.days[dow].players.map(p => p.player_id));
+    if (!availablePids.has(playerId)) return 'absence';
     return rankDefault;
 }
 

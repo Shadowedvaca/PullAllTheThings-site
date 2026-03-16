@@ -169,7 +169,7 @@ async def _build_signups(conn: asyncpg.Connection, event_date: date) -> list[dic
 
     players = await conn.fetch(
         """
-        SELECT p.id, p.auto_invite_events,
+        SELECT p.id, p.auto_invite_events, p.on_raid_hiatus,
                gr.level as rank_level,
                du.discord_id,
                s.name as spec_name, c.name as class_name
@@ -183,23 +183,22 @@ async def _build_signups(conn: asyncpg.Connection, event_date: date) -> list[dic
         """
     )
 
-    avail_rows = await conn.fetch("SELECT player_id, day_of_week FROM patt.player_availability")
-    available_on_day = {row["player_id"] for row in avail_rows if row["day_of_week"] == raid_dow}
-    has_any_avail = {row["player_id"] for row in avail_rows}
+    avail_rows = await conn.fetch(
+        "SELECT player_id FROM patt.player_availability WHERE day_of_week = $1", raid_dow
+    )
+    available_on_day = {row["player_id"] for row in avail_rows}
 
     signups = []
     for p in players:
         rank_level = p["rank_level"]
         pid = p["id"]
 
-        if pid in has_any_avail and pid not in available_on_day:
+        if p["on_raid_hiatus"] or pid not in available_on_day:
             status = "absence"
         elif rank_level >= 2 and p["auto_invite_events"]:
             status = "accepted"
-        elif rank_level >= 2:
-            status = "tentative"
         else:
-            status = "tentative"  # initiates: tentative, not bench
+            status = "tentative"
 
         rh_class, rh_spec = SPEC_TO_RAID_HELPER.get(
             (p["class_name"], p["spec_name"]), (None, None)
