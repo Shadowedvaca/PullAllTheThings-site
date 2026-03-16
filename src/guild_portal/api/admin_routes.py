@@ -15,7 +15,7 @@ from sqlalchemy import text
 from guild_portal.deps import get_db, require_rank
 from sv_common.config_cache import set_site_config
 from sv_common.db.models import (
-    DiscordConfig, GuildRank, Player, RaidAttendance, RaidEvent, RecurringEvent,
+    DiscordConfig, GuildRank, Player, PlayerAvailability, RaidAttendance, RaidEvent, RecurringEvent,
     Role, RaidSeason, ScreenPermission, SiteConfig, Specialization, WowCharacter, WowClass,
 )
 from sv_common.identity import ranks as rank_service
@@ -1042,6 +1042,15 @@ async def create_raid_event(
     )
     active_players = list(players_result.scalars().all())
 
+    # Load availability: who's available on the raid day, and who has any records
+    raid_dow = date.fromisoformat(body.event_date).weekday()  # 0=Mon, 6=Sun
+    avail_result = await db.execute(
+        select(PlayerAvailability.player_id, PlayerAvailability.day_of_week)
+    )
+    all_avail_rows = avail_result.all()
+    available_on_day = {row.player_id for row in all_avail_rows if row.day_of_week == raid_dow}
+    has_any_avail = {row.player_id for row in all_avail_rows}
+
     signups = []
     attendance_rows = []
     for p in active_players:
@@ -1053,8 +1062,10 @@ async def create_raid_event(
             continue
         elif override:
             status = override  # explicit override
+        elif p.id in has_any_avail and p.id not in available_on_day:
+            status = "absence"
         elif rank_level == 1:
-            status = "bench"
+            status = "tentative"
         elif p.auto_invite_events:
             status = "accepted"
         else:

@@ -4,7 +4,7 @@ creates next week's Raid-Helper event, and posts a Discord announcement.
 """
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import asyncpg
 
@@ -87,7 +87,7 @@ async def book_next_occurrence(
         return None
 
     # Build player signups
-    signups = await _build_signups(conn)
+    signups = await _build_signups(conn, next_date)
 
     # Call Raid-Helper API
     try:
@@ -163,8 +163,10 @@ async def book_next_occurrence(
     return result["event_id"]
 
 
-async def _build_signups(conn: asyncpg.Connection) -> list[dict]:
-    """Build signup list using auto-invite rules."""
+async def _build_signups(conn: asyncpg.Connection, event_date: date) -> list[dict]:
+    """Build signup list using auto-invite rules and availability."""
+    raid_dow = event_date.weekday()  # 0=Mon, 6=Sun
+
     players = await conn.fetch(
         """
         SELECT p.id, p.auto_invite_events,
@@ -181,20 +183,29 @@ async def _build_signups(conn: asyncpg.Connection) -> list[dict]:
         """
     )
 
+    avail_rows = await conn.fetch("SELECT player_id, day_of_week FROM patt.player_availability")
+    available_on_day = {row["player_id"] for row in avail_rows if row["day_of_week"] == raid_dow}
+    has_any_avail = {row["player_id"] for row in avail_rows}
+
     signups = []
     for p in players:
-        if p["rank_level"] >= 2 and p["auto_invite_events"]:
+        rank_level = p["rank_level"]
+        pid = p["id"]
+
+        if pid in has_any_avail and pid not in available_on_day:
+            status = "absence"
+        elif rank_level >= 2 and p["auto_invite_events"]:
             status = "accepted"
-        elif p["rank_level"] >= 2:
+        elif rank_level >= 2:
             status = "tentative"
         else:
-            status = "bench"
+            status = "tentative"  # initiates: tentative, not bench
 
         rh_class, rh_spec = SPEC_TO_RAID_HELPER.get(
             (p["class_name"], p["spec_name"]), (None, None)
         )
         signups.append({
-            "player_id": p["id"],
+            "player_id": pid,
             "discord_id": p["discord_id"],
             "status": status,
             "class_name": rh_class,

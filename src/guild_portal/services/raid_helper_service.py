@@ -172,6 +172,9 @@ async def add_signups_to_event(
     class_name (or class) and spec_name (or spec).
     Returns (success_count, fail_count).
     """
+    # Status values that map to specific Raid-Helper slot classes (override role className)
+    _STATUS_CLASS = {"tentative": "Tentative", "bench": "Bench", "absence": "Absence"}
+
     ok = 0
     fail = 0
     async with httpx.AsyncClient() as client:
@@ -180,13 +183,20 @@ async def add_signups_to_event(
             user_id = s.get("discord_id") or s.get("userId")
             if not user_id:
                 continue
-            class_name = s.get("class_name") or s.get("class")
-            spec_name = s.get("spec_name") or s.get("spec")
-            body: dict[str, Any] = {"userId": user_id}
-            if class_name:
-                body["className"] = class_name
-            if spec_name:
-                body["specName"] = spec_name
+            status = s.get("status", "accepted")
+            slot_class = _STATUS_CLASS.get(status)
+            if slot_class:
+                # Non-accepted: sign up into the status slot, no class/spec
+                body: dict[str, Any] = {"userId": user_id, "className": slot_class}
+            else:
+                # Accepted: use role-based class and spec
+                class_name = s.get("class_name") or s.get("class")
+                spec_name = s.get("spec_name") or s.get("spec")
+                body = {"userId": user_id}
+                if class_name:
+                    body["className"] = class_name
+                if spec_name:
+                    body["specName"] = spec_name
             logger.info("Raid-Helper signup body for %s: %s", user_id, body)
             try:
                 resp = await client.post(
