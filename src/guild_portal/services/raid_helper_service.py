@@ -181,6 +181,7 @@ async def add_signups_to_event(
                 body["className"] = class_name
             if spec_name:
                 body["specName"] = spec_name
+            logger.info("Raid-Helper signup body for %s: %s", user_id, body)
             try:
                 resp = await client.post(
                     f"{_BASE_URL}/events/{event_id}/signups",
