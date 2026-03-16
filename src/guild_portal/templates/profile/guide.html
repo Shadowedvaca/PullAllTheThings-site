@@ -173,14 +173,15 @@
       </summary>
       <div class="guide-section__body">
         <h4>What is this website?</h4>
-        <p>The {{ site().guild_name }} website is the guild's hub — it tracks your characters, lets you vote on campaigns, shows the raid schedule, and lets you browse what guildies can craft. You're looking at it right now.</p>
+        <p>The {{ site().guild_name }} website is the guild's hub — it tracks your characters, lets you vote on campaigns, shows the raid schedule, lets you browse what guildies can craft, and monitors market prices for raid consumables.</p>
 
         <h4>How do I get an account?</h4>
-        <p>You should already have one if you're reading this! Accounts are created via invite code — either DM the guild bot on Discord and ask for an invite, or ask an officer to generate one for you. The bot will send you a registration link via DM.</p>
+        <p>Accounts are created via invite code. DM the guild bot on Discord and ask for an invite — it will send you a registration link automatically. You can also ask an officer to generate one from the admin panel.</p>
 
         <h4>What can my account do?</h4>
         <ul>
           <li>Set up your profile with your main character and spec</li>
+          <li>Link your Battle.net account to verify and auto-claim your WoW characters</li>
           <li>Mark your weekly availability for raid planning</li>
           <li>Vote in guild campaigns (art votes, polls, book club picks, etc.)</li>
           <li>Request guild crafting orders via the Crafting Corner</li>
@@ -210,9 +211,38 @@
         </ul>
 
         <h4>Claiming Characters</h4>
-        <p>If your character doesn't appear linked yet, you can claim an unclaimed guild character from the dropdown at the bottom of the profile page. Officers can also link characters to you via the Player Manager.</p>
+        <p>If your character doesn't appear linked yet, you can claim an unclaimed guild character from the dropdown at the bottom of the profile page. Linking your Battle.net account (see below) is the easiest way — it auto-claims all your characters on the guild's home realm.</p>
 
         <div class="guide-tip">💡 Your main character's item level and spec are pulled automatically from the Blizzard API and stay current after each sync.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        🔵 Battle.net Account
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>What it does</h4>
+        <p>Linking your Battle.net account lets the site verify which WoW characters are actually yours and auto-claim them — no manual claiming or officer intervention needed. Characters claimed via Battle.net show a lock badge and cannot be accidentally unlinked or reassigned.</p>
+
+        <h4>How to link</h4>
+        <p>On your Profile page (Settings → My Profile), click <strong>"Connect Battle.net"</strong>. You'll be redirected to Blizzard's login page. After authorizing, you're sent back to the site and your characters are synced automatically.</p>
+
+        <h4>What gets synced</h4>
+        <ul>
+          <li>All your WoW characters on the guild's home realm at level 10 or above</li>
+          <li>Characters are upserted — new ones are added, existing ones are updated</li>
+          <li>Claims are marked as <strong>Battle.net Verified</strong> (high-confidence) on your profile and in the Player Manager</li>
+        </ul>
+
+        <h4>Unlinking</h4>
+        <p>You can disconnect your Battle.net account from the profile page. This removes the OAuth token but leaves your claimed characters in place — they just become manually-claimable again.</p>
+
+        <h4>Automatic refresh</h4>
+        <p>Battle.net tokens are refreshed nightly at 3:15 AM UTC. If your token expires, re-linking from the profile page will restore sync.</p>
+
+        <div class="guide-tip">💡 The onboarding flow automatically prompts new members to link their Battle.net account as part of joining the guild website.</div>
       </div>
     </details>
 
@@ -284,6 +314,29 @@
 
     <details class="guide-section">
       <summary>
+        📈 Market Watch
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>What it is</h4>
+        <p>The Market Watch card on the home page shows current Auction House prices for raid-relevant consumables — flasks, injectors, enchants, and gems. Prices are updated hourly from the Blizzard AH API.</p>
+
+        <h4>What's tracked</h4>
+        <ul>
+          <li><strong>Consumables</strong> — Flasks and health injectors used in progression raiding</li>
+          <li><strong>Enchants</strong> — Weapon and cloak enchants relevant to current content</li>
+          <li><strong>Gems</strong> — Jeweler's settings for gear sockets</li>
+        </ul>
+
+        <h4>Price display</h4>
+        <p>Prices shown are the current minimum buyout (or region-wide market price for commodities). Each item links to Wowhead for full details. Officers can configure which items are tracked and trigger manual syncs from the AH Pricing admin page.</p>
+
+        <div class="guide-tip">💡 Commodity items (flasks, gems) use region-wide pricing from the Blizzard commodity endpoint. Non-commodity items use your guild's connected realm.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
         🤖 The Discord Bot
         <span class="guide-arrow">▶</span>
       </summary>
@@ -294,7 +347,11 @@
           <li><strong>Crafting orders</strong> — Posts embeds in #crafters-corner when a guild order is placed on the website, tagging relevant crafters.</li>
           <li><strong>Campaign announcements</strong> — Posts milestone updates in the campaign channel when voting is active.</li>
           <li><strong>Raid event booking</strong> — After a raid event starts, the bot auto-creates next week's Raid-Helper signup sheet so it's ready before you log off for the night.</li>
+          <li><strong>Attendance tracking</strong> — When enabled, the bot monitors the raid voice channel and logs join/leave events to calculate attendance for each raid event.</li>
         </ul>
+
+        <h4>Onboarding new members</h4>
+        <p>When a new member joins the Discord, the bot automatically starts an onboarding conversation via DM. It walks you through getting a website account and linking your Battle.net account. If you miss a step, the bot follows up after 24 hours and again at 48 hours before closing the flow.</p>
 
         <h4>Getting an invite</h4>
         <p>DM the guild bot directly and ask for a website invite — it will send you a registration code and link automatically. You can also ask an officer and they'll generate one from the admin panel.</p>
@@ -360,7 +417,7 @@
         <ul>
           <li><strong>Discord</strong> — Live Discord server members, pulled directly from the bot</li>
           <li><strong>Players</strong> — Guild identity records (the player entities that own characters and have ranks)</li>
-          <li><strong>Characters</strong> — WoW characters from the guild roster (synced via Blizzard API and the PATTSync addon)</li>
+          <li><strong>Characters</strong> — WoW characters from the guild roster (synced via Blizzard API and the GuildSync addon)</li>
         </ul>
 
         <h4>Linking Discord to Players</h4>
@@ -368,6 +425,12 @@
 
         <h4>Linking Characters to Players</h4>
         <p>Drag a Character from the right column onto a Player card to assign ownership. You can also toggle whether a character is the player's Main or an Alt.</p>
+
+        <h4>Battle.net Verified Characters</h4>
+        <p>Characters claimed via Battle.net OAuth show a 🔒 badge and are <strong>locked</strong> — they cannot be dragged or manually reassigned. This protects verified identity data. To reassign a locked character, the player must disconnect their Battle.net account first.</p>
+
+        <h4>Attendance Dot</h4>
+        <p>Each player card shows a colored attendance dot (green / amber / red / grey) based on their attendance rate over the configured trailing window. Grey means new member or feature disabled.</p>
 
         <h4>Drill-down</h4>
         <p>Click the ◎ button on any card to filter all three columns to only show items related to that player. A gold banner shows the active filter — click ✕ to clear it.</p>
@@ -390,7 +453,7 @@
         <p>The Data Quality page monitors the health of the guild identity data — character links, Discord connections, and role assignments.</p>
 
         <h4>Coverage Dashboard</h4>
-        <p>The top section shows overall matching coverage — what percentage of guild characters are linked to players, broken down by confidence level (High / Medium / Low) and link source (note key, name match, manual, etc.).</p>
+        <p>The top section shows overall matching coverage — what percentage of guild characters are linked to players, broken down by confidence level (High / Medium / Low) and link source (note key, name match, manual, Battle.net OAuth, etc.).</p>
 
         <h4>Audit Rules</h4>
         <p>Eight automated rules run after each guild sync:</p>
@@ -439,6 +502,55 @@
 
     <details class="guide-section">
       <summary>
+        🎙️ Raid Attendance
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Attendance</h4>
+        <p>Tracks raid attendance by combining two sources: voice channel presence (bot logs who is in the raid voice channel) and Warcraft Logs reports (who appears in WCL for that session). The result is a season-wide grid showing attendance for every player across every event.</p>
+
+        <h4>Season Grid</h4>
+        <p>The main view is a player × event matrix. Each cell shows:</p>
+        <ul>
+          <li><strong>✓ green</strong> — Attended. Flags: ⏰ arrived late, 🚪 left early.</li>
+          <li><strong>✗ red</strong> — Absent (processed, not present)</li>
+          <li><strong>~ amber</strong> — Excused absence</li>
+          <li><strong>[live] blue</strong> — Event in progress, tracking now</li>
+          <li><strong>— grey</strong> — No data for this event</li>
+        </ul>
+        <p>The rightmost column shows each player's total attendance count and percentage. The bottom row shows guild-wide attendance per event.</p>
+
+        <h4>Habitual Patterns</h4>
+        <p>Players who are consistently late or leave early across recent raids get a <strong>⚠ Habitual</strong> badge. Hover it to see the pattern. The bot also posts an alert to the audit channel when a habitual pattern is detected.</p>
+
+        <h4>Cell Popover</h4>
+        <p>Click any cell for details: attendance source, minutes present, join/leave times, late/early flags. You can mark a cell as Excused directly from the popover.</p>
+
+        <h4>Event Detail Panel</h4>
+        <p>Click a column header to open the event detail panel — shows the full per-player breakdown for that event including time in channel, data source, and result. A <strong>Re-process</strong> button re-runs both the WCL and voice passes for that event.</p>
+
+        <h4>Unlinked Users</h4>
+        <p>Discord users seen in voice who aren't linked to a player appear in the collapsible "Unlinked Discord Users" list at the bottom of the grid. Use the Player Manager to link them.</p>
+
+        <h4>Settings</h4>
+        <ul>
+          <li><strong>Enable voice attendance tracking</strong> — Master toggle. The bot must have View Channel + Connect permission on the raid voice channel.</li>
+          <li><strong>Minimum presence %</strong> — How much of the event a player must be present to count as attended (default 75%).</li>
+          <li><strong>Late arrival grace</strong> — Minutes after event start before arriving counts as "late" (default 10 min).</li>
+          <li><strong>Early leave grace</strong> — Minutes before event end that leaving counts as "left early" (default 10 min).</li>
+          <li><strong>Trailing window</strong> — How many recent events the attendance dot on Player Manager uses (default 8).</li>
+          <li><strong>Habitual flag window / threshold</strong> — How many events to look back and how many occurrences to flag as habitual (default: 5 events, 3 occurrences).</li>
+        </ul>
+
+        <h4>CSV Export</h4>
+        <p>The <strong>CSV Export</strong> button downloads a full season attendance spreadsheet with one row per player and one column per event.</p>
+
+        <div class="guide-tip">💡 Attendance is processed automatically every 30 minutes for events that ended more than 30 minutes ago. You can also re-process any event manually from the event detail panel.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
         ⚙️ Crafting Sync
         <span class="guide-arrow">▶</span>
       </summary>
@@ -467,11 +579,36 @@
 
     <details class="guide-section">
       <summary>
+        📦 AH Pricing
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → AH Pricing</h4>
+        <p>Manages which items are tracked for Auction House pricing and lets you manually trigger a sync. Prices from this page power the Market Watch card on the public home page.</p>
+
+        <h4>Tracked Items</h4>
+        <p>The item list shows all currently tracked consumables, enchants, and gems. Each row shows the item name, category, current price, and last-updated time. You can add new items, toggle existing items on/off, and reorder them.</p>
+
+        <h4>Realm Setup</h4>
+        <p>The <strong>Resolve Realm</strong> button looks up your guild's connected realm ID from the Blizzard API using the realm slug from Site Config. This ID is cached in the database and used for realm-specific auction lookups.</p>
+
+        <h4>Manual Sync</h4>
+        <p>Click <strong>Sync Now</strong> to trigger an immediate price update outside the hourly schedule. Useful after a major patch or when you've just added new items.</p>
+
+        <h4>Price Source</h4>
+        <p>Commodity items (flasks, gems — things anyone can buy from the AH without a specific seller) use the Blizzard region-wide commodities endpoint. Non-commodity items (specific enchant scrolls) fall back to your connected realm's auction data.</p>
+
+        <div class="guide-tip">💡 Prices sync hourly at :15 past each hour. The home page card only appears if at least one active item has a price on record.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
         📣 Campaigns
         <span class="guide-arrow">▶</span>
       </summary>
       <div class="guide-section__body">
-        <h4>Settings → Campaigns</h4>
+        <h4>Settings → Social Tools → Campaigns</h4>
         <p>Create and manage guild voting campaigns from this page.</p>
 
         <h4>Campaign lifecycle</h4>
@@ -496,6 +633,60 @@
         <p>If "Close early if all eligible members have voted" is checked, the campaign closes automatically once everyone with voting access has submitted.</p>
       </div>
     </details>
+
+    <details class="guide-section">
+      <summary>
+        📜 Warcraft Logs
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Warcraft Logs</h4>
+        <p>Integrates with the Warcraft Logs API to pull parse data and raid reports. Used as a data source for attendance alongside voice tracking.</p>
+
+        <h4>Configuration</h4>
+        <p>Enter your WCL API client ID and secret (from your Warcraft Logs account), then verify the connection. Once connected, the sync runs automatically after each raid sync pass.</p>
+
+        <h4>Reports</h4>
+        <p>The Reports tab shows recent WCL reports for your guild — log date, zone, duration, and a direct link to the full report on Warcraft Logs. Reports are used to reconcile attendance: anyone who appears in a WCL report for a raid event is credited as attended.</p>
+
+        <h4>Parses</h4>
+        <p>The Parses tab shows per-player performance data pulled from WCL — best parse percentile per boss, spec, and difficulty. This feeds the public <code>/roster</code> parse display.</p>
+
+        <h4>Attendance (WCL source)</h4>
+        <p>The WCL-sourced attendance pass runs for each processed raid event: it matches WCL report participants to guild players by character name and marks them as attended. When a player is in WCL but not in voice (or vice versa), the combined result is still counted as attended.</p>
+
+        <div class="guide-tip">💡 WCL data requires a Warcraft Logs account and active logging during raids. If logs aren't uploaded, the voice channel pass is the sole attendance source for that event.</div>
+      </div>
+    </details>
+
+    <details class="guide-section">
+      <summary>
+        🏆 Progression
+        <span class="guide-arrow">▶</span>
+      </summary>
+      <div class="guide-section__body">
+        <h4>Settings → Progression</h4>
+        <p>Tracks raid progression and M+ activity across the guild, syncing data from the Blizzard API, Raider.IO, and Warcraft Logs.</p>
+
+        <h4>Raid Progression</h4>
+        <p>Per-character boss kill data is synced from the Blizzard encounters API. The public <code>/roster</code> Progression tab aggregates this into a guild-wide view showing kills per boss across difficulties.</p>
+
+        <h4>Mythic+ Tracking</h4>
+        <p>The current M+ season ID (set on this page) controls which season's keystone data is pulled. Per-character best key levels and scores sync automatically as part of the weekly progression pass.</p>
+
+        <h4>Tracked Achievements</h4>
+        <p>Add specific achievement IDs to track across the guild. On the next sync, the system checks each character for those achievements and stores completion status. Useful for tracking guild-wide progress on meta achievements or raid titles.</p>
+
+        <h4>Snapshots</h4>
+        <p>The weekly sweep (Sundays at 4:30 AM UTC) takes a full progression snapshot — a point-in-time record of every character's kill counts. Snapshots let you compare progression week over week.</p>
+
+        <h4>Sync Stats</h4>
+        <p>The page shows when the last progression sync ran, how many characters were processed, and the last snapshot date.</p>
+
+        <div class="guide-tip">💡 Characters that haven't logged in recently are skipped to save API quota. Use the "Force Full" option on the sync trigger to include all characters regardless of last login.</div>
+      </div>
+    </details>
+
   </div>
   {% endif %}
 
