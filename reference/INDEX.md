@@ -60,6 +60,7 @@ This means Claude Code never needs conversation history. It reads the repo.
 |------|---------|
 | `reference/PHASE_2_5_OVERVIEW.md` | Guild identity system overview — officer list, rank mappings, guild details |
 | `reference/PHASE_2_6_ONBOARDING.md` | Onboarding system design — built but not yet activated |
+| `reference/RAID_HELPER_API.md` | Raid-Helper API v2 reference — auth, event creation, signups, wowretail2 spec table, error catalog |
 | `context/contest_agent_personality.md` | Bot personality and message templates for campaigns |
 | `docs/OPERATIONS.md` | How to operate the platform day-to-day |
 | `docs/DISCORD-BOT-SETUP.md` | Discord bot configuration guide |
