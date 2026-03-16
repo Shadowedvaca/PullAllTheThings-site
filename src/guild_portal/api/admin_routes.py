@@ -1107,7 +1107,6 @@ async def create_raid_event(
             channel_id=channel_id,
             description=body.description,
             template_id=template_id,
-            signups=signups,
         )
     except RaidHelperError as e:
         return {"ok": False, "error": str(e)}

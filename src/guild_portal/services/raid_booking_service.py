@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import asyncpg
 
-from guild_portal.services.raid_helper_service import create_event, RaidHelperError
+from guild_portal.services.raid_helper_service import create_event, add_signups_to_event, RaidHelperError
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +100,23 @@ async def book_next_occurrence(
             channel_id=source_event["discord_channel_id"] or config.get("raid_channel_id") or "",
             description="Auto-scheduled raid. Sign up below!",
             template_id=source_event["raid_helper_template_id"] or "wowretail2",
-            signups=signups,
         )
     except RaidHelperError as e:
         logger.error("Auto-booking failed (Raid-Helper API error): %s", e)
         return None
+
+    # Add player signups to the new event
+    rh_signups = [s for s in signups if s.get("discord_id")]
+    if rh_signups:
+        try:
+            ok, fail = await add_signups_to_event(
+                api_key=config["raid_helper_api_key"],
+                event_id=result["event_id"],
+                signups=rh_signups,
+            )
+            logger.info("Auto-booking signups: %d ok, %d failed", ok, fail)
+        except Exception as e:
+            logger.error("Auto-booking: signup step failed: %s", e)
 
     # Insert patt.raid_events row
     next_end_utc = next_start_utc + timedelta(minutes=source_event["default_duration_minutes"])

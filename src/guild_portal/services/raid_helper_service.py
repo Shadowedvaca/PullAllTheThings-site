@@ -85,7 +85,6 @@ async def create_event(
     channel_id: str,
     description: str,
     template_id: str = "wowretail2",
-    signups: list[dict] | None = None,
 ) -> dict[str, Any]:
     """POST to Raid-Helper API to create an event.
 
@@ -162,42 +161,50 @@ async def add_signups_to_event(
     """Add pre-populated signups to an existing Raid-Helper event.
 
     Calls PUT /api/v2/events/{eventId}/signup/{userId} for each signup
-    concurrently.  Returns (success_count, fail_count).
+    sequentially with a 200 ms delay between requests to avoid rate limiting.
+    Signup dicts must have keys: discord_id, status, class_name, spec_name.
+    Returns (success_count, fail_count).
     """
     # Raid-Helper signup status codes: 1=Signed Up, 2=Bench, 3=Tentative
     _STATUS_CODE = {"accepted": 1, "bench": 2, "tentative": 3}
 
-    async def _add_one(client: httpx.AsyncClient, s: dict) -> bool:
-        user_id = s["userId"]
-        body: dict[str, Any] = {
-            "statusId": _STATUS_CODE.get(s.get("status", "accepted"), 1),
-        }
-        if s.get("class"):
-            body["className"] = s["class"]
-        if s.get("spec"):
-            body["specName"] = s["spec"]
-        try:
-            resp = await client.put(
-                f"{_BASE_URL}/events/{event_id}/signup/{user_id}",
-                headers={"Authorization": api_key, "Content-Type": "application/json"},
-                json=body,
-                timeout=10.0,
-            )
-            if not resp.is_success:
-                logger.warning(
-                    "Raid-Helper signup failed for user %s: %s %s",
-                    user_id, resp.status_code, resp.text[:100],
-                )
-            return resp.is_success
-        except Exception as exc:
-            logger.warning("Raid-Helper signup error for user %s: %s", user_id, exc)
-            return False
-
+    ok = 0
+    fail = 0
     async with httpx.AsyncClient() as client:
-        results = await asyncio.gather(*[_add_one(client, s) for s in signups])
+        for s in signups:
+            # Accept both field name conventions: discord_id / userId, class_name / class, spec_name / spec
+            user_id = s.get("discord_id") or s.get("userId")
+            if not user_id:
+                continue
+            body: dict[str, Any] = {
+                "statusId": _STATUS_CODE.get(s.get("status", "accepted"), 1),
+            }
+            class_name = s.get("class_name") or s.get("class")
+            spec_name = s.get("spec_name") or s.get("spec")
+            if class_name:
+                body["className"] = class_name
+            if spec_name:
+                body["specName"] = spec_name
+            try:
+                resp = await client.put(
+                    f"{_BASE_URL}/events/{event_id}/signup/{user_id}",
+                    headers={"Authorization": api_key, "Content-Type": "application/json"},
+                    json=body,
+                    timeout=10.0,
+                )
+                if resp.is_success:
+                    ok += 1
+                else:
+                    logger.warning(
+                        "Raid-Helper signup failed for user %s: %s %s",
+                        user_id, resp.status_code, resp.text[:100],
+                    )
+                    fail += 1
+            except Exception as exc:
+                logger.warning("Raid-Helper signup error for user %s: %s", user_id, exc)
+                fail += 1
+            await asyncio.sleep(0.2)
 
-    ok = sum(results)
-    fail = len(results) - ok
     logger.info("Raid-Helper signups: %d ok, %d failed (event %s)", ok, fail, event_id)
     return ok, fail
 
