@@ -184,14 +184,14 @@ def _char(name, realm_slug, level, class_name="Druid"):
 
 @pytest.mark.asyncio
 async def test_sync_bnet_characters_correct_realm_and_level_filtering(monkeypatch):
-    """Only characters on the home realm at level >= 10 are linked."""
+    """Home-realm chars at level >= 10 are linked; low-level and unknown off-realm chars skipped."""
     _setup_bnet_key(monkeypatch)
     from sv_common.guild_sync.bnet_character_sync import sync_bnet_characters
 
     profile = _make_blizzard_profile([
-        _char("Trogmoon", "senjin", 80),       # ✓ keep
+        _char("Trogmoon", "senjin", 80),       # ✓ home realm, level ok
         _char("Bankalt", "senjin", 5),          # ✗ level too low
-        _char("Transfered", "illidan", 80),     # ✗ wrong realm
+        _char("Transfered", "illidan", 80),     # ✗ unknown char on unrelated realm
         _char("NewChar", "senjin", 10),         # ✓ exactly level 10
     ])
 
@@ -199,16 +199,17 @@ async def test_sync_bnet_characters_correct_realm_and_level_filtering(monkeypatc
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = profile
 
-    linked_chars = []
-
     async def fake_fetchrow(query, *args):
         if "classes" in query:
             return {"id": 5}  # class_id
-        if "wow_characters" in query and "character_name" in query and "realm_slug" in query and "INSERT" not in query:
-            return {"id": 100}  # existing char
-        if "wow_characters" in query and "INSERT" in query:
+        if "SELECT id FROM guild_identity.wow_characters" in query:
+            # Trogmoon (senjin) and NewChar (senjin) exist; Transfered (illidan) does NOT
             char_name = args[0]
-            linked_chars.append(char_name)
+            realm = args[1]
+            if realm == "senjin":
+                return {"id": 100}
+            return None  # illidan char not in guild DB
+        if "INSERT INTO guild_identity.wow_characters" in query:
             return {"id": 100}
         if "player_characters" in query and "SELECT" in query.upper():
             return None  # no existing link
@@ -232,6 +233,60 @@ async def test_sync_bnet_characters_correct_realm_and_level_filtering(monkeypatc
 
     assert stats["linked"] == 2  # Trogmoon + NewChar
     assert stats["skipped"] == 2  # Bankalt + Transfered
+
+
+@pytest.mark.asyncio
+async def test_sync_bnet_characters_links_connected_realm_chars(monkeypatch):
+    """Characters on connected realms that exist in wow_characters are linked."""
+    _setup_bnet_key(monkeypatch)
+    from sv_common.guild_sync.bnet_character_sync import sync_bnet_characters
+
+    # Bladefist and Malganis are connected to Sen'jin — chars already in wow_characters from roster sync
+    profile = _make_blizzard_profile([
+        _char("Shamlee", "bladefist", 82),      # ✓ known connected-realm char
+        _char("Bullstorms", "malganis", 90),    # ✓ known connected-realm char
+        _char("Bankalt", "area-52", 5),         # ✗ level too low
+        _char("Stranger", "area-52", 80),       # ✗ unknown char on unrelated realm
+    ])
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = profile
+
+    async def fake_fetchrow(query, *args):
+        if "classes" in query:
+            return {"id": 7}
+        if "SELECT id FROM guild_identity.wow_characters" in query:
+            char_name = args[0]
+            realm = args[1]
+            # Shamlee/Bullstorms were imported by guild roster sync
+            if (char_name, realm) in [("Shamlee", "bladefist"), ("Bullstorms", "malganis")]:
+                return {"id": 50}
+            return None  # Stranger on area-52 is unknown
+        if "INSERT INTO guild_identity.wow_characters" in query:
+            return {"id": 50}
+        if "player_characters" in query and "SELECT" in query.upper():
+            return None
+        return None
+
+    pool, conn = _make_pool()
+    conn.fetchrow.side_effect = fake_fetchrow
+
+    monkeypatch.setattr(
+        "sv_common.guild_sync.bnet_character_sync.get_site_config",
+        lambda: {"home_realm_slug": "senjin"},
+    )
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_http = AsyncMock()
+        mock_http.get = AsyncMock(return_value=mock_resp)
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        stats = await sync_bnet_characters(pool, player_id=1, access_token="tok")
+
+    assert stats["linked"] == 2   # Shamlee + Bullstorms
+    assert stats["skipped"] == 2  # Bankalt (low level) + Stranger (unknown off-realm)
 
 
 @pytest.mark.asyncio
