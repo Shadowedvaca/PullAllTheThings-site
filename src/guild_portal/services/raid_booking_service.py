@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import asyncpg
 
-from guild_portal.services.raid_helper_service import create_event, add_signups_to_event, RaidHelperError
+from guild_portal.services.raid_helper_service import create_event, add_signups_to_event, RaidHelperError, SPEC_TO_RAID_HELPER
 
 logger = logging.getLogger(__name__)
 
@@ -190,12 +190,15 @@ async def _build_signups(conn: asyncpg.Connection) -> list[dict]:
         else:
             status = "bench"
 
+        rh_class, rh_spec = SPEC_TO_RAID_HELPER.get(
+            (p["class_name"], p["spec_name"]), (None, None)
+        )
         signups.append({
             "player_id": p["id"],
             "discord_id": p["discord_id"],
             "status": status,
-            "class_name": p["class_name"],
-            "spec_name": p["spec_name"],
+            "class_name": rh_class,
+            "spec_name": rh_spec,
         })
 
     return signups

@@ -26,47 +26,53 @@ class RaidHelperError(Exception):
 # Spec → Raid-Helper mapping
 # ---------------------------------------------------------------------------
 
-# Maps (class_name, spec_name) → (raid_helper_class, raid_helper_spec)
+# Maps (wow_class_name, wow_spec_name) → (raid_helper_className, raid_helper_specName)
+# className must match the wowretail2 template role names: Tank, Healer, Melee, Ranged
+# specName must match the exact spec name in the template (some differ from WoW names)
 SPEC_TO_RAID_HELPER: dict[tuple[str, str], tuple[str, str]] = {
-    ("Death Knight", "Blood"): ("Death Knight", "Blood"),
-    ("Death Knight", "Frost"): ("Death Knight", "Frost"),
-    ("Death Knight", "Unholy"): ("Death Knight", "Unholy"),
-    ("Demon Hunter", "Havoc"): ("Demon Hunter", "Havoc"),
-    ("Demon Hunter", "Vengeance"): ("Demon Hunter", "Vengeance"),
-    ("Druid", "Balance"): ("Druid", "Balance"),
-    ("Druid", "Feral"): ("Druid", "Feral"),
-    ("Druid", "Guardian"): ("Druid", "Guardian"),
-    ("Druid", "Restoration"): ("Druid", "Restoration"),
-    ("Evoker", "Devastation"): ("Evoker", "Devastation"),
-    ("Evoker", "Preservation"): ("Evoker", "Preservation"),
-    ("Evoker", "Augmentation"): ("Evoker", "Augmentation"),
-    ("Hunter", "Beast Mastery"): ("Hunter", "Beast Mastery"),
-    ("Hunter", "Marksmanship"): ("Hunter", "Marksmanship"),
-    ("Hunter", "Survival"): ("Hunter", "Survival"),
-    ("Mage", "Arcane"): ("Mage", "Arcane"),
-    ("Mage", "Fire"): ("Mage", "Fire"),
-    ("Mage", "Frost"): ("Mage", "Frost"),
-    ("Monk", "Brewmaster"): ("Monk", "Brewmaster"),
-    ("Monk", "Mistweaver"): ("Monk", "Mistweaver"),
-    ("Monk", "Windwalker"): ("Monk", "Windwalker"),
-    ("Paladin", "Holy"): ("Paladin", "Holy"),
-    ("Paladin", "Protection"): ("Paladin", "Protection"),
-    ("Paladin", "Retribution"): ("Paladin", "Retribution"),
-    ("Priest", "Discipline"): ("Priest", "Discipline"),
-    ("Priest", "Holy"): ("Priest", "Holy"),
-    ("Priest", "Shadow"): ("Priest", "Shadow"),
-    ("Rogue", "Assassination"): ("Rogue", "Assassination"),
-    ("Rogue", "Outlaw"): ("Rogue", "Outlaw"),
-    ("Rogue", "Subtlety"): ("Rogue", "Subtlety"),
-    ("Shaman", "Elemental"): ("Shaman", "Elemental"),
-    ("Shaman", "Enhancement"): ("Shaman", "Enhancement"),
-    ("Shaman", "Restoration"): ("Shaman", "Restoration"),
-    ("Warlock", "Affliction"): ("Warlock", "Affliction"),
-    ("Warlock", "Demonology"): ("Warlock", "Demonology"),
-    ("Warlock", "Destruction"): ("Warlock", "Destruction"),
-    ("Warrior", "Arms"): ("Warrior", "Arms"),
-    ("Warrior", "Fury"): ("Warrior", "Fury"),
-    ("Warrior", "Protection"): ("Warrior", "Protection"),
+    # Tanks
+    ("Death Knight", "Blood"): ("Tank", "Blood"),
+    ("Demon Hunter", "Vengeance"): ("Tank", "Vengeance"),
+    ("Druid", "Guardian"): ("Tank", "Guardian"),
+    ("Monk", "Brewmaster"): ("Tank", "Brewmaster"),
+    ("Paladin", "Protection"): ("Tank", "Protection"),
+    ("Warrior", "Protection"): ("Tank", "Protection1"),  # Protection1 = Warrior
+    # Healers
+    ("Druid", "Restoration"): ("Healer", "Restoration"),
+    ("Evoker", "Preservation"): ("Healer", "Preservation"),
+    ("Monk", "Mistweaver"): ("Healer", "Mistweaver"),
+    ("Paladin", "Holy"): ("Healer", "Holy1"),             # Holy1 = Paladin, Holy = Priest
+    ("Priest", "Discipline"): ("Healer", "Discipline"),
+    ("Priest", "Holy"): ("Healer", "Holy"),
+    ("Shaman", "Restoration"): ("Healer", "Restoration1"),  # Restoration1 = Shaman
+    # Melee DPS
+    ("Death Knight", "Frost"): ("Melee", "Frost1"),       # Frost1 = DK, Frost = Mage
+    ("Death Knight", "Unholy"): ("Melee", "Unholy"),
+    ("Demon Hunter", "Havoc"): ("Melee", "Havoc"),
+    ("Druid", "Feral"): ("Melee", "Feral"),
+    ("Hunter", "Survival"): ("Melee", "Survival"),
+    ("Monk", "Windwalker"): ("Melee", "Windwalker"),
+    ("Paladin", "Retribution"): ("Melee", "Retribution"),
+    ("Rogue", "Assassination"): ("Melee", "Assassination"),
+    ("Rogue", "Outlaw"): ("Melee", "Outlaw"),
+    ("Rogue", "Subtlety"): ("Melee", "Subtlety"),
+    ("Shaman", "Enhancement"): ("Melee", "Enhancement"),
+    ("Warrior", "Arms"): ("Melee", "Arms"),
+    ("Warrior", "Fury"): ("Melee", "Fury"),
+    # Ranged DPS
+    ("Druid", "Balance"): ("Ranged", "Balance"),
+    ("Evoker", "Devastation"): ("Ranged", "Devastation"),
+    ("Evoker", "Augmentation"): ("Ranged", "Augmentation"),
+    ("Hunter", "Beast Mastery"): ("Ranged", "Beastmastery"),  # no space
+    ("Hunter", "Marksmanship"): ("Ranged", "Marksmanship"),
+    ("Mage", "Arcane"): ("Ranged", "Arcane"),
+    ("Mage", "Fire"): ("Ranged", "Fire"),
+    ("Mage", "Frost"): ("Ranged", "Frost"),
+    ("Priest", "Shadow"): ("Ranged", "Shadow"),
+    ("Shaman", "Elemental"): ("Ranged", "Elemental"),
+    ("Warlock", "Affliction"): ("Ranged", "Affliction"),
+    ("Warlock", "Demonology"): ("Ranged", "Demonology"),
+    ("Warlock", "Destruction"): ("Ranged", "Destruction"),
 }
 
 
