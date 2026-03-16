@@ -67,6 +67,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/site-config",     "site_config"),
     ("/admin/progression",     "progression"),
     ("/admin/warcraft-logs",   "warcraft_logs"),
+    ("/admin/ah-pricing",      "ah_pricing"),
 ]
 
 
@@ -2992,3 +2993,232 @@ async def admin_wcl_parses(
         for r in rows
     ]
     return JSONResponse({"ok": True, "data": parses})
+
+
+# ===========================================================================
+# AH Pricing — /admin/ah-pricing
+# ===========================================================================
+
+
+@router.get("/ah-pricing", response_class=HTMLResponse)
+async def admin_ah_pricing_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """AH Pricing admin page — Officer+."""
+    player = await _require_screen("ah_pricing", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/ah-pricing")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/ah_pricing.html", ctx)
+
+
+@router.get("/ah-pricing/items")
+async def admin_ah_items(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return tracked items with current prices (JSON)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    from sv_common.guild_sync.ah_service import get_tracked_items_with_prices, copper_to_gold_str
+    items = await get_tracked_items_with_prices(pool)
+
+    data = [
+        {
+            "id": i["id"],
+            "item_id": i["item_id"],
+            "item_name": i["item_name"],
+            "category": i["category"],
+            "display_order": i["display_order"],
+            "is_active": i["is_active"],
+            "min_buyout": i["min_buyout"],
+            "min_buyout_str": copper_to_gold_str(i["min_buyout"]),
+            "median_price": i["median_price"],
+            "median_price_str": copper_to_gold_str(i["median_price"]),
+            "quantity_available": i["quantity_available"],
+            "num_auctions": i["num_auctions"],
+            "change_pct": i["change_pct"],
+            "snapshot_at": i["snapshot_at"].isoformat() if i["snapshot_at"] else None,
+        }
+        for i in items
+    ]
+    return JSONResponse({"ok": True, "data": data})
+
+
+@router.post("/ah-pricing/items")
+async def admin_ah_add_item(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new item to track. Body: {item_id, item_name, category}."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    body = await request.json()
+    item_id = body.get("item_id")
+    item_name = (body.get("item_name") or "").strip()
+    category = (body.get("category") or "consumable").strip()
+
+    if not item_id or not item_name:
+        return JSONResponse({"ok": False, "error": "item_id and item_name are required"}, status_code=400)
+
+    valid_categories = {"consumable", "enchant", "gem", "material", "gear"}
+    if category not in valid_categories:
+        category = "consumable"
+
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                """
+                INSERT INTO guild_identity.tracked_items
+                    (item_id, item_name, category, added_by_player_id)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (item_id) DO UPDATE
+                    SET item_name = EXCLUDED.item_name,
+                        category = EXCLUDED.category,
+                        is_active = TRUE
+                RETURNING id, item_id, item_name, category, is_active
+                """,
+                int(item_id),
+                item_name,
+                category,
+                admin.id,
+            )
+        except Exception as exc:
+            logger.error("Failed to add tracked item: %s", exc)
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+    return JSONResponse({"ok": True, "data": dict(row)})
+
+
+@router.delete("/ah-pricing/items/{item_id}")
+async def admin_ah_remove_item(
+    item_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a tracked item (hard delete with cascade to price history)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM guild_identity.tracked_items WHERE id = $1", item_id
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    if deleted == 0:
+        return JSONResponse({"ok": False, "error": "Item not found"}, status_code=404)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/ah-pricing/sync")
+async def admin_ah_force_sync(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Force an immediate AH price sync."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if not scheduler:
+        return JSONResponse({"ok": False, "error": "Scheduler not available"}, status_code=503)
+
+    import asyncio
+    asyncio.create_task(scheduler.run_ah_sync())
+    return JSONResponse({"ok": True, "message": "AH sync triggered"})
+
+
+@router.post("/ah-pricing/resolve-realm")
+async def admin_ah_resolve_realm(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-resolve the connected realm ID from the home realm slug."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if not pool or not scheduler:
+        return JSONResponse({"ok": False, "error": "Services not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT home_realm_slug FROM common.site_config LIMIT 1")
+    realm_slug = row["home_realm_slug"] if row else None
+    if not realm_slug:
+        return JSONResponse({"ok": False, "error": "home_realm_slug not configured"}, status_code=400)
+
+    connected_realm_id = await scheduler.blizzard_client.get_connected_realm_id(realm_slug)
+    if not connected_realm_id:
+        return JSONResponse({"ok": False, "error": "Could not resolve connected realm ID"}, status_code=502)
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE common.site_config SET connected_realm_id = $1", connected_realm_id
+        )
+    return JSONResponse({"ok": True, "connected_realm_id": connected_realm_id})
+
+
+@router.get("/ah-pricing/status")
+async def admin_ah_status(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return AH sync status: last snapshot time, item counts, connected realm."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Guild sync pool not available"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        config_row = await conn.fetchrow(
+            "SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1"
+        )
+        total_items = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.tracked_items WHERE is_active = TRUE"
+        )
+        last_snapshot = await conn.fetchval(
+            "SELECT MAX(snapshot_at) FROM guild_identity.item_price_history"
+        )
+        items_with_prices = await conn.fetchval(
+            """
+            SELECT COUNT(DISTINCT tracked_item_id)
+            FROM guild_identity.item_price_history
+            WHERE snapshot_at >= NOW() - INTERVAL '2 hours'
+            """
+        )
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "connected_realm_id": config_row["connected_realm_id"] if config_row else None,
+            "realm_slug": config_row["home_realm_slug"] if config_row else None,
+            "total_tracked_items": total_items or 0,
+            "items_with_recent_prices": items_with_prices or 0,
+            "last_snapshot": last_snapshot.isoformat() if last_snapshot else None,
+        },
+    })

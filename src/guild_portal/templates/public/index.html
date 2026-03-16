@@ -123,6 +123,39 @@
     {% endif %}
 </section>
 
+{# ── Market Watch ── #}
+{% if ah_prices %}
+<section class="lp-section">
+    <h2 class="lp-section-title">📈 Market Watch</h2>
+    <div class="lp-market-watch">
+        <table class="lp-market-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Min Price</th>
+                    <th>Available</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in ah_prices %}
+                <tr>
+                    <td class="lp-market-name">
+                        <span class="lp-market-cat lp-market-cat--{{ item.category }}">{{ item.category }}</span>
+                        {{ item.item_name }}
+                    </td>
+                    <td class="lp-market-price">{{ item.min_buyout | gold }}</td>
+                    <td class="lp-market-qty">{{ "{:,}".format(item.quantity_available) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if ah_prices[0].snapshot_at %}
+        <p class="lp-market-updated">Updated {{ ah_prices[0].snapshot_at.strftime('%b %d, %H:%M') }} UTC</p>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
 {# ── Guild Officers ── #}
 <section class="lp-section">
     <h2 class="lp-section-title">Guild Officers</h2>

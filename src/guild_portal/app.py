@@ -192,6 +192,10 @@ def create_app() -> FastAPI:
         from guild_portal.templating import templates as _tmpl
         _tmpl.env.globals["site"] = get_site_config
 
+        # Register Jinja2 filters
+        from sv_common.guild_sync.ah_service import copper_to_gold_str
+        _tmpl.env.filters["gold"] = copper_to_gold_str
+
         # Start auto-booking scheduler (requires guild_sync_pool)
         auto_book_task = None
         if guild_sync_pool:

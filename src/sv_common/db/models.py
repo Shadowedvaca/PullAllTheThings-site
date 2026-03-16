@@ -13,7 +13,7 @@ guild_identity schema: roles, classes, specializations, players,
                        character_mythic_plus, tracked_achievements,
                        character_achievements, progression_snapshots,
                        raiderio_profiles, wcl_config, character_parses,
-                       raid_reports
+                       raid_reports, tracked_items, item_price_history
 """
 
 from datetime import date, datetime, time
@@ -178,6 +178,7 @@ class SiteConfig(Base):
     blizzard_client_id: Mapped[Optional[str]] = mapped_column(String(100))
     blizzard_client_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text)
     current_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
+    connected_realm_id: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -1241,3 +1242,54 @@ class RaidReport(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema — AH Pricing (Phase 4.6)
+# ---------------------------------------------------------------------------
+
+
+class TrackedItem(Base):
+    """Guild-selected items to track on the Auction House."""
+
+    __tablename__ = "tracked_items"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    item_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    category: Mapped[str] = mapped_column(String(50), server_default="consumable")
+    display_order: Mapped[int] = mapped_column(Integer, server_default="0")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    added_by_player_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.players.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
+class ItemPriceHistory(Base):
+    """Hourly AH price snapshots for tracked items."""
+
+    __tablename__ = "item_price_history"
+    __table_args__ = (
+        UniqueConstraint("tracked_item_id", "snapshot_at", name="uq_item_price_snapshot"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tracked_item_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.tracked_items.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    min_buyout: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    median_price: Mapped[Optional[int]] = mapped_column(BigInteger)
+    mean_price: Mapped[Optional[int]] = mapped_column(BigInteger)
+    quantity_available: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    num_auctions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    connected_realm_id: Mapped[int] = mapped_column(Integer, nullable=False)
