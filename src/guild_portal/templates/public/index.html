@@ -234,6 +234,13 @@
        target="_blank" rel="noopener">📜 View our WoW recruitment post</a>
 </div>
 
+{% if site().realm_display_name %}
+<div class="lp-realm-badge">
+    <span class="lp-realm-badge__icon">🌍</span>
+    <span class="lp-realm-badge__text">{{ site().realm_display_name }} — US</span>
+</div>
+{% endif %}
+
 </div>{# /lp-container #}
 {% endblock %}
 
