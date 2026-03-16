@@ -220,8 +220,10 @@
             <div class="lp-quote-text">
                 {{ guild_quote or "" }}
             </div>
-            {% if guild_quote_title %}
-            <div class="lp-quote-label">— {{ guild_quote_title }}</div>
+            {% if guild_quote_subject or guild_quote_title %}
+            <div class="lp-quote-label">
+                — {% if guild_quote_subject %}{{ guild_quote_subject }}{% if guild_quote_title %}, {{ guild_quote_title }}{% endif %}{% else %}{{ guild_quote_title }}{% endif %}
+            </div>
             {% endif %}
         </div>
     </div>
