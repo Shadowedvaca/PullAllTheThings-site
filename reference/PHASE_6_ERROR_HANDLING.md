@@ -226,7 +226,20 @@ Note: `first_notified_discord_at` / `last_notified_discord_at` are **not** on `c
 
 ---
 
-## Sub-Phases
+## Sub-Phase Documents
+
+Each sub-phase is a standalone document with full context for a cold-start session.
+
+| Phase | File | Summary |
+|-------|------|---------|
+| 6.1 | `PHASE_6_1_ERROR_CATALOGUE.md` | sv_common core — `common.error_log` schema + `report_error/resolve_issue/get_unresolved` |
+| 6.2 | `PHASE_6_2_ADMIN_UI.md` | Routing config table, admin page, HTTP API |
+| 6.3 | `PHASE_6_3_DISCORD_DIGEST.md` | Discord notification helper + Sunday weekly digest |
+| 6.4 | `PHASE_6_4_MIGRATION.md` | Migrate all existing callsites; no more silent failures |
+
+---
+
+## Sub-Phases (Summary)
 
 ### Phase 6.1 — Schema + sv_common Core Module
 
