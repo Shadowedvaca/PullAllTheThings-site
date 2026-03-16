@@ -16,6 +16,7 @@ from sv_common.db.models import (
     GuildRank,
     GuildQuote,
     GuildQuoteTitle,
+    QuoteSubject,
     Player,
     RecurringEvent,
     WowCharacter,
@@ -193,19 +194,62 @@ async def landing_page(
     # Random guild quote and title from DB (only loaded when feature is enabled)
     guild_quote = None
     guild_quote_title = None
+    guild_quote_subject = None  # display_name of the subject for attribution
     if is_guild_quotes_enabled():
         try:
-            result = await db.execute(select(GuildQuote).order_by(func.random()).limit(1))
-            quote_row = result.scalar_one_or_none()
-            if quote_row:
-                guild_quote = quote_row.quote
-
-            result = await db.execute(
-                select(GuildQuoteTitle).order_by(func.random()).limit(1)
+            # Pick a random active subject first
+            subj_result = await db.execute(
+                select(QuoteSubject)
+                .where(QuoteSubject.active.is_(True))
+                .order_by(func.random())
+                .limit(1)
             )
-            title_row = result.scalar_one_or_none()
-            if title_row:
-                guild_quote_title = title_row.title
+            subj = subj_result.scalar_one_or_none()
+
+            if subj:
+                # Quote from that subject's pool
+                q_result = await db.execute(
+                    select(GuildQuote)
+                    .where(GuildQuote.subject_id == subj.id)
+                    .order_by(func.random())
+                    .limit(1)
+                )
+                quote_row = q_result.scalar_one_or_none()
+                if quote_row:
+                    guild_quote = quote_row.quote
+                    guild_quote_subject = subj.display_name
+
+                # Title from that subject's pool
+                t_result = await db.execute(
+                    select(GuildQuoteTitle)
+                    .where(GuildQuoteTitle.subject_id == subj.id)
+                    .order_by(func.random())
+                    .limit(1)
+                )
+                title_row = t_result.scalar_one_or_none()
+                if title_row:
+                    guild_quote_title = title_row.title
+            else:
+                # Fallback: unassigned quotes (subject_id IS NULL)
+                q_result = await db.execute(
+                    select(GuildQuote)
+                    .where(GuildQuote.subject_id.is_(None))
+                    .order_by(func.random())
+                    .limit(1)
+                )
+                quote_row = q_result.scalar_one_or_none()
+                if quote_row:
+                    guild_quote = quote_row.quote
+
+                t_result = await db.execute(
+                    select(GuildQuoteTitle)
+                    .where(GuildQuoteTitle.subject_id.is_(None))
+                    .order_by(func.random())
+                    .limit(1)
+                )
+                title_row = t_result.scalar_one_or_none()
+                if title_row:
+                    guild_quote_title = title_row.title
         except Exception:
             logger.warning("Could not load guild quote/title from DB", exc_info=True)
 
@@ -244,6 +288,7 @@ async def landing_page(
         "closed_campaigns": closed_campaigns,
         "guild_quote": guild_quote,
         "guild_quote_title": guild_quote_title,
+        "guild_quote_subject": guild_quote_subject,
         "officers": officers,
         "recruiting_needs": recruiting_needs,
         "event_days": event_days,

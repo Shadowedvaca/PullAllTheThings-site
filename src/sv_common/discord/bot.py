@@ -59,8 +59,8 @@ async def on_ready():
         try:
             from sv_common.guild_sync.onboarding.commands import register_onboarding_commands
             register_onboarding_commands(bot.tree, _db_pool)
-            from guild_portal.bot.guild_quote_commands import register_guild_quote_commands
-            register_guild_quote_commands(bot.tree, _db_pool)
+            from guild_portal.bot.guild_quote_commands import _async_register_guild_quote_commands
+            await _async_register_guild_quote_commands(bot.tree, _db_pool)
             if discord_guild:
                 bot.tree.copy_global_to(guild=discord_guild)
                 await bot.tree.sync(guild=discord_guild)
@@ -213,3 +213,33 @@ async def stop_bot() -> None:
 def get_bot() -> commands.Bot:
     """Return the global bot instance."""
     return bot
+
+
+async def sync_quote_commands_from_admin() -> None:
+    """Re-register and sync quote commands — called from the admin API endpoint.
+
+    Resolves the guild from DB/settings (same logic as on_ready) so the sync
+    is always guild-scoped when a guild ID is configured.
+    """
+    if _db_pool is None:
+        raise RuntimeError("DB pool not available — bot not started")
+
+    from guild_portal.config import get_settings
+    settings = get_settings()
+    guild_id_str = settings.discord_guild_id
+    try:
+        async with _db_pool.acquire() as _conn:
+            db_guild_id = await _conn.fetchval(
+                "SELECT guild_discord_id FROM common.discord_config LIMIT 1"
+            )
+        if db_guild_id:
+            guild_id_str = db_guild_id
+    except Exception:
+        pass
+
+    discord_guild = None
+    if guild_id_str:
+        discord_guild = bot.get_guild(int(guild_id_str))
+
+    from guild_portal.bot.guild_quote_commands import sync_quote_commands
+    await sync_quote_commands(bot.tree, _db_pool, discord_guild)

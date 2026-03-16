@@ -3,7 +3,7 @@
 common schema: guild_ranks, users, discord_config, invite_codes,
                site_config, rank_wow_mapping
 patt schema: campaigns, campaign_entries, votes, campaign_results,
-             contest_agent_log, guild_quotes, guild_quote_titles,
+             contest_agent_log, guild_quotes, guild_quote_titles, quote_subjects,
              player_availability, raid_seasons, raid_events, raid_attendance,
              recurring_events, voice_attendance_log
 guild_identity schema: roles, classes, specializations, players,
@@ -391,14 +391,56 @@ class ContestAgentLog(Base):
     campaign: Mapped[Campaign] = relationship(back_populates="agent_log")
 
 
+class QuoteSubject(Base):
+    """A guild member who has a personal quote collection and Discord slash command."""
+
+    __tablename__ = "quote_subjects"
+    __table_args__ = (
+        CheckConstraint(
+            "command_slug ~ '^[a-z][a-z0-9_-]{0,30}$'",
+            name="quote_subjects_slug_format",
+        ),
+        {"schema": "patt"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.players.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    command_slug: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    player: Mapped["Player"] = relationship("Player", foreign_keys=[player_id])
+    quotes: Mapped[list["GuildQuote"]] = relationship(
+        "GuildQuote", back_populates="subject", cascade="all, delete-orphan"
+    )
+    titles: Mapped[list["GuildQuoteTitle"]] = relationship(
+        "GuildQuoteTitle", back_populates="subject", cascade="all, delete-orphan"
+    )
+
+
 class GuildQuote(Base):
     __tablename__ = "guild_quotes"
     __table_args__ = {"schema": "patt"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subject_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("patt.quote_subjects.id", ondelete="CASCADE"), nullable=True
+    )
     quote: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    subject: Mapped[Optional["QuoteSubject"]] = relationship(
+        "QuoteSubject", back_populates="quotes", foreign_keys=[subject_id]
     )
 
 
@@ -407,9 +449,16 @@ class GuildQuoteTitle(Base):
     __table_args__ = {"schema": "patt"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subject_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("patt.quote_subjects.id", ondelete="CASCADE"), nullable=True
+    )
     title: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    subject: Mapped[Optional["QuoteSubject"]] = relationship(
+        "QuoteSubject", back_populates="titles", foreign_keys=[subject_id]
     )
 
 

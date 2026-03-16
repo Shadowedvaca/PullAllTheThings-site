@@ -15,7 +15,8 @@ from sqlalchemy import text
 from guild_portal.deps import get_db, require_rank
 from sv_common.config_cache import set_site_config
 from sv_common.db.models import (
-    DiscordConfig, GuildRank, Player, PlayerAvailability, RaidAttendance, RaidEvent, RecurringEvent,
+    DiscordConfig, GuildQuote, GuildQuoteTitle, GuildRank, Player, PlayerAvailability,
+    QuoteSubject, RaidAttendance, RaidEvent, RecurringEvent,
     Role, RaidSeason, ScreenPermission, SiteConfig, Specialization, WowCharacter, WowClass,
 )
 from sv_common.identity import ranks as rank_service
@@ -1949,3 +1950,285 @@ def _compute_att_status(rows, min_pct: int, feature_enabled: bool) -> dict:
     else:
         status = "concern"
     return {"status": status, "summary": summary}
+
+
+# ---------------------------------------------------------------------------
+# Quote Subjects — Phase 4.8
+# ---------------------------------------------------------------------------
+
+import re as _re
+
+_SLUG_RE = _re.compile(r'^[a-z][a-z0-9_-]{0,30}$')
+_RESERVED_SLUGS = {
+    "quote", "help", "me", "info", "ping", "stats", "settings",
+    "admin", "mod", "bot", "server", "role", "user",
+}
+
+
+class QuoteSubjectCreate(BaseModel):
+    player_id: int
+    command_slug: str
+    display_name: str
+    active: bool = True
+
+
+class QuoteSubjectUpdate(BaseModel):
+    command_slug: str | None = None
+    display_name: str | None = None
+    active: bool | None = None
+
+
+class QuoteBody(BaseModel):
+    quote: str
+
+
+class QuoteTitleBody(BaseModel):
+    title: str
+
+
+def _validate_slug(slug: str) -> str | None:
+    """Return error message if slug is invalid, else None."""
+    slug = slug.strip()
+    if not _SLUG_RE.match(slug):
+        return "Slug must start with a letter and contain only lowercase letters, numbers, hyphens, or underscores (max 32 chars)"
+    if slug in _RESERVED_SLUGS:
+        return f"'{slug}' is a reserved command name and cannot be used"
+    return None
+
+
+@router.get("/quote-subjects")
+async def list_quote_subjects(db: AsyncSession = Depends(get_db)):
+    """List all quote subjects with quote and title counts."""
+    result = await db.execute(
+        text("""
+            SELECT
+                qs.id,
+                qs.player_id,
+                qs.command_slug,
+                qs.display_name,
+                qs.active,
+                qs.created_at,
+                p.display_name AS player_display_name,
+                (SELECT COUNT(*) FROM patt.guild_quotes gq WHERE gq.subject_id = qs.id) AS quote_count,
+                (SELECT COUNT(*) FROM patt.guild_quote_titles gt WHERE gt.subject_id = qs.id) AS title_count
+            FROM patt.quote_subjects qs
+            JOIN guild_identity.players p ON p.id = qs.player_id
+            ORDER BY qs.display_name
+        """)
+    )
+    rows = result.mappings().all()
+    return {
+        "ok": True,
+        "data": [
+            {
+                "id": r["id"],
+                "player_id": r["player_id"],
+                "player_display_name": r["player_display_name"],
+                "command_slug": r["command_slug"],
+                "display_name": r["display_name"],
+                "active": r["active"],
+                "quote_count": r["quote_count"],
+                "title_count": r["title_count"],
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.post("/quote-subjects")
+async def create_quote_subject(body: QuoteSubjectCreate, db: AsyncSession = Depends(get_db)):
+    slug = body.command_slug.strip().lower()
+    err = _validate_slug(slug)
+    if err:
+        raise HTTPException(status_code=422, detail=err)
+
+    # Check player exists
+    p_result = await db.execute(select(Player).where(Player.id == body.player_id))
+    player = p_result.scalar_one_or_none()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    # Check uniqueness
+    existing = await db.execute(
+        select(QuoteSubject).where(QuoteSubject.command_slug == slug)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail=f"Command slug '/{slug}' is already in use")
+
+    player_taken = await db.execute(
+        select(QuoteSubject).where(QuoteSubject.player_id == body.player_id)
+    )
+    if player_taken.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="This player already has a quote subject")
+
+    subj = QuoteSubject(
+        player_id=body.player_id,
+        command_slug=slug,
+        display_name=body.display_name.strip(),
+        active=body.active,
+    )
+    db.add(subj)
+    await db.commit()
+    await db.refresh(subj)
+    return {"ok": True, "data": {"id": subj.id, "command_slug": subj.command_slug, "display_name": subj.display_name, "active": subj.active}}
+
+
+@router.patch("/quote-subjects/{subject_id}")
+async def update_quote_subject(
+    subject_id: int, body: QuoteSubjectUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(QuoteSubject).where(QuoteSubject.id == subject_id))
+    subj = result.scalar_one_or_none()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Quote subject not found")
+
+    if body.command_slug is not None:
+        slug = body.command_slug.strip().lower()
+        err = _validate_slug(slug)
+        if err:
+            raise HTTPException(status_code=422, detail=err)
+        # Check uniqueness (excluding self)
+        taken = await db.execute(
+            select(QuoteSubject).where(
+                QuoteSubject.command_slug == slug,
+                QuoteSubject.id != subject_id,
+            )
+        )
+        if taken.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail=f"Command slug '/{slug}' is already in use")
+        subj.command_slug = slug
+
+    if body.display_name is not None:
+        subj.display_name = body.display_name.strip()
+
+    if body.active is not None:
+        subj.active = body.active
+
+    await db.commit()
+    return {"ok": True, "data": {"id": subj.id, "command_slug": subj.command_slug, "display_name": subj.display_name, "active": subj.active}}
+
+
+@router.delete("/quote-subjects/{subject_id}")
+async def delete_quote_subject(subject_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(QuoteSubject).where(QuoteSubject.id == subject_id))
+    subj = result.scalar_one_or_none()
+    if not subj:
+        raise HTTPException(status_code=404, detail="Quote subject not found")
+    await db.delete(subj)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/quote-subjects/sync-commands")
+async def sync_quote_commands_endpoint(request: Request):
+    """Re-register and sync all quote slash commands to Discord.
+
+    Called after adding/removing/toggling subjects so Discord reflects current state.
+    """
+    try:
+        from sv_common.discord.bot import sync_quote_commands_from_admin
+        await sync_quote_commands_from_admin()
+        return {"ok": True, "message": "Bot commands synced successfully"}
+    except RuntimeError as e:
+        # Bot not running (e.g. dev environment without Discord token)
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        logger.warning("Failed to sync quote commands: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to sync bot commands")
+
+
+@router.get("/quote-subjects/{subject_id}/quotes")
+async def list_subject_quotes(subject_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(GuildQuote)
+        .where(GuildQuote.subject_id == subject_id)
+        .order_by(GuildQuote.id)
+    )
+    quotes = [{"id": q.id, "quote": q.quote} for q in result.scalars()]
+    return {"ok": True, "data": quotes}
+
+
+@router.post("/quote-subjects/{subject_id}/quotes")
+async def add_subject_quote(
+    subject_id: int, body: QuoteBody, db: AsyncSession = Depends(get_db)
+):
+    # Verify subject exists
+    s_result = await db.execute(select(QuoteSubject).where(QuoteSubject.id == subject_id))
+    if not s_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Quote subject not found")
+
+    quote = GuildQuote(subject_id=subject_id, quote=body.quote.strip())
+    db.add(quote)
+    await db.commit()
+    await db.refresh(quote)
+    return {"ok": True, "data": {"id": quote.id, "quote": quote.quote}}
+
+
+@router.put("/quotes/{quote_id}")
+async def update_quote(quote_id: int, body: QuoteBody, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GuildQuote).where(GuildQuote.id == quote_id))
+    quote = result.scalar_one_or_none()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    quote.quote = body.quote.strip()
+    await db.commit()
+    return {"ok": True, "data": {"id": quote.id, "quote": quote.quote}}
+
+
+@router.delete("/quotes/{quote_id}")
+async def delete_quote(quote_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GuildQuote).where(GuildQuote.id == quote_id))
+    quote = result.scalar_one_or_none()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    await db.delete(quote)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/quote-subjects/{subject_id}/titles")
+async def list_subject_titles(subject_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(GuildQuoteTitle)
+        .where(GuildQuoteTitle.subject_id == subject_id)
+        .order_by(GuildQuoteTitle.id)
+    )
+    titles = [{"id": t.id, "title": t.title} for t in result.scalars()]
+    return {"ok": True, "data": titles}
+
+
+@router.post("/quote-subjects/{subject_id}/titles")
+async def add_subject_title(
+    subject_id: int, body: QuoteTitleBody, db: AsyncSession = Depends(get_db)
+):
+    s_result = await db.execute(select(QuoteSubject).where(QuoteSubject.id == subject_id))
+    if not s_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Quote subject not found")
+
+    title = GuildQuoteTitle(subject_id=subject_id, title=body.title.strip())
+    db.add(title)
+    await db.commit()
+    await db.refresh(title)
+    return {"ok": True, "data": {"id": title.id, "title": title.title}}
+
+
+@router.put("/titles/{title_id}")
+async def update_title(title_id: int, body: QuoteTitleBody, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GuildQuoteTitle).where(GuildQuoteTitle.id == title_id))
+    title = result.scalar_one_or_none()
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    title.title = body.title.strip()
+    await db.commit()
+    return {"ok": True, "data": {"id": title.id, "title": title.title}}
+
+
+@router.delete("/titles/{title_id}")
+async def delete_title(title_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GuildQuoteTitle).where(GuildQuoteTitle.id == title_id))
+    title = result.scalar_one_or_none()
+    if not title:
+        raise HTTPException(status_code=404, detail="Title not found")
+    await db.delete(title)
+    await db.commit()
+    return {"ok": True}

@@ -40,6 +40,11 @@ def get_home_realm_slug() -> str:
     return _cache.get("home_realm_slug", "")
 
 
+def get_realm_display_name() -> str:
+    """Return the realm's human-readable display name (e.g. \"Sen'jin\")."""
+    return _cache.get("realm_display_name", "")
+
+
 def get_guild_name_slug() -> str:
     """Return the guild API slug (e.g. 'pull-all-the-things')."""
     return _cache.get("guild_name_slug", "")

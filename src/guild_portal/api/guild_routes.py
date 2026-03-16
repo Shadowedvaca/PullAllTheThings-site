@@ -13,6 +13,7 @@ from guild_portal.deps import get_db
 from sv_common.db.models import (
     GuildQuote,
     GuildQuoteTitle,
+    QuoteSubject,
     Player,
     PlayerAvailability,
     PlayerCharacter,
@@ -361,89 +362,45 @@ async def get_availability(db: AsyncSession = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Guild quotes endpoints
+# Guild quotes endpoints (public read-only)
 # ---------------------------------------------------------------------------
 
 
 @router.get("/quotes")
-async def get_quotes(db: AsyncSession = Depends(get_db)):
-    """Returns all guild quotes and titles."""
-    quotes_result = await db.execute(select(GuildQuote).order_by(GuildQuote.id))
-    titles_result = await db.execute(select(GuildQuoteTitle).order_by(GuildQuoteTitle.id))
+async def get_quotes(subject: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Returns guild quotes and titles for all subjects (or filtered by ?subject=slug).
+
+    Write operations (POST/PUT/DELETE) have been moved to the admin API (Phase 4.8).
+    """
+    if subject:
+        # Filter by subject slug
+        subj_result = await db.execute(
+            select(QuoteSubject).where(
+                QuoteSubject.command_slug == subject,
+                QuoteSubject.active.is_(True),
+            )
+        )
+        subj = subj_result.scalar_one_or_none()
+        if not subj:
+            return {"ok": True, "data": {"quotes": [], "titles": [], "subject": None}}
+        quotes_result = await db.execute(
+            select(GuildQuote).where(GuildQuote.subject_id == subj.id).order_by(GuildQuote.id)
+        )
+        titles_result = await db.execute(
+            select(GuildQuoteTitle)
+            .where(GuildQuoteTitle.subject_id == subj.id)
+            .order_by(GuildQuoteTitle.id)
+        )
+        subject_data = {
+            "id": subj.id,
+            "command_slug": subj.command_slug,
+            "display_name": subj.display_name,
+        }
+    else:
+        quotes_result = await db.execute(select(GuildQuote).order_by(GuildQuote.id))
+        titles_result = await db.execute(select(GuildQuoteTitle).order_by(GuildQuoteTitle.id))
+        subject_data = None
+
     quotes = [{"id": q.id, "quote": q.quote} for q in quotes_result.scalars()]
     titles = [{"id": t.id, "title": t.title} for t in titles_result.scalars()]
-    return {"ok": True, "data": {"quotes": quotes, "titles": titles}}
-
-
-class GuildQuoteBody(BaseModel):
-    quote: str
-
-
-class GuildQuoteTitleBody(BaseModel):
-    title: str
-
-
-@router.post("/quotes")
-async def add_guild_quote(body: GuildQuoteBody, db: AsyncSession = Depends(get_db)):
-    quote = GuildQuote(quote=body.quote.strip())
-    db.add(quote)
-    await db.commit()
-    await db.refresh(quote)
-    return {"ok": True, "data": {"id": quote.id, "quote": quote.quote}}
-
-
-@router.put("/quotes/{quote_id}")
-async def update_guild_quote(
-    quote_id: int, body: GuildQuoteBody, db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(select(GuildQuote).where(GuildQuote.id == quote_id))
-    quote = result.scalar_one_or_none()
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
-    quote.quote = body.quote.strip()
-    await db.commit()
-    return {"ok": True, "data": {"id": quote.id, "quote": quote.quote}}
-
-
-@router.delete("/quotes/{quote_id}")
-async def delete_guild_quote(quote_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(GuildQuote).where(GuildQuote.id == quote_id))
-    quote = result.scalar_one_or_none()
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
-    await db.delete(quote)
-    await db.commit()
-    return {"ok": True}
-
-
-@router.post("/quote-titles")
-async def add_guild_quote_title(body: GuildQuoteTitleBody, db: AsyncSession = Depends(get_db)):
-    title = GuildQuoteTitle(title=body.title.strip())
-    db.add(title)
-    await db.commit()
-    await db.refresh(title)
-    return {"ok": True, "data": {"id": title.id, "title": title.title}}
-
-
-@router.put("/quote-titles/{title_id}")
-async def update_guild_quote_title(
-    title_id: int, body: GuildQuoteTitleBody, db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(select(GuildQuoteTitle).where(GuildQuoteTitle.id == title_id))
-    title = result.scalar_one_or_none()
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
-    title.title = body.title.strip()
-    await db.commit()
-    return {"ok": True, "data": {"id": title.id, "title": title.title}}
-
-
-@router.delete("/quote-titles/{title_id}")
-async def delete_guild_quote_title(title_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(GuildQuoteTitle).where(GuildQuoteTitle.id == title_id))
-    title = result.scalar_one_or_none()
-    if not title:
-        raise HTTPException(status_code=404, detail="Title not found")
-    await db.delete(title)
-    await db.commit()
-    return {"ok": True}
+    return {"ok": True, "data": {"quotes": quotes, "titles": titles, "subject": subject_data}}

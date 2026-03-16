@@ -165,7 +165,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 |--------|-----------|
 | `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`), `rank_wow_mapping` |
 | `guild_identity` | `players` (central entity), `wow_characters`, `discord_users`, `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports` |
-| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes`, `guild_quote_titles`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
+| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
 
 **Key design notes:**
 - `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`
@@ -223,14 +223,14 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Platform is feature-complete through Phase 4.7.**
-- **Tests:** 620 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0041 (Voice Attendance — `voice_attendance_log`, columns on `raid_events`, `raid_attendance`, `discord_config`)
+- **Platform is feature-complete through Phase 4.8.**
+- **Tests:** 664 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Last migration:** 0044 (Quotes 2.0 — `patt.quote_subjects`, `subject_id` FK on `guild_quotes`/`guild_quote_titles`)
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor)
 - **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide` — no login required
-- **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users`, `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`
+- **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users`, `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`

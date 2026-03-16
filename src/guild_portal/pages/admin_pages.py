@@ -69,6 +69,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/warcraft-logs",   "warcraft_logs"),
     ("/admin/ah-pricing",      "ah_pricing"),
     ("/admin/attendance",      "attendance_report"),
+    ("/admin/quotes",          "quotes"),
 ]
 
 
@@ -817,6 +818,33 @@ async def admin_players_data(
                 for c in chars
             ],
         },
+    })
+
+
+@router.get("/players-search")
+async def admin_players_search(
+    q: str = "",
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lightweight player search for autocomplete (e.g. add quote subject modal)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    if not q or len(q) < 2:
+        return JSONResponse({"ok": True, "data": []})
+
+    result = await db.execute(
+        select(Player)
+        .where(Player.display_name.ilike(f"%{q}%"))
+        .order_by(Player.display_name)
+        .limit(20)
+    )
+    players = result.scalars().all()
+    return JSONResponse({
+        "ok": True,
+        "data": [{"id": p.id, "display_name": p.display_name} for p in players],
     })
 
 
@@ -3443,3 +3471,17 @@ async def admin_attendance_page(
 
     ctx = await _base_ctx(request, player, db)
     return templates.TemplateResponse("admin/attendance.html", ctx)
+
+
+@router.get("/quotes", response_class=HTMLResponse)
+async def admin_quotes_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Guild Quotes management admin page — Officer+."""
+    player = await _require_screen("quotes", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/quotes")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/quotes.html", ctx)
