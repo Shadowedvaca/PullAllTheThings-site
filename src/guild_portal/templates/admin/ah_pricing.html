@@ -155,6 +155,13 @@
     font-size: 0.875rem;
 }
 .ah-force-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ah-item-link {
+    color: var(--color-text);
+    text-decoration: none;
+    font-weight: 600;
+}
+.ah-item-link:hover { color: var(--color-accent); text-decoration: underline; }
 </style>
 {% endblock %}
 
@@ -326,7 +333,7 @@ async function loadItems() {
         const tr = document.createElement('tr');
         tr.dataset.id = item.id;
         tr.innerHTML = `
-            <td><strong>${item.item_name}</strong> <small style="color:var(--color-text-muted)">#${item.item_id}</small></td>
+            <td><a href="https://www.wowhead.com/item=${item.item_id}" target="_blank" rel="noopener" class="ah-item-link">${item.item_name}</a> <small style="color:var(--color-text-muted)">#${item.item_id}</small></td>
             <td>${catBadge(item.category)}</td>
             <td class="ah-price">${item.min_buyout_str}</td>
             <td style="color:var(--color-text-muted)">${item.median_price_str}</td>

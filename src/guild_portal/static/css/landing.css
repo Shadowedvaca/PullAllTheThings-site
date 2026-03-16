@@ -378,6 +378,11 @@
 .lp-market-cat--gem         { background: #3b1a5f; color: #d8b4fe; }
 .lp-market-cat--material    { background: #3a2a10; color: #fcd34d; }
 .lp-market-cat--gear        { background: #2a1e1e; color: #fca5a5; }
+.lp-market-item-link {
+    color: var(--color-text);
+    text-decoration: none;
+}
+.lp-market-item-link:hover { color: var(--color-accent); text-decoration: underline; }
 .lp-market-updated {
     font-size: 0.75rem;
     color: var(--color-text-muted);

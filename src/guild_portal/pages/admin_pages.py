@@ -3129,6 +3129,31 @@ async def admin_ah_remove_item(
     return JSONResponse({"ok": True})
 
 
+async def _get_blizzard_client(request):
+    """Return a ready-to-use BlizzardClient.
+
+    Prefers the scheduler's already-initialized client. Falls back to
+    creating a temporary client from environment variables, which works
+    even when the scheduler is not running (e.g. audit channel not configured).
+    Returns (client, owned) where owned=True means caller must close it.
+    """
+    import os
+    from sv_common.guild_sync.blizzard_client import BlizzardClient
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler and scheduler.blizzard_client:
+        return scheduler.blizzard_client, False
+
+    client_id = os.environ.get("BLIZZARD_CLIENT_ID", "")
+    client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        return None, False
+
+    client = BlizzardClient(client_id, client_secret)
+    await client.initialize()
+    return client, True
+
+
 @router.post("/ah-pricing/sync")
 async def admin_ah_force_sync(
     request: Request,
@@ -3139,13 +3164,39 @@ async def admin_ah_force_sync(
     if admin is None:
         return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
 
-    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
-    if not scheduler:
-        return JSONResponse({"ok": False, "error": "Scheduler not available"}, status_code=503)
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "DB pool not available"}, status_code=503)
 
-    import asyncio
-    asyncio.create_task(scheduler.run_ah_sync())
-    return JSONResponse({"ok": True, "message": "AH sync triggered"})
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler:
+        # Scheduler is running — delegate to it (handles realm resolution too)
+        import asyncio
+        asyncio.create_task(scheduler.run_ah_sync())
+        return JSONResponse({"ok": True, "message": "AH sync triggered"})
+
+    # Scheduler not running — run sync inline with a temporary client
+    blizzard_client, owned = await _get_blizzard_client(request)
+    if not blizzard_client:
+        return JSONResponse({"ok": False, "error": "Blizzard API credentials not configured"}, status_code=503)
+
+    try:
+        from sv_common.guild_sync.ah_sync import sync_ah_prices
+        async with pool.acquire() as conn:
+            cfg = await conn.fetchrow(
+                "SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1"
+            )
+        connected_realm_id = cfg["connected_realm_id"] if cfg else None
+        if not connected_realm_id:
+            return JSONResponse({"ok": False, "error": "Connected realm not resolved yet — use Re-Resolve first"}, status_code=400)
+
+        import asyncio
+        asyncio.create_task(sync_ah_prices(pool, blizzard_client, connected_realm_id))
+        return JSONResponse({"ok": True, "message": "AH sync triggered"})
+    except Exception as exc:
+        if owned:
+            await blizzard_client.close()
+        raise exc
 
 
 @router.post("/ah-pricing/resolve-realm")
@@ -3159,9 +3210,8 @@ async def admin_ah_resolve_realm(
         return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
 
     pool = getattr(request.app.state, "guild_sync_pool", None)
-    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
-    if not pool or not scheduler:
-        return JSONResponse({"ok": False, "error": "Services not available"}, status_code=503)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "DB pool not available"}, status_code=503)
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT home_realm_slug FROM common.site_config LIMIT 1")
@@ -3169,9 +3219,18 @@ async def admin_ah_resolve_realm(
     if not realm_slug:
         return JSONResponse({"ok": False, "error": "home_realm_slug not configured"}, status_code=400)
 
-    connected_realm_id = await scheduler.blizzard_client.get_connected_realm_id(realm_slug)
+    blizzard_client, owned = await _get_blizzard_client(request)
+    if not blizzard_client:
+        return JSONResponse({"ok": False, "error": "Blizzard API credentials not configured"}, status_code=503)
+
+    try:
+        connected_realm_id = await blizzard_client.get_connected_realm_id(realm_slug)
+    finally:
+        if owned:
+            await blizzard_client.close()
+
     if not connected_realm_id:
-        return JSONResponse({"ok": False, "error": "Could not resolve connected realm ID"}, status_code=502)
+        return JSONResponse({"ok": False, "error": "Could not resolve connected realm ID from Blizzard API"}, status_code=502)
 
     async with pool.acquire() as conn:
         await conn.execute(
