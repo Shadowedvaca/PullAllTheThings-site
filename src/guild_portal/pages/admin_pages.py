@@ -68,6 +68,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/progression",     "progression"),
     ("/admin/warcraft-logs",   "warcraft_logs"),
     ("/admin/ah-pricing",      "ah_pricing"),
+    ("/admin/attendance",      "attendance_report"),
 ]
 
 
@@ -725,6 +726,50 @@ async def admin_players_data(
     )
     bnet_verified_ids = {row[0] for row in bnet_result.all()}
 
+    # Attendance status per player (feature-gated)
+    attendance_by_player: dict = {}
+    try:
+        att_cfg = await db.execute(text(
+            """
+            SELECT attendance_feature_enabled, attendance_min_pct, attendance_trailing_events
+            FROM common.discord_config LIMIT 1
+            """
+        ))
+        att_cfg_row = att_cfg.mappings().first()
+        if att_cfg_row and att_cfg_row["attendance_feature_enabled"]:
+            min_pct = att_cfg_row["attendance_min_pct"] or 75
+            trailing = att_cfg_row["attendance_trailing_events"] or 8
+            att_rows = await db.execute(text(
+                """
+                SELECT ra.player_id, ra.attended, ra.noted_absence
+                FROM patt.raid_attendance ra
+                JOIN patt.raid_events re ON re.id = ra.event_id
+                WHERE re.attendance_processed_at IS NOT NULL
+                ORDER BY ra.player_id, re.start_time_utc DESC
+                """
+            ))
+            # Group by player_id, take last N
+            from collections import defaultdict
+            raw: dict = defaultdict(list)
+            for row in att_rows.mappings().all():
+                raw[row["player_id"]].append(row)
+            for pid, rows in raw.items():
+                recent = rows[:trailing]
+                attended = sum(1 for r in recent if r["attended"] or r["noted_absence"])
+                total = len(recent)
+                summary = f"{attended}/{total} raids"
+                if total < 3:
+                    status = "new"
+                elif attended / total * 100 >= min_pct:
+                    status = "good"
+                elif attended / total * 100 >= 50:
+                    status = "at_risk"
+                else:
+                    status = "concern"
+                attendance_by_player[pid] = {"status": status, "summary": summary}
+    except Exception as e:
+        logger.warning("Could not load attendance status: %s", e)
+
     return JSONResponse({
         "ok": True,
         "data": {
@@ -748,6 +793,8 @@ async def admin_players_data(
                     "on_raid_hiatus": p.on_raid_hiatus,
                     "bnet_verified": p.id in bnet_verified_ids,
                     "aliases": aliases_by_player.get(p.id, []),
+                    "attendance_status": attendance_by_player.get(p.id, {}).get("status", "none"),
+                    "attendance_summary": attendance_by_player.get(p.id, {}).get("summary", ""),
                 }
                 for p in players
             ],
@@ -3281,3 +3328,22 @@ async def admin_ah_status(
             "last_snapshot": last_snapshot.isoformat() if last_snapshot else None,
         },
     })
+
+
+# ===========================================================================
+# Attendance — /admin/attendance
+# ===========================================================================
+
+
+@router.get("/attendance", response_class=HTMLResponse)
+async def admin_attendance_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Voice attendance tracking admin page — Officer+."""
+    player = await _require_screen("attendance_report", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/attendance")
+
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/attendance.html", ctx)

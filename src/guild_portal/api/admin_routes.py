@@ -1321,3 +1321,631 @@ async def update_mplus_season(
     set_site_config(updated)
 
     return {"ok": True, "data": {"current_mplus_season_id": cfg.current_mplus_season_id}}
+
+
+# ===========================================================================
+# Attendance — /api/v1/admin/attendance
+# ===========================================================================
+
+
+class AttendanceSettingsUpdate(BaseModel):
+    attendance_feature_enabled: bool | None = None
+    attendance_min_pct: int | None = None
+    attendance_late_grace_min: int | None = None
+    attendance_early_leave_min: int | None = None
+    attendance_trailing_events: int | None = None
+    attendance_habitual_window: int | None = None
+    attendance_habitual_threshold: int | None = None
+
+
+class ExcusedUpdate(BaseModel):
+    noted_absence: bool
+
+
+@router.get("/attendance/season")
+async def get_attendance_season(
+    request: Request,
+    season_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Season grid data: players × events attendance matrix."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        # Check if feature enabled
+        enabled = await conn.fetchval(
+            "SELECT attendance_feature_enabled FROM common.discord_config LIMIT 1"
+        )
+
+        # Load available seasons
+        seasons = await conn.fetch(
+            "SELECT id, expansion_name, season_number FROM patt.raid_seasons ORDER BY start_date DESC"
+        )
+        available_seasons = [
+            {
+                "id": s["id"],
+                "display_name": _season_display_name(s),
+            }
+            for s in seasons
+        ]
+
+        # Select active season
+        if season_id:
+            season = await conn.fetchrow(
+                "SELECT id, expansion_name, season_number FROM patt.raid_seasons WHERE id = $1",
+                season_id,
+            )
+        else:
+            season = await conn.fetchrow(
+                "SELECT id, expansion_name, season_number FROM patt.raid_seasons WHERE is_active = TRUE ORDER BY start_date DESC LIMIT 1"
+            )
+
+        if not season:
+            return {
+                "ok": True,
+                "data": {
+                    "feature_disabled": not enabled,
+                    "available_seasons": available_seasons,
+                    "season": None,
+                    "events": [],
+                    "players": [],
+                    "unlinked_users": [],
+                },
+            }
+
+        # Load events for this season
+        events = await conn.fetch(
+            """
+            SELECT id, title, event_date, start_time_utc, end_time_utc,
+                   attendance_processed_at, log_url, voice_tracking_enabled
+            FROM patt.raid_events
+            WHERE season_id = $1
+            ORDER BY event_date
+            """,
+            season["id"],
+        )
+
+        now = datetime.now(timezone.utc)
+        event_ids = [e["id"] for e in events]
+
+        # Load all attendance records for these events
+        if event_ids:
+            att_rows = await conn.fetch(
+                """
+                SELECT id, event_id, player_id, attended, source, noted_absence,
+                       minutes_present, first_join_at, last_leave_at, joined_late, left_early
+                FROM patt.raid_attendance
+                WHERE event_id = ANY($1::int[])
+                """,
+                event_ids,
+            )
+        else:
+            att_rows = []
+
+        # Index attendance by (event_id, player_id)
+        att_index: dict = {}
+        for row in att_rows:
+            att_index[(row["event_id"], row["player_id"])] = row
+
+        # Load all players with ranks
+        players = await conn.fetch(
+            """
+            SELECT p.id, p.display_name, gr.name AS rank_name, gr.level AS rank_level
+            FROM guild_identity.players p
+            LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            WHERE p.removed_at IS NULL
+            ORDER BY gr.level DESC NULLS LAST, p.display_name
+            """
+        )
+
+        # Config for habitual check
+        cfg = await conn.fetchrow(
+            """
+            SELECT attendance_habitual_window, attendance_habitual_threshold,
+                   attendance_min_pct, attendance_trailing_events
+            FROM common.discord_config LIMIT 1
+            """
+        )
+        hab_window = cfg["attendance_habitual_window"] if cfg else 5
+        hab_threshold = cfg["attendance_habitual_threshold"] if cfg else 3
+        trailing = cfg["attendance_trailing_events"] if cfg else 8
+
+        # Build event objects
+        event_objs = []
+        for e in events:
+            processed = e["attendance_processed_at"] is not None
+            has_wcl = e["log_url"] is not None
+            is_live = e["start_time_utc"] <= now <= e["end_time_utc"]
+            event_objs.append({
+                "id": e["id"],
+                "date": e["event_date"].isoformat(),
+                "title": e["title"],
+                "processed": processed,
+                "has_wcl": has_wcl,
+                "is_live": is_live,
+            })
+
+        # Build player rows
+        player_objs = []
+        for p in players:
+            pid = p["id"]
+            attendance: dict = {}
+            total_eligible = 0
+            total_attended = 0
+
+            for e in events:
+                eid = e["id"]
+                cell = att_index.get((eid, pid))
+                is_live = e["start_time_utc"] <= now <= e["end_time_utc"]
+                processed = e["attendance_processed_at"] is not None
+
+                if is_live:
+                    attendance[str(eid)] = {"status": "live"}
+                elif not processed and cell is None:
+                    attendance[str(eid)] = {"status": "nodata"}
+                elif not processed:
+                    attendance[str(eid)] = {"status": "pending"}
+                elif cell is None:
+                    attendance[str(eid)] = {"status": "nodata"}
+                else:
+                    total_eligible += 1
+                    if cell["attended"]:
+                        total_attended += 1
+
+                    if cell["noted_absence"]:
+                        status = "excused"
+                    elif cell["attended"]:
+                        status = "attended"
+                    else:
+                        status = "absent"
+
+                    attendance[str(eid)] = {
+                        "status": status,
+                        "source": cell["source"],
+                        "minutes_present": cell["minutes_present"],
+                        "pct": (cell["minutes_present"] / ((e["end_time_utc"] - e["start_time_utc"]).total_seconds() / 60) * 100) if cell["minutes_present"] is not None else None,
+                        "joined_late": cell["joined_late"],
+                        "left_early": cell["left_early"],
+                        "noted_absence": cell["noted_absence"],
+                        "attendance_id": cell["id"],
+                        "first_join_at": cell["first_join_at"].isoformat() if cell["first_join_at"] else None,
+                        "last_leave_at": cell["last_leave_at"].isoformat() if cell["last_leave_at"] else None,
+                    }
+
+            pct = (total_attended / total_eligible * 100) if total_eligible > 0 else None
+
+            # Habitual check
+            recent_voice = await conn.fetch(
+                """
+                SELECT joined_late, left_early
+                FROM patt.raid_attendance ra
+                JOIN patt.raid_events re ON re.id = ra.event_id
+                WHERE ra.player_id = $1 AND ra.joined_late IS NOT NULL
+                  AND re.attendance_processed_at IS NOT NULL
+                ORDER BY re.start_time_utc DESC
+                LIMIT $2
+                """,
+                pid,
+                hab_window,
+            )
+            late_count = sum(1 for r in recent_voice if r["joined_late"])
+            early_count = sum(1 for r in recent_voice if r["left_early"])
+            habitual_late = late_count >= hab_threshold
+            habitual_early = early_count >= hab_threshold
+            habitual_summary = ""
+            if habitual_late:
+                habitual_summary += f"Late to {late_count}/{len(recent_voice)} recent raids"
+            if habitual_early:
+                sep = " · " if habitual_summary else ""
+                habitual_summary += f"{sep}Left early {early_count}/{len(recent_voice)} recent raids"
+
+            # Attendance status for dot badge
+            att_status_result = await conn.fetch(
+                """
+                SELECT ra.attended, ra.noted_absence
+                FROM patt.raid_attendance ra
+                JOIN patt.raid_events re ON re.id = ra.event_id
+                WHERE ra.player_id = $1 AND re.attendance_processed_at IS NOT NULL
+                ORDER BY re.start_time_utc DESC
+                LIMIT $2
+                """,
+                pid,
+                trailing,
+            )
+            att_status = _compute_att_status(att_status_result, cfg["attendance_min_pct"] if cfg else 75, enabled)
+
+            player_objs.append({
+                "id": pid,
+                "name": p["display_name"] or f"Player#{pid}",
+                "rank": p["rank_name"] or "Unknown",
+                "rank_level": p["rank_level"] or 0,
+                "attendance": attendance,
+                "total_attended": total_attended,
+                "total_eligible": total_eligible,
+                "pct": pct,
+                "habitual_late": habitual_late,
+                "habitual_early": habitual_early,
+                "habitual_summary": habitual_summary,
+                "attendance_status": att_status["status"],
+                "attendance_summary": att_status["summary"],
+            })
+
+        # Unlinked users
+        if event_ids:
+            unlinked_rows = await conn.fetch(
+                """
+                SELECT val.discord_user_id, COUNT(DISTINCT val.event_id) AS event_count
+                FROM patt.voice_attendance_log val
+                WHERE val.event_id = ANY($1::int[])
+                  AND NOT EXISTS (
+                      SELECT 1 FROM guild_identity.discord_users du
+                      WHERE du.discord_id = val.discord_user_id
+                  )
+                GROUP BY val.discord_user_id
+                ORDER BY event_count DESC
+                """,
+                event_ids,
+            )
+            unlinked = [dict(r) for r in unlinked_rows]
+        else:
+            unlinked = []
+
+    return {
+        "ok": True,
+        "data": {
+            "feature_disabled": not enabled,
+            "available_seasons": available_seasons,
+            "season": {
+                "id": season["id"],
+                "display_name": _season_display_name(season),
+            },
+            "events": event_objs,
+            "players": player_objs,
+            "unlinked_users": unlinked,
+        },
+    }
+
+
+@router.get("/attendance/event/{event_id}")
+async def get_attendance_event(
+    event_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-event breakdown with all attendance records and voice presence."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        event = await conn.fetchrow(
+            """
+            SELECT id, title, event_date, start_time_utc, end_time_utc,
+                   log_url, voice_channel_id, attendance_processed_at
+            FROM patt.raid_events WHERE id = $1
+            """,
+            event_id,
+        )
+        if not event:
+            return {"ok": False, "error": "Event not found"}
+
+        records = await conn.fetch(
+            """
+            SELECT ra.id, ra.player_id, p.display_name AS player_name,
+                   ra.attended, ra.source, ra.noted_absence,
+                   ra.minutes_present, ra.first_join_at, ra.last_leave_at,
+                   ra.joined_late, ra.left_early, ra.signed_up
+            FROM patt.raid_attendance ra
+            JOIN guild_identity.players p ON p.id = ra.player_id
+            WHERE ra.event_id = $1
+            ORDER BY p.display_name
+            """,
+            event_id,
+        )
+
+        duration_min = (event["end_time_utc"] - event["start_time_utc"]).total_seconds() / 60
+
+        sources_set = set(r["source"] for r in records if r["source"])
+        source_summary = "+".join(sorted(sources_set)) if sources_set else "none"
+
+        attended_count = sum(1 for r in records if r["attended"])
+        excused_count = sum(1 for r in records if r["noted_absence"])
+        absent_count = sum(1 for r in records if not r["attended"] and not r["noted_absence"])
+
+        record_objs = []
+        for r in records:
+            pct = (r["minutes_present"] / duration_min * 100) if r["minutes_present"] is not None and duration_min > 0 else None
+            record_objs.append({
+                "id": r["id"],
+                "player_id": r["player_id"],
+                "player_name": r["player_name"] or f"Player#{r['player_id']}",
+                "attended": r["attended"],
+                "source": r["source"],
+                "noted_absence": r["noted_absence"],
+                "minutes_present": r["minutes_present"],
+                "pct": pct,
+                "first_join_at": r["first_join_at"].isoformat() if r["first_join_at"] else None,
+                "last_leave_at": r["last_leave_at"].isoformat() if r["last_leave_at"] else None,
+                "joined_late": r["joined_late"],
+                "left_early": r["left_early"],
+                "signed_up": r["signed_up"],
+            })
+
+    return {
+        "ok": True,
+        "data": {
+            "event": {
+                "id": event["id"],
+                "title": event["title"],
+                "date": event["event_date"].isoformat(),
+                "start_time": event["start_time_utc"].strftime("%H:%M"),
+                "end_time": event["end_time_utc"].strftime("%H:%M"),
+                "log_url": event["log_url"],
+                "processed": event["attendance_processed_at"] is not None,
+            },
+            "summary": {
+                "attended": attended_count,
+                "absent": absent_count,
+                "excused": excused_count,
+                "sources": source_summary,
+            },
+            "records": record_objs,
+        },
+    }
+
+
+@router.post("/attendance/event/{event_id}/reprocess")
+async def reprocess_attendance_event(
+    event_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger re-processing of both passes for a raid event."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    # Reset processed_at so it will be re-stamped
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval(
+            "SELECT id FROM patt.raid_events WHERE id = $1", event_id
+        )
+        if not exists:
+            return {"ok": False, "error": "Event not found"}
+        await conn.execute(
+            "UPDATE patt.raid_events SET attendance_processed_at = NULL WHERE id = $1",
+            event_id,
+        )
+
+    from sv_common.guild_sync.attendance_processor import process_event
+    import asyncio
+
+    # Get audit channel if available
+    audit_channel = None
+    try:
+        from sv_common.discord.bot import get_bot
+        bot = get_bot()
+        if bot and not bot.is_closed():
+            async with pool.acquire() as conn:
+                audit_id = await conn.fetchval(
+                    "SELECT audit_channel_id FROM common.discord_config LIMIT 1"
+                )
+            if audit_id:
+                audit_channel = bot.get_channel(int(audit_id))
+    except Exception:
+        pass
+
+    asyncio.create_task(process_event(pool, event_id, audit_channel))
+    return {"ok": True, "message": f"Re-processing triggered for event {event_id}"}
+
+
+@router.patch("/attendance/record/{record_id}")
+async def update_attendance_record(
+    record_id: int,
+    body: ExcusedUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Toggle noted_absence on an attendance record."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id FROM patt.raid_attendance WHERE id = $1", record_id
+        )
+        if not row:
+            return {"ok": False, "error": "Record not found"}
+        await conn.execute(
+            "UPDATE patt.raid_attendance SET noted_absence = $1 WHERE id = $2",
+            body.noted_absence,
+            record_id,
+        )
+    return {"ok": True}
+
+
+@router.get("/attendance/export")
+async def export_attendance_csv(
+    request: Request,
+    season_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """CSV export of the season attendance grid."""
+    from fastapi.responses import StreamingResponse
+    import io
+    import csv
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        if season_id:
+            season = await conn.fetchrow(
+                "SELECT id, expansion_name, season_number FROM patt.raid_seasons WHERE id = $1",
+                season_id,
+            )
+        else:
+            season = await conn.fetchrow(
+                "SELECT id, expansion_name, season_number FROM patt.raid_seasons WHERE is_active = TRUE ORDER BY start_date DESC LIMIT 1"
+            )
+
+        if not season:
+            return {"ok": False, "error": "No season found"}
+
+        events = await conn.fetch(
+            "SELECT id, title, event_date FROM patt.raid_events WHERE season_id = $1 ORDER BY event_date",
+            season["id"],
+        )
+        players = await conn.fetch(
+            """
+            SELECT p.id, p.display_name, gr.name AS rank_name
+            FROM guild_identity.players p
+            LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            WHERE p.removed_at IS NULL
+            ORDER BY gr.level DESC NULLS LAST, p.display_name
+            """
+        )
+        event_ids = [e["id"] for e in events]
+        att_rows = []
+        if event_ids:
+            att_rows = await conn.fetch(
+                """
+                SELECT event_id, player_id, attended, noted_absence, source
+                FROM patt.raid_attendance WHERE event_id = ANY($1::int[])
+                """,
+                event_ids,
+            )
+
+    att_index = {(r["event_id"], r["player_id"]): r for r in att_rows}
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header
+    writer.writerow(
+        ["Player", "Rank"] + [f"{e['event_date']} — {e['title']}" for e in events] + ["Total", "Pct"]
+    )
+
+    for p in players:
+        pid = p["id"]
+        cells = []
+        total_att = 0
+        total_elig = 0
+        for e in events:
+            rec = att_index.get((e["id"], pid))
+            if rec is None:
+                cells.append("—")
+            elif rec["noted_absence"]:
+                cells.append("excused")
+                total_elig += 1
+                total_att += 1
+            elif rec["attended"]:
+                cells.append("attended")
+                total_elig += 1
+                total_att += 1
+            else:
+                cells.append("absent")
+                total_elig += 1
+        pct_str = f"{round(total_att / total_elig * 100)}%" if total_elig > 0 else "—"
+        writer.writerow([p["display_name"] or f"#{pid}", p["rank_name"] or ""] + cells + [f"{total_att}/{total_elig}", pct_str])
+
+    output.seek(0)
+    filename = f"attendance-{season['id']}.csv"
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/attendance/settings")
+async def get_attendance_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return current attendance configuration from discord_config."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT attendance_feature_enabled, attendance_min_pct, attendance_late_grace_min,
+                   attendance_early_leave_min, attendance_trailing_events,
+                   attendance_habitual_window, attendance_habitual_threshold
+            FROM common.discord_config LIMIT 1
+            """
+        )
+    if not row:
+        return {"ok": False, "error": "No discord_config found"}
+    return {"ok": True, "data": dict(row)}
+
+
+@router.patch("/attendance/settings")
+async def update_attendance_settings(
+    body: AttendanceSettingsUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update attendance configuration in discord_config."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not fields:
+        return {"ok": False, "error": "No fields to update"}
+
+    set_clauses = ", ".join(f"{k} = ${i + 1}" for i, k in enumerate(fields))
+    values = list(fields.values())
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"UPDATE common.discord_config SET {set_clauses}",
+            *values,
+        )
+        # Reload and return updated config
+        row = await conn.fetchrow(
+            """
+            SELECT attendance_feature_enabled, attendance_min_pct, attendance_late_grace_min,
+                   attendance_early_leave_min, attendance_trailing_events,
+                   attendance_habitual_window, attendance_habitual_threshold
+            FROM common.discord_config LIMIT 1
+            """
+        )
+
+    return {"ok": True, "data": dict(row)}
+
+
+# ---------------------------------------------------------------------------
+# Attendance helpers
+# ---------------------------------------------------------------------------
+
+
+def _season_display_name(season) -> str:
+    if season["expansion_name"] and season["season_number"] is not None:
+        return f"{season['expansion_name']} Season {season['season_number']}"
+    return season["expansion_name"] or "Unknown Season"
+
+
+def _compute_att_status(rows, min_pct: int, feature_enabled: bool) -> dict:
+    if not feature_enabled:
+        return {"status": "none", "summary": ""}
+    if len(rows) < 3:
+        return {"status": "new", "summary": f"{len(rows)} events"}
+    attended = sum(1 for r in rows if r["attended"] or r["noted_absence"])
+    total = len(rows)
+    pct = (attended / total) * 100 if total > 0 else 0
+    summary = f"{attended}/{total} raids"
+    if pct >= min_pct:
+        status = "good"
+    elif pct >= 50:
+        status = "at_risk"
+    else:
+        status = "concern"
+    return {"status": status, "summary": summary}

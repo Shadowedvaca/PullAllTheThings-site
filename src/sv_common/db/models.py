@@ -5,7 +5,7 @@ common schema: guild_ranks, users, discord_config, invite_codes,
 patt schema: campaigns, campaign_entries, votes, campaign_results,
              contest_agent_log, guild_quotes, guild_quote_titles,
              player_availability, raid_seasons, raid_events, raid_attendance,
-             recurring_events
+             recurring_events, voice_attendance_log
 guild_identity schema: roles, classes, specializations, players,
                        wow_characters, discord_users, player_characters,
                        player_note_aliases, audit_issues, sync_log,
@@ -147,6 +147,28 @@ class DiscordConfig(Base):
         Integer, server_default="120"
     )
     bot_token_encrypted: Mapped[Optional[str]] = mapped_column(Text)
+    # Phase 4.7 — Voice Attendance config
+    attendance_min_pct: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="75"
+    )
+    attendance_late_grace_min: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="10"
+    )
+    attendance_early_leave_min: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="10"
+    )
+    attendance_trailing_events: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="8"
+    )
+    attendance_habitual_window: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="5"
+    )
+    attendance_habitual_threshold: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="3"
+    )
+    attendance_feature_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -472,6 +494,14 @@ class RaidEvent(Base):
     )
     auto_booked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     raid_helper_payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # Phase 4.7 — Voice Attendance
+    voice_channel_id: Mapped[Optional[str]] = mapped_column(String(25), nullable=True)
+    voice_tracking_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    attendance_processed_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -506,6 +536,16 @@ class RaidAttendance(Base):
     )
     noted_absence: Mapped[bool] = mapped_column(Boolean, server_default="false")
     source: Mapped[str] = mapped_column(String(20), server_default="manual")
+    # Phase 4.7 — Voice timing fields
+    minutes_present: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    first_join_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    last_leave_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    joined_late: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    left_early: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -1293,3 +1333,32 @@ class ItemPriceHistory(Base):
     quantity_available: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     num_auctions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     connected_realm_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# patt schema — Voice Attendance (Phase 4.7)
+# ---------------------------------------------------------------------------
+
+
+class VoiceAttendanceLog(Base):
+    """Raw join/leave events logged during active raid windows.
+
+    Kept permanently for re-processing if rules change. One row per
+    join-or-leave event per user per raid event.
+    """
+
+    __tablename__ = "voice_attendance_log"
+    __table_args__ = {"schema": "patt"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("patt.raid_events.id", ondelete="CASCADE"), nullable=False
+    )
+    discord_user_id: Mapped[str] = mapped_column(String(25), nullable=False)
+    channel_id: Mapped[str] = mapped_column(String(25), nullable=False)
+    action: Mapped[str] = mapped_column(String(10), nullable=False)  # 'join' | 'leave'
+    occurred_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    event: Mapped["RaidEvent"] = relationship()

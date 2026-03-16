@@ -164,6 +164,16 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # Voice attendance post-processing: every 30 minutes
+        # Picks up events that ended ≥30 min ago and haven't been processed yet
+        self.scheduler.add_job(
+            self.run_attendance_processing,
+            IntervalTrigger(minutes=30),
+            id="attendance_processing",
+            name="Voice Attendance Post-Processing",
+            misfire_grace_time=3600,
+        )
+
         self.scheduler.start()
         logger.info("Guild sync scheduler started")
 
@@ -694,6 +704,40 @@ class GuildSyncScheduler:
 
         except Exception as exc:
             logger.error("AH sync failed: %s", exc, exc_info=True)
+
+    async def run_attendance_processing(self):
+        """Voice attendance post-processing pipeline. Runs every 30 minutes.
+
+        Picks up events that ended ≥30 minutes ago, have voice_tracking_enabled,
+        and have not yet been processed. Runs both WCL and voice passes.
+        """
+        from .attendance_processor import get_unprocessed_events, process_event
+
+        try:
+            # Check if feature is enabled
+            async with self.db_pool.acquire() as conn:
+                enabled = await conn.fetchval(
+                    "SELECT attendance_feature_enabled FROM common.discord_config LIMIT 1"
+                )
+            if not enabled:
+                return
+
+            events = await get_unprocessed_events(self.db_pool)
+            if not events:
+                return
+
+            audit_channel = self._get_audit_channel()
+            for event in events:
+                logger.info(
+                    "Attendance processing: event %d (%s) ended %s",
+                    event["id"],
+                    event["title"],
+                    event["end_time_utc"],
+                )
+                await process_event(self.db_pool, event["id"], audit_channel)
+
+        except Exception as exc:
+            logger.error("Attendance processing failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

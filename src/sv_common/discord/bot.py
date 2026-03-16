@@ -14,10 +14,11 @@ from sv_common.config_cache import get_accent_color_int, get_guild_name
 
 logger = logging.getLogger(__name__)
 
-# Intents: members required for roster sync; message_content not needed
+# Intents: members required for roster sync; voice_states for attendance tracking
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = False
+intents.voice_states = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -77,6 +78,23 @@ async def on_ready():
             await sync_channels(_db_pool, discord_guild)
         except Exception as e:
             logger.warning("Channel sync on_ready failed: %s", e)
+
+    # Register VoiceAttendanceCog if attendance tracking is enabled
+    if _db_pool is not None:
+        try:
+            async with _db_pool.acquire() as _conn:
+                _att_enabled = await _conn.fetchval(
+                    "SELECT attendance_feature_enabled FROM common.discord_config LIMIT 1"
+                )
+            if _att_enabled:
+                from sv_common.discord.voice_attendance import VoiceAttendanceCog
+                if not bot.cogs.get("VoiceAttendanceCog"):
+                    await bot.add_cog(VoiceAttendanceCog(bot, _db_pool))
+                    logger.info("VoiceAttendanceCog loaded — attendance tracking active")
+            else:
+                logger.debug("Voice attendance tracking disabled — cog not loaded")
+        except Exception as e:
+            logger.warning("Failed to load VoiceAttendanceCog: %s", e)
 
 
 @bot.event

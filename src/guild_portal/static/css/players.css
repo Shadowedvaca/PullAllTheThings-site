@@ -902,3 +902,13 @@
     cursor: pointer;
     line-height: 1.5;
 }
+
+/* ── Attendance dot badge (Phase 4.7) ─────────────────────────────────────── */
+.pm-att-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin: 0 2px;
+    vertical-align: middle;
+    cursor: help;

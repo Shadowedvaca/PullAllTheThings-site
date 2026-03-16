@@ -1,0 +1,773 @@
+{% extends "base_admin.html" %}
+{% block title %}Attendance — Admin — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+/* ── Layout ── */
+.att-page { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.att-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+}
+.att-card--wide { width: 100%; }
+.att-card__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0 0 0.25rem 0;
+}
+.att-card__subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+/* ── Season selector bar ── */
+.att-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.att-toolbar__label { color: var(--color-text-muted); font-size: 0.85rem; }
+.att-toolbar select {
+    background: var(--color-input-bg, #1e1e22);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+/* ── Season grid ── */
+.att-grid-wrap { overflow-x: auto; }
+table.att-grid {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+.att-grid th, .att-grid td {
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--color-border);
+    text-align: center;
+}
+.att-grid th {
+    background: #1a1a1f;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+.att-grid th.att-col-player {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #1a1a1f;
+    min-width: 150px;
+}
+.att-grid td.att-col-player {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: var(--color-card);
+    z-index: 1;
+}
+.att-grid th.att-col-event { cursor: pointer; }
+.att-grid th.att-col-event:hover { color: var(--color-gold); }
+.att-grid tr:nth-child(even) td { background: #1b1b20; }
+.att-grid tr:nth-child(even) td.att-col-player { background: #1b1b20; }
+.att-grid .att-footer-row td {
+    font-weight: 600;
+    background: #16161a;
+    color: var(--color-text-muted);
+}
+
+/* ── Cell styles ── */
+.att-cell { cursor: pointer; }
+.att-cell:hover { background: rgba(212,168,75,0.1) !important; }
+.att-status--attended    { color: #4ade80; }
+.att-status--absent      { color: #f87171; }
+.att-status--excused     { color: #fbbf24; }
+.att-status--nodata      { color: #555; }
+.att-status--live        { color: #60a5fa; }
+.att-status--pending     { color: #888; font-style: italic; }
+
+/* ── Totals column ── */
+.att-total { font-weight: 600; }
+.att-total--good   { color: #4ade80; }
+.att-total--atrisk { color: #fbbf24; }
+.att-total--low    { color: #f87171; }
+
+/* ── Habitual badge ── */
+.att-habitual-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    background: #7c2d12;
+    color: #fca5a5;
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* ── Popover ── */
+.att-popover {
+    position: fixed;
+    z-index: 1000;
+    background: #1e1e24;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    min-width: 240px;
+    max-width: 320px;
+    font-size: 0.82rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    display: none;
+}
+.att-popover__title {
+    font-weight: 600;
+    color: var(--color-gold);
+    margin-bottom: 0.4rem;
+}
+.att-popover__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.15rem 0;
+    border-bottom: 1px solid #2a2a2e;
+}
+.att-popover__row:last-child { border-bottom: none; }
+.att-popover__label { color: var(--color-text-muted); }
+.att-popover__close {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.5rem;
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+}
+.att-excused-btn {
+    margin-top: 0.5rem;
+    background: #3d2f00;
+    border: 1px solid #7c6200;
+    color: #fbbf24;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    width: 100%;
+}
+.att-excused-btn:hover { background: #52400a; }
+
+/* ── Event detail panel ── */
+.att-event-panel {
+    margin-top: 1rem;
+    background: #14141a;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    display: none;
+}
+.att-event-panel--open { display: block; }
+.att-event-panel__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.att-event-panel__title { font-family: 'Cinzel', serif; color: var(--color-gold); }
+.att-event-panel__meta { color: var(--color-text-muted); font-size: 0.8rem; }
+.att-event-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.att-event-panel table th, .att-event-panel table td {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--color-border);
+    text-align: left;
+}
+.att-event-panel table th { background: #1a1a1f; color: var(--color-text-muted); }
+
+/* ── Unlinked panel ── */
+.att-unlinked { color: var(--color-text-muted); font-size: 0.82rem; }
+.att-unlinked summary { cursor: pointer; color: #fbbf24; margin-bottom: 0.5rem; }
+
+/* ── Settings panel ── */
+.att-settings summary {
+    cursor: pointer;
+    color: var(--color-gold);
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+}
+.att-settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+@media (max-width: 700px) { .att-settings-grid { grid-template-columns: 1fr; } }
+.att-setting-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #2a2a2e;
+}
+.att-setting-row:last-child { border-bottom: none; }
+.att-setting-row label { flex: 1; font-size: 0.85rem; color: var(--color-text-muted); }
+.att-setting-row input[type=number] {
+    width: 60px;
+    background: var(--color-input-bg, #1e1e22);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    text-align: right;
+}
+.att-setting-hint { color: #666; font-size: 0.75rem; }
+.att-save-btn {
+    margin-top: 1rem;
+    background: var(--color-accent);
+    border: none;
+    color: #0a0a0b;
+    padding: 0.4rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.att-save-btn:hover { opacity: 0.9; }
+.att-status-msg { font-size: 0.82rem; margin-left: 0.75rem; }
+.att-status-msg--ok { color: #4ade80; }
+.att-status-msg--err { color: #f87171; }
+
+/* ── Feature-disabled notice ── */
+.att-disabled-notice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1rem;
+    color: var(--color-text-muted);
+    text-align: center;
+    gap: 0.5rem;
+}
+.att-disabled-notice h3 { color: var(--color-text); font-family: 'Cinzel', serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="att-page">
+
+  <!-- ── Header + toolbar ──────────────────────────────────────────────── -->
+  <div class="att-card att-card--wide">
+    <h2 class="att-card__title">Raid Attendance</h2>
+    <p class="att-card__subtitle">Voice + WCL combined attendance tracking by season.</p>
+
+    <div class="att-toolbar">
+      <span class="att-toolbar__label">Season:</span>
+      <select id="att-season-sel" onchange="loadSeason()">
+        <option value="">Loading…</option>
+      </select>
+      <button class="att-save-btn" onclick="exportCsv()" style="margin-top:0">CSV Export</button>
+      <span id="att-main-status" class="att-status-msg"></span>
+    </div>
+  </div>
+
+  <!-- ── Season Grid ────────────────────────────────────────────────────── -->
+  <div class="att-card att-card--wide" id="att-grid-card">
+    <div id="att-disabled-notice" class="att-disabled-notice" style="display:none">
+      <h3>Attendance Tracking Disabled</h3>
+      <p>Enable voice attendance tracking in the settings panel below.</p>
+    </div>
+    <div id="att-grid-container" class="att-grid-wrap">
+      <p style="color:var(--color-text-muted);font-size:0.85rem;">Loading attendance data…</p>
+    </div>
+    <!-- Event detail panel (shown when column header clicked) -->
+    <div id="att-event-panel" class="att-event-panel"></div>
+    <!-- Unlinked users panel -->
+    <div id="att-unlinked-wrap" style="margin-top:1rem;display:none">
+      <details class="att-unlinked">
+        <summary id="att-unlinked-summary">Unlinked Discord Users</summary>
+        <div id="att-unlinked-list"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- ── Settings (GL-only if rank >= 5, Officer sees read-only state) ── -->
+  <div class="att-card att-card--wide">
+    <details class="att-settings" id="att-settings-details">
+      <summary>Settings</summary>
+      <form id="att-settings-form" onsubmit="saveSettings(event)">
+        <div class="att-settings-grid">
+          <div>
+            <div class="att-setting-row" style="grid-column:1/-1;margin-bottom:0.5rem;">
+              <label>
+                <input type="checkbox" id="att-feature-enabled" style="margin-right:0.4rem;">
+                Enable voice attendance tracking
+              </label>
+            </div>
+            <p class="att-setting-hint">The bot must have View Channel + Connect permission on the raid voice channel.</p>
+          </div>
+          <div></div>
+
+          <div>
+            <div class="att-setting-row">
+              <label>Minimum presence</label>
+              <input type="number" id="att-min-pct" min="1" max="100" value="75">
+              <span class="att-setting-hint">%</span>
+            </div>
+            <div class="att-setting-row">
+              <label>Late arrival grace</label>
+              <input type="number" id="att-late-grace" min="0" max="60" value="10">
+              <span class="att-setting-hint">min</span>
+            </div>
+            <div class="att-setting-row">
+              <label>Early leave grace</label>
+              <input type="number" id="att-early-grace" min="0" max="60" value="10">
+              <span class="att-setting-hint">min</span>
+            </div>
+            <div class="att-setting-row">
+              <label>Trailing window</label>
+              <input type="number" id="att-trailing" min="1" max="30" value="8">
+              <span class="att-setting-hint">events</span>
+            </div>
+          </div>
+          <div>
+            <p style="color:var(--color-text-muted);font-size:0.8rem;margin-bottom:0.5rem;">Habitual behavior alerts</p>
+            <div class="att-setting-row">
+              <label>Flag window</label>
+              <input type="number" id="att-hab-window" min="1" max="20" value="5">
+              <span class="att-setting-hint">events</span>
+            </div>
+            <div class="att-setting-row">
+              <label>Flag threshold</label>
+              <input type="number" id="att-hab-threshold" min="1" max="10" value="3">
+              <span class="att-setting-hint">occurrences</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-top:1rem;">
+          <button type="submit" class="att-save-btn">Save Settings</button>
+          <span id="att-settings-status" class="att-status-msg"></span>
+        </div>
+      </form>
+    </details>
+  </div>
+
+</div>
+
+<!-- ── Cell popover ────────────────────────────────────────────────────── -->
+<div id="att-popover" class="att-popover">
+  <button class="att-popover__close" onclick="closePopover()">×</button>
+  <div id="att-popover-content"></div>
+</div>
+
+<script>
+'use strict';
+
+let seasonData = null;
+let currentEventId = null;
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+
+async function init() {
+    await loadSeasons();
+    await loadSettings();
+}
+
+async function loadSeasons() {
+    const res = await fetch('/api/v1/admin/attendance/season');
+    const json = await res.json();
+    if (!json.ok) {
+        document.getElementById('att-grid-container').innerHTML =
+            `<p style="color:#f87171">Error loading seasons: ${json.error || 'unknown'}</p>`;
+        return;
+    }
+    // Check if feature disabled
+    if (json.data && json.data.feature_disabled) {
+        document.getElementById('att-disabled-notice').style.display = '';
+        document.getElementById('att-grid-container').style.display = 'none';
+        return;
+    }
+    seasonData = json.data;
+    renderSeasonSelector(json.data);
+    renderGrid(json.data);
+    renderUnlinked(json.data);
+}
+
+async function loadSeason() {
+    const seasonId = document.getElementById('att-season-sel').value;
+    const url = seasonId
+        ? `/api/v1/admin/attendance/season?season_id=${seasonId}`
+        : '/api/v1/admin/attendance/season';
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.ok) return;
+    seasonData = json.data;
+    renderGrid(json.data);
+    renderUnlinked(json.data);
+}
+
+async function loadSettings() {
+    const res = await fetch('/api/v1/admin/attendance/settings');
+    const json = await res.json();
+    if (!json.ok) return;
+    const s = json.data;
+    document.getElementById('att-feature-enabled').checked = s.attendance_feature_enabled;
+    document.getElementById('att-min-pct').value = s.attendance_min_pct;
+    document.getElementById('att-late-grace').value = s.attendance_late_grace_min;
+    document.getElementById('att-early-grace').value = s.attendance_early_leave_min;
+    document.getElementById('att-trailing').value = s.attendance_trailing_events;
+    document.getElementById('att-hab-window').value = s.attendance_habitual_window;
+    document.getElementById('att-hab-threshold').value = s.attendance_habitual_threshold;
+}
+
+// ── Season selector ────────────────────────────────────────────────────────
+
+function renderSeasonSelector(data) {
+    const sel = document.getElementById('att-season-sel');
+    const seasons = data.available_seasons || [];
+    if (!seasons.length) { sel.innerHTML = '<option value="">No seasons</option>'; return; }
+    sel.innerHTML = seasons.map(s =>
+        `<option value="${s.id}" ${s.id === (data.season && data.season.id) ? 'selected' : ''}>${escHtml(s.display_name)}</option>`
+    ).join('');
+}
+
+// ── Grid rendering ─────────────────────────────────────────────────────────
+
+function renderGrid(data) {
+    const container = document.getElementById('att-grid-container');
+    if (!data || !data.events || !data.players) {
+        container.innerHTML = '<p style="color:var(--color-text-muted)">No data for this season.</p>';
+        return;
+    }
+    const { events, players } = data;
+
+    // Footer: guild-wide attendance per event
+    const eventTotals = {};
+    events.forEach(e => { eventTotals[e.id] = { attended: 0, total: 0 }; });
+    players.forEach(p => {
+        events.forEach(e => {
+            const cell = (p.attendance || {})[String(e.id)];
+            if (!cell || cell.status === 'nodata' || cell.status === 'pending' || cell.status === 'live') return;
+            eventTotals[e.id].total++;
+            if (cell.status === 'attended' || cell.status === 'excused') eventTotals[e.id].attended++;
+        });
+    });
+
+    let html = `<table class="att-grid">
+<thead>
+<tr>
+  <th class="att-col-player">Player</th>
+  ${events.map(e => `<th class="att-col-event" onclick="showEventPanel(${e.id})" title="Click for details">${escHtml(e.date)}<br><small style="color:#888">${escHtml(e.title)}</small></th>`).join('')}
+  <th>Total</th>
+</tr>
+</thead>
+<tbody>`;
+
+    players.forEach(p => {
+        const habitualBadge = (p.habitual_late || p.habitual_early)
+            ? `<span class="att-habitual-badge" title="${escAttr(p.habitual_summary || 'Habitual pattern detected')}">⚠ Habitual</span>`
+            : '';
+        html += `<tr>
+  <td class="att-col-player">
+    <span>${escHtml(p.name)}${habitualBadge}</span>
+    <small style="color:#888;display:block">${escHtml(p.rank)}</small>
+  </td>`;
+
+        events.forEach(e => {
+            const cell = (p.attendance || {})[String(e.id)] || { status: 'nodata' };
+            html += renderCell(cell, e.id, p.id);
+        });
+
+        // Total column
+        const totalPct = p.pct != null ? p.pct : null;
+        let totalClass = 'att-total';
+        if (totalPct != null) {
+            if (totalPct >= 75) totalClass += ' att-total--good';
+            else if (totalPct >= 50) totalClass += ' att-total--atrisk';
+            else totalClass += ' att-total--low';
+        }
+        html += `<td class="${totalClass}">${p.total_attended}/${p.total_eligible}${totalPct != null ? '<br><small>' + Math.round(totalPct) + '%</small>' : ''}</td>`;
+        html += '</tr>';
+    });
+
+    // Footer row
+    html += '<tr class="att-footer-row"><td class="att-col-player">Guild %</td>';
+    events.forEach(e => {
+        const t = eventTotals[e.id];
+        const pct = t.total > 0 ? Math.round((t.attended / t.total) * 100) : null;
+        html += `<td>${t.attended}/${t.total}${pct != null ? '<br><small>' + pct + '%</small>' : ''}</td>`;
+    });
+    html += '<td></td></tr>';
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function renderCell(cell, eventId, playerId) {
+    const s = cell.status;
+    let icon = '';
+    let cls = '';
+    let title = '';
+
+    if (s === 'attended') {
+        cls = 'att-status--attended';
+        let flags = '';
+        if (cell.joined_late) flags += ' ⏰';
+        if (cell.left_early) flags += ' 🚪';
+        icon = '✓' + flags;
+        title = `Source: ${cell.source || '?'}${cell.minutes_present != null ? ' | ' + cell.minutes_present + 'min' : ''}`;
+    } else if (s === 'absent') {
+        cls = 'att-status--absent'; icon = '✗'; title = 'Absent';
+    } else if (s === 'excused') {
+        cls = 'att-status--excused'; icon = '~'; title = 'Excused absence';
+    } else if (s === 'live') {
+        cls = 'att-status--live'; icon = '[live]'; title = 'Tracking in progress';
+    } else if (s === 'pending') {
+        cls = 'att-status--pending'; icon = '[pending]'; title = 'Processing pending';
+    } else {
+        cls = 'att-status--nodata'; icon = '—'; title = 'No data';
+    }
+
+    return `<td class="att-cell ${cls}" title="${escAttr(title)}"
+        onclick="showCellPopover(event, ${eventId}, ${playerId})">${icon}</td>`;
+}
+
+// ── Popover ────────────────────────────────────────────────────────────────
+
+async function showCellPopover(evt, eventId, playerId) {
+    evt.stopPropagation();
+    closePopover();
+
+    // Find cell data in cached season
+    let cellData = null;
+    if (seasonData) {
+        const player = seasonData.players.find(p => p.id === playerId);
+        if (player) cellData = (player.attendance || {})[String(eventId)];
+    }
+
+    const popover = document.getElementById('att-popover');
+    const content = document.getElementById('att-popover-content');
+
+    if (!cellData || cellData.status === 'nodata' || cellData.status === 'pending') {
+        content.innerHTML = `<div class="att-popover__title">No data</div>`;
+    } else {
+        const s = cellData;
+        const statusLabel = s.status === 'attended' ? 'Attended'
+            : s.status === 'excused' ? 'Excused'
+            : s.status === 'absent' ? 'Absent' : s.status;
+
+        content.innerHTML = `
+            <div class="att-popover__title">${statusLabel}</div>
+            <div class="att-popover__row"><span class="att-popover__label">Source</span><span>${escHtml(s.source || '—')}</span></div>
+            ${s.minutes_present != null ? `<div class="att-popover__row"><span class="att-popover__label">Present</span><span>${s.minutes_present} min (${s.pct != null ? Math.round(s.pct) : '?'}%)</span></div>` : ''}
+            ${s.first_join_at ? `<div class="att-popover__row"><span class="att-popover__label">Joined</span><span>${fmtTime(s.first_join_at)}</span></div>` : ''}
+            ${s.last_leave_at ? `<div class="att-popover__row"><span class="att-popover__label">Left</span><span>${fmtTime(s.last_leave_at)}</span></div>` : ''}
+            ${s.joined_late != null ? `<div class="att-popover__row"><span class="att-popover__label">Late</span><span>${s.joined_late ? 'Yes ⏰' : 'No'}</span></div>` : ''}
+            ${s.left_early != null ? `<div class="att-popover__row"><span class="att-popover__label">Left early</span><span>${s.left_early ? 'Yes 🚪' : 'No'}</span></div>` : ''}
+            ${s.attendance_id ? `<button class="att-excused-btn" onclick="toggleExcused(${s.attendance_id}, ${s.noted_absence ? 'false' : 'true'})">${s.noted_absence ? 'Remove Excused' : 'Mark as Excused'}</button>` : ''}
+        `;
+    }
+
+    // Position near click
+    popover.style.display = 'block';
+    const px = Math.min(evt.clientX + 10, window.innerWidth - 340);
+    const py = Math.min(evt.clientY + 10, window.innerHeight - 280);
+    popover.style.left = px + 'px';
+    popover.style.top = py + 'px';
+}
+
+function closePopover() {
+    document.getElementById('att-popover').style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+    const pop = document.getElementById('att-popover');
+    if (pop && !pop.contains(e.target)) closePopover();
+});
+
+async function toggleExcused(attendanceId, setExcused) {
+    const res = await fetch(`/api/v1/admin/attendance/record/${attendanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noted_absence: setExcused }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+        closePopover();
+        await loadSeason();
+    } else {
+        alert('Error: ' + (json.error || 'unknown'));
+    }
+}
+
+// ── Event detail panel ────────────────────────────────────────────────────
+
+async function showEventPanel(eventId) {
+    currentEventId = eventId;
+    const panel = document.getElementById('att-event-panel');
+    panel.innerHTML = '<p style="color:#888;padding:0.5rem">Loading…</p>';
+    panel.classList.add('att-event-panel--open');
+
+    const res = await fetch(`/api/v1/admin/attendance/event/${eventId}`);
+    const json = await res.json();
+    if (!json.ok) {
+        panel.innerHTML = `<p style="color:#f87171">Error: ${json.error}</p>`;
+        return;
+    }
+    const d = json.data;
+    const e = d.event;
+
+    let rows = '';
+    (d.records || []).forEach(r => {
+        const statusIcon = r.attended ? (r.noted_absence ? '~' : '✓') : '✗';
+        const statusCls = r.attended ? (r.noted_absence ? 'att-status--excused' : 'att-status--attended') : 'att-status--absent';
+        rows += `<tr>
+          <td>${escHtml(r.player_name)}</td>
+          <td>${escHtml(r.source || '—')}</td>
+          <td>${r.first_join_at ? fmtTime(r.first_join_at) : '—'}</td>
+          <td>${r.last_leave_at ? fmtTime(r.last_leave_at) : '—'}</td>
+          <td>${r.minutes_present != null ? r.minutes_present + 'm' : '—'}</td>
+          <td>${r.pct != null ? Math.round(r.pct) + '%' : '—'}</td>
+          <td class="${statusCls}">${statusIcon}</td>
+        </tr>`;
+    });
+
+    panel.innerHTML = `
+        <div class="att-event-panel__header">
+          <div>
+            <div class="att-event-panel__title">${escHtml(e.title)} — ${escHtml(e.date)}</div>
+            <div class="att-event-panel__meta">${escHtml(e.start_time)} → ${escHtml(e.end_time)} UTC
+              ${e.log_url ? ` | <a href="${escAttr(e.log_url)}" target="_blank" style="color:var(--color-gold)">WCL Report</a>` : ''}
+            </div>
+            <div class="att-event-panel__meta" style="margin-top:0.25rem">
+              ${d.summary.attended} attended · ${d.summary.absent} absent · ${d.summary.excused} excused · source: ${escHtml(d.summary.sources)}
+            </div>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:flex-start">
+            <button class="att-save-btn" onclick="reprocessEvent(${eventId})">Re-process</button>
+            <button class="att-save-btn" style="background:#333;color:#ccc" onclick="closeEventPanel()">Close</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Player</th><th>Source</th><th>Joined</th><th>Left</th><th>Time</th><th>%</th><th>Result</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+function closeEventPanel() {
+    const panel = document.getElementById('att-event-panel');
+    panel.classList.remove('att-event-panel--open');
+    panel.innerHTML = '';
+    currentEventId = null;
+}
+
+async function reprocessEvent(eventId) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+    const res = await fetch(`/api/v1/admin/attendance/event/${eventId}/reprocess`, { method: 'POST' });
+    const json = await res.json();
+    btn.disabled = false;
+    btn.textContent = 'Re-process';
+    if (json.ok) {
+        await loadSeason();
+        await showEventPanel(eventId);
+    } else {
+        alert('Error: ' + (json.error || 'unknown'));
+    }
+}
+
+// ── Unlinked users ────────────────────────────────────────────────────────
+
+function renderUnlinked(data) {
+    const wrap = document.getElementById('att-unlinked-wrap');
+    const list = document.getElementById('att-unlinked-list');
+    const unlinked = data.unlinked_users || [];
+    if (!unlinked.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    document.getElementById('att-unlinked-summary').textContent =
+        `Unlinked Discord Users (${unlinked.length})`;
+    list.innerHTML = '<ul style="margin:0.5rem 0 0 1rem;color:var(--color-text-muted);font-size:0.8rem">' +
+        unlinked.map(u => `<li>Discord ID: ${escHtml(u.discord_user_id)} — appeared in ${u.event_count} event(s)</li>`).join('') +
+        '</ul>';
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────
+
+async function saveSettings(evt) {
+    evt.preventDefault();
+    const statusEl = document.getElementById('att-settings-status');
+    statusEl.textContent = 'Saving…';
+    statusEl.className = 'att-status-msg';
+
+    const body = {
+        attendance_feature_enabled: document.getElementById('att-feature-enabled').checked,
+        attendance_min_pct: parseInt(document.getElementById('att-min-pct').value),
+        attendance_late_grace_min: parseInt(document.getElementById('att-late-grace').value),
+        attendance_early_leave_min: parseInt(document.getElementById('att-early-grace').value),
+        attendance_trailing_events: parseInt(document.getElementById('att-trailing').value),
+        attendance_habitual_window: parseInt(document.getElementById('att-hab-window').value),
+        attendance_habitual_threshold: parseInt(document.getElementById('att-hab-threshold').value),
+    };
+
+    const res = await fetch('/api/v1/admin/attendance/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.ok) {
+        statusEl.textContent = 'Saved!';
+        statusEl.className = 'att-status-msg att-status-msg--ok';
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    } else {
+        statusEl.textContent = 'Error: ' + (json.error || 'unknown');
+        statusEl.className = 'att-status-msg att-status-msg--err';
+    }
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+
+async function exportCsv() {
+    const seasonId = document.getElementById('att-season-sel').value;
+    const url = '/api/v1/admin/attendance/export' + (seasonId ? `?season_id=${seasonId}` : '');
+    window.location.href = url;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+    return String(s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function fmtTime(iso) {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
+    } catch { return iso; }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+init();
+</script>
+{% endblock %}
