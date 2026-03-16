@@ -705,7 +705,11 @@ function nextOccurrenceOf(dayOfWeek) {
     if (daysUntil === 0) daysUntil = 7;
     const next = new Date(today);
     next.setDate(today.getDate() + daysUntil);
-    return next.toISOString().split('T')[0];
+    // Use local date parts — toISOString() would give the wrong date in negative-UTC-offset timezones
+    const y = next.getFullYear();
+    const m = String(next.getMonth() + 1).padStart(2, '0');
+    const d = String(next.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
 }
 
 // ── Player status overrides ──────────────────────────────────────
