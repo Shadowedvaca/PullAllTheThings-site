@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models for the guild platform.
 
 common schema: guild_ranks, users, discord_config, invite_codes,
-               site_config, rank_wow_mapping
+               site_config, rank_wow_mapping, error_log
 patt schema: campaigns, campaign_entries, votes, campaign_results,
              contest_agent_log, guild_quotes, guild_quote_titles, quote_subjects,
              player_availability, raid_seasons, raid_events, raid_attendance,
@@ -257,6 +257,31 @@ class InviteCode(Base):
     created_by_player: Mapped[Optional["Player"]] = relationship(
         back_populates="created_invite_codes", foreign_keys=[created_by_player_id]
     )
+
+
+class ErrorLog(Base):
+    """Centralised error catalogue — portable across projects."""
+
+    __tablename__ = "error_log"
+    __table_args__ = {"schema": "common"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    issue_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    severity: Mapped[str] = mapped_column(String(10), nullable=False, server_default="warning")
+    source_module: Mapped[Optional[str]] = mapped_column(String(80))
+    identifier: Mapped[Optional[str]] = mapped_column(String(255))
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[Optional[dict]] = mapped_column(JSONB)
+    issue_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    first_occurred_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    last_occurred_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(80))
 
 
 # ---------------------------------------------------------------------------
