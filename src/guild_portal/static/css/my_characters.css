@@ -1,0 +1,253 @@
+/* ── My Characters page styles ─────────────────────────────────────────────── */
+
+.mc-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.mc-page__title {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  color: var(--color-accent);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Loading / error states ───────────────────────────────────────────────── */
+
+.mc-loading {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 2rem 0;
+}
+
+.mc-error {
+  background: var(--color-bg-card);
+  border: 1px solid #b91c1c;
+  border-left: 3px solid #ef4444;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  color: #fca5a5;
+  margin-bottom: 1rem;
+}
+
+/* ── Selector bar ─────────────────────────────────────────────────────────── */
+
+.mc-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.mc-selector-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mc-selector {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 1rem;
+  padding: 0.4rem 0.75rem;
+  min-width: 220px;
+  cursor: pointer;
+}
+
+.mc-selector:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.mc-selector-meta {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Stale notice ─────────────────────────────────────────────────────────── */
+
+.mc-stale-notice {
+  background: var(--color-bg-panel);
+  border: 1px solid #78350f;
+  border-left: 3px solid #f59e0b;
+  border-radius: var(--radius);
+  padding: 0.6rem 1rem;
+  color: #fcd34d;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Stat panel ───────────────────────────────────────────────────────────── */
+
+.mc-panel {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mc-panel__header {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  /* Class color is set inline via style attribute */
+  background: var(--color-bg-panel);
+  border-top: 3px solid var(--mc-class-color, var(--color-accent));
+}
+
+.mc-panel__emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.mc-panel__name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.mc-panel__name {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--mc-class-color, var(--color-text));
+  line-height: 1.2;
+}
+
+.mc-panel__realm {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.mc-panel__badges {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mc-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.mc-badge--main {
+  background: rgba(212, 168, 75, 0.2);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.mc-badge--offspec {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  border: 1px solid #60a5fa;
+}
+
+.mc-badge--bnet {
+  background: rgba(0, 120, 212, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(0, 120, 212, 0.4);
+}
+
+/* ── Stat grid ────────────────────────────────────────────────────────────── */
+
+.mc-panel__body {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.mc-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.mc-stat-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mc-stat-field__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.mc-stat-field__value {
+  font-size: 1rem;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.mc-stat-field__value--accent {
+  color: var(--color-accent);
+}
+
+.mc-stat-field__value--muted {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+/* ── External links ───────────────────────────────────────────────────────── */
+
+.mc-links {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.mc-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.mc-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+
+.mc-empty {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.mc-empty__text {
+  color: var(--color-text-muted);
+  margin-bottom: 1.25rem;
+  font-size: 1rem;
+}

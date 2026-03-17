@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}My Characters — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/my_characters.css">
+{% endblock %}
+
+{% block content %}
+<div class="mc-page">
+  <h1 class="mc-page__title">My Characters</h1>
+
+  <div id="mc-loading" class="mc-loading" aria-live="polite">
+    Loading characters&hellip;
+  </div>
+
+  <div id="mc-error" class="mc-error" hidden>
+    <p>Could not load characters. Please refresh and try again.</p>
+  </div>
+
+  {# Selector bar — populated by JS #}
+  <div id="mc-selector-bar" class="mc-selector-bar" hidden>
+    <label for="mc-selector" class="mc-selector-label">Character</label>
+    <select id="mc-selector" class="mc-selector"></select>
+    <span id="mc-selector-meta" class="mc-selector-meta"></span>
+  </div>
+
+  {# Stale data notice — shown by JS when blizzard_last_sync > 7 days old #}
+  <div id="mc-stale-notice" class="mc-stale-notice" hidden>
+    ⚠ Character data may be outdated (last synced over 7 days ago).
+  </div>
+
+  {# Stat panel — populated by JS #}
+  <div id="mc-panel" class="mc-panel" hidden></div>
+
+  {# Empty state — shown by JS when member has no characters #}
+  <div id="mc-empty" class="mc-empty" hidden>
+    <p class="mc-empty__text">You have no claimed characters yet.</p>
+    <a href="/profile" class="btn btn-primary">Go to Settings → Character Claims</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/my_characters.js"></script>
+{% endblock %}
