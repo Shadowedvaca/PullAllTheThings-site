@@ -39,6 +39,7 @@ ISSUE_EMOJI = {
     "wcl_sync_failed": "📊",
     "attendance_sync_failed": "📋",
     "ah_sync_failed": "💰",
+    "discord_sync_failed": "🤖",
 }
 
 # Human-friendly type names
@@ -56,6 +57,7 @@ ISSUE_TYPE_NAMES = {
     "wcl_sync_failed": "Warcraft Logs Sync Failed",
     "attendance_sync_failed": "Attendance Processing Failed",
     "ah_sync_failed": "AH Pricing Sync Failed",
+    "discord_sync_failed": "Discord Member Sync Failed",
 }
 
 

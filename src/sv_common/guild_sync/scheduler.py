@@ -459,12 +459,22 @@ class GuildSyncScheduler:
 
         except Exception as exc:
             logger.error("Discord sync pipeline failed: %s", exc, exc_info=True)
-            if audit_channel:
-                await send_error(
-                    audit_channel,
-                    "Discord Sync Failed",
-                    f"The Discord member sync pipeline encountered an unexpected error:\n```{exc}```",
-                )
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "discord_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "discord_sync_failed", "warning",
+                f"The Discord member sync pipeline encountered an unexpected error: {exc}",
+                result["is_first_occurrence"],
+            )
 
     async def run_addon_sync(self, addon_data: list[dict]):
         """Process addon upload and run downstream pipeline.
