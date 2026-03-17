@@ -408,3 +408,166 @@
   margin-bottom: 1.25rem;
   font-size: 1rem;
 }
+
+/* ── Parses panel ─────────────────────────────────────────────────────────── */
+
+.mc-parses {
+  margin-top: 1rem;
+}
+
+/* Difficulty tab bar */
+.mc-parse-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mc-parse-tab {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.mc-parse-tab:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.mc-parse-tab--active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(212, 168, 75, 0.08);
+}
+
+/* Summary bar */
+.mc-parse-summary {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.mc-parse-summary strong {
+  color: var(--color-text);
+}
+
+/* Parse table */
+.mc-parse-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.mc-parse-table thead th {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+
+.mc-parse-table thead th:last-child {
+  width: 140px;
+}
+
+.mc-parse-table tbody td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.mc-parse-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mc-parse-row--gray {
+  opacity: 0.6;
+}
+
+.mc-parse-row--legendary td:first-child {
+  text-shadow: 0 0 8px #e5cc80;
+}
+
+/* Parse percentile badge */
+.mc-parse-pct {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* WCL parse color tiers */
+.mc-parse--gray    { color: #9ca3af; }
+.mc-parse--green   { color: #1eff00; }
+.mc-parse--blue    { color: #0070ff; }
+.mc-parse--purple  { color: #a335ee; }
+.mc-parse--orange  { color: #ff8000; }
+.mc-parse--gold    { color: #e5cc80; }
+.mc-parse--pink    { color: #e268a8; }
+
+/* Progress bar in parse table */
+.mc-parse-bar-wrap {
+  height: 6px;
+  background: var(--color-bg-panel);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.mc-parse-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* Bar fill colors matching WCL tiers */
+.mc-parse-bar--gray    { background: #9ca3af; }
+.mc-parse-bar--green   { background: #1eff00; }
+.mc-parse-bar--blue    { background: #0070ff; }
+.mc-parse-bar--purple  { background: #a335ee; }
+.mc-parse-bar--orange  { background: #ff8000; }
+.mc-parse-bar--gold    { background: #e5cc80; }
+.mc-parse-bar--pink    { background: #e268a8; }
+
+/* No data / not configured states */
+.mc-parse-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.mc-parse-wcl-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.mc-parse-wcl-link:hover {
+  text-decoration: underline;
+}
+
+.mc-parse-not-configured {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}

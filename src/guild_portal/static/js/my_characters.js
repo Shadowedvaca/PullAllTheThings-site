@@ -231,6 +231,155 @@ function renderProgressionPanel(data) {
 }
 
 // ---------------------------------------------------------------------------
+// Parses panel helpers
+// ---------------------------------------------------------------------------
+
+const WCL_TIER_ORDER = ["lfr", "normal", "heroic", "mythic"];
+const WCL_DIFF_LABELS = { lfr: "LFR", normal: "Normal", heroic: "Heroic", mythic: "Mythic" };
+
+function parsePercentileTier(pct) {
+  if (pct >= 100) return "pink";
+  if (pct >= 99)  return "gold";
+  if (pct >= 95)  return "orange";
+  if (pct >= 75)  return "purple";
+  if (pct >= 50)  return "blue";
+  if (pct >= 25)  return "green";
+  return "gray";
+}
+
+function ordinalSuffix(n) {
+  const s = ["th","st","nd","rd"];
+  const v = n % 100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
+
+function renderParsesPanel(data, charRealm, charName) {
+  const panel = document.getElementById("mc-parses");
+  const { tier_name, wcl_configured, parses, summary } = data;
+
+  const wclCharUrl = `https://www.warcraftlogs.com/character/us/${charRealm}/${charName.toLowerCase()}`;
+
+  // Handle WCL not configured
+  if (!wcl_configured) {
+    panel.innerHTML = `
+      <div class="mc-prog-card">
+        <div class="mc-prog-card__title">Warcraft Logs \u2014 Recent Parses</div>
+        <div class="mc-prog-card__body">
+          <div class="mc-parse-not-configured">WCL not configured \u2014 contact an officer to set up Warcraft Logs integration.</div>
+        </div>
+      </div>`;
+    panel.hidden = false;
+    return;
+  }
+
+  // Group by difficulty
+  const byDiff = {};
+  for (const p of (parses || [])) {
+    if (!byDiff[p.difficulty]) byDiff[p.difficulty] = [];
+    byDiff[p.difficulty].push(p);
+  }
+
+  const availDiffs = WCL_TIER_ORDER.filter(d => byDiff[d] && byDiff[d].length > 0);
+
+  // No data state
+  if (!parses || parses.length === 0) {
+    panel.innerHTML = `
+      <div class="mc-prog-card">
+        <div class="mc-prog-card__title">Warcraft Logs \u2014 Recent Parses</div>
+        <div class="mc-prog-card__body">
+          <span class="mc-parse-empty">No Warcraft Logs data found for this character.</span>
+          <a href="${wclCharUrl}" target="_blank" rel="noopener noreferrer" class="mc-parse-wcl-link">View on Warcraft Logs \u2197</a>
+        </div>
+      </div>`;
+    panel.hidden = false;
+    return;
+  }
+
+  // Default tab: heroic if available, else first with data
+  let activeTab = availDiffs.includes("heroic") ? "heroic" : availDiffs[0];
+
+  function buildTableHtml(diff) {
+    const rows = (byDiff[diff] || []).slice().sort((a, b) => b.percentile - a.percentile);
+    if (!rows.length) return '<span class="mc-parse-empty">No data for this difficulty.</span>';
+    let html = `
+      <table class="mc-parse-table">
+        <thead><tr>
+          <th>Boss</th>
+          <th>Parse %</th>
+          <th>Best Parse</th>
+        </tr></thead>
+        <tbody>`;
+    for (const row of rows) {
+      const tier = parsePercentileTier(row.percentile);
+      const pct = Math.round(row.percentile);
+      const rowClass = tier === "gray" ? "mc-parse-row--gray" : (tier === "gold" ? "mc-parse-row--legendary" : "");
+      const bossLink = row.report_code
+        ? `<a href="https://www.warcraftlogs.com/reports/${row.report_code}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;">${row.boss_name}</a>`
+        : row.boss_name;
+      html += `
+        <tr class="${rowClass}">
+          <td>${bossLink}</td>
+          <td><span class="mc-parse-pct mc-parse--${tier}">${ordinalSuffix(pct)}</span></td>
+          <td>
+            <div class="mc-parse-bar-wrap">
+              <div class="mc-parse-bar-fill mc-parse-bar--${tier}" style="width:${pct}%"></div>
+            </div>
+          </td>
+        </tr>`;
+    }
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function buildSummaryHtml() {
+    if (!summary) return '';
+    const parts = [];
+    if (summary.best_percentile != null) {
+      parts.push(`Best this tier: <strong>${ordinalSuffix(Math.round(summary.best_percentile))} percentile</strong> (${WCL_DIFF_LABELS[summary.best_difficulty] || summary.best_difficulty}, ${summary.best_boss})`);
+    }
+    if (summary.heroic_average != null) {
+      parts.push(`Heroic avg: <strong>${ordinalSuffix(Math.round(summary.heroic_average))}</strong>`);
+    }
+    return parts.length ? `<div class="mc-parse-summary">${parts.map(p => `<span>${p}</span>`).join('')}</div>` : '';
+  }
+
+  function buildTabsHtml(activeDiff) {
+    return `<div class="mc-parse-tabs" id="mc-parse-tabs">
+      ${availDiffs.map(d => `<button class="mc-parse-tab${d === activeDiff ? ' mc-parse-tab--active' : ''}" data-diff="${d}">${WCL_DIFF_LABELS[d] || d}</button>`).join('')}
+    </div>`;
+  }
+
+  const tierLabel = tier_name ? ` \u2014 ${tier_name}` : '';
+
+  function renderFull(activeDiff) {
+    panel.innerHTML = `
+      <div class="mc-prog-card">
+        <div class="mc-prog-card__title">Warcraft Logs${tierLabel}</div>
+        <div class="mc-prog-card__body">
+          ${buildSummaryHtml()}
+          ${availDiffs.length > 1 ? buildTabsHtml(activeDiff) : ''}
+          <div id="mc-parse-table-body">${buildTableHtml(activeDiff)}</div>
+          <a href="${wclCharUrl}" target="_blank" rel="noopener noreferrer" class="mc-parse-wcl-link" style="margin-top:0.75rem;">View full profile on Warcraft Logs \u2197</a>
+        </div>
+      </div>`;
+
+    // Attach tab click handlers
+    const tabsEl = panel.querySelector("#mc-parse-tabs");
+    if (tabsEl) {
+      tabsEl.querySelectorAll(".mc-parse-tab").forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeTab = btn.dataset.diff;
+          renderFull(activeTab);
+        });
+      });
+    }
+    panel.hidden = false;
+  }
+
+  renderFull(activeTab);
+}
+
+// ---------------------------------------------------------------------------
 // State management
 // ---------------------------------------------------------------------------
 
@@ -265,6 +414,24 @@ async function selectCharacter(charId) {
   } catch (err) {
     // Progression is non-critical — fail silently
     console.warn("Progression load failed:", err);
+  }
+
+  // Load parses panel
+  const parsesPanel = document.getElementById("mc-parses");
+  parsesPanel.hidden = true;
+  parsesPanel.innerHTML = "";
+
+  try {
+    const parsesResp = await fetch(`/api/v1/me/character/${charId}/parses`, { credentials: "include" });
+    if (parsesResp.ok) {
+      const parsesJson = await parsesResp.json();
+      if (parsesJson.ok) {
+        renderParsesPanel(parsesJson.data, char.realm_slug, char.character_name);
+      }
+    }
+  } catch (err) {
+    // Parses are non-critical — fail silently
+    console.warn("Parses load failed:", err);
   }
 }
 

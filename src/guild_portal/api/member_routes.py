@@ -13,17 +13,21 @@ from guild_portal.deps import get_current_player, get_db
 from sv_common.config_cache import get_site_config
 from sv_common.db.models import (
     CharacterMythicPlus,
+    CharacterParse,
     CharacterRaidProgress,
     Player,
     PlayerCharacter,
     RaiderIOProfile,
     RaidSeason,
+    WclConfig,
     WowCharacter,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/me", tags=["member"])
+
+_DIFF_NAMES: dict[int, str] = {1: "lfr", 3: "normal", 4: "heroic", 5: "mythic"}
 
 # Class emoji mapping (matches public_pages.py)
 _CLASS_EMOJIS: dict[str, str] = {
@@ -266,5 +270,89 @@ async def get_character_progression(
             "character_id": character_id,
             "raid_progress": raid_progress,
             "mythic_plus": mythic_plus,
+        },
+    }
+
+
+@router.get("/character/{character_id}/parses")
+async def get_character_parses(
+    character_id: int,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return WCL parse percentiles for a character owned by the current member."""
+    # Verify the character belongs to this player
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # Check WCL config
+    wcl_result = await db.execute(select(WclConfig).limit(1))
+    wcl_cfg = wcl_result.scalar_one_or_none()
+    wcl_configured = bool(wcl_cfg and wcl_cfg.is_configured)
+
+    # Load all parses for this character
+    parse_result = await db.execute(
+        select(CharacterParse).where(CharacterParse.character_id == character_id)
+    )
+    all_rows = list(parse_result.scalars().all())
+
+    # Deduplicate: best percentile per (encounter_name, difficulty_int)
+    best: dict[tuple, CharacterParse] = {}
+    for row in all_rows:
+        key = (row.encounter_name, row.difficulty)
+        if key not in best or float(row.percentile) > float(best[key].percentile):
+            best[key] = row
+
+    # Build parse list
+    parses = []
+    tier_name: str | None = None
+    for row in best.values():
+        diff_name = _DIFF_NAMES.get(row.difficulty, str(row.difficulty))
+        if tier_name is None and row.zone_name:
+            tier_name = row.zone_name
+        recorded_at = None
+        if row.fight_date:
+            recorded_at = row.fight_date.isoformat()
+        elif row.last_synced:
+            recorded_at = row.last_synced.isoformat()
+        parses.append({
+            "boss_name": row.encounter_name,
+            "difficulty": diff_name,
+            "percentile": float(row.percentile),
+            "rank_world": None,
+            "report_code": row.report_code,
+            "recorded_at": recorded_at,
+        })
+
+    # Build summary
+    summary = None
+    if parses:
+        best_parse = max(parses, key=lambda p: p["percentile"])
+        heroic = [p for p in parses if p["difficulty"] == "heroic"]
+        heroic_avg = (
+            round(sum(p["percentile"] for p in heroic) / len(heroic), 1)
+            if heroic else None
+        )
+        summary = {
+            "best_percentile": best_parse["percentile"],
+            "best_boss": best_parse["boss_name"],
+            "best_difficulty": best_parse["difficulty"],
+            "heroic_average": heroic_avg,
+        }
+
+    return {
+        "ok": True,
+        "data": {
+            "character_id": character_id,
+            "tier_name": tier_name,
+            "wcl_configured": wcl_configured,
+            "parses": parses,
+            "summary": summary,
         },
     }
