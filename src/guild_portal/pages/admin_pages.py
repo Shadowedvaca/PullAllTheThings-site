@@ -70,6 +70,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/ah-pricing",      "ah_pricing"),
     ("/admin/attendance",      "attendance_report"),
     ("/admin/quotes",          "quotes"),
+    ("/admin/error-routing",   "error_routing"),
 ]
 
 
@@ -3491,3 +3492,39 @@ async def admin_quotes_page(
 
     ctx = await _base_ctx(request, player, db)
     return templates.TemplateResponse("admin/quotes.html", ctx)
+
+
+# ===========================================================================
+# Error Routing — /admin/error-routing
+# ===========================================================================
+
+
+@router.get("/error-routing", response_class=HTMLResponse)
+async def admin_error_routing_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Error routing admin page — Officer+."""
+    player = await _require_screen("error_routing", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/error-routing")
+
+    pool = request.app.state.guild_sync_pool
+    from sv_common.errors import get_unresolved
+    errors = await get_unresolved(pool)
+
+    from sqlalchemy import text as sa_text
+    result = await db.execute(
+        sa_text("""
+            SELECT id, issue_type, min_severity, dest_audit_log, dest_discord,
+                   first_only, enabled, notes, updated_at
+              FROM common.error_routing
+             ORDER BY issue_type NULLS LAST, min_severity
+        """)
+    )
+    routing_rules = [dict(r) for r in result.mappings().all()]
+
+    ctx = await _base_ctx(request, player, db)
+    ctx["errors"] = errors
+    ctx["routing_rules"] = routing_rules
+    return templates.TemplateResponse("admin/error_routing.html", ctx)

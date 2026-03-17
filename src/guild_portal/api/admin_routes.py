@@ -14,6 +14,8 @@ from sqlalchemy import text
 
 from guild_portal.deps import get_db, require_rank
 from sv_common.config_cache import set_site_config
+from sv_common.errors import get_unresolved, resolve_issue
+from guild_portal.services.error_routing import get_routing_rule, invalidate_cache as invalidate_routing_cache
 from sv_common.db.models import (
     DiscordConfig, GuildQuote, GuildQuoteTitle, GuildRank, Player, PlayerAvailability,
     QuoteSubject, RaidAttendance, RaidEvent, RecurringEvent,
@@ -108,6 +110,14 @@ class RecurringEventUpdate(BaseModel):
     raid_helper_template_id: str | None = None
     is_active: bool | None = None
     display_on_public: bool | None = None
+
+
+class ErrorRoutingUpdate(BaseModel):
+    dest_audit_log: bool | None = None
+    dest_discord: bool | None = None
+    first_only: bool | None = None
+    enabled: bool | None = None
+    notes: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -2232,3 +2242,144 @@ async def delete_title(title_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(title)
     await db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Error Log & Routing — Phase 6.2
+# ---------------------------------------------------------------------------
+
+
+@router.get("/errors/unresolved")
+async def get_errors_unresolved(
+    request: Request,
+    severity: str | None = None,
+    issue_type: str | None = None,
+    source_module: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """Return open error records from common.error_log."""
+    pool = request.app.state.guild_sync_pool
+    errors = await get_unresolved(
+        pool,
+        severity=severity,
+        issue_type=issue_type,
+        source_module=source_module,
+        limit=limit,
+        offset=offset,
+    )
+    # Convert datetime objects to ISO strings for JSON serialisation
+    serialised = []
+    for e in errors:
+        row = dict(e)
+        for key in ("first_occurred_at", "last_occurred_at"):
+            if row.get(key) is not None:
+                row[key] = row[key].isoformat()
+        serialised.append(row)
+    return {"ok": True, "data": {"errors": serialised, "total": len(serialised)}}
+
+
+@router.get("/errors/routing")
+async def get_error_routing(db: AsyncSession = Depends(get_db)):
+    """Return all error routing rules."""
+    result = await db.execute(
+        text("""
+            SELECT id, issue_type, min_severity, dest_audit_log, dest_discord,
+                   first_only, enabled, notes, updated_at
+              FROM common.error_routing
+             ORDER BY issue_type NULLS LAST, min_severity
+        """)
+    )
+    rows = result.mappings().all()
+    rules = []
+    for r in rows:
+        row = dict(r)
+        if row.get("updated_at") is not None:
+            row["updated_at"] = row["updated_at"].isoformat()
+        rules.append(row)
+    return {"ok": True, "data": {"rules": rules}}
+
+
+@router.patch("/errors/routing/{rule_id}")
+async def update_error_routing(
+    rule_id: int,
+    body: ErrorRoutingUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a routing rule and flush the in-process cache."""
+    result = await db.execute(
+        text("SELECT id FROM common.error_routing WHERE id = :id"),
+        {"id": rule_id},
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Routing rule not found")
+
+    updates: dict = {}
+    if body.dest_audit_log is not None:
+        updates["dest_audit_log"] = body.dest_audit_log
+    if body.dest_discord is not None:
+        updates["dest_discord"] = body.dest_discord
+    if body.first_only is not None:
+        updates["first_only"] = body.first_only
+    if body.enabled is not None:
+        updates["enabled"] = body.enabled
+    if body.notes is not None:
+        updates["notes"] = body.notes
+
+    if updates:
+        updates["updated_at"] = "NOW()"
+        set_clauses = ", ".join(
+            f"{k} = NOW()" if v == "NOW()" else f"{k} = :{k}"
+            for k, v in updates.items()
+        )
+        params = {k: v for k, v in updates.items() if v != "NOW()"}
+        params["id"] = rule_id
+        await db.execute(
+            text(f"UPDATE common.error_routing SET {set_clauses} WHERE id = :id"),
+            params,
+        )
+        await db.commit()
+        invalidate_routing_cache()
+
+    result = await db.execute(
+        text("""
+            SELECT id, issue_type, min_severity, dest_audit_log, dest_discord,
+                   first_only, enabled, notes, updated_at
+              FROM common.error_routing WHERE id = :id
+        """),
+        {"id": rule_id},
+    )
+    row = dict(result.mappings().one())
+    if row.get("updated_at") is not None:
+        row["updated_at"] = row["updated_at"].isoformat()
+    return {"ok": True, "data": row}
+
+
+@router.post("/errors/{error_id}/resolve")
+async def resolve_error_manually(
+    error_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually resolve an open error record."""
+    from guild_portal.deps import get_page_member
+
+    # Get admin's display name for resolved_by
+    player = await get_page_member(request, db)
+    resolved_by = f"officer:{player.display_name}" if player else "officer:unknown"
+
+    pool = request.app.state.guild_sync_pool
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, issue_type, identifier FROM common.error_log WHERE id = $1 AND resolved_at IS NULL",
+            error_id,
+        )
+        if row is None:
+            raise HTTPException(status_code=404, detail="Error record not found or already resolved")
+
+        await conn.execute(
+            "UPDATE common.error_log SET resolved_at = NOW(), resolved_by = $1 WHERE id = $2",
+            resolved_by, error_id,
+        )
+
+    return {"ok": True, "data": {"resolved": True}}
