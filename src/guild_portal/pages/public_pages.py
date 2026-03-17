@@ -326,6 +326,23 @@ async def landing_page(
     return templates.TemplateResponse("public/index.html", ctx)
 
 
+@router.get("/feedback", response_class=HTMLResponse)
+async def feedback_page(
+    request: Request,
+    current_member: Player | None = Depends(get_page_member),
+):
+    prefill_contact = current_member.display_name if current_member else None
+    return templates.TemplateResponse(
+        "feedback.html",
+        {
+            "request": request,
+            "current_member": current_member,
+            "is_authenticated": current_member is not None,
+            "prefill_contact": prefill_contact,
+        },
+    )
+
+
 @router.get("/crafting-corner", response_class=HTMLResponse)
 async def crafting_corner_page(
     request: Request,
