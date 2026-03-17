@@ -128,7 +128,20 @@
 <section class="lp-section">
     <h2 class="lp-section-title">📈 Market Watch</h2>
     <div class="lp-market-watch">
-        <table class="lp-market-table">
+        {% if available_realms | length > 1 %}
+        <div class="lp-market-realm-bar">
+            <label for="market-realm-select">Showing prices for:</label>
+            <select id="market-realm-select" onchange="switchMarketRealm(this.value)">
+                {% for realm in available_realms %}
+                <option value="{{ realm.connected_realm_id }}"
+                    {% if realm.connected_realm_id == viewer_realm_id %}selected{% endif %}>
+                    {{ realm.label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <table class="lp-market-table" id="lp-market-table">
             <thead>
                 <tr>
                     <th>Item</th>
@@ -136,12 +149,13 @@
                     <th>Available</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="lp-market-tbody">
                 {% for item in ah_prices %}
-                <tr>
+                <tr class="{% if item.is_realm_specific %}lp-market-row--realm{% endif %}">
                     <td class="lp-market-name">
                         <span class="lp-market-cat lp-market-cat--{{ item.category }}">{{ item.category }}</span>
                         <a href="https://www.wowhead.com/search?q={{ item.item_name | replace(' ', '+') | replace("'", '%27') }}" target="_blank" rel="noopener" class="lp-market-item-link">{{ item.item_name }}</a>
+                        {% if item.is_realm_specific %}<span class="lp-market-realm-flag">*</span>{% endif %}
                     </td>
                     <td class="lp-market-price">{{ item.min_buyout | gold }}</td>
                     <td class="lp-market-qty">{{ "{:,}".format(item.quantity_available) }}</td>
@@ -149,8 +163,11 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% if ah_prices | selectattr('is_realm_specific') | list %}
+        <p class="lp-market-footnote">* Realm-specific auction price for your connected realm.</p>
+        {% endif %}
         {% if ah_prices[0].snapshot_at %}
-        <p class="lp-market-updated">Updated {{ ah_prices[0].snapshot_at.strftime('%b %d, %H:%M') }} UTC</p>
+        <p class="lp-market-updated" id="lp-market-updated">Updated {{ ah_prices[0].snapshot_at.strftime('%b %d, %H:%M') }} UTC</p>
         {% endif %}
     </div>
 </section>
@@ -248,4 +265,43 @@
 
 {% block scripts %}
 <script src="/static/js/countdown.js"></script>
+{% if available_realms | length > 1 %}
+<script>
+async function switchMarketRealm(realmId) {
+    const res = await fetch(`/api/v1/guild/ah-prices?realm_id=${realmId}`);
+    const json = await res.json();
+    if (!json.ok || !json.data.prices) return;
+    renderMarketTable(json.data.prices);
+}
+
+function goldStr(copper) {
+    if (!copper || copper <= 0) return '\u2014';
+    const gold = Math.floor(copper / 10000);
+    const silver = Math.floor((copper % 10000) / 100);
+    if (gold >= 1000) return gold.toLocaleString() + 'g';
+    if (gold > 0) return gold + 'g ' + silver + 's';
+    return silver + 's';
+}
+
+function renderMarketTable(prices) {
+    const tbody = document.getElementById('lp-market-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = prices.map(item => {
+        const realmCls = item.is_realm_specific ? ' lp-market-row--realm' : '';
+        const realmFlag = item.is_realm_specific ? '<span class="lp-market-realm-flag">*</span>' : '';
+        const name = item.item_name.replace(/'/g, '%27').replace(/ /g, '+');
+        const qty = item.quantity_available ? item.quantity_available.toLocaleString() : '\u2014';
+        return `<tr class="${realmCls}">
+            <td class="lp-market-name">
+                <span class="lp-market-cat lp-market-cat--${item.category}">${item.category}</span>
+                <a href="https://www.wowhead.com/search?q=${name}" target="_blank" rel="noopener" class="lp-market-item-link">${item.item_name}</a>
+                ${realmFlag}
+            </td>
+            <td class="lp-market-price">${goldStr(item.min_buyout)}</td>
+            <td class="lp-market-qty">${qty}</td>
+        </tr>`;
+    }).join('');
+}
+</script>
+{% endif %}
 {% endblock %}

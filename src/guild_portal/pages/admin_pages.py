@@ -3362,7 +3362,7 @@ async def admin_ah_force_sync(
             return JSONResponse({"ok": False, "error": "Connected realm not resolved yet — use Re-Resolve first"}, status_code=400)
 
         import asyncio
-        asyncio.create_task(sync_ah_prices(pool, blizzard_client, connected_realm_id))
+        asyncio.create_task(sync_ah_prices(pool, blizzard_client, [connected_realm_id]))
         return JSONResponse({"ok": True, "message": "AH sync triggered"})
     except Exception as exc:
         if owned:
@@ -3426,7 +3426,7 @@ async def admin_ah_status(
 
     async with pool.acquire() as conn:
         config_row = await conn.fetchrow(
-            "SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1"
+            "SELECT connected_realm_id, home_realm_slug, active_connected_realm_ids FROM common.site_config LIMIT 1"
         )
         total_items = await conn.fetchval(
             "SELECT COUNT(*) FROM guild_identity.tracked_items WHERE is_active = TRUE"
@@ -3442,11 +3442,17 @@ async def admin_ah_status(
             """
         )
 
+    active_realm_ids = []
+    if config_row:
+        active_realm_ids = list(config_row["active_connected_realm_ids"] or [])
+
     return JSONResponse({
         "ok": True,
         "data": {
             "connected_realm_id": config_row["connected_realm_id"] if config_row else None,
             "realm_slug": config_row["home_realm_slug"] if config_row else None,
+            "active_realm_count": len(active_realm_ids),
+            "active_realm_ids": active_realm_ids,
             "total_tracked_items": total_items or 0,
             "items_with_recent_prices": items_with_prices or 0,
             "last_snapshot": last_snapshot.isoformat() if last_snapshot else None,

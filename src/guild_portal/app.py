@@ -428,6 +428,7 @@ def create_app() -> FastAPI:
     from guild_portal.api.guild_routes import router as guild_router
     from guild_portal.api.auth_routes import router as auth_router
     from guild_portal.api.bnet_auth_routes import router as bnet_auth_router
+    from guild_portal.api.member_routes import router as member_router
     from guild_portal.api.campaign_routes import (
         admin_campaign_router,
         vote_router,
@@ -439,6 +440,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
     app.include_router(bnet_auth_router)
+    app.include_router(member_router)
     app.include_router(admin_router)
     app.include_router(admin_campaign_router)
     app.include_router(guild_router)

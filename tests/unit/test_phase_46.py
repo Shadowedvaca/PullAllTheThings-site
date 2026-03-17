@@ -146,7 +146,7 @@ class TestSyncAhPrices:
         mock_conn.fetch = AsyncMock(return_value=[])
         mock_pool.acquire = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_conn), __aexit__=AsyncMock()))
 
-        result = await sync_ah_prices(mock_pool, MagicMock(), connected_realm_id=11)
+        result = await sync_ah_prices(mock_pool, MagicMock(), [11])
         assert result["status"] == "no_tracked_items"
 
     @pytest.mark.asyncio
@@ -176,7 +176,7 @@ class TestSyncAhPrices:
         })
         mock_client.get_auctions = AsyncMock(return_value={"auctions": []})
 
-        result = await sync_ah_prices(mock_pool, mock_client, connected_realm_id=11)
+        result = await sync_ah_prices(mock_pool, mock_client, [11])
         assert result["items_updated"] == 1
         assert result["items_not_listed"] == 0
         # Should not need to call get_auctions since commodity was found
@@ -207,7 +207,7 @@ class TestSyncAhPrices:
             ]
         })
 
-        result = await sync_ah_prices(mock_pool, mock_client, connected_realm_id=11)
+        result = await sync_ah_prices(mock_pool, mock_client, [11])
         assert result["items_updated"] == 1
         mock_client.get_auctions.assert_called_once_with(11)
 
@@ -230,7 +230,7 @@ class TestSyncAhPrices:
         mock_client.get_commodities = AsyncMock(return_value={"auctions": []})
         mock_client.get_auctions = AsyncMock(return_value={"auctions": []})
 
-        result = await sync_ah_prices(mock_pool, mock_client, connected_realm_id=11)
+        result = await sync_ah_prices(mock_pool, mock_client, [11])
         assert result["items_not_listed"] == 1
         assert result["items_updated"] == 0
 

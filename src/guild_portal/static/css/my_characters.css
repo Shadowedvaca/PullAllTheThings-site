@@ -1,0 +1,846 @@
+/* ── My Characters page styles ─────────────────────────────────────────────── */
+
+.mc-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.mc-page__title {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  color: var(--color-accent);
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* ── Loading / error states ───────────────────────────────────────────────── */
+
+.mc-loading {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 2rem 0;
+}
+
+.mc-error {
+  background: var(--color-bg-card);
+  border: 1px solid #b91c1c;
+  border-left: 3px solid #ef4444;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  color: #fca5a5;
+  margin-bottom: 1rem;
+}
+
+/* ── Selector bar ─────────────────────────────────────────────────────────── */
+
+.mc-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.mc-selector-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mc-selector {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 1rem;
+  padding: 0.4rem 0.75rem;
+  min-width: 220px;
+  cursor: pointer;
+}
+
+.mc-selector:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.mc-selector-meta {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Stale notice ─────────────────────────────────────────────────────────── */
+
+.mc-stale-notice {
+  background: var(--color-bg-panel);
+  border: 1px solid #78350f;
+  border-left: 3px solid #f59e0b;
+  border-radius: var(--radius);
+  padding: 0.6rem 1rem;
+  color: #fcd34d;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+/* ── Stat panel ───────────────────────────────────────────────────────────── */
+
+.mc-panel {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mc-panel__header {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  /* Class color is set inline via style attribute */
+  background: var(--color-bg-panel);
+  border-top: 3px solid var(--mc-class-color, var(--color-accent));
+}
+
+.mc-panel__emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.mc-panel__name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.mc-panel__name {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  color: var(--mc-class-color, var(--color-text));
+  line-height: 1.2;
+}
+
+.mc-panel__realm {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.mc-panel__badges {
+  margin-left: auto;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.mc-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.mc-badge--main {
+  background: rgba(212, 168, 75, 0.2);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+
+.mc-badge--offspec {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  border: 1px solid #60a5fa;
+}
+
+.mc-badge--bnet {
+  background: rgba(0, 120, 212, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(0, 120, 212, 0.4);
+}
+
+/* ── Stat grid ────────────────────────────────────────────────────────────── */
+
+.mc-panel__body {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.mc-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+.mc-stat-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.mc-stat-field__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.mc-stat-field__value {
+  font-size: 1rem;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.mc-stat-field__value--accent {
+  color: var(--color-accent);
+}
+
+.mc-stat-field__value--muted {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+/* ── External links ───────────────────────────────────────────────────────── */
+
+.mc-links {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.mc-link {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.mc-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+/* ── Progression panel ────────────────────────────────────────────────────── */
+
+.mc-progression {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Shared card used for raid + M+ sub-sections */
+.mc-prog-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mc-prog-card__title {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+
+div.mc-prog-card__title {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+div.mc-prog-card__title::after {
+  content: '\25BE';
+  font-size: 0.75rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.mc-prog-card--collapsed div.mc-prog-card__title::after {
+  content: '\25B8';
+}
+
+.mc-prog-card--collapsed .mc-prog-card__body {
+  display: none;
+}
+
+.mc-prog-card__body {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── Raid section ─────────────────────────────────────────────────────────── */
+
+.mc-raid-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
+.mc-raid-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.mc-raid-row__diff {
+  width: 5rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+
+.mc-raid-row__bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--color-bg-panel);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.mc-raid-row__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transition: width 0.3s ease;
+}
+
+.mc-raid-row__bar-fill--mythic {
+  background: var(--color-dps);
+}
+
+.mc-raid-row__fraction {
+  min-width: 3.5rem;
+  text-align: right;
+  font-weight: 600;
+}
+
+.mc-raid-row__fraction--clear {
+  color: var(--color-accent);
+}
+
+.mc-raid-row__fraction--partial {
+  color: var(--color-text);
+}
+
+.mc-raid-row__fraction--zero {
+  color: var(--color-text-muted);
+}
+
+.mc-raid-row__fraction--mythic {
+  color: var(--color-dps);
+}
+
+.mc-raid-row__fraction--none {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* ── Mythic+ score ────────────────────────────────────────────────────────── */
+
+.mc-mplus-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.mc-mplus-season {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  flex: 1;
+}
+
+.mc-mplus-score-badge {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* Score color tiers */
+.mc-mplus-score--gray   { color: #9ca3af; border-color: rgba(156,163,175,0.3); }
+.mc-mplus-score--green  { color: #4ade80; border-color: rgba(74,222,128,0.3); }
+.mc-mplus-score--blue   { color: #60a5fa; border-color: rgba(96,165,250,0.3); }
+.mc-mplus-score--purple { color: #c084fc; border-color: rgba(192,132,252,0.3); }
+.mc-mplus-score--orange { color: #fb923c; border-color: rgba(251,146,60,0.3); }
+.mc-mplus-score--pink   { color: #f472b6; border-color: rgba(244,114,182,0.3); }
+
+.mc-mplus-best {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  width: 100%;
+}
+
+.mc-mplus-best strong {
+  color: var(--color-text);
+}
+
+.mc-mplus-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+
+.mc-empty {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.mc-empty__text {
+  color: var(--color-text-muted);
+  margin-bottom: 1.25rem;
+  font-size: 1rem;
+}
+
+/* ── Parses panel ─────────────────────────────────────────────────────────── */
+
+.mc-parses {
+  margin-top: 1rem;
+}
+
+/* Difficulty tab bar */
+.mc-parse-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mc-parse-tab {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.mc-parse-tab:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.mc-parse-tab--active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(212, 168, 75, 0.08);
+}
+
+/* Summary bar */
+.mc-parse-summary {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.mc-parse-summary strong {
+  color: var(--color-text);
+}
+
+/* Parse table */
+.mc-parse-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.mc-parse-table thead th {
+  text-align: left;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+
+.mc-parse-table thead th:last-child {
+  width: 140px;
+}
+
+.mc-parse-table tbody td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.mc-parse-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mc-parse-row--gray {
+  opacity: 0.6;
+}
+
+.mc-parse-row--legendary td:first-child {
+  text-shadow: 0 0 8px #e5cc80;
+}
+
+/* Parse percentile badge */
+.mc-parse-pct {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+/* WCL parse color tiers */
+.mc-parse--gray    { color: #9ca3af; }
+.mc-parse--green   { color: #1eff00; }
+.mc-parse--blue    { color: #0070ff; }
+.mc-parse--purple  { color: #a335ee; }
+.mc-parse--orange  { color: #ff8000; }
+.mc-parse--gold    { color: #e5cc80; }
+.mc-parse--pink    { color: #e268a8; }
+
+/* Progress bar in parse table */
+.mc-parse-bar-wrap {
+  height: 6px;
+  background: var(--color-bg-panel);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.mc-parse-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* Bar fill colors matching WCL tiers */
+.mc-parse-bar--gray    { background: #9ca3af; }
+.mc-parse-bar--green   { background: #1eff00; }
+.mc-parse-bar--blue    { background: #0070ff; }
+.mc-parse-bar--purple  { background: #a335ee; }
+.mc-parse-bar--orange  { background: #ff8000; }
+.mc-parse-bar--gold    { background: #e5cc80; }
+.mc-parse-bar--pink    { background: #e268a8; }
+
+/* No data / not configured states */
+.mc-parse-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 0.9rem;
+  padding: 0.5rem 0;
+}
+
+.mc-parse-wcl-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.mc-parse-wcl-link:hover {
+  text-decoration: underline;
+}
+
+.mc-parse-not-configured {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+/* ── Market Panel ──────────────────────────────────────────────────────── */
+.mc-market {
+  margin-top: 1rem;
+}
+
+.mc-market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+.mc-market-table th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.mc-market-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #1e1e22;
+  vertical-align: middle;
+}
+.mc-market-table tr:last-child td { border-bottom: none; }
+.mc-market-row--realm { background: rgba(212, 168, 75, 0.05); }
+.mc-market-realm-flag { color: var(--color-accent); font-weight: 700; margin-left: 0.2rem; font-size: 0.75rem; }
+.mc-market-name { color: var(--color-text); }
+.mc-market-price { font-weight: 700; color: #f5c842; white-space: nowrap; }
+.mc-market-qty { color: var(--color-text-muted); font-size: 0.8rem; }
+.mc-market-cat {
+  display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.3rem;
+  border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em;
+  margin-right: 0.3rem; font-weight: 600; opacity: 0.9;
+}
+.mc-market-cat--consumable { background: #1e3a1e; color: #86efac; }
+.mc-market-cat--enchant    { background: #1e2a5f; color: #93c5fd; }
+.mc-market-cat--gem        { background: #3b1a5f; color: #d8b4fe; }
+.mc-market-cat--material   { background: #3a2a10; color: #fcd34d; }
+.mc-market-cat--gear       { background: #2a1e1e; color: #fca5a5; }
+.mc-market-item-link { color: var(--color-text); text-decoration: none; }
+.mc-market-item-link:hover { color: var(--color-accent); text-decoration: underline; }
+.mc-market-footnote {
+  font-size: 0.72rem; color: var(--color-text-muted);
+  padding: 0.35rem 0.5rem; margin: 0.25rem 0 0;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ── Crafting & Raid Prep panel ────────────────────────────────────────── */
+
+.mc-crafting {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mc-crafting-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.mc-crafting-section > summary {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.mc-crafting-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mc-crafting-section > summary::after {
+  content: '\25BE';
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.mc-crafting-section:not([open]) > summary::after {
+  content: '\25B8';
+}
+
+.mc-crafting-section > summary:hover {
+  color: var(--color-text);
+}
+
+.mc-crafting-section[open] > summary {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mc-crafting-section:not([open]) > .mc-prog-card__body {
+  display: none;
+}
+
+/* Recipe / consumable table */
+.mc-craft-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.mc-craft-table th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  background: var(--color-bg-panel);
+}
+
+.mc-craft-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid #1e1e22;
+  vertical-align: middle;
+}
+
+.mc-craft-table tr:last-child td {
+  border-bottom: none;
+}
+
+.mc-craft-link {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.mc-craft-link:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* Can-craft status */
+.mc-craft-status--yes  { color: #4ade80; font-weight: 600; }
+.mc-craft-status--warn { color: #fbbf24; font-weight: 600; }
+.mc-craft-status--no   { color: #9ca3af; }
+
+/* Consumable price column */
+.mc-cons-price {
+  font-weight: 700;
+  color: #f5c842;
+  white-space: nowrap;
+}
+
+.mc-cons-status-cell {
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+/* Consumable status indicators */
+.mc-cons-status--up     { color: #fbbf24; }
+.mc-cons-status--down   { color: #60a5fa; }
+.mc-cons-status--stable { color: var(--color-text-muted); }
+.mc-cons-status--low    { color: #f97316; }
+.mc-cons-status--na     { color: var(--color-text-muted); }
+
+/* ── Crafting filter bar ─────────────────────────────────────────────────── */
+
+.mc-craft-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+
+.mc-craft-select {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  min-width: 130px;
+}
+
+.mc-craft-select:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mc-craft-select:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.mc-craft-search {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.6rem;
+  flex: 1;
+  min-width: 130px;
+}
+
+.mc-craft-search:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.mc-craft-search::placeholder {
+  color: var(--color-text-muted);
+}
+
+.mc-craft-count {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-style: italic;
+}
+
+.mc-craft-count:empty {
+  display: none;
+}
+
+.mc-craft-prof-cell {
+  white-space: nowrap;
+}
+
+.mc-craft-expansion {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}

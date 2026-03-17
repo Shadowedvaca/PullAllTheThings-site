@@ -201,6 +201,9 @@ class SiteConfig(Base):
     blizzard_client_secret_encrypted: Mapped[Optional[str]] = mapped_column(Text)
     current_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
     connected_realm_id: Mapped[Optional[int]] = mapped_column(Integer)
+    active_connected_realm_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default="{}"
+    )
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
