@@ -223,14 +223,14 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Platform is feature-complete through Phase 5.1.**
-- **Tests:** 720 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Platform is feature-complete through Phase 5.2.**
+- **Tests:** 747 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
 - **Last migration:** 0044 (Quotes 2.0 — `patt.quote_subjects`, `subject_id` FK on `guild_quotes`/`guild_quote_titles`)
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor)
 - **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide` — no login required
-- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1)
+- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users`, `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
