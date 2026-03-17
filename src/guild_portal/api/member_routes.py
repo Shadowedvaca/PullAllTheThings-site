@@ -4,15 +4,20 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from fastapi.responses import JSONResponse
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from guild_portal.deps import get_current_player, get_db
+from sv_common.config_cache import get_site_config
 from sv_common.db.models import (
+    CharacterMythicPlus,
+    CharacterRaidProgress,
     Player,
     PlayerCharacter,
     RaiderIOProfile,
+    RaidSeason,
     WowCharacter,
 )
 
@@ -164,5 +169,102 @@ async def get_my_characters(
         "data": {
             "characters": characters,
             "default_character_id": default_id,
+        },
+    }
+
+
+@router.get("/character/{character_id}/progression")
+async def get_character_progression(
+    character_id: int,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return raid progress and M+ score for a character owned by the current member."""
+    # Verify the character belongs to this player
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # ── Raid progress ────────────────────────────────────────────────────────
+    # Aggregate per (raid_name, difficulty): total bosses and bosses with kills
+    raid_rows = await db.execute(
+        select(
+            CharacterRaidProgress.raid_name,
+            CharacterRaidProgress.difficulty,
+            func.count().label("total"),
+            func.sum(
+                case((CharacterRaidProgress.kill_count > 0, 1), else_=0)
+            ).label("killed"),
+        )
+        .where(CharacterRaidProgress.character_id == character_id)
+        .group_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
+        .order_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
+    )
+
+    raid_by_name: dict[str, dict] = {}
+    for row in raid_rows:
+        name = row.raid_name
+        if name not in raid_by_name:
+            raid_by_name[name] = {}
+        raid_by_name[name][row.difficulty.lower()] = {
+            "killed": int(row.killed or 0),
+            "total": int(row.total),
+        }
+
+    raid_progress = [
+        {"raid_name": name, "difficulties": diffs}
+        for name, diffs in raid_by_name.items()
+    ]
+
+    # ── Mythic+ score ────────────────────────────────────────────────────────
+    cfg = get_site_config()
+    season_id: int | None = cfg.get("current_mplus_season_id")
+
+    mythic_plus = None
+    if season_id:
+        mplus_result = await db.execute(
+            select(CharacterMythicPlus).where(
+                CharacterMythicPlus.character_id == character_id,
+                CharacterMythicPlus.season_id == season_id,
+            )
+        )
+        mplus_rows = list(mplus_result.scalars())
+
+        if mplus_rows:
+            overall_score = max(float(r.overall_rating or 0) for r in mplus_rows)
+            best_row = max(mplus_rows, key=lambda r: r.best_level or 0)
+
+            # Try to get a human-readable season name from raid_seasons
+            season_name = f"Season {season_id}"
+            season_result = await db.execute(
+                select(RaidSeason).where(
+                    RaidSeason.blizzard_mplus_season_id == season_id
+                )
+            )
+            season = season_result.scalar_one_or_none()
+            if season:
+                if season.expansion_name and season.season_number:
+                    season_name = f"{season.expansion_name} Season {season.season_number}"
+                elif season.season_number:
+                    season_name = f"Season {season.season_number}"
+
+            mythic_plus = {
+                "season_name": season_name,
+                "overall_score": round(overall_score, 1),
+                "best_run_level": best_row.best_level,
+                "best_run_dungeon": best_row.dungeon_name,
+            }
+
+    return {
+        "ok": True,
+        "data": {
+            "character_id": character_id,
+            "raid_progress": raid_progress,
+            "mythic_plus": mythic_plus,
         },
     }
