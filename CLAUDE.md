@@ -226,7 +226,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Phase 6.4 complete** — Migrate all error callsites to report_error/resolve_issue
 - **Tests:** 901 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
 - **Last migration:** 0049 (Phase 6.4 — new per-type routing rules seeded)
-- **Last tag:** `v0.1.7`
+- **Last tag:** `v0.2.0`
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1)
