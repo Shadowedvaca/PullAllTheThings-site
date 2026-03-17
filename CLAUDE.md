@@ -223,9 +223,9 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 6.2 complete** — Error routing config + admin UI (`common.error_routing`, `/admin/error-routing`)
-- **Tests:** 855 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0048 (Phase 6.2 — fix Settings nav: error_routing → settings_admin, guide order collision)
+- **Phase 6.3 complete** — Discord notifications + weekly error digest
+- **Tests:** 871 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Last migration:** 0048 (Phase 6.2 — no new migrations in 6.3)
 - **Last tag:** `v0.1.7`
 
 ### What Exists
