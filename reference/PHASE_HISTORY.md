@@ -34,10 +34,38 @@
 - **Phase 4.4.4:** Data Quality Simplification (no migration) — Fuzzy matching rules (`NameMatchRule`, `NoteGroupRule`) deleted; `matching_rules/` registry returns `[]`; `note_mismatch` and `link_contradicts_note` retired; Data Quality page: OAuth Coverage panel (verified/total bar + "Send Reminder" per member); `GET /admin/oauth-coverage`; Settings → Characters "Add by Name" form
 - **Phase 4.5:** Warcraft Logs Integration (migration 0039) — `wcl_config`, `character_parses`, `raid_reports`; `warcraftlogs_client.py` (OAuth2 + GraphQL); `wcl_sync.py`; scheduler daily 5 AM; `/admin/warcraft-logs` page; `GET /api/v1/guild/parses` public endpoint
 - **Phase 4.6:** Auction House Pricing (migration 0040) — `tracked_items`, `item_price_history`; `connected_realm_id` on `site_config`; `ah_sync.py` (commodities + realm fallback); `ah_service.py` (price helpers); hourly scheduler job at :15; `gold` Jinja2 filter; Market Watch card on index; `/admin/ah-pricing` page
+- **Phase 4.7:** Voice Attendance (migration 0041) — `voice_attendance_log` raw events; 7 attendance config columns on `discord_config`; `VoiceAttendanceCog`; `attendance_processor.py`; scheduler every 30 min; `/admin/attendance` season grid with excused toggle + CSV export
+- **Phase 4.8:** Quotes 2.0 (migration 0044) — `patt.quote_subjects` table; per-subject `/quote` slash commands; admin `/admin/quotes` page; public index picks random active subject; Discord embed attribution
+- **Phase 5.0:** My Characters page (no migration) — `/my-characters` member page; `GET /api/v1/me/characters`; `member_routes.py`; character selector, stat panel, SPA-style panel swap, URL `?char=` param
+- **Phase 5.1:** Progression Panel (no migration) — `GET /api/v1/me/character/{id}/progression`; raid progress bars per difficulty; Mythic+ score badge with color tiers
+- **Phase 5.2:** WCL Parse Panel (no migration) — `GET /api/v1/me/character/{id}/parses`; best-percentile deduplication; difficulty tabs; WCL color tiers; heroic average summary
+- **Phase 5.3:** AH Multi-Realm Market Panel (migration 0045) — `active_connected_realm_ids` on `site_config`; `sync_ah_prices()` accepts list of realm IDs; `get_prices_for_realm()` merges commodity+realm; `GET /api/v1/me/character/{id}/market`; index page realm dropdown; My Characters Market Watch panel
+- **Phase 5.4:** Crafting & Raid Prep Panel (no migration) — `GET /api/v1/me/character/{id}/crafting`; Section A: what char can craft (profession/expansion dropdowns + search, client-side filtering); Section B: raid consumables with realm-aware AH prices, 24h trend indicators, low-stock flag; `get_consumable_prices_for_realm()` in `ah_service.py`; all My Characters panels made collapsible with localStorage state
 
 ---
 
 ## Recent Changes
+
+### Phase 5.4 (2026-03-17, no migration)
+- **`member_routes.py`:** `GET /api/v1/me/character/{id}/crafting` — own-character auth; raw SQL joins `character_recipes` + `recipes` + `professions` + `profession_tiers`; returns `craftable` list (with `tier_name`, `expansion_name`) and `consumables` list via `get_consumable_prices_for_realm()`.
+- **`ah_service.py`:** `get_consumable_prices_for_realm(pool, realm_id)` — active tracked items filtered to `category IN ('consumable', 'material')`; merges commodity/realm prices; computes 24h `change_pct`; returns `min_buyout_display` + `wowhead_url` (search format).
+- **`my_characters.js`:** Section A rebuilt with profession dropdown, expansion dropdown (cascades, disabled until profession selected), search input (cross-prof, ≥2 chars), `_updateCraftingTable()` / `_onCraftProfChange()` helpers, `_craftableAll` module state, `escHtml()` utility. Section A Status column removed. All `mc-prog-card` panels made collapsible via `makeCardsCollapsible()` helper + `mc-prog-card--collapsed` CSS class.
+- **`my_characters.css`:** `.mc-craft-filters`, `.mc-craft-select`, `.mc-craft-search`, `.mc-craft-count`, `.mc-craft-expansion`, collapsible card styles (`div.mc-prog-card__title`, `::after` chevron, `.mc-prog-card--collapsed`).
+- **Tests:** 35 new tests in `test_phase_54.py`. **813 tests pass, 69 skip.**
+- **Tag:** `v0.1.7`
+
+### Phase 5.3 (2026-03-16, migration 0045)
+- **Migration 0045:** `active_connected_realm_ids` (JSONB) added to `common.site_config`; unique constraint on `item_price_history` updated to `(tracked_item_id, snapshot_at, connected_realm_id)`.
+- **`ah_sync.py`:** `sync_ah_prices(pool, client, connected_realm_ids: list[int])` — commodities stored as `realm_id=0`; per-realm auctions iterated per realm ID. `get_active_connected_realm_ids(pool, client, days=30)` discovers active realms from character login history, caches in `site_config`.
+- **`ah_service.py`:** `get_prices_for_realm(pool, realm_id)` merges commodity baseline + realm-specific rows, prefers realm row. `get_available_realms(pool)` returns distinct realm IDs with recent data.
+- **Index page:** realm dropdown switcher when >1 realm available; realm-specific row highlight + footnote; `switchMarketRealm()` JS.
+- **My Characters:** `#mc-market` panel — realm-aware prices via `GET /api/v1/me/character/{id}/market`.
+- **Tests:** `test_phase_53.py`. **778 tests pass, 69 skip.**
+
+### Phase 5.0–5.2 (2026-03-15–16, no migrations)
+- **Phase 5.0:** `/my-characters` page (auth-gated); `GET /api/v1/me/characters`; `member_routes.py`; character selector + stat panel; SPA-style panel swap; `?char=` URL param; default: main > offspec > first alphabetically. `my_characters.html`, `my_characters.css`, `my_characters.js`.
+- **Phase 5.1:** `GET /api/v1/me/character/{id}/progression`; raid progress per (raid_name, difficulty); M+ score from `CharacterMythicPlus`; color tiers (gray→pink); `renderProgressionPanel()` with progress bars.
+- **Phase 5.2:** `GET /api/v1/me/character/{id}/parses`; best-percentile dedup per (boss, difficulty_int); WCL difficulty tab switching; summary bar (best parse + heroic avg); WCL color tiers; `wcl_configured` flag. **747 tests pass, 69 skip** (at 5.2 completion).
 
 ### Phase 4.6 (2026-03-15, migration 0040)
 - **Migration 0040:** 2 new tables in `guild_identity` — `tracked_items` (item tracking with category/display_order), `item_price_history` (hourly snapshots with min/median/mean/qty/auctions). `connected_realm_id` added to `common.site_config`. `screen_permission` for `ah_pricing` (Officer+). Seeds 8 common consumables/enchants/gems.
