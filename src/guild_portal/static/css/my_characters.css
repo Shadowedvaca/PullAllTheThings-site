@@ -265,6 +265,29 @@
   background: var(--color-bg-panel);
 }
 
+div.mc-prog-card__title {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+div.mc-prog-card__title::after {
+  content: '\25BE';
+  font-size: 0.75rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.mc-prog-card--collapsed div.mc-prog-card__title::after {
+  content: '\25B8';
+}
+
+.mc-prog-card--collapsed .mc-prog-card__body {
+  display: none;
+}
+
 .mc-prog-card__body {
   padding: 1rem 1.25rem;
   display: flex;

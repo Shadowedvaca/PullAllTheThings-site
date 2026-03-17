@@ -227,6 +227,7 @@ function renderProgressionPanel(data) {
   html += '</div>';
 
   panel.innerHTML = html;
+  makeCardsCollapsible(panel, 'mc-prog');
   panel.hidden = false;
 }
 
@@ -373,6 +374,7 @@ function renderParsesPanel(data, charRealm, charName) {
         });
       });
     }
+    makeCardsCollapsible(panel, 'mc-parses');
     panel.hidden = false;
   }
 
@@ -439,7 +441,27 @@ function renderMarketPanel(data) {
         ${footnote}
       </div>
     </div>`;
+  makeCardsCollapsible(panel, 'mc-market');
   panel.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
+// Collapsible card helper (shared by all panels)
+// ---------------------------------------------------------------------------
+
+function makeCardsCollapsible(containerEl, keyPrefix) {
+  containerEl.querySelectorAll('.mc-prog-card').forEach((card, i) => {
+    const title = card.querySelector('div.mc-prog-card__title');
+    if (!title) return;
+    const key = `${keyPrefix}-${i}`;
+    if (localStorage.getItem(key) === '1') {
+      card.classList.add('mc-prog-card--collapsed');
+    }
+    title.addEventListener('click', () => {
+      const collapsed = card.classList.toggle('mc-prog-card--collapsed');
+      localStorage.setItem(key, collapsed ? '1' : '0');
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -464,14 +486,13 @@ function renderCraftingPanel(data, charName) {
       <tr>
         <td>${r.profession}</td>
         <td><a href="${r.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mc-craft-link">${r.recipe_name}</a></td>
-        <td class="mc-craft-status--yes">\u2705 Yes</td>
       </tr>`).join('');
     parts.push(`
       <details class="mc-crafting-section" data-collapse-key="mc-crafting-recipes"${openAttr}>
         <summary class="mc-prog-card__title">What ${charName} Can Craft (${craftable.length})</summary>
         <div class="mc-prog-card__body" style="padding:0">
           <table class="mc-craft-table">
-            <thead><tr><th>Profession</th><th>Recipe</th><th>Status</th></tr></thead>
+            <thead><tr><th>Profession</th><th>Recipe</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
