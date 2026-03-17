@@ -573,6 +573,10 @@
 }
 
 /* ── Market Panel ──────────────────────────────────────────────────────── */
+.mc-market {
+  margin-top: 1rem;
+}
+
 .mc-market-table {
   width: 100%;
   border-collapse: collapse;
