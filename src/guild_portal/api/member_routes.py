@@ -451,12 +451,15 @@ async def get_character_crafting(
             """
             SELECT r.id AS recipe_id,
                    r.name AS recipe_name,
-                   p.name AS profession
+                   p.name AS profession,
+                   pt.name AS tier_name,
+                   pt.expansion_name
             FROM guild_identity.character_recipes cr
             JOIN guild_identity.recipes r ON r.id = cr.recipe_id
             JOIN guild_identity.professions p ON p.id = r.profession_id
+            JOIN guild_identity.profession_tiers pt ON pt.id = r.tier_id
             WHERE cr.character_id = :char_id
-            ORDER BY p.name, r.name
+            ORDER BY p.name, pt.sort_order DESC, r.name
             """
         ),
         {"char_id": character_id},
@@ -469,6 +472,8 @@ async def get_character_crafting(
             "recipe_id": row.recipe_id,
             "recipe_name": row.recipe_name,
             "profession": row.profession,
+            "tier_name": row.tier_name,
+            "expansion_name": row.expansion_name,
             "rank": None,
             "max_rank": None,
             "can_craft_fully": True,

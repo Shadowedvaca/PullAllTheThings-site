@@ -473,28 +473,116 @@ function craftingCollapseState(key) {
   return val === null ? true : val === '1'; // default open
 }
 
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _updateCraftingTable() {
+  const prof = document.getElementById('mc-craft-prof')?.value || '';
+  const tier = document.getElementById('mc-craft-tier')?.value || '';
+  const search = (document.getElementById('mc-craft-search')?.value || '').trim();
+
+  let filtered = _craftableAll;
+
+  if (search.length >= 2) {
+    const q = search.toLowerCase();
+    filtered = _craftableAll.filter(r => r.recipe_name.toLowerCase().includes(q));
+  } else {
+    if (prof) filtered = filtered.filter(r => r.profession === prof);
+    if (tier) filtered = filtered.filter(r => r.tier_name === tier);
+  }
+
+  const tbody = document.getElementById('mc-craft-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = filtered.map(r => {
+    const expansion = r.expansion_name
+      ? `<span class="mc-craft-expansion">${escHtml(r.expansion_name)}</span>`
+      : '';
+    return `<tr>
+      <td class="mc-craft-prof-cell">${escHtml(r.profession)}${expansion}</td>
+      <td><a href="${r.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mc-craft-link">${escHtml(r.recipe_name)}</a></td>
+    </tr>`;
+  }).join('');
+
+  const count = document.getElementById('mc-craft-count');
+  if (count) {
+    count.textContent = filtered.length !== _craftableAll.length
+      ? `Showing ${filtered.length} of ${_craftableAll.length} recipes`
+      : '';
+  }
+}
+
+function _onCraftProfChange() {
+  const prof = document.getElementById('mc-craft-prof')?.value || '';
+  const tierSelect = document.getElementById('mc-craft-tier');
+  if (!tierSelect) return;
+
+  tierSelect.innerHTML = '<option value="">All Expansions</option>';
+  tierSelect.disabled = true;
+
+  if (prof) {
+    const seen = new Set();
+    const tiers = [];
+    for (const r of _craftableAll) {
+      if (r.profession === prof && r.tier_name && !seen.has(r.tier_name)) {
+        seen.add(r.tier_name);
+        tiers.push({ value: r.tier_name, label: r.expansion_name || r.tier_name });
+      }
+    }
+    tiers.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.value;
+      opt.textContent = t.label;
+      tierSelect.appendChild(opt);
+    });
+    if (tiers.length > 1) tierSelect.disabled = false;
+  }
+
+  _updateCraftingTable();
+}
+
 function renderCraftingPanel(data, charName) {
   const panel = document.getElementById('mc-crafting');
   const { craftable, consumables } = data;
+  _craftableAll = craftable || [];
 
   const parts = [];
 
   // Section A: What I Can Craft
   if (craftable && craftable.length > 0) {
     const openAttr = craftingCollapseState('mc-crafting-recipes') ? ' open' : '';
-    const rows = craftable.map(r => `
-      <tr>
-        <td>${r.profession}</td>
-        <td><a href="${r.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mc-craft-link">${r.recipe_name}</a></td>
-      </tr>`).join('');
+    const seenProfs = new Set();
+    const professions = [];
+    for (const r of craftable) {
+      if (!seenProfs.has(r.profession)) { seenProfs.add(r.profession); professions.push(r.profession); }
+    }
+    professions.sort();
+    const profOptions = professions.map(p =>
+      `<option value="${escHtml(p)}">${escHtml(p)}</option>`
+    ).join('');
     parts.push(`
       <details class="mc-crafting-section" data-collapse-key="mc-crafting-recipes"${openAttr}>
-        <summary class="mc-prog-card__title">What ${charName} Can Craft (${craftable.length})</summary>
+        <summary class="mc-prog-card__title">What ${escHtml(charName)} Can Craft (${craftable.length})</summary>
         <div class="mc-prog-card__body" style="padding:0">
+          <div class="mc-craft-filters">
+            <select id="mc-craft-prof" class="mc-craft-select">
+              <option value="">All Professions</option>${profOptions}
+            </select>
+            <select id="mc-craft-tier" class="mc-craft-select" disabled>
+              <option value="">All Expansions</option>
+            </select>
+            <input type="text" id="mc-craft-search" class="mc-craft-search" placeholder="Search recipes\u2026" autocomplete="off">
+          </div>
           <table class="mc-craft-table">
             <thead><tr><th>Profession</th><th>Recipe</th></tr></thead>
-            <tbody>${rows}</tbody>
+            <tbody id="mc-craft-tbody"></tbody>
           </table>
+          <div id="mc-craft-count" class="mc-craft-count"></div>
         </div>
       </details>`);
   }
@@ -550,6 +638,14 @@ function renderCraftingPanel(data, charName) {
   panel.innerHTML = parts.join('');
   panel.hidden = false;
 
+  // Initialize crafting recipe filters
+  if (_craftableAll.length > 0) {
+    _updateCraftingTable();
+    document.getElementById('mc-craft-prof')?.addEventListener('change', _onCraftProfChange);
+    document.getElementById('mc-craft-tier')?.addEventListener('change', _updateCraftingTable);
+    document.getElementById('mc-craft-search')?.addEventListener('input', _updateCraftingTable);
+  }
+
   // Persist collapse state on toggle
   panel.querySelectorAll('details.mc-crafting-section').forEach(det => {
     det.addEventListener('toggle', () => {
@@ -564,6 +660,7 @@ function renderCraftingPanel(data, charName) {
 // ---------------------------------------------------------------------------
 
 let _allChars = [];
+let _craftableAll = [];
 
 async function selectCharacter(charId) {
   const char = _allChars.find(c => c.id === charId);
