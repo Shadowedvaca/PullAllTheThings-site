@@ -39,21 +39,41 @@ This means Claude Code never needs conversation history. It reads the repo.
 | `CLAUDE.md` | Master project context — read this first, always |
 | `TESTING.md` | Testing strategy, conventions, framework setup |
 
-### Phase 4: Guild Portal — Multi-Guild Release (Active)
+### Phase 4: Guild Portal — Complete ✅
 | File | Purpose |
 |------|---------|
-| `reference/PHASE_4_OVERVIEW.md` | Master plan — dependencies, architecture changes, status |
+| ~~`reference/PHASE_4_OVERVIEW.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_0_CONFIG_EXTRACTION.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_1_SETUP_WIZARD.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_2_DOCKER_ENVIRONMENTS.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_3_BLIZZARD_EXPANSION.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_4_RAIDERIO_INTEGRATION.md`~~ | ✅ Complete — archived |
 | ~~`reference/PHASE_4_4_1_BNET_OAUTH_ACCOUNT_LINKING.md`~~ | ✅ Complete — archived |
-| `reference/PHASE_4_4_2_CHARACTER_AUTO_CLAIM.md` | Auto-link characters from `/profile/user/wow` |
-| `reference/PHASE_4_4_3_ONBOARDING_ACTIVATION.md` | Wire on_member_join, OAuth as onboarding finish line |
-| `reference/PHASE_4_4_4_DATA_QUALITY_SIMPLIFICATION.md` | Remove fuzzy matching, simplify DQ page, manual add UI |
-| `reference/PHASE_4_5_WARCRAFT_LOGS.md` | Deferred — Warcraft Logs parses, reports, attendance |
-| `reference/PHASE_4_6_AH_PRICING.md` | Deferred — Blizzard Auction House price tracking |
+| ~~`reference/PHASE_4_4_2_CHARACTER_AUTO_CLAIM.md`~~ | ✅ Complete — archived |
+| ~~`reference/PHASE_4_4_3_ONBOARDING_ACTIVATION.md`~~ | ✅ Complete — archived |
+| ~~`reference/PHASE_4_4_4_DATA_QUALITY_SIMPLIFICATION.md`~~ | ✅ Complete — archived |
+| ~~`reference/PHASE_4_5_WARCRAFT_LOGS.md`~~ | ✅ Complete — archived |
+| ~~`reference/PHASE_4_6_AH_PRICING.md`~~ | ✅ Complete — archived |
+| ~~`reference/PHASE_4_7_ELECTRIC_BOOGALO.md`~~ | ✅ Complete — archived (Voice Attendance) |
+| ~~`reference/PHASE_4_8_QUOTES_2_0.md`~~ | ✅ Complete — archived |
+
+### Phase 5: Player Profile Pages (Planned)
+| File | Purpose |
+|------|---------|
+| `reference/PHASE_5_0_MY_CHARACTERS.md` | My Characters settings page |
+| `reference/PHASE_5_1_PROGRESSION_PANEL.md` | Per-character progression panel |
+| `reference/PHASE_5_2_PARSE_PANEL.md` | WCL parse panel |
+| `reference/PHASE_5_3_AH_MULTI_REALM.md` | Multi-realm AH pricing |
+| `reference/PHASE_5_4_CRAFTING_MARKET.md` | Crafting market features |
+
+### Phase 6: Error Handling & Observability (Planned)
+| File | Purpose |
+|------|---------|
+| `reference/PHASE_6_ERROR_HANDLING.md` | Phase overview |
+| `reference/PHASE_6_1_ERROR_CATALOGUE.md` | sv_common error catalogue module |
+| `reference/PHASE_6_2_ADMIN_UI.md` | Admin error panel |
+| `reference/PHASE_6_3_DISCORD_DIGEST.md` | Discord error digest |
+| `reference/PHASE_6_4_MIGRATION.md` | Error migration plan |
 
 ### Reference Documents (useful context)
 | File | Purpose |
@@ -104,11 +124,13 @@ This means Claude Code never needs conversation history. It reads the repo.
 | 4.3 | ✅ Complete | Blizzard API Expansion & Last-Login Optimization |
 | 4.4 | ✅ Complete | Raider.IO Integration |
 | 4.4.1 | ✅ Complete | Battle.net OAuth Account Linking |
-| 4.4.2 | 📋 Planned | Character Auto-Claim on OAuth |
-| 4.4.3 | 📋 Planned | Onboarding Activation & OAuth Integration |
-| 4.4.4 | 📋 Planned | Data Quality Simplification |
-| 4.5 | ⏸️ Deferred | Warcraft Logs Integration |
-| 4.6 | ⏸️ Deferred | Auction House Pricing |
+| 4.4.2 | ✅ Complete | Character Auto-Claim on OAuth |
+| 4.4.3 | ✅ Complete | Onboarding Activation & OAuth Integration |
+| 4.4.4 | ✅ Complete | Data Quality Simplification |
+| 4.5 | ✅ Complete | Warcraft Logs Integration |
+| 4.6 | ✅ Complete | Auction House Pricing |
+| 4.7 | ✅ Complete | Voice Channel Attendance Tracking |
+| 4.8 | ✅ Complete | Quotes 2.0 — per-player quote subjects |
 
 ---
 
@@ -126,4 +148,17 @@ to understand what was originally specified for a completed phase.
 | PHASE_2_8_CRAFTING_CORNER.md | Phase 2.8 |
 | PHASE_2_9_DATA_QUALITY_ENGINE.md | Phase 2.9 |
 | PHASE_4_0_CONFIG_EXTRACTION.md | Phase 4.0 |
+| PHASE_4_1_SETUP_WIZARD.md | Phase 4.1 |
+| PHASE_4_2_DOCKER_ENVIRONMENTS.md | Phase 4.2 |
+| PHASE_4_3_BLIZZARD_EXPANSION.md | Phase 4.3 |
+| PHASE_4_4_RAIDERIO_INTEGRATION.md | Phase 4.4 |
+| PHASE_4_4_1_BNET_OAUTH_ACCOUNT_LINKING.md | Phase 4.4.1 |
+| PHASE_4_4_2_CHARACTER_AUTO_CLAIM.md | Phase 4.4.2 |
+| PHASE_4_4_3_ONBOARDING_ACTIVATION.md | Phase 4.4.3 |
+| PHASE_4_4_4_DATA_QUALITY_SIMPLIFICATION.md | Phase 4.4.4 |
+| PHASE_4_5_WARCRAFT_LOGS.md | Phase 4.5 |
+| PHASE_4_6_AH_PRICING.md | Phase 4.6 |
+| PHASE_4_7_ELECTRIC_BOOGALO.md | Phase 4.7 (Voice Attendance) |
+| PHASE_4_8_QUOTES_2_0.md | Phase 4.8 |
+| PHASE_4_OVERVIEW.md | Phase 4 master plan |
 | ADMIN-SETUP-GUIDE.md | Legacy Google Sheets admin system (fully replaced) |

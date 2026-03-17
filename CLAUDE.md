@@ -159,13 +159,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 ## Database Schema
 
-> Full DDL: `reference/SCHEMA.md`. Current through **migration 0039**.
+> Full DDL: `reference/SCHEMA.md`. Current through **migration 0044**.
 
 | Schema | Key tables |
 |--------|-----------|
-| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`), `rank_wow_mapping` |
-| `guild_identity` | `players` (central entity), `wow_characters`, `discord_users`, `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports` |
-| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons`, `raid_events`, `raid_attendance`, `recurring_events` |
+| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`), `rank_wow_mapping` |
+| `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history` |
+| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`), `recurring_events`, `voice_attendance_log` |
 
 **Key design notes:**
 - `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`

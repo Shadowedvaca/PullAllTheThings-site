@@ -13,10 +13,10 @@
 | Admin panel | https://pullallthethings.com/admin/campaigns |
 | Health check | https://pullallthethings.com/api/health |
 | Server SSH | `ssh hetzner` |
-| App directory | `/opt/patt-platform/` |
-| App logs | `journalctl -u patt -f` |
-| Restart app | `sudo systemctl restart patt` |
-| Run migration | `cd /opt/patt-platform && .venv/bin/alembic upgrade head` |
+| App directory | `/opt/guild-portal/` |
+| App logs | `docker logs guild-portal-app-prod-1 -f` |
+| Restart app | `docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod` |
+| Run migration | `docker exec guild-portal-app-prod-1 alembic upgrade head` |
 
 ---
 
@@ -29,9 +29,15 @@
 | Users | `/admin/users` | Website account management |
 | Availability | `/admin/availability` | 7-day raid availability grid + event day config |
 | Raid Tools | `/admin/raid-tools` | Raid-Helper event builder, roster preview |
+| Attendance | `/admin/attendance` | Voice attendance tracking, season grid, settings |
 | Data Quality | `/admin/data-quality` | Coverage stats, unmatched players/chars, drift issues |
 | Crafting Sync | `/admin/crafting-sync` | Force recipe sync, configure season |
+| AH Pricing | `/admin/ah-pricing` | Auction House price tracking |
+| Warcraft Logs | `/admin/warcraft-logs` | WCL parse sync, raid reports |
+| Progression | `/admin/progression` | Tracked achievements, M+ season config |
+| Guild Quotes | `/admin/quotes` | Per-person quote collections, Discord commands |
 | Bot Settings | `/admin/bot-settings` | DM feature toggles |
+| Site Config | `/admin/site-config` | Guild name, branding, feature flags (GL only) |
 
 ---
 
@@ -127,7 +133,7 @@ Invite codes expire in 7 days. If it expires, click ✉ again.
 and the bot syncs it automatically on the next sync cycle (default: every 24 hours).
 To force an immediate sync, restart the app:
 ```bash
-sudo systemctl restart patt
+docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod
 ```
 
 **Putting someone on raid hiatus:** In **Admin → Player Manager**, find their card
@@ -164,7 +170,7 @@ raid channel. No action needed from you — just ensure Raid-Helper config is se
 
 ### Is the bot online?
 - Look for Guild Bot in your Discord server member list — it should appear online
-- If offline: `sudo systemctl restart patt`
+- If offline: `docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod`
 
 ### Is the platform healthy?
 ```bash
@@ -175,14 +181,14 @@ Should return: `{"status": "ok"}`
 ### View live logs
 ```bash
 ssh hetzner
-journalctl -u patt -f
+docker logs guild-portal-app-prod-1 -f
 ```
 Press `Ctrl+C` to stop.
 
 ### Check app status
 ```bash
 ssh hetzner
-systemctl status patt
+docker ps | grep guild-portal-app-prod
 ```
 
 ---
@@ -200,14 +206,13 @@ The GitHub Actions workflow:
 
 Watch it at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
 
-To deploy manually:
+To deploy manually (dev/test only — never do this for prod):
 ```bash
 ssh hetzner
-cd /opt/patt-platform
+cd /opt/guild-portal
 git pull
-.venv/bin/pip install -r requirements.txt
-.venv/bin/alembic upgrade head
-sudo systemctl restart patt
+docker compose -f docker-compose.guild.yml up -d --build app-dev
+docker exec guild-portal-app-dev-1 alembic upgrade head
 ```
 
 ---
@@ -217,9 +222,9 @@ sudo systemctl restart patt
 See `docs/BACKUPS.md` for full backup and restore procedures.
 
 **Quick version:**
-- Automatic nightly backup at 3:00 AM UTC → `/opt/backups/patt-db/`
-- Manual backup: `ssh hetzner && patt-backup.sh`
-- Restore: `ssh hetzner && patt-restore.sh`
+- Automatic nightly backup at 3:00 AM UTC → `/opt/backups/patt-db/` on the server
+- Manual backup: `ssh hetzner` then `patt-backup.sh`
+- Restore: `ssh hetzner` then `patt-restore.sh`
 
 ---
 
@@ -242,12 +247,12 @@ The agent checks every 5 minutes. It never posts the same event twice.
 
 ### "Guild Bot is offline"
 ```bash
-sudo systemctl restart patt
+docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod
 ```
-If it keeps going offline: `journalctl -u patt -n 50`
+If it keeps going offline: `docker logs guild-portal-app-prod-1 -n 50`
 
 ### "The website isn't loading"
-1. Check if the app is running: `systemctl status patt`
+1. Check if the container is running: `docker ps | grep guild-portal-app-prod`
 2. Check Nginx: `systemctl status nginx`
 3. Check health from the server: `curl http://localhost:8100/api/health`
 
@@ -268,7 +273,7 @@ Fix: Go to `chrome://net-internals/#sockets` → click **Flush socket pools**, t
 
 ## Environment Variables
 
-These live in `/opt/patt-platform/.env` on the server. Never commit this file.
+These live in `/opt/guild-portal/.env` on the server. Never commit this file.
 
 ```bash
 DATABASE_URL=postgresql+asyncpg://patt_user:PASSWORD@localhost:5432/patt_db
@@ -320,5 +325,5 @@ re-establish the link with fresh tokens.
 
 If something is deeply broken:
 - GitHub: https://github.com/Shadowedvaca/PullAllTheThings-site
-- Logs: `journalctl -u patt -n 200`
-- DB: `ssh hetzner && sudo -u postgres psql patt_db`
+- Logs: `docker logs guild-portal-app-prod-1 -n 200`
+- DB: `ssh hetzner && docker exec guild-portal-db-prod-1 psql -U guild_user guild_db_prod`

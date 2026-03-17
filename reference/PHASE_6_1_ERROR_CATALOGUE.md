@@ -32,8 +32,8 @@ The only external dependency for `sv_common/errors/` is `asyncpg`. Nothing else.
 
 ## Prerequisites
 
-- Platform is feature-complete through Phase 4.7 (migration 0041)
-- Working dev environment: `.venv` active, `pytest tests/unit/ -v` passes (620 pass, 69 skip)
+- Platform is feature-complete through Phase 4.8 (migration 0044)
+- Working dev environment: `.venv` active, `pytest tests/unit/ -v` passes (664 pass, 69 skip)
 - Familiarity with existing `sv_common/guild_sync/integrity_checker.py` — same upsert
   pattern, same hash approach, but generalised and moved to `sv_common/errors/`
 
@@ -472,7 +472,7 @@ a broken error catalogue should never crash the subsystem that's reporting an er
 - [ ] `src/sv_common/errors/_store.py` — `_make_hash`, `_upsert`, `_resolve`, `_query_unresolved`
 - [ ] `src/sv_common/db/models.py` — `ErrorLog` ORM model added
 - [ ] `tests/unit/test_errors.py` — all test cases above pass
-- [ ] `pytest tests/unit/ -v` — existing 620 tests still pass + new error tests
+- [ ] `pytest tests/unit/ -v` — existing 664 tests still pass + new error tests
 
 ---
 
