@@ -790,9 +790,9 @@ async def run_integrity_check(pool: asyncpg.Pool) -> dict:
         await _auto_resolve_fixed_issues(conn)
 
     logger.info(
-        "Integrity check: %d note_mismatch, %d orphan_wow, %d orphan_discord, "
+        "Integrity check: %d orphan_wow, %d orphan_discord, "
         "%d role_mismatch, %d stale, %d no_role, %d main_char_not_linked — %d total new issues",
-        stats["note_mismatch"], stats["orphan_wow"], stats["orphan_discord"],
+        stats["orphan_wow"], stats["orphan_discord"],
         stats["role_mismatch"], stats["stale"], stats["no_guild_role"],
         stats["main_char_not_linked"], stats["total_new"],
     )
