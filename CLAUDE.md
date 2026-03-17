@@ -163,7 +163,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 | Schema | Key tables |
 |--------|-----------|
-| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`), `rank_wow_mapping` |
+| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`, +`active_connected_realm_ids`), `rank_wow_mapping` |
 | `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history` |
 | `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`), `recurring_events`, `voice_attendance_log` |
 
@@ -223,18 +223,18 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Platform is feature-complete through Phase 5.2.**
-- **Tests:** 747 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0044 (Quotes 2.0 — `patt.quote_subjects`, `subject_id` FK on `guild_quotes`/`guild_quote_titles`)
+- **Platform is feature-complete through Phase 5.3.**
+- **Tests:** 778 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Last migration:** 0045 (AH Multi-Realm — `active_connected_realm_ids` on `site_config`, updated unique constraint on `item_price_history` to include `connected_realm_id`)
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor)
 - **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide` — no login required
-- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2)
+- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users`, `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`
+- **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`, `/api/v1/guild/ah-prices?realm_id=N`
 - **Battle.net OAuth:** `GET /auth/battlenet`, `GET /auth/battlenet/callback`, `DELETE /api/v1/auth/battlenet`; character auto-claim on OAuth; daily token refresh scheduler
 - **Onboarding:** active, fires on `on_member_join`, gated by `enable_onboarding` site_config flag
 - **Setup wizard:** `/setup` → `/setup/complete` — 9-step first-run wizard; guard middleware redirects until `setup_complete=TRUE`
