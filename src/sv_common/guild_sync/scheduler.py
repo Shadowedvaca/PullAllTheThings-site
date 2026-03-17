@@ -394,12 +394,22 @@ class GuildSyncScheduler:
 
         except Exception as exc:
             logger.error("Blizzard sync pipeline failed: %s", exc, exc_info=True)
-            if channel:
-                await send_error(
-                    channel,
-                    "Blizzard Sync Failed",
-                    f"The Blizzard API sync pipeline encountered an unexpected error:\n```{exc}```",
-                )
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "blizzard_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "blizzard_sync_failed", "warning",
+                f"The Blizzard API sync pipeline encountered an unexpected error: {exc}",
+                result["is_first_occurrence"],
+            )
 
     async def run_discord_sync(self):
         """Discord member sync pipeline.
@@ -521,6 +531,22 @@ class GuildSyncScheduler:
             logger.info("Crafting sync complete: %s", stats)
         except Exception as exc:
             logger.error("Crafting sync failed: %s", exc, exc_info=True)
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "crafting_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "crafting_sync_failed", "warning",
+                str(exc),
+                result["is_first_occurrence"],
+            )
 
     async def run_roleless_prune(self):
         """Prune Discord members with no guild role for 30+ days and no linked characters."""
@@ -583,48 +609,103 @@ class GuildSyncScheduler:
         with a linked Battle.net account, refreshing tokens as needed.
         """
         from .bnet_character_sync import get_valid_access_token, sync_bnet_characters
+        from sv_common.errors import report_error, resolve_issue
+        from guild_portal.services.error_routing import maybe_notify_discord
 
         try:
             async with self.db_pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT player_id FROM guild_identity.battlenet_accounts"
+                    "SELECT player_id, battletag FROM guild_identity.battlenet_accounts"
                 )
-            player_ids = [r["player_id"] for r in rows]
 
-            if not player_ids:
+            if not rows:
                 logger.info("Battle.net character refresh: no linked accounts")
                 return
 
             refreshed = 0
-            tokens_refreshed = 0
             new_chars = 0
             errors = 0
 
-            for player_id in player_ids:
+            for row in rows:
+                player_id = row["player_id"]
+                battletag = row["battletag"] or f"player#{player_id}"
+
                 try:
                     access_token = await get_valid_access_token(self.db_pool, player_id)
                     if access_token is None:
                         logger.warning(
-                            "Battle.net refresh: no valid token for player %s — skipping",
-                            player_id,
+                            "Battle.net refresh: no valid token for %s — skipping", battletag
+                        )
+                        errors += 1
+                        result = await report_error(
+                            self.db_pool,
+                            "bnet_token_expired",
+                            "warning",
+                            f"Battle.net token expired for {battletag} — player must re-link "
+                            f"their Battle.net account at /profile.",
+                            "scheduler",
+                            details={"player_id": player_id, "battletag": battletag},
+                            identifier=battletag,
+                        )
+                        await maybe_notify_discord(
+                            self.db_pool, self.discord_bot, self.audit_channel_id,
+                            "bnet_token_expired", "warning",
+                            f"Battle.net token expired for **{battletag}** — player must re-link.",
+                            result["is_first_occurrence"],
                         )
                         continue
+
                     stats = await sync_bnet_characters(self.db_pool, player_id, access_token)
                     refreshed += 1
                     new_chars += stats.get("new_characters", 0)
+
+                    # Clear any open errors for this player on success
+                    await resolve_issue(self.db_pool, "bnet_token_expired", identifier=battletag)
+                    await resolve_issue(self.db_pool, "bnet_sync_error", identifier=battletag)
+
                 except Exception as exc:
                     logger.error(
-                        "Battle.net character refresh failed for player %s: %s",
-                        player_id, exc, exc_info=True,
+                        "Battle.net character refresh failed for %s: %s",
+                        battletag, exc, exc_info=True,
                     )
                     errors += 1
+                    result = await report_error(
+                        self.db_pool,
+                        "bnet_sync_error",
+                        "warning",
+                        f"Battle.net character sync failed for {battletag}: {exc}",
+                        "scheduler",
+                        details={"player_id": player_id, "battletag": battletag, "error": str(exc)},
+                        identifier=battletag,
+                    )
+                    await maybe_notify_discord(
+                        self.db_pool, self.discord_bot, self.audit_channel_id,
+                        "bnet_sync_error", "warning",
+                        f"Battle.net sync failed for **{battletag}**: {exc}",
+                        result["is_first_occurrence"],
+                    )
 
             logger.info(
-                "Battle.net character refresh complete: players=%d new_chars=%d errors=%d",
+                "Battle.net character refresh complete: refreshed=%d new_chars=%d errors=%d",
                 refreshed, new_chars, errors,
             )
+
         except Exception as exc:
             logger.error("Battle.net character refresh job failed: %s", exc, exc_info=True)
+            result = await report_error(
+                self.db_pool,
+                "bnet_sync_error",
+                "critical",
+                f"Battle.net character refresh job crashed: {exc}",
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "bnet_sync_error", "critical",
+                f"Battle.net character refresh job crashed: {exc}",
+                result["is_first_occurrence"],
+            )
 
     async def run_wcl_sync(self):
         """Warcraft Logs sync pipeline. Runs daily at 5 AM UTC.
@@ -713,6 +794,22 @@ class GuildSyncScheduler:
                     str(exc)[:500],
                     config_id,
                 )
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "wcl_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "wcl_sync_failed", "warning",
+                str(exc),
+                result["is_first_occurrence"],
+            )
         except Exception as exc:
             logger.error("WCL sync pipeline failed: %s", exc, exc_info=True)
             async with self.db_pool.acquire() as conn:
@@ -724,6 +821,22 @@ class GuildSyncScheduler:
                     str(exc)[:500],
                     config_id,
                 )
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "wcl_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "wcl_sync_failed", "warning",
+                str(exc),
+                result["is_first_occurrence"],
+            )
         finally:
             await wcl_client.close()
 
@@ -805,6 +918,22 @@ class GuildSyncScheduler:
 
         except Exception as exc:
             logger.error("AH sync failed: %s", exc, exc_info=True)
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "ah_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "ah_sync_failed", "warning",
+                str(exc),
+                result["is_first_occurrence"],
+            )
 
     async def run_attendance_processing(self):
         """Voice attendance post-processing pipeline. Runs every 30 minutes.
@@ -839,6 +968,22 @@ class GuildSyncScheduler:
 
         except Exception as exc:
             logger.error("Attendance processing failed: %s", exc, exc_info=True)
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "attendance_sync_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "attendance_sync_failed", "warning",
+                str(exc),
+                result["is_first_occurrence"],
+            )
 
     async def run_weekly_error_digest(self):
         """Post a grouped summary of all open errors to the audit channel.

@@ -67,6 +67,17 @@ async def _refresh_token(pool, player_id: int, row, now: datetime) -> str | None
         logger.warning(
             "No refresh token for player %s — cannot refresh expired OAuth token", player_id
         )
+        from sv_common.errors import report_error
+        await report_error(
+            pool,
+            "bnet_token_expired",
+            "warning",
+            f"Battle.net token expired for player {player_id} — no refresh token stored. "
+            f"Player must re-link their Battle.net account.",
+            "bnet_character_sync",
+            details={"player_id": player_id},
+            identifier=str(player_id),
+        )
         return None
 
     try:
@@ -106,6 +117,16 @@ async def _refresh_token(pool, player_id: int, row, now: datetime) -> str | None
             token_data = resp.json()
     except Exception as exc:
         logger.error("Token refresh failed for player %s: %s", player_id, exc)
+        from sv_common.errors import report_error
+        await report_error(
+            pool,
+            "bnet_token_expired",
+            "warning",
+            f"Battle.net token refresh failed for player {player_id}: {exc}",
+            "bnet_character_sync",
+            details={"player_id": player_id, "error": str(exc)},
+            identifier=str(player_id),
+        )
         return None
 
     new_access_token = token_data.get("access_token", "")

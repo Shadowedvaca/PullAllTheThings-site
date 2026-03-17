@@ -2456,12 +2456,27 @@ async def admin_bnet_sync_user(
 
     access_token = await get_valid_access_token(pool, player_id)
     if access_token is None:
+        from sv_common.errors import report_error
+        await report_error(
+            pool,
+            "bnet_token_expired",
+            "warning",
+            "Battle.net token expired — player must re-link their Battle.net account.",
+            "admin_bnet_sync",
+            details={"user_id": user_id, "player_id": player_id},
+            identifier=str(player_id),
+        )
         return JSONResponse(
             {"ok": False, "error": "Could not retrieve a valid access token — the token may have expired"},
             status_code=422,
         )
 
     stats = await sync_bnet_characters(pool, player_id, access_token)
+
+    from sv_common.errors import resolve_issue
+    await resolve_issue(pool, "bnet_token_expired", identifier=str(player_id))
+    await resolve_issue(pool, "bnet_sync_error", identifier=str(player_id))
+
     return JSONResponse({"ok": True, "data": stats})
 
 
@@ -2492,18 +2507,40 @@ async def admin_bnet_sync_all(
     failed = 0
     total_linked = 0
 
+    from sv_common.errors import report_error, resolve_issue
+
     for player_id in player_ids:
         try:
             access_token = await get_valid_access_token(pool, player_id)
             if access_token is None:
                 failed += 1
+                await report_error(
+                    pool,
+                    "bnet_token_expired",
+                    "warning",
+                    f"Battle.net token expired for player {player_id} — player must re-link.",
+                    "admin_bnet_sync",
+                    details={"player_id": player_id},
+                    identifier=str(player_id),
+                )
                 continue
             stats = await sync_bnet_characters(pool, player_id, access_token)
             synced += 1
             total_linked += stats.get("linked", 0)
+            await resolve_issue(pool, "bnet_token_expired", identifier=str(player_id))
+            await resolve_issue(pool, "bnet_sync_error", identifier=str(player_id))
         except Exception as exc:
             logger.error("BNet sync-all: failed for player %s: %s", player_id, exc)
             failed += 1
+            await report_error(
+                pool,
+                "bnet_sync_error",
+                "warning",
+                f"Battle.net character sync failed for player {player_id}: {exc}",
+                "admin_bnet_sync",
+                details={"player_id": player_id, "error": str(exc)},
+                identifier=str(player_id),
+            )
 
     return JSONResponse({"ok": True, "data": {"synced": synced, "failed": failed, "total_linked": total_linked}})
 
