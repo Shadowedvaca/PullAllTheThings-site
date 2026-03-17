@@ -187,18 +187,20 @@ function renderProgressionPanel(data) {
   let html = '<div class="mc-progression">';
 
   // ── Raid progress card ──
+  html += '<div class="mc-prog-card">';
+  html += '<div class="mc-prog-card__title">Raid Progression</div>';
+  html += '<div class="mc-prog-card__body">';
   if (raid_progress && raid_progress.length > 0) {
-    html += '<div class="mc-prog-card">';
-    html += '<div class="mc-prog-card__title">Raid Progression</div>';
-    html += '<div class="mc-prog-card__body">';
     for (const tier of raid_progress) {
       html += `<div class="mc-raid-name">${tier.raid_name}</div>`;
       for (const diff of DIFF_ORDER) {
         html += renderRaidDiffRow(diff, tier.difficulties[diff] || null);
       }
     }
-    html += '</div></div>';
+  } else {
+    html += '<span class="mc-mplus-empty">No raid data synced yet</span>';
   }
+  html += '</div></div>';
 
   // ── M+ score card ──
   html += '<div class="mc-prog-card">';
