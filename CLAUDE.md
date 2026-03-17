@@ -223,9 +223,9 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 6.3 complete** — Discord notifications + weekly error digest
-- **Tests:** 871 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0048 (Phase 6.2 — no new migrations in 6.3)
+- **Phase 6.4 complete** — Migrate all error callsites to report_error/resolve_issue
+- **Tests:** 901 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Last migration:** 0049 (Phase 6.4 — new per-type routing rules seeded)
 - **Last tag:** `v0.1.7`
 
 ### What Exists
