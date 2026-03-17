@@ -443,6 +443,102 @@ function renderMarketPanel(data) {
 }
 
 // ---------------------------------------------------------------------------
+// Crafting & Raid Prep panel helpers
+// ---------------------------------------------------------------------------
+
+function craftingCollapseState(key) {
+  const val = localStorage.getItem(key);
+  return val === null ? true : val === '1'; // default open
+}
+
+function renderCraftingPanel(data, charName) {
+  const panel = document.getElementById('mc-crafting');
+  const { craftable, consumables } = data;
+
+  const parts = [];
+
+  // Section A: What I Can Craft
+  if (craftable && craftable.length > 0) {
+    const openAttr = craftingCollapseState('mc-crafting-recipes') ? ' open' : '';
+    const rows = craftable.map(r => `
+      <tr>
+        <td>${r.profession}</td>
+        <td><a href="${r.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mc-craft-link">${r.recipe_name}</a></td>
+        <td class="mc-craft-status--yes">\u2705 Yes</td>
+      </tr>`).join('');
+    parts.push(`
+      <details class="mc-crafting-section" data-collapse-key="mc-crafting-recipes"${openAttr}>
+        <summary class="mc-prog-card__title">What ${charName} Can Craft (${craftable.length})</summary>
+        <div class="mc-prog-card__body" style="padding:0">
+          <table class="mc-craft-table">
+            <thead><tr><th>Profession</th><th>Recipe</th><th>Status</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </details>`);
+  }
+
+  // Section B: Raid Consumables
+  if (consumables && consumables.length > 0) {
+    const openAttr = craftingCollapseState('mc-crafting-consumables') ? ' open' : '';
+    const rows = consumables.map(item => {
+      const price = item.min_buyout ? item.min_buyout_display : '\u2014';
+      let status;
+      if (!item.min_buyout) {
+        status = '<span class="mc-cons-status--na">\u2014</span>';
+      } else if (item.quantity_available != null && item.quantity_available < 50) {
+        status = `<span class="mc-cons-status--low">\u26A0 Low stock (${item.quantity_available})</span>`;
+      } else if (item.change_pct != null && item.change_pct > 5) {
+        status = `<span class="mc-cons-status--up">\uD83D\uDCC8 +${item.change_pct.toFixed(1)}%</span>`;
+      } else if (item.change_pct != null && item.change_pct < -5) {
+        status = `<span class="mc-cons-status--down">\uD83D\uDCC9 ${item.change_pct.toFixed(1)}%</span>`;
+      } else {
+        status = '<span class="mc-cons-status--stable">\u2705 stable</span>';
+      }
+      const catHtml = `<span class="mc-market-cat mc-market-cat--${item.category}">${item.category}</span>`;
+      return `<tr>
+        <td>${catHtml}<a href="${item.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mc-craft-link">${item.item_name}</a></td>
+        <td class="mc-cons-price">${price}</td>
+        <td class="mc-cons-status-cell">${status}</td>
+      </tr>`;
+    }).join('');
+    parts.push(`
+      <details class="mc-crafting-section" data-collapse-key="mc-crafting-consumables"${openAttr}>
+        <summary class="mc-prog-card__title">Raid Consumables \u2014 Current Prices</summary>
+        <div class="mc-prog-card__body" style="padding:0">
+          <table class="mc-craft-table">
+            <thead><tr><th>Item</th><th>Price</th><th>Status</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </details>`);
+  }
+
+  if (parts.length === 0) {
+    panel.innerHTML = `
+      <div class="mc-prog-card">
+        <div class="mc-prog-card__title">Crafting &amp; Raid Prep</div>
+        <div class="mc-prog-card__body">
+          <span class="mc-mplus-empty">No crafting data available for this character.</span>
+        </div>
+      </div>`;
+    panel.hidden = false;
+    return;
+  }
+
+  panel.innerHTML = parts.join('');
+  panel.hidden = false;
+
+  // Persist collapse state on toggle
+  panel.querySelectorAll('details.mc-crafting-section').forEach(det => {
+    det.addEventListener('toggle', () => {
+      const key = det.dataset.collapseKey;
+      if (key) localStorage.setItem(key, det.open ? '1' : '0');
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // State management
 // ---------------------------------------------------------------------------
 
@@ -513,6 +609,24 @@ async function selectCharacter(charId) {
   } catch (err) {
     // Market is non-critical — fail silently
     console.warn('Market load failed:', err);
+  }
+
+  // Load crafting panel
+  const craftingPanel = document.getElementById('mc-crafting');
+  craftingPanel.hidden = true;
+  craftingPanel.innerHTML = '';
+
+  try {
+    const craftingResp = await fetch(`/api/v1/me/character/${charId}/crafting`, { credentials: 'include' });
+    if (craftingResp.ok) {
+      const craftingJson = await craftingResp.json();
+      if (craftingJson.ok) {
+        renderCraftingPanel(craftingJson.data, char.character_name);
+      }
+    }
+  } catch (err) {
+    // Crafting is non-critical — fail silently
+    console.warn('Crafting load failed:', err);
   }
 }
 

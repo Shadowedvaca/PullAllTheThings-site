@@ -5,11 +5,13 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from guild_portal.deps import get_current_player, get_db
+from urllib.parse import quote_plus
+
 from sv_common.config_cache import get_site_config
 from sv_common.db.models import (
     CharacterMythicPlus,
@@ -415,3 +417,89 @@ async def get_character_market(
         }
     except Exception:
         return {"ok": True, "data": {"prices": [], "realm_id": 0, "available": False}}
+
+
+@router.get("/character/{character_id}/crafting")
+async def get_character_crafting(
+    character_id: int,
+    request: Request,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return craftable recipes and consumable prices for a character owned by the current member."""
+    # Verify the character belongs to this player
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # Get character info for realm determination
+    char_result = await db.execute(
+        select(WowCharacter).where(WowCharacter.id == character_id)
+    )
+    char = char_result.scalar_one_or_none()
+    if not char:
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # ── Craftable recipes ────────────────────────────────────────────────────
+    recipe_result = await db.execute(
+        text(
+            """
+            SELECT r.id AS recipe_id,
+                   r.name AS recipe_name,
+                   p.name AS profession
+            FROM guild_identity.character_recipes cr
+            JOIN guild_identity.recipes r ON r.id = cr.recipe_id
+            JOIN guild_identity.professions p ON p.id = r.profession_id
+            WHERE cr.character_id = :char_id
+            ORDER BY p.name, r.name
+            """
+        ),
+        {"char_id": character_id},
+    )
+
+    craftable = []
+    for row in recipe_result:
+        wowhead_url = f"https://www.wowhead.com/search?q={quote_plus(row.recipe_name)}"
+        craftable.append({
+            "recipe_id": row.recipe_id,
+            "recipe_name": row.recipe_name,
+            "profession": row.profession,
+            "rank": None,
+            "max_rank": None,
+            "can_craft_fully": True,
+            "wowhead_url": wowhead_url,
+        })
+
+    # ── Consumable prices ────────────────────────────────────────────────────
+    consumables: list[dict] = []
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+
+    if pool:
+        try:
+            cfg = get_site_config()
+            home_realm_slug = cfg.get("home_realm_slug", "")
+            home_connected_realm_id = cfg.get("connected_realm_id") or 0
+
+            if char.realm_slug and char.realm_slug == home_realm_slug:
+                realm_id = home_connected_realm_id
+            else:
+                realm_id = 0
+
+            from sv_common.guild_sync.ah_service import get_consumable_prices_for_realm
+            consumables = await get_consumable_prices_for_realm(pool, realm_id)
+        except Exception:
+            pass  # Prices are non-critical
+
+    return {
+        "ok": True,
+        "data": {
+            "character_id": character_id,
+            "craftable": craftable,
+            "consumables": consumables,
+        },
+    }
