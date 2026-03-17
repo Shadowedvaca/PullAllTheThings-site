@@ -47,6 +47,66 @@ from .sync_logger import SyncLogEntry
 logger = logging.getLogger(__name__)
 
 
+def _build_digest_embeds(errors: list[dict]) -> list[discord.Embed]:
+    """Build a list of Discord embeds for the weekly error digest.
+
+    One header embed + one embed per issue_type group.
+    """
+    from datetime import datetime, timezone
+    from sv_common.guild_sync.reporter import ISSUE_EMOJI, ISSUE_TYPE_NAMES, SEVERITY_COLORS
+    from sv_common.config_cache import get_accent_color_int
+
+    # Group by issue_type
+    grouped: dict[str, list[dict]] = {}
+    for err in errors:
+        grouped.setdefault(err["issue_type"], []).append(err)
+
+    # Determine overall worst severity
+    sev_order = {"info": 0, "warning": 1, "critical": 2}
+    worst = max(errors, key=lambda e: sev_order.get(e["severity"], 0))["severity"]
+
+    header = discord.Embed(
+        title="📋 Weekly Error Digest",
+        description=(
+            f"**{len(errors)} open issue{'s' if len(errors) != 1 else ''}** "
+            f"across {len(grouped)} type{'s' if len(grouped) != 1 else ''}.\n"
+            f"Manage at **Admin → Error Routing**."
+        ),
+        color=SEVERITY_COLORS.get(worst, get_accent_color_int()),
+        timestamp=datetime.now(timezone.utc),
+    )
+    embeds = [header]
+
+    for issue_type, group in grouped.items():
+        emoji = ISSUE_EMOJI.get(issue_type, "🔴")
+        label = ISSUE_TYPE_NAMES.get(issue_type, issue_type.replace("_", " ").title())
+        worst_sev = max(group, key=lambda e: sev_order.get(e["severity"], 0))["severity"]
+        color = SEVERITY_COLORS.get(worst_sev, 0x3498DB)
+
+        lines = []
+        for err in group[:15]:  # cap at 15 per type
+            identifier = f" `{err['identifier']}`" if err["identifier"] else ""
+            count = f" · {err['occurrence_count']}×" if err["occurrence_count"] > 1 else ""
+            first = err["first_occurred_at"]
+            age = f"first seen <t:{int(first.timestamp())}:R>"
+            lines.append(f"•{identifier} — {err['summary'][:80]}{count} ({age})")
+
+        if len(group) > 15:
+            lines.append(f"*...and {len(group) - 15} more*")
+
+        desc = "\n".join(lines)
+        if len(desc) > 4000:
+            desc = desc[:3990] + "\n*...truncated*"
+
+        embeds.append(discord.Embed(
+            title=f"{emoji} {label} ({len(group)})",
+            description=desc,
+            color=color,
+        ))
+
+    return embeds
+
+
 class GuildSyncScheduler:
     """Manages all scheduled guild sync tasks."""
 
@@ -171,6 +231,15 @@ class GuildSyncScheduler:
             IntervalTrigger(minutes=30),
             id="attendance_processing",
             name="Voice Attendance Post-Processing",
+            misfire_grace_time=3600,
+        )
+
+        # Weekly error digest: Sunday 8:00 AM UTC
+        self.scheduler.add_job(
+            self.run_weekly_error_digest,
+            CronTrigger(day_of_week="sun", hour=8, minute=0),
+            id="weekly_error_digest",
+            replace_existing=True,
             misfire_grace_time=3600,
         )
 
@@ -770,6 +839,35 @@ class GuildSyncScheduler:
 
         except Exception as exc:
             logger.error("Attendance processing failed: %s", exc, exc_info=True)
+
+    async def run_weekly_error_digest(self):
+        """Post a grouped summary of all open errors to the audit channel.
+
+        Runs Sunday 8:00 AM UTC. Silent if no open errors.
+        """
+        from sv_common.errors import get_unresolved
+
+        audit_channel = self._get_audit_channel()
+        if audit_channel is None:
+            logger.warning("Weekly error digest: audit channel not available")
+            return
+
+        try:
+            errors = await get_unresolved(self.db_pool, limit=200)
+        except Exception as exc:
+            logger.error("Weekly error digest: failed to fetch errors: %s", exc)
+            return
+
+        if not errors:
+            logger.info("Weekly error digest: no open errors")
+            return
+
+        embeds = _build_digest_embeds(errors)
+        try:
+            for i in range(0, len(embeds), 10):
+                await audit_channel.send(embeds=embeds[i:i + 10])
+        except Exception as exc:
+            logger.error("Weekly error digest: failed to post to Discord: %s", exc)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

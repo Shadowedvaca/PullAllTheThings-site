@@ -7,8 +7,12 @@ Call invalidate_cache() from the admin PATCH endpoint to flush immediately.
 
 import logging
 from datetime import datetime, timezone, timedelta
+from typing import TYPE_CHECKING
 
 import asyncpg
+
+if TYPE_CHECKING:
+    import discord
 
 logger = logging.getLogger(__name__)
 
@@ -108,3 +112,46 @@ async def get_routing_rule(
         "dest_discord": best["dest_discord"],
         "first_only": best["first_only"],
     }
+
+
+async def maybe_notify_discord(
+    pool: asyncpg.Pool,
+    bot: "discord.Client | None",
+    audit_channel_id: "int | None",
+    issue_type: str,
+    severity: str,
+    summary: str,
+    is_first_occurrence: bool,
+) -> None:
+    """
+    Post to the audit Discord channel if the routing rule says to.
+
+    Call this immediately after report_error() returns, passing its is_first_occurrence.
+    Does nothing if:
+    - routing rule says dest_discord=False
+    - routing rule says first_only=True AND is_first_occurrence=False
+    - bot is None or audit_channel_id is None
+    """
+    if bot is None or audit_channel_id is None:
+        return
+
+    rule = await get_routing_rule(pool, issue_type, severity)
+    if not rule["dest_discord"]:
+        return
+    if rule["first_only"] and not is_first_occurrence:
+        return
+
+    from sv_common.guild_sync.reporter import send_error
+    channel = bot.get_channel(audit_channel_id)
+    if channel is None:
+        return
+
+    await send_error(channel, _format_title(issue_type, severity), summary)
+
+
+def _format_title(issue_type: str, severity: str) -> str:
+    """Convert issue_type to a readable title for the Discord embed."""
+    from sv_common.guild_sync.reporter import ISSUE_TYPE_NAMES
+    label = ISSUE_TYPE_NAMES.get(issue_type, issue_type.replace("_", " ").title())
+    prefix = {"critical": "CRITICAL", "warning": "Warning", "info": "Notice"}.get(severity, severity.title())
+    return f"{prefix}: {label}"
