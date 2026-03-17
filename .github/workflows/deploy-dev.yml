@@ -1,9 +1,12 @@
 name: Deploy to Dev
 
 on:
-  push:
-    branches-ignore:
-      - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy to dev'
+        required: true
+        default: 'main'
 
 jobs:
   deploy:
@@ -21,10 +24,10 @@ jobs:
             set -e
             cd /opt/guild-portal
 
-            echo "==> Pulling branch: ${{ github.ref_name }}..."
+            echo "==> Pulling branch: ${{ github.event.inputs.branch }}..."
             git fetch origin
-            git checkout ${{ github.ref_name }}
-            git pull origin ${{ github.ref_name }}
+            git checkout ${{ github.event.inputs.branch }}
+            git pull origin ${{ github.event.inputs.branch }}
 
             echo "==> Building dev image..."
             docker compose -f docker-compose.guild.yml build app-dev

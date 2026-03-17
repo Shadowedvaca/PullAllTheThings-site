@@ -179,10 +179,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 ## Deployment & Operations
 
-> See `reference/DEPLOY.md` for CI/CD details, Docker environments, and known server quirks.
+> See `reference/DEPLOY.md` for Docker environments and server quirks.
+> **Git & CI/CD workflow:** `reference/git-cicd-workflow.md` — canonical rules for branching, merging, and releasing.
 
-- **CRITICAL: Never touch prod without explicit permission from Mike.** No SSH against prod DB, no docker exec on prod containers, no version tags. Dev and test are fair game.
-- Push to any branch → dev auto-deploys; merge to main → test auto-deploys; version tag → prod (~30s each)
+- **CRITICAL: Never touch prod without explicit permission from Mike.** No SSH against prod DB, no docker exec on prod containers, no prod tags. Dev and test are fair game.
+- **Dev:** manual trigger — `gh workflow run deploy-dev.yml -f branch=feature/my-thing`
+- **Test:** auto-deploys on push to `main` (i.e. merged PR)
+- **Prod:** auto-deploys on `prod-v*` tag — `git tag prod-vX.Y.Z && git push main prod-vX.Y.Z`
 - Local tests: `.venv/Scripts/pytest tests/unit/ -v` (no DB needed for unit tests)
 
 ---
@@ -206,9 +209,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - All DB operations wrapped in try/except with proper rollback
 - User-facing errors friendly; technical details logged server-side
 
-### Git
-- Commit messages: `feat:` / `fix:` / `docs:` / `phase-N.N: description`
-- Branch strategy: feature branches → merge to main
+### Git & CI/CD
+> Full workflow rules: `reference/git-cicd-workflow.md`
+
+- Commit messages: `feat:` / `fix:` / `docs:` / `chore:` / `refactor:`
+- Branch types: `feature/*` (MINOR bump), `fix/*` (PATCH), `hotfix/*` (PATCH — fast lane to prod), `chore/*`, `refactor/*` (no bump)
+- Always `--no-ff` on merges; delete branches after merge
+- Tag format: `prod-vMAJOR.MINOR.PATCH` (e.g. `prod-v0.2.1`) — prod deploys on this pattern only
 
 ### Testing
 - See `TESTING.md` for full strategy
