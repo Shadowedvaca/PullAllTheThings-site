@@ -223,13 +223,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Platform is feature-complete through Phase 5.4.**
-- **Tests:** 813 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0045 (AH Multi-Realm — `active_connected_realm_ids` on `site_config`, updated unique constraint on `item_price_history` to include `connected_realm_id`)
+- **Phase 6.1 complete** — sv_common error catalogue (`common.error_log`, `sv_common.errors`)
+- **Tests:** 842 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Last migration:** 0046 (Phase 6.1 — `common.error_log` table + indexes)
 - **Last tag:** `v0.1.7`
 
 ### What Exists
-- **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor)
+- **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1)
 - **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide` — no login required
 - **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4 — what char can craft with profession/expansion/search filters, raid consumable prices with trend indicators)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users`, `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`
