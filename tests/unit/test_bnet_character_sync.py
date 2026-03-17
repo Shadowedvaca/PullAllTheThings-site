@@ -108,7 +108,9 @@ async def test_get_valid_access_token_returns_none_when_no_refresh_token(monkeyp
         "token_expires_at": past,
     })
 
-    result = await get_valid_access_token(pool, player_id=1)
+    mock_report_result = {"id": 1, "is_first_occurrence": True, "occurrence_count": 1}
+    with patch("sv_common.errors.report_error", new=AsyncMock(return_value=mock_report_result)):
+        result = await get_valid_access_token(pool, player_id=1)
     assert result is None
 
 
@@ -574,3 +576,79 @@ def test_players_js_handles_battlenet_oauth():
     assert "battlenet_oauth" in content
     assert "draggable" in content
     assert "🔒" in content
+
+
+# ---------------------------------------------------------------------------
+# Phase 6.4 — _refresh_token error reporting
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_reports_error_on_no_refresh_token(monkeypatch):
+    """_refresh_token calls report_error when no refresh token is stored."""
+    _setup_bnet_key(monkeypatch)
+    from sv_common.crypto import encrypt_bnet_token
+    from sv_common.guild_sync.bnet_character_sync import get_valid_access_token
+    from datetime import datetime, timedelta, timezone
+
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    pool, conn = _make_pool(rows={
+        "access_token_encrypted": encrypt_bnet_token("old"),
+        "refresh_token_encrypted": None,  # no refresh token
+        "token_expires_at": past,
+    })
+
+    monkeypatch.setattr(
+        "sv_common.guild_sync.bnet_character_sync.get_site_config", lambda: {}
+    )
+
+    mock_report_result = {"id": 1, "is_first_occurrence": True, "occurrence_count": 1}
+    with patch("sv_common.errors.report_error", new=AsyncMock(return_value=mock_report_result)) as mock_report:
+        result = await get_valid_access_token(pool, player_id=42)
+
+    assert result is None
+    mock_report.assert_awaited_once()
+    call_args = mock_report.await_args[0]
+    assert call_args[1] == "bnet_token_expired"
+    call_kwargs = mock_report.await_args[1]
+    assert call_kwargs.get("identifier") == "42"
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_reports_error_on_http_failure(monkeypatch):
+    """_refresh_token calls report_error when the Blizzard HTTP request fails."""
+    _setup_bnet_key(monkeypatch)
+    from sv_common.crypto import encrypt_bnet_token
+    from sv_common.guild_sync.bnet_character_sync import get_valid_access_token
+    from datetime import datetime, timedelta, timezone
+    import httpx
+
+    past = datetime.now(timezone.utc) - timedelta(hours=1)
+    pool, conn = _make_pool(rows={
+        "access_token_encrypted": encrypt_bnet_token("old"),
+        "refresh_token_encrypted": encrypt_bnet_token("refresh-tok"),
+        "token_expires_at": past,
+    })
+
+    monkeypatch.setenv("BLIZZARD_CLIENT_ID", "test-id")
+    monkeypatch.setenv("BLIZZARD_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "test-jwt-key-32-bytes-long-here!")
+    monkeypatch.setattr(
+        "sv_common.guild_sync.bnet_character_sync.get_site_config", lambda: {}
+    )
+
+    mock_report_result = {"id": 1, "is_first_occurrence": True, "occurrence_count": 1}
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_http = AsyncMock()
+        mock_http.post = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_http)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("sv_common.errors.report_error", new=AsyncMock(return_value=mock_report_result)) as mock_report:
+            result = await get_valid_access_token(pool, player_id=42)
+
+    assert result is None
+    mock_report.assert_awaited_once()
+    call_args = mock_report.await_args[0]
+    assert call_args[1] == "bnet_token_expired"

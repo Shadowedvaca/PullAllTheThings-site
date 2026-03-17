@@ -34,6 +34,11 @@ ISSUE_EMOJI = {
     "rank_change": "📊",
     "bnet_token_expired": "🔑",
     "bnet_sync_error": "🔴",
+    "blizzard_sync_failed": "🌐",
+    "crafting_sync_failed": "🔨",
+    "wcl_sync_failed": "📊",
+    "attendance_sync_failed": "📋",
+    "ah_sync_failed": "💰",
 }
 
 # Human-friendly type names
@@ -46,6 +51,11 @@ ISSUE_TYPE_NAMES = {
     "auto_link_suggestion": "Suggested Auto-Links (Needs Review)",
     "bnet_token_expired": "Battle.net Token Expired (Re-Link Required)",
     "bnet_sync_error": "Battle.net Character Sync Errors",
+    "blizzard_sync_failed": "Blizzard API Sync Failed",
+    "crafting_sync_failed": "Crafting Sync Failed",
+    "wcl_sync_failed": "Warcraft Logs Sync Failed",
+    "attendance_sync_failed": "Attendance Processing Failed",
+    "ah_sync_failed": "AH Pricing Sync Failed",
 }
 
 
