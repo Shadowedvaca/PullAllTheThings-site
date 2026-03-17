@@ -257,7 +257,6 @@ async def landing_page(
     officers = []
     recruiting_needs: dict[str, int] = {}
     event_days = []
-    ah_prices = []
     try:
         officers = await _get_officers(db)
     except Exception:
@@ -270,13 +269,38 @@ async def landing_page(
         event_days = await _get_event_days(db)
     except Exception:
         logger.warning("Could not load event days from DB", exc_info=True)
+    ah_prices = []
+    viewer_realm_id = 0
+    available_realms = []
     try:
         pool = getattr(request.app.state, "guild_sync_pool", None)
         if pool:
-            from sv_common.guild_sync.ah_service import get_current_prices
-            raw_prices = await get_current_prices(pool)
-            # Only show items that have at least one price snapshot
+            from sv_common.guild_sync.ah_service import get_prices_for_realm, get_available_realms
+            from sv_common.config_cache import get_site_config as _get_site_config
+            _cfg = _get_site_config()
+            home_realm_slug = _cfg.get("home_realm_slug", "")
+            home_connected_realm_id = _cfg.get("connected_realm_id") or 0
+
+            # Default to home realm prices for the index page
+            viewer_realm_id = home_connected_realm_id
+
+            # If logged in and main char is on home realm, use home realm prices
+            if current_member:
+                try:
+                    from sqlalchemy import select as sa_select
+                    from sv_common.db.models import WowCharacter as _WowChar
+                    mc_id = current_member.main_character_id
+                    if mc_id:
+                        mc_res = await db.execute(sa_select(_WowChar).where(_WowChar.id == mc_id))
+                        main_char = mc_res.scalar_one_or_none()
+                        if main_char and main_char.realm_slug and main_char.realm_slug == home_realm_slug:
+                            viewer_realm_id = home_connected_realm_id
+                except Exception:
+                    pass
+
+            raw_prices = await get_prices_for_realm(pool, viewer_realm_id)
             ah_prices = [p for p in raw_prices if p.get("min_buyout") is not None]
+            available_realms = await get_available_realms(pool)
     except Exception:
         logger.warning("Could not load AH prices from DB", exc_info=True)
 
@@ -296,6 +320,8 @@ async def landing_page(
         "role_emojis": ROLE_EMOJIS,
         "day_names": DAY_NAMES,
         "ah_prices": ah_prices,
+        "viewer_realm_id": viewer_realm_id,
+        "available_realms": available_realms,
     }
     return templates.TemplateResponse("public/index.html", ctx)
 

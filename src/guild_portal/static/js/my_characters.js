@@ -380,6 +380,69 @@ function renderParsesPanel(data, charRealm, charName) {
 }
 
 // ---------------------------------------------------------------------------
+// Market panel helpers
+// ---------------------------------------------------------------------------
+
+function goldStr(copper) {
+  if (!copper || copper <= 0) return '\u2014';
+  const gold = Math.floor(copper / 10000);
+  const silver = Math.floor((copper % 10000) / 100);
+  if (gold >= 1000) return gold.toLocaleString() + 'g';
+  if (gold > 0) return `${gold}g ${silver}s`;
+  return `${silver}s`;
+}
+
+function renderMarketPanel(data) {
+  const panel = document.getElementById('mc-market');
+  const { prices, available } = data;
+
+  if (!available || !prices || prices.length === 0) {
+    panel.innerHTML = `
+      <div class="mc-prog-card">
+        <div class="mc-prog-card__title">Market Watch</div>
+        <div class="mc-prog-card__body">
+          <span class="mc-mplus-empty">No market data available for your realm yet.</span>
+        </div>
+      </div>`;
+    panel.hidden = false;
+    return;
+  }
+
+  const rows = prices.map(item => {
+    const realmCls = item.is_realm_specific ? ' mc-market-row--realm' : '';
+    const realmFlag = item.is_realm_specific ? '<span class="mc-market-realm-flag">*</span>' : '';
+    const wowheadName = item.item_name.replace(/ /g, '+').replace(/'/g, '%27');
+    const qty = item.quantity_available ? item.quantity_available.toLocaleString() : '\u2014';
+    return `<tr class="${realmCls}">
+      <td class="mc-market-name">
+        <span class="mc-market-cat mc-market-cat--${item.category}">${item.category}</span>
+        <a href="https://www.wowhead.com/search?q=${wowheadName}" target="_blank" rel="noopener noreferrer" class="mc-market-item-link">${item.item_name}</a>${realmFlag}
+      </td>
+      <td class="mc-market-price">${goldStr(item.min_buyout)}</td>
+      <td class="mc-market-qty">${qty}</td>
+    </tr>`;
+  }).join('');
+
+  const hasRealmSpecific = prices.some(p => p.is_realm_specific);
+  const footnote = hasRealmSpecific
+    ? '<p class="mc-market-footnote">* Realm-specific auction price.</p>'
+    : '';
+
+  panel.innerHTML = `
+    <div class="mc-prog-card">
+      <div class="mc-prog-card__title">Market Watch</div>
+      <div class="mc-prog-card__body">
+        <table class="mc-market-table">
+          <thead><tr><th>Item</th><th>Min Price</th><th>Available</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        ${footnote}
+      </div>
+    </div>`;
+  panel.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
 // State management
 // ---------------------------------------------------------------------------
 
@@ -432,6 +495,24 @@ async function selectCharacter(charId) {
   } catch (err) {
     // Parses are non-critical — fail silently
     console.warn("Parses load failed:", err);
+  }
+
+  // Load market panel
+  const marketPanel = document.getElementById('mc-market');
+  marketPanel.hidden = true;
+  marketPanel.innerHTML = '';
+
+  try {
+    const marketResp = await fetch(`/api/v1/me/character/${charId}/market`, { credentials: 'include' });
+    if (marketResp.ok) {
+      const marketJson = await marketResp.json();
+      if (marketJson.ok) {
+        renderMarketPanel(marketJson.data);
+      }
+    }
+  } catch (err) {
+    // Market is non-critical — fail silently
+    console.warn('Market load failed:', err);
   }
 }
 

@@ -571,3 +571,49 @@
   color: var(--color-text-muted);
   font-size: 0.875rem;
 }
+
+/* ── Market Panel ──────────────────────────────────────────────────────── */
+.mc-market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+.mc-market-table th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.mc-market-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #1e1e22;
+  vertical-align: middle;
+}
+.mc-market-table tr:last-child td { border-bottom: none; }
+.mc-market-row--realm { background: rgba(212, 168, 75, 0.05); }
+.mc-market-realm-flag { color: var(--color-accent); font-weight: 700; margin-left: 0.2rem; font-size: 0.75rem; }
+.mc-market-name { color: var(--color-text); }
+.mc-market-price { font-weight: 700; color: #f5c842; white-space: nowrap; }
+.mc-market-qty { color: var(--color-text-muted); font-size: 0.8rem; }
+.mc-market-cat {
+  display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.3rem;
+  border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em;
+  margin-right: 0.3rem; font-weight: 600; opacity: 0.9;
+}
+.mc-market-cat--consumable { background: #1e3a1e; color: #86efac; }
+.mc-market-cat--enchant    { background: #1e2a5f; color: #93c5fd; }
+.mc-market-cat--gem        { background: #3b1a5f; color: #d8b4fe; }
+.mc-market-cat--material   { background: #3a2a10; color: #fcd34d; }
+.mc-market-cat--gear       { background: #2a1e1e; color: #fca5a5; }
+.mc-market-item-link { color: var(--color-text); text-decoration: none; }
+.mc-market-item-link:hover { color: var(--color-accent); text-decoration: underline; }
+.mc-market-footnote {
+  font-size: 0.72rem; color: var(--color-text-muted);
+  padding: 0.35rem 0.5rem; margin: 0.25rem 0 0;
+  border-top: 1px solid var(--color-border);
+}

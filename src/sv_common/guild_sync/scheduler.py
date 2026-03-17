@@ -662,43 +662,75 @@ class GuildSyncScheduler:
         """Auction House price sync pipeline. Runs every hour at :15.
 
         Pipeline:
-          1. Load connected_realm_id from site_config (resolve + cache if missing)
-          2. Call sync_ah_prices() — fetch commodities + realm auctions
+          1. Load active_connected_realm_ids from site_config (resolve if empty)
+          2. Call sync_ah_prices() — fetch commodities (realm_id=0) + per-realm auctions
           3. Daily cleanup of old price history (runs on the first call each day)
         """
-        from .ah_sync import sync_ah_prices, cleanup_old_prices
+        from .ah_sync import sync_ah_prices, cleanup_old_prices, get_active_connected_realm_ids
 
         try:
-            # Load connected realm ID from site_config
-            connected_realm_id: int | None = None
-            async with self.db_pool.acquire() as conn:
-                row = await conn.fetchrow("SELECT connected_realm_id, home_realm_slug FROM common.site_config LIMIT 1")
-            if row:
-                connected_realm_id = row["connected_realm_id"]
-                realm_slug = row["home_realm_slug"]
+            # Load connected realm IDs from site_config
+            connected_realm_ids: list[int] = []
+            home_realm_slug: str | None = None
 
-            # Resolve and cache if not stored yet
-            if not connected_realm_id and realm_slug:
-                logger.info("AH sync: resolving connected realm ID for slug '%s'", realm_slug)
-                connected_realm_id = await self.blizzard_client.get_connected_realm_id(realm_slug)
-                if connected_realm_id:
+            async with self.db_pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    "SELECT connected_realm_id, home_realm_slug, active_connected_realm_ids FROM common.site_config LIMIT 1"
+                )
+            if row:
+                home_realm_slug = row["home_realm_slug"]
+                stored_ids = row["active_connected_realm_ids"] or []
+                connected_realm_ids = list(stored_ids)
+
+            # Resolve the home realm ID if not yet stored
+            if not connected_realm_ids and home_realm_slug:
+                logger.info("AH sync: resolving connected realm IDs for slug '%s'", home_realm_slug)
+                connected_realm_ids = await get_active_connected_realm_ids(
+                    self.db_pool, self.blizzard_client
+                )
+                if not connected_realm_ids:
+                    # Fall back to just the home realm
+                    crid = await self.blizzard_client.get_connected_realm_id(home_realm_slug)
+                    if crid:
+                        connected_realm_ids = [crid]
+
+                if connected_realm_ids:
                     async with self.db_pool.acquire() as conn:
                         await conn.execute(
-                            "UPDATE common.site_config SET connected_realm_id = $1",
-                            connected_realm_id,
+                            "UPDATE common.site_config SET connected_realm_id = $1, active_connected_realm_ids = $2",
+                            connected_realm_ids[0],
+                            connected_realm_ids,
                         )
-                    logger.info("AH sync: cached connected realm ID %d", connected_realm_id)
+                    logger.info("AH sync: cached %d active realm(s): %s", len(connected_realm_ids), connected_realm_ids)
 
-            if not connected_realm_id:
-                logger.warning("AH sync: no connected_realm_id available — skipping")
+            # Daily refresh of active realm list (runs on the first sync after midnight)
+            from datetime import datetime, timezone
+            now_utc = datetime.now(timezone.utc)
+            if now_utc.hour == 0 and home_realm_slug:
+                try:
+                    refreshed_ids = await get_active_connected_realm_ids(
+                        self.db_pool, self.blizzard_client
+                    )
+                    if refreshed_ids:
+                        connected_realm_ids = refreshed_ids
+                        async with self.db_pool.acquire() as conn:
+                            await conn.execute(
+                                "UPDATE common.site_config SET active_connected_realm_ids = $1",
+                                connected_realm_ids,
+                            )
+                        logger.info("AH sync: refreshed active realm list: %s", connected_realm_ids)
+                except Exception as refresh_exc:
+                    logger.warning("AH sync: realm list refresh failed (non-fatal): %s", refresh_exc)
+
+            if not connected_realm_ids:
+                logger.warning("AH sync: no connected_realm_ids available — skipping")
                 return
 
-            stats = await sync_ah_prices(self.db_pool, self.blizzard_client, connected_realm_id)
+            stats = await sync_ah_prices(self.db_pool, self.blizzard_client, connected_realm_ids)
             logger.info("AH sync complete: %s", stats)
 
             # Run cleanup once per day (on the first sync after midnight)
-            from datetime import datetime, timezone
-            if datetime.now(timezone.utc).hour == 0:
+            if now_utc.hour == 0:
                 cleanup_stats = await cleanup_old_prices(self.db_pool)
                 logger.info("AH cleanup: %s", cleanup_stats)
 

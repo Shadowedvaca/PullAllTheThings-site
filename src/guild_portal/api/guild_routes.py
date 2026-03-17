@@ -3,7 +3,7 @@
 import statistics
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -404,3 +404,24 @@ async def get_quotes(subject: str | None = None, db: AsyncSession = Depends(get_
     quotes = [{"id": q.id, "quote": q.quote} for q in quotes_result.scalars()]
     titles = [{"id": t.id, "title": t.title} for t in titles_result.scalars()]
     return {"ok": True, "data": {"quotes": quotes, "titles": titles, "subject": subject_data}}
+
+
+# ---------------------------------------------------------------------------
+# AH Prices public endpoint — Phase 5.3
+# ---------------------------------------------------------------------------
+
+
+@router.get("/ah-prices")
+async def get_ah_prices(realm_id: int = 0, request: Request = None):
+    """Return AH prices for the specified connected realm (0 = region-wide commodities)."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "unavailable"}
+    try:
+        from sv_common.guild_sync.ah_service import get_prices_for_realm, get_available_realms
+        prices = await get_prices_for_realm(pool, realm_id)
+        realms = await get_available_realms(pool)
+        prices_filtered = [p for p in prices if p.get("min_buyout") is not None]
+        return {"ok": True, "data": {"prices": prices_filtered, "available_realms": realms}}
+    except Exception:
+        return {"ok": False, "error": "unavailable"}

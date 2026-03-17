@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -356,3 +356,62 @@ async def get_character_parses(
             "summary": summary,
         },
     }
+
+
+@router.get("/character/{character_id}/market")
+async def get_character_market(
+    character_id: int,
+    request: Request,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return AH market prices for a character's realm, owned by the current member."""
+    # Verify the character belongs to this player
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # Get the character's realm_slug
+    char_result = await db.execute(
+        select(WowCharacter).where(WowCharacter.id == character_id)
+    )
+    char = char_result.scalar_one_or_none()
+    if not char:
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": True, "data": {"prices": [], "realm_id": 0, "available": False}}
+
+    try:
+        # Determine the connected realm ID for this character
+        cfg = get_site_config()
+        home_realm_slug = cfg.get("home_realm_slug", "")
+        home_connected_realm_id = cfg.get("connected_realm_id") or 0
+
+        if char.realm_slug and char.realm_slug == home_realm_slug:
+            realm_id = home_connected_realm_id
+        else:
+            # Character is on a different realm — use commodity prices (realm_id=0)
+            # which cover all tracked guild items (consumables, enchants, gems)
+            realm_id = 0
+
+        from sv_common.guild_sync.ah_service import get_prices_for_realm
+        prices = await get_prices_for_realm(pool, realm_id)
+        prices_filtered = [p for p in prices if p.get("min_buyout") is not None]
+
+        return {
+            "ok": True,
+            "data": {
+                "prices": prices_filtered,
+                "realm_id": realm_id,
+                "available": bool(prices_filtered),
+            },
+        }
+    except Exception:
+        return {"ok": True, "data": {"prices": [], "realm_id": 0, "available": False}}
