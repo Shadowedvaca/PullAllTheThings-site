@@ -237,13 +237,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Active branch:** `main`
 
 ### What Exists
-- **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2)
-- **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide` — no login required
+- **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com)
+- **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
 - **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4 — what char can craft with profession/expansion/search filters, raid consumable prices with trend indicators)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users`, `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`, `/api/v1/guild/ah-prices?realm_id=N`
+- **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`, `/api/v1/guild/ah-prices?realm_id=N`, `POST /api/v1/feedback` (public, no auth required)
 - **Battle.net OAuth:** `GET /auth/battlenet`, `GET /auth/battlenet/callback`, `DELETE /api/v1/auth/battlenet`; character auto-claim on OAuth; daily token refresh scheduler
 - **Onboarding:** active, fires on `on_member_join`, gated by `enable_onboarding` site_config flag
 - **Setup wizard:** `/setup` → `/setup/complete` — 9-step first-run wizard; guard middleware redirects until `setup_complete=TRUE`
