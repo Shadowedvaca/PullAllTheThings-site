@@ -1,5 +1,4 @@
 {
-  "defaultMode": "bypassPermissions",
   "permissions": {
     "allow": [
       "Bash(cd:*)",
@@ -84,7 +83,17 @@
       "WebFetch(domain:web.archive.org)",
       "WebFetch(domain:top.gg)",
       "Bash(dd:*)",
-      "Bash(claude config:*)"
+      "Bash(claude config:*)",
+      "Bash(for dir:*)",
+      "Bash(do echo:*)",
+      "Read(//h/Development/PullAllTheThings-site/$dir/**)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(done)",
+      "Bash(xargs wc:*)",
+      "Bash(gh workflow:*)",
+      "WebFetch(domain:www.icy-veins.com)",
+      "WebFetch(domain:u.gg)"
     ]
-  }
+  },
+  "defaultMode": "bypassPermissions"
 }
