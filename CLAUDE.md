@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase F.2 complete** — sv_common.feedback client package + common.feedback_submissions local DB table
-- **Tests:** 913 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Phase F.3 complete** — Feedback badge on all pages, `/feedback` form, `POST /api/v1/feedback` endpoint
+- **Tests:** 922 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
 - **Last migration:** 0050 (Phase F.2 — feedback_submissions table)
-- **Last tag:** `v0.2.0`
-- **Active branch:** `feature/phase-feedback`
+- **Last tag:** `prod-v0.3.0`
+- **Active branch:** `main`
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2)
