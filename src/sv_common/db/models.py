@@ -284,6 +284,27 @@ class ErrorLog(Base):
     resolved_by: Mapped[Optional[str]] = mapped_column(String(80))
 
 
+class FeedbackSubmission(Base):
+    """Client-side feedback record. PII lives here; Hub receives only de-identified payload."""
+
+    __tablename__ = "feedback_submissions"
+    __table_args__ = {"schema": "common"}
+
+    id:                    Mapped[int]            = mapped_column(Integer, primary_key=True)
+    program_name:          Mapped[str]            = mapped_column(String(80), nullable=False)
+    submitted_at:          Mapped[datetime]       = mapped_column(
+                               TIMESTAMP(timezone=True), server_default=func.now()
+                           )
+    is_authenticated_user: Mapped[bool]           = mapped_column(Boolean, nullable=False, server_default="false")
+    is_anonymous:          Mapped[bool]           = mapped_column(Boolean, nullable=False, server_default="false")
+    contact_info:          Mapped[Optional[str]]  = mapped_column(String(255))
+    privacy_token:         Mapped[Optional[str]]  = mapped_column(String(64))
+    score:                 Mapped[Optional[int]]  = mapped_column(Integer)
+    raw_feedback:          Mapped[str]            = mapped_column(Text, nullable=False)
+    hub_feedback_id:       Mapped[Optional[int]]  = mapped_column(Integer)
+    hub_synced_at:         Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
 # ---------------------------------------------------------------------------
 # patt schema
 # ---------------------------------------------------------------------------

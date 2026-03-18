@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}Share Feedback — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+.fb-wrap { max-width: 620px; margin: 2.5rem auto; padding: 0 1rem; }
+.fb-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 2rem 2.25rem;
+}
+.fb-title { font-family: var(--font-heading); margin-bottom: 0.5rem; }
+.fb-intro { color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 1.75rem; }
+.fb-section { margin-bottom: 1.5rem; }
+.fb-question { font-weight: 600; margin-bottom: 0.75rem; }
+.fb-label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+.fb-label-hint { font-weight: 400; color: var(--color-text-muted); font-size: 0.85rem; }
+
+.fb-score-row { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.fb-score-btn {
+    width: 2.6rem; height: 2.6rem;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.fb-score-btn:hover { border-color: var(--color-gold); color: var(--color-gold); }
+.fb-score-btn.fb-score--active {
+    background: var(--color-gold);
+    border-color: var(--color-gold);
+    color: #0a0a0b;
+    font-weight: 700;
+}
+
+.fb-textarea, .fb-input {
+    width: 100%;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text);
+    padding: 0.6rem 0.75rem;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    resize: vertical;
+    box-sizing: border-box;
+}
+.fb-textarea:focus, .fb-input:focus {
+    outline: none;
+    border-color: var(--color-gold);
+}
+
+.fb-contact-row { display: flex; align-items: center; gap: 0.75rem; }
+.fb-anon-label {
+    display: flex; align-items: center; gap: 0.4rem;
+    white-space: nowrap; cursor: pointer;
+    font-size: 0.85rem; flex-shrink: 0;
+}
+
+.fb-actions { margin-top: 1.75rem; }
+
+.fb-success { text-align: center; padding: 3rem 2rem; }
+.fb-success-icon {
+    font-size: 3rem; color: var(--color-gold);
+    margin-bottom: 1rem; line-height: 1;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fb-wrap">
+  <div class="fb-card" id="fb-form-card">
+
+    <h1 class="fb-title">Share Your Feedback</h1>
+    <p class="fb-intro">
+      What's working, what's missing, what doesn't make sense? I read every
+      response and use it to make this better. Anonymous feedback is absolutely welcome.
+    </p>
+
+    <!-- Score -->
+    <div class="fb-section">
+      <p class="fb-question">
+        {% if is_authenticated %}
+          On a scale of 1–10, how much are you enjoying this guild tool?
+        {% else %}
+          On a scale of 1–10, would you want to see a tool like this used by your guild?
+        {% endif %}
+      </p>
+      <div class="fb-score-row" id="fb-score-row">
+        {% for n in range(1, 11) %}
+        <button type="button" class="fb-score-btn" data-score="{{ n }}">{{ n }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Free text -->
+    <div class="fb-section">
+      <label class="fb-label" for="fb-text">What's on your mind?</label>
+      <textarea id="fb-text" class="fb-textarea" rows="6"
+        placeholder="Anything at all — features you want, things that confused you, things you love..."></textarea>
+    </div>
+
+    <!-- Contact -->
+    <div class="fb-section">
+      {% if is_authenticated %}
+        <label class="fb-label">
+          Contact info
+          <span class="fb-label-hint">(optional — for follow-up if you're open to it)</span>
+        </label>
+        <div class="fb-contact-row">
+          <label class="fb-anon-label">
+            <input type="checkbox" id="fb-anon"> Anonymous
+          </label>
+          <input type="text" id="fb-contact" class="fb-input"
+            value="{{ prefill_contact or '' }}"
+            placeholder="Email or Discord handle">
+        </div>
+      {% else %}
+        <label class="fb-label" for="fb-contact">
+          Contact info
+          <span class="fb-label-hint">(optional — anonymous is totally fine)</span>
+        </label>
+        <input type="text" id="fb-contact" class="fb-input"
+          placeholder="Email or Discord handle">
+      {% endif %}
+    </div>
+
+    <div class="fb-actions">
+      <button id="fb-submit" class="btn btn-primary">Send Feedback</button>
+    </div>
+
+  </div><!-- /fb-form-card -->
+
+  <!-- Success state (hidden until submission) -->
+  <div class="fb-card fb-success" id="fb-success" style="display:none">
+    <div class="fb-success-icon">&#10003;</div>
+    <h2>Thanks for your feedback!</h2>
+    <p>I read every response and use it to keep improving the platform.</p>
+    <a href="/" class="btn btn-secondary" style="margin-top:1rem">Back to Home</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    let selectedScore = null;
+    let savedContact = "";
+
+    // Score button selection
+    document.querySelectorAll(".fb-score-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".fb-score-btn")
+                    .forEach(b => b.classList.remove("fb-score--active"));
+            btn.classList.add("fb-score--active");
+            selectedScore = parseInt(btn.dataset.score, 10);
+        });
+    });
+
+    // Anonymous checkbox (logged-in users only)
+    const anonCheckbox = document.getElementById("fb-anon");
+    const contactInput = document.getElementById("fb-contact");
+
+    if (anonCheckbox && contactInput) {
+        anonCheckbox.addEventListener("change", () => {
+            if (anonCheckbox.checked) {
+                savedContact = contactInput.value;
+                contactInput.value = "";
+                contactInput.disabled = true;
+                contactInput.placeholder = "—";
+            } else {
+                contactInput.disabled = false;
+                contactInput.placeholder = "Email or Discord handle";
+                contactInput.value = savedContact;
+            }
+        });
+    }
+
+    // Submission
+    document.getElementById("fb-submit").addEventListener("click", async () => {
+        const text = document.getElementById("fb-text").value.trim();
+
+        if (!selectedScore) {
+            alert("Please select a score (1–10) before submitting.");
+            return;
+        }
+        if (!text) {
+            alert("Please enter some feedback before submitting.");
+            return;
+        }
+
+        const isAnon = anonCheckbox ? anonCheckbox.checked : false;
+        const contact = (contactInput && !isAnon && contactInput.value.trim())
+            ? contactInput.value.trim()
+            : null;
+
+        const btn = document.getElementById("fb-submit");
+        btn.disabled = true;
+        btn.textContent = "Sending\u2026";
+
+        try {
+            const resp = await fetch("/api/v1/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    score: selectedScore,
+                    feedback: text,
+                    contact_info: contact,
+                    is_anonymous: isAnon,
+                }),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                document.getElementById("fb-form-card").style.display = "none";
+                document.getElementById("fb-success").style.display = "block";
+            } else {
+                btn.disabled = false;
+                btn.textContent = "Send Feedback";
+                alert("Something went wrong. Please try again.");
+            }
+        } catch {
+            btn.disabled = false;
+            btn.textContent = "Send Feedback";
+            alert("Network error. Please try again.");
+        }
+    });
+})();
+</script>
+{% endblock %}

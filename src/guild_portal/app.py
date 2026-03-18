@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from guild_portal.config import get_settings
-from sv_common.config_cache import set_site_config, get_site_config, set_app_url
+from sv_common.config_cache import set_site_config, get_site_config, set_app_url, set_program_name
 from sv_common.db.engine import get_engine, get_session_factory
 from sv_common.db.seed import seed_ranks
 
@@ -172,6 +172,9 @@ def create_app() -> FastAPI:
 
         # Populate app URL in config cache (used by sv_common modules for DM links)
         set_app_url(settings.app_url)
+
+        # Identify this app to the feedback package
+        set_program_name("patt-guild-portal")
 
         # Load site config into the in-process cache
         if guild_sync_pool is not None:
@@ -429,6 +432,7 @@ def create_app() -> FastAPI:
     from guild_portal.api.auth_routes import router as auth_router
     from guild_portal.api.bnet_auth_routes import router as bnet_auth_router
     from guild_portal.api.member_routes import router as member_router
+    from guild_portal.api.feedback_routes import router as feedback_router
     from guild_portal.api.campaign_routes import (
         admin_campaign_router,
         vote_router,
@@ -441,6 +445,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(bnet_auth_router)
     app.include_router(member_router)
+    app.include_router(feedback_router)
     app.include_router(admin_router)
     app.include_router(admin_campaign_router)
     app.include_router(guild_router)

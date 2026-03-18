@@ -78,3 +78,17 @@ def set_app_url(url: str) -> None:
 def get_app_url() -> str:
     """Return the app's base URL (e.g. 'https://pullallthethings.com')."""
     return _cache.get("_app_url", "")
+
+
+_program_name: str = "unknown"
+
+
+def set_program_name(name: str) -> None:
+    """Set the program name used by sv_common.feedback when submitting to the Hub."""
+    global _program_name
+    _program_name = name
+
+
+def get_program_name() -> str:
+    """Return the program name (e.g. 'patt-guild-portal')."""
+    return _program_name

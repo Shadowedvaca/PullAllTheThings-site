@@ -93,6 +93,32 @@ a:hover {
 }
 .site-title:hover { text-decoration: none; }
 
+.btn-feedback {
+    display: inline-block;
+    padding: 0.18rem 0.5rem;
+    font-size: 0.68rem;
+    font-family: var(--font-body);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-gold);
+    background: rgba(212, 168, 75, 0.1);
+    border: 1px solid rgba(212, 168, 75, 0.3);
+    border-radius: 3px;
+    text-decoration: none;
+    vertical-align: middle;
+    margin-left: 0.65rem;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+}
+
+.btn-feedback:hover {
+    background: rgba(212, 168, 75, 0.2);
+    border-color: rgba(212, 168, 75, 0.55);
+    color: var(--color-gold);
+    text-decoration: none;
+}
+
 .site-nav {
     display: flex;
     align-items: center;
