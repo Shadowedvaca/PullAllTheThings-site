@@ -230,10 +230,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase F.3 complete** — Feedback badge on all pages, `/feedback` form, `POST /api/v1/feedback` endpoint
+- **Hotfix prod-v0.3.1 complete** — Landing zone channel fallback for DMs-closed members on join
 - **Tests:** 922 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0050 (Phase F.2 — feedback_submissions table)
-- **Last tag:** `prod-v0.3.0`
+- **Last migration:** 0051 (hotfix — `landing_zone_channel_id` on `common.discord_config`)
+- **Last tag:** `prod-v0.3.1`
 - **Active branch:** `main`
 
 ### What Exists
