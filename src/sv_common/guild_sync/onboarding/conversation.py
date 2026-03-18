@@ -104,6 +104,35 @@ class OnboardingConversation:
         except discord.Forbidden:
             logger.warning("Cannot DM %s — DMs closed", self.member.name)
             await self._set_state("declined")
+            await self._notify_landing_zone()
+
+    async def _notify_landing_zone(self) -> None:
+        """Post a server message @mentioning the member when DMs are closed."""
+        async with self.db_pool.acquire() as conn:
+            channel_id = await conn.fetchval(
+                "SELECT landing_zone_channel_id FROM common.discord_config LIMIT 1"
+            )
+        if not channel_id:
+            return
+        channel = self.bot.get_channel(int(channel_id))
+        if channel is None:
+            logger.warning(
+                "Landing zone channel %s not in cache — cannot notify %s",
+                channel_id, self.member.name,
+            )
+            return
+        guild_name = get_guild_name()
+        try:
+            await channel.send(
+                f"Hey {self.member.mention}! It looks like I couldn't send you a DM "
+                f"(your Discord settings may be blocking messages from server members). "
+                f"To get set up with a **{guild_name} website account**, just use "
+                f"`/get-account` in any channel — it only takes a second! 🎮"
+            )
+        except discord.Forbidden:
+            logger.warning(
+                "Bot lacks send permission in landing zone channel %s", channel_id
+            )
 
     async def _create_session_only(self):
         """

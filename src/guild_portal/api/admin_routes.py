@@ -528,6 +528,9 @@ async def update_bot_settings(
     if "audit_channel_id" in payload:
         row.audit_channel_id = payload["audit_channel_id"] or None
 
+    if "landing_zone_channel_id" in payload:
+        row.landing_zone_channel_id = payload["landing_zone_channel_id"] or None
+
     await db.commit()
     logger.info(
         "Bot settings updated by %s: %s",
@@ -541,6 +544,7 @@ async def update_bot_settings(
             "feature_invite_dm": row.feature_invite_dm,
             "feature_onboarding_dm": row.feature_onboarding_dm,
             "audit_channel_id": row.audit_channel_id,
+            "landing_zone_channel_id": row.landing_zone_channel_id,
         },
     }
 
