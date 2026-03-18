@@ -169,6 +169,8 @@ class DiscordConfig(Base):
     attendance_feature_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    # Hotfix: landing zone channel for DMs-closed members
+    landing_zone_channel_id: Mapped[Optional[str]] = mapped_column(String(25))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

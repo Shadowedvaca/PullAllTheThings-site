@@ -266,6 +266,23 @@ input:checked + .bs-slider::before {
     </p>
 </div>
 
+{# Landing Zone Channel Card #}
+<div class="bs-card">
+    <h2 class="bs-card__title">Landing Zone Channel</h2>
+    <p class="bs-card__subtitle">When a new member has DMs closed, the bot will @mention them here and tell them to use <code>/get-account</code>.</p>
+
+    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <select id="landing-zone-channel-select" style="flex: 1; min-width: 220px; max-width: 380px;">
+            <option value="">— loading channels —</option>
+        </select>
+        <button class="btn btn--secondary" id="landing-zone-save-btn" onclick="saveLandingZoneChannel()">Save</button>
+        <span id="landing-zone-save-status" style="font-size: 0.85rem; color: var(--color-text-muted);"></span>
+    </div>
+    <p class="bs-info" style="margin-top: 0.75rem;">
+        If no channel is set, members with DMs closed will receive no guidance and must find <code>/get-account</code> on their own.
+    </p>
+</div>
+
 {# Bot DM Toggle Card #}
 <div class="bs-card">
     <h2 class="bs-card__title">Discord DM Messaging</h2>
@@ -366,9 +383,8 @@ async function _fetchChannels() {
     return _channelCache;
 }
 
-async function loadAuditChannelDropdown() {
-    const sel = document.getElementById('audit-channel-select');
-    const savedId = '{{ discord_config.audit_channel_id or "" }}';
+async function loadChannelDropdown(selectId, savedId) {
+    const sel = document.getElementById(selectId);
     try {
         const channels = await _fetchChannels();
         const text_channels = channels.filter(ch =>
@@ -393,6 +409,14 @@ async function loadAuditChannelDropdown() {
     }
 }
 
+async function loadAuditChannelDropdown() {
+    await loadChannelDropdown('audit-channel-select', '{{ discord_config.audit_channel_id or "" }}');
+}
+
+async function loadLandingZoneChannelDropdown() {
+    await loadChannelDropdown('landing-zone-channel-select', '{{ discord_config.landing_zone_channel_id or "" }}');
+}
+
 async function saveAuditChannel() {
     const btn = document.getElementById('audit-save-btn');
     const status = document.getElementById('audit-save-status');
@@ -401,6 +425,29 @@ async function saveAuditChannel() {
     status.textContent = 'Saving…';
     try {
         const data = await patchSettings({audit_channel_id: val});
+        if (data.ok) {
+            status.style.color = 'var(--color-gold)';
+            status.textContent = 'Saved';
+        } else {
+            status.style.color = '#f87171';
+            status.textContent = data.error || 'Failed';
+        }
+    } catch (e) {
+        status.style.color = '#f87171';
+        status.textContent = 'Network error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function saveLandingZoneChannel() {
+    const btn = document.getElementById('landing-zone-save-btn');
+    const status = document.getElementById('landing-zone-save-status');
+    const val = document.getElementById('landing-zone-channel-select').value || null;
+    btn.disabled = true;
+    status.textContent = 'Saving…';
+    try {
+        const data = await patchSettings({landing_zone_channel_id: val});
         if (data.ok) {
             status.style.color = 'var(--color-gold)';
             status.textContent = 'Saved';
@@ -603,5 +650,6 @@ async function saveBotConnection() {
 
 loadOnboardingStats();
 loadAuditChannelDropdown();
+loadLandingZoneChannelDropdown();
 </script>
 {% endblock %}
