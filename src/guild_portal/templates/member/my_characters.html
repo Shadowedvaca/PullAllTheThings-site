@@ -7,7 +7,17 @@
 
 {% block content %}
 <div class="mc-page">
-  <h1 class="mc-page__title">My Characters</h1>
+  <div class="page-title-row">
+    <h1 class="mc-page__title">My Characters</h1>
+    <div class="page-title-actions">
+      <button id="btn-refresh-chars" class="btn btn--secondary btn--sm">
+        Refresh Characters
+      </button>
+      <p class="refresh-note">
+        Connecting with Battle.net lets us see your full character list for 24 hours.
+      </p>
+    </div>
+  </div>
 
   <div id="mc-loading" class="mc-loading" aria-live="polite">
     Loading characters&hellip;
@@ -43,6 +53,16 @@
 
   {# Crafting & Raid Prep panel — populated by JS after character is selected #}
   <div id="mc-crafting" class="mc-crafting" hidden></div>
+
+  {# Out-of-guild characters — populated by JS from API response #}
+  <section class="oog-section" id="oog-section" hidden>
+    <h2 class="oog-section__title">Your Characters Outside the Guild</h2>
+    <p class="oog-section__note">
+      These characters are on your Battle.net account but aren&rsquo;t in the guild yet.
+      When you move one over, it will automatically appear in your character list above.
+    </p>
+    <div class="oog-grid" id="oog-grid"></div>
+  </section>
 
   {# Empty state — shown by JS when member has no characters #}
   <div id="mc-empty" class="mc-empty" hidden>

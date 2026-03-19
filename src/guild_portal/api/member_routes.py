@@ -14,6 +14,7 @@ from urllib.parse import quote_plus
 
 from sv_common.config_cache import get_site_config
 from sv_common.db.models import (
+    BattlenetAccount,
     CharacterMythicPlus,
     CharacterParse,
     CharacterRaidProgress,
@@ -171,13 +172,107 @@ async def get_my_characters(
         fresh_player.offspec_character_id,
     )
 
+    # Out-of-guild characters linked via BNet
+    oog_result = await db.execute(
+        select(WowCharacter)
+        .join(PlayerCharacter, PlayerCharacter.character_id == WowCharacter.id)
+        .where(
+            PlayerCharacter.player_id == player.id,
+            WowCharacter.in_guild == False,
+            WowCharacter.removed_at.is_(None),
+        )
+        .options(selectinload(WowCharacter.wow_class))
+        .order_by(WowCharacter.character_name)
+    )
+    out_of_guild_chars = list(oog_result.scalars().all())
+
+    # BNet link status
+    bnet_result = await db.execute(
+        select(BattlenetAccount).where(BattlenetAccount.player_id == player.id)
+    )
+    bnet_account = bnet_result.scalar_one_or_none()
+    bnet_linked = bnet_account is not None
+    bnet_token_expired = False
+    if bnet_account and bnet_account.token_expires_at:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        exp = bnet_account.token_expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        bnet_token_expired = exp <= now
+
     return {
         "ok": True,
         "data": {
             "characters": characters,
             "default_character_id": default_id,
+            "out_of_guild_characters": [
+                {
+                    "id": c.id,
+                    "name": c.character_name,
+                    "realm": c.realm_slug,
+                    "level": c.level,
+                    "class": c.wow_class.name if c.wow_class else None,
+                }
+                for c in out_of_guild_chars
+            ],
+            "bnet_linked": bnet_linked,
+            "bnet_token_expired": bnet_token_expired,
         },
     }
+
+
+@router.post("/bnet-sync")
+async def member_bnet_sync(
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Smart character refresh. Handles all three token states:
+      - Not linked:     return redirect to /auth/battlenet
+      - Token valid:    sync now, return stats
+      - Token expired:  return redirect to /auth/battlenet
+    The caller (JS) checks for a `redirect` field and navigates if present.
+    The `next` query param is forwarded into the redirect URL so the OAuth
+    callback returns the user to the page they came from.
+    """
+    from sv_common.guild_sync.bnet_character_sync import (
+        get_valid_access_token,
+        sync_bnet_characters,
+    )
+
+    pool = request.app.state.guild_sync_pool
+    next_url = request.query_params.get("next", "/my-characters")
+
+    # Validate next (prevent open redirect)
+    ALLOWED_NEXT = {"/my-characters", "/profile", "/"}
+    if next_url not in ALLOWED_NEXT:
+        next_url = "/my-characters"
+
+    # Check if BNet is linked
+    bnet_row = await db.execute(
+        select(BattlenetAccount).where(BattlenetAccount.player_id == current_player.id)
+    )
+    bnet_account = bnet_row.scalar_one_or_none()
+
+    if not bnet_account:
+        return JSONResponse({
+            "ok": True,
+            "redirect": f"/auth/battlenet?next={next_url}",
+        })
+
+    # Check if token is still valid
+    access_token = await get_valid_access_token(pool, current_player.id)
+    if access_token is None:
+        return JSONResponse({
+            "ok": True,
+            "redirect": f"/auth/battlenet?next={next_url}",
+        })
+
+    # Token is valid — sync now
+    stats = await sync_bnet_characters(pool, current_player.id, access_token)
+    return JSONResponse({"ok": True, "data": stats})
 
 
 @router.get("/character/{character_id}/progression")

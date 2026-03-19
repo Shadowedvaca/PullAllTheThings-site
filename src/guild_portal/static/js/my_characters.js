@@ -656,6 +656,29 @@ function renderCraftingPanel(data, charName) {
 }
 
 // ---------------------------------------------------------------------------
+// Out-of-guild characters
+// ---------------------------------------------------------------------------
+
+function renderOutOfGuild(chars) {
+  const section = document.getElementById("oog-section");
+  const grid = document.getElementById("oog-grid");
+  if (!section || !grid) return;
+  if (!chars || chars.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+  grid.innerHTML = chars.map(c => `
+    <div class="oog-card">
+      <span class="oog-card__name">${c.name}</span>
+      <span class="oog-card__realm">${c.realm}</span>
+      ${c.class ? `<span class="oog-card__class">${c.class}</span>` : ""}
+      <span class="oog-card__level">Level ${c.level}</span>
+    </div>
+  `).join("");
+}
+
+// ---------------------------------------------------------------------------
 // State management
 // ---------------------------------------------------------------------------
 
@@ -767,8 +790,11 @@ async function init() {
     const json = await resp.json();
     if (!json.ok) throw new Error(json.error || "API error");
 
-    const { characters, default_character_id } = json.data;
+    const { characters, default_character_id, out_of_guild_characters } = json.data;
     loading.hidden = true;
+
+    // Render out-of-guild section (always, even if no in-guild chars)
+    renderOutOfGuild(out_of_guild_characters || []);
 
     if (!characters || characters.length === 0) {
       emptyEl.hidden = false;
@@ -798,5 +824,41 @@ async function init() {
     console.error("My Characters load failed:", err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Refresh Characters button
+// ---------------------------------------------------------------------------
+
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("btn-refresh-chars");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "Refreshing\u2026";
+
+    try {
+      const resp = await fetch(
+        `/api/v1/me/bnet-sync?next=${encodeURIComponent(window.location.pathname)}`,
+        { method: "POST", credentials: "include" }
+      );
+      const data = await resp.json();
+
+      if (data.redirect) {
+        // Not linked or token expired — go through OAuth
+        window.location.href = data.redirect;
+        return;
+      }
+
+      if (data.ok) {
+        // Sync happened — reload to show updated character list
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error("Character refresh failed:", err);
+      btn.disabled = false;
+      btn.textContent = "Refresh Characters";
+    }
+  });
+});
 
 document.addEventListener("DOMContentLoaded", init);
