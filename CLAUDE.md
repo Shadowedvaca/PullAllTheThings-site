@@ -230,18 +230,18 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase H.4 complete** — Character Syncing Overhaul (all sub-phases done). Profile Battle.net section reworked: Refresh Characters + Unlink + 24-hour note when linked; `?next=/profile` on OAuth link. Admin Users: expired-token indicator (disabled Sync BNet + red ✕ + legend). Branch ready for PR.
-- **Branch:** `feature/phase-h-character-sync` (ready for PR)
-- **Tests:** 952 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
-- **Last migration:** 0052 (`in_guild BOOLEAN NOT NULL DEFAULT TRUE` on `guild_identity.wow_characters` + index)
-- **Last tag:** `prod-v0.3.1`
+- **Phase G complete** — Spec Guide Links panel on My Characters. Data-driven badge buttons (Wowhead, Icy Veins, u.gg) with spec dropdown; configurable via Admin → Reference Tables with live preview. Two post-tag CSS polish fixes (badge gap, panel margin/label spacing) are on `feature/phase-h-character-sync` — need a small PR to main before next prod push.
+- **Branch:** `feature/phase-h-character-sync` (2 CSS fix commits ahead of main post-PR-#9)
+- **Tests:** 960 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
+- **Last migration:** 0053 (`common.guide_sites` table + 3 seed rows)
+- **Last tag:** `prod-v0.4.0`
 - **Active branch:** `feature/phase-h-character-sync`
 
 ### What Exists
-- **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com)
+- **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
 - **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
-- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4 — what char can craft with profession/expansion/search filters, raid consumable prices with trend indicators) + **Refresh Characters button** (H.3 — triggers BNet sync or OAuth flow); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net (with `?next=/profile`) when unlinked (H.4)
-- **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users` (expired-token indicator: disabled Sync BNet + red ✕ + legend — H.4), `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables`, `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`
+- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
+- **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users` (expired-token indicator — H.4), `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables` (**Guide Sites section** — Phase G), `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`, `/api/v1/guild/ah-prices?realm_id=N`, `POST /api/v1/feedback` (public, no auth required)
