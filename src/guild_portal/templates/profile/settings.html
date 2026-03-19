@@ -387,16 +387,25 @@
             {% endif %}
           </div>
         </div>
-        <button
-          type="button"
-          class="btn btn-danger btn-sm"
-          onclick="confirmUnlink()"
-        >Unlink</button>
+        <p class="bnet-note">
+          Connecting with Battle.net lets us see your full character list for 24 hours.
+          Use Refresh Characters any time to re-authorize and update your list.
+        </p>
+        <div class="bnet-actions">
+          <button type="button" id="btn-profile-refresh-chars" class="btn btn-secondary">
+            Refresh Characters
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger btn-sm"
+            onclick="confirmUnlink()"
+          >Unlink</button>
+        </div>
       {% else %}
         <p class="field-group__hint" style="margin-bottom:1rem">
           Connect your Battle.net account to automatically claim all your characters.
         </p>
-        <a href="/auth/battlenet" class="btn btn-secondary">Connect Battle.net</a>
+        <a href="/auth/battlenet?next=/profile" class="btn btn-secondary">Connect Battle.net</a>
       {% endif %}
     </div>
   </div>
@@ -931,6 +940,29 @@ async function addCharManually(btn) {
     btn.disabled = false;
     btn.textContent = 'Add Character';
   }
+}
+
+const profileRefreshBtn = document.getElementById("btn-profile-refresh-chars");
+if (profileRefreshBtn) {
+  profileRefreshBtn.addEventListener("click", async () => {
+    profileRefreshBtn.disabled = true;
+    profileRefreshBtn.textContent = "Refreshing\u2026";
+    try {
+      const resp = await fetch("/api/v1/me/bnet-sync?next=/profile", { method: "POST" });
+      const data = await resp.json();
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      } else if (data.ok) {
+        window.location.reload();
+      } else {
+        profileRefreshBtn.disabled = false;
+        profileRefreshBtn.textContent = "Refresh Characters";
+      }
+    } catch {
+      profileRefreshBtn.disabled = false;
+      profileRefreshBtn.textContent = "Refresh Characters";
+    }
+  });
 }
 </script>
 {% endblock %}

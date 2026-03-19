@@ -2400,7 +2400,8 @@ async def admin_users(
                    p.display_name,
                    gr.name                 AS rank_name,
                    ba.battletag            AS battletag,
-                   ba.last_character_sync  AS last_bnet_sync
+                   ba.last_character_sync  AS last_bnet_sync,
+                   ba.token_expires_at     AS bnet_token_expires_at
             FROM common.users u
             LEFT JOIN guild_identity.players p ON p.website_user_id = u.id
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
@@ -2408,7 +2409,15 @@ async def admin_users(
             ORDER BY u.created_at DESC
         """)
     )
-    users = [dict(r._mapping) for r in rows]
+    now = datetime.now(timezone.utc)
+    users = []
+    for r in rows:
+        u = dict(r._mapping)
+        expires_at = u.get("bnet_token_expires_at")
+        u["bnet_token_expired"] = bool(
+            expires_at and expires_at <= now
+        )
+        users.append(u)
 
     ctx = await _base_ctx(request, player, db)
     ctx["users"] = users

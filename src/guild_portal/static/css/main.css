@@ -1429,3 +1429,45 @@ textarea.form-control {
     .page-title { font-size: 1.5rem; }
     .admin-title { font-size: 1.4rem; }
 }
+
+/* ── Battle.net profile section (Phase H.4) ──────────────────── */
+.bnet-note {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    margin: 0.4rem 0 0.8rem;
+    max-width: 50ch;
+    line-height: 1.4;
+}
+
+.bnet-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* ── Expired token indicator (Admin Users, Phase H.4) ─────────── */
+.bnet-expired-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2rem;
+    height: 1.2rem;
+    background: var(--color-danger, #ef4444);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    vertical-align: middle;
+    margin-left: 0.3rem;
+    cursor: help;
+}
+
+.table-legend {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-top: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}

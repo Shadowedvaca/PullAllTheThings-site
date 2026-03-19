@@ -356,11 +356,18 @@
                     {% if u.is_active %}Disable{% else %}Enable{% endif %}
                 </button>
                 {% if u.battletag %}
-                <button class="ua-btn ua-btn--bnet"
-                        id="bnet-btn-{{ u.id }}"
-                        onclick="syncBnet({{ u.id }})">
-                    Sync BNet
-                </button>
+                  {% if u.bnet_token_expired %}
+                    <button class="ua-btn ua-btn--bnet" disabled title="Token expired — player must refresh">
+                        Sync BNet
+                    </button>
+                    <span class="bnet-expired-indicator" title="Token expired">&#x2715;</span>
+                  {% else %}
+                    <button class="ua-btn ua-btn--bnet"
+                            id="bnet-btn-{{ u.id }}"
+                            onclick="syncBnet({{ u.id }})">
+                        Sync BNet
+                    </button>
+                  {% endif %}
                 {% endif %}
                 <button class="ua-btn ua-btn--delete"
                         data-uid="{{ u.id }}"
@@ -380,6 +387,13 @@
     </div>
     {% endif %}
 </div>
+
+{% if users | selectattr('bnet_token_expired') | list | length > 0 %}
+<p class="table-legend">
+    <span class="bnet-expired-indicator">&#x2715;</span>
+    Token expired — player must use "Refresh Characters" on their My Characters page to re-authorize.
+</p>
+{% endif %}
 
 {% endblock %}
 
