@@ -656,29 +656,6 @@ function renderCraftingPanel(data, charName) {
 }
 
 // ---------------------------------------------------------------------------
-// Out-of-guild characters
-// ---------------------------------------------------------------------------
-
-function renderOutOfGuild(chars) {
-  const section = document.getElementById("oog-section");
-  const grid = document.getElementById("oog-grid");
-  if (!section || !grid) return;
-  if (!chars || chars.length === 0) {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
-  grid.innerHTML = chars.map(c => `
-    <div class="oog-card">
-      <span class="oog-card__name">${c.name}</span>
-      <span class="oog-card__realm">${c.realm}</span>
-      ${c.class ? `<span class="oog-card__class">${c.class}</span>` : ""}
-      <span class="oog-card__level">Level ${c.level}</span>
-    </div>
-  `).join("");
-}
-
-// ---------------------------------------------------------------------------
 // State management
 // ---------------------------------------------------------------------------
 
@@ -790,11 +767,8 @@ async function init() {
     const json = await resp.json();
     if (!json.ok) throw new Error(json.error || "API error");
 
-    const { characters, default_character_id, out_of_guild_characters } = json.data;
+    const { characters, default_character_id } = json.data;
     loading.hidden = true;
-
-    // Render out-of-guild section (always, even if no in-guild chars)
-    renderOutOfGuild(out_of_guild_characters || []);
 
     if (!characters || characters.length === 0) {
       emptyEl.hidden = false;
