@@ -424,6 +424,83 @@
     </div>
   </div>
 
+  {# ── Raid Availability ───────────────────────────────────────── #}
+  <div class="settings-section">
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Raid Availability</h2>
+    </div>
+    <form method="post" action="/profile/availability">
+      <div class="settings-section__body">
+        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:1rem;">
+          Earliest start time and hours available are in your selected timezone.
+          Uncheck a day if you're never available then.
+        </p>
+
+        <table class="avail-table">
+          <colgroup>
+            <col><col><col><col>
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Day</th>
+              <th>Available</th>
+              <th>Earliest Start</th>
+              <th>Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for day_idx in range(7) %}
+              {% set avail = avail_by_day.get(day_idx) %}
+              {% set is_avail = avail is not none %}
+              <tr id="avail-row-{{ day_idx }}" class="{{ '' if is_avail else 'row-unavailable' }}">
+                <td class="avail-day-name">{{ day_names[day_idx] }}</td>
+                <td>
+                  <div class="avail-check-wrap">
+                    <input
+                      type="checkbox"
+                      id="day_{{ day_idx }}_available"
+                      name="day_{{ day_idx }}_available"
+                      value="1"
+                      {% if is_avail %}checked{% endif %}
+                      onchange="toggleDayRow({{ day_idx }}, this.checked)"
+                    >
+                    <label for="day_{{ day_idx }}_available">Yes</label>
+                  </div>
+                </td>
+                <td>
+                  <input
+                    type="time"
+                    class="form-control"
+                    id="day_{{ day_idx }}_start"
+                    name="day_{{ day_idx }}_start"
+                    value="{{ avail.earliest_start.strftime('%H:%M') if avail else '18:00' }}"
+                    {% if not is_avail %}disabled{% endif %}
+                  >
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="day_{{ day_idx }}_hours"
+                    name="day_{{ day_idx }}_hours"
+                    min="0.5"
+                    max="16"
+                    step="0.5"
+                    value="{{ avail.available_hours if avail else '4' }}"
+                    {% if not is_avail %}disabled{% endif %}
+                  >
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="settings-section__footer">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+
   {# ── Characters ──────────────────────────────────────────────── #}
   <div class="settings-section">
     <div class="settings-section__header">
@@ -677,82 +754,42 @@
     </div>
   </div>
 
-  {# ── Raid Availability ───────────────────────────────────────── #}
+  {# ── Other Battle.net Characters ─────────────────────────────── #}
+  {% if out_of_guild_chars %}
   <div class="settings-section">
     <div class="settings-section__header">
-      <h2 class="settings-section__title">Raid Availability</h2>
+      <h2 class="settings-section__title">Other Battle.net Characters</h2>
     </div>
-    <form method="post" action="/profile/availability">
-      <div class="settings-section__body">
-        <p style="font-size:0.85rem;color:var(--color-text-muted);margin-bottom:1rem;">
-          Earliest start time and hours available are in your selected timezone.
-          Uncheck a day if you're never available then.
-        </p>
-
-        <table class="avail-table">
-          <colgroup>
-            <col><col><col><col>
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Day</th>
-              <th>Available</th>
-              <th>Earliest Start</th>
-              <th>Hours</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for day_idx in range(7) %}
-              {% set avail = avail_by_day.get(day_idx) %}
-              {% set is_avail = avail is not none %}
-              <tr id="avail-row-{{ day_idx }}" class="{{ '' if is_avail else 'row-unavailable' }}">
-                <td class="avail-day-name">{{ day_names[day_idx] }}</td>
-                <td>
-                  <div class="avail-check-wrap">
-                    <input
-                      type="checkbox"
-                      id="day_{{ day_idx }}_available"
-                      name="day_{{ day_idx }}_available"
-                      value="1"
-                      {% if is_avail %}checked{% endif %}
-                      onchange="toggleDayRow({{ day_idx }}, this.checked)"
-                    >
-                    <label for="day_{{ day_idx }}_available">Yes</label>
-                  </div>
-                </td>
-                <td>
-                  <input
-                    type="time"
-                    class="form-control"
-                    id="day_{{ day_idx }}_start"
-                    name="day_{{ day_idx }}_start"
-                    value="{{ avail.earliest_start.strftime('%H:%M') if avail else '18:00' }}"
-                    {% if not is_avail %}disabled{% endif %}
-                  >
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    class="form-control"
-                    id="day_{{ day_idx }}_hours"
-                    name="day_{{ day_idx }}_hours"
-                    min="0.5"
-                    max="16"
-                    step="0.5"
-                    value="{{ avail.available_hours if avail else '4' }}"
-                    {% if not is_avail %}disabled{% endif %}
-                  >
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div class="settings-section__footer">
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
-    </form>
+    <div class="settings-section__body">
+      <p class="field-group__hint" style="margin-bottom:0.75rem">
+        Characters on your Battle.net account that are not in the guild.
+        These are kept for reference and are not visible to other members.
+      </p>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Character</th>
+            <th>Realm</th>
+            <th>Class</th>
+            <th style="text-align:right">Level</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pc in out_of_guild_chars %}
+          <tr>
+            <td style="font-weight:600">{{ pc.character.character_name }}</td>
+            <td style="color:var(--color-text-muted)">{{ pc.character.realm_name or pc.character.realm_slug }}</td>
+            <td style="color:var(--color-text-muted)">
+              {% if pc.character.wow_class %}{{ pc.character.wow_class.name }}{% else %}—{% endif %}
+            </td>
+            <td style="text-align:right;color:var(--color-text-muted)">{{ pc.character.level or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+  {% endif %}
 
   {# ── Change Password ─────────────────────────────────────────── #}
   <div class="settings-section">
