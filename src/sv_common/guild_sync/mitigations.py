@@ -278,7 +278,7 @@ async def mitigate_orphan_discord(pool: asyncpg.Pool, issue_row: dict) -> bool:
         unlinked_chars = await conn.fetch(
             """SELECT id, character_name, guild_note, guild_rank_id
                FROM guild_identity.wow_characters
-               WHERE removed_at IS NULL
+               WHERE removed_at IS NULL AND in_guild = TRUE
                  AND id NOT IN (SELECT character_id FROM guild_identity.player_characters)"""
         )
 

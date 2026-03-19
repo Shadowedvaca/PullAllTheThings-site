@@ -86,6 +86,7 @@ async def sync_blizzard_roster(
                             last_login_timestamp = $7,
                             blizzard_last_sync = $8,
                             removed_at = NULL,
+                            in_guild = TRUE,
                             realm_name = $9
                            WHERE id = $1""",
                         existing["id"],
@@ -110,8 +111,8 @@ async def sync_blizzard_roster(
                         """INSERT INTO guild_identity.wow_characters
                            (character_name, realm_slug, realm_name, class_id,
                             active_spec_id, level, item_level, guild_rank_id,
-                            last_login_timestamp, blizzard_last_sync)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""",
+                            last_login_timestamp, blizzard_last_sync, in_guild)
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)""",
                         char.character_name, char.realm_slug, char.realm_name,
                         class_id, spec_id, char.level, char.item_level,
                         guild_rank_id, char.last_login_timestamp, now,

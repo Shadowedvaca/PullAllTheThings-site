@@ -1206,6 +1206,64 @@ async def create_raid_event(
 
 
 # ---------------------------------------------------------------------------
+# Guide Sites (external guide badge config)
+# ---------------------------------------------------------------------------
+
+
+class GuideSiteUpdate(BaseModel):
+    badge_label:        Optional[str]  = None
+    url_template:       Optional[str]  = None
+    role_dps_slug:      Optional[str]  = None
+    role_tank_slug:     Optional[str]  = None
+    role_healer_slug:   Optional[str]  = None
+    badge_bg_color:     Optional[str]  = None
+    badge_text_color:   Optional[str]  = None
+    badge_border_color: Optional[str]  = None
+    enabled:            Optional[bool] = None
+    sort_order:         Optional[int]  = None
+
+
+@router.patch("/guide-sites/{site_id}")
+async def update_guide_site(
+    site_id: int,
+    body: GuideSiteUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    from sv_common.db.models import GuideSite
+    from guild_portal.services.guide_links_service import invalidate_cache
+
+    result = await db.execute(select(GuideSite).where(GuideSite.id == site_id))
+    site = result.scalar_one_or_none()
+    if not site:
+        return {"ok": False, "error": "Guide site not found"}
+
+    updates = body.model_dump(exclude_none=True)
+    for field, value in updates.items():
+        setattr(site, field, value)
+
+    await db.flush()
+    invalidate_cache()
+
+    return {
+        "ok": True,
+        "data": {
+            "id": site.id,
+            "name": site.name,
+            "badge_label": site.badge_label,
+            "url_template": site.url_template,
+            "role_dps_slug": site.role_dps_slug,
+            "role_tank_slug": site.role_tank_slug,
+            "role_healer_slug": site.role_healer_slug,
+            "badge_bg_color": site.badge_bg_color,
+            "badge_text_color": site.badge_text_color,
+            "badge_border_color": site.badge_border_color,
+            "enabled": site.enabled,
+            "sort_order": site.sort_order,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Screen Permissions (Settings nav visibility)
 # ---------------------------------------------------------------------------
 

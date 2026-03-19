@@ -125,6 +125,7 @@ async def _get_recruiting_needs(db) -> dict[str, int]:
             WHERE p.is_active = TRUE
               AND p.on_raid_hiatus IS NOT TRUE
               AND gr.level > 1
+              AND wc.in_guild = TRUE
             GROUP BY r.name
             """
         )

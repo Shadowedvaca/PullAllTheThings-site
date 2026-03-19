@@ -7,7 +7,17 @@
 
 {% block content %}
 <div class="mc-page">
-  <h1 class="mc-page__title">My Characters</h1>
+  <div class="page-title-row">
+    <h1 class="mc-page__title">My Characters</h1>
+    <div class="page-title-actions">
+      <button id="btn-refresh-chars" class="btn btn--secondary btn--sm">
+        Refresh Characters
+      </button>
+      <p class="refresh-note">
+        Connecting with Battle.net lets us see your full character list for 24 hours.
+      </p>
+    </div>
+  </div>
 
   <div id="mc-loading" class="mc-loading" aria-live="polite">
     Loading characters&hellip;
@@ -31,6 +41,9 @@
 
   {# Stat panel — populated by JS #}
   <div id="mc-panel" class="mc-panel" hidden></div>
+
+  {# Spec Guide Links panel — populated by JS, no fetch required #}
+  <div id="mc-guides" class="mc-guides" hidden></div>
 
   {# Progression panel — populated by JS after character is selected #}
   <div id="mc-progression" class="mc-progression" hidden></div>

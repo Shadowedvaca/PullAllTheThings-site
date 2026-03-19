@@ -417,6 +417,109 @@
     </table>
 </div>
 
+{# ── Guide Sites ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Guide Sites</h2>
+        <span style="font-size:0.8rem;color:var(--color-text-muted);">Badge config for Spec Guide Links panel on My Characters — changes take effect within 5 minutes</span>
+    </div>
+    <table class="rt-table">
+        <thead>
+            <tr>
+                <th style="width:60px">Sort</th>
+                <th>Name</th>
+                <th>Badge Label</th>
+                <th style="max-width:300px">URL Template</th>
+                <th style="width:60px">DPS</th>
+                <th style="width:60px">Tank</th>
+                <th style="width:70px">Healer</th>
+                <th>Bg Color</th>
+                <th>Text Color</th>
+                <th>Border Color</th>
+                <th style="width:80px">Enabled</th>
+                <th>Preview</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for site in guide_sites %}
+        <tr class="rt-row" data-id="{{ site.id }}" data-type="guide-sites">
+            <td>
+                <input class="rt-editable rt-editable--number rt-field" type="number" name="sort_order"
+                       value="{{ site.sort_order }}" data-orig="{{ site.sort_order }}" style="width:55px">
+            </td>
+            <td style="color:var(--color-text-muted);font-size:0.85rem;white-space:nowrap">{{ site.name }}</td>
+            <td>
+                <input class="rt-editable rt-field gs-field" name="badge_label"
+                       value="{{ site.badge_label }}" data-orig="{{ site.badge_label }}" style="max-width:120px">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="url_template"
+                       value="{{ site.url_template }}" data-orig="{{ site.url_template }}"
+                       style="max-width:380px;font-family:monospace;font-size:0.8rem">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="role_dps_slug"
+                       value="{{ site.role_dps_slug }}" data-orig="{{ site.role_dps_slug }}"
+                       style="width:55px;font-size:0.85rem">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="role_tank_slug"
+                       value="{{ site.role_tank_slug }}" data-orig="{{ site.role_tank_slug }}"
+                       style="width:55px;font-size:0.85rem">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="role_healer_slug"
+                       value="{{ site.role_healer_slug }}" data-orig="{{ site.role_healer_slug }}"
+                       style="width:65px;font-size:0.85rem">
+            </td>
+            <td>
+                <div style="display:flex;align-items:center;gap:0.4rem">
+                    <input class="rt-editable rt-field gs-field gs-bg" name="badge_bg_color"
+                           value="{{ site.badge_bg_color }}" data-orig="{{ site.badge_bg_color }}"
+                           style="width:80px;font-family:monospace;font-size:0.85rem">
+                    <span class="gs-swatch" style="background:{{ site.badge_bg_color }};width:18px;height:18px;border-radius:3px;display:inline-block;border:1px solid var(--color-border)"></span>
+                </div>
+            </td>
+            <td>
+                <div style="display:flex;align-items:center;gap:0.4rem">
+                    <input class="rt-editable rt-field gs-field gs-text" name="badge_text_color"
+                           value="{{ site.badge_text_color }}" data-orig="{{ site.badge_text_color }}"
+                           style="width:80px;font-family:monospace;font-size:0.85rem">
+                    <span class="gs-swatch" style="background:{{ site.badge_text_color }};width:18px;height:18px;border-radius:3px;display:inline-block;border:1px solid var(--color-border)"></span>
+                </div>
+            </td>
+            <td>
+                <div style="display:flex;align-items:center;gap:0.4rem">
+                    <input class="rt-editable rt-field gs-field gs-border" name="badge_border_color"
+                           value="{{ site.badge_border_color or '' }}" data-orig="{{ site.badge_border_color or '' }}"
+                           placeholder="{{ site.badge_bg_color }}"
+                           style="width:80px;font-family:monospace;font-size:0.85rem">
+                    <span class="gs-swatch" style="background:{{ site.badge_border_color or site.badge_bg_color }};width:18px;height:18px;border-radius:3px;display:inline-block;border:1px solid var(--color-border)"></span>
+                </div>
+            </td>
+            <td>
+                <select class="rt-editable rt-field" name="enabled" data-orig="{{ site.enabled | lower }}" style="width:75px">
+                    <option value="true" {% if site.enabled %}selected{% endif %}>Yes</option>
+                    <option value="false" {% if not site.enabled %}selected{% endif %}>No</option>
+                </select>
+            </td>
+            <td>
+                <span class="gs-preview"
+                      style="display:inline-block;padding:0.3em 0.75em;border-radius:5px;font-size:0.85rem;font-weight:600;border:1px solid {{ site.badge_border_color or site.badge_bg_color }};background:{{ site.badge_bg_color }};color:{{ site.badge_text_color }}">
+                    {{ site.badge_label }}
+                </span>
+            </td>
+            <td>
+                <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
+                <span class="rt-status"></span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 {# ── WoW Classes & Specs (read-only, collapsible) ── #}
 <div class="rt-section">
     <details class="rt-collapsible">
@@ -573,6 +676,32 @@ async function saveRow(btn) {
 document.querySelectorAll('.rt-field').forEach(f => {
     f.addEventListener('input', () => {
         f.closest('.rt-row').classList.add('rt-row--dirty');
+    });
+});
+
+// ── Guide Sites live badge preview ──────────────────────────────────────────
+
+function updateGuidePreview(row) {
+    const bg     = row.querySelector('.gs-bg')?.value   || '#333333';
+    const text   = row.querySelector('.gs-text')?.value || '#ffffff';
+    const border = row.querySelector('.gs-border')?.value || bg;
+    const label  = row.querySelector('.gs-field[name="badge_label"]')?.value || '…';
+    const preview = row.querySelector('.gs-preview');
+    if (!preview) return;
+    preview.style.background   = bg;
+    preview.style.color        = text;
+    preview.style.borderColor  = border || bg;
+    preview.textContent        = label;
+    // Update swatches
+    const swatches = row.querySelectorAll('.gs-swatch');
+    if (swatches[0]) swatches[0].style.background = bg;
+    if (swatches[1]) swatches[1].style.background = text;
+    if (swatches[2]) swatches[2].style.background = border || bg;
+}
+
+document.querySelectorAll('.gs-field').forEach(f => {
+    f.addEventListener('input', () => {
+        updateGuidePreview(f.closest('.rt-row'));
     });
 });
 

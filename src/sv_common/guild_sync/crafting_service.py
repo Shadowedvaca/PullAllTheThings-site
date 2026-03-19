@@ -62,7 +62,7 @@ async def get_recipes_for_filter(
                FROM guild_identity.recipes r
                LEFT JOIN guild_identity.character_recipes cr ON cr.recipe_id = r.id
                LEFT JOIN guild_identity.wow_characters wc
-                   ON wc.id = cr.character_id AND wc.removed_at IS NULL
+                   ON wc.id = cr.character_id AND wc.removed_at IS NULL AND wc.in_guild = TRUE
                WHERE r.profession_id = $1 AND r.tier_id = $2
                GROUP BY r.id, r.name, r.blizzard_recipe_id, r.wowhead_url
                ORDER BY r.name""",
@@ -106,6 +106,7 @@ async def get_recipe_crafters(pool: asyncpg.Pool, recipe_id: int) -> dict:
                LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
                WHERE cr.recipe_id = $1
                  AND wc.removed_at IS NULL
+                 AND wc.in_guild = TRUE
                ORDER BY COALESCE(gr.level, 999) ASC, wc.character_name""",
             recipe_id,
         )
@@ -177,7 +178,7 @@ async def search_recipes(pool: asyncpg.Pool, query: str) -> list[dict]:
                JOIN guild_identity.profession_tiers pt ON pt.id = r.tier_id
                LEFT JOIN guild_identity.character_recipes cr ON cr.recipe_id = r.id
                LEFT JOIN guild_identity.wow_characters wc
-                   ON wc.id = cr.character_id AND wc.removed_at IS NULL
+                   ON wc.id = cr.character_id AND wc.removed_at IS NULL AND wc.in_guild = TRUE
                WHERE r.name ILIKE $1
                GROUP BY r.id, r.name, r.wowhead_url, p.name, pt.name, pt.expansion_name
                ORDER BY r.name

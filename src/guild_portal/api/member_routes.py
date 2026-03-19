@@ -14,6 +14,7 @@ from urllib.parse import quote_plus
 
 from sv_common.config_cache import get_site_config
 from sv_common.db.models import (
+    BattlenetAccount,
     CharacterMythicPlus,
     CharacterParse,
     CharacterRaidProgress,
@@ -21,9 +22,12 @@ from sv_common.db.models import (
     PlayerCharacter,
     RaiderIOProfile,
     RaidSeason,
+    Specialization,
     WclConfig,
     WowCharacter,
+    WowClass,
 )
+from guild_portal.services.guide_links_service import build_links_for_spec, get_enabled_sites
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +57,7 @@ def _build_char_dict(
     pc: PlayerCharacter,
     player: Player,
     rio_by_char: dict[int, RaiderIOProfile],
+    guide_sites: list[dict] | None = None,
 ) -> dict:
     """Build the character data dict for the API response."""
     char = pc.character
@@ -74,6 +79,29 @@ def _build_char_dict(
     last_synced_at: str | None = None
     if char.blizzard_last_sync:
         last_synced_at = char.blizzard_last_sync.isoformat()
+
+    # Build guide links for current spec and all class specs
+    guide_links: list[dict] | None = None
+    class_specs: list[dict] | None = None
+    _sites = guide_sites or []
+
+    if char.wow_class and char.active_spec and _sites:
+        active_role = char.active_spec.default_role.name if char.active_spec.default_role else "dps"
+        guide_links = build_links_for_spec(
+            _sites, class_name, spec_name, active_role
+        )
+
+    if char.wow_class and char.wow_class.specializations is not None:
+        class_specs = []
+        for spec in sorted(char.wow_class.specializations, key=lambda s: s.name):
+            role_name = spec.default_role.name if spec.default_role else "dps"
+            class_specs.append({
+                "name": spec.name,
+                "role": role_name,
+                "guide_links": build_links_for_spec(
+                    _sites, class_name, spec.name, role_name
+                ),
+            })
 
     return {
         "id": char.id,
@@ -98,6 +126,8 @@ def _build_char_dict(
         "wcl_url": (
             f"https://www.warcraftlogs.com/character/us/{realm_slug}/{char_name}"
         ),
+        "guide_links": guide_links,
+        "class_specs": class_specs,
     }
 
 
@@ -123,16 +153,24 @@ async def get_my_characters(
     db: AsyncSession = Depends(get_db),
 ):
     """Return all characters claimed by the current member with stat data."""
-    # Load player characters with WoW class + spec relationships
+    # Load guide sites (cached)
+    guide_sites = await get_enabled_sites(db)
+
+    # Load player characters with WoW class + spec + role relationships
     result = await db.execute(
         select(PlayerCharacter)
         .options(
             selectinload(PlayerCharacter.character).options(
-                selectinload(WowCharacter.wow_class),
-                selectinload(WowCharacter.active_spec),
+                selectinload(WowCharacter.wow_class).selectinload(
+                    WowClass.specializations
+                ).selectinload(Specialization.default_role),
+                selectinload(WowCharacter.active_spec).selectinload(
+                    Specialization.default_role
+                ),
             )
         )
-        .where(PlayerCharacter.player_id == player.id)
+        .join(PlayerCharacter.character)
+        .where(PlayerCharacter.player_id == player.id, WowCharacter.in_guild == True)
     )
     player_chars = list(result.scalars().all())
 
@@ -160,7 +198,7 @@ async def get_my_characters(
     for pc in player_chars:
         if not pc.character:
             continue
-        characters.append(_build_char_dict(pc, fresh_player, rio_by_char))
+        characters.append(_build_char_dict(pc, fresh_player, rio_by_char, guide_sites))
 
     characters.sort(key=lambda c: f"{c['character_name']}-{c['realm_slug']}")
 
@@ -170,13 +208,107 @@ async def get_my_characters(
         fresh_player.offspec_character_id,
     )
 
+    # Out-of-guild characters linked via BNet
+    oog_result = await db.execute(
+        select(WowCharacter)
+        .join(PlayerCharacter, PlayerCharacter.character_id == WowCharacter.id)
+        .where(
+            PlayerCharacter.player_id == player.id,
+            WowCharacter.in_guild == False,
+            WowCharacter.removed_at.is_(None),
+        )
+        .options(selectinload(WowCharacter.wow_class))
+        .order_by(WowCharacter.character_name)
+    )
+    out_of_guild_chars = list(oog_result.scalars().all())
+
+    # BNet link status
+    bnet_result = await db.execute(
+        select(BattlenetAccount).where(BattlenetAccount.player_id == player.id)
+    )
+    bnet_account = bnet_result.scalar_one_or_none()
+    bnet_linked = bnet_account is not None
+    bnet_token_expired = False
+    if bnet_account and bnet_account.token_expires_at:
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        exp = bnet_account.token_expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        bnet_token_expired = exp <= now
+
     return {
         "ok": True,
         "data": {
             "characters": characters,
             "default_character_id": default_id,
+            "out_of_guild_characters": [
+                {
+                    "id": c.id,
+                    "name": c.character_name,
+                    "realm": c.realm_slug,
+                    "level": c.level,
+                    "class": c.wow_class.name if c.wow_class else None,
+                }
+                for c in out_of_guild_chars
+            ],
+            "bnet_linked": bnet_linked,
+            "bnet_token_expired": bnet_token_expired,
         },
     }
+
+
+@router.post("/bnet-sync")
+async def member_bnet_sync(
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Smart character refresh. Handles all three token states:
+      - Not linked:     return redirect to /auth/battlenet
+      - Token valid:    sync now, return stats
+      - Token expired:  return redirect to /auth/battlenet
+    The caller (JS) checks for a `redirect` field and navigates if present.
+    The `next` query param is forwarded into the redirect URL so the OAuth
+    callback returns the user to the page they came from.
+    """
+    from sv_common.guild_sync.bnet_character_sync import (
+        get_valid_access_token,
+        sync_bnet_characters,
+    )
+
+    pool = request.app.state.guild_sync_pool
+    next_url = request.query_params.get("next", "/my-characters")
+
+    # Validate next (prevent open redirect)
+    ALLOWED_NEXT = {"/my-characters", "/profile", "/"}
+    if next_url not in ALLOWED_NEXT:
+        next_url = "/my-characters"
+
+    # Check if BNet is linked
+    bnet_row = await db.execute(
+        select(BattlenetAccount).where(BattlenetAccount.player_id == current_player.id)
+    )
+    bnet_account = bnet_row.scalar_one_or_none()
+
+    if not bnet_account:
+        return JSONResponse({
+            "ok": True,
+            "redirect": f"/auth/battlenet?next={next_url}",
+        })
+
+    # Check if token is still valid
+    access_token = await get_valid_access_token(pool, current_player.id)
+    if access_token is None:
+        return JSONResponse({
+            "ok": True,
+            "redirect": f"/auth/battlenet?next={next_url}",
+        })
+
+    # Token is valid — sync now
+    stats = await sync_bnet_characters(pool, current_player.id, access_token)
+    return JSONResponse({"ok": True, "data": stats})
 
 
 @router.get("/character/{character_id}/progression")
@@ -283,11 +415,14 @@ async def get_character_parses(
     db: AsyncSession = Depends(get_db),
 ):
     """Return WCL parse percentiles for a character owned by the current member."""
-    # Verify the character belongs to this player
+    # Verify the character belongs to this player and is a guild character
     pc_result = await db.execute(
-        select(PlayerCharacter).where(
+        select(PlayerCharacter)
+        .join(PlayerCharacter.character)
+        .where(
             PlayerCharacter.player_id == player.id,
             PlayerCharacter.character_id == character_id,
+            WowCharacter.in_guild == True,
         )
     )
     if not pc_result.scalar_one_or_none():
@@ -378,9 +513,9 @@ async def get_character_market(
     if not pc_result.scalar_one_or_none():
         return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
 
-    # Get the character's realm_slug
+    # Get the character's realm_slug (only guild characters have market data)
     char_result = await db.execute(
-        select(WowCharacter).where(WowCharacter.id == character_id)
+        select(WowCharacter).where(WowCharacter.id == character_id, WowCharacter.in_guild == True)
     )
     char = char_result.scalar_one_or_none()
     if not char:
@@ -437,9 +572,9 @@ async def get_character_crafting(
     if not pc_result.scalar_one_or_none():
         return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
 
-    # Get character info for realm determination
+    # Get character info for realm determination (only guild characters have crafting data)
     char_result = await db.execute(
-        select(WowCharacter).where(WowCharacter.id == character_id)
+        select(WowCharacter).where(WowCharacter.id == character_id, WowCharacter.in_guild == True)
     )
     char = char_result.scalar_one_or_none()
     if not char:

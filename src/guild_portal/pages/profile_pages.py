@@ -85,7 +85,9 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         .where(PlayerCharacter.player_id == player.id)
         .order_by(PlayerCharacter.id)
     )
-    player_chars = list(result.scalars().all())
+    all_player_chars = list(result.scalars().all())
+    player_chars = [pc for pc in all_player_chars if pc.character and pc.character.in_guild]
+    out_of_guild_chars = [pc for pc in all_player_chars if pc.character and not pc.character.in_guild]
 
     # Unclaimed active guild characters (not in player_characters, not removed)
     claimed_char_ids_result = await db.execute(select(PlayerCharacter.character_id))
@@ -96,6 +98,7 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         .options(selectinload(WowCharacter.wow_class))
         .where(
             WowCharacter.removed_at.is_(None),
+            WowCharacter.in_guild == True,
             WowCharacter.id.notin_(claimed_char_ids) if claimed_char_ids else True,
         )
         .order_by(WowCharacter.character_name)
@@ -151,6 +154,7 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
 
     return {
         "player_chars": player_chars,
+        "out_of_guild_chars": out_of_guild_chars,
         "unclaimed_chars": unclaimed_chars,
         "specs_by_class": specs_by_class,
         "all_specs": all_specs,

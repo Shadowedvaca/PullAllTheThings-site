@@ -6,6 +6,7 @@ GET  /auth/battlenet/callback  — Exchange code for tokens, store, redirect to 
 DELETE /api/v1/auth/battlenet  — Unlink Battle.net account
 """
 
+import json
 import logging
 import secrets
 
@@ -84,6 +85,7 @@ async def bnet_auth_start(
         )
 
     state = secrets.token_hex(16)
+    next_url = request.query_params.get("next", "")
     settings = get_settings()
     base_url = settings.app_url.rstrip("/") if settings.app_url else str(request.base_url).rstrip("/")
     redirect_uri = f"{base_url}/auth/battlenet/callback"
@@ -97,10 +99,13 @@ async def bnet_auth_start(
     )
     authorize_url = BNET_AUTHORIZE_URL + params
 
+    # Store state and next together in the cookie; Blizzard only sees the state token
+    state_payload = json.dumps({"state": state, "next": next_url})
+
     response = RedirectResponse(url=authorize_url, status_code=302)
     response.set_cookie(
         key=_STATE_COOKIE,
-        value=state,
+        value=state_payload,
         max_age=600,
         httponly=True,
         samesite="lax",
@@ -131,10 +136,18 @@ async def bnet_auth_callback(
         response.delete_cookie(_STATE_COOKIE)
         return response
 
-    # Validate state to prevent CSRF
+    # Validate state to prevent CSRF; cookie holds JSON {"state": ..., "next": ...}
     returned_state = request.query_params.get("state", "")
-    cookie_state = request.cookies.get(_STATE_COOKIE, "")
-    if not returned_state or not cookie_state or returned_state != cookie_state:
+    raw_cookie = request.cookies.get(_STATE_COOKIE, "")
+    try:
+        cookie_data = json.loads(raw_cookie)
+        expected_state = cookie_data.get("state", "")
+        next_url = cookie_data.get("next", "")
+    except (ValueError, AttributeError):
+        # Backwards compat: cookie may be a plain state string (old format)
+        expected_state = raw_cookie
+        next_url = ""
+    if not returned_state or not raw_cookie or returned_state != expected_state:
         logger.warning(
             "Battle.net OAuth state mismatch for player %s", current_member.id
         )
@@ -271,9 +284,18 @@ async def bnet_auth_callback(
         battletag,
     )
 
+    # Clear any open token-expired errors for this player (both identifier formats used historically)
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if pool is not None:
+        try:
+            from sv_common.errors import resolve_issue
+            await resolve_issue(pool, "bnet_token_expired", identifier=battletag)
+            await resolve_issue(pool, "bnet_token_expired", identifier=str(current_member.id))
+        except Exception as exc:
+            logger.warning("Failed to resolve bnet_token_expired errors for player %s: %s", current_member.id, exc)
+
     # Immediately sync characters from the linked Battle.net account
     char_count = 0
-    pool = getattr(request.app.state, "guild_sync_pool", None)
     try:
         if pool is not None:
             from sv_common.guild_sync.bnet_character_sync import sync_bnet_characters
@@ -309,17 +331,18 @@ async def bnet_auth_callback(
             )
 
     if char_count > 0:
-        realm_display = get_site_config().get("realm_display_name") or "your realm"
         success_msg = (
             f"Battle.net+linked!+Found+{char_count}+character"
             + ("s" if char_count != 1 else "")
-            + f"+on+{realm_display.replace(' ', '+')}."
+            + "+on+your+account."
         )
     else:
         success_msg = "Battle.net+account+linked+successfully"
 
+    ALLOWED_NEXT_PATHS = {"/my-characters", "/profile", "/"}
+    redirect_to = next_url if next_url in ALLOWED_NEXT_PATHS else "/profile"
     response = RedirectResponse(
-        url=f"/profile?success={success_msg}",
+        url=f"{redirect_to}?success={success_msg}",
         status_code=302,
     )
     response.delete_cookie(_STATE_COOKIE)
