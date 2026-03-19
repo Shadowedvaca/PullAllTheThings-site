@@ -876,3 +876,51 @@ div.mc-prog-card__title::after {
   margin: 0;
 }
 
+/* ── Spec Guide Links panel ──────────────────────────────────────────────── */
+
+.mc-guides-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.mc-guides-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mc-guides-select {
+  background: var(--color-bg-dark);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.mc-guides-badges {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.mc-guide-badge {
+  display: inline-block;
+  padding: 0.45em 1.1em;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.mc-guide-badge:hover {
+  filter: brightness(1.2);
+  transform: translateY(-1px);
+}
+.mc-guide-badge:active {
+  transform: translateY(0);
+}

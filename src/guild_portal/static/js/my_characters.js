@@ -124,6 +124,73 @@ function showStaleNotice(char) {
 }
 
 // ---------------------------------------------------------------------------
+// Spec Guide Links panel (synchronous — data arrives with characters fetch)
+// ---------------------------------------------------------------------------
+
+// Keyed by charId — stores class_specs list so the dropdown change handler
+// doesn't need to re-fetch anything.
+const _guideSpecsByChar = {};
+
+function _renderGuideBadges(links) {
+  if (!links || links.length === 0) return '<span class="mc-mplus-empty">No guide sites configured.</span>';
+  return links.map(link => `
+    <a href="${link.url}" target="_blank" rel="noopener noreferrer"
+       class="mc-guide-badge"
+       style="background:${link.badge_bg_color};color:${link.badge_text_color};border-color:${link.badge_border_color}">
+      ${link.badge_label}
+    </a>`).join('');
+}
+
+function renderGuidesPanel(char) {
+  const panel = document.getElementById('mc-guides');
+
+  if (!char.class_specs || char.class_specs.length === 0) {
+    panel.hidden = true;
+    return;
+  }
+
+  _guideSpecsByChar[char.id] = char.class_specs;
+
+  // Determine default spec selection
+  const defaultSpec = char.spec_name || (char.class_specs[0] && char.class_specs[0].name);
+  const defaultLinks = (char.class_specs.find(s => s.name === defaultSpec) || char.class_specs[0])?.guide_links || [];
+
+  const options = char.class_specs.map(s =>
+    `<option value="${s.name}"${s.name === defaultSpec ? ' selected' : ''}>${s.name}</option>`
+  ).join('');
+
+  panel.innerHTML = `
+    <div class="mc-prog-card">
+      <div class="mc-prog-card__title">Spec Guide Links</div>
+      <div class="mc-prog-card__body">
+        <div class="mc-guides-controls">
+          <label class="mc-guides-label" for="mc-guides-spec-${char.id}">Spec</label>
+          <select id="mc-guides-spec-${char.id}" class="mc-guides-select">${options}</select>
+        </div>
+        <div id="mc-guides-badges-${char.id}" class="mc-guides-badges">
+          ${_renderGuideBadges(defaultLinks)}
+        </div>
+      </div>
+    </div>`;
+
+  // Dropdown change handler
+  const sel = panel.querySelector(`#mc-guides-spec-${char.id}`);
+  if (sel) {
+    sel.addEventListener('change', () => {
+      const specs = _guideSpecsByChar[char.id] || [];
+      const chosen = specs.find(s => s.name === sel.value);
+      const badgesEl = panel.querySelector(`#mc-guides-badges-${char.id}`);
+      if (badgesEl) {
+        badgesEl.innerHTML = _renderGuideBadges(chosen ? chosen.guide_links : []);
+      }
+    });
+  }
+
+  makeCardsCollapsible(panel, 'mc-guides');
+  panel.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
 // Progression panel helpers
 // ---------------------------------------------------------------------------
 
@@ -673,6 +740,7 @@ async function selectCharacter(charId) {
 
   renderSelectorMeta(char);
   renderPanel(char);
+  renderGuidesPanel(char);
   showStaleNotice(char);
 
   // Load progression panel

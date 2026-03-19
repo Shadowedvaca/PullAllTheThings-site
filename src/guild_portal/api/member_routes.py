@@ -22,9 +22,12 @@ from sv_common.db.models import (
     PlayerCharacter,
     RaiderIOProfile,
     RaidSeason,
+    Specialization,
     WclConfig,
     WowCharacter,
+    WowClass,
 )
+from guild_portal.services.guide_links_service import build_links_for_spec, get_enabled_sites
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +57,7 @@ def _build_char_dict(
     pc: PlayerCharacter,
     player: Player,
     rio_by_char: dict[int, RaiderIOProfile],
+    guide_sites: list[dict] | None = None,
 ) -> dict:
     """Build the character data dict for the API response."""
     char = pc.character
@@ -75,6 +79,29 @@ def _build_char_dict(
     last_synced_at: str | None = None
     if char.blizzard_last_sync:
         last_synced_at = char.blizzard_last_sync.isoformat()
+
+    # Build guide links for current spec and all class specs
+    guide_links: list[dict] | None = None
+    class_specs: list[dict] | None = None
+    _sites = guide_sites or []
+
+    if char.wow_class and char.active_spec and _sites:
+        active_role = char.active_spec.default_role.name if char.active_spec.default_role else "dps"
+        guide_links = build_links_for_spec(
+            _sites, class_name, spec_name, active_role
+        )
+
+    if char.wow_class and char.wow_class.specializations is not None:
+        class_specs = []
+        for spec in sorted(char.wow_class.specializations, key=lambda s: s.name):
+            role_name = spec.default_role.name if spec.default_role else "dps"
+            class_specs.append({
+                "name": spec.name,
+                "role": role_name,
+                "guide_links": build_links_for_spec(
+                    _sites, class_name, spec.name, role_name
+                ),
+            })
 
     return {
         "id": char.id,
@@ -99,6 +126,8 @@ def _build_char_dict(
         "wcl_url": (
             f"https://www.warcraftlogs.com/character/us/{realm_slug}/{char_name}"
         ),
+        "guide_links": guide_links,
+        "class_specs": class_specs,
     }
 
 
@@ -124,13 +153,20 @@ async def get_my_characters(
     db: AsyncSession = Depends(get_db),
 ):
     """Return all characters claimed by the current member with stat data."""
-    # Load player characters with WoW class + spec relationships
+    # Load guide sites (cached)
+    guide_sites = await get_enabled_sites(db)
+
+    # Load player characters with WoW class + spec + role relationships
     result = await db.execute(
         select(PlayerCharacter)
         .options(
             selectinload(PlayerCharacter.character).options(
-                selectinload(WowCharacter.wow_class),
-                selectinload(WowCharacter.active_spec),
+                selectinload(WowCharacter.wow_class).selectinload(
+                    WowClass.specializations
+                ).selectinload(Specialization.default_role),
+                selectinload(WowCharacter.active_spec).selectinload(
+                    Specialization.default_role
+                ),
             )
         )
         .join(PlayerCharacter.character)
@@ -162,7 +198,7 @@ async def get_my_characters(
     for pc in player_chars:
         if not pc.character:
             continue
-        characters.append(_build_char_dict(pc, fresh_player, rio_by_char))
+        characters.append(_build_char_dict(pc, fresh_player, rio_by_char, guide_sites))
 
     characters.sort(key=lambda c: f"{c['character_name']}-{c['realm_slug']}")
 

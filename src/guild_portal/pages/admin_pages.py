@@ -1277,7 +1277,7 @@ async def admin_reference_tables(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from sv_common.db.models import Role, WowClass, Specialization
+    from sv_common.db.models import GuideSite, Role, WowClass, Specialization
     from sv_common.identity import ranks as rank_service
     from guild_portal.services import season_service
     from sqlalchemy.orm import selectinload
@@ -1305,6 +1305,11 @@ async def admin_reference_tables(
     )
     screen_permissions = list(screen_perms_result.scalars().all())
 
+    guide_sites_result = await db.execute(
+        select(GuideSite).order_by(GuideSite.sort_order, GuideSite.id)
+    )
+    guide_sites = list(guide_sites_result.scalars().all())
+
     ctx = await _base_ctx(request, player, db)
     ctx.update({
         "ranks": ranks,
@@ -1312,6 +1317,7 @@ async def admin_reference_tables(
         "classes": classes,
         "seasons": seasons,
         "screen_permissions": screen_permissions,
+        "guide_sites": guide_sites,
     })
     return templates.TemplateResponse("admin/reference_tables.html", ctx)
 

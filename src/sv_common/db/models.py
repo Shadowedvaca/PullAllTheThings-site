@@ -1,7 +1,7 @@
 """SQLAlchemy ORM models for the guild platform.
 
 common schema: guild_ranks, users, discord_config, invite_codes,
-               site_config, rank_wow_mapping, error_log
+               site_config, rank_wow_mapping, error_log, guide_sites
 patt schema: campaigns, campaign_entries, votes, campaign_results,
              contest_agent_log, guild_quotes, guild_quote_titles, quote_subjects,
              player_availability, raid_seasons, raid_events, raid_attendance,
@@ -305,6 +305,26 @@ class FeedbackSubmission(Base):
     raw_feedback:          Mapped[str]            = mapped_column(Text, nullable=False)
     hub_feedback_id:       Mapped[Optional[int]]  = mapped_column(Integer)
     hub_synced_at:         Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
+class GuideSite(Base):
+    """External guide site config row — drives badge rendering on My Characters."""
+
+    __tablename__ = "guide_sites"
+    __table_args__ = {"schema": "common"}
+
+    id:                 Mapped[int]           = mapped_column(Integer, primary_key=True)
+    name:               Mapped[str]           = mapped_column(String(50), nullable=False)
+    badge_label:        Mapped[str]           = mapped_column(String(50), nullable=False)
+    url_template:       Mapped[str]           = mapped_column(Text, nullable=False)
+    role_dps_slug:      Mapped[str]           = mapped_column(String(20), nullable=False)
+    role_tank_slug:     Mapped[str]           = mapped_column(String(20), nullable=False)
+    role_healer_slug:   Mapped[str]           = mapped_column(String(20), nullable=False)
+    badge_bg_color:     Mapped[str]           = mapped_column(String(7), nullable=False)
+    badge_text_color:   Mapped[str]           = mapped_column(String(7), nullable=False)
+    badge_border_color: Mapped[Optional[str]] = mapped_column(String(7))
+    enabled:            Mapped[bool]          = mapped_column(Boolean, nullable=False)
+    sort_order:         Mapped[int]           = mapped_column(Integer, nullable=False)
 
 
 # ---------------------------------------------------------------------------
