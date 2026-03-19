@@ -6,7 +6,7 @@
 <style>
   /* ── Page shell ───────────────────────────────────────────────── */
   .profile-page {
-    max-width: 700px;
+    max-width: 770px;
     margin: 0 auto;
     padding: 2rem 1rem 3rem;
   }
@@ -366,6 +366,85 @@
     </form>
   </div>
 
+  {# ── Characters ──────────────────────────────────────────────── #}
+  <div class="settings-section">
+    <div class="settings-section__header">
+      <h2 class="settings-section__title">Characters</h2>
+    </div>
+    <form method="post" action="/profile/characters">
+      <div class="settings-section__body">
+
+        <div class="char-col-headers">
+          <span></span>
+          <span>Character</span>
+          <span>Specialization</span>
+        </div>
+
+        {# Main #}
+        <div class="char-pair">
+          <div class="char-pair__role-label">Main</div>
+          <div class="field-group">
+            <select class="form-control" id="main_character_id" name="main_character_id" onchange="updateSpecDropdown('main')">
+              <option value="">— None —</option>
+              {% for pc in player_chars %}
+                <option
+                  value="{{ pc.character.id }}"
+                  data-class-id="{{ pc.character.class_id or '' }}"
+                  {% if current_member.main_character_id == pc.character.id %}selected{% endif %}
+                >{{ pc.character.character_name }} — {{ pc.character.realm_name or pc.character.realm_slug }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field-group">
+            <select class="form-control" id="main_spec_id" name="main_spec_id">
+              <option value="">— None —</option>
+              {% for spec in all_specs %}
+                <option
+                  value="{{ spec.id }}"
+                  data-class-id="{{ spec.class_id }}"
+                  {% if current_member.main_spec_id == spec.id %}selected{% endif %}
+                >{{ spec.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        {# Secondary Character #}
+        <div class="char-pair">
+          <div class="char-pair__role-label">Secondary</div>
+          <div class="field-group">
+            <select class="form-control" id="offspec_character_id" name="offspec_character_id" onchange="updateSpecDropdown('offspec')">
+              <option value="">— None —</option>
+              {% for pc in player_chars %}
+                <option
+                  value="{{ pc.character.id }}"
+                  data-class-id="{{ pc.character.class_id or '' }}"
+                  {% if current_member.offspec_character_id == pc.character.id %}selected{% endif %}
+                >{{ pc.character.character_name }} — {{ pc.character.realm_name or pc.character.realm_slug }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field-group">
+            <select class="form-control" id="offspec_spec_id" name="offspec_spec_id">
+              <option value="">— None —</option>
+              {% for spec in all_specs %}
+                <option
+                  value="{{ spec.id }}"
+                  data-class-id="{{ spec.class_id }}"
+                  {% if current_member.offspec_spec_id == spec.id %}selected{% endif %}
+                >{{ spec.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+      </div>
+      <div class="settings-section__footer">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+
   {# ── Battle.net Account ──────────────────────────────────────── #}
   <div class="settings-section">
     <div class="settings-section__header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
@@ -501,85 +580,6 @@
     </form>
   </div>
 
-  {# ── Characters ──────────────────────────────────────────────── #}
-  <div class="settings-section">
-    <div class="settings-section__header">
-      <h2 class="settings-section__title">Characters</h2>
-    </div>
-    <form method="post" action="/profile/characters">
-      <div class="settings-section__body">
-
-        <div class="char-col-headers">
-          <span></span>
-          <span>Character</span>
-          <span>Specialization</span>
-        </div>
-
-        {# Main #}
-        <div class="char-pair">
-          <div class="char-pair__role-label">Main</div>
-          <div class="field-group">
-            <select class="form-control" id="main_character_id" name="main_character_id" onchange="updateSpecDropdown('main')">
-              <option value="">— None —</option>
-              {% for pc in player_chars %}
-                <option
-                  value="{{ pc.character.id }}"
-                  data-class-id="{{ pc.character.class_id or '' }}"
-                  {% if current_member.main_character_id == pc.character.id %}selected{% endif %}
-                >{{ pc.character.character_name }} — {{ pc.character.realm_name or pc.character.realm_slug }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="field-group">
-            <select class="form-control" id="main_spec_id" name="main_spec_id">
-              <option value="">— None —</option>
-              {% for spec in all_specs %}
-                <option
-                  value="{{ spec.id }}"
-                  data-class-id="{{ spec.class_id }}"
-                  {% if current_member.main_spec_id == spec.id %}selected{% endif %}
-                >{{ spec.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-
-        {# Secondary Character #}
-        <div class="char-pair">
-          <div class="char-pair__role-label">Secondary</div>
-          <div class="field-group">
-            <select class="form-control" id="offspec_character_id" name="offspec_character_id" onchange="updateSpecDropdown('offspec')">
-              <option value="">— None —</option>
-              {% for pc in player_chars %}
-                <option
-                  value="{{ pc.character.id }}"
-                  data-class-id="{{ pc.character.class_id or '' }}"
-                  {% if current_member.offspec_character_id == pc.character.id %}selected{% endif %}
-                >{{ pc.character.character_name }} — {{ pc.character.realm_name or pc.character.realm_slug }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="field-group">
-            <select class="form-control" id="offspec_spec_id" name="offspec_spec_id">
-              <option value="">— None —</option>
-              {% for spec in all_specs %}
-                <option
-                  value="{{ spec.id }}"
-                  data-class-id="{{ spec.class_id }}"
-                  {% if current_member.offspec_spec_id == spec.id %}selected{% endif %}
-                >{{ spec.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-
-      </div>
-      <div class="settings-section__footer">
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
-    </form>
-  </div>
-
   {# ── Manage Characters ───────────────────────────────────────── #}
   <div class="settings-section">
     <div class="settings-section__header">
@@ -589,59 +589,27 @@
 
       {# — Claimed characters — #}
       {% if player_chars %}
-      <p class="field-group__hint" style="margin-bottom:0.75rem">
-        These characters are currently linked to your account.{% if not bnet_account %} You can unclaim any you don't own.{% endif %}
-      </p>
       <table class="table" style="margin-bottom:1.25rem">
         <thead>
           <tr>
             <th>Character</th>
             <th>Realm</th>
             <th>Class</th>
-            <th style="text-align:right">ilvl</th>
-            <th style="text-align:right">M+ Score</th>
-            <th>Raid Prog</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {% for pc in player_chars %}
-          {% set rio = rio_by_char.get(pc.character.id) %}
           {% set is_bnet = pc.link_source == 'battlenet_oauth' %}
           <tr>
-            <td style="font-weight:600">
-              {{ pc.character.character_name }}
-              {% if is_bnet %}
-                <span title="Auto-claimed via Battle.net" style="font-size:0.75rem;color:var(--color-accent);margin-left:0.3rem;font-weight:700">🔒 Battle.net Verified</span>
-              {% endif %}
-            </td>
+            <td style="font-weight:600">{{ pc.character.character_name }}</td>
             <td style="color:var(--color-text-muted)">{{ pc.character.realm_name or pc.character.realm_slug }}</td>
             <td style="color:var(--color-text-muted)">
               {% if pc.character.wow_class %}{{ pc.character.wow_class.name }}{% else %}—{% endif %}
             </td>
-            <td style="text-align:right;color:var(--color-text-muted)">
-              {{ pc.character.item_level or '—' }}
-            </td>
-            <td style="text-align:right">
-              {% if rio and rio.overall_score %}
-                <span style="color:{{ rio.score_color or 'var(--color-text-muted)' }};font-weight:600">
-                  {{ rio.overall_score | int }}
-                </span>
-                {% if rio.profile_url %}
-                  <a href="{{ rio.profile_url }}" target="_blank" rel="noopener"
-                     style="color:var(--color-text-muted);font-size:0.8rem;margin-left:0.25rem"
-                     title="View on Raider.IO">⬡</a>
-                {% endif %}
-              {% else %}
-                <span style="color:var(--color-text-muted)">—</span>
-              {% endif %}
-            </td>
-            <td style="color:var(--color-text-muted)">
-              {{ rio.raid_progression if rio and rio.raid_progression else '—' }}
-            </td>
             <td style="text-align:right">
               {% if is_bnet %}
-                <span style="font-size:0.78rem;color:var(--color-text-muted)" title="Unlink Battle.net to remove this character">🔒 Locked</span>
+                <span style="color:var(--color-text-muted)" title="Linked via Battle.net — unlink account to remove">🔒</span>
               {% else %}
                 <form method="post" action="/profile/characters/unclaim"
                       onsubmit="return confirm('Unclaim {{ pc.character.character_name }}? This will remove it from your account.')">
@@ -731,23 +699,10 @@
       </div>
 
       {# — Add a character by name — for chars not in the guild scan #}
-      <div style="border-top:1px solid var(--color-border);padding:1.25rem 0 0;margin-top:1rem">
-        <p class="field-group__hint" style="margin-bottom:0.75rem">
-          Can't find your character above? Add it by name — we'll look it up from Blizzard.
-        </p>
-        <div style="display:flex;gap:0.75rem;align-items:flex-end;flex-wrap:wrap">
-          <div class="field-group" style="flex:1;min-width:180px">
-            <label class="field-group__label" for="manual-char-name">Character Name</label>
-            <input type="text" id="manual-char-name" class="form-control" placeholder="e.g. Trogmoon" maxlength="60">
-          </div>
-          <button type="button" class="btn btn-secondary" onclick="addCharManually(this)" style="align-self:flex-end">
-            Add Character
-          </button>
-        </div>
-        <p class="field-group__hint" style="margin-top:0.5rem">
-          Manually added characters are visible to officers for verification.
-        </p>
-        <div id="manual-char-result" style="margin-top:0.5rem;font-size:0.85rem"></div>
+      <div style="border-top:1px solid var(--color-border);padding:0.75rem 0 0;margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <input type="text" id="manual-char-name" class="form-control" placeholder="Add character by name…" maxlength="60" style="flex:1;min-width:160px">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="addCharManually(this)">Add</button>
+        <div id="manual-char-result" style="font-size:0.85rem;width:100%"></div>
       </div>
       {% endif %}
 

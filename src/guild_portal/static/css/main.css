@@ -1435,7 +1435,6 @@ textarea.form-control {
     font-size: 0.82rem;
     color: var(--color-text-muted);
     margin: 0.4rem 0 0.8rem;
-    max-width: 50ch;
     line-height: 1.4;
 }
 
