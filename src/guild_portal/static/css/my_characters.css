@@ -902,7 +902,7 @@ div.mc-prog-card__title::after {
 
 .mc-guides-badges {
   display: flex;
-  gap: var(--space-sm);
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
