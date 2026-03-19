@@ -230,9 +230,9 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase H.1 complete** — `in_guild` column added to `wow_characters`; all display/sync queries updated to filter `AND in_guild = TRUE`
-- **Branch:** `feature/phase-h-character-sync` (in progress; H.2–H.4 remaining)
-- **Tests:** 922 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
+- **Phase H.2 complete** — BNet sync overhaul: captures all chars (level 10+) regardless of realm with `in_guild=FALSE`; token expiry severity → `"info"`, scheduler silently skips expired tokens (no Discord ping); OAuth callback resolves open errors + supports `?next=` redirect
+- **Branch:** `feature/phase-h-character-sync` (in progress; H.3–H.4 remaining)
+- **Tests:** 929 pass, 69 skip (skips are pre-existing: identity_engine import error, one bot DM gate test)
 - **Last migration:** 0052 (`in_guild BOOLEAN NOT NULL DEFAULT TRUE` on `guild_identity.wow_characters` + index)
 - **Last tag:** `prod-v0.3.1`
 - **Active branch:** `feature/phase-h-character-sync`
