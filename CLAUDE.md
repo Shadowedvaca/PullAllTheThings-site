@@ -230,12 +230,12 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase G complete** — Spec Guide Links panel on My Characters. Data-driven badge buttons (Wowhead, Icy Veins, u.gg) with spec dropdown; configurable via Admin → Reference Tables with live preview. All shipped in `prod-v0.4.0`.
-- **Branch:** `main` (feature/phase-h-character-sync merged via PR #9)
+- **Phase G complete** — Spec Guide Links panel on My Characters. Data-driven badge buttons (Wowhead, Icy Veins, u.gg) with spec dropdown; configurable via Admin → Reference Tables with live preview. Two post-tag CSS polish fixes (badge gap, panel margin/label spacing) are on `feature/phase-h-character-sync` — need a small PR to main before next prod push.
+- **Branch:** `feature/phase-h-character-sync` (2 CSS fix commits ahead of main post-PR-#9)
 - **Tests:** 960 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
 - **Last migration:** 0053 (`common.guide_sites` table + 3 seed rows)
 - **Last tag:** `prod-v0.4.0`
-- **Active branch:** `main`
+- **Active branch:** `feature/phase-h-character-sync`
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
