@@ -329,7 +329,20 @@ async def get_character_progression(
         return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
 
     # ── Raid progress ────────────────────────────────────────────────────────
+    # Restrict to the active season's raid tier if one is configured.
+    active_season_result = await db.execute(
+        select(RaidSeason).where(RaidSeason.is_active == True)
+    )
+    active_season = active_season_result.scalar_one_or_none()
+    current_raid_name: str | None = (
+        active_season.current_raid_name if active_season else None
+    )
+
     # Aggregate per (raid_name, difficulty): total bosses and bosses with kills
+    raid_filter = [CharacterRaidProgress.character_id == character_id]
+    if current_raid_name:
+        raid_filter.append(CharacterRaidProgress.raid_name == current_raid_name)
+
     raid_rows = await db.execute(
         select(
             CharacterRaidProgress.raid_name,
@@ -339,7 +352,7 @@ async def get_character_progression(
                 case((CharacterRaidProgress.kill_count > 0, 1), else_=0)
             ).label("killed"),
         )
-        .where(CharacterRaidProgress.character_id == character_id)
+        .where(*raid_filter)
         .group_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
         .order_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
     )

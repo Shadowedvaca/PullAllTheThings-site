@@ -320,6 +320,7 @@
                 <th>New Expansion</th>
                 <th>Active</th>
                 <th title="Blizzard API integer ID for M+ keystone season. Find at: us.api.blizzard.com/data/wow/mythic-keystone/season/index">M+ Season ID</th>
+                <th title="Exact raid instance name as returned by the Blizzard API (e.g. Liberation of Undermine). Used to filter the raid progress panel on My Characters.">Current Raid Name</th>
                 <th></th>
             </tr>
         </thead>
@@ -353,6 +354,12 @@
                        value="{{ season.blizzard_mplus_season_id or '' }}"
                        data-orig="{{ season.blizzard_mplus_season_id or '' }}"
                        placeholder="e.g. 13" style="width:70px;">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="current_raid_name"
+                       value="{{ season.current_raid_name or '' }}"
+                       data-orig="{{ season.current_raid_name or '' }}"
+                       placeholder="e.g. Liberation of Undermine" style="width:180px;">
             </td>
             <td>
                 <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
@@ -751,6 +758,10 @@ async function createSeason() {
                 <td>
                     <input class="rt-editable rt-field rt-editable--number" type="number" name="blizzard_mplus_season_id"
                            value="" data-orig="" placeholder="e.g. 13" style="width:70px;">
+                </td>
+                <td>
+                    <input class="rt-editable rt-field" name="current_raid_name"
+                           value="" data-orig="" placeholder="e.g. Liberation of Undermine" style="width:180px;">
                 </td>
                 <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
             `;

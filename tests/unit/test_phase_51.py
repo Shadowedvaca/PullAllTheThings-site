@@ -113,6 +113,10 @@ class TestRaidProgressAggregation:
                 mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
                 return mock_result
             elif call_count[0] == 2:
+                # Active season query — no active season configured
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+                return mock_result
+            elif call_count[0] == 3:
                 # Raid progress query
                 rows = _make_raid_rows([
                     ("Nerub-ar Palace", "heroic", 8, 8),
@@ -158,6 +162,10 @@ class TestRaidProgressAggregation:
                 mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
                 return mock_result
             elif call_count[0] == 2:
+                # Active season query — no active season configured
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+                return mock_result
+            elif call_count[0] == 3:
                 mock_result.__iter__ = MagicMock(return_value=iter([]))
                 return mock_result
             else:
@@ -213,6 +221,9 @@ class TestMythicPlusNull:
             if call_count[0] == 1:
                 mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
             elif call_count[0] == 2:
+                # Active season query — no active season configured
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+            elif call_count[0] == 3:
                 mock_result.__iter__ = MagicMock(return_value=iter([]))
             return mock_result
 
@@ -241,6 +252,10 @@ class TestMythicPlusNull:
                 mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
                 return mock_result
             elif call_count[0] == 2:
+                # Active season query — no active season configured
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+                return mock_result
+            elif call_count[0] == 3:
                 mock_result.__iter__ = MagicMock(return_value=iter([]))
                 return mock_result
             else:
