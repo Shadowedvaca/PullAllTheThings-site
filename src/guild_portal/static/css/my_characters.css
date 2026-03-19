@@ -878,11 +878,15 @@ div.mc-prog-card__title::after {
 
 /* ── Spec Guide Links panel ──────────────────────────────────────────────── */
 
+.mc-guides {
+  margin-top: 1rem;
+}
+
 .mc-guides-controls {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-md);
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .mc-guides-label {
