@@ -1,11 +1,11 @@
 """
-Unit tests for Phase 6.4 — scheduler.run_bnet_character_refresh error reporting.
+Unit tests for scheduler.run_bnet_character_refresh error reporting.
 
 Tests:
-1. report_error called with bnet_token_expired when token is None
+1. Phase H.2: expired token is a silent skip — no report_error, no Discord ping
 2. resolve_issue called on success
 3. report_error called with bnet_sync_error on sync exception
-4. maybe_notify_discord receives is_first_occurrence=False on repeat errors
+4. Phase H.2: repeat expired token still silently skipped (no Discord suppression needed)
 """
 
 import os
@@ -52,13 +52,14 @@ def _make_pool_with_rows(rows):
 
 
 # ---------------------------------------------------------------------------
-# 1. report_error called with bnet_token_expired when token is None
+# 1. Phase H.2: expired token → silent skip (no report_error, no Discord)
 # ---------------------------------------------------------------------------
 
 
 class TestRunBnetRefreshExpiredToken:
     @pytest.mark.asyncio
-    async def test_reports_bnet_token_expired_when_token_none(self):
+    async def test_no_report_error_when_token_none(self):
+        """Phase H.2: expired token is silently skipped — no error record created."""
         scheduler = _make_scheduler()
 
         bnet_rows = [{"player_id": 1, "battletag": "Trog#1234"}]
@@ -73,52 +74,48 @@ class TestRunBnetRefreshExpiredToken:
              patch("guild_portal.services.error_routing.maybe_notify_discord", new=AsyncMock()) as mock_notify:
             await scheduler.run_bnet_character_refresh()
 
-        # report_error called with bnet_token_expired
-        mock_report.assert_awaited()
-        call_args = mock_report.await_args_list[0][0]
-        assert call_args[1] == "bnet_token_expired"
-        assert call_args[4] == "scheduler"  # source_module is 5th arg (index 4)
-
+        # report_error must NOT be called — token expiry is expected, not an error
+        mock_report.assert_not_awaited()
         # resolve_issue NOT called (token was None — no success)
         mock_resolve.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_uses_battletag_as_identifier(self):
+    async def test_no_discord_notification_when_token_none(self):
+        """Phase H.2: expired token does not ping Discord."""
         scheduler = _make_scheduler()
 
         bnet_rows = [{"player_id": 7, "battletag": "Rocket#5678"}]
         pool, conn = _make_pool_with_rows(bnet_rows)
         scheduler.db_pool = pool
 
-        mock_report_result = {"id": 2, "is_first_occurrence": True, "occurrence_count": 1}
-
         with patch("sv_common.guild_sync.bnet_character_sync.get_valid_access_token", new=AsyncMock(return_value=None)), \
-             patch("sv_common.errors.report_error", new=AsyncMock(return_value=mock_report_result)) as mock_report, \
-             patch("guild_portal.services.error_routing.maybe_notify_discord", new=AsyncMock()):
-            await scheduler.run_bnet_character_refresh()
-
-        call_kwargs = mock_report.await_args_list[0][1]
-        assert call_kwargs.get("identifier") == "Rocket#5678"
-
-    @pytest.mark.asyncio
-    async def test_maybe_notify_discord_called_with_is_first_occurrence(self):
-        scheduler = _make_scheduler()
-
-        bnet_rows = [{"player_id": 1, "battletag": "Trog#1234"}]
-        pool, conn = _make_pool_with_rows(bnet_rows)
-        scheduler.db_pool = pool
-
-        mock_report_result = {"id": 1, "is_first_occurrence": True, "occurrence_count": 1}
-
-        with patch("sv_common.guild_sync.bnet_character_sync.get_valid_access_token", new=AsyncMock(return_value=None)), \
-             patch("sv_common.errors.report_error", new=AsyncMock(return_value=mock_report_result)), \
+             patch("sv_common.errors.report_error", new=AsyncMock()) as mock_report, \
              patch("guild_portal.services.error_routing.maybe_notify_discord", new=AsyncMock()) as mock_notify:
             await scheduler.run_bnet_character_refresh()
 
-        mock_notify.assert_awaited()
-        # 7th positional arg is is_first_occurrence
-        notify_is_first = mock_notify.await_args_list[0][0][6]
-        assert notify_is_first is True
+        mock_report.assert_not_awaited()
+        mock_notify.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_skipped_counter_increments_for_expired_token(self):
+        """Phase H.2: expired token increments skipped count, not errors count."""
+        # We verify this indirectly by ensuring the method completes cleanly
+        # without calling report_error (errors counter stays 0)
+        scheduler = _make_scheduler()
+
+        bnet_rows = [
+            {"player_id": 1, "battletag": "Trog#1234"},
+            {"player_id": 2, "battletag": "Rocket#5678"},
+        ]
+        pool, conn = _make_pool_with_rows(bnet_rows)
+        scheduler.db_pool = pool
+
+        with patch("sv_common.guild_sync.bnet_character_sync.get_valid_access_token", new=AsyncMock(return_value=None)), \
+             patch("sv_common.errors.report_error", new=AsyncMock()) as mock_report:
+            await scheduler.run_bnet_character_refresh()
+
+        # Neither player should generate an error record
+        mock_report.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -193,30 +190,24 @@ class TestRunBnetRefreshSyncException:
 
 
 # ---------------------------------------------------------------------------
-# 4. maybe_notify_discord receives is_first_occurrence=False on repeat errors
+# 4. Phase H.2: repeat expired tokens still silently skipped
 # ---------------------------------------------------------------------------
 
 
 class TestRunBnetRefreshSuppressRepeatNotification:
     @pytest.mark.asyncio
-    async def test_notify_receives_false_for_repeat_occurrence(self):
-        """When report_error returns is_first_occurrence=False, maybe_notify_discord
-        receives that value so the routing layer can suppress repeat pings."""
+    async def test_repeat_expired_token_still_silent(self):
+        """Phase H.2: repeat expired tokens do not ping Discord (no suppression logic needed)."""
         scheduler = _make_scheduler()
 
         bnet_rows = [{"player_id": 2, "battletag": "Mage#2222"}]
         pool, conn = _make_pool_with_rows(bnet_rows)
         scheduler.db_pool = pool
 
-        # is_first_occurrence=False (repeat error)
-        mock_report_result = {"id": 1, "is_first_occurrence": False, "occurrence_count": 5}
-
         with patch("sv_common.guild_sync.bnet_character_sync.get_valid_access_token", new=AsyncMock(return_value=None)), \
-             patch("sv_common.errors.report_error", new=AsyncMock(return_value=mock_report_result)), \
+             patch("sv_common.errors.report_error", new=AsyncMock()) as mock_report, \
              patch("guild_portal.services.error_routing.maybe_notify_discord", new=AsyncMock()) as mock_notify:
             await scheduler.run_bnet_character_refresh()
 
-        mock_notify.assert_awaited()
-        # 7th positional arg is is_first_occurrence
-        notify_is_first = mock_notify.await_args_list[0][0][6]
-        assert notify_is_first is False
+        mock_report.assert_not_awaited()
+        mock_notify.assert_not_awaited()

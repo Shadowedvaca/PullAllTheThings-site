@@ -635,6 +635,7 @@ class GuildSyncScheduler:
             refreshed = 0
             new_chars = 0
             errors = 0
+            skipped = 0
 
             for row in rows:
                 player_id = row["player_id"]
@@ -643,26 +644,13 @@ class GuildSyncScheduler:
                 try:
                     access_token = await get_valid_access_token(self.db_pool, player_id)
                     if access_token is None:
-                        logger.warning(
-                            "Battle.net refresh: no valid token for %s — skipping", battletag
+                        # Token expiry is expected (Blizzard tokens last 24h, no refresh tokens).
+                        # The player will re-sync via the Refresh Characters button when they visit.
+                        logger.info(
+                            "Battle.net refresh: token expired for %s — skipping until player re-links",
+                            battletag,
                         )
-                        errors += 1
-                        result = await report_error(
-                            self.db_pool,
-                            "bnet_token_expired",
-                            "warning",
-                            f"Battle.net token expired for {battletag} — player must re-link "
-                            f"their Battle.net account at /profile.",
-                            "scheduler",
-                            details={"player_id": player_id, "battletag": battletag},
-                            identifier=battletag,
-                        )
-                        await maybe_notify_discord(
-                            self.db_pool, self.discord_bot, self.audit_channel_id,
-                            "bnet_token_expired", "warning",
-                            f"Battle.net token expired for **{battletag}** — player must re-link.",
-                            result["is_first_occurrence"],
-                        )
+                        skipped += 1
                         continue
 
                     stats = await sync_bnet_characters(self.db_pool, player_id, access_token)
@@ -696,8 +684,8 @@ class GuildSyncScheduler:
                     )
 
             logger.info(
-                "Battle.net character refresh complete: refreshed=%d new_chars=%d errors=%d",
-                refreshed, new_chars, errors,
+                "Battle.net character refresh complete: refreshed=%d new_chars=%d skipped=%d errors=%d",
+                refreshed, new_chars, skipped, errors,
             )
 
         except Exception as exc:

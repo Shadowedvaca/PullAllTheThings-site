@@ -71,7 +71,7 @@ async def _refresh_token(pool, player_id: int, row, now: datetime) -> str | None
         await report_error(
             pool,
             "bnet_token_expired",
-            "warning",
+            "info",
             f"Battle.net token expired for player {player_id} — no refresh token stored. "
             f"Player must re-link their Battle.net account.",
             "bnet_character_sync",
@@ -121,7 +121,7 @@ async def _refresh_token(pool, player_id: int, row, now: datetime) -> str | None
         await report_error(
             pool,
             "bnet_token_expired",
-            "warning",
+            "info",
             f"Battle.net token refresh failed for player {player_id}: {exc}",
             "bnet_character_sync",
             details={"player_id": player_id, "error": str(exc)},
@@ -164,21 +164,12 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
     Fetch the character list for a player's Battle.net account and upsert
     player_characters entries with link_source='battlenet_oauth'.
 
-    Filtering:
-    - Only characters on the guild's home realm (home_realm_slug from site_config)
-    - Only characters at level 10 or above (filters bank alts and trial chars)
+    Captures every character (level 10+) on the account regardless of realm.
+    New characters discovered via BNet are created with in_guild=FALSE.
+    Characters already in the guild roster (in_guild=TRUE) keep their value.
 
     Returns: {"linked": int, "new_characters": int, "skipped": int}
     """
-    cfg = get_site_config()
-    home_realm_slug = cfg.get("home_realm_slug", "") or os.environ.get("GUILD_REALM_SLUG", "")
-
-    if not home_realm_slug:
-        logger.warning(
-            "home_realm_slug not configured — skipping Battle.net character sync for player %s",
-            player_id,
-        )
-        return {"linked": 0, "new_characters": 0, "skipped": 0}
 
     # Fetch character list from Blizzard profile API
     try:
@@ -218,19 +209,12 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                     continue
 
                 # Check if character already exists in wow_characters.
-                # Guild roster sync imports characters from all connected realms, so a character
-                # on a connected realm (e.g. bladefist, malganis) will already be in the table.
-                # We always link known characters; only skip unknown characters not on home realm.
+                # Used to track whether this is a new character row (for new_characters counter).
                 existing_char = await conn.fetchrow(
                     """SELECT id FROM guild_identity.wow_characters
                        WHERE character_name = $1 AND realm_slug = $2""",
                     char_name, realm_slug,
                 )
-
-                if not existing_char and realm_slug != home_realm_slug:
-                    # Unknown character on a non-home realm — likely a toon on an unrelated server
-                    skipped += 1
-                    continue
 
                 class_name = char_data.get("playable_class", {}).get("name", "")
 
@@ -245,16 +229,20 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
 
                 is_new_char = existing_char is None
 
-                # Upsert into wow_characters using the character's actual realm slug
+                # Upsert into wow_characters using the character's actual realm slug.
+                # New rows get in_guild=FALSE; existing rows keep their in_guild value
+                # (guild roster sync is responsible for setting in_guild=TRUE).
                 char_row = await conn.fetchrow(
                     """INSERT INTO guild_identity.wow_characters
-                       (character_name, realm_slug, level, class_id)
-                       VALUES ($1, $2, $3, $4)
+                       (character_name, realm_slug, level, class_id, in_guild)
+                       VALUES ($1, $2, $3, $4, FALSE)
                        ON CONFLICT (character_name, realm_slug) DO UPDATE SET
                            level = EXCLUDED.level,
                            class_id = COALESCE(EXCLUDED.class_id,
                                                guild_identity.wow_characters.class_id),
                            removed_at = NULL
+                           -- in_guild is intentionally NOT updated on conflict:
+                           -- if the char is already in the guild roster (TRUE), keep it TRUE
                        RETURNING id""",
                     char_name, realm_slug, level, class_id,
                 )
