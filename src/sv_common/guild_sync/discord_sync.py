@@ -186,7 +186,7 @@ async def reconcile_player_ranks(
                     FROM guild_identity.player_characters pc
                     JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
                     JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
-                    WHERE pc.player_id = p.id
+                    WHERE pc.player_id = p.id AND wc.in_guild = TRUE
                     ORDER BY gr.level DESC
                     LIMIT 1
                 ) AS best_char_rank_id

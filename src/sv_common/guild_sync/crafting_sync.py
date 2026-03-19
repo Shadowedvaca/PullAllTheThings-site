@@ -306,7 +306,7 @@ async def run_crafting_sync(
             """SELECT id, character_name, realm_slug,
                       last_login_timestamp, last_profession_sync
                FROM guild_identity.wow_characters
-               WHERE removed_at IS NULL
+               WHERE removed_at IS NULL AND in_guild = TRUE
                ORDER BY character_name"""
         )
 

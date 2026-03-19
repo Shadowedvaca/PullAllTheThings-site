@@ -211,6 +211,7 @@ async def get_progression(db: AsyncSession = Depends(get_db)):
             FROM guild_identity.raiderio_profiles r
             JOIN guild_identity.wow_characters wc ON wc.id = r.character_id
             WHERE r.season = 'current' AND r.overall_score > 0
+              AND wc.in_guild = TRUE
             ORDER BY r.overall_score DESC
         """)
     )
@@ -279,6 +280,7 @@ async def get_parses(db: AsyncSession = Depends(get_db)):
             FROM guild_identity.character_parses cp
             JOIN guild_identity.wow_characters wc ON wc.id = cp.character_id
             WHERE cp.difficulty = 4 AND cp.percentile > 0
+              AND wc.in_guild = TRUE
             ORDER BY cp.zone_name, cp.encounter_name, cp.percentile DESC
         """)
     )

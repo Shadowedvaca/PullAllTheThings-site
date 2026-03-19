@@ -96,6 +96,7 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         .options(selectinload(WowCharacter.wow_class))
         .where(
             WowCharacter.removed_at.is_(None),
+            WowCharacter.in_guild == True,
             WowCharacter.id.notin_(claimed_char_ids) if claimed_char_ids else True,
         )
         .order_by(WowCharacter.character_name)

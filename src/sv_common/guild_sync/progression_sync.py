@@ -364,7 +364,7 @@ async def create_weekly_snapshot(pool: asyncpg.Pool) -> int:
 
     async with pool.acquire() as conn:
         characters = await conn.fetch(
-            "SELECT id FROM guild_identity.wow_characters WHERE removed_at IS NULL"
+            "SELECT id FROM guild_identity.wow_characters WHERE removed_at IS NULL AND in_guild = TRUE"
         )
 
         for char in characters:
@@ -480,7 +480,7 @@ async def load_characters_for_progression_sync(
             SELECT id, character_name, realm_slug,
                    last_login_timestamp, last_progression_sync
             FROM guild_identity.wow_characters
-            WHERE removed_at IS NULL
+            WHERE removed_at IS NULL AND in_guild = TRUE
             ORDER BY character_name
             """
         )
@@ -513,7 +513,7 @@ async def load_characters_for_profession_sync(
             SELECT id, character_name, realm_slug,
                    last_login_timestamp, last_profession_sync
             FROM guild_identity.wow_characters
-            WHERE removed_at IS NULL
+            WHERE removed_at IS NULL AND in_guild = TRUE
             ORDER BY character_name
             """
         )

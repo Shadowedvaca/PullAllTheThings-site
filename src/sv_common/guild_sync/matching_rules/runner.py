@@ -43,7 +43,7 @@ async def build_context(
                           wc.guild_rank_id
                    FROM guild_identity.wow_characters wc
                    JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
-                   WHERE wc.removed_at IS NULL
+                   WHERE wc.removed_at IS NULL AND wc.in_guild = TRUE
                      AND gr.level >= $1
                      AND wc.id NOT IN (
                          SELECT character_id FROM guild_identity.player_characters
@@ -54,7 +54,7 @@ async def build_context(
             rows = await conn.fetch(
                 """SELECT id, character_name, guild_note, officer_note, guild_rank_id
                    FROM guild_identity.wow_characters
-                   WHERE removed_at IS NULL
+                   WHERE removed_at IS NULL AND in_guild = TRUE
                      AND id NOT IN (
                          SELECT character_id FROM guild_identity.player_characters
                      )"""

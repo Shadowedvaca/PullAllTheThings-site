@@ -94,7 +94,7 @@ async def process_wcl_pass(pool: asyncpg.Pool, event_id: int) -> dict:
             FROM guild_identity.wow_characters wc
             JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
             WHERE LOWER(wc.character_name) = ANY($1::text[])
-              AND wc.removed_at IS NULL
+              AND wc.removed_at IS NULL AND wc.in_guild = TRUE
             """,
             name_list,
         )

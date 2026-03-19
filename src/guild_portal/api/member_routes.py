@@ -132,7 +132,8 @@ async def get_my_characters(
                 selectinload(WowCharacter.active_spec),
             )
         )
-        .where(PlayerCharacter.player_id == player.id)
+        .join(PlayerCharacter.character)
+        .where(PlayerCharacter.player_id == player.id, WowCharacter.in_guild == True)
     )
     player_chars = list(result.scalars().all())
 
@@ -283,11 +284,14 @@ async def get_character_parses(
     db: AsyncSession = Depends(get_db),
 ):
     """Return WCL parse percentiles for a character owned by the current member."""
-    # Verify the character belongs to this player
+    # Verify the character belongs to this player and is a guild character
     pc_result = await db.execute(
-        select(PlayerCharacter).where(
+        select(PlayerCharacter)
+        .join(PlayerCharacter.character)
+        .where(
             PlayerCharacter.player_id == player.id,
             PlayerCharacter.character_id == character_id,
+            WowCharacter.in_guild == True,
         )
     )
     if not pc_result.scalar_one_or_none():
@@ -378,9 +382,9 @@ async def get_character_market(
     if not pc_result.scalar_one_or_none():
         return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
 
-    # Get the character's realm_slug
+    # Get the character's realm_slug (only guild characters have market data)
     char_result = await db.execute(
-        select(WowCharacter).where(WowCharacter.id == character_id)
+        select(WowCharacter).where(WowCharacter.id == character_id, WowCharacter.in_guild == True)
     )
     char = char_result.scalar_one_or_none()
     if not char:
@@ -437,9 +441,9 @@ async def get_character_crafting(
     if not pc_result.scalar_one_or_none():
         return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
 
-    # Get character info for realm determination
+    # Get character info for realm determination (only guild characters have crafting data)
     char_result = await db.execute(
-        select(WowCharacter).where(WowCharacter.id == character_id)
+        select(WowCharacter).where(WowCharacter.id == character_id, WowCharacter.in_guild == True)
     )
     char = char_result.scalar_one_or_none()
     if not char:

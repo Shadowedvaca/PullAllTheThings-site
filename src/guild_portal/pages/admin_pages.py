@@ -704,7 +704,7 @@ async def admin_players_data(
         LEFT JOIN guild_identity.specializations sp ON sp.id = wc.active_spec_id
         LEFT JOIN guild_identity.roles ro ON ro.id = sp.default_role_id
         LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
-        WHERE wc.removed_at IS NULL
+        WHERE wc.removed_at IS NULL AND wc.in_guild = TRUE
         ORDER BY wc.character_name
     """))
     chars = chars_result.mappings().all()
@@ -2031,13 +2031,13 @@ async def admin_matching_coverage(
 
     async with pool.acquire() as conn:
         total_chars = await conn.fetchval(
-            "SELECT COUNT(*) FROM guild_identity.wow_characters WHERE removed_at IS NULL"
+            "SELECT COUNT(*) FROM guild_identity.wow_characters WHERE removed_at IS NULL AND in_guild = TRUE"
         )
         matched_chars = await conn.fetchval(
             """SELECT COUNT(DISTINCT wc.id)
                FROM guild_identity.wow_characters wc
                JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
-               WHERE wc.removed_at IS NULL"""
+               WHERE wc.removed_at IS NULL AND wc.in_guild = TRUE"""
         )
         total_discord = await conn.fetchval(
             """SELECT COUNT(*) FROM guild_identity.discord_users
@@ -2810,15 +2810,15 @@ async def admin_progression_sync_stats(
 
     async with pool.acquire() as conn:
         total_chars = await conn.fetchval(
-            "SELECT COUNT(*) FROM guild_identity.wow_characters WHERE removed_at IS NULL"
+            "SELECT COUNT(*) FROM guild_identity.wow_characters WHERE removed_at IS NULL AND in_guild = TRUE"
         )
         synced_chars = await conn.fetchval(
             """SELECT COUNT(*) FROM guild_identity.wow_characters
-               WHERE removed_at IS NULL AND last_progression_sync IS NOT NULL"""
+               WHERE removed_at IS NULL AND in_guild = TRUE AND last_progression_sync IS NOT NULL"""
         )
         last_sync = await conn.fetchval(
             """SELECT MAX(last_progression_sync) FROM guild_identity.wow_characters
-               WHERE removed_at IS NULL"""
+               WHERE removed_at IS NULL AND in_guild = TRUE"""
         )
         raid_rows = await conn.fetchval(
             "SELECT COUNT(*) FROM guild_identity.character_raid_progress"

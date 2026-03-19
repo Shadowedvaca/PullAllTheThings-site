@@ -773,7 +773,7 @@ class GuildSyncScheduler:
                 char_rows = await conn.fetch(
                     """SELECT id, character_name AS name
                        FROM guild_identity.wow_characters
-                       WHERE removed_at IS NULL
+                       WHERE removed_at IS NULL AND in_guild = TRUE
                        ORDER BY character_name"""
                 )
             characters = [dict(r) for r in char_rows]
