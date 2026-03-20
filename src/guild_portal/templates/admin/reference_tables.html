@@ -68,19 +68,16 @@
 .rt-editable--number {
     max-width: 90px;
 }
-.rt-raid-checks {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    min-width: 180px;
-}
-.rt-raid-check-label {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+.rt-multi-select {
+    min-width: 200px;
+    max-width: 260px;
+    background: var(--color-bg-dark);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    border-radius: 4px;
     font-size: 0.85rem;
-    white-space: nowrap;
-    cursor: pointer;
+    font-family: inherit;
+    padding: 0.2rem;
 }
 .rt-save-btn {
     padding: 0.2rem 0.6rem;
@@ -370,19 +367,19 @@
                        placeholder="e.g. 13" style="width:70px;">
             </td>
             <td>
-                <div class="rt-raid-checks" data-field="current_raid_ids" data-orig="{{ season.current_raid_ids | tojson if season.current_raid_ids else '[]' }}">
-                    {% if known_raids %}
-                        {% for raid in known_raids %}
-                        <label class="rt-raid-check-label">
-                            <input type="checkbox" class="rt-raid-check" value="{{ raid.id }}"
-                                   {% if season.current_raid_ids and raid.id in season.current_raid_ids %}checked{% endif %}>
+                {% set season_raid_ids = season.current_raid_ids or [] %}
+                <select multiple name="current_raid_ids" class="rt-field rt-multi-select"
+                        size="5"
+                        data-orig="{{ season_raid_ids | tojson }}">
+                    {% for raid in known_raids %}
+                        {% if raid.id in season_raid_ids or raid.id not in all_assigned_raid_ids %}
+                        <option value="{{ raid.id }}"
+                                {% if raid.id in season_raid_ids %}selected{% endif %}>
                             {{ raid.name }}
-                        </label>
-                        {% endfor %}
-                    {% else %}
-                        <span style="color:var(--color-text-muted);font-size:0.8rem;">No raid data synced yet</span>
-                    {% endif %}
-                </div>
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
             </td>
             <td>
                 <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
@@ -662,17 +659,15 @@ function getRowPayload(row) {
     const fields = row.querySelectorAll('.rt-field');
     const payload = {};
     fields.forEach(f => {
+        if (f.multiple) {
+            payload[f.name] = Array.from(f.selectedOptions).map(o => parseInt(o.value, 10));
+            return;
+        }
         let val = f.value.trim();
         if (f.type === 'number') val = val === '' ? null : Number(val);
         if (f.tagName === 'SELECT' && (val === 'true' || val === 'false')) val = val === 'true';
         payload[f.name] = val === '' ? null : val;
     });
-    // Collect raid ID checkboxes
-    const raidDiv = row.querySelector('.rt-raid-checks');
-    if (raidDiv) {
-        payload.current_raid_ids = Array.from(raidDiv.querySelectorAll('.rt-raid-check:checked'))
-            .map(cb => parseInt(cb.value, 10));
-    }
     return payload;
 }
 
@@ -696,11 +691,12 @@ async function saveRow(btn) {
             statusEl.textContent = '✓';
             statusEl.classList.add('rt-status--visible');
             row.classList.remove('rt-row--dirty');
-            // Update orig values for regular fields
-            row.querySelectorAll('.rt-field').forEach(f => f.dataset.orig = f.value);
-            // Update orig for raid checkboxes
-            const raidDiv = row.querySelector('.rt-raid-checks');
-            if (raidDiv) raidDiv.dataset.orig = JSON.stringify(payload.current_raid_ids);
+            // Update orig values
+            row.querySelectorAll('.rt-field').forEach(f => {
+                f.dataset.orig = f.multiple
+                    ? JSON.stringify(Array.from(f.selectedOptions).map(o => parseInt(o.value, 10)))
+                    : f.value;
+            });
             setTimeout(() => statusEl.classList.remove('rt-status--visible'), 2000);
         } else {
             showToast('Error: ' + (data.error || 'unknown'), true);
@@ -718,10 +714,10 @@ document.querySelectorAll('.rt-field').forEach(f => {
     });
 });
 
-// Mark row dirty when a raid checkbox changes
-document.querySelectorAll('.rt-raid-check').forEach(cb => {
-    cb.addEventListener('change', () => {
-        cb.closest('.rt-row').classList.add('rt-row--dirty');
+// Mark row dirty when the raids multi-select changes
+document.querySelectorAll('select[name="current_raid_ids"]').forEach(sel => {
+    sel.addEventListener('change', () => {
+        sel.closest('.rt-row').classList.add('rt-row--dirty');
     });
 });
 
@@ -752,15 +748,16 @@ document.querySelectorAll('.gs-field').forEach(f => {
 });
 
 const _knownRaids = {{ known_raids | tojson }};
+const _allAssignedRaidIds = {{ all_assigned_raid_ids | list | tojson }};
 
-function _buildRaidChecks(selectedIds) {
-    if (!_knownRaids.length) {
-        return '<span style="color:var(--color-text-muted);font-size:0.8rem;">No raid data synced yet</span>';
-    }
-    return _knownRaids.map(r => {
-        const checked = selectedIds.includes(r.id) ? ' checked' : '';
-        return `<label class="rt-raid-check-label"><input type="checkbox" class="rt-raid-check" value="${r.id}"${checked}> ${r.name}</label>`;
-    }).join('');
+function _buildRaidMultiSelect(selectedIds) {
+    const opts = _knownRaids
+        .filter(r => selectedIds.includes(r.id) || !_allAssignedRaidIds.includes(r.id))
+        .map(r => {
+            const sel = selectedIds.includes(r.id) ? ' selected' : '';
+            return `<option value="${r.id}"${sel}>${r.name}</option>`;
+        }).join('');
+    return `<select multiple name="current_raid_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
 }
 
 async function createSeason() {
@@ -810,15 +807,13 @@ async function createSeason() {
                     <input class="rt-editable rt-field rt-editable--number" type="number" name="blizzard_mplus_season_id"
                            value="" data-orig="" placeholder="e.g. 13" style="width:70px;">
                 </td>
-                <td><div class="rt-raid-checks" data-field="current_raid_ids" data-orig="[]">${_buildRaidChecks([])}</div></td>
+                <td>${_buildRaidMultiSelect([])}</td>
                 <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
             `;
             tbody.prepend(tr);
             tr.querySelectorAll('.rt-field').forEach(f => {
-                f.addEventListener('input', () => f.closest('.rt-row').classList.add('rt-row--dirty'));
-            });
-            tr.querySelectorAll('.rt-raid-check').forEach(cb => {
-                cb.addEventListener('change', () => cb.closest('.rt-row').classList.add('rt-row--dirty'));
+                const evt = f.multiple ? 'change' : 'input';
+                f.addEventListener(evt, () => f.closest('.rt-row').classList.add('rt-row--dirty'));
             });
             document.getElementById('new-season-expansion').value = '';
             document.getElementById('new-season-number').value = '';
