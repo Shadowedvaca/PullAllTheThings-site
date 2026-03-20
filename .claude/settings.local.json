@@ -92,7 +92,16 @@
       "Bash(xargs wc:*)",
       "Bash(gh workflow:*)",
       "WebFetch(domain:www.icy-veins.com)",
-      "WebFetch(domain:u.gg)"
+      "WebFetch(domain:u.gg)",
+      "Bash(mv phase-H.md PHASE_H_CHARACTER_SYNCING_OVERHAUL.md)",
+      "Bash(mv phase-H-1.md PHASE_H_1_MIGRATION_QUERY_UPDATES.md)",
+      "Bash(mv phase-H-2.md PHASE_H_2_BNET_SYNC_OVERHAUL.md)",
+      "Bash(mv phase-H-3.md PHASE_H_3_API_MY_CHARACTERS_FRONTEND.md)",
+      "Bash(mv phase-H-4.md PHASE_H_4_MY_PROFILE_ADMIN_USERS_FRONTEND.md)",
+      "Read(//h/Development/**)",
+      "Read(//h/Development//**)",
+      "Bash(xxd)",
+      "Bash(gh pr:*)"
     ]
   },
   "defaultMode": "bypassPermissions"
