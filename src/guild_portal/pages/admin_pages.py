@@ -1277,7 +1277,7 @@ async def admin_reference_tables(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from sv_common.db.models import GuideSite, Role, WowClass, Specialization
+    from sv_common.db.models import CharacterRaidProgress, GuideSite, Role, WowClass, Specialization
     from sv_common.identity import ranks as rank_service
     from guild_portal.services import season_service
     from sqlalchemy.orm import selectinload
@@ -1310,6 +1310,19 @@ async def admin_reference_tables(
     )
     guide_sites = list(guide_sites_result.scalars().all())
 
+    known_raids_result = await db.execute(
+        select(CharacterRaidProgress.raid_name, CharacterRaidProgress.raid_id)
+        .distinct()
+        .order_by(CharacterRaidProgress.raid_id.desc())
+    )
+    known_raids = [{"name": row[0], "id": row[1]} for row in known_raids_result.all()]
+
+    # Which raid IDs are already assigned to any season
+    all_assigned_raid_ids: set[int] = set()
+    for s in seasons:
+        if s.current_raid_ids:
+            all_assigned_raid_ids.update(s.current_raid_ids)
+
     ctx = await _base_ctx(request, player, db)
     ctx.update({
         "ranks": ranks,
@@ -1318,6 +1331,8 @@ async def admin_reference_tables(
         "seasons": seasons,
         "screen_permissions": screen_permissions,
         "guide_sites": guide_sites,
+        "known_raids": known_raids,
+        "all_assigned_raid_ids": all_assigned_raid_ids,
     })
     return templates.TemplateResponse("admin/reference_tables.html", ctx)
 
