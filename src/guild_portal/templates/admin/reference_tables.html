@@ -68,6 +68,20 @@
 .rt-editable--number {
     max-width: 90px;
 }
+.rt-raid-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 180px;
+}
+.rt-raid-check-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
 .rt-save-btn {
     padding: 0.2rem 0.6rem;
     font-size: 0.8rem;
@@ -320,7 +334,7 @@
                 <th>New Expansion</th>
                 <th>Active</th>
                 <th title="Blizzard API integer ID for M+ keystone season. Find at: us.api.blizzard.com/data/wow/mythic-keystone/season/index">M+ Season ID</th>
-                <th title="Raid instance to show on My Characters. Populated from synced character data.">Current Raid</th>
+                <th title="Raid tiers active this season. Check all that apply. Populated from synced character data.">Current Raids</th>
                 <th></th>
             </tr>
         </thead>
@@ -356,13 +370,19 @@
                        placeholder="e.g. 13" style="width:70px;">
             </td>
             <td>
-                <select class="rt-editable rt-field" name="current_raid_name"
-                        data-orig="{{ season.current_raid_name or '' }}">
-                    <option value="">— none —</option>
-                    {% for rn in known_raid_names %}
-                    <option value="{{ rn }}" {% if season.current_raid_name == rn %}selected{% endif %}>{{ rn }}</option>
-                    {% endfor %}
-                </select>
+                <div class="rt-raid-checks" data-field="current_raid_ids" data-orig="{{ season.current_raid_ids | tojson if season.current_raid_ids else '[]' }}">
+                    {% if known_raids %}
+                        {% for raid in known_raids %}
+                        <label class="rt-raid-check-label">
+                            <input type="checkbox" class="rt-raid-check" value="{{ raid.id }}"
+                                   {% if season.current_raid_ids and raid.id in season.current_raid_ids %}checked{% endif %}>
+                            {{ raid.name }}
+                        </label>
+                        {% endfor %}
+                    {% else %}
+                        <span style="color:var(--color-text-muted);font-size:0.8rem;">No raid data synced yet</span>
+                    {% endif %}
+                </div>
             </td>
             <td>
                 <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
@@ -647,6 +667,12 @@ function getRowPayload(row) {
         if (f.tagName === 'SELECT' && (val === 'true' || val === 'false')) val = val === 'true';
         payload[f.name] = val === '' ? null : val;
     });
+    // Collect raid ID checkboxes
+    const raidDiv = row.querySelector('.rt-raid-checks');
+    if (raidDiv) {
+        payload.current_raid_ids = Array.from(raidDiv.querySelectorAll('.rt-raid-check:checked'))
+            .map(cb => parseInt(cb.value, 10));
+    }
     return payload;
 }
 
@@ -670,8 +696,11 @@ async function saveRow(btn) {
             statusEl.textContent = '✓';
             statusEl.classList.add('rt-status--visible');
             row.classList.remove('rt-row--dirty');
-            // Update orig values
+            // Update orig values for regular fields
             row.querySelectorAll('.rt-field').forEach(f => f.dataset.orig = f.value);
+            // Update orig for raid checkboxes
+            const raidDiv = row.querySelector('.rt-raid-checks');
+            if (raidDiv) raidDiv.dataset.orig = JSON.stringify(payload.current_raid_ids);
             setTimeout(() => statusEl.classList.remove('rt-status--visible'), 2000);
         } else {
             showToast('Error: ' + (data.error || 'unknown'), true);
@@ -686,6 +715,13 @@ async function saveRow(btn) {
 document.querySelectorAll('.rt-field').forEach(f => {
     f.addEventListener('input', () => {
         f.closest('.rt-row').classList.add('rt-row--dirty');
+    });
+});
+
+// Mark row dirty when a raid checkbox changes
+document.querySelectorAll('.rt-raid-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+        cb.closest('.rt-row').classList.add('rt-row--dirty');
     });
 });
 
@@ -715,15 +751,16 @@ document.querySelectorAll('.gs-field').forEach(f => {
     });
 });
 
-const _knownRaidNames = {{ known_raid_names | tojson }};
+const _knownRaids = {{ known_raids | tojson }};
 
-function _buildRaidNameSelect(selected) {
-    const opts = ['<option value="">— none —</option>'];
-    _knownRaidNames.forEach(n => {
-        const sel = n === selected ? ' selected' : '';
-        opts.push(`<option value="${n}"${sel}>${n}</option>`);
-    });
-    return `<select class="rt-editable rt-field" name="current_raid_name" data-orig="${selected || ''}">${opts.join('')}</select>`;
+function _buildRaidChecks(selectedIds) {
+    if (!_knownRaids.length) {
+        return '<span style="color:var(--color-text-muted);font-size:0.8rem;">No raid data synced yet</span>';
+    }
+    return _knownRaids.map(r => {
+        const checked = selectedIds.includes(r.id) ? ' checked' : '';
+        return `<label class="rt-raid-check-label"><input type="checkbox" class="rt-raid-check" value="${r.id}"${checked}> ${r.name}</label>`;
+    }).join('');
 }
 
 async function createSeason() {
@@ -773,12 +810,15 @@ async function createSeason() {
                     <input class="rt-editable rt-field rt-editable--number" type="number" name="blizzard_mplus_season_id"
                            value="" data-orig="" placeholder="e.g. 13" style="width:70px;">
                 </td>
-                <td>${_buildRaidNameSelect('')}</td>
+                <td><div class="rt-raid-checks" data-field="current_raid_ids" data-orig="[]">${_buildRaidChecks([])}</div></td>
                 <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
             `;
             tbody.prepend(tr);
             tr.querySelectorAll('.rt-field').forEach(f => {
                 f.addEventListener('input', () => f.closest('.rt-row').classList.add('rt-row--dirty'));
+            });
+            tr.querySelectorAll('.rt-raid-check').forEach(cb => {
+                cb.addEventListener('change', () => cb.closest('.rt-row').classList.add('rt-row--dirty'));
             });
             document.getElementById('new-season-expansion').value = '';
             document.getElementById('new-season-number').value = '';

@@ -1310,12 +1310,12 @@ async def admin_reference_tables(
     )
     guide_sites = list(guide_sites_result.scalars().all())
 
-    known_raid_names_result = await db.execute(
-        select(CharacterRaidProgress.raid_name)
+    known_raids_result = await db.execute(
+        select(CharacterRaidProgress.raid_name, CharacterRaidProgress.raid_id)
         .distinct()
         .order_by(CharacterRaidProgress.raid_name)
     )
-    known_raid_names = [row[0] for row in known_raid_names_result.all()]
+    known_raids = [{"name": row[0], "id": row[1]} for row in known_raids_result.all()]
 
     ctx = await _base_ctx(request, player, db)
     ctx.update({
@@ -1325,7 +1325,7 @@ async def admin_reference_tables(
         "seasons": seasons,
         "screen_permissions": screen_permissions,
         "guide_sites": guide_sites,
-        "known_raid_names": known_raid_names,
+        "known_raids": known_raids,
     })
     return templates.TemplateResponse("admin/reference_tables.html", ctx)
 

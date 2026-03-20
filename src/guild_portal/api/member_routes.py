@@ -334,14 +334,14 @@ async def get_character_progression(
         select(RaidSeason).where(RaidSeason.is_active == True)
     )
     active_season = active_season_result.scalar_one_or_none()
-    current_raid_name: str | None = (
-        active_season.current_raid_name if active_season else None
+    current_raid_ids: list[int] = (
+        active_season.current_raid_ids or [] if active_season else []
     )
 
     # Aggregate per (raid_name, difficulty): total bosses and bosses with kills
     raid_filter = [CharacterRaidProgress.character_id == character_id]
-    if current_raid_name:
-        raid_filter.append(CharacterRaidProgress.raid_name == current_raid_name)
+    if current_raid_ids:
+        raid_filter.append(CharacterRaidProgress.raid_id.in_(current_raid_ids))
 
     raid_rows = await db.execute(
         select(
