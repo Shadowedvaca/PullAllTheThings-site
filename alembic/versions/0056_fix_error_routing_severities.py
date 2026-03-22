@@ -20,7 +20,15 @@ def upgrade():
         WHERE issue_type = 'bnet_token_expired'
     """)
 
-    # Sync pipeline failures are critical — insert specific routing rows for each type
+    # Remove any existing rows for these types (may have been added via admin UI)
+    # then insert the canonical critical entries
+    op.execute("""
+        DELETE FROM common.error_routing
+        WHERE issue_type IN (
+            'blizzard_sync_failed', 'discord_sync_failed', 'crafting_sync_failed',
+            'wcl_sync_failed', 'ah_sync_failed', 'attendance_sync_failed'
+        )
+    """)
     op.execute("""
         INSERT INTO common.error_routing
             (issue_type, min_severity, dest_audit_log, dest_discord, first_only, notes)
