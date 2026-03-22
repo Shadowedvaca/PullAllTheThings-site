@@ -159,7 +159,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 ## Database Schema
 
-> Full DDL: `reference/SCHEMA.md`. Current through **migration 0044**.
+> Full DDL: `reference/SCHEMA.md`. Current through **migration 0056**.
 
 | Schema | Key tables |
 |--------|-----------|
@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase G complete** — Spec Guide Links panel on My Characters. Data-driven badge buttons (Wowhead, Icy Veins, u.gg) with spec dropdown; configurable via Admin → Reference Tables with live preview. All polish fixes shipped in `prod-v0.4.1`.
-- **Branch:** `main` (feature/phase-h-character-sync merged via PR #9 + #10)
-- **Tests:** 960 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
-- **Last migration:** 0053 (`common.guide_sites` table + 3 seed rows)
-- **Last tag:** `prod-v0.4.1`
+- **Hotfix prod-v0.4.2** — Error routing severity alignment + note_mismatch rule retirement.
+- **Branch:** `main`
+- **Tests:** 955 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
+- **Last migration:** 0056 (`common.error_routing` severity fixes — bnet_token_expired→info, sync failures→critical)
+- **Last tag:** `prod-v0.4.2`
 - **Active branch:** `main`
 
 ### What Exists
