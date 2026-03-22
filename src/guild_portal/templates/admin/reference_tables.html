@@ -332,6 +332,7 @@
                 <th>Active</th>
                 <th title="Blizzard API integer ID for M+ keystone season. Find at: us.api.blizzard.com/data/wow/mythic-keystone/season/index">M+ Season ID</th>
                 <th title="Raid tiers active this season. Check all that apply. Populated from synced character data.">Current Raids</th>
+                <th title="WCL zone IDs for this season's raid tier. Populated from synced WCL parse data.">WCL Zones</th>
                 <th></th>
             </tr>
         </thead>
@@ -376,6 +377,21 @@
                         <option value="{{ raid.id }}"
                                 {% if raid.id in season_raid_ids %}selected{% endif %}>
                             {{ raid.name }}
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                {% set season_wcl_zone_ids = season.current_wcl_zone_ids or [] %}
+                <select multiple name="current_wcl_zone_ids" class="rt-field rt-multi-select"
+                        size="5"
+                        data-orig="{{ season_wcl_zone_ids | tojson }}">
+                    {% for zone in known_wcl_zones %}
+                        {% if zone.id in season_wcl_zone_ids or zone.id not in all_assigned_wcl_zone_ids %}
+                        <option value="{{ zone.id }}"
+                                {% if zone.id in season_wcl_zone_ids %}selected{% endif %}>
+                            {{ zone.name }}
                         </option>
                         {% endif %}
                     {% endfor %}
@@ -721,6 +737,13 @@ document.querySelectorAll('select[name="current_raid_ids"]').forEach(sel => {
     });
 });
 
+// Mark row dirty when the WCL zones multi-select changes
+document.querySelectorAll('select[name="current_wcl_zone_ids"]').forEach(sel => {
+    sel.addEventListener('change', () => {
+        sel.closest('.rt-row').classList.add('rt-row--dirty');
+    });
+});
+
 // ── Guide Sites live badge preview ──────────────────────────────────────────
 
 function updateGuidePreview(row) {
@@ -749,6 +772,8 @@ document.querySelectorAll('.gs-field').forEach(f => {
 
 const _knownRaids = {{ known_raids | tojson }};
 const _allAssignedRaidIds = {{ all_assigned_raid_ids | list | tojson }};
+const _knownWclZones = {{ known_wcl_zones | tojson }};
+const _allAssignedWclZoneIds = {{ all_assigned_wcl_zone_ids | list | tojson }};
 
 function _buildRaidMultiSelect(selectedIds) {
     const opts = _knownRaids

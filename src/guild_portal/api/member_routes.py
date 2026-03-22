@@ -446,9 +446,22 @@ async def get_character_parses(
     wcl_cfg = wcl_result.scalar_one_or_none()
     wcl_configured = bool(wcl_cfg and wcl_cfg.is_configured)
 
-    # Load all parses for this character
+    # Restrict to the active season's WCL zones if configured
+    active_season_result = await db.execute(
+        select(RaidSeason).where(RaidSeason.is_active == True)
+    )
+    active_season = active_season_result.scalar_one_or_none()
+    current_wcl_zone_ids: list[int] = (
+        active_season.current_wcl_zone_ids or [] if active_season else []
+    )
+
+    # Load parses for this character, filtered to current season's WCL zones
+    parse_filter = [CharacterParse.character_id == character_id]
+    if current_wcl_zone_ids:
+        parse_filter.append(CharacterParse.zone_id.in_(current_wcl_zone_ids))
+
     parse_result = await db.execute(
-        select(CharacterParse).where(CharacterParse.character_id == character_id)
+        select(CharacterParse).where(*parse_filter)
     )
     all_rows = list(parse_result.scalars().all())
 

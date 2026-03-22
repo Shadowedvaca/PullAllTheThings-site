@@ -17,6 +17,7 @@ from sv_common.db.models import (
     Player,
     PlayerAvailability,
     PlayerCharacter,
+    RaidSeason,
     RaiderIOProfile,
     Specialization,
     WowCharacter,
@@ -246,14 +247,32 @@ async def get_progression(db: AsyncSession = Depends(get_db)):
     prog_row = prog_result.fetchone()
     guild_best = prog_row.raid_progression if prog_row else None
 
-    # Raid clearers from character_raid_progress
-    raid_result = await db.execute(
-        text("""
-            SELECT difficulty, COUNT(DISTINCT character_id) AS cnt
-            FROM guild_identity.character_raid_progress
-            GROUP BY difficulty
-        """)
+    # Raid clearers from character_raid_progress — filtered to current season's raid tier
+    active_season_result = await db.execute(
+        select(RaidSeason).where(RaidSeason.is_active == True)
     )
+    active_season = active_season_result.scalar_one_or_none()
+    current_raid_ids: list[int] = (
+        active_season.current_raid_ids or [] if active_season else []
+    )
+
+    if current_raid_ids:
+        raid_result = await db.execute(
+            text("""
+                SELECT difficulty, COUNT(DISTINCT character_id) AS cnt
+                FROM guild_identity.character_raid_progress
+                WHERE raid_id = ANY(:raid_ids)
+                GROUP BY difficulty
+            """).bindparams(raid_ids=current_raid_ids)
+        )
+    else:
+        raid_result = await db.execute(
+            text("""
+                SELECT difficulty, COUNT(DISTINCT character_id) AS cnt
+                FROM guild_identity.character_raid_progress
+                GROUP BY difficulty
+            """)
+        )
     diff_counts = {row.difficulty: int(row.cnt) for row in raid_result}
 
     return {
