@@ -230,8 +230,21 @@ async def get_progression(db: AsyncSession = Depends(get_db)):
         for row in rio_rows[:10]
     ]
 
-    # Guild best progression string — from the highest-scored character
-    guild_best = rio_rows[0].raid_progression if rio_rows else None
+    # Guild best progression string — independent of M+ score so it shows at
+    # the start of a new season when everyone's score has reset to 0
+    prog_result = await db.execute(
+        text("""
+            SELECT r.raid_progression
+            FROM guild_identity.raiderio_profiles r
+            JOIN guild_identity.wow_characters wc ON wc.id = r.character_id
+            WHERE r.season = 'current' AND r.raid_progression IS NOT NULL
+              AND wc.in_guild = TRUE
+            ORDER BY r.overall_score DESC NULLS LAST
+            LIMIT 1
+        """)
+    )
+    prog_row = prog_result.fetchone()
+    guild_best = prog_row.raid_progression if prog_row else None
 
     # Raid clearers from character_raid_progress
     raid_result = await db.execute(
