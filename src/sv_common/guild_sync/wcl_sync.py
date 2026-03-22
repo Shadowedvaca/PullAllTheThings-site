@@ -153,7 +153,7 @@ async def sync_guild_reports(
     return stats
 
 
-def _parse_zone_rankings(zone_rankings: dict) -> list[dict]:
+def _parse_zone_rankings(zone_rankings: dict, zone_name_map: dict[int, str] | None = None) -> list[dict]:
     """Extract per-boss parse records from a WCL zoneRankings response.
 
     Returns list of dicts with encounter_id, encounter_name, zone_id, zone_name,
@@ -164,7 +164,7 @@ def _parse_zone_rankings(zone_rankings: dict) -> list[dict]:
         return parses
 
     zone_id = zone_rankings.get("zone", 0)
-    zone_name = zone_rankings.get("zoneName", "")
+    zone_name = (zone_name_map or {}).get(zone_id, "") if zone_id else ""
     difficulty = zone_rankings.get("difficulty", 4)
     spec = zone_rankings.get("bestSpec") or zone_rankings.get("spec") or "Unknown"
 
@@ -209,6 +209,12 @@ async def sync_character_parses(
     """
     stats = {"synced": 0, "errors": 0, "parse_records": 0}
 
+    # Fetch zone name lookup once so parse records have readable names
+    try:
+        zone_name_map = await wcl_client.get_world_zones()
+    except Exception:
+        zone_name_map = {}
+
     for i in range(0, len(characters), batch_size):
         batch = characters[i: i + batch_size]
         results = await asyncio.gather(
@@ -238,7 +244,7 @@ async def sync_character_parses(
             if not zone_rankings_raw:
                 continue
 
-            parses = _parse_zone_rankings(zone_rankings_raw)
+            parses = _parse_zone_rankings(zone_rankings_raw, zone_name_map)
             if not parses:
                 continue
 

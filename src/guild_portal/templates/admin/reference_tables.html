@@ -391,7 +391,7 @@
                         {% if zone.id in season_wcl_zone_ids or zone.id not in all_assigned_wcl_zone_ids %}
                         <option value="{{ zone.id }}"
                                 {% if zone.id in season_wcl_zone_ids %}selected{% endif %}>
-                            {{ zone.name }}
+                            {{ zone.name or ('Zone ' ~ zone.id) }}
                         </option>
                         {% endif %}
                     {% endfor %}

@@ -188,7 +188,7 @@ class TestParseZoneRankings:
                 },
             ],
         }
-        result = parse(zone_rankings)
+        result = parse(zone_rankings, zone_name_map={38: "Nerub-ar Palace"})
         assert len(result) == 2
         assert result[0]["encounter_id"] == 2507
         assert result[0]["encounter_name"] == "Ulgrax the Devourer"

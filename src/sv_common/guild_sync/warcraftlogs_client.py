@@ -130,6 +130,25 @@ class WarcraftLogsClient:
             "difficulty": difficulty,
         })
 
+    async def get_world_zones(self) -> dict[int, str]:
+        """Fetch all WCL zone IDs and names from worldData.
+
+        Returns {zone_id: zone_name}.
+        """
+        query = """
+        query {
+            worldData {
+                zones {
+                    id
+                    name
+                }
+            }
+        }
+        """
+        data = await self._query(query)
+        zones = data.get("worldData", {}).get("zones") or []
+        return {z["id"]: z["name"] for z in zones if z.get("id") and z.get("name")}
+
     # --- Guild Queries ---
 
     async def get_guild_reports(
