@@ -6,6 +6,11 @@ Create Date: 2026-03-22
 """
 from alembic import op
 
+revision = "0056"
+down_revision = "0055"
+branch_labels = None
+depends_on = None
+
 
 def upgrade():
     # bnet_token_expired is informational (player action needed, not a system failure)
