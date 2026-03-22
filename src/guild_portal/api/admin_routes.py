@@ -75,7 +75,6 @@ class SeasonUpdate(BaseModel):
     is_active: bool | None = None
     blizzard_mplus_season_id: int | None = None
     current_raid_ids: list[int] | None = None
-    current_wcl_zone_ids: list[int] | None = None
 
 
 class PlayerCreate(BaseModel):
@@ -292,7 +291,6 @@ async def list_seasons(db: AsyncSession = Depends(get_db)):
                 "is_active": s.is_active,
                 "blizzard_mplus_season_id": s.blizzard_mplus_season_id,
                 "current_raid_ids": s.current_raid_ids or [],
-                "current_wcl_zone_ids": s.current_wcl_zone_ids or [],
                 "created_at": s.created_at.isoformat(),
             }
             for s in seasons
@@ -345,8 +343,6 @@ async def update_season(
         season.blizzard_mplus_season_id = body.blizzard_mplus_season_id
     if "current_raid_ids" in body.model_fields_set:
         season.current_raid_ids = body.current_raid_ids or None
-    if "current_wcl_zone_ids" in body.model_fields_set:
-        season.current_wcl_zone_ids = body.current_wcl_zone_ids or None
     await db.commit()
     return {
         "ok": True,
@@ -360,7 +356,6 @@ async def update_season(
             "is_active": season.is_active,
             "blizzard_mplus_season_id": season.blizzard_mplus_season_id,
             "current_raid_ids": season.current_raid_ids or [],
-            "current_wcl_zone_ids": season.current_wcl_zone_ids or [],
         },
     }
 

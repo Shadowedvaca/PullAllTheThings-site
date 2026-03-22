@@ -1277,7 +1277,7 @@ async def admin_reference_tables(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from sv_common.db.models import CharacterParse, CharacterRaidProgress, GuideSite, Role, WowClass, Specialization
+    from sv_common.db.models import CharacterRaidProgress, GuideSite, Role, WowClass, Specialization
     from sv_common.identity import ranks as rank_service
     from guild_portal.services import season_service
     from sqlalchemy.orm import selectinload
@@ -1323,19 +1323,6 @@ async def admin_reference_tables(
         if s.current_raid_ids:
             all_assigned_raid_ids.update(s.current_raid_ids)
 
-    # WCL zones discovered from synced parse data
-    known_wcl_zones_result = await db.execute(
-        select(CharacterParse.zone_name, CharacterParse.zone_id)
-        .distinct()
-        .order_by(CharacterParse.zone_id.desc())
-    )
-    known_wcl_zones = [{"name": row[0], "id": row[1]} for row in known_wcl_zones_result.all()]
-
-    all_assigned_wcl_zone_ids: set[int] = set()
-    for s in seasons:
-        if s.current_wcl_zone_ids:
-            all_assigned_wcl_zone_ids.update(s.current_wcl_zone_ids)
-
     ctx = await _base_ctx(request, player, db)
     ctx.update({
         "ranks": ranks,
@@ -1346,8 +1333,6 @@ async def admin_reference_tables(
         "guide_sites": guide_sites,
         "known_raids": known_raids,
         "all_assigned_raid_ids": all_assigned_raid_ids,
-        "known_wcl_zones": known_wcl_zones,
-        "all_assigned_wcl_zone_ids": all_assigned_wcl_zone_ids,
     })
     return templates.TemplateResponse("admin/reference_tables.html", ctx)
 

@@ -446,14 +446,30 @@ async def get_character_parses(
     wcl_cfg = wcl_result.scalar_one_or_none()
     wcl_configured = bool(wcl_cfg and wcl_cfg.is_configured)
 
-    # Restrict to the active season's WCL zones if configured
+    # Derive current WCL zone IDs from current_raid_ids — find zones that appear
+    # in parses for characters who have kills in the active season's raids.
     active_season_result = await db.execute(
         select(RaidSeason).where(RaidSeason.is_active == True)
     )
     active_season = active_season_result.scalar_one_or_none()
-    current_wcl_zone_ids: list[int] = (
-        active_season.current_wcl_zone_ids or [] if active_season else []
+    current_raid_ids_for_wcl: list[int] = (
+        active_season.current_raid_ids or [] if active_season else []
     )
+
+    current_wcl_zone_ids: list[int] = []
+    if current_raid_ids_for_wcl:
+        zone_result = await db.execute(
+            text("""
+                SELECT DISTINCT cp.zone_id
+                FROM guild_identity.character_parses cp
+                WHERE cp.character_id IN (
+                    SELECT DISTINCT crp.character_id
+                    FROM guild_identity.character_raid_progress crp
+                    WHERE crp.raid_id = ANY(:raid_ids) AND crp.kill_count > 0
+                )
+            """).bindparams(raid_ids=current_raid_ids_for_wcl)
+        )
+        current_wcl_zone_ids = [row.zone_id for row in zone_result]
 
     # Load parses for this character, filtered to current season's WCL zones
     parse_filter = [CharacterParse.character_id == character_id]
