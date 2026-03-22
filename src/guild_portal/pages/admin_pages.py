@@ -2490,7 +2490,7 @@ async def admin_bnet_sync_user(
         await report_error(
             pool,
             "bnet_token_expired",
-            "warning",
+            "info",
             "Battle.net token expired — player must re-link their Battle.net account.",
             "admin_bnet_sync",
             details={"user_id": user_id, "player_id": player_id},
@@ -2547,7 +2547,7 @@ async def admin_bnet_sync_all(
                 await report_error(
                     pool,
                     "bnet_token_expired",
-                    "warning",
+                    "info",
                     f"Battle.net token expired for player {player_id} — player must re-link.",
                     "admin_bnet_sync",
                     details={"player_id": player_id},

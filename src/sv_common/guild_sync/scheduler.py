@@ -399,14 +399,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "blizzard_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "blizzard_sync_failed", "warning",
+                "blizzard_sync_failed", "critical",
                 f"The Blizzard API sync pipeline encountered an unexpected error: {exc}",
                 result["is_first_occurrence"],
             )
@@ -464,14 +464,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "discord_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "discord_sync_failed", "warning",
+                "discord_sync_failed", "critical",
                 f"The Discord member sync pipeline encountered an unexpected error: {exc}",
                 result["is_first_occurrence"],
             )
@@ -480,9 +480,9 @@ class GuildSyncScheduler:
         """Process addon upload and run downstream pipeline.
 
         Pipeline:
-          1. sync_addon_data()          — write notes, log note_mismatch issues
+          1. sync_addon_data()          — write guild/officer notes to DB
           2. run_integrity_check()      — detect orphans and other issues
-          3. run_drift_scan()           — detect note mismatches + link contradictions + auto-fix
+          3. run_drift_scan()           — detect duplicate links + auto-fix
           4. send_sync_summary()        — Discord report if notable
 
         Note: run_matching() is NOT called here. Use POST /api/identity/run-matching
@@ -494,7 +494,7 @@ class GuildSyncScheduler:
             async with SyncLogEntry(self.db_pool, "addon_upload") as log:
                 start = time.time()
 
-                # Step 1: Write notes, log note_mismatch issues for changed notes
+                # Step 1: Write guild/officer notes to DB
                 addon_stats = await sync_addon_data(self.db_pool, addon_data)
                 log.stats = {"found": addon_stats["processed"], "updated": addon_stats["updated"]}
 
@@ -546,14 +546,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "crafting_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "crafting_sync_failed", "warning",
+                "crafting_sync_failed", "critical",
                 str(exc),
                 result["is_first_occurrence"],
             )
@@ -797,14 +797,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "wcl_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "wcl_sync_failed", "warning",
+                "wcl_sync_failed", "critical",
                 str(exc),
                 result["is_first_occurrence"],
             )
@@ -824,14 +824,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "wcl_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "wcl_sync_failed", "warning",
+                "wcl_sync_failed", "critical",
                 str(exc),
                 result["is_first_occurrence"],
             )
@@ -921,14 +921,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "ah_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "ah_sync_failed", "warning",
+                "ah_sync_failed", "critical",
                 str(exc),
                 result["is_first_occurrence"],
             )
@@ -971,14 +971,14 @@ class GuildSyncScheduler:
             result = await report_error(
                 self.db_pool,
                 "attendance_sync_failed",
-                "warning",
+                "critical",
                 str(exc),
                 "scheduler",
                 details={"error": str(exc)},
             )
             await maybe_notify_discord(
                 self.db_pool, self.discord_bot, self.audit_channel_id,
-                "attendance_sync_failed", "warning",
+                "attendance_sync_failed", "critical",
                 str(exc),
                 result["is_first_occurrence"],
             )

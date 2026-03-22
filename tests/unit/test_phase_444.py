@@ -51,17 +51,6 @@ class TestMatchingRulesEmpty:
 
 
 class TestDriftScannerSkipsOAuth:
-    def test_detect_note_mismatch_excludes_battlenet_oauth_in_sql(self):
-        """detect_note_mismatch SQL must filter out battlenet_oauth links."""
-        from sv_common.guild_sync import integrity_checker
-        src = inspect.getsource(integrity_checker.detect_note_mismatch)
-        assert "battlenet_oauth" in src, (
-            "detect_note_mismatch should exclude battlenet_oauth links"
-        )
-        assert "link_source != 'battlenet_oauth'" in src or "link_source != \"battlenet_oauth\"" in src, (
-            "detect_note_mismatch SQL should have AND pc.link_source != 'battlenet_oauth'"
-        )
-
     def test_detect_link_note_contradictions_excludes_battlenet_oauth_in_sql(self):
         """detect_link_note_contradictions SQL must filter out battlenet_oauth links."""
         from sv_common.guild_sync import integrity_checker
@@ -71,14 +60,6 @@ class TestDriftScannerSkipsOAuth:
         )
         assert "link_source != 'battlenet_oauth'" in src or "link_source != \"battlenet_oauth\"" in src, (
             "detect_link_note_contradictions SQL should have AND pc.link_source != 'battlenet_oauth'"
-        )
-
-    def test_detect_note_mismatch_docstring_mentions_oauth(self):
-        """detect_note_mismatch should document the OAuth skip in its docstring."""
-        from sv_common.guild_sync.integrity_checker import detect_note_mismatch
-        doc = detect_note_mismatch.__doc__ or ""
-        assert "battlenet_oauth" in doc.lower() or "oauth" in doc.lower(), (
-            "detect_note_mismatch docstring should mention OAuth skip"
         )
 
     def test_detect_link_note_contradictions_docstring_mentions_oauth(self):

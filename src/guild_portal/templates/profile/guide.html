@@ -456,22 +456,19 @@
         <p>The top section shows overall matching coverage — what percentage of guild characters are linked to players, broken down by confidence level (High / Medium / Low) and link source (note key, name match, manual, Battle.net OAuth, etc.).</p>
 
         <h4>Audit Rules</h4>
-        <p>Eight automated rules run after each guild sync:</p>
+        <p>Seven automated rules run after each guild sync:</p>
         <ul>
-          <li><strong>note_mismatch</strong> — A character's guild note doesn't match the player it's linked to (auto-fixed)</li>
           <li><strong>orphan_wow</strong> — A WoW character with no linked player</li>
           <li><strong>orphan_discord</strong> — A Discord member with no linked player</li>
           <li><strong>role_mismatch</strong> — Player's recorded rank doesn't match their Discord role</li>
           <li><strong>stale_character</strong> — Character hasn't been seen in a long time</li>
-          <li><strong>link_contradicts_note</strong> — Existing link doesn't match the guild note key</li>
           <li><strong>duplicate_discord</strong> — Two players linked to the same Discord user</li>
           <li><strong>stale_discord_link</strong> — Player linked to a Discord user who left the server</li>
+          <li><strong>main_char_not_linked</strong> — A player's main/offspec pointer is orphaned</li>
         </ul>
 
         <h4>Drift Detection</h4>
         <p>The Drift Detection panel at the bottom tracks things that <em>were</em> correct and have since changed. Run a drift scan manually with the "Run Drift Scan" button, or it runs automatically after each sync.</p>
-
-        <div class="guide-tip">💡 The <code>note_mismatch</code> rule is the only one with auto-fix enabled. Everything else requires manual review or use of the Fix buttons.</div>
       </div>
     </details>
 

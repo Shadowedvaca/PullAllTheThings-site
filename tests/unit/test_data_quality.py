@@ -151,10 +151,6 @@ class TestDetectFunctions:
 # ---------------------------------------------------------------------------
 
 class TestMitigationFunctions:
-    def test_mitigate_note_mismatch_is_async(self):
-        from sv_common.guild_sync.mitigations import mitigate_note_mismatch
-        assert inspect.iscoroutinefunction(mitigate_note_mismatch)
-
     def test_mitigate_orphan_wow_is_async(self):
         from sv_common.guild_sync.mitigations import mitigate_orphan_wow
         assert inspect.iscoroutinefunction(mitigate_orphan_wow)
@@ -170,20 +166,6 @@ class TestMitigationFunctions:
     def test_run_auto_mitigations_is_async(self):
         from sv_common.guild_sync.mitigations import run_auto_mitigations
         assert inspect.iscoroutinefunction(run_auto_mitigations)
-
-    def test_mitigate_note_mismatch_takes_pool_and_issue_row(self):
-        from sv_common.guild_sync.mitigations import mitigate_note_mismatch
-        sig = inspect.signature(mitigate_note_mismatch)
-        params = list(sig.parameters.keys())
-        assert "pool" in params
-        assert "issue_row" in params
-
-    def test_mitigate_note_mismatch_returns_false_for_missing_char_id(self):
-        """Synchronous part: returns False if issue_row has no wow_character_id."""
-        # We can't easily test async without a DB, but we can verify the guard
-        # by checking that the function signature is correct and the docstring
-        from sv_common.guild_sync.mitigations import mitigate_note_mismatch
-        assert mitigate_note_mismatch.__doc__ is not None
 
 
 # ---------------------------------------------------------------------------
@@ -213,14 +195,12 @@ class TestSchedulerPipeline:
         assert "run_matching" in src, \
             "scheduler.py should mention run_matching (it's still available as admin action)"
 
-    def test_db_sync_logs_note_changed_not_returns_ids(self):
-        """sync_addon_data should log note_mismatch issues, not return note_changed_ids."""
+    def test_db_sync_does_not_use_note_changed_ids(self):
+        """sync_addon_data should not use note_changed_ids (retired)."""
         import pathlib
         src = pathlib.Path("src/sv_common/guild_sync/db_sync.py").read_text()
         assert "note_changed_ids" not in src, \
             "db_sync.py still uses note_changed_ids"
-        assert "note_mismatch" in src, \
-            "db_sync.py should log note_mismatch issues"
 
 
 # ---------------------------------------------------------------------------
@@ -228,12 +208,10 @@ class TestSchedulerPipeline:
 # ---------------------------------------------------------------------------
 
 class TestDbSyncStatKeys:
-    def test_sync_addon_data_stats_has_note_changed_key(self):
-        """Stats dict should have 'note_changed' (count) not 'note_changed_ids' (list)."""
+    def test_sync_addon_data_stats_does_not_have_note_changed_ids(self):
+        """Stats dict should not have the retired note_changed_ids key."""
         import pathlib
         src = pathlib.Path("src/sv_common/guild_sync/db_sync.py").read_text()
-        assert '"note_changed"' in src or "'note_changed'" in src, \
-            "db_sync.py stats should have note_changed count key"
         assert "note_changed_ids" not in src, \
             "db_sync.py should not have note_changed_ids"
 
@@ -283,14 +261,6 @@ class TestNoteAliases:
         """Player model should have a note_aliases relationship."""
         from sv_common.db.models import Player
         assert hasattr(Player, "note_aliases")
-
-    def test_detect_note_mismatch_loads_aliases(self):
-        """detect_note_mismatch source should reference player_note_aliases table."""
-        import inspect
-        from sv_common.guild_sync.integrity_checker import detect_note_mismatch
-        src = inspect.getsource(detect_note_mismatch)
-        assert "player_note_aliases" in src, \
-            "detect_note_mismatch should query player_note_aliases"
 
     def test_mitigations_import_upsert_note_alias(self):
         """mitigations.py should import upsert_note_alias."""
