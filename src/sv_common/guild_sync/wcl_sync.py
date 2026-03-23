@@ -439,12 +439,24 @@ async def sync_report_parses(
                           .get("report", {})
                           .get("rankings")
                 )
+                logger.info(
+                    "sync_report_parses: report=%s enc=%s blob_type=%s blob_keys=%s",
+                    report_code, encounter_id,
+                    type(rankings_blob).__name__,
+                    list(rankings_blob.keys()) if isinstance(rankings_blob, dict)
+                    else (rankings_blob[:120] if isinstance(rankings_blob, str) else rankings_blob),
+                )
                 if not rankings_blob:
                     stats["encounters_queried"] += 1
                     await asyncio.sleep(0.3)
                     continue
 
                 entries = _parse_report_rankings(rankings_blob)
+                logger.info(
+                    "sync_report_parses: report=%s enc=%s entries=%d name_matches=%d",
+                    report_code, encounter_id, len(entries),
+                    sum(1 for e in entries if char_lookup.get(e["name"].lower())),
+                )
                 stats["encounters_queried"] += 1
 
                 async with pool.acquire() as conn:
