@@ -1365,6 +1365,7 @@ class CharacterParse(Base):
     difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
     spec: Mapped[str] = mapped_column(String(50), nullable=False)
     percentile: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False)
+    kill: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     amount: Mapped[Optional[float]] = mapped_column(Numeric(12, 1))
     report_code: Mapped[Optional[str]] = mapped_column(String(20))
     fight_id: Mapped[Optional[int]] = mapped_column(Integer)

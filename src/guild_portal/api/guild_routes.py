@@ -78,7 +78,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
     )
     players = list(result.unique().scalars().all())
 
-    # Collect all character IDs for a single Raider.IO batch query
+    # Collect all character IDs for batch queries
     all_char_ids: set[int] = set()
     for p in players:
         if p.main_character:
@@ -100,13 +100,66 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         for r in rio_result.scalars():
             rio_by_char[r.character_id] = r
 
-    def _rio_data(char_id: int | None) -> dict:
+    # Derive current WCL zone IDs from active season's raid boss names
+    avg_parse_by_char: dict[int, float] = {}
+    if all_char_ids:
+        season_row = await db.execute(
+            select(RaidSeason).where(RaidSeason.is_active.is_(True))
+        )
+        active_season = season_row.scalars().first()
+        current_raid_ids = active_season.current_raid_ids if active_season else []
+
+        if current_raid_ids:
+            zone_result = await db.execute(
+                text("""
+                    SELECT DISTINCT cp.zone_id
+                    FROM guild_identity.character_parses cp
+                    WHERE LOWER(cp.encounter_name) IN (
+                        SELECT DISTINCT LOWER(crp.boss_name)
+                        FROM guild_identity.character_raid_progress crp
+                        WHERE crp.raid_id = ANY(:raid_ids)
+                    )
+                """).bindparams(raid_ids=current_raid_ids)
+            )
+            current_wcl_zone_ids = [row.zone_id for row in zone_result]
+
+            if current_wcl_zone_ids:
+                parse_result = await db.execute(
+                    text("""
+                        SELECT character_id, AVG(percentile)::numeric(5,1) AS avg_pct
+                        FROM guild_identity.character_parses
+                        WHERE character_id = ANY(:char_ids)
+                          AND zone_id = ANY(:zone_ids)
+                          AND difficulty = 4
+                          AND kill IS TRUE
+                          AND percentile > 0
+                        GROUP BY character_id
+                    """).bindparams(
+                        char_ids=list(all_char_ids),
+                        zone_ids=current_wcl_zone_ids,
+                    )
+                )
+                avg_parse_by_char = {
+                    row.character_id: float(row.avg_pct)
+                    for row in parse_result
+                }
+
+    def _wcl_url(char_name: str, realm_slug: str) -> str:
+        return (
+            f"https://www.warcraftlogs.com/character/us"
+            f"/{realm_slug}/{char_name.lower()}"
+        )
+
+    def _rio_data(char_id: int | None, char_name: str = "", realm_slug: str = "") -> dict:
         r = rio_by_char.get(char_id) if char_id else None
+        avg = avg_parse_by_char.get(char_id) if char_id else None
         return {
             "rio_score": float(r.overall_score) if r and r.overall_score else None,
             "rio_color": r.score_color if r else None,
             "rio_raid_prog": r.raid_progression if r else None,
             "rio_url": r.profile_url if r else None,
+            "avg_parse": round(avg) if avg is not None else None,
+            "wcl_url": _wcl_url(char_name, realm_slug) if char_name and realm_slug else None,
         }
 
     roster = []
@@ -130,7 +183,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 "role_name": role.name if role else None,
                 "item_level": mc.item_level,
                 "armory_url": armory_url,
-                **_rio_data(mc.id),
+                **_rio_data(mc.id, mc.character_name, mc.realm_slug),
             }
 
         sc = p.offspec_character
@@ -150,7 +203,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                     f"https://worldofwarcraft.blizzard.com/en-us/character/us"
                     f"/{sc.realm_slug}/{sc.character_name.lower()}"
                 ),
-                **_rio_data(sc.id),
+                **_rio_data(sc.id, sc.character_name, sc.realm_slug),
             }
 
         all_chars = []
@@ -174,7 +227,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                         f"/{char.realm_slug}/{char.character_name.lower()}"
                     ),
                     "is_main": mc is not None and char.id == mc.id,
-                    **_rio_data(char.id),
+                    **_rio_data(char.id, char.character_name, char.realm_slug),
                 }
             )
 

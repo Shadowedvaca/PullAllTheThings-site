@@ -70,6 +70,7 @@
                         <th class="sort-col num-col" data-col="item_level">iLvl</th>
                         <th class="sort-col num-col" data-col="rio_score" title="Raider.IO M+ Score">M+ Score</th>
                         <th class="sort-col" data-col="rio_raid_prog" title="Raid Progression">Raid Prog</th>
+                        <th class="sort-col num-col" data-col="avg_parse" title="Average heroic kill parse for current tier (WCL)">Avg Raid Parse</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -196,6 +197,8 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
                 rio_color: mc.rio_color || null,
                 rio_raid_prog: mc.rio_raid_prog || '',
                 rio_url: mc.rio_url || null,
+                avg_parse: mc.avg_parse ?? null,
+                wcl_url: mc.wcl_url || null,
             });
         }
         if (showSecondary && sc) {
@@ -217,6 +220,8 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
                 rio_color: sc.rio_color || null,
                 rio_raid_prog: sc.rio_raid_prog || '',
                 rio_url: sc.rio_url || null,
+                avg_parse: sc.avg_parse ?? null,
+                wcl_url: sc.wcl_url || null,
             });
         }
         if (showAlts && player.characters) {
@@ -244,6 +249,8 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
                     rio_color: char.rio_color || null,
                     rio_raid_prog: char.rio_raid_prog || '',
                     rio_url: char.rio_url || null,
+                    avg_parse: char.avg_parse ?? null,
+                    wcl_url: char.wcl_url || null,
                 });
             }
         }
@@ -261,7 +268,7 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
         : rows;
 
     // Sort
-    const numericCols = new Set(['item_level', 'rank_level', 'rio_score']);
+    const numericCols = new Set(['item_level', 'rank_level', 'rio_score', 'avg_parse']);
     filtered.sort((a, b) => {
         const av = numericCols.has(sortCol)
             ? (a[sortCol] || 0)
@@ -306,6 +313,10 @@ function renderRoster() {
         const rioLinkHtml = r.rio_url
             ? ` <a href="${esc(r.rio_url)}" target="_blank" rel="noopener" class="armory-link" title="Raider.IO Profile">⬡</a>`
             : '';
+        const avgParseHtml = r.avg_parse !== null
+            ? `<span style="color:${wclParseColor(r.avg_parse)};font-weight:600">${r.avg_parse}</span>`
+              + (r.wcl_url ? ` <a href="${esc(r.wcl_url)}" target="_blank" rel="noopener" class="armory-link" title="Warcraft Logs">𝕎</a>` : '')
+            : '—';
         return `
         <tr class="${r.row_type !== 'main' ? 'roster-row--alt' : ''}">
             <td class="col-type" title="${TYPE_LABEL[r.row_type]}">${TYPE_EMOJI[r.row_type]}</td>
@@ -320,6 +331,7 @@ function renderRoster() {
             <td class="col-ilvl num-col">${r.item_level || '—'}</td>
             <td class="col-rio num-col">${rioScoreHtml}</td>
             <td class="col-raid-prog">${rioRaidHtml}${rioLinkHtml}</td>
+            <td class="col-avg-parse num-col">${avgParseHtml}</td>
             <td class="col-armory">
                 ${r.armory_url
                     ? `<a href="${esc(r.armory_url)}" target="_blank" rel="noopener" class="armory-link" title="Armory">🔗</a>`
@@ -493,7 +505,7 @@ document.querySelectorAll('.sort-col').forEach(th => {
             sortDir *= -1;
         } else {
             sortCol = col;
-            sortDir = (col === 'item_level' || col === 'rio_score') ? -1 : 1;
+            sortDir = (col === 'item_level' || col === 'rio_score' || col === 'avg_parse') ? -1 : 1;
         }
         document.querySelectorAll('.sort-col').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
         th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
@@ -512,6 +524,15 @@ document.getElementById('roster-search').addEventListener('input', renderRoster)
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+function wclParseColor(pct) {
+    if (pct >= 99) return '#e268a8';
+    if (pct >= 95) return '#ff8000';
+    if (pct >= 75) return '#a335ee';
+    if (pct >= 50) return '#0070dd';
+    if (pct >= 25) return '#1eff00';
+    return '#9d9d9d';
+}
+
 function esc(str) {
     if (!str) return '';
     return String(str)
