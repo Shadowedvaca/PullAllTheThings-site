@@ -780,7 +780,7 @@ class GuildSyncScheduler:
                 zone_name_map = {}
 
             # Derive current WCL zone IDs from current raid season's boss names
-            site_cfg = await get_site_config(self.db_pool)
+            site_cfg = get_site_config()
             current_raid_ids: list[int] = []
             if site_cfg:
                 async with self.db_pool.acquire() as conn:
