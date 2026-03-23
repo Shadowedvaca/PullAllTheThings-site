@@ -462,10 +462,10 @@ async def get_character_parses(
             text("""
                 SELECT DISTINCT cp.zone_id
                 FROM guild_identity.character_parses cp
-                WHERE cp.character_id IN (
-                    SELECT DISTINCT crp.character_id
+                WHERE LOWER(cp.encounter_name) IN (
+                    SELECT DISTINCT LOWER(crp.boss_name)
                     FROM guild_identity.character_raid_progress crp
-                    WHERE crp.raid_id = ANY(:raid_ids) AND crp.kill_count > 0
+                    WHERE crp.raid_id = ANY(:raid_ids)
                 )
             """).bindparams(raid_ids=current_raid_ids_for_wcl)
         )
