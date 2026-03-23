@@ -716,7 +716,7 @@ class GuildSyncScheduler:
           5. Sync character parses for active characters
           6. Update wcl_config timestamps
         """
-        from .wcl_sync import load_wcl_config, sync_guild_reports, sync_character_parses
+        from .wcl_sync import load_wcl_config, sync_guild_reports, sync_character_parses, sync_report_parses
         from .warcraftlogs_client import WarcraftLogsClient, WarcraftLogsError
 
         config = await load_wcl_config(self.db_pool)
@@ -770,6 +770,86 @@ class GuildSyncScheduler:
                 self.db_pool, wcl_client, characters, server_slug, region
             )
             logger.info("WCL parse sync complete: %s", parse_stats)
+
+            # Step 3: Report-based parse sync — covers all raid attendees,
+            # not just characters with public WCL profiles.
+            # Fetch zone name map once, then pull current-tier reports.
+            try:
+                zone_name_map = await wcl_client.get_world_zones()
+            except Exception:
+                zone_name_map = {}
+
+            # Derive current WCL zone IDs from current raid season's boss names
+            site_cfg = await get_site_config(self.db_pool)
+            current_raid_ids: list[int] = []
+            if site_cfg:
+                async with self.db_pool.acquire() as conn:
+                    season_row = await conn.fetchrow(
+                        """SELECT current_raid_ids
+                           FROM patt.raid_seasons
+                           WHERE is_active = TRUE
+                           LIMIT 1"""
+                    )
+                if season_row and season_row["current_raid_ids"]:
+                    current_raid_ids = season_row["current_raid_ids"]
+
+            # Find WCL zone IDs that correspond to the current raid tier
+            current_wcl_zone_ids: list[int] = []
+            if current_raid_ids:
+                async with self.db_pool.acquire() as conn:
+                    zone_rows = await conn.fetch(
+                        """SELECT DISTINCT rr.zone_id
+                           FROM guild_identity.raid_reports rr
+                           WHERE rr.zone_id IS NOT NULL
+                             AND array_length(rr.encounter_ids, 1) > 0
+                             AND LOWER(rr.zone_name) IN (
+                                 SELECT DISTINCT LOWER(crp.boss_name)
+                                 FROM guild_identity.character_raid_progress crp
+                                 WHERE crp.raid_id = ANY($1)
+                             )""",
+                        current_raid_ids,
+                    )
+                current_wcl_zone_ids = [r["zone_id"] for r in zone_rows]
+
+            # If zone derivation failed, just pull all recent reports
+            # that have encounter data (better than nothing)
+            zone_filter_sql = (
+                "AND zone_id = ANY($2)" if current_wcl_zone_ids else ""
+            )
+            zone_params: list = [20]
+            if current_wcl_zone_ids:
+                zone_params = [current_wcl_zone_ids, 20]
+
+            async with self.db_pool.acquire() as conn:
+                if current_wcl_zone_ids:
+                    report_rows = await conn.fetch(
+                        """SELECT report_code
+                           FROM guild_identity.raid_reports
+                           WHERE array_length(encounter_ids, 1) > 0
+                             AND zone_id = ANY($1)
+                           ORDER BY raid_date DESC
+                           LIMIT $2""",
+                        current_wcl_zone_ids,
+                        20,
+                    )
+                else:
+                    report_rows = await conn.fetch(
+                        """SELECT report_code
+                           FROM guild_identity.raid_reports
+                           WHERE array_length(encounter_ids, 1) > 0
+                           ORDER BY raid_date DESC
+                           LIMIT $1""",
+                        20,
+                    )
+            report_codes = [r["report_code"] for r in report_rows]
+
+            if report_codes:
+                report_parse_stats = await sync_report_parses(
+                    self.db_pool, wcl_client, report_codes, zone_name_map
+                )
+                logger.info("WCL report parse sync: %s", report_parse_stats)
+            else:
+                logger.info("WCL report parse sync: no eligible reports found")
 
             # Update sync status
             async with self.db_pool.acquire() as conn:

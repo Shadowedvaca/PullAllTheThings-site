@@ -206,6 +206,7 @@ class WarcraftLogsClient:
                     }
                     fights(killType: Kills) {
                         id
+                        encounterID
                         name
                         kill
                         startTime
@@ -217,6 +218,30 @@ class WarcraftLogsClient:
         }
         """
         return await self._query(query, {"code": report_code})
+
+    async def get_report_rankings(
+        self,
+        report_code: str,
+        encounter_id: int,
+    ) -> dict:
+        """Get per-player parse rankings for one encounter within a report.
+
+        Returns the raw JSON rankings blob from WCL. The rankings field is a
+        JSON scalar (not typed GraphQL), shaped as:
+          {"data": {"roles": {"tanks": {"characters": [...]},
+                              "healers": {"characters": [...]},
+                              "dps": {"characters": [...]}}}}
+        """
+        query = """
+        query ($code: String!, $encID: Int!) {
+            reportData {
+                report(code: $code) {
+                    rankings(encounterID: $encID)
+                }
+            }
+        }
+        """
+        return await self._query(query, {"code": report_code, "encID": encounter_id})
 
     async def verify_credentials(
         self,

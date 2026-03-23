@@ -80,16 +80,19 @@ async def sync_guild_reports(
         if not code:
             continue
 
-        # Check if already stored
+        # Check if already stored — but re-fetch if encounter_ids is empty (backfill path)
         async with pool.acquire() as conn:
-            existing = await conn.fetchval(
-                "SELECT id FROM guild_identity.raid_reports WHERE report_code = $1",
+            existing = await conn.fetchrow(
+                """SELECT id, encounter_ids
+                   FROM guild_identity.raid_reports
+                   WHERE report_code = $1""",
                 code,
             )
-        if existing:
-            continue  # Already have this report
+        if existing and existing["encounter_ids"]:
+            continue  # Already have this report with encounter data
+        is_update = bool(existing)
 
-        # New report — fetch fight details + attendance
+        # New report (or backfill missing encounter data) — fetch fight details
         try:
             fight_data = await wcl_client.get_report_fights(code)
             report_detail = fight_data.get("reportData", {}).get("report", {})
@@ -106,9 +109,21 @@ async def sync_guild_reports(
                 if a.get("type") == "Player"
             ]
 
-            # Count boss kills
+            # Count boss kills + extract encounter IDs and name map
             fights = report_detail.get("fights", []) or []
             boss_kills = sum(1 for f in fights if f.get("kill"))
+            encounter_ids = list({
+                f["encounterID"]
+                for f in fights
+                if f.get("encounterID")
+            })
+            # Build encounterID→name lookup dict (deduplicated by ID)
+            encounter_map: dict[str, str] = {}
+            for f in fights:
+                enc_id = f.get("encounterID")
+                enc_name = f.get("name")
+                if enc_id and enc_name and str(enc_id) not in encounter_map:
+                    encounter_map[str(enc_id)] = enc_name
 
             # Parse timestamps (WCL gives ms epoch)
             start_ms = report.get("startTime") or report_detail.get("startTime", 0)
@@ -125,12 +140,16 @@ async def sync_guild_reports(
                 await conn.execute(
                     """INSERT INTO guild_identity.raid_reports
                            (report_code, title, raid_date, zone_id, zone_name,
-                            owner_name, boss_kills, duration_ms, attendees, report_url)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+                            owner_name, boss_kills, duration_ms, attendees,
+                            encounter_ids, encounter_map, report_url)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb,
+                               $10, $11::jsonb, $12)
                        ON CONFLICT (report_code) DO UPDATE
-                           SET boss_kills = EXCLUDED.boss_kills,
-                               attendees  = EXCLUDED.attendees,
-                               last_synced = NOW()""",
+                           SET boss_kills    = EXCLUDED.boss_kills,
+                               attendees     = EXCLUDED.attendees,
+                               encounter_ids = EXCLUDED.encounter_ids,
+                               encounter_map = EXCLUDED.encounter_map,
+                               last_synced   = NOW()""",
                     code,
                     report.get("title"),
                     raid_date,
@@ -140,9 +159,14 @@ async def sync_guild_reports(
                     boss_kills,
                     duration_ms,
                     json.dumps(attendees),
+                    encounter_ids,
+                    json.dumps(encounter_map),
                     f"https://www.warcraftlogs.com/reports/{code}",
                 )
-            stats["new_reports"] += 1
+            if is_update:
+                stats["updated"] += 1
+            else:
+                stats["new_reports"] += 1
             await asyncio.sleep(0.5)  # Space requests
         except Exception as exc:
             logger.warning(
@@ -284,6 +308,172 @@ async def sync_character_parses(
 
         if i + batch_size < len(characters):
             await asyncio.sleep(2.0)  # ~2.5 req/sec — well under 3600/hr
+
+    return stats
+
+
+def _parse_report_rankings(rankings_blob: dict) -> list[dict]:
+    """Extract per-character parse entries from a WCL report rankings response.
+
+    rankings_blob is the value of reportData.report.rankings — a JSON scalar.
+    Expected shape:
+      {"data": {"roles": {"tanks":   {"characters": [...]},
+                          "healers": {"characters": [...]},
+                          "dps":     {"characters": [...]}}}}
+
+    Returns list of dicts with: name, spec, percentile, amount.
+    """
+    entries = []
+    if not isinstance(rankings_blob, dict):
+        return entries
+
+    data = rankings_blob.get("data") or {}
+    roles = data.get("roles") or {}
+
+    for role_data in roles.values():
+        if not isinstance(role_data, dict):
+            continue
+        for char_entry in role_data.get("characters") or []:
+            if not isinstance(char_entry, dict):
+                continue
+            name = char_entry.get("name") or ""
+            spec = char_entry.get("spec") or None
+            percentile = char_entry.get("rankPercent")
+            amount = char_entry.get("amount")
+            if name and percentile is not None:
+                entries.append({
+                    "name": name,
+                    "spec": spec,
+                    "percentile": float(percentile),
+                    "amount": float(amount) if amount is not None else None,
+                })
+    return entries
+
+
+async def sync_report_parses(
+    pool: asyncpg.Pool,
+    wcl_client: WarcraftLogsClient,
+    report_codes: list[str],
+    zone_name_map: dict[int, str],
+) -> dict:
+    """Fetch per-player parse rankings from WCL report logs and store granularly.
+
+    For each report:
+      - Reads encounter_ids, encounter_map, zone_id, zone_name, raid_date from raid_reports
+      - Calls rankings(encounterID) for each unique encounter
+      - Matches character names to guild wow_characters (in_guild=TRUE)
+      - Upserts into character_report_parses
+
+    Returns stats: reports_processed, encounters_queried, parse_records, errors.
+    """
+    stats = {
+        "reports_processed": 0,
+        "encounters_queried": 0,
+        "parse_records": 0,
+        "errors": 0,
+    }
+
+    # Build character name→id lookup (case-insensitive)
+    async with pool.acquire() as conn:
+        char_rows = await conn.fetch(
+            """SELECT id, LOWER(character_name) AS name_lower
+               FROM guild_identity.wow_characters
+               WHERE in_guild = TRUE AND removed_at IS NULL"""
+        )
+    char_lookup: dict[str, int] = {
+        row["name_lower"]: row["id"] for row in char_rows
+    }
+
+    for report_code in report_codes:
+        async with pool.acquire() as conn:
+            report_row = await conn.fetchrow(
+                """SELECT encounter_ids, encounter_map, zone_id, zone_name, raid_date
+                   FROM guild_identity.raid_reports
+                   WHERE report_code = $1""",
+                report_code,
+            )
+        if not report_row:
+            logger.warning("sync_report_parses: report %s not found in DB", report_code)
+            stats["errors"] += 1
+            continue
+
+        encounter_ids = report_row["encounter_ids"] or []
+        if not encounter_ids:
+            logger.debug("sync_report_parses: report %s has no encounter_ids — skipping", report_code)
+            continue
+
+        # encounter_map stored as JSONB with string keys {"123": "Boss Name"}
+        encounter_map_raw = report_row["encounter_map"] or {}
+        zone_id = report_row["zone_id"] or 0
+        zone_name = report_row["zone_name"] or zone_name_map.get(zone_id, "")
+        raid_date = report_row["raid_date"]
+
+        for encounter_id in encounter_ids:
+            encounter_name = (
+                encounter_map_raw.get(str(encounter_id))
+                or encounter_map_raw.get(encounter_id)
+                or f"Encounter {encounter_id}"
+            )
+
+            try:
+                result = await wcl_client.get_report_rankings(report_code, encounter_id)
+                rankings_blob = (
+                    result.get("reportData", {})
+                          .get("report", {})
+                          .get("rankings")
+                )
+                if not rankings_blob:
+                    stats["encounters_queried"] += 1
+                    await asyncio.sleep(0.3)
+                    continue
+
+                entries = _parse_report_rankings(rankings_blob)
+                stats["encounters_queried"] += 1
+
+                async with pool.acquire() as conn:
+                    for entry in entries:
+                        char_id = char_lookup.get(entry["name"].lower())
+                        if char_id is None:
+                            continue  # Not a tracked guild character
+                        await conn.execute(
+                            """INSERT INTO guild_identity.character_report_parses
+                                   (character_id, report_code, encounter_id,
+                                    encounter_name, zone_id, zone_name,
+                                    difficulty, spec, percentile, amount,
+                                    raid_date, last_synced)
+                               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                                       $11, NOW())
+                               ON CONFLICT (character_id, report_code, encounter_id)
+                               DO UPDATE SET
+                                   percentile     = GREATEST(EXCLUDED.percentile,
+                                                             character_report_parses.percentile),
+                                   spec           = EXCLUDED.spec,
+                                   amount         = EXCLUDED.amount,
+                                   last_synced    = NOW()""",
+                            char_id,
+                            report_code,
+                            encounter_id,
+                            encounter_name,
+                            zone_id,
+                            zone_name,
+                            3,  # WCL difficulty: 3=normal (guild raids normal)
+                            entry["spec"],
+                            entry["percentile"],
+                            entry["amount"],
+                            raid_date,
+                        )
+                        stats["parse_records"] += 1
+
+            except Exception as exc:
+                logger.warning(
+                    "sync_report_parses: error on report %s encounter %s: %s",
+                    report_code, encounter_id, exc,
+                )
+                stats["errors"] += 1
+
+            await asyncio.sleep(0.3)  # Space requests between encounter calls
+
+        stats["reports_processed"] += 1
 
     return stats
 

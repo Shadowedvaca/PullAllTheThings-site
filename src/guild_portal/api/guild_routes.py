@@ -112,6 +112,14 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         if current_raid_ids:
             zone_result = await db.execute(
                 text("""
+                    SELECT DISTINCT crp_zone.zone_id
+                    FROM guild_identity.character_report_parses crp_zone
+                    WHERE LOWER(crp_zone.encounter_name) IN (
+                        SELECT DISTINCT LOWER(crp.boss_name)
+                        FROM guild_identity.character_raid_progress crp
+                        WHERE crp.raid_id = ANY(:raid_ids)
+                    )
+                    UNION
                     SELECT DISTINCT cp.zone_id
                     FROM guild_identity.character_parses cp
                     WHERE LOWER(cp.encounter_name) IN (
@@ -127,7 +135,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 parse_result = await db.execute(
                     text("""
                         SELECT cp.character_id, AVG(cp.percentile)::numeric(5,1) AS avg_pct
-                        FROM guild_identity.character_parses cp
+                        FROM guild_identity.character_report_parses cp
                         WHERE cp.character_id = ANY(:char_ids)
                           AND cp.zone_id = ANY(:zone_ids)
                           AND cp.percentile > 0
