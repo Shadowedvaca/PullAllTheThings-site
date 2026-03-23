@@ -130,7 +130,6 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                         FROM guild_identity.character_parses cp
                         WHERE cp.character_id = ANY(:char_ids)
                           AND cp.zone_id = ANY(:zone_ids)
-                          AND cp.difficulty = 4
                           AND cp.percentile > 0
                           AND LOWER(cp.encounter_name) IN (
                               SELECT LOWER(crp.boss_name)
