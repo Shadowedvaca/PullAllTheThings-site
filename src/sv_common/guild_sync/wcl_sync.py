@@ -157,7 +157,7 @@ def _parse_zone_rankings(zone_rankings: dict, zone_name_map: dict[int, str] | No
     """Extract per-boss parse records from a WCL zoneRankings response.
 
     Returns list of dicts with encounter_id, encounter_name, zone_id, zone_name,
-    difficulty, spec, percentile, kill, amount, report_code, fight_id.
+    difficulty, spec, percentile, amount, report_code, fight_id.
     """
     parses = []
     if not isinstance(zone_rankings, dict):
@@ -185,7 +185,6 @@ def _parse_zone_rankings(zone_rankings: dict, zone_name_map: dict[int, str] | No
                 "difficulty": difficulty,
                 "spec": spec,
                 "percentile": percentile,
-                "kill": True,
                 "amount": float(amount) if amount else None,
                 "report_code": report.get("code"),
                 "fight_id": report.get("fightID"),
@@ -255,13 +254,12 @@ async def sync_character_parses(
                     await conn.execute(
                         """INSERT INTO guild_identity.character_parses
                                (character_id, encounter_id, encounter_name, zone_id,
-                                zone_name, difficulty, spec, percentile, kill, amount,
+                                zone_name, difficulty, spec, percentile, amount,
                                 report_code, fight_id, last_synced)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
                            ON CONFLICT (character_id, encounter_id, difficulty, spec)
                            DO UPDATE SET
                                percentile   = EXCLUDED.percentile,
-                               kill         = EXCLUDED.kill,
                                amount       = EXCLUDED.amount,
                                report_code  = EXCLUDED.report_code,
                                fight_id     = EXCLUDED.fight_id,
@@ -277,7 +275,6 @@ async def sync_character_parses(
                         p["difficulty"],
                         p["spec"],
                         p["percentile"],
-                        p["kill"],
                         p["amount"],
                         p["report_code"],
                         p["fight_id"],

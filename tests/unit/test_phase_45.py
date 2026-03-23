@@ -197,7 +197,6 @@ class TestParseZoneRankings:
         assert result[0]["difficulty"] == 4
         assert result[0]["spec"] == "Balance"
         assert result[0]["percentile"] == 89.2
-        assert result[0]["kill"] is True
         assert result[0]["report_code"] == "abc123"
         assert result[0]["fight_id"] == 5
 

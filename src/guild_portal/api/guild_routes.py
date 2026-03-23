@@ -126,17 +126,24 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
             if current_wcl_zone_ids:
                 parse_result = await db.execute(
                     text("""
-                        SELECT character_id, AVG(percentile)::numeric(5,1) AS avg_pct
-                        FROM guild_identity.character_parses
-                        WHERE character_id = ANY(:char_ids)
-                          AND zone_id = ANY(:zone_ids)
-                          AND difficulty = 4
-                          AND kill IS TRUE
-                          AND percentile > 0
-                        GROUP BY character_id
+                        SELECT cp.character_id, AVG(cp.percentile)::numeric(5,1) AS avg_pct
+                        FROM guild_identity.character_parses cp
+                        WHERE cp.character_id = ANY(:char_ids)
+                          AND cp.zone_id = ANY(:zone_ids)
+                          AND cp.difficulty = 4
+                          AND cp.percentile > 0
+                          AND LOWER(cp.encounter_name) IN (
+                              SELECT LOWER(crp.boss_name)
+                              FROM guild_identity.character_raid_progress crp
+                              WHERE crp.character_id = cp.character_id
+                                AND crp.raid_id = ANY(:raid_ids)
+                                AND crp.kill_count > 0
+                          )
+                        GROUP BY cp.character_id
                     """).bindparams(
                         char_ids=list(all_char_ids),
                         zone_ids=current_wcl_zone_ids,
+                        raid_ids=current_raid_ids,
                     )
                 )
                 avg_parse_by_char = {

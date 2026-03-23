@@ -86,7 +86,7 @@ class WarcraftLogsClient:
         query ($name: String!, $server: String!, $region: String!, $zoneID: Int) {
             characterData {
                 character(name: $name, serverSlug: $server, serverRegion: $region) {
-                    zoneRankings(zoneID: $zoneID, killType: Kills)
+                    zoneRankings(zoneID: $zoneID)
                 }
             }
         }
