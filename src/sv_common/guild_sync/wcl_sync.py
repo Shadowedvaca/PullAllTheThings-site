@@ -340,7 +340,14 @@ def _parse_report_rankings(rankings_blob) -> list[dict]:
     if not isinstance(rankings_blob, dict):
         return entries
 
-    data = rankings_blob.get("data") or {}
+    raw_data = rankings_blob.get("data")
+    logger.info(
+        "_parse_report_rankings: raw_data type=%s len=%s sample=%s",
+        type(raw_data).__name__,
+        len(raw_data) if isinstance(raw_data, (list, dict)) else "n/a",
+        str(raw_data)[:300] if raw_data else raw_data,
+    )
+    data = raw_data or {}
 
     if isinstance(data, list):
         char_list = data
