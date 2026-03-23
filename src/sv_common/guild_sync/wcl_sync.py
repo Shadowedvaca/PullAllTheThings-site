@@ -312,10 +312,13 @@ async def sync_character_parses(
     return stats
 
 
-def _parse_report_rankings(rankings_blob: dict) -> list[dict]:
+def _parse_report_rankings(rankings_blob) -> list[dict]:
     """Extract per-character parse entries from a WCL report rankings response.
 
     rankings_blob is the value of reportData.report.rankings — a JSON scalar.
+    WCL returns this as a raw JSON string (not a parsed dict), so we json.loads()
+    it first if needed.
+
     Expected shape:
       {"data": {"roles": {"tanks":   {"characters": [...]},
                           "healers": {"characters": [...]},
@@ -324,6 +327,13 @@ def _parse_report_rankings(rankings_blob: dict) -> list[dict]:
     Returns list of dicts with: name, spec, percentile, amount.
     """
     entries = []
+    if not rankings_blob:
+        return entries
+    if isinstance(rankings_blob, str):
+        try:
+            rankings_blob = json.loads(rankings_blob)
+        except (json.JSONDecodeError, ValueError):
+            return entries
     if not isinstance(rankings_blob, dict):
         return entries
 
@@ -403,7 +413,14 @@ async def sync_report_parses(
             continue
 
         # encounter_map stored as JSONB with string keys {"123": "Boss Name"}
-        encounter_map_raw = report_row["encounter_map"] or {}
+        # asyncpg decodes JSONB automatically, but handle string fallback defensively
+        _raw_enc_map = report_row["encounter_map"] or {}
+        if isinstance(_raw_enc_map, str):
+            try:
+                _raw_enc_map = json.loads(_raw_enc_map)
+            except (json.JSONDecodeError, ValueError):
+                _raw_enc_map = {}
+        encounter_map_raw = _raw_enc_map
         zone_id = report_row["zone_id"] or 0
         zone_name = report_row["zone_name"] or zone_name_map.get(zone_id, "")
         raid_date = report_row["raid_date"]
