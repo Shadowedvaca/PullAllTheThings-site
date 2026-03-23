@@ -110,15 +110,14 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         current_raid_ids = active_season.current_raid_ids if active_season else []
 
         if current_raid_ids:
+            # Derive zone IDs directly from character_report_parses — no boss name
+            # matching needed since zone_id is stored on every parse row.
+            # Fall back to character_parses if report table is empty.
             zone_result = await db.execute(
                 text("""
-                    SELECT DISTINCT crp_zone.zone_id
-                    FROM guild_identity.character_report_parses crp_zone
-                    WHERE LOWER(crp_zone.encounter_name) IN (
-                        SELECT DISTINCT LOWER(crp.boss_name)
-                        FROM guild_identity.character_raid_progress crp
-                        WHERE crp.raid_id = ANY(:raid_ids)
-                    )
+                    SELECT DISTINCT zone_id
+                    FROM guild_identity.character_report_parses
+                    WHERE zone_id IS NOT NULL AND zone_id > 0
                     UNION
                     SELECT DISTINCT cp.zone_id
                     FROM guild_identity.character_parses cp
@@ -132,25 +131,19 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
             current_wcl_zone_ids = [row.zone_id for row in zone_result]
 
             if current_wcl_zone_ids:
+                # Every row in character_report_parses is a kill parse (ingested via
+                # killType: Kills fights only), so no kill filter needed here.
                 parse_result = await db.execute(
                     text("""
-                        SELECT cp.character_id, AVG(cp.percentile)::numeric(5,1) AS avg_pct
-                        FROM guild_identity.character_report_parses cp
-                        WHERE cp.character_id = ANY(:char_ids)
-                          AND cp.zone_id = ANY(:zone_ids)
-                          AND cp.percentile > 0
-                          AND LOWER(cp.encounter_name) IN (
-                              SELECT LOWER(crp.boss_name)
-                              FROM guild_identity.character_raid_progress crp
-                              WHERE crp.character_id = cp.character_id
-                                AND crp.raid_id = ANY(:raid_ids)
-                                AND crp.kill_count > 0
-                          )
-                        GROUP BY cp.character_id
+                        SELECT character_id, AVG(percentile)::numeric(5,1) AS avg_pct
+                        FROM guild_identity.character_report_parses
+                        WHERE character_id = ANY(:char_ids)
+                          AND zone_id = ANY(:zone_ids)
+                          AND percentile > 0
+                        GROUP BY character_id
                     """).bindparams(
                         char_ids=list(all_char_ids),
                         zone_ids=current_wcl_zone_ids,
-                        raid_ids=current_raid_ids,
                     )
                 )
                 avg_parse_by_char = {
