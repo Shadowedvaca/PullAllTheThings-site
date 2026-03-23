@@ -340,20 +340,21 @@ def _parse_report_rankings(rankings_blob) -> list[dict]:
     if not isinstance(rankings_blob, dict):
         return entries
 
-    raw_data = rankings_blob.get("data")
-    logger.info(
-        "_parse_report_rankings: raw_data type=%s len=%s sample=%s",
-        type(raw_data).__name__,
-        len(raw_data) if isinstance(raw_data, (list, dict)) else "n/a",
-        str(raw_data)[:300] if raw_data else raw_data,
-    )
-    data = raw_data or {}
+    data = rankings_blob.get("data") or []
 
+    char_list = []
     if isinstance(data, list):
-        char_list = data
-    else:
+        # Actual WCL format: list of fight objects, each with roles.X.characters
+        for fight in data:
+            if not isinstance(fight, dict):
+                continue
+            roles = fight.get("roles") or {}
+            for role_data in roles.values():
+                if isinstance(role_data, dict):
+                    char_list.extend(role_data.get("characters") or [])
+    elif isinstance(data, dict):
+        # Legacy/spec format: {"roles": {"tanks": {"characters": [...]}, ...}}
         roles = data.get("roles") or {}
-        char_list = []
         for role_data in roles.values():
             if isinstance(role_data, dict):
                 char_list.extend(role_data.get("characters") or [])
@@ -460,12 +461,6 @@ async def sync_report_parses(
                     continue
 
                 entries = _parse_report_rankings(rankings_blob)
-                if entries:
-                    logger.info(
-                        "sync_report_parses: report=%s enc=%d got %d entries, sample names: %s",
-                        report_code, encounter_id, len(entries),
-                        [e["name"] for e in entries[:5]],
-                    )
                 stats["encounters_queried"] += 1
 
                 async with pool.acquire() as conn:

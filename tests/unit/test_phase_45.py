@@ -587,34 +587,53 @@ class TestParseReportRankings:
         result = parse(blob)
         assert result == []
 
-    def test_parses_flat_list_format(self):
-        """Actual WCL format: data is a flat list of character entries."""
+    def test_parses_fight_object_format(self):
+        """Actual WCL format: data is a list of fight objects, each with roles.X.characters."""
         parse = self._get_parser()
         blob = {
             "data": [
-                {"name": "Trogmoon", "spec": "Balance", "rankPercent": 75.5, "amount": 150000},
-                {"name": "Rocketman", "spec": "Survival", "rankPercent": 60.0, "amount": 120000},
+                {
+                    "fightID": 35,
+                    "roles": {
+                        "tanks": {"name": "Tanks", "characters": [
+                            {"name": "Tankadin", "spec": "Protection", "rankPercent": 55.0, "amount": 100000},
+                        ]},
+                        "healers": {"name": "Healers", "characters": [
+                            {"name": "Holypala", "spec": "Holy", "rankPercent": 82.3, "amount": 80000},
+                        ]},
+                        "dps": {"name": "DPS", "characters": [
+                            {"name": "Trogmoon", "spec": "Balance", "rankPercent": 75.5, "amount": 150000},
+                            {"name": "Rocketman", "spec": "Survival", "rankPercent": 60.0, "amount": 120000},
+                        ]},
+                    }
+                }
             ]
         }
         result = parse(blob)
-        assert len(result) == 2
+        assert len(result) == 4
         names = {e["name"] for e in result}
-        assert names == {"Trogmoon", "Rocketman"}
+        assert names == {"Tankadin", "Holypala", "Trogmoon", "Rocketman"}
         trog = next(e for e in result if e["name"] == "Trogmoon")
         assert trog["percentile"] == 75.5
         assert trog["spec"] == "Balance"
 
-    def test_flat_list_skips_missing_percentile(self):
+    def test_fight_object_format_multiple_fights(self):
+        """Multiple fight objects (e.g. multiple kills) — characters from all are collected."""
         parse = self._get_parser()
         blob = {
             "data": [
-                {"name": "Trogmoon", "spec": "Balance"},  # no rankPercent
+                {"fightID": 1, "roles": {"dps": {"characters": [
+                    {"name": "Trogmoon", "spec": "Balance", "rankPercent": 75.5, "amount": 150000},
+                ]}}},
+                {"fightID": 2, "roles": {"dps": {"characters": [
+                    {"name": "Rocketman", "spec": "Survival", "rankPercent": 60.0, "amount": 120000},
+                ]}}},
             ]
         }
         result = parse(blob)
-        assert result == []
+        assert len(result) == 2
 
-    def test_empty_flat_list(self):
+    def test_empty_fight_list(self):
         parse = self._get_parser()
         blob = {"data": []}
         result = parse(blob)
