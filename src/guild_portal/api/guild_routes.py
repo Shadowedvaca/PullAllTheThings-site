@@ -134,52 +134,6 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 for row in parse_result
             }
 
-        if not avg_parse_by_char:
-            # Fallback: character_parses (WCL account holders only), needs current_raid_ids
-            season_row = await db.execute(
-                select(RaidSeason).where(RaidSeason.is_active.is_(True))
-            )
-            active_season = season_row.scalars().first()
-            current_raid_ids = active_season.current_raid_ids if active_season else []
-            if current_raid_ids:
-                fallback_zone_result = await db.execute(
-                    text("""
-                        SELECT DISTINCT cp.zone_id
-                        FROM guild_identity.character_parses cp
-                        WHERE LOWER(cp.encounter_name) IN (
-                            SELECT DISTINCT LOWER(crp.boss_name)
-                            FROM guild_identity.character_raid_progress crp
-                            WHERE crp.raid_id = ANY(:raid_ids)
-                        )
-                    """).bindparams(raid_ids=current_raid_ids)
-                )
-                fallback_zone_ids = [row.zone_id for row in fallback_zone_result]
-                if fallback_zone_ids:
-                    fallback_result = await db.execute(
-                        text("""
-                            SELECT cp.character_id, AVG(cp.percentile)::numeric(5,1) AS avg_pct
-                            FROM guild_identity.character_parses cp
-                            WHERE cp.character_id = ANY(:char_ids)
-                              AND cp.zone_id = ANY(:zone_ids)
-                              AND cp.percentile > 0
-                              AND LOWER(cp.encounter_name) IN (
-                                  SELECT LOWER(crp.boss_name)
-                                  FROM guild_identity.character_raid_progress crp
-                                  WHERE crp.character_id = cp.character_id
-                                    AND crp.raid_id = ANY(:raid_ids)
-                                    AND crp.kill_count > 0
-                              )
-                            GROUP BY cp.character_id
-                        """).bindparams(
-                            char_ids=list(all_char_ids),
-                            zone_ids=fallback_zone_ids,
-                            raid_ids=current_raid_ids,
-                        )
-                    )
-                    avg_parse_by_char = {
-                        row.character_id: float(row.avg_pct)
-                        for row in fallback_result
-                    }
 
     def _wcl_url(char_name: str, realm_slug: str) -> str:
         return (

@@ -72,67 +72,85 @@ class TestParsesAuth:
 # ---------------------------------------------------------------------------
 
 
-def _make_parse_row(encounter_name, difficulty, percentile, zone_name="Nerub-ar Palace",
-                    report_code=None, fight_date=None, last_synced=None):
-    """Build a mock CharacterParse-like row."""
+def _make_zone_row(zone_id):
+    """Mock row for zone derivation query."""
+    row = MagicMock()
+    row.zone_id = zone_id
+    return row
+
+
+def _make_parse_row(encounter_name, best_pct, zone_name="Nerub-ar Palace",
+                    report_code=None, raid_date=None, last_synced=None):
+    """Build a mock character_report_parses aggregate row."""
     from datetime import datetime, timezone
     row = MagicMock()
     row.encounter_name = encounter_name
     row.zone_name = zone_name
-    row.difficulty = difficulty  # int: 3=Normal, 4=Heroic, 5=Mythic
-    row.percentile = percentile
+    row.best_pct = best_pct
     row.report_code = report_code
-    row.fight_date = fight_date
+    row.raid_date = raid_date
     row.last_synced = last_synced or datetime(2026, 3, 14, tzinfo=timezone.utc)
     return row
+
+
+def _execute_side_with_parses(parse_rows, zone_ids=None):
+    """Return an execute side-effect: ownership, wcl_config, zones, parses."""
+    if zone_ids is None:
+        zone_ids = [38]
+    call_count = [0]
+
+    def execute_side(stmt):
+        call_count[0] += 1
+        mock_result = MagicMock()
+        if call_count[0] == 1:
+            # ownership check
+            mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
+            return mock_result
+        elif call_count[0] == 2:
+            # wcl_config check
+            wcl = MagicMock()
+            wcl.is_configured = True
+            mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
+            return mock_result
+        elif call_count[0] == 3:
+            # zone derivation — return iterable of zone rows
+            mock_result.__iter__ = MagicMock(
+                return_value=iter([_make_zone_row(z) for z in zone_ids])
+            )
+            return mock_result
+        else:
+            # parses query — return iterable of parse rows
+            mock_result.__iter__ = MagicMock(return_value=iter(parse_rows))
+            return mock_result
+
+    return execute_side
 
 
 class TestParseDeduplication:
     @pytest.mark.asyncio
     async def test_best_percentile_per_boss_returned(self):
-        """Multiple rows for same (boss, difficulty) → only highest percentile."""
+        """SQL MAX(percentile) returns one best row per boss — verify mapping."""
         from guild_portal.api.member_routes import get_character_parses
 
         player = MagicMock()
         player.id = 1
 
+        # character_report_parses returns best parse per boss (SQL GROUP BY + MAX)
         rows = [
-            _make_parse_row("Ulgrax the Devourer", 4, 87.0),   # heroic, lower
-            _make_parse_row("Ulgrax the Devourer", 4, 94.0),   # heroic, higher → keep
-            _make_parse_row("Ulgrax the Devourer", 5, 72.0),   # mythic
+            _make_parse_row("Ulgrax the Devourer", 94.0),
+            _make_parse_row("The Bloodbound Horror", 87.0),
         ]
 
         db = AsyncMock()
-        call_count = [0]
-
-        def execute_side(stmt):
-            call_count[0] += 1
-            mock_result = MagicMock()
-            if call_count[0] == 1:
-                # ownership check
-                mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
-                return mock_result
-            elif call_count[0] == 2:
-                # wcl_config check
-                wcl = MagicMock()
-                wcl.is_configured = True
-                mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
-                return mock_result
-            else:
-                # parses query
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=rows)))
-                return mock_result
-
-        db.execute = AsyncMock(side_effect=execute_side)
+        db.execute = AsyncMock(side_effect=_execute_side_with_parses(rows))
 
         result = await get_character_parses(character_id=10, player=player, db=db)
 
         assert result["ok"] is True
         parses = result["data"]["parses"]
-        # Should have 2 entries: heroic Ulgrax (94) + mythic Ulgrax (72)
-        heroic_ulgrax = [p for p in parses if p["boss_name"] == "Ulgrax the Devourer" and p["difficulty"] == "heroic"]
-        assert len(heroic_ulgrax) == 1
-        assert heroic_ulgrax[0]["percentile"] == 94.0
+        ulgrax = [p for p in parses if p["boss_name"] == "Ulgrax the Devourer"]
+        assert len(ulgrax) == 1
+        assert ulgrax[0]["percentile"] == 94.0
 
     @pytest.mark.asyncio
     async def test_multiple_bosses_returned(self):
@@ -143,30 +161,13 @@ class TestParseDeduplication:
         player.id = 1
 
         rows = [
-            _make_parse_row("Ulgrax the Devourer", 4, 94.0),
-            _make_parse_row("The Bloodbound Horror", 4, 87.0),
-            _make_parse_row("Sikran", 4, 72.0),
+            _make_parse_row("Ulgrax the Devourer", 94.0),
+            _make_parse_row("The Bloodbound Horror", 87.0),
+            _make_parse_row("Sikran", 72.0),
         ]
 
         db = AsyncMock()
-        call_count = [0]
-
-        def execute_side(stmt):
-            call_count[0] += 1
-            mock_result = MagicMock()
-            if call_count[0] == 1:
-                mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
-                return mock_result
-            elif call_count[0] == 2:
-                wcl = MagicMock()
-                wcl.is_configured = True
-                mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
-                return mock_result
-            else:
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=rows)))
-                return mock_result
-
-        db.execute = AsyncMock(side_effect=execute_side)
+        db.execute = AsyncMock(side_effect=_execute_side_with_parses(rows))
 
         result = await get_character_parses(character_id=10, player=player, db=db)
 
@@ -231,37 +232,21 @@ class TestPercentileTierBoundaries:
 
 class TestSummaryCalculation:
     @pytest.mark.asyncio
-    async def test_best_percentile_and_heroic_average(self):
+    async def test_best_percentile_and_boss(self):
         from guild_portal.api.member_routes import get_character_parses
 
         player = MagicMock()
         player.id = 1
 
+        # Report parses all come back as difficulty=3 (normal) — guild raids normal
         rows = [
-            _make_parse_row("Boss A", 4, 80.0),   # heroic
-            _make_parse_row("Boss B", 4, 90.0),   # heroic → best + highest heroic avg
-            _make_parse_row("Boss C", 5, 97.0),   # mythic → best overall
+            _make_parse_row("Boss A", 80.0),
+            _make_parse_row("Boss B", 90.0),
+            _make_parse_row("Boss C", 97.0),  # best
         ]
 
         db = AsyncMock()
-        call_count = [0]
-
-        def execute_side(stmt):
-            call_count[0] += 1
-            mock_result = MagicMock()
-            if call_count[0] == 1:
-                mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
-                return mock_result
-            elif call_count[0] == 2:
-                wcl = MagicMock()
-                wcl.is_configured = True
-                mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
-                return mock_result
-            else:
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=rows)))
-                return mock_result
-
-        db.execute = AsyncMock(side_effect=execute_side)
+        db.execute = AsyncMock(side_effect=_execute_side_with_parses(rows))
 
         result = await get_character_parses(character_id=10, player=player, db=db)
 
@@ -269,38 +254,20 @@ class TestSummaryCalculation:
         assert summary is not None
         assert summary["best_percentile"] == 97.0
         assert summary["best_boss"] == "Boss C"
-        assert summary["best_difficulty"] == "mythic"
-        # heroic average: (80 + 90) / 2 = 85.0
-        assert summary["heroic_average"] == 85.0
+        assert summary["best_difficulty"] == "normal"
 
     @pytest.mark.asyncio
     async def test_heroic_average_null_when_no_heroic(self):
+        """All report parses are difficulty=normal, so heroic_average is None."""
         from guild_portal.api.member_routes import get_character_parses
 
         player = MagicMock()
         player.id = 1
 
-        rows = [_make_parse_row("Boss A", 5, 90.0)]  # mythic only
+        rows = [_make_parse_row("Boss A", 90.0)]
 
         db = AsyncMock()
-        call_count = [0]
-
-        def execute_side(stmt):
-            call_count[0] += 1
-            mock_result = MagicMock()
-            if call_count[0] == 1:
-                mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
-                return mock_result
-            elif call_count[0] == 2:
-                wcl = MagicMock()
-                wcl.is_configured = True
-                mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
-                return mock_result
-            else:
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=rows)))
-                return mock_result
-
-        db.execute = AsyncMock(side_effect=execute_side)
+        db.execute = AsyncMock(side_effect=_execute_side_with_parses(rows))
 
         result = await get_character_parses(character_id=10, player=player, db=db)
 
@@ -322,24 +289,7 @@ class TestNoParsesData:
         player.id = 1
 
         db = AsyncMock()
-        call_count = [0]
-
-        def execute_side(stmt):
-            call_count[0] += 1
-            mock_result = MagicMock()
-            if call_count[0] == 1:
-                mock_result.scalar_one_or_none = MagicMock(return_value=MagicMock())
-                return mock_result
-            elif call_count[0] == 2:
-                wcl = MagicMock()
-                wcl.is_configured = True
-                mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
-                return mock_result
-            else:
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
-                return mock_result
-
-        db.execute = AsyncMock(side_effect=execute_side)
+        db.execute = AsyncMock(side_effect=_execute_side_with_parses([]))
 
         result = await get_character_parses(character_id=10, player=player, db=db)
 
@@ -361,7 +311,6 @@ class TestWclNotConfigured:
         player = MagicMock()
         player.id = 1
 
-        db = AsyncMock()
         call_count = [0]
 
         def execute_side(stmt):
@@ -375,9 +324,10 @@ class TestWclNotConfigured:
                 mock_result.scalar_one_or_none = MagicMock(return_value=None)
                 return mock_result
             else:
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+                mock_result.__iter__ = MagicMock(return_value=iter([]))
                 return mock_result
 
+        db = AsyncMock()
         db.execute = AsyncMock(side_effect=execute_side)
 
         result = await get_character_parses(character_id=10, player=player, db=db)
@@ -392,7 +342,6 @@ class TestWclNotConfigured:
         player = MagicMock()
         player.id = 1
 
-        db = AsyncMock()
         call_count = [0]
 
         def execute_side(stmt):
@@ -407,9 +356,10 @@ class TestWclNotConfigured:
                 mock_result.scalar_one_or_none = MagicMock(return_value=wcl)
                 return mock_result
             else:
-                mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+                mock_result.__iter__ = MagicMock(return_value=iter([]))
                 return mock_result
 
+        db = AsyncMock()
         db.execute = AsyncMock(side_effect=execute_side)
 
         result = await get_character_parses(character_id=10, player=player, db=db)

@@ -16,7 +16,6 @@ from sv_common.config_cache import get_site_config
 from sv_common.db.models import (
     BattlenetAccount,
     CharacterMythicPlus,
-    CharacterParse,
     CharacterRaidProgress,
     Player,
     PlayerCharacter,
@@ -446,50 +445,25 @@ async def get_character_parses(
     wcl_cfg = wcl_result.scalar_one_or_none()
     wcl_configured = bool(wcl_cfg and wcl_cfg.is_configured)
 
-    # Derive current WCL zone IDs from current_raid_ids — find zones that appear
-    # in parses for characters who have kills in the active season's raids.
-    active_season_result = await db.execute(
-        select(RaidSeason).where(RaidSeason.is_active == True)
-    )
-    active_season = active_season_result.scalar_one_or_none()
-    current_raid_ids_for_wcl: list[int] = (
-        active_season.current_raid_ids or [] if active_season else []
-    )
-
-    current_wcl_zone_ids: list[int] = []
-    if current_raid_ids_for_wcl:
-        zone_result = await db.execute(
-            text("""
-                SELECT DISTINCT crp_zone.zone_id
-                FROM guild_identity.character_report_parses crp_zone
-                WHERE LOWER(crp_zone.encounter_name) IN (
-                    SELECT DISTINCT LOWER(crp.boss_name)
-                    FROM guild_identity.character_raid_progress crp
-                    WHERE crp.raid_id = ANY(:raid_ids)
-                )
-                UNION
-                SELECT DISTINCT cp.zone_id
-                FROM guild_identity.character_parses cp
-                WHERE LOWER(cp.encounter_name) IN (
-                    SELECT DISTINCT LOWER(crp.boss_name)
-                    FROM guild_identity.character_raid_progress crp
-                    WHERE crp.raid_id = ANY(:raid_ids)
-                )
-            """).bindparams(raid_ids=current_raid_ids_for_wcl)
-        )
-        current_wcl_zone_ids = [row.zone_id for row in zone_result]
-
-    # Load parses from character_report_parses (report-based, covers all raiders)
-    # Best percentile per encounter_name aggregated at query time.
+    # Load parses from character_report_parses — zone IDs queried directly,
+    # no current_raid_ids dependency. Every row is a kill parse by construction.
     parses = []
     tier_name: str | None = None
+
+    zone_result = await db.execute(
+        text("""
+            SELECT DISTINCT zone_id
+            FROM guild_identity.character_report_parses
+            WHERE zone_id IS NOT NULL AND zone_id > 0
+        """)
+    )
+    current_wcl_zone_ids = [row.zone_id for row in zone_result]
 
     if current_wcl_zone_ids:
         report_parse_result = await db.execute(
             text("""
                 SELECT encounter_name, zone_name,
                        MAX(percentile)::numeric(5,1) AS best_pct,
-                       MAX(spec) AS spec,
                        MAX(report_code) AS report_code,
                        MAX(raid_date) AS raid_date,
                        MAX(last_synced) AS last_synced
@@ -500,12 +474,7 @@ async def get_character_parses(
                 ORDER BY encounter_name
             """).bindparams(char_id=character_id, zone_ids=current_wcl_zone_ids)
         )
-        report_rows = list(report_parse_result)
-    else:
-        report_rows = []
-
-    if report_rows:
-        for row in report_rows:
+        for row in report_parse_result:
             if tier_name is None and row.zone_name:
                 tier_name = row.zone_name
             recorded_at = None
@@ -515,43 +484,8 @@ async def get_character_parses(
                 recorded_at = row.last_synced.isoformat()
             parses.append({
                 "boss_name": row.encounter_name,
-                "difficulty": _DIFF_NAMES.get(3, "normal"),  # report parses use difficulty 3
+                "difficulty": _DIFF_NAMES.get(3, "normal"),
                 "percentile": float(row.best_pct),
-                "rank_world": None,
-                "report_code": row.report_code,
-                "recorded_at": recorded_at,
-            })
-    else:
-        # Fall back to character_parses (all-time best for WCL account holders)
-        parse_filter = [CharacterParse.character_id == character_id]
-        if current_wcl_zone_ids:
-            parse_filter.append(CharacterParse.zone_id.in_(current_wcl_zone_ids))
-
-        parse_result = await db.execute(
-            select(CharacterParse).where(*parse_filter)
-        )
-        all_rows = list(parse_result.scalars().all())
-
-        # Deduplicate: best percentile per (encounter_name, difficulty_int)
-        best: dict[tuple, CharacterParse] = {}
-        for row in all_rows:
-            key = (row.encounter_name, row.difficulty)
-            if key not in best or float(row.percentile) > float(best[key].percentile):
-                best[key] = row
-
-        for row in best.values():
-            diff_name = _DIFF_NAMES.get(row.difficulty, str(row.difficulty))
-            if tier_name is None and row.zone_name:
-                tier_name = row.zone_name
-            recorded_at = None
-            if row.fight_date:
-                recorded_at = row.fight_date.isoformat()
-            elif row.last_synced:
-                recorded_at = row.last_synced.isoformat()
-            parses.append({
-                "boss_name": row.encounter_name,
-                "difficulty": diff_name,
-                "percentile": float(row.percentile),
                 "rank_world": None,
                 "report_code": row.report_code,
                 "recorded_at": recorded_at,
