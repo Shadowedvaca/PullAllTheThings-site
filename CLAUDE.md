@@ -159,7 +159,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 ## Database Schema
 
-> Full DDL: `reference/SCHEMA.md`. Current through **migration 0056**.
+> Full DDL: `reference/SCHEMA.md`. Current through **migration 0059**.
 
 | Schema | Key tables |
 |--------|-----------|
@@ -230,21 +230,21 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Hotfix prod-v0.4.2** — Error routing severity alignment + note_mismatch rule retirement.
+- **prod-v0.5.x** — WCL season filtering, Roster avg raid parse column, WCL zone derivation fixes.
 - **Branch:** `main`
-- **Tests:** 955 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
-- **Last migration:** 0056 (`common.error_routing` severity fixes — bnet_token_expired→info, sync failures→critical)
-- **Last tag:** `prod-v0.4.2`
+- **Tests:** 954 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
+- **Last migration:** 0059 (`guild_identity.character_parses` +`kill BOOLEAN` nullable — unused, reserved for future)
+- **Last tag:** `prod-v0.5.7`
 - **Active branch:** `main`
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
-- **Public pages:** `/` (index), `/roster`, `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
-- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
+- **Public pages:** `/` (index), `/roster` (**Avg Raid Parse column** — WCL kill-average, color-coded, links to WCL profile), `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
+- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (current season kills only; Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users` (expired-token indicator — H.4), `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables` (**Guide Sites section** — Phase G), `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster`, `/api/v1/guild/progression`, `/api/v1/guild/parses`, `/api/v1/guild/ah-prices?realm_id=N`, `POST /api/v1/feedback` (public, no auth required)
+- **Public API:** `/api/v1/guild/ranks`, `/api/v1/guild/roster` (+`avg_parse`, `wcl_url` per char), `/api/v1/guild/progression`, `/api/v1/guild/parses`, `/api/v1/guild/ah-prices?realm_id=N`, `POST /api/v1/feedback` (public, no auth required)
 - **Battle.net OAuth:** `GET /auth/battlenet`, `GET /auth/battlenet/callback`, `DELETE /api/v1/auth/battlenet`; character auto-claim on OAuth; daily token refresh scheduler
 - **Onboarding:** active, fires on `on_member_join`, gated by `enable_onboarding` site_config flag
 - **Setup wizard:** `/setup` → `/setup/complete` — 9-step first-run wizard; guard middleware redirects until `setup_complete=TRUE`
@@ -253,3 +253,4 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 ### Known Gaps / Dormant Features
 - `guild_identity.identity_engine`: some tests skipped due to import error — pre-existing, non-blocking
+- **Roster Avg Raid Parse** only shows for ~7 characters with public WCL profiles. Full coverage requires report-based WCL ingestion — spec at `reference/detailed-wcl-logs.md` (migration 0060, `character_report_parses` table)
