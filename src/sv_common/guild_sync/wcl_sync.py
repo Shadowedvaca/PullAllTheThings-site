@@ -319,7 +319,10 @@ def _parse_report_rankings(rankings_blob) -> list[dict]:
     WCL returns this as a raw JSON string (not a parsed dict), so we json.loads()
     it first if needed.
 
-    Expected shape:
+    WCL actual shape (flat list):
+      {"data": [{"name": "...", "spec": "...", "rankPercent": 94.0, "amount": 12345}, ...]}
+
+    Older/spec assumed shape (roles-nested):
       {"data": {"roles": {"tanks":   {"characters": [...]},
                           "healers": {"characters": [...]},
                           "dps":     {"characters": [...]}}}}
@@ -338,25 +341,30 @@ def _parse_report_rankings(rankings_blob) -> list[dict]:
         return entries
 
     data = rankings_blob.get("data") or {}
-    roles = data.get("roles") or {}
 
-    for role_data in roles.values():
-        if not isinstance(role_data, dict):
+    if isinstance(data, list):
+        char_list = data
+    else:
+        roles = data.get("roles") or {}
+        char_list = []
+        for role_data in roles.values():
+            if isinstance(role_data, dict):
+                char_list.extend(role_data.get("characters") or [])
+
+    for char_entry in char_list:
+        if not isinstance(char_entry, dict):
             continue
-        for char_entry in role_data.get("characters") or []:
-            if not isinstance(char_entry, dict):
-                continue
-            name = char_entry.get("name") or ""
-            spec = char_entry.get("spec") or None
-            percentile = char_entry.get("rankPercent")
-            amount = char_entry.get("amount")
-            if name and percentile is not None:
-                entries.append({
-                    "name": name,
-                    "spec": spec,
-                    "percentile": float(percentile),
-                    "amount": float(amount) if amount is not None else None,
-                })
+        name = char_entry.get("name") or ""
+        spec = char_entry.get("spec") or None
+        percentile = char_entry.get("rankPercent")
+        amount = char_entry.get("amount")
+        if name and percentile is not None:
+            entries.append({
+                "name": name,
+                "spec": spec,
+                "percentile": float(percentile),
+                "amount": float(amount) if amount is not None else None,
+            })
     return entries
 
 
@@ -439,24 +447,12 @@ async def sync_report_parses(
                           .get("report", {})
                           .get("rankings")
                 )
-                logger.info(
-                    "sync_report_parses: report=%s enc=%s blob_type=%s blob_keys=%s",
-                    report_code, encounter_id,
-                    type(rankings_blob).__name__,
-                    list(rankings_blob.keys()) if isinstance(rankings_blob, dict)
-                    else (rankings_blob[:120] if isinstance(rankings_blob, str) else rankings_blob),
-                )
                 if not rankings_blob:
                     stats["encounters_queried"] += 1
                     await asyncio.sleep(0.3)
                     continue
 
                 entries = _parse_report_rankings(rankings_blob)
-                logger.info(
-                    "sync_report_parses: report=%s enc=%s entries=%d name_matches=%d",
-                    report_code, encounter_id, len(entries),
-                    sum(1 for e in entries if char_lookup.get(e["name"].lower())),
-                )
                 stats["encounters_queried"] += 1
 
                 async with pool.acquire() as conn:

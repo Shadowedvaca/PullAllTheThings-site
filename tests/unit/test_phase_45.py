@@ -587,6 +587,39 @@ class TestParseReportRankings:
         result = parse(blob)
         assert result == []
 
+    def test_parses_flat_list_format(self):
+        """Actual WCL format: data is a flat list of character entries."""
+        parse = self._get_parser()
+        blob = {
+            "data": [
+                {"name": "Trogmoon", "spec": "Balance", "rankPercent": 75.5, "amount": 150000},
+                {"name": "Rocketman", "spec": "Survival", "rankPercent": 60.0, "amount": 120000},
+            ]
+        }
+        result = parse(blob)
+        assert len(result) == 2
+        names = {e["name"] for e in result}
+        assert names == {"Trogmoon", "Rocketman"}
+        trog = next(e for e in result if e["name"] == "Trogmoon")
+        assert trog["percentile"] == 75.5
+        assert trog["spec"] == "Balance"
+
+    def test_flat_list_skips_missing_percentile(self):
+        parse = self._get_parser()
+        blob = {
+            "data": [
+                {"name": "Trogmoon", "spec": "Balance"},  # no rankPercent
+            ]
+        }
+        result = parse(blob)
+        assert result == []
+
+    def test_empty_flat_list(self):
+        parse = self._get_parser()
+        blob = {"data": []}
+        result = parse(blob)
+        assert result == []
+
 
 # ---------------------------------------------------------------------------
 # 10. sync_report_parses — module structure and import
