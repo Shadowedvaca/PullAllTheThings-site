@@ -450,3 +450,297 @@ class TestWclSyncModule:
         from sv_common.guild_sync import wcl_sync
         src = inspect.getsource(wcl_sync._parse_zone_rankings)
         assert "percentile" in src.lower()
+
+
+# ---------------------------------------------------------------------------
+# 9. _parse_report_rankings — report-based parse extraction
+# ---------------------------------------------------------------------------
+
+
+class TestParseReportRankings:
+    def _get_parser(self):
+        from sv_common.guild_sync.wcl_sync import _parse_report_rankings
+        return _parse_report_rankings
+
+    def test_empty_blob(self):
+        parse = self._get_parser()
+        assert parse({}) == []
+
+    def test_none_input(self):
+        parse = self._get_parser()
+        assert parse(None) == []
+
+    def test_parses_all_roles(self):
+        parse = self._get_parser()
+        blob = {
+            "data": {
+                "roles": {
+                    "tanks": {
+                        "characters": [
+                            {"name": "Tankadin", "spec": "Protection",
+                             "rankPercent": 55.0, "amount": 100000},
+                        ]
+                    },
+                    "healers": {
+                        "characters": [
+                            {"name": "Holypala", "spec": "Holy",
+                             "rankPercent": 82.3, "amount": 80000},
+                        ]
+                    },
+                    "dps": {
+                        "characters": [
+                            {"name": "Trogmoon", "spec": "Balance",
+                             "rankPercent": 75.5, "amount": 150000},
+                            {"name": "Rocketman", "spec": "Survival",
+                             "rankPercent": 60.0, "amount": 120000},
+                        ]
+                    },
+                }
+            }
+        }
+        result = parse(blob)
+        assert len(result) == 4
+        names = {e["name"] for e in result}
+        assert names == {"Tankadin", "Holypala", "Trogmoon", "Rocketman"}
+
+    def test_extracts_fields_correctly(self):
+        parse = self._get_parser()
+        blob = {
+            "data": {
+                "roles": {
+                    "dps": {
+                        "characters": [
+                            {"name": "Trogmoon", "spec": "Balance",
+                             "rankPercent": 75.5, "amount": 123456.7},
+                        ]
+                    }
+                }
+            }
+        }
+        result = parse(blob)
+        assert len(result) == 1
+        entry = result[0]
+        assert entry["name"] == "Trogmoon"
+        assert entry["spec"] == "Balance"
+        assert entry["percentile"] == 75.5
+        assert entry["amount"] == 123456.7
+
+    def test_skips_entries_without_name(self):
+        parse = self._get_parser()
+        blob = {
+            "data": {
+                "roles": {
+                    "dps": {
+                        "characters": [
+                            {"spec": "Balance", "rankPercent": 75.5},  # no name
+                        ]
+                    }
+                }
+            }
+        }
+        result = parse(blob)
+        assert result == []
+
+    def test_skips_entries_without_percentile(self):
+        parse = self._get_parser()
+        blob = {
+            "data": {
+                "roles": {
+                    "dps": {
+                        "characters": [
+                            {"name": "Trogmoon", "spec": "Balance"},  # no rankPercent
+                        ]
+                    }
+                }
+            }
+        }
+        result = parse(blob)
+        assert result == []
+
+    def test_handles_null_amount(self):
+        parse = self._get_parser()
+        blob = {
+            "data": {
+                "roles": {
+                    "dps": {
+                        "characters": [
+                            {"name": "Trogmoon", "spec": "Balance",
+                             "rankPercent": 75.5, "amount": None},
+                        ]
+                    }
+                }
+            }
+        }
+        result = parse(blob)
+        assert len(result) == 1
+        assert result[0]["amount"] is None
+
+    def test_handles_missing_roles(self):
+        parse = self._get_parser()
+        blob = {"data": {}}
+        result = parse(blob)
+        assert result == []
+
+    def test_handles_missing_data_key(self):
+        parse = self._get_parser()
+        blob = {"something_else": {}}
+        result = parse(blob)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# 10. sync_report_parses — module structure and import
+# ---------------------------------------------------------------------------
+
+
+class TestSyncReportParses:
+    def test_sync_report_parses_exists(self):
+        from sv_common.guild_sync.wcl_sync import sync_report_parses
+        assert sync_report_parses is not None
+
+    def test_sync_report_parses_is_async(self):
+        import inspect as _inspect
+        from sv_common.guild_sync.wcl_sync import sync_report_parses
+        assert _inspect.iscoroutinefunction(sync_report_parses)
+
+    def test_sync_report_parses_returns_stats_dict(self):
+        """Source code should reference all expected stat keys."""
+        from sv_common.guild_sync import wcl_sync
+        src = inspect.getsource(wcl_sync.sync_report_parses)
+        assert "reports_processed" in src
+        assert "encounters_queried" in src
+        assert "parse_records" in src
+        assert "errors" in src
+
+    def test_sync_report_parses_uses_sleep(self):
+        from sv_common.guild_sync import wcl_sync
+        src = inspect.getsource(wcl_sync.sync_report_parses)
+        assert "asyncio.sleep" in src
+
+    def test_sync_report_parses_uses_greatest_upsert(self):
+        """Upsert should use GREATEST to keep higher percentile."""
+        from sv_common.guild_sync import wcl_sync
+        src = inspect.getsource(wcl_sync.sync_report_parses)
+        assert "GREATEST" in src
+
+    def test_sync_report_parses_filters_in_guild(self):
+        """Should only match characters with in_guild = TRUE."""
+        from sv_common.guild_sync import wcl_sync
+        src = inspect.getsource(wcl_sync.sync_report_parses)
+        assert "in_guild" in src
+
+    @pytest.mark.asyncio
+    async def test_sync_report_parses_returns_empty_for_no_reports(self):
+        from sv_common.guild_sync.wcl_sync import sync_report_parses
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        # Return empty char lookup
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool.acquire = MagicMock()
+        mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        mock_client = MagicMock()
+
+        result = await sync_report_parses(mock_pool, mock_client, [], {})
+        assert result["reports_processed"] == 0
+        assert result["encounters_queried"] == 0
+        assert result["parse_records"] == 0
+        assert result["errors"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 11. CharacterReportParse ORM model
+# ---------------------------------------------------------------------------
+
+
+class TestCharacterReportParseModel:
+    def test_model_exists(self):
+        from sv_common.db.models import CharacterReportParse
+        assert CharacterReportParse.__tablename__ == "character_report_parses"
+        assert CharacterReportParse.__table_args__[-1]["schema"] == "guild_identity"
+
+    def test_model_fields(self):
+        from sv_common.db.models import CharacterReportParse
+        for field in [
+            "character_id", "report_code", "encounter_id", "encounter_name",
+            "zone_id", "zone_name", "difficulty", "spec", "percentile",
+            "amount", "fight_id", "raid_date", "last_synced",
+        ]:
+            assert hasattr(CharacterReportParse, field), f"Missing field: {field}"
+
+    def test_raid_report_has_encounter_ids(self):
+        from sv_common.db.models import RaidReport
+        assert hasattr(RaidReport, "encounter_ids")
+
+    def test_raid_report_has_encounter_map(self):
+        from sv_common.db.models import RaidReport
+        assert hasattr(RaidReport, "encounter_map")
+
+
+# ---------------------------------------------------------------------------
+# 12. get_report_rankings client method
+# ---------------------------------------------------------------------------
+
+
+class TestGetReportRankings:
+    def test_method_exists(self):
+        from sv_common.guild_sync.warcraftlogs_client import WarcraftLogsClient
+        assert hasattr(WarcraftLogsClient, "get_report_rankings")
+
+    def test_method_is_coroutine(self):
+        import inspect as _inspect
+        from sv_common.guild_sync.warcraftlogs_client import WarcraftLogsClient
+        assert _inspect.iscoroutinefunction(WarcraftLogsClient.get_report_rankings)
+
+    def test_query_contains_encounter_id_field(self):
+        from sv_common.guild_sync.warcraftlogs_client import WarcraftLogsClient
+        src = inspect.getsource(WarcraftLogsClient.get_report_rankings)
+        assert "encounterID" in src
+        assert "rankings" in src
+
+    @pytest.mark.asyncio
+    async def test_get_report_rankings_sends_graphql(self):
+        import time
+        from sv_common.guild_sync.warcraftlogs_client import WarcraftLogsClient
+
+        client = WarcraftLogsClient("cid", "csecret")
+        mock_http = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "data": {
+                "reportData": {
+                    "report": {"rankings": {"data": {"roles": {}}}}
+                }
+            }
+        }
+        mock_http.post = AsyncMock(return_value=mock_resp)
+        client._client = mock_http
+        client._token = "tok"
+        client._token_expires = time.time() + 3600
+
+        result = await client.get_report_rankings("abc123", 2507)
+        assert "reportData" in result
+        call_json = mock_http.post.call_args[1]["json"]
+        assert call_json["variables"]["code"] == "abc123"
+        assert call_json["variables"]["encID"] == 2507
+
+
+# ---------------------------------------------------------------------------
+# 13. get_report_fights includes encounterID
+# ---------------------------------------------------------------------------
+
+
+class TestGetReportFightsEncounterID:
+    def test_fights_query_has_encounter_id(self):
+        from sv_common.guild_sync.warcraftlogs_client import WarcraftLogsClient
+        src = inspect.getsource(WarcraftLogsClient.get_report_fights)
+        assert "encounterID" in src
+
+    def test_scheduler_step3_imports_sync_report_parses(self):
+        from sv_common.guild_sync.scheduler import GuildSyncScheduler
+        src = inspect.getsource(GuildSyncScheduler.run_wcl_sync)
+        assert "sync_report_parses" in src

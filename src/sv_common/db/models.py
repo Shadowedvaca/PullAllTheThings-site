@@ -13,7 +13,8 @@ guild_identity schema: roles, classes, specializations, players,
                        character_mythic_plus, tracked_achievements,
                        character_achievements, progression_snapshots,
                        raiderio_profiles, wcl_config, character_parses,
-                       raid_reports, tracked_items, item_price_history
+                       raid_reports, character_report_parses,
+                       tracked_items, item_price_history
 """
 
 from datetime import date, datetime, time
@@ -1398,6 +1399,10 @@ class RaidReport(Base):
     wipes: Mapped[Optional[int]] = mapped_column(Integer, server_default="0")
     duration_ms: Mapped[Optional[int]] = mapped_column(BigInteger)
     attendees: Mapped[Optional[list]] = mapped_column(JSONB)
+    encounter_ids: Mapped[list] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default="{}"
+    )
+    encounter_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     report_url: Mapped[Optional[str]] = mapped_column(String(255))
     last_synced: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
@@ -1405,6 +1410,48 @@ class RaidReport(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
+
+
+class CharacterReportParse(Base):
+    """WCL parse percentile per character per encounter per report (granular).
+
+    One row per player per boss per raid night. Enables time-window aggregation
+    (season avg, last N weeks, specific report) at query time without pre-computation.
+    """
+
+    __tablename__ = "character_report_parses"
+    __table_args__ = (
+        UniqueConstraint(
+            "character_id",
+            "report_code",
+            "encounter_id",
+            name="uq_crp_char_report_enc",
+        ),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    report_code: Mapped[str] = mapped_column(String(20), nullable=False)
+    encounter_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    encounter_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    zone_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    zone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
+    spec: Mapped[Optional[str]] = mapped_column(String(50))
+    percentile: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False)
+    amount: Mapped[Optional[float]] = mapped_column(Numeric(12, 1))
+    fight_id: Mapped[Optional[int]] = mapped_column(Integer)
+    raid_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_synced: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character: Mapped["WowCharacter"] = relationship()
 
 
 # ---------------------------------------------------------------------------
