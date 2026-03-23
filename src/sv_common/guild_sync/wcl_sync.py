@@ -453,6 +453,12 @@ async def sync_report_parses(
                     continue
 
                 entries = _parse_report_rankings(rankings_blob)
+                if entries:
+                    logger.info(
+                        "sync_report_parses: report=%s enc=%d got %d entries, sample names: %s",
+                        report_code, encounter_id, len(entries),
+                        [e["name"] for e in entries[:5]],
+                    )
                 stats["encounters_queried"] += 1
 
                 async with pool.acquire() as conn:
