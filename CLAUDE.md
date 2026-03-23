@@ -49,7 +49,7 @@ Hetzner Server (5.78.114.224)
 │                          onboarding_sessions, professions, profession_tiers, recipes,
 │                          character_recipes, crafting_sync_config, discord_channels,
 │                          raiderio_profiles, battlenet_accounts, wcl_config,
-│                          character_parses, raid_reports)
+│                          character_parses, raid_reports, character_report_parses)
 │
 ├── Guild Portal App (Python 3.11+ / FastAPI, guild_portal package)
 │   ├── API routes + Admin pages + Public pages (Jinja2)
@@ -230,17 +230,17 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.5.x** — WCL season filtering, Roster avg raid parse column, WCL zone derivation fixes.
+- **prod-v0.6.x** — Report-based WCL parse ingestion (`character_report_parses`). Roster and My Characters parse data now sourced from full raid log rankings, covering all guild members in any logged raid — not just public WCL profile holders.
 - **Branch:** `main`
-- **Tests:** 954 pass, 69 skip (2 pre-existing Phase H.4 failures, pre-existing identity_engine import error + one bot DM gate test)
-- **Last migration:** 0059 (`guild_identity.character_parses` +`kill BOOLEAN` nullable — unused, reserved for future)
-- **Last tag:** `prod-v0.5.7`
+- **Tests:** ~1000 pass (69 added in test_phase_45 for WCL report sync; pre-existing skips unchanged)
+- **Last migration:** 0060 (`character_report_parses` table + `encounter_ids`/`encounter_map` on `raid_reports`)
+- **Last tag:** `prod-v0.6.10`
 - **Active branch:** `main`
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
-- **Public pages:** `/` (index), `/roster` (**Avg Raid Parse column** — WCL kill-average, color-coded, links to WCL profile), `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
-- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (current season kills only; Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
+- **Public pages:** `/` (index), `/roster` (**Avg Raid Parse column** — sourced from `character_report_parses`, color-coded, links to WCL profile), `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
+- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (sourced from `character_report_parses`; Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users` (expired-token indicator — H.4), `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables` (**Guide Sites section** — Phase G), `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
@@ -253,4 +253,5 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 ### Known Gaps / Dormant Features
 - `guild_identity.identity_engine`: some tests skipped due to import error — pre-existing, non-blocking
-- **Roster Avg Raid Parse** only shows for ~7 characters with public WCL profiles. Full coverage requires report-based WCL ingestion — spec at `reference/detailed-wcl-logs.md` (migration 0060, `character_report_parses` table)
+- **Liberation of Undermine** (encounters 3212–3214) returns 0 WCL rankings — WCL has not yet published rankings for that tier. Will populate automatically once WCL processes it.
+- **`compute_attendance` in `wcl_sync.py`** has a bug at line ~538: `'str' object has no attribute 'get'` when loading attendees JSONB — the WCL Attendance admin tab is broken. Not yet fixed.
