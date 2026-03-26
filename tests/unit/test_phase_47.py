@@ -276,9 +276,9 @@ class TestWclPassUnknownCharacter:
         async def mock_fetchrow(*args, **kwargs):
             return {
                 "id": 1,
-                "event_date": datetime(2026, 3, 18, tzinfo=timezone.utc).date(),
                 "log_url": None,
                 "start_time_utc": _dt(0),
+                "end_time_utc": _dt(120),
             }
 
         conn.fetchrow = AsyncMock(side_effect=mock_fetchrow)
@@ -314,9 +314,9 @@ class TestWclPassNoReport:
         conn = AsyncMock()
         conn.fetchrow = AsyncMock(return_value={
             "id": 1,
-            "event_date": datetime(2026, 3, 18, tzinfo=timezone.utc).date(),
             "log_url": None,
             "start_time_utc": _dt(0),
+            "end_time_utc": _dt(120),
         })
         conn.fetch = AsyncMock(return_value=[])  # no reports
         conn.execute = AsyncMock()

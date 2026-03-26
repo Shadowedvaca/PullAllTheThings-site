@@ -34,44 +34,55 @@ logger = logging.getLogger(__name__)
 
 async def process_wcl_pass(pool: asyncpg.Pool, event_id: int) -> dict:
     """
-    Read raid_reports for the event date, resolve attendees to player_ids,
+    Read raid_reports for the event time window, resolve attendees to player_ids,
     upsert raid_attendance rows with source='wcl'.
 
-    Returns stats dict: {"matched": N, "unmatched": M, "skipped": 0 if no report}
+    Matches reports whose raid_date falls within the event's start/end UTC window
+    (with ±30 min / +1 hr buffer) so late-night raids that cross midnight UTC are
+    handled correctly regardless of the calendar event_date.
+
+    If the event has a log_url set, that report code is used instead (exact match).
+
+    Returns stats dict: {"matched": N, "unmatched": M, "skipped": True if no report}
     """
     async with pool.acquire() as conn:
         event = await conn.fetchrow(
-            "SELECT id, event_date, log_url, start_time_utc FROM patt.raid_events WHERE id = $1",
+            "SELECT id, log_url, start_time_utc, end_time_utc FROM patt.raid_events WHERE id = $1",
             event_id,
         )
         if not event:
             logger.warning("process_wcl_pass: event %d not found", event_id)
             return {"matched": 0, "unmatched": 0, "skipped": True}
 
-        event_date = event["event_date"]
         log_url = event["log_url"] or ""
+        start_utc = event["start_time_utc"]
+        end_utc = event["end_time_utc"]
 
-        # Find matching WCL reports: prefer by report code from log_url, else by date
+        # Find matching WCL reports: prefer exact match by report code from log_url,
+        # otherwise match by time window (handles midnight-UTC crossings).
         report_code = _extract_wcl_code(log_url)
         if report_code:
             reports = await conn.fetch(
-                """
-                SELECT id, attendees FROM guild_identity.raid_reports
-                WHERE report_code = $1
-                """,
+                "SELECT id, attendees FROM guild_identity.raid_reports WHERE report_code = $1",
                 report_code,
             )
         else:
+            window_start = start_utc - timedelta(minutes=30)
+            window_end = end_utc + timedelta(hours=1)
             reports = await conn.fetch(
                 """
                 SELECT id, attendees FROM guild_identity.raid_reports
-                WHERE raid_date::date = $1::date
+                WHERE raid_date >= $1 AND raid_date <= $2
                 """,
-                event_date,
+                window_start,
+                window_end,
             )
 
         if not reports:
-            logger.debug("process_wcl_pass: no WCL reports for event %d (date=%s)", event_id, event_date)
+            logger.debug(
+                "process_wcl_pass: no WCL reports for event %d (window %s–%s)",
+                event_id, start_utc, end_utc,
+            )
             return {"matched": 0, "unmatched": 0, "skipped": True}
 
         # Collect all attendee names across all reports
@@ -130,8 +141,8 @@ async def process_wcl_pass(pool: asyncpg.Pool, event_id: int) -> dict:
             matched += 1
 
         logger.info(
-            "WCL pass event %d: %d matched, %d unmatched",
-            event_id, matched, unmatched,
+            "WCL pass event %d: %d matched, %d unmatched (window %s–%s)",
+            event_id, matched, unmatched, start_utc, end_utc,
         )
         return {"matched": matched, "unmatched": unmatched, "skipped": False}
 
