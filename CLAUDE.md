@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.8.0** — Stable Blizzard character ID tracking. `blizzard_character_id` (BIGINT, unique) added to `wow_characters`; new `character_name_history` table. Roster sync matches by stable ID first — renames detected, old name recorded in history, row updated in-place. WCL parse sync expands name lookup to include historical names. BNet OAuth also stores stable ID. Fixes the rename problem (e.g. Wyland Evoker → Wyland Monk).
+- **prod-v0.8.1** — Attendance upgrades. `is_deleted BOOLEAN` added to `patt.raid_events` (migration 0062); deleted events excluded from all attendance views and CSV exports. Delete Event button added to event detail panel. Attendance grid horizontal scrollbar now always visible (grid capped at 65vh).
 - **Branch:** `main`
-- **Tests:** 1011 pass (6 new in test_db_sync.py; pre-existing skips unchanged)
-- **Last migration:** 0061
-- **Last tag:** `prod-v0.8.0`
+- **Tests:** 1011 pass (pre-existing skips unchanged)
+- **Last migration:** 0062
+- **Last tag:** `prod-v0.8.1`
 - **Active branch:** `main`
 
 ### What Exists
