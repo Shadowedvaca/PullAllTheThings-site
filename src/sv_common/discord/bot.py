@@ -195,6 +195,11 @@ async def on_message(message: discord.Message):
         value="Get your website invite code or log in link.",
         inline=False,
     )
+    embed.add_field(
+        name="/resetpassword",
+        value="Reset your website password. A temporary password will be DMed to you.",
+        inline=False,
+    )
     embed.set_footer(text=get_guild_name())
     await message.channel.send(embed=embed)
 

@@ -2624,6 +2624,28 @@ async def admin_delete_user(
     return JSONResponse({"ok": True, "data": {"user_id": user_id, "player_display_name": player_name}})
 
 
+@router.post("/users/{user_id}/reset-password")
+async def admin_reset_user_password(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    u = result.scalar_one_or_none()
+    if not u:
+        return JSONResponse({"ok": False, "error": "User not found"}, status_code=404)
+
+    from sv_common.auth.passwords import generate_temp_password, hash_password
+    temp_pw = generate_temp_password()
+    u.password_hash = hash_password(temp_pw)
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"temp_password": temp_pw}})
+
+
 # ---------------------------------------------------------------------------
 # Site Config (GL-only)
 # ---------------------------------------------------------------------------

@@ -459,6 +459,71 @@ def register_onboarding_commands(
             )
 
     @tree.command(
+        name="resetpassword",
+        description="Reset your guild website password — a temporary password will be DMed to you",
+    )
+    async def reset_password(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+
+        discord_id = str(interaction.user.id)
+
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """SELECT u.id, u.email
+                   FROM guild_identity.discord_users du
+                   JOIN guild_identity.players p ON p.discord_user_id = du.id
+                   JOIN common.users u ON u.id = p.website_user_id
+                   WHERE du.discord_id = $1""",
+                discord_id,
+            )
+
+        if not row:
+            await interaction.followup.send(
+                "No website account found for your Discord account.\n"
+                "Use `/get-account` to register.",
+                ephemeral=True,
+            )
+            return
+
+        from sv_common.auth.passwords import generate_temp_password, hash_password
+        temp_pw = generate_temp_password()
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE common.users SET password_hash = $1 WHERE id = $2",
+                hash_password(temp_pw),
+                row["id"],
+            )
+
+        site_url = get_app_url()
+        try:
+            embed = discord.Embed(
+                title="Password Reset",
+                description=(
+                    f"Your temporary password is:\n\n"
+                    f"```\n{temp_pw}\n```\n"
+                    f"**Log in here:** {site_url}/login\n\n"
+                    "Once you're in, change it on your profile page."
+                ),
+                color=get_accent_color_int(),
+            )
+            embed.set_footer(text=get_guild_name())
+            dm = await interaction.user.create_dm()
+            await dm.send(embed=embed)
+            await interaction.followup.send(
+                "Check your DMs — your temporary password has been sent.", ephemeral=True
+            )
+            logger.info(
+                "Password reset via Discord bot: discord_id=%s user_id=%s",
+                discord_id, row["id"],
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "I couldn't DM you (your DM settings may be blocking server messages). "
+                "Please open your DMs and try again.",
+                ephemeral=True,
+            )
+
+    @tree.command(
         name="onboard-start",
         description="Force-start a fresh onboarding conversation for a member (testing/recovery)",
     )

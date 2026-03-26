@@ -1,6 +1,16 @@
 """Password hashing and verification using bcrypt."""
 
+import secrets
+
 import bcrypt
+
+# Unambiguous characters — no 0/O, 1/I/L
+_TEMP_PW_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789abcdefghjkmnpqrstuvwxyz"
+
+
+def generate_temp_password(length: int = 12) -> str:
+    """Generate a random temporary password using an unambiguous character set."""
+    return "".join(secrets.choice(_TEMP_PW_ALPHABET) for _ in range(length))
 
 
 def hash_password(plain: str) -> str:
