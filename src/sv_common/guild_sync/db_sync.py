@@ -44,12 +44,29 @@ async def sync_blizzard_roster(
             rank_index_map = await _build_rank_index_map(conn)
 
             for char in characters:
-                existing = await conn.fetchrow(
-                    """SELECT id, removed_at
-                       FROM guild_identity.wow_characters
-                       WHERE LOWER(character_name) = $1 AND LOWER(realm_slug) = $2""",
-                    char.character_name.lower(), char.realm_slug.lower(),
-                )
+                # --- Resolve existing row: stable ID first, name+realm fallback ---
+                existing = None
+                renamed_from = None
+
+                if char.blizzard_character_id:
+                    existing = await conn.fetchrow(
+                        """SELECT id, character_name, realm_slug, removed_at
+                           FROM guild_identity.wow_characters
+                           WHERE blizzard_character_id = $1""",
+                        char.blizzard_character_id,
+                    )
+                    if existing and existing["character_name"].lower() != char.character_name.lower():
+                        # Rename detected: same stable ID, different name
+                        renamed_from = existing["character_name"]
+
+                if existing is None:
+                    # Fall back to name+realm (handles rows that predate stable ID tracking)
+                    existing = await conn.fetchrow(
+                        """SELECT id, character_name, realm_slug, removed_at
+                           FROM guild_identity.wow_characters
+                           WHERE LOWER(character_name) = $1 AND LOWER(realm_slug) = $2""",
+                        char.character_name.lower(), char.realm_slug.lower(),
+                    )
 
                 # Resolve class_id and active_spec_id from reference tables
                 class_row = await conn.fetchrow(
@@ -76,20 +93,43 @@ async def sync_blizzard_roster(
                     )
 
                 if existing:
+                    if renamed_from:
+                        # Record old name in history before updating
+                        await conn.execute(
+                            """INSERT INTO guild_identity.character_name_history
+                               (wow_character_id, character_name, realm_slug)
+                               VALUES ($1, $2, $3)""",
+                            existing["id"], renamed_from, existing["realm_slug"],
+                        )
+                        logger.info(
+                            "Character rename detected: %s → %s (blizzard_id=%s)",
+                            renamed_from, char.character_name, char.blizzard_character_id,
+                        )
+                        # current_keys was built from new names, so update it to keep
+                        # removal detection accurate (remove the old name key if it snuck in)
+                        old_key = (renamed_from.lower(), existing["realm_slug"].lower())
+                        current_keys.discard(old_key)
+
                     await conn.execute(
                         """UPDATE guild_identity.wow_characters SET
-                            class_id = $2,
-                            active_spec_id = $3,
-                            level = $4,
-                            item_level = $5,
-                            guild_rank_id = $6,
-                            last_login_timestamp = $7,
-                            blizzard_last_sync = $8,
+                            character_name = $2,
+                            realm_slug = $3,
+                            blizzard_character_id = COALESCE($4, blizzard_character_id),
+                            class_id = $5,
+                            active_spec_id = $6,
+                            level = $7,
+                            item_level = $8,
+                            guild_rank_id = $9,
+                            last_login_timestamp = $10,
+                            blizzard_last_sync = $11,
                             removed_at = NULL,
                             in_guild = TRUE,
-                            realm_name = $9
+                            realm_name = $12
                            WHERE id = $1""",
                         existing["id"],
+                        char.character_name,
+                        char.realm_slug,
+                        char.blizzard_character_id,
                         class_id,
                         spec_id,
                         char.level,
@@ -109,11 +149,12 @@ async def sync_blizzard_roster(
                 else:
                     await conn.execute(
                         """INSERT INTO guild_identity.wow_characters
-                           (character_name, realm_slug, realm_name, class_id,
-                            active_spec_id, level, item_level, guild_rank_id,
+                           (character_name, realm_slug, realm_name, blizzard_character_id,
+                            class_id, active_spec_id, level, item_level, guild_rank_id,
                             last_login_timestamp, blizzard_last_sync, in_guild)
-                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE)""",
+                           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE)""",
                         char.character_name, char.realm_slug, char.realm_name,
+                        char.blizzard_character_id,
                         class_id, spec_id, char.level, char.item_level,
                         guild_rank_id, char.last_login_timestamp, now,
                     )

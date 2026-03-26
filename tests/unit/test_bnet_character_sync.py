@@ -174,8 +174,16 @@ def _make_blizzard_profile(characters):
     return {"wow_accounts": [{"id": 1, "characters": characters}]}
 
 
-def _char(name, realm_slug, level, class_name="Druid"):
+_CHAR_ID_COUNTER = 10000
+
+
+def _char(name, realm_slug, level, class_name="Druid", char_id=None):
+    global _CHAR_ID_COUNTER
+    if char_id is None:
+        _CHAR_ID_COUNTER += 1
+        char_id = _CHAR_ID_COUNTER
     return {
+        "id": char_id,
         "name": name,
         "realm": {"slug": realm_slug, "name": realm_slug.capitalize()},
         "level": level,
@@ -204,6 +212,8 @@ async def test_sync_bnet_characters_correct_realm_and_level_filtering(monkeypatc
     async def fake_fetchrow(query, *args):
         if "classes" in query:
             return {"id": 5}  # class_id
+        if "blizzard_character_id = $1" in query:
+            return None  # no existing row by stable ID (simulate backfill scenario)
         if "SELECT id FROM guild_identity.wow_characters" in query:
             char_name = args[0]
             realm = args[1]
@@ -256,6 +266,8 @@ async def test_sync_bnet_characters_links_connected_realm_chars(monkeypatch):
     async def fake_fetchrow(query, *args):
         if "classes" in query:
             return {"id": 7}
+        if "blizzard_character_id = $1" in query:
+            return None  # no existing row by stable ID
         if "SELECT id FROM guild_identity.wow_characters" in query:
             char_name = args[0]
             realm = args[1]

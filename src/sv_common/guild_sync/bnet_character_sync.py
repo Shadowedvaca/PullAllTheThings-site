@@ -199,6 +199,7 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                 realm_slug = char_data.get("realm", {}).get("slug", "")
                 level = char_data.get("level", 0)
                 char_name = char_data.get("name", "")
+                blizzard_character_id = char_data.get("id")
 
                 # Filter: level 10+ (no bank alts or trial chars)
                 if level < 10:
@@ -209,12 +210,20 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                     continue
 
                 # Check if character already exists in wow_characters.
-                # Used to track whether this is a new character row (for new_characters counter).
-                existing_char = await conn.fetchrow(
-                    """SELECT id FROM guild_identity.wow_characters
-                       WHERE character_name = $1 AND realm_slug = $2""",
-                    char_name, realm_slug,
-                )
+                # Prefer matching by stable Blizzard character ID so renames are detected.
+                existing_char = None
+                if blizzard_character_id:
+                    existing_char = await conn.fetchrow(
+                        """SELECT id FROM guild_identity.wow_characters
+                           WHERE blizzard_character_id = $1""",
+                        blizzard_character_id,
+                    )
+                if existing_char is None:
+                    existing_char = await conn.fetchrow(
+                        """SELECT id FROM guild_identity.wow_characters
+                           WHERE character_name = $1 AND realm_slug = $2""",
+                        char_name, realm_slug,
+                    )
 
                 class_name = char_data.get("playable_class", {}).get("name", "")
 
@@ -232,19 +241,22 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                 # Upsert into wow_characters using the character's actual realm slug.
                 # New rows get in_guild=FALSE; existing rows keep their in_guild value
                 # (guild roster sync is responsible for setting in_guild=TRUE).
+                # blizzard_character_id stored for stable rename/transfer tracking.
                 char_row = await conn.fetchrow(
                     """INSERT INTO guild_identity.wow_characters
-                       (character_name, realm_slug, level, class_id, in_guild)
-                       VALUES ($1, $2, $3, $4, FALSE)
+                       (character_name, realm_slug, level, class_id, blizzard_character_id, in_guild)
+                       VALUES ($1, $2, $3, $4, $5, FALSE)
                        ON CONFLICT (character_name, realm_slug) DO UPDATE SET
                            level = EXCLUDED.level,
                            class_id = COALESCE(EXCLUDED.class_id,
                                                guild_identity.wow_characters.class_id),
+                           blizzard_character_id = COALESCE(EXCLUDED.blizzard_character_id,
+                                                            guild_identity.wow_characters.blizzard_character_id),
                            removed_at = NULL
                            -- in_guild is intentionally NOT updated on conflict:
                            -- if the char is already in the guild roster (TRUE), keep it TRUE
                        RETURNING id""",
-                    char_name, realm_slug, level, class_id,
+                    char_name, realm_slug, level, class_id, blizzard_character_id,
                 )
                 char_id = char_row["id"]
 

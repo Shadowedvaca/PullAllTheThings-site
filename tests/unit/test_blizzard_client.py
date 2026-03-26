@@ -79,6 +79,7 @@ class TestGetGuildRoster:
             "members": [
                 {
                     "character": {
+                        "id": 111111,
                         "name": "Trogmoon",
                         "realm": {"slug": "senjin", "name": "Sen'jin"},
                         "level": 80,
@@ -88,6 +89,7 @@ class TestGetGuildRoster:
                 },
                 {
                     "character": {
+                        "id": 222222,
                         "name": "Shodoom",
                         "realm": {"slug": "bleeding-hollow", "name": "Bleeding Hollow"},
                         "level": 80,
@@ -106,10 +108,30 @@ class TestGetGuildRoster:
         assert roster[0].character_class == "Druid"
         assert roster[0].guild_rank == 0
         assert roster[0].realm_slug == "senjin"
+        assert roster[0].blizzard_character_id == 111111
         assert roster[1].character_name == "Shodoom"
         assert roster[1].character_class == "Shaman"
         assert roster[1].guild_rank == 1
         assert roster[1].realm_slug == "bleeding-hollow"
+        assert roster[1].blizzard_character_id == 222222
+
+    async def test_roster_without_character_id_is_none(self, client):
+        """Missing id field in roster response → blizzard_character_id is None (graceful)."""
+        response = _make_response(200, {
+            "members": [{
+                "character": {
+                    "name": "Oldchar",
+                    "realm": {"slug": "senjin", "name": "Sen'jin"},
+                    "level": 80,
+                    "playable_class": {"id": 11},
+                },
+                "rank": 3,
+            }]
+        })
+        client._http_client.get = AsyncMock(return_value=response)
+
+        roster = await client.get_guild_roster()
+        assert roster[0].blizzard_character_id is None
 
     async def test_empty_roster_returns_empty_list(self, client):
         response = _make_response(200, {"members": []})
@@ -147,6 +169,7 @@ class TestGetCharacterProfile:
     async def test_parse_character_profile(self, client):
         """Full profile response is parsed correctly."""
         response = _make_response(200, {
+            "id": 999888,
             "name": "Trogmoon",
             "realm": {"slug": "senjin", "name": "Sen'jin"},
             "character_class": {"name": "Druid"},
@@ -170,6 +193,7 @@ class TestGetCharacterProfile:
         assert profile.last_login_timestamp == 1740000000000
         assert profile.realm_slug == "senjin"
         assert profile.race == "Tauren"
+        assert profile.blizzard_character_id == 999888
 
     async def test_character_not_found_returns_none(self, client):
         """404 response returns None."""

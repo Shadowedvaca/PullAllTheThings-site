@@ -399,16 +399,24 @@ async def sync_report_parses(
         "errors": 0,
     }
 
-    # Build character name→id lookup (case-insensitive)
+    # Build character name→id lookup (case-insensitive).
+    # Includes historical names so parses from before a rename still resolve correctly.
+    # Current names take precedence over historical names if there is ever a collision.
     async with pool.acquire() as conn:
         char_rows = await conn.fetch(
             """SELECT id, LOWER(character_name) AS name_lower
                FROM guild_identity.wow_characters
                WHERE in_guild = TRUE AND removed_at IS NULL"""
         )
-    char_lookup: dict[str, int] = {
-        row["name_lower"]: row["id"] for row in char_rows
-    }
+        history_rows = await conn.fetch(
+            """SELECT cnh.wow_character_id AS id, LOWER(cnh.character_name) AS name_lower
+               FROM guild_identity.character_name_history cnh
+               JOIN guild_identity.wow_characters wc ON wc.id = cnh.wow_character_id
+               WHERE wc.in_guild = TRUE AND wc.removed_at IS NULL"""
+        )
+    # Historical names first (lower priority), then current names overwrite on conflict
+    char_lookup: dict[str, int] = {row["name_lower"]: row["id"] for row in history_rows}
+    char_lookup.update({row["name_lower"]: row["id"] for row in char_rows})
 
     for report_code in report_codes:
         async with pool.acquire() as conn:
