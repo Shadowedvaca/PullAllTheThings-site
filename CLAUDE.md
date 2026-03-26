@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.6.x** — Report-based WCL parse ingestion (`character_report_parses`). Roster and My Characters parse data now sourced from full raid log rankings, covering all guild members in any logged raid — not just public WCL profile holders.
+- **prod-v0.7.0** — Password reset. Admin force-reset (temp password shown once in modal), Discord `/resetpassword` slash command (DMs temp password), login page hint, bot DM help updated.
 - **Branch:** `main`
-- **Tests:** ~1000 pass (69 added in test_phase_45 for WCL report sync; pre-existing skips unchanged)
-- **Last migration:** 0060 (`character_report_parses` table + `encounter_ids`/`encounter_map` on `raid_reports`)
-- **Last tag:** `prod-v0.6.10`
+- **Tests:** ~1030 pass (26 added for password reset; pre-existing skips unchanged)
+- **Last migration:** 0060 (no new migration in this phase)
+- **Last tag:** `prod-v0.7.0`
 - **Active branch:** `main`
 
 ### What Exists
