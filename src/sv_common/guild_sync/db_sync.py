@@ -123,11 +123,14 @@ async def sync_blizzard_roster(
                     )
                     stats["new"] += 1
 
-            # Mark characters as removed if they're no longer in the roster
+            # Mark characters as removed if they're no longer in the roster.
+            # Only consider in_guild=TRUE characters — BNet-discovered non-guild
+            # characters (in_guild=FALSE) are not guild members and should never
+            # be marked removed by the Blizzard roster sync.
             all_active = await conn.fetch(
                 """SELECT id, character_name, realm_slug
                    FROM guild_identity.wow_characters
-                   WHERE removed_at IS NULL"""
+                   WHERE removed_at IS NULL AND in_guild = TRUE"""
             )
 
             for row in all_active:
