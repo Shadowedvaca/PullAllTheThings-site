@@ -17,6 +17,7 @@ The processor runs 30 minutes after each raid's end_time_utc via the scheduler,
 or can be triggered manually via the admin API.
 """
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -86,9 +87,13 @@ async def process_wcl_pass(pool: asyncpg.Pool, event_id: int) -> dict:
             return {"matched": 0, "unmatched": 0, "skipped": True}
 
         # Collect all attendee names across all reports
+        # asyncpg returns JSONB as a raw string — parse it before iterating.
         attendee_names: set[str] = set()
         for report in reports:
-            attendees = report["attendees"] or []
+            raw = report["attendees"]
+            if not raw:
+                continue
+            attendees = json.loads(raw) if isinstance(raw, str) else raw
             for a in attendees:
                 name = (a.get("name") or "").strip()
                 if name:

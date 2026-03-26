@@ -543,7 +543,10 @@ async def compute_attendance(
     counts: dict[str, int] = {}
 
     for row in rows:
-        attendees = row["attendees"] or []
+        raw = row["attendees"]
+        if not raw:
+            continue
+        attendees = json.loads(raw) if isinstance(raw, str) else raw
         for a in attendees:
             name = (a.get("name") or "").lower().strip()
             if name:
