@@ -43,6 +43,7 @@ class GuildMemberData:
     character_class: str
     level: int
     guild_rank: int
+    blizzard_character_id: Optional[int] = None
 
 
 @dataclass
@@ -68,6 +69,7 @@ class CharacterProfileData:
     last_login_timestamp: Optional[int] = None
     race: Optional[str] = None
     gender: Optional[str] = None
+    blizzard_character_id: Optional[int] = None
 
 
 # Blizzard class ID → class name mapping
@@ -253,6 +255,7 @@ class BlizzardClient:
                 character_class=class_name,
                 level=char.get("level", 0),
                 guild_rank=entry.get("rank", 99),
+                blizzard_character_id=char.get("id"),
             ))
 
         logger.info("Fetched %d guild members from Blizzard API", len(members))
@@ -301,6 +304,7 @@ class BlizzardClient:
             last_login_timestamp=data.get("last_login_timestamp"),
             race=data.get("race", {}).get("name"),
             gender=data.get("gender", {}).get("name"),
+            blizzard_character_id=data.get("id"),
         )
 
     async def get_character_equipment_summary(
@@ -499,7 +503,7 @@ class BlizzardClient:
                         "Failed to fetch profile for %s: %s",
                         member.character_name, result
                     )
-                    # Use basic roster data without enrichment
+                    # Use basic roster data without enrichment; stable ID from roster
                     enriched.append(CharacterProfileData(
                         character_name=member.character_name,
                         realm_slug=member.realm_slug,
@@ -510,13 +514,17 @@ class BlizzardClient:
                         guild_rank_name=effective_rank_map.get(
                             member.guild_rank, f"Rank {member.guild_rank}"
                         ),
+                        blizzard_character_id=member.blizzard_character_id,
                     ))
                 elif result is not None:
-                    # Merge guild rank from roster (profile doesn't include it)
+                    # Merge guild rank from roster (profile doesn't include it).
+                    # Profile ID takes precedence; fall back to roster ID if missing.
                     result.guild_rank = member.guild_rank
                     result.guild_rank_name = effective_rank_map.get(
                         member.guild_rank, f"Rank {member.guild_rank}"
                     )
+                    if result.blizzard_character_id is None:
+                        result.blizzard_character_id = member.blizzard_character_id
                     enriched.append(result)
 
             # Small delay between batches to be nice

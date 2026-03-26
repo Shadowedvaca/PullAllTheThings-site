@@ -805,6 +805,7 @@ class WowCharacter(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    blizzard_character_id: Mapped[Optional[int]] = mapped_column(BigInteger, unique=True)
     character_name: Mapped[str] = mapped_column(String(50), nullable=False)
     realm_slug: Mapped[str] = mapped_column(String(50), nullable=False)
     realm_name: Mapped[Optional[str]] = mapped_column(String(100))
@@ -839,6 +840,34 @@ class WowCharacter(Base):
     player_character: Mapped[Optional["PlayerCharacter"]] = relationship(
         back_populates="character"
     )
+    name_history: Mapped[list["CharacterNameHistory"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan"
+    )
+
+
+class CharacterNameHistory(Base):
+    """Records previous names for a WoW character (rename tracking).
+
+    When sync detects that a character's blizzard_character_id matches an
+    existing row but the name has changed, the old name is written here before
+    the row is updated. WCL parse sync uses this table to attribute historical
+    parses to the correct character even after renames.
+    """
+
+    __tablename__ = "character_name_history"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    wow_character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"), nullable=False
+    )
+    character_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    realm_slug: Mapped[str] = mapped_column(String(50), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    character: Mapped["WowCharacter"] = relationship(back_populates="name_history")
 
 
 class Player(Base):
