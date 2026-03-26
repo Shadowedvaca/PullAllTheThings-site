@@ -1474,13 +1474,13 @@ async def get_attendance_season(
                 },
             }
 
-        # Load events for this season
+        # Load events for this season (exclude soft-deleted)
         events = await conn.fetch(
             """
             SELECT id, title, event_date, start_time_utc, end_time_utc,
                    attendance_processed_at, log_url, voice_tracking_enabled
             FROM patt.raid_events
-            WHERE season_id = $1
+            WHERE season_id = $1 AND NOT is_deleted
             ORDER BY event_date
             """,
             season["id"],
@@ -1820,6 +1820,30 @@ async def reprocess_attendance_event(
     return {"ok": True, "message": f"Re-processing triggered for event {event_id}"}
 
 
+@router.delete("/attendance/event/{event_id}")
+async def delete_attendance_event(
+    event_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a raid event so it is excluded from attendance views and exports."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval(
+            "SELECT id FROM patt.raid_events WHERE id = $1", event_id
+        )
+        if not exists:
+            return {"ok": False, "error": "Event not found"}
+        await conn.execute(
+            "UPDATE patt.raid_events SET is_deleted = TRUE WHERE id = $1",
+            event_id,
+        )
+    return {"ok": True}
+
+
 @router.patch("/attendance/record/{record_id}")
 async def update_attendance_record(
     record_id: int,
@@ -1876,7 +1900,7 @@ async def export_attendance_csv(
             return {"ok": False, "error": "No season found"}
 
         events = await conn.fetch(
-            "SELECT id, title, event_date FROM patt.raid_events WHERE season_id = $1 ORDER BY event_date",
+            "SELECT id, title, event_date FROM patt.raid_events WHERE season_id = $1 AND NOT is_deleted ORDER BY event_date",
             season["id"],
         )
         players = await conn.fetch(

@@ -43,7 +43,7 @@
 }
 
 /* ── Season grid ── */
-.att-grid-wrap { overflow-x: auto; }
+.att-grid-wrap { overflow: auto; max-height: 65vh; }
 table.att-grid {
     border-collapse: collapse;
     width: 100%;
@@ -659,6 +659,7 @@ async function showEventPanel(eventId) {
           </div>
           <div style="display:flex;gap:0.5rem;align-items:flex-start">
             <button class="att-save-btn" onclick="reprocessEvent(${eventId})">Re-process</button>
+            <button class="att-save-btn" style="background:#3d1515;color:#fca5a5;border:1px solid #7c2d12" onclick="deleteEvent(${eventId})">Delete Event</button>
             <button class="att-save-btn" style="background:#333;color:#ccc" onclick="closeEventPanel()">Close</button>
           </div>
         </div>
@@ -689,6 +690,18 @@ async function reprocessEvent(eventId) {
     if (json.ok) {
         await loadSeason();
         await showEventPanel(eventId);
+    } else {
+        alert('Error: ' + (json.error || 'unknown'));
+    }
+}
+
+async function deleteEvent(eventId) {
+    if (!confirm('Delete this event? It will be hidden from attendance views and exports. This cannot be undone from the UI.')) return;
+    const res = await fetch(`/api/v1/admin/attendance/event/${eventId}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.ok) {
+        closeEventPanel();
+        await loadSeason();
     } else {
         alert('Error: ' + (json.error || 'unknown'));
     }
