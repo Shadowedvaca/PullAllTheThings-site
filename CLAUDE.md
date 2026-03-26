@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.7.0** — Password reset. Admin force-reset (temp password shown once in modal), Discord `/resetpassword` slash command (DMs temp password), login page hint, bot DM help updated.
+- **prod-v0.8.0** — Stable Blizzard character ID tracking. `blizzard_character_id` (BIGINT, unique) added to `wow_characters`; new `character_name_history` table. Roster sync matches by stable ID first — renames detected, old name recorded in history, row updated in-place. WCL parse sync expands name lookup to include historical names. BNet OAuth also stores stable ID. Fixes the rename problem (e.g. Wyland Evoker → Wyland Monk).
 - **Branch:** `main`
-- **Tests:** ~1030 pass (26 added for password reset; pre-existing skips unchanged)
-- **Last migration:** 0060 (no new migration in this phase)
-- **Last tag:** `prod-v0.7.0`
+- **Tests:** 1011 pass (6 new in test_db_sync.py; pre-existing skips unchanged)
+- **Last migration:** 0061
+- **Last tag:** `prod-v0.8.0`
 - **Active branch:** `main`
 
 ### What Exists
