@@ -205,6 +205,74 @@
     background: rgba(96, 165, 250, 0.15);
     border-color: #60a5fa;
 }
+.ua-btn--reset {
+    background: transparent;
+    border-color: rgba(251, 191, 36, 0.3);
+    color: var(--color-warning);
+    margin-left: 0.4rem;
+}
+.ua-btn--reset:hover {
+    background: rgba(251, 191, 36, 0.1);
+    border-color: var(--color-warning);
+}
+
+/* ------------------------------------------------------------------ reset modal */
+.ua-modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+.ua-modal-backdrop.is-open { display: flex; }
+.ua-modal {
+    background: var(--color-bg-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.75rem 2rem;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: var(--shadow);
+}
+.ua-modal__title {
+    font-family: var(--font-display);
+    color: var(--color-accent);
+    font-size: 1.15rem;
+    margin: 0 0 0.75rem 0;
+}
+.ua-modal__body {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+    line-height: 1.6;
+}
+.ua-modal__pw {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.85rem;
+    letter-spacing: 0.08em;
+    user-select: all;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+.ua-modal__copy-hint {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-bottom: 1.25rem;
+}
+.ua-modal__actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+.ua-modal__actions .btn { font-size: 0.875rem; }
 
 /* ------------------------------------------------------------------ bnet cell */
 .ua-bnet-tag {
@@ -369,6 +437,12 @@
                     </button>
                   {% endif %}
                 {% endif %}
+                <button class="ua-btn ua-btn--reset"
+                        data-uid="{{ u.id }}"
+                        data-label="{{ u.email or u.display_name or 'this user' }}"
+                        onclick="resetPassword(this)">
+                    Reset PW
+                </button>
                 <button class="ua-btn ua-btn--delete"
                         data-uid="{{ u.id }}"
                         data-label="{{ u.email or u.display_name or 'this user' }}"
@@ -394,6 +468,38 @@
     Token expired — player must use "Refresh Characters" on their My Characters page to re-authorize.
 </p>
 {% endif %}
+
+<!-- Reset Password: confirm modal -->
+<div class="ua-modal-backdrop" id="reset-confirm-modal">
+    <div class="ua-modal">
+        <h2 class="ua-modal__title">Reset Password</h2>
+        <p class="ua-modal__body" id="reset-confirm-body">
+            This will replace the current password with a temporary one.
+            Tell the player to log in and change it on their profile.
+        </p>
+        <div class="ua-modal__actions">
+            <button class="btn btn-secondary" onclick="closeResetConfirm()">Cancel</button>
+            <button class="btn btn-primary" id="reset-confirm-ok" onclick="doReset()">Reset Password</button>
+        </div>
+    </div>
+</div>
+
+<!-- Reset Password: result modal -->
+<div class="ua-modal-backdrop" id="reset-result-modal">
+    <div class="ua-modal">
+        <h2 class="ua-modal__title">Temporary Password</h2>
+        <p class="ua-modal__body">
+            Copy this and send it to the player via Discord DM.
+            Once they log in they can change it on their profile.
+        </p>
+        <div class="ua-modal__pw" id="reset-result-pw"></div>
+        <p class="ua-modal__copy-hint">Click the password to select it, then copy.</p>
+        <div class="ua-modal__actions">
+            <button class="btn btn-secondary" onclick="copyTempPw()">Copy</button>
+            <button class="btn btn-primary" onclick="closeResetResult()">Done</button>
+        </div>
+    </div>
+</div>
 
 {% endblock %}
 
@@ -482,6 +588,57 @@ async function syncBnetAll() {
         btn.disabled = false;
         btn.textContent = 'Sync All Battle.net';
     }
+}
+
+let _resetUserId = null;
+
+function resetPassword(btn) {
+    _resetUserId = btn.dataset.uid;
+    const label = btn.dataset.label;
+    document.getElementById('reset-confirm-body').textContent =
+        `Reset password for "${label}"? This will replace their current password with a temporary one.`;
+    document.getElementById('reset-confirm-modal').classList.add('is-open');
+}
+
+function closeResetConfirm() {
+    document.getElementById('reset-confirm-modal').classList.remove('is-open');
+    _resetUserId = null;
+}
+
+async function doReset() {
+    const userId = _resetUserId;
+    if (!userId) return;
+    const okBtn = document.getElementById('reset-confirm-ok');
+    okBtn.disabled = true;
+    okBtn.textContent = '…';
+    try {
+        const res = await fetch(`/admin/users/${userId}/reset-password`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('reset-confirm-modal').classList.remove('is-open');
+            document.getElementById('reset-result-pw').textContent = data.data.temp_password;
+            document.getElementById('reset-result-modal').classList.add('is-open');
+        } else {
+            showToast('Error: ' + (data.error || '?'), 'error');
+            closeResetConfirm();
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+        closeResetConfirm();
+    } finally {
+        okBtn.disabled = false;
+        okBtn.textContent = 'Reset Password';
+    }
+}
+
+function closeResetResult() {
+    document.getElementById('reset-result-modal').classList.remove('is-open');
+    _resetUserId = null;
+}
+
+function copyTempPw() {
+    const pw = document.getElementById('reset-result-pw').textContent;
+    navigator.clipboard.writeText(pw).then(() => showToast('Copied to clipboard', 'success'));
 }
 
 async function deleteUser(btn) {

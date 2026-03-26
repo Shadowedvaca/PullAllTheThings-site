@@ -51,6 +51,47 @@ class TestPasswords:
         hashed = hash_password("real_password")
         assert verify_password("", hashed) is False
 
+    def test_generate_temp_password_default_length(self):
+        from sv_common.auth.passwords import generate_temp_password
+
+        pw = generate_temp_password()
+        assert len(pw) == 12
+
+    def test_generate_temp_password_custom_length(self):
+        from sv_common.auth.passwords import generate_temp_password
+
+        pw = generate_temp_password(length=20)
+        assert len(pw) == 20
+
+    def test_generate_temp_password_uses_safe_charset(self):
+        from sv_common.auth.passwords import generate_temp_password, _TEMP_PW_ALPHABET
+
+        for _ in range(50):
+            pw = generate_temp_password()
+            for ch in pw:
+                assert ch in _TEMP_PW_ALPHABET, f"Unsafe character '{ch}' in temp password"
+
+    def test_generate_temp_password_no_ambiguous_chars(self):
+        from sv_common.auth.passwords import generate_temp_password
+
+        ambiguous = set("0O1Il")
+        for _ in range(100):
+            pw = generate_temp_password()
+            assert not ambiguous.intersection(pw), f"Ambiguous char found in: {pw}"
+
+    def test_generate_temp_password_returns_different_values(self):
+        from sv_common.auth.passwords import generate_temp_password
+
+        passwords = {generate_temp_password() for _ in range(20)}
+        assert len(passwords) > 1  # statistically impossible to collide
+
+    def test_generate_temp_password_is_hashable(self):
+        from sv_common.auth.passwords import generate_temp_password, hash_password, verify_password
+
+        pw = generate_temp_password()
+        hashed = hash_password(pw)
+        assert verify_password(pw, hashed) is True
+
 
 # ---------------------------------------------------------------------------
 # JWT
