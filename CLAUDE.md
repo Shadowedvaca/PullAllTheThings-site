@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.9.0** — Attendance Snapshot + Auto-Excuse (migration 0063). Signup snapshot job runs at event start: captures `was_available` (player has availability row for event's day_of_week) and `raid_helper_status` (accepted/tentative/bench/absence/unknown from RH API). Two new auto-excuse settings in discord_config (`attendance_excuse_if_unavailable`, `attendance_excuse_if_discord_absent`). Auto-excuse applied at query time — changing settings immediately recalculates all stats. Denominator excludes effectively-excused events. Grid cells show "Auto-excused" vs "Excused" in tooltip; popover shows Availability/Raid-Helper/Auto-excused block. Event panel shows Avail?/RH Status columns + Re-snapshot button. CSV export treats auto-excused same as noted_absence.
+- **prod-v0.9.2** — Attendance Snapshot + Auto-Excuse (migration 0063). Signup snapshot job runs at event start: captures `was_available` (player has availability row for event's day_of_week) and `raid_helper_status` (accepted/tentative/bench/absence/unknown from RH API). Two new auto-excuse settings in discord_config (`attendance_excuse_if_unavailable`, `attendance_excuse_if_discord_absent`). Auto-excuse applied at query time — changing settings immediately recalculates all stats. **Auto-excuse only applies when absent — attending overrides availability/RH status.** Denominator excludes effectively-excused absent events. Grid cells show "Auto-excused" vs "Excused" in tooltip; popover shows Availability/Raid-Helper/Auto-excused block. Event panel shows Avail?/RH Status columns + Re-snapshot button. CSV export treats auto-excused same as noted_absence. Bugfixes: v0.9.1 fixed discord_users JOIN (FK is `players.discord_user_id → discord_users.id`, not reverse); v0.9.2 fixed attending-overrides-excuse logic.
 - **Branch:** `main`
-- **Tests:** 1030 pass (19 new; 2 pre-existing bnet template failures unchanged)
+- **Tests:** 1030 pass (20 new; 2 pre-existing bnet template failures unchanged)
 - **Last migration:** 0063
-- **Last tag:** `prod-v0.9.1`
+- **Last tag:** `prod-v0.9.2`
 - **Active branch:** `main`
 
 ### What Exists
@@ -255,3 +255,4 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - `guild_identity.identity_engine`: some tests skipped due to import error — pre-existing, non-blocking
 - **Liberation of Undermine** (encounters 3212–3214) returns 0 WCL rankings — WCL has not yet published rankings for that tier. Will populate automatically once WCL processes it.
 - **`compute_attendance` in `wcl_sync.py`** — JSONB `json.loads()` bug fixed in prod-v0.8.3. WCL Attendance admin tab should now work.
+- **Signup snapshot** — scheduler job runs at event start, not end. On test/dev `Guild sync scheduler skipped` (missing credentials) is expected; Re-snapshot button works manually.
