@@ -38,14 +38,25 @@ class TestAutoExcuseLogic:
         assert not _compute_auto_excused(True, None, False, True)
 
     def test_both_settings_on_either_condition_triggers(self):
-        # unavailable + not absent → excused (unavailable)
+        # unavailable → excused (when absent)
         assert _compute_auto_excused(False, "accepted", True, True)
-        # available + absent → excused (discord absent)
+        # discord absent → excused (when absent)
         assert _compute_auto_excused(True, "absence", True, True)
         # both conditions → still excused
         assert _compute_auto_excused(False, "absence", True, True)
         # neither condition → not excused
         assert not _compute_auto_excused(True, "accepted", True, True)
+
+    def test_attending_overrides_auto_excuse(self):
+        # The call sites gate on `not attended` before calling _compute_auto_excused.
+        # Simulate: attended=True means we never pass to the helper at all.
+        attended = True
+        result = (not attended) and _compute_auto_excused(False, "absence", True, True)
+        assert not result
+
+        attended = False
+        result = (not attended) and _compute_auto_excused(False, "absence", True, True)
+        assert result
 
     def test_null_snapshot_data_never_excused(self):
         # was_available=None means snapshot hasn't run for availability — should not trigger

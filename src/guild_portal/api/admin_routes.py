@@ -1577,8 +1577,8 @@ async def get_attendance_season(
                 elif cell is None:
                     attendance[str(eid)] = {"status": "nodata"}
                 else:
-                    # Compute auto_excused from snapshot data + current settings
-                    auto_excused = _compute_auto_excused(
+                    # Auto-excuse only applies when absent — attending overrides everything
+                    auto_excused = not cell["attended"] and _compute_auto_excused(
                         cell["was_available"],
                         cell["raid_helper_status"],
                         excuse_unavailable,
@@ -1767,9 +1767,11 @@ async def get_attendance_event(
         attended_count = sum(1 for r in records if r["attended"])
         excused_count = sum(
             1 for r in records
-            if r["noted_absence"] or _compute_auto_excused(
-                r["was_available"], r["raid_helper_status"],
-                excuse_unavailable, excuse_discord_absent,
+            if r["noted_absence"] or (
+                not r["attended"] and _compute_auto_excused(
+                    r["was_available"], r["raid_helper_status"],
+                    excuse_unavailable, excuse_discord_absent,
+                )
             )
         )
         absent_count = sum(
@@ -1785,7 +1787,7 @@ async def get_attendance_event(
         record_objs = []
         for r in records:
             pct = (r["minutes_present"] / duration_min * 100) if r["minutes_present"] is not None and duration_min > 0 else None
-            auto_excused = _compute_auto_excused(
+            auto_excused = not r["attended"] and _compute_auto_excused(
                 r["was_available"], r["raid_helper_status"],
                 excuse_unavailable, excuse_discord_absent,
             )
@@ -2041,7 +2043,7 @@ async def export_attendance_csv(
             if rec is None:
                 cells.append("—")
             else:
-                auto_excused = _compute_auto_excused(
+                auto_excused = not rec["attended"] and _compute_auto_excused(
                     rec["was_available"], rec["raid_helper_status"],
                     excuse_unavailable, excuse_discord_absent,
                 )
