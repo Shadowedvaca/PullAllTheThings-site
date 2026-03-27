@@ -234,7 +234,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Branch:** `main`
 - **Tests:** 1030 pass (19 new; 2 pre-existing bnet template failures unchanged)
 - **Last migration:** 0063
-- **Last tag:** `prod-v0.9.0`
+- **Last tag:** `prod-v0.9.1`
 - **Active branch:** `main`
 
 ### What Exists
