@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.8.1** — Attendance upgrades. `is_deleted BOOLEAN` added to `patt.raid_events` (migration 0062); deleted events excluded from all attendance views and CSV exports. Delete Event button added to event detail panel. Attendance grid horizontal scrollbar now always visible (grid capped at 65vh).
+- **prod-v0.8.5** — Attendance tracking overhaul (0.8.1–0.8.5). Migration 0062 adds `is_deleted` soft-delete to `patt.raid_events`. WCL matching switched from calendar-date to UTC time-window (handles late-night raids crossing midnight UTC). Fixed `json.loads()` for asyncpg JSONB attendees (was crashing silently). Attendance grid: roster-only players (active + main char set + not on hiatus), no rank column, compact single-line rows, short M/D date headers, `100% (1/1)` total format, sorted by % desc then name. Delete Event button in event panel. Scrollbar always visible (65vh cap).
 - **Branch:** `main`
 - **Tests:** 1011 pass (pre-existing skips unchanged)
 - **Last migration:** 0062
-- **Last tag:** `prod-v0.8.1`
+- **Last tag:** `prod-v0.8.5`
 - **Active branch:** `main`
 
 ### What Exists
@@ -254,4 +254,4 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 ### Known Gaps / Dormant Features
 - `guild_identity.identity_engine`: some tests skipped due to import error — pre-existing, non-blocking
 - **Liberation of Undermine** (encounters 3212–3214) returns 0 WCL rankings — WCL has not yet published rankings for that tier. Will populate automatically once WCL processes it.
-- **`compute_attendance` in `wcl_sync.py`** has a bug at line ~538: `'str' object has no attribute 'get'` when loading attendees JSONB — the WCL Attendance admin tab is broken. Not yet fixed.
+- **`compute_attendance` in `wcl_sync.py`** — JSONB `json.loads()` bug fixed in prod-v0.8.3. WCL Attendance admin tab should now work.
