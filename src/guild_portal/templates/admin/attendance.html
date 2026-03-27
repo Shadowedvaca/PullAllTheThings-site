@@ -358,6 +358,23 @@ table.att-grid {
             </div>
           </div>
         </div>
+
+        <div style="margin-top:1.25rem;border-top:1px solid #2a2a2e;padding-top:1rem;">
+          <p style="color:var(--color-text-muted);font-size:0.8rem;margin-bottom:0.5rem;">Excuse Logic — <span style="font-size:0.75rem;color:#666">Changing these settings immediately recalculates all stats using stored snapshot data.</span></p>
+          <div class="att-setting-row">
+            <label>
+              <input type="checkbox" id="att-excuse-unavailable" style="margin-right:0.4rem;">
+              Auto-excuse if player was not available (schedule)
+            </label>
+          </div>
+          <div class="att-setting-row">
+            <label>
+              <input type="checkbox" id="att-excuse-discord-absent" style="margin-right:0.4rem;">
+              Auto-excuse if player marked Absence in Discord
+            </label>
+          </div>
+        </div>
+
         <div style="display:flex;align-items:center;gap:0.75rem;margin-top:1rem;">
           <button type="submit" class="att-save-btn">Save Settings</button>
           <span id="att-settings-status" class="att-status-msg"></span>
@@ -432,6 +449,8 @@ async function loadSettings() {
     document.getElementById('att-trailing').value = s.attendance_trailing_events;
     document.getElementById('att-hab-window').value = s.attendance_habitual_window;
     document.getElementById('att-hab-threshold').value = s.attendance_habitual_threshold;
+    document.getElementById('att-excuse-unavailable').checked = !!s.attendance_excuse_if_unavailable;
+    document.getElementById('att-excuse-discord-absent').checked = !!s.attendance_excuse_if_discord_absent;
 }
 
 // ── Season selector ────────────────────────────────────────────────────────
@@ -533,7 +552,9 @@ function renderCell(cell, eventId, playerId) {
     } else if (s === 'absent') {
         cls = 'att-status--absent'; icon = '✗'; title = 'Absent';
     } else if (s === 'excused') {
-        cls = 'att-status--excused'; icon = '~'; title = 'Excused absence';
+        cls = 'att-status--excused';
+        icon = '~';
+        title = cell.auto_excused && !cell.noted_absence ? 'Auto-excused' : 'Excused';
     } else if (s === 'live') {
         cls = 'att-status--live'; icon = '[live]'; title = 'Tracking in progress';
     } else if (s === 'pending') {
@@ -566,8 +587,30 @@ async function showCellPopover(evt, eventId, playerId) {
         content.innerHTML = `<div class="att-popover__title">No data</div>`;
     } else {
         const s = cellData;
+
+        // Build snapshot block if snapshot has run (was_available is not null)
+        let snapshotBlock = '';
+        if (s.was_available !== null && s.was_available !== undefined) {
+            const availLabel = s.was_available ? 'Available' : 'Not available';
+            const rhLabel = s.raid_helper_status
+                ? s.raid_helper_status.charAt(0).toUpperCase() + s.raid_helper_status.slice(1)
+                : 'Unknown';
+            let autoExcusedLabel = 'No';
+            if (s.auto_excused) {
+                autoExcusedLabel = !s.was_available ? 'Yes (unavailable)' : 'Yes (absent in Discord)';
+            }
+            snapshotBlock = `
+                <div class="att-popover__row" style="margin-top:0.4rem;border-top:1px solid #2a2a2e;padding-top:0.4rem;">
+                  <span class="att-popover__label">Availability</span><span>${availLabel}</span>
+                </div>
+                <div class="att-popover__row"><span class="att-popover__label">Raid-Helper</span><span>${escHtml(rhLabel)}</span></div>
+                <div class="att-popover__row"><span class="att-popover__label">Auto-excused</span><span>${autoExcusedLabel}</span></div>
+            `;
+        }
+
         const statusLabel = s.status === 'attended' ? 'Attended'
-            : s.status === 'excused' ? 'Excused'
+            : s.status === 'excused'
+                ? (s.auto_excused && !s.noted_absence ? 'Auto-excused' : 'Excused')
             : s.status === 'absent' ? 'Absent' : s.status;
 
         content.innerHTML = `
@@ -578,6 +621,7 @@ async function showCellPopover(evt, eventId, playerId) {
             ${s.last_leave_at ? `<div class="att-popover__row"><span class="att-popover__label">Left</span><span>${fmtTime(s.last_leave_at)}</span></div>` : ''}
             ${s.joined_late != null ? `<div class="att-popover__row"><span class="att-popover__label">Late</span><span>${s.joined_late ? 'Yes ⏰' : 'No'}</span></div>` : ''}
             ${s.left_early != null ? `<div class="att-popover__row"><span class="att-popover__label">Left early</span><span>${s.left_early ? 'Yes 🚪' : 'No'}</span></div>` : ''}
+            ${snapshotBlock}
             ${s.attendance_id ? `<button class="att-excused-btn" onclick="toggleExcused(${s.attendance_id}, ${s.noted_absence ? 'false' : 'true'})">${s.noted_absence ? 'Remove Excused' : 'Mark as Excused'}</button>` : ''}
         `;
     }
@@ -631,10 +675,26 @@ async function showEventPanel(eventId) {
     const d = json.data;
     const e = d.event;
 
+    const hasSnapshot = d.records && d.records.some(r => r.was_available !== null && r.was_available !== undefined);
+
     let rows = '';
     (d.records || []).forEach(r => {
-        const statusIcon = r.attended ? (r.noted_absence ? '~' : '✓') : '✗';
-        const statusCls = r.attended ? (r.noted_absence ? 'att-status--excused' : 'att-status--attended') : 'att-status--absent';
+        const effectivelyExcused = r.noted_absence || r.auto_excused;
+        const statusIcon = r.attended ? (effectivelyExcused ? '~' : '✓') : (effectivelyExcused ? '~' : '✗');
+        const statusCls = r.attended
+            ? (effectivelyExcused ? 'att-status--excused' : 'att-status--attended')
+            : (effectivelyExcused ? 'att-status--excused' : 'att-status--absent');
+
+        let snapshotCells = '';
+        if (hasSnapshot) {
+            const availLabel = r.was_available === null ? '—'
+                : r.was_available ? 'Yes' : 'No';
+            const rhLabel = r.raid_helper_status
+                ? r.raid_helper_status.charAt(0).toUpperCase() + r.raid_helper_status.slice(1)
+                : '—';
+            snapshotCells = `<td>${availLabel}</td><td>${escHtml(rhLabel)}</td>`;
+        }
+
         rows += `<tr>
           <td>${escHtml(r.player_name)}</td>
           <td>${escHtml(r.source || '—')}</td>
@@ -642,9 +702,15 @@ async function showEventPanel(eventId) {
           <td>${r.last_leave_at ? fmtTime(r.last_leave_at) : '—'}</td>
           <td>${r.minutes_present != null ? r.minutes_present + 'm' : '—'}</td>
           <td>${r.pct != null ? Math.round(r.pct) + '%' : '—'}</td>
+          ${snapshotCells}
           <td class="${statusCls}">${statusIcon}</td>
         </tr>`;
     });
+
+    const snapshotHeaderCells = hasSnapshot ? '<th>Avail?</th><th>RH Status</th>' : '';
+    const snapshotMeta = e.snapshotted
+        ? ' · snapshot: done'
+        : ' · snapshot: pending';
 
     panel.innerHTML = `
         <div class="att-event-panel__header">
@@ -654,18 +720,19 @@ async function showEventPanel(eventId) {
               ${e.log_url ? ` | <a href="${escAttr(e.log_url)}" target="_blank" style="color:var(--color-gold)">WCL Report</a>` : ''}
             </div>
             <div class="att-event-panel__meta" style="margin-top:0.25rem">
-              ${d.summary.attended} attended · ${d.summary.absent} absent · ${d.summary.excused} excused · source: ${escHtml(d.summary.sources)}
+              ${d.summary.attended} attended · ${d.summary.absent} absent · ${d.summary.excused} excused · source: ${escHtml(d.summary.sources)}${snapshotMeta}
             </div>
           </div>
           <div style="display:flex;gap:0.5rem;align-items:flex-start">
             <button class="att-save-btn" onclick="reprocessEvent(${eventId})">Re-process</button>
+            <button class="att-save-btn" style="background:#1e2d1e;color:#86efac;border:1px solid #166534" onclick="resnapshotEvent(${eventId})">Re-snapshot</button>
             <button class="att-save-btn" style="background:#3d1515;color:#fca5a5;border:1px solid #7c2d12" onclick="deleteEvent(${eventId})">Delete Event</button>
             <button class="att-save-btn" style="background:#333;color:#ccc" onclick="closeEventPanel()">Close</button>
           </div>
         </div>
         <table>
           <thead><tr>
-            <th>Player</th><th>Source</th><th>Joined</th><th>Left</th><th>Time</th><th>%</th><th>Result</th>
+            <th>Player</th><th>Source</th><th>Joined</th><th>Left</th><th>Time</th><th>%</th>${snapshotHeaderCells}<th>Result</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -687,6 +754,22 @@ async function reprocessEvent(eventId) {
     const json = await res.json();
     btn.disabled = false;
     btn.textContent = 'Re-process';
+    if (json.ok) {
+        await loadSeason();
+        await showEventPanel(eventId);
+    } else {
+        alert('Error: ' + (json.error || 'unknown'));
+    }
+}
+
+async function resnapshotEvent(eventId) {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Snapshotting…';
+    const res = await fetch(`/api/v1/admin/attendance/event/${eventId}/snapshot`, { method: 'POST' });
+    const json = await res.json();
+    btn.disabled = false;
+    btn.textContent = 'Re-snapshot';
     if (json.ok) {
         await loadSeason();
         await showEventPanel(eventId);
@@ -738,6 +821,8 @@ async function saveSettings(evt) {
         attendance_trailing_events: parseInt(document.getElementById('att-trailing').value),
         attendance_habitual_window: parseInt(document.getElementById('att-hab-window').value),
         attendance_habitual_threshold: parseInt(document.getElementById('att-hab-threshold').value),
+        attendance_excuse_if_unavailable: document.getElementById('att-excuse-unavailable').checked,
+        attendance_excuse_if_discord_absent: document.getElementById('att-excuse-discord-absent').checked,
     };
 
     const res = await fetch('/api/v1/admin/attendance/settings', {

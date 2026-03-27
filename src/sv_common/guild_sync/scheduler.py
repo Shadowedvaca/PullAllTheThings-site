@@ -1018,8 +1018,16 @@ class GuildSyncScheduler:
 
         Picks up events that ended ≥30 minutes ago, have voice_tracking_enabled,
         and have not yet been processed. Runs both WCL and voice passes.
+
+        Also snapshots signup data for events that have started but not yet
+        been snapshotted (was_available + raid_helper_status).
         """
-        from .attendance_processor import get_unprocessed_events, process_event
+        from .attendance_processor import (
+            get_unprocessed_events,
+            get_unsnapshotted_events,
+            process_event,
+            snapshot_event_signups,
+        )
 
         try:
             # Check if feature is enabled
@@ -1030,6 +1038,18 @@ class GuildSyncScheduler:
             if not enabled:
                 return
 
+            # --- Signup snapshot pass (runs at event start) ---
+            unsnapshotted = await get_unsnapshotted_events(self.db_pool)
+            for event in unsnapshotted:
+                logger.info(
+                    "Signup snapshot: event %d (%s) started %s",
+                    event["id"],
+                    event["title"],
+                    event["start_time_utc"],
+                )
+                await snapshot_event_signups(self.db_pool, event["id"])
+
+            # --- Attendance processing pass (runs 30 min after event end) ---
             events = await get_unprocessed_events(self.db_pool)
             if not events:
                 return

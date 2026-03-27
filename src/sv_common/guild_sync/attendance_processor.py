@@ -1,5 +1,6 @@
 """
-Attendance processor: Two-pass reconciliation of voice + WCL data.
+Attendance processor: Two-pass reconciliation of voice + WCL data, plus
+signup snapshot.
 
 Pass 1 — WCL Reconciliation:
   Reads raid_reports.attendees for the event date, resolves character names to
@@ -13,6 +14,11 @@ Pass 3 — Habitual Behavior Check:
   Scans recent events for repeated joined_late / left_early patterns. Posts an
   officer alert to the audit channel if the threshold is met.
 
+Signup Snapshot:
+  Runs at event start time (not end). Captures was_available and
+  raid_helper_status for each roster player. Triggered by scheduler
+  alongside the main processing loop.
+
 The processor runs 30 minutes after each raid's end_time_utc via the scheduler,
 or can be triggered manually via the admin API.
 """
@@ -24,6 +30,7 @@ from typing import Any
 
 import asyncpg
 import discord
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -531,6 +538,213 @@ async def get_unprocessed_events(pool: asyncpg.Pool) -> list[dict]:
             """
         )
         return [dict(r) for r in rows]
+
+
+async def get_unsnapshotted_events(pool: asyncpg.Pool) -> list[dict]:
+    """
+    Return events that have started but not yet had a signup snapshot taken.
+    Snapshot runs at event start (not end), so we look for events where
+    start_time_utc <= NOW() and signup_snapshot_at IS NULL.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT re.id, re.title, re.start_time_utc, re.raid_helper_event_id
+            FROM patt.raid_events re
+            JOIN patt.raid_seasons rs ON rs.id = re.season_id
+            WHERE re.start_time_utc <= NOW()
+              AND re.signup_snapshot_at IS NULL
+              AND NOT re.is_deleted
+              AND rs.is_active = TRUE
+            ORDER BY re.start_time_utc
+            """
+        )
+        return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Raid-Helper status mapping
+# ---------------------------------------------------------------------------
+
+# className values from Raid-Helper signUps entries → our status enum
+_RH_CLASS_TO_STATUS = {
+    "Tentative": "tentative",
+    "Bench": "bench",
+    "Absence": "absence",
+    # Role-based class names mean the player signed up as that role (accepted)
+    "Tank": "accepted",
+    "Healer": "accepted",
+    "Melee": "accepted",
+    "Ranged": "accepted",
+}
+
+
+def _map_rh_class_to_status(class_name: str | None) -> str:
+    """Map a Raid-Helper className to our raid_helper_status enum value."""
+    if not class_name:
+        return "unknown"
+    return _RH_CLASS_TO_STATUS.get(class_name, "accepted")
+
+
+# ---------------------------------------------------------------------------
+# Signup Snapshot
+# ---------------------------------------------------------------------------
+
+
+async def snapshot_event_signups(pool: asyncpg.Pool, event_id: int) -> dict:
+    """
+    Snapshot was_available and raid_helper_status for each roster player at
+    event start time.
+
+    Steps:
+    1. Load event; if no raid_helper_event_id, skip RH fetch but still snapshot
+       was_available.
+    2. Fetch Raid-Helper event signUps (if raid_helper_event_id set).
+    3. Build discord_id → raid_helper_status map from signUps.
+    4. Determine was_available per player: TRUE if any player_availability row
+       exists for the event's day_of_week. FALSE if none. (Simplified heuristic —
+       player timezone is not stored, so we use presence of a row as the proxy.
+       This matches the logic used at event creation time.)
+    5. For each roster player, upsert raid_attendance with was_available +
+       raid_helper_status.
+    6. Stamp raid_events.signup_snapshot_at = NOW().
+
+    Returns {"snapshotted": N, "no_rh_id": bool}.
+
+    Error handling: if Raid-Helper fetch fails, still snapshot was_available
+    and set raid_helper_status = 'unknown' for all. Do NOT stamp
+    signup_snapshot_at so it retries next cycle.
+    """
+    async with pool.acquire() as conn:
+        event = await conn.fetchrow(
+            """
+            SELECT id, event_date, start_time_utc, raid_helper_event_id
+            FROM patt.raid_events WHERE id = $1
+            """,
+            event_id,
+        )
+        if not event:
+            logger.warning("snapshot_event_signups: event %d not found", event_id)
+            return {"snapshotted": 0, "no_rh_id": True}
+
+        rh_event_id = event["raid_helper_event_id"]
+        no_rh_id = not rh_event_id
+
+        # Load Raid-Helper credentials
+        config = await conn.fetchrow(
+            "SELECT raid_helper_api_key, raid_helper_server_id FROM common.discord_config LIMIT 1"
+        )
+        api_key = config["raid_helper_api_key"] if config else None
+        server_id = config["raid_helper_server_id"] if config else None
+
+        # Load roster: active players with main character set and not on hiatus
+        roster = await conn.fetch(
+            """
+            SELECT p.id AS player_id, du.discord_id
+            FROM guild_identity.players p
+            LEFT JOIN guild_identity.discord_users du ON du.player_id = p.id
+            WHERE p.is_active = TRUE
+              AND p.main_character_id IS NOT NULL
+              AND p.on_raid_hiatus = FALSE
+            """
+        )
+
+        # Build day-of-week for this event (0=Mon, 6=Sun — Python weekday())
+        event_dow = event["event_date"].weekday()
+
+        # Load player_availability rows for this day_of_week
+        avail_rows = await conn.fetch(
+            "SELECT player_id FROM patt.player_availability WHERE day_of_week = $1",
+            event_dow,
+        )
+        available_player_ids: set[int] = {r["player_id"] for r in avail_rows}
+
+        # Build discord_id → raid_helper_status map
+        discord_to_rh_status: dict[str, str] = {}
+        rh_fetch_ok = False
+
+        if rh_event_id and api_key and server_id:
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"https://raid-helper.dev/api/v2/events/{rh_event_id}",
+                        headers={"Authorization": api_key},
+                        timeout=15.0,
+                    )
+                if resp.is_success:
+                    data = resp.json()
+                    sign_ups = data.get("signUps") or []
+                    for entry in sign_ups:
+                        user_id = entry.get("userId") or entry.get("discord_id")
+                        class_name = entry.get("className") or entry.get("class")
+                        if user_id:
+                            discord_to_rh_status[str(user_id)] = _map_rh_class_to_status(class_name)
+                    rh_fetch_ok = True
+                    logger.info(
+                        "snapshot_event_signups: fetched %d signups for RH event %s",
+                        len(discord_to_rh_status), rh_event_id,
+                    )
+                else:
+                    logger.warning(
+                        "snapshot_event_signups: RH API returned %d for event %s",
+                        resp.status_code, rh_event_id,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "snapshot_event_signups: RH fetch failed for event %s: %s",
+                    rh_event_id, exc,
+                )
+        else:
+            # No RH ID configured — consider fetch "ok" so we still stamp at the end
+            rh_fetch_ok = True
+
+        # Upsert attendance rows with snapshot data
+        snapshotted = 0
+        for player in roster:
+            pid = player["player_id"]
+            discord_id = player["discord_id"]
+
+            was_available = pid in available_player_ids
+
+            if no_rh_id:
+                rh_status = "unknown"
+            elif not rh_fetch_ok:
+                rh_status = None  # will retry next cycle
+            elif discord_id and discord_id in discord_to_rh_status:
+                rh_status = discord_to_rh_status[discord_id]
+            else:
+                rh_status = "unknown"
+
+            await conn.execute(
+                """
+                INSERT INTO patt.raid_attendance (event_id, player_id, attended, was_available, raid_helper_status)
+                VALUES ($1, $2, FALSE, $3, $4)
+                ON CONFLICT (event_id, player_id) DO UPDATE
+                  SET was_available = EXCLUDED.was_available,
+                      raid_helper_status = CASE
+                        WHEN $4 IS NOT NULL THEN $4
+                        ELSE raid_attendance.raid_helper_status
+                      END
+                """,
+                event_id,
+                pid,
+                was_available,
+                rh_status,
+            )
+            snapshotted += 1
+
+        # Stamp snapshot_at only if RH fetch succeeded (or no RH ID)
+        if rh_fetch_ok:
+            await conn.execute(
+                "UPDATE patt.raid_events SET signup_snapshot_at = NOW() WHERE id = $1",
+                event_id,
+            )
+
+    logger.info(
+        "snapshot_event_signups event %d: %d players snapshotted, no_rh_id=%s, rh_ok=%s",
+        event_id, snapshotted, no_rh_id, rh_fetch_ok,
+    )
+    return {"snapshotted": snapshotted, "no_rh_id": no_rh_id}
 
 
 async def get_attendance_status(pool: asyncpg.Pool, player_id: int, trailing: int = 8) -> dict:
