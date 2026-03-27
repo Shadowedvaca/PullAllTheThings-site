@@ -163,9 +163,9 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 
 | Schema | Key tables |
 |--------|-----------|
-| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`, +`active_connected_realm_ids`), `rank_wow_mapping` |
+| `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns, +`attendance_excuse_if_unavailable`, +`attendance_excuse_if_discord_absent`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`, +`active_connected_realm_ids`), `rank_wow_mapping` |
 | `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`, +**`in_guild`**), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history` |
-| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`), `recurring_events`, `voice_attendance_log` |
+| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`, +`is_deleted` BOOLEAN — 0062, **+`signup_snapshot_at`** — 0063), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`, **+`was_available` BOOLEAN, +`raid_helper_status` VARCHAR(20)** — 0063), `recurring_events`, `voice_attendance_log` |
 
 **Key design notes:**
 - `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`
@@ -230,11 +230,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.8.5** — Attendance tracking overhaul (0.8.1–0.8.5). Migration 0062 adds `is_deleted` soft-delete to `patt.raid_events`. WCL matching switched from calendar-date to UTC time-window (handles late-night raids crossing midnight UTC). Fixed `json.loads()` for asyncpg JSONB attendees (was crashing silently). Attendance grid: roster-only players (active + main char set + not on hiatus), no rank column, compact single-line rows, short M/D date headers, `100% (1/1)` total format, sorted by % desc then name. Delete Event button in event panel. Scrollbar always visible (65vh cap).
+- **prod-v0.9.0** — Attendance Snapshot + Auto-Excuse (migration 0063). Signup snapshot job runs at event start: captures `was_available` (player has availability row for event's day_of_week) and `raid_helper_status` (accepted/tentative/bench/absence/unknown from RH API). Two new auto-excuse settings in discord_config (`attendance_excuse_if_unavailable`, `attendance_excuse_if_discord_absent`). Auto-excuse applied at query time — changing settings immediately recalculates all stats. Denominator excludes effectively-excused events. Grid cells show "Auto-excused" vs "Excused" in tooltip; popover shows Availability/Raid-Helper/Auto-excused block. Event panel shows Avail?/RH Status columns + Re-snapshot button. CSV export treats auto-excused same as noted_absence.
 - **Branch:** `main`
-- **Tests:** 1011 pass (pre-existing skips unchanged)
-- **Last migration:** 0062
-- **Last tag:** `prod-v0.8.5`
+- **Tests:** 1030 pass (19 new; 2 pre-existing bnet template failures unchanged)
+- **Last migration:** 0063
+- **Last tag:** `prod-v0.9.0`
 - **Active branch:** `main`
 
 ### What Exists
