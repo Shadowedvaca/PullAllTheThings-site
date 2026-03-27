@@ -1652,6 +1652,9 @@ async def get_attendance_season(
                 "attendance_summary": att_status["summary"],
             })
 
+        # Sort by pct descending, then name ascending
+        player_objs.sort(key=lambda p: (-(p["pct"] or 0), p["name"].lower()))
+
         # Unlinked users
         if event_ids:
             unlinked_rows = await conn.fetch(

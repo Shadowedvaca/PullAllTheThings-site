@@ -77,7 +77,7 @@ table.att-grid {
     background: var(--color-card);
     z-index: 1;
 }
-.att-grid th.att-col-event { cursor: pointer; }
+.att-grid th.att-col-event { cursor: pointer; max-width: 48px; width: 48px; }
 .att-grid th.att-col-event:hover { color: var(--color-gold); }
 .att-grid tr:nth-child(even) td { background: #1b1b20; }
 .att-grid tr:nth-child(even) td.att-col-player { background: #1b1b20; }
@@ -471,8 +471,8 @@ function renderGrid(data) {
 <thead>
 <tr>
   <th class="att-col-player">Player</th>
-  ${events.map(e => `<th class="att-col-event" onclick="showEventPanel(${e.id})" title="Click for details">${escHtml(e.date)}<br><small style="color:#888">${escHtml(e.title)}</small></th>`).join('')}
-  <th>Total</th>
+  ${events.map(e => `<th class="att-col-event" onclick="showEventPanel(${e.id})" title="${escAttr(e.date + ' — ' + e.title)}">${fmtShortDate(e.date)}</th>`).join('')}
+  <th>Att%</th>
 </tr>
 </thead>
 <tbody>`;
@@ -497,16 +497,19 @@ function renderGrid(data) {
             else if (totalPct >= 50) totalClass += ' att-total--atrisk';
             else totalClass += ' att-total--low';
         }
-        html += `<td class="${totalClass}">${p.total_attended}/${p.total_eligible}${totalPct != null ? '<br><small>' + Math.round(totalPct) + '%</small>' : ''}</td>`;
+        const totalLabel = totalPct != null
+            ? `${Math.round(totalPct)}% (${p.total_attended}/${p.total_eligible})`
+            : `${p.total_attended}/${p.total_eligible}`;
+        html += `<td class="${totalClass}">${totalLabel}</td>`;
         html += '</tr>';
     });
 
     // Footer row
-    html += '<tr class="att-footer-row"><td class="att-col-player">Guild %</td>';
+    html += '<tr class="att-footer-row"><td class="att-col-player">Guild</td>';
     events.forEach(e => {
         const t = eventTotals[e.id];
         const pct = t.total > 0 ? Math.round((t.attended / t.total) * 100) : null;
-        html += `<td>${t.attended}/${t.total}${pct != null ? '<br><small>' + pct + '%</small>' : ''}</td>`;
+        html += `<td>${pct != null ? pct + '%' : '—'}</td>`;
     });
     html += '<td></td></tr>';
 
@@ -768,6 +771,12 @@ function escHtml(s) {
 }
 function escAttr(s) {
     return String(s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function fmtShortDate(iso) {
+    // "2026-03-25" → "3/25"
+    if (!iso) return '?';
+    const parts = iso.split('-');
+    return parts.length === 3 ? `${parseInt(parts[1])}/${parseInt(parts[2])}` : iso;
 }
 function fmtTime(iso) {
     if (!iso) return '—';
