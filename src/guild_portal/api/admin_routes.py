@@ -1415,6 +1415,8 @@ class AttendanceSettingsUpdate(BaseModel):
     attendance_trailing_events: int | None = None
     attendance_habitual_window: int | None = None
     attendance_habitual_threshold: int | None = None
+    attendance_excuse_if_unavailable: bool | None = None
+    attendance_excuse_if_discord_absent: bool | None = None
 
 
 class ExcusedUpdate(BaseModel):
@@ -1494,7 +1496,8 @@ async def get_attendance_season(
             att_rows = await conn.fetch(
                 """
                 SELECT id, event_id, player_id, attended, source, noted_absence,
-                       minutes_present, first_join_at, last_leave_at, joined_late, left_early
+                       minutes_present, first_join_at, last_leave_at, joined_late, left_early,
+                       was_available, raid_helper_status
                 FROM patt.raid_attendance
                 WHERE event_id = ANY($1::int[])
                 """,
@@ -1521,17 +1524,20 @@ async def get_attendance_season(
             """
         )
 
-        # Config for habitual check
+        # Config for habitual check and excuse logic
         cfg = await conn.fetchrow(
             """
             SELECT attendance_habitual_window, attendance_habitual_threshold,
-                   attendance_min_pct, attendance_trailing_events
+                   attendance_min_pct, attendance_trailing_events,
+                   attendance_excuse_if_unavailable, attendance_excuse_if_discord_absent
             FROM common.discord_config LIMIT 1
             """
         )
         hab_window = cfg["attendance_habitual_window"] if cfg else 5
         hab_threshold = cfg["attendance_habitual_threshold"] if cfg else 3
         trailing = cfg["attendance_trailing_events"] if cfg else 8
+        excuse_unavailable = cfg["attendance_excuse_if_unavailable"] if cfg else False
+        excuse_discord_absent = cfg["attendance_excuse_if_discord_absent"] if cfg else False
 
         # Build event objects
         event_objs = []
@@ -1571,11 +1577,22 @@ async def get_attendance_season(
                 elif cell is None:
                     attendance[str(eid)] = {"status": "nodata"}
                 else:
-                    total_eligible += 1
-                    if cell["attended"]:
-                        total_attended += 1
+                    # Compute auto_excused from snapshot data + current settings
+                    auto_excused = _compute_auto_excused(
+                        cell["was_available"],
+                        cell["raid_helper_status"],
+                        excuse_unavailable,
+                        excuse_discord_absent,
+                    )
+                    effectively_excused = cell["noted_absence"] or auto_excused
 
-                    if cell["noted_absence"]:
+                    # Denominator excludes effectively excused events
+                    if not effectively_excused:
+                        total_eligible += 1
+                        if cell["attended"]:
+                            total_attended += 1
+
+                    if effectively_excused:
                         status = "excused"
                     elif cell["attended"]:
                         status = "attended"
@@ -1590,6 +1607,9 @@ async def get_attendance_season(
                         "joined_late": cell["joined_late"],
                         "left_early": cell["left_early"],
                         "noted_absence": cell["noted_absence"],
+                        "auto_excused": auto_excused,
+                        "was_available": cell["was_available"],
+                        "raid_helper_status": cell["raid_helper_status"],
                         "attendance_id": cell["id"],
                         "first_join_at": cell["first_join_at"].isoformat() if cell["first_join_at"] else None,
                         "last_leave_at": cell["last_leave_at"].isoformat() if cell["last_leave_at"] else None,
@@ -1706,7 +1726,7 @@ async def get_attendance_event(
         event = await conn.fetchrow(
             """
             SELECT id, title, event_date, start_time_utc, end_time_utc,
-                   log_url, voice_channel_id, attendance_processed_at
+                   log_url, voice_channel_id, attendance_processed_at, signup_snapshot_at
             FROM patt.raid_events WHERE id = $1
             """,
             event_id,
@@ -1719,7 +1739,8 @@ async def get_attendance_event(
             SELECT ra.id, ra.player_id, p.display_name AS player_name,
                    ra.attended, ra.source, ra.noted_absence,
                    ra.minutes_present, ra.first_join_at, ra.last_leave_at,
-                   ra.joined_late, ra.left_early, ra.signed_up
+                   ra.joined_late, ra.left_early, ra.signed_up,
+                   ra.was_available, ra.raid_helper_status
             FROM patt.raid_attendance ra
             JOIN guild_identity.players p ON p.id = ra.player_id
             WHERE ra.event_id = $1
@@ -1728,18 +1749,46 @@ async def get_attendance_event(
             event_id,
         )
 
+        # Load excuse settings
+        cfg = await conn.fetchrow(
+            """
+            SELECT attendance_excuse_if_unavailable, attendance_excuse_if_discord_absent
+            FROM common.discord_config LIMIT 1
+            """
+        )
+        excuse_unavailable = cfg["attendance_excuse_if_unavailable"] if cfg else False
+        excuse_discord_absent = cfg["attendance_excuse_if_discord_absent"] if cfg else False
+
         duration_min = (event["end_time_utc"] - event["start_time_utc"]).total_seconds() / 60
 
         sources_set = set(r["source"] for r in records if r["source"])
         source_summary = "+".join(sorted(sources_set)) if sources_set else "none"
 
         attended_count = sum(1 for r in records if r["attended"])
-        excused_count = sum(1 for r in records if r["noted_absence"])
-        absent_count = sum(1 for r in records if not r["attended"] and not r["noted_absence"])
+        excused_count = sum(
+            1 for r in records
+            if r["noted_absence"] or _compute_auto_excused(
+                r["was_available"], r["raid_helper_status"],
+                excuse_unavailable, excuse_discord_absent,
+            )
+        )
+        absent_count = sum(
+            1 for r in records
+            if not r["attended"]
+            and not r["noted_absence"]
+            and not _compute_auto_excused(
+                r["was_available"], r["raid_helper_status"],
+                excuse_unavailable, excuse_discord_absent,
+            )
+        )
 
         record_objs = []
         for r in records:
             pct = (r["minutes_present"] / duration_min * 100) if r["minutes_present"] is not None and duration_min > 0 else None
+            auto_excused = _compute_auto_excused(
+                r["was_available"], r["raid_helper_status"],
+                excuse_unavailable, excuse_discord_absent,
+            )
             record_objs.append({
                 "id": r["id"],
                 "player_id": r["player_id"],
@@ -1747,6 +1796,9 @@ async def get_attendance_event(
                 "attended": r["attended"],
                 "source": r["source"],
                 "noted_absence": r["noted_absence"],
+                "auto_excused": auto_excused,
+                "was_available": r["was_available"],
+                "raid_helper_status": r["raid_helper_status"],
                 "minutes_present": r["minutes_present"],
                 "pct": pct,
                 "first_join_at": r["first_join_at"].isoformat() if r["first_join_at"] else None,
@@ -1767,6 +1819,7 @@ async def get_attendance_event(
                 "end_time": event["end_time_utc"].strftime("%H:%M"),
                 "log_url": event["log_url"],
                 "processed": event["attendance_processed_at"] is not None,
+                "snapshotted": event["signup_snapshot_at"] is not None,
             },
             "summary": {
                 "attended": attended_count,
@@ -1822,6 +1875,36 @@ async def reprocess_attendance_event(
 
     asyncio.create_task(process_event(pool, event_id, audit_channel))
     return {"ok": True, "message": f"Re-processing triggered for event {event_id}"}
+
+
+@router.post("/attendance/event/{event_id}/snapshot")
+async def snapshot_attendance_event(
+    event_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Manually trigger signup snapshot for a raid event."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    # Reset snapshot_at so it can be re-snapshotted
+    async with pool.acquire() as conn:
+        exists = await conn.fetchval(
+            "SELECT id FROM patt.raid_events WHERE id = $1", event_id
+        )
+        if not exists:
+            return {"ok": False, "error": "Event not found"}
+        await conn.execute(
+            "UPDATE patt.raid_events SET signup_snapshot_at = NULL WHERE id = $1",
+            event_id,
+        )
+
+    from sv_common.guild_sync.attendance_processor import snapshot_event_signups
+    import asyncio
+
+    asyncio.create_task(snapshot_event_signups(pool, event_id))
+    return {"ok": True, "message": f"Snapshot triggered for event {event_id}"}
 
 
 @router.delete("/attendance/event/{event_id}")
@@ -1923,11 +2006,20 @@ async def export_attendance_csv(
         if event_ids:
             att_rows = await conn.fetch(
                 """
-                SELECT event_id, player_id, attended, noted_absence, source
+                SELECT event_id, player_id, attended, noted_absence, source,
+                       was_available, raid_helper_status
                 FROM patt.raid_attendance WHERE event_id = ANY($1::int[])
                 """,
                 event_ids,
             )
+        cfg = await conn.fetchrow(
+            """
+            SELECT attendance_excuse_if_unavailable, attendance_excuse_if_discord_absent
+            FROM common.discord_config LIMIT 1
+            """
+        )
+        excuse_unavailable = cfg["attendance_excuse_if_unavailable"] if cfg else False
+        excuse_discord_absent = cfg["attendance_excuse_if_discord_absent"] if cfg else False
 
     att_index = {(r["event_id"], r["player_id"]): r for r in att_rows}
 
@@ -1948,17 +2040,21 @@ async def export_attendance_csv(
             rec = att_index.get((e["id"], pid))
             if rec is None:
                 cells.append("—")
-            elif rec["noted_absence"]:
-                cells.append("excused")
-                total_elig += 1
-                total_att += 1
-            elif rec["attended"]:
-                cells.append("attended")
-                total_elig += 1
-                total_att += 1
             else:
-                cells.append("absent")
-                total_elig += 1
+                auto_excused = _compute_auto_excused(
+                    rec["was_available"], rec["raid_helper_status"],
+                    excuse_unavailable, excuse_discord_absent,
+                )
+                if rec["noted_absence"] or auto_excused:
+                    cells.append("excused")
+                    # excused events do NOT count toward total (excluded from denominator)
+                elif rec["attended"]:
+                    cells.append("attended")
+                    total_elig += 1
+                    total_att += 1
+                else:
+                    cells.append("absent")
+                    total_elig += 1
         pct_str = f"{round(total_att / total_elig * 100)}%" if total_elig > 0 else "—"
         writer.writerow([p["display_name"] or f"#{pid}"] + cells + [f"{total_att}/{total_elig}", pct_str])
 
@@ -1986,7 +2082,8 @@ async def get_attendance_settings(
             """
             SELECT attendance_feature_enabled, attendance_min_pct, attendance_late_grace_min,
                    attendance_early_leave_min, attendance_trailing_events,
-                   attendance_habitual_window, attendance_habitual_threshold
+                   attendance_habitual_window, attendance_habitual_threshold,
+                   attendance_excuse_if_unavailable, attendance_excuse_if_discord_absent
             FROM common.discord_config LIMIT 1
             """
         )
@@ -2023,7 +2120,8 @@ async def update_attendance_settings(
             """
             SELECT attendance_feature_enabled, attendance_min_pct, attendance_late_grace_min,
                    attendance_early_leave_min, attendance_trailing_events,
-                   attendance_habitual_window, attendance_habitual_threshold
+                   attendance_habitual_window, attendance_habitual_threshold,
+                   attendance_excuse_if_unavailable, attendance_excuse_if_discord_absent
             FROM common.discord_config LIMIT 1
             """
         )
@@ -2034,6 +2132,25 @@ async def update_attendance_settings(
 # ---------------------------------------------------------------------------
 # Attendance helpers
 # ---------------------------------------------------------------------------
+
+
+def _compute_auto_excused(
+    was_available: bool | None,
+    raid_helper_status: str | None,
+    excuse_if_unavailable: bool,
+    excuse_if_discord_absent: bool,
+) -> bool:
+    """Compute auto_excused flag from snapshot data and current settings.
+
+    Applied at query time — changing settings immediately recalculates all stats.
+    was_available=None or raid_helper_status=None means snapshot hasn't run yet.
+    """
+    auto = False
+    if excuse_if_unavailable and was_available is False:
+        auto = True
+    if excuse_if_discord_absent and raid_helper_status == "absence":
+        auto = True
+    return auto
 
 
 def _season_display_name(season) -> str:
