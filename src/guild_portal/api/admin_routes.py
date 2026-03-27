@@ -2180,6 +2180,229 @@ def _compute_att_status(rows, min_pct: int, feature_enabled: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Attendance Rules CRUD + Evaluation
+# ---------------------------------------------------------------------------
+
+import json as _json_mod
+
+_VALID_CONDITION_TYPES = {"attendance_pct_in_window", "min_events_per_week"}
+_VALID_GROUP_TYPES = {"promotion", "warning", "info"}
+
+
+class AttendanceRuleConditionModel(BaseModel):
+    type: str
+    window_days: int = 14
+    operator: str = ">="
+    value: float = 0
+
+
+class AttendanceRuleCreate(BaseModel):
+    name: str
+    group_label: str
+    group_type: str
+    is_active: bool = True
+    target_rank_ids: list[int]
+    result_rank_id: int | None = None
+    conditions: list[AttendanceRuleConditionModel]
+    sort_order: int = 0
+
+
+class AttendanceRuleUpdate(BaseModel):
+    name: str | None = None
+    group_label: str | None = None
+    group_type: str | None = None
+    is_active: bool | None = None
+    target_rank_ids: list[int] | None = None
+    result_rank_id: int | None = None
+    conditions: list[AttendanceRuleConditionModel] | None = None
+    sort_order: int | None = None
+
+
+def _validate_rule_fields(data: dict) -> str | None:
+    """Returns error string if invalid, None if ok."""
+    if "group_type" in data and data["group_type"] not in _VALID_GROUP_TYPES:
+        return f"group_type must be one of: {', '.join(sorted(_VALID_GROUP_TYPES))}"
+    if "conditions" in data and data["conditions"] is not None:
+        for c in data["conditions"]:
+            ct = c.get("type", "") if isinstance(c, dict) else c.type
+            if ct not in _VALID_CONDITION_TYPES:
+                return f"Unknown condition type: {ct!r}"
+    return None
+
+
+def _serialize_conditions(conditions) -> str:
+    return _json_mod.dumps(
+        [c if isinstance(c, dict) else c.model_dump() for c in conditions]
+    )
+
+
+def _deserialize_rule(row) -> dict:
+    d = dict(row)
+    if isinstance(d.get("conditions"), str):
+        d["conditions"] = _json_mod.loads(d["conditions"])
+    return d
+
+
+@router.get("/attendance/rules")
+async def get_attendance_rules(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all attendance rules sorted by sort_order."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT * FROM patt.attendance_rules ORDER BY sort_order, id"
+        )
+    return {"ok": True, "data": {"rules": [_deserialize_rule(r) for r in rows]}}
+
+
+@router.post("/attendance/rules")
+async def create_attendance_rule(
+    body: AttendanceRuleCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new attendance rule."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    err = _validate_rule_fields(body.model_dump())
+    if err:
+        return {"ok": False, "error": err}
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO patt.attendance_rules
+                (name, group_label, group_type, is_active, target_rank_ids,
+                 result_rank_id, conditions, sort_order)
+            VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+            RETURNING *
+            """,
+            body.name,
+            body.group_label,
+            body.group_type,
+            body.is_active,
+            body.target_rank_ids,
+            body.result_rank_id,
+            _serialize_conditions(body.conditions),
+            body.sort_order,
+        )
+    return {"ok": True, "data": {"rule": _deserialize_rule(row)}}
+
+
+@router.patch("/attendance/rules/{rule_id}")
+async def update_attendance_rule(
+    rule_id: int,
+    body: AttendanceRuleUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Partial update of an attendance rule."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    fields = body.model_dump(exclude_unset=True)
+    if not fields:
+        return {"ok": False, "error": "No fields to update"}
+
+    err = _validate_rule_fields(fields)
+    if err:
+        return {"ok": False, "error": err}
+
+    set_parts = []
+    values: list = []
+    i = 1
+    for k, v in fields.items():
+        if k == "conditions":
+            set_parts.append(f"conditions = ${i}::jsonb")
+            values.append(_serialize_conditions(v))
+        else:
+            set_parts.append(f"{k} = ${i}")
+            values.append(v)
+        i += 1
+    values.append(rule_id)
+
+    async with pool.acquire() as conn:
+        existing = await conn.fetchval(
+            "SELECT id FROM patt.attendance_rules WHERE id = $1", rule_id
+        )
+        if not existing:
+            return {"ok": False, "error": "Rule not found"}
+        row = await conn.fetchrow(
+            f"UPDATE patt.attendance_rules SET {', '.join(set_parts)} WHERE id = ${i} RETURNING *",
+            *values,
+        )
+    return {"ok": True, "data": {"rule": _deserialize_rule(row)}}
+
+
+@router.delete("/attendance/rules/{rule_id}")
+async def delete_attendance_rule(
+    rule_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Hard delete an attendance rule."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM patt.attendance_rules WHERE id = $1", rule_id
+        )
+    if result == "DELETE 0":
+        return {"ok": False, "error": "Rule not found"}
+    return {"ok": True}
+
+
+@router.get("/attendance/rule-matches")
+async def get_attendance_rule_matches(
+    request: Request,
+    season_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Evaluate all active rules and return matches grouped by group_label."""
+    pool = getattr(request.app.state, "guild_sync_pool", None)
+    if not pool:
+        return {"ok": False, "error": "Guild sync pool not available"}
+
+    from sv_common.guild_sync.attendance_processor import evaluate_attendance_rules
+
+    matches = await evaluate_attendance_rules(pool, season_id=season_id)
+
+    # Group by (group_label, group_type) in sort_order sequence
+    groups_dict: dict = {}
+    for m in matches:
+        key = m["group_label"]
+        if key not in groups_dict:
+            groups_dict[key] = {
+                "group_label": m["group_label"],
+                "group_type": m["group_type"],
+                "sort_order": m["sort_order"],
+                "matches": [],
+            }
+        groups_dict[key]["matches"].append(
+            {
+                "rule_name": m["rule_name"],
+                "player_id": m["player_id"],
+                "player_name": m["player_name"],
+                "current_rank_name": m["current_rank_name"],
+                "result_rank_name": m["result_rank_name"],
+                "stats": m["stats"],
+            }
+        )
+
+    groups = sorted(groups_dict.values(), key=lambda g: g["sort_order"])
+    return {"ok": True, "data": {"groups": groups}}
+
+
+# ---------------------------------------------------------------------------
 # Quote Subjects — Phase 4.8
 # ---------------------------------------------------------------------------
 

@@ -801,3 +801,279 @@ async def get_attendance_status(pool: asyncpg.Pool, player_id: int, trailing: in
             status = "concern"
 
         return {"status": status, "summary": summary}
+
+
+# ---------------------------------------------------------------------------
+# Attendance Rule Engine
+# ---------------------------------------------------------------------------
+
+
+def _rule_auto_excused(
+    was_available: bool | None,
+    raid_helper_status: str | None,
+    excuse_if_unavailable: bool,
+    excuse_if_discord_absent: bool,
+) -> bool:
+    """Compute auto_excused for rule evaluation (mirrors admin_routes._compute_auto_excused)."""
+    auto = False
+    if excuse_if_unavailable and was_available is False:
+        auto = True
+    if excuse_if_discord_absent and raid_helper_status == "absence":
+        auto = True
+    return auto
+
+
+def _compare(actual: float, operator: str, threshold: float) -> bool:
+    """Compare actual vs threshold using the given operator."""
+    if operator == ">=":
+        return actual >= threshold
+    if operator == ">":
+        return actual > threshold
+    if operator == "<=":
+        return actual <= threshold
+    if operator == "<":
+        return actual < threshold
+    if operator == "==":
+        return actual == threshold
+    return False
+
+
+async def _eval_player_rule(
+    conn: asyncpg.Connection,
+    player_id: int,
+    rule: Any,
+    season_id: int,
+    excuse_unavailable: bool,
+    excuse_discord_absent: bool,
+) -> tuple[bool, dict]:
+    """
+    Evaluate a single rule against a single player.
+    Returns (passes, stats_dict).
+    """
+    conditions = rule["conditions"]
+    if isinstance(conditions, str):
+        conditions = json.loads(conditions)
+    if not conditions:
+        return False, {}
+
+    max_window = max(c.get("window_days", 14) for c in conditions)
+    window_start = datetime.now(timezone.utc) - timedelta(days=max_window)
+
+    events = await conn.fetch(
+        """
+        SELECT id, event_date, start_time_utc
+        FROM patt.raid_events
+        WHERE season_id = $1 AND start_time_utc >= $2 AND NOT is_deleted
+        ORDER BY start_time_utc
+        """,
+        season_id,
+        window_start,
+    )
+
+    if not events:
+        return False, {"eligible": 0}
+
+    event_ids = [e["id"] for e in events]
+    events_by_id = {e["id"]: e for e in events}
+
+    att_rows = await conn.fetch(
+        """
+        SELECT event_id, attended, noted_absence, was_available, raid_helper_status
+        FROM patt.raid_attendance
+        WHERE player_id = $1 AND event_id = ANY($2::int[])
+        """,
+        player_id,
+        event_ids,
+    )
+    att_by_event = {r["event_id"]: r for r in att_rows}
+
+    # Compute effective state for each event
+    event_state: dict[int, dict] = {}
+    for e in events:
+        eid = e["id"]
+        row = att_by_event.get(eid)
+        if row is None:
+            event_state[eid] = {"attended": False, "effectively_excused": False}
+        else:
+            attended = bool(row["attended"])
+            # Auto-excuse only applies when absent — attending overrides
+            if attended:
+                auto_excused = False
+            else:
+                auto_excused = _rule_auto_excused(
+                    row["was_available"],
+                    row["raid_helper_status"],
+                    excuse_unavailable,
+                    excuse_discord_absent,
+                )
+            effectively_excused = bool(row["noted_absence"]) or auto_excused
+            event_state[eid] = {
+                "attended": attended,
+                "effectively_excused": effectively_excused,
+            }
+
+    stats: dict = {}
+    all_pass = True
+
+    for condition in conditions:
+        ctype = condition.get("type", "")
+        window_days = condition.get("window_days", 14)
+        operator = condition.get("operator", ">=")
+        value = condition.get("value", 0)
+
+        # Filter to this condition's window
+        cond_window_start = datetime.now(timezone.utc) - timedelta(days=window_days)
+        cond_event_ids = [
+            eid for eid in event_ids
+            if events_by_id[eid]["start_time_utc"] >= cond_window_start
+        ]
+        cond_states = [event_state[eid] for eid in cond_event_ids]
+
+        if ctype == "attendance_pct_in_window":
+            total = len(cond_states)
+            excused_count = sum(1 for s in cond_states if s["effectively_excused"])
+            attended_count = sum(1 for s in cond_states if s["attended"])
+            eligible = total - excused_count
+            pct = 100.0 * attended_count / eligible if eligible > 0 else 0.0
+            passes = eligible > 0 and _compare(pct, operator, value)
+            stats["pct"] = round(pct, 1)
+            stats["eligible"] = eligible
+            stats["attended"] = attended_count
+
+        elif ctype == "min_events_per_week":
+            # Group events by ISO week (Monday start)
+            weeks: dict[tuple, list] = {}
+            for eid in cond_event_ids:
+                edate = events_by_id[eid]["event_date"]
+                iso_key = edate.isocalendar()[:2]  # (year, week_num)
+                weeks.setdefault(iso_key, []).append(event_state[eid])
+
+            weeks_checked = 0
+            weeks_passed = 0
+            has_eligible = False
+            passes = True
+
+            for week_states in weeks.values():
+                eligible_in_week = [s for s in week_states if not s["effectively_excused"]]
+                if not eligible_in_week:
+                    continue  # Skip weeks where all events are excused
+                has_eligible = True
+                weeks_checked += 1
+                attended_in_week = sum(1 for s in eligible_in_week if s["attended"])
+                if _compare(attended_in_week, operator, value):
+                    weeks_passed += 1
+                else:
+                    passes = False
+
+            if not has_eligible:
+                passes = False
+
+            stats["weeks_checked"] = weeks_checked
+            stats["weeks_passed"] = weeks_passed
+
+        else:
+            # Unknown condition type — skip without failing
+            continue
+
+        if not passes:
+            all_pass = False
+
+    return all_pass, stats
+
+
+async def evaluate_attendance_rules(
+    pool: asyncpg.Pool,
+    season_id: int | None = None,
+) -> list[dict]:
+    """
+    Evaluate all active attendance rules against the current roster.
+
+    Returns a list of match dicts for players that satisfy all conditions
+    of a rule. Called on page load — no background job needed.
+
+    Each match dict contains rule metadata, player info, and stats.
+    """
+    async with pool.acquire() as conn:
+        # Load excuse settings
+        settings = await conn.fetchrow(
+            """
+            SELECT attendance_excuse_if_unavailable, attendance_excuse_if_discord_absent
+            FROM common.discord_config LIMIT 1
+            """
+        )
+        if not settings:
+            return []
+        excuse_unavailable = settings["attendance_excuse_if_unavailable"]
+        excuse_discord_absent = settings["attendance_excuse_if_discord_absent"]
+
+        # Load active rules
+        rules = await conn.fetch(
+            "SELECT * FROM patt.attendance_rules WHERE is_active ORDER BY sort_order, id"
+        )
+        if not rules:
+            return []
+
+        # Load season
+        if season_id:
+            season = await conn.fetchrow(
+                "SELECT id FROM patt.raid_seasons WHERE id = $1", season_id
+            )
+        else:
+            season = await conn.fetchrow(
+                "SELECT id FROM patt.raid_seasons WHERE is_active LIMIT 1"
+            )
+        if not season:
+            return []
+
+        # Load all guild ranks for name lookups
+        rank_rows = await conn.fetch("SELECT id, name FROM common.guild_ranks")
+        rank_by_id: dict[int, str] = {r["id"]: r["name"] for r in rank_rows}
+
+        # Load active roster (main char set, not on hiatus)
+        players = await conn.fetch(
+            """
+            SELECT p.id, p.display_name, p.guild_rank_id AS rank_id, gr.name AS rank_name
+            FROM guild_identity.players p
+            JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            WHERE p.is_active = TRUE
+              AND p.main_character_id IS NOT NULL
+              AND p.on_raid_hiatus = FALSE
+            """
+        )
+
+        results: list[dict] = []
+        for rule in rules:
+            target_rank_ids: list[int] = rule["target_rank_ids"] or []
+            if not target_rank_ids:
+                continue
+
+            matching_players = [p for p in players if p["rank_id"] in target_rank_ids]
+            for player in matching_players:
+                passes, player_stats = await _eval_player_rule(
+                    conn,
+                    player["id"],
+                    rule,
+                    season["id"],
+                    excuse_unavailable,
+                    excuse_discord_absent,
+                )
+                if passes:
+                    result_rank_id = rule["result_rank_id"]
+                    results.append(
+                        {
+                            "rule_id": rule["id"],
+                            "rule_name": rule["name"],
+                            "group_label": rule["group_label"],
+                            "group_type": rule["group_type"],
+                            "sort_order": rule["sort_order"],
+                            "result_rank_id": result_rank_id,
+                            "result_rank_name": rank_by_id.get(result_rank_id) if result_rank_id else None,
+                            "player_id": player["id"],
+                            "player_name": player["display_name"],
+                            "current_rank_id": player["rank_id"],
+                            "current_rank_name": player["rank_name"],
+                            "stats": player_stats,
+                        }
+                    )
+
+        return results

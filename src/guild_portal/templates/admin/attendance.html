@@ -252,6 +252,137 @@ table.att-grid {
 .att-status-msg--ok { color: #4ade80; }
 .att-status-msg--err { color: #f87171; }
 
+/* ── Rule match cards ── */
+.att-rule-groups { display: flex; flex-direction: column; gap: 0.75rem; }
+.att-rule-card {
+    background: var(--color-card);
+    border-radius: 6px;
+    border: 1px solid #2a2a2e;
+    overflow: hidden;
+}
+.att-rule-card--promotion { border-left: 3px solid #4ade80; }
+.att-rule-card--warning   { border-left: 3px solid var(--color-gold); }
+.att-rule-card--info      { border-left: 3px solid #60a5fa; }
+.att-rule-card__title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.85rem;
+    background: #16161a;
+    color: var(--color-text-muted);
+}
+.att-rule-card--promotion .att-rule-card__title { color: #86efac; }
+.att-rule-card--warning   .att-rule-card__title { color: var(--color-gold); }
+.att-rule-card--info      .att-rule-card__title { color: #93c5fd; }
+.att-rule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.att-rule-table td {
+    padding: 0.3rem 0.85rem;
+    border-bottom: 1px solid #1e1e24;
+}
+.att-rule-table tr:last-child td { border-bottom: none; }
+.att-rule-table td:first-child { color: var(--color-text); font-weight: 500; }
+.att-rule-table td:nth-child(2) { color: var(--color-text-muted); }
+.att-rule-table td:last-child { color: #aaa; font-size: 0.75rem; text-align: right; }
+.att-rank-arrow {
+    display: inline-block;
+    background: #1e2d1e;
+    color: #86efac;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-size: 0.72rem;
+    margin-left: 0.4rem;
+    border: 1px solid #166534;
+}
+
+/* ── Rule editor (in settings) ── */
+.att-rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    margin-top: 0.75rem;
+}
+.att-rules-table th, .att-rules-table td {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--color-border);
+    text-align: left;
+}
+.att-rules-table th { background: #1a1a1f; color: var(--color-text-muted); }
+.att-rule-edit-btn {
+    background: #1e1e28;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+.att-rule-edit-btn:hover { color: var(--color-gold); border-color: var(--color-gold); }
+.att-rule-edit-btn--danger:hover { color: #f87171; border-color: #7c2d12; }
+
+/* ── Rule modal ── */
+.att-rule-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200;
+    display: none; align-items: center; justify-content: center;
+}
+.att-rule-modal-backdrop--open { display: flex; }
+.att-rule-modal {
+    background: #1a1a1f;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    width: 540px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.att-rule-modal h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 0.95rem;
+    margin: 0 0 1rem;
+}
+.att-rule-form-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+.att-rule-form-row label { width: 120px; font-size: 0.82rem; color: var(--color-text-muted); flex-shrink: 0; }
+.att-rule-form-row input[type=text],
+.att-rule-form-row input[type=number],
+.att-rule-form-row select {
+    flex: 1; background: #111115; border: 1px solid var(--color-border);
+    color: var(--color-text); padding: 0.3rem 0.5rem; border-radius: 4px;
+    font-size: 0.82rem;
+}
+.att-rule-modal .att-save-btn { margin-top: 0.75rem; }
+
+/* ── Condition builder ── */
+.att-cond-list { margin-top: 0.5rem; }
+.att-cond-row {
+    display: flex; align-items: center; gap: 0.4rem;
+    margin-bottom: 0.4rem; font-size: 0.8rem;
+}
+.att-cond-row select, .att-cond-row input[type=number] {
+    background: #111115; border: 1px solid var(--color-border);
+    color: var(--color-text); padding: 0.25rem 0.4rem; border-radius: 3px;
+    font-size: 0.8rem;
+}
+.att-cond-row select:first-child { flex: 2; }
+.att-cond-row select:nth-child(2) { flex: 1; }
+.att-cond-row input[type=number] { width: 60px; }
+.att-cond-remove {
+    background: none; border: none; color: #f87171; cursor: pointer;
+    font-size: 1rem; line-height: 1; padding: 0 2px;
+}
+.att-add-cond-btn {
+    background: none; border: 1px dashed #444; color: #888;
+    padding: 0.2rem 0.6rem; border-radius: 3px; cursor: pointer;
+    font-size: 0.78rem; margin-top: 0.25rem;
+}
+.att-add-cond-btn:hover { border-color: var(--color-gold); color: var(--color-gold); }
+
 /* ── Feature-disabled notice ── */
 .att-disabled-notice {
     display: flex;
@@ -283,6 +414,11 @@ table.att-grid {
       <button class="att-save-btn" onclick="exportCsv()" style="margin-top:0">CSV Export</button>
       <span id="att-main-status" class="att-status-msg"></span>
     </div>
+  </div>
+
+  <!-- ── Rule Matches ──────────────────────────────────────────────────── -->
+  <div id="att-rule-matches-section" style="display:none">
+    <div class="att-rule-groups" id="att-rule-groups"></div>
   </div>
 
   <!-- ── Season Grid ────────────────────────────────────────────────────── -->
@@ -380,9 +516,76 @@ table.att-grid {
           <span id="att-settings-status" class="att-status-msg"></span>
         </div>
       </form>
+
+      <div style="margin-top:1.5rem;border-top:1px solid #2a2a2e;padding-top:1rem;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+          <p style="color:var(--color-text-muted);font-size:0.8rem;margin:0;">Attendance Rules — <span style="font-size:0.75rem;color:#666">Define groups that match players based on attendance metrics.</span></p>
+          <button class="att-save-btn" style="margin:0" onclick="openRuleModal(null)">+ New Rule</button>
+        </div>
+        <table class="att-rules-table" id="att-rules-table">
+          <thead><tr><th>Name</th><th>Group</th><th>Type</th><th>Ranks</th><th>Active</th><th></th></tr></thead>
+          <tbody id="att-rules-tbody"><tr><td colspan="6" style="color:#666;text-align:center">Loading…</td></tr></tbody>
+        </table>
+      </div>
     </details>
   </div>
 
+</div>
+
+<!-- ── Rule editor modal ───────────────────────────────────────────────── -->
+<div id="att-rule-modal-backdrop" class="att-rule-modal-backdrop" onclick="closeRuleModal(event)">
+  <div class="att-rule-modal" onclick="event.stopPropagation()">
+    <h3 id="att-rule-modal-title">Edit Rule</h3>
+    <input type="hidden" id="att-rule-id">
+
+    <div class="att-rule-form-row">
+      <label>Name</label>
+      <input type="text" id="att-rule-name" placeholder="Consistent Initiate">
+    </div>
+    <div class="att-rule-form-row">
+      <label>Group Label</label>
+      <input type="text" id="att-rule-group-label" placeholder="Promotion Suggestions">
+    </div>
+    <div class="att-rule-form-row">
+      <label>Group Type</label>
+      <select id="att-rule-group-type">
+        <option value="promotion">Promotion</option>
+        <option value="warning">Warning</option>
+        <option value="info">Info</option>
+      </select>
+    </div>
+    <div class="att-rule-form-row">
+      <label>Active</label>
+      <input type="checkbox" id="att-rule-is-active" checked style="width:auto">
+    </div>
+    <div class="att-rule-form-row" id="att-rule-result-rank-row">
+      <label>Result Rank</label>
+      <select id="att-rule-result-rank">
+        <option value="">— None —</option>
+      </select>
+    </div>
+    <div class="att-rule-form-row">
+      <label>Target Ranks</label>
+      <div id="att-rule-target-ranks" style="display:flex;flex-wrap:wrap;gap:0.4rem;flex:1"></div>
+    </div>
+    <div class="att-rule-form-row">
+      <label>Sort Order</label>
+      <input type="number" id="att-rule-sort-order" value="10" min="0" max="999" style="max-width:80px">
+    </div>
+
+    <div style="margin-top:0.75rem;">
+      <p style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:0.25rem;">Conditions (ALL must pass)</p>
+      <div class="att-cond-list" id="att-cond-list"></div>
+      <button class="att-add-cond-btn" onclick="addCondRow()">+ Add Condition</button>
+    </div>
+
+    <div style="display:flex;gap:0.5rem;align-items:center;margin-top:1rem;">
+      <button class="att-save-btn" onclick="saveRule()">Save Rule</button>
+      <button class="att-save-btn" style="background:#3d1515;color:#fca5a5;border:1px solid #7c2d12;display:none" id="att-rule-delete-btn" onclick="deleteRule()">Delete</button>
+      <button class="att-save-btn" style="background:#333;color:#ccc" onclick="closeRuleModal()">Cancel</button>
+      <span id="att-rule-modal-status" class="att-status-msg"></span>
+    </div>
+  </div>
 </div>
 
 <!-- ── Cell popover ────────────────────────────────────────────────────── -->
@@ -399,9 +602,14 @@ let currentEventId = null;
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────
 
+let allRanks = [];
+
 async function init() {
     await loadSeasons();
     await loadSettings();
+    await loadRuleMatches();
+    await loadRules();
+    await loadRanksForEditor();
 }
 
 async function loadSeasons() {
@@ -435,6 +643,7 @@ async function loadSeason() {
     seasonData = json.data;
     renderGrid(json.data);
     renderUnlinked(json.data);
+    await loadRuleMatches();
 }
 
 async function loadSettings() {
@@ -869,6 +1078,262 @@ function fmtTime(iso) {
         const d = new Date(iso);
         return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' UTC';
     } catch { return iso; }
+}
+
+// ── Rule Matches ──────────────────────────────────────────────────────
+
+async function loadRuleMatches() {
+    const seasonId = document.getElementById('att-season-sel').value;
+    const url = '/api/v1/admin/attendance/rule-matches' + (seasonId ? `?season_id=${seasonId}` : '');
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.ok) return;
+    renderRuleMatches(json.data.groups || []);
+}
+
+function renderRuleMatches(groups) {
+    const section = document.getElementById('att-rule-matches-section');
+    const container = document.getElementById('att-rule-groups');
+    const activeGroups = groups.filter(g => g.matches && g.matches.length > 0);
+    if (!activeGroups.length) {
+        section.style.display = 'none';
+        return;
+    }
+    section.style.display = '';
+    container.innerHTML = activeGroups.map(g => {
+        const typeCls = `att-rule-card--${escHtml(g.group_type)}`;
+        const rows = g.matches.map(m => {
+            const stats = m.stats || {};
+            let statStr = '';
+            if (stats.pct != null) statStr += `${stats.pct}% (${stats.attended}/${stats.eligible})`;
+            if (stats.weeks_checked != null) {
+                if (statStr) statStr += ', ';
+                statStr += `${stats.weeks_passed}/${stats.weeks_checked} wks`;
+            }
+            const rankArrow = m.result_rank_name
+                ? `<span class="att-rank-arrow">\u2192 ${escHtml(m.result_rank_name)}</span>`
+                : '';
+            return `<tr>
+              <td><a href="/admin/players" style="color:var(--color-text);text-decoration:none" title="Open Player Manager">${escHtml(m.player_name)}</a></td>
+              <td>${escHtml(m.rule_name)}${rankArrow}</td>
+              <td>${escHtml(statStr)}</td>
+            </tr>`;
+        }).join('');
+        return `<div class="att-rule-card ${typeCls}">
+          <div class="att-rule-card__title">${escHtml(g.group_label)}</div>
+          <table class="att-rule-table"><tbody>${rows}</tbody></table>
+        </div>`;
+    }).join('');
+}
+
+// ── Rule Management ───────────────────────────────────────────────────
+
+async function loadRanksForEditor() {
+    const res = await fetch('/api/v1/guild/ranks');
+    const json = await res.json();
+    if (!json.ok) return;
+    allRanks = json.data || [];
+}
+
+async function loadRules() {
+    const res = await fetch('/api/v1/admin/attendance/rules');
+    const json = await res.json();
+    if (!json.ok) return;
+    renderRulesTable(json.data.rules || []);
+}
+
+function renderRulesTable(rules) {
+    const tbody = document.getElementById('att-rules-tbody');
+    if (!rules.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:#666;text-align:center">No rules defined.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rules.map(r => {
+        const rankNames = (r.target_rank_ids || []).map(id => {
+            const rank = allRanks.find(rk => rk.id === id);
+            return rank ? rank.name : `#${id}`;
+        }).join(', ');
+        const activeBadge = r.is_active
+            ? '<span style="color:#4ade80;font-size:0.75rem">\u2713 Active</span>'
+            : '<span style="color:#888;font-size:0.75rem">Off</span>';
+        return `<tr>
+          <td>${escHtml(r.name)}</td>
+          <td>${escHtml(r.group_label)}</td>
+          <td style="text-transform:capitalize">${escHtml(r.group_type)}</td>
+          <td style="font-size:0.75rem;color:var(--color-text-muted)">${escHtml(rankNames || '\u2014')}</td>
+          <td>${activeBadge}</td>
+          <td>
+            <button class="att-rule-edit-btn" onclick="openRuleModal(${r.id})">Edit</button>
+          </td>
+        </tr>`;
+    }).join('');
+}
+
+// ── Rule Modal ────────────────────────────────────────────────────────
+
+let _editingRule = null;
+
+async function openRuleModal(ruleId) {
+    _editingRule = null;
+
+    if (!allRanks.length) await loadRanksForEditor();
+
+    const resultSel = document.getElementById('att-rule-result-rank');
+    resultSel.innerHTML = '<option value="">\u2014 None \u2014</option>' +
+        allRanks.map(r => `<option value="${r.id}">${escHtml(r.name)}</option>`).join('');
+
+    const targetDiv = document.getElementById('att-rule-target-ranks');
+    targetDiv.innerHTML = allRanks.map(r =>
+        `<label style="font-size:0.8rem;display:flex;align-items:center;gap:0.25rem;cursor:pointer">
+          <input type="checkbox" data-rank-id="${r.id}" style="width:auto"> ${escHtml(r.name)}
+        </label>`
+    ).join('');
+
+    if (ruleId) {
+        const res = await fetch('/api/v1/admin/attendance/rules');
+        const json = await res.json();
+        const rule = json.ok ? (json.data.rules || []).find(r => r.id === ruleId) : null;
+        if (!rule) { alert('Rule not found'); return; }
+        _editingRule = rule;
+
+        document.getElementById('att-rule-modal-title').textContent = 'Edit Rule';
+        document.getElementById('att-rule-id').value = ruleId;
+        document.getElementById('att-rule-name').value = rule.name;
+        document.getElementById('att-rule-group-label').value = rule.group_label;
+        document.getElementById('att-rule-group-type').value = rule.group_type;
+        document.getElementById('att-rule-is-active').checked = rule.is_active;
+        document.getElementById('att-rule-sort-order').value = rule.sort_order;
+        resultSel.value = rule.result_rank_id || '';
+
+        (rule.target_rank_ids || []).forEach(id => {
+            const cb = targetDiv.querySelector(`[data-rank-id="${id}"]`);
+            if (cb) cb.checked = true;
+        });
+
+        document.getElementById('att-cond-list').innerHTML = '';
+        (rule.conditions || []).forEach(c => addCondRow(c));
+
+        document.getElementById('att-rule-delete-btn').style.display = '';
+    } else {
+        document.getElementById('att-rule-modal-title').textContent = 'New Rule';
+        document.getElementById('att-rule-id').value = '';
+        document.getElementById('att-rule-name').value = '';
+        document.getElementById('att-rule-group-label').value = '';
+        document.getElementById('att-rule-group-type').value = 'promotion';
+        document.getElementById('att-rule-is-active').checked = true;
+        document.getElementById('att-rule-sort-order').value = '10';
+        resultSel.value = '';
+        document.getElementById('att-cond-list').innerHTML = '';
+        document.getElementById('att-rule-delete-btn').style.display = 'none';
+    }
+
+    document.getElementById('att-rule-modal-status').textContent = '';
+    document.getElementById('att-rule-modal-backdrop').classList.add('att-rule-modal-backdrop--open');
+}
+
+function closeRuleModal(evt) {
+    if (evt && evt.target !== document.getElementById('att-rule-modal-backdrop')) return;
+    document.getElementById('att-rule-modal-backdrop').classList.remove('att-rule-modal-backdrop--open');
+}
+
+function addCondRow(cond) {
+    const list = document.getElementById('att-cond-list');
+    const div = document.createElement('div');
+    div.className = 'att-cond-row';
+    div.innerHTML = `
+        <select class="cond-type">
+          <option value="attendance_pct_in_window">Attendance % in window</option>
+          <option value="min_events_per_week">Min events per week</option>
+        </select>
+        <select class="cond-window">
+          <option value="7">7d (1wk)</option>
+          <option value="14">14d (2wks)</option>
+          <option value="28">28d (4wks)</option>
+          <option value="56">56d (8wks)</option>
+        </select>
+        <span style="color:#666;font-size:0.78rem">\u2265</span>
+        <input type="number" class="cond-value" value="1" min="0" max="100">
+        <button class="att-cond-remove" onclick="this.parentElement.remove()" title="Remove">\u00d7</button>
+    `;
+    if (cond) {
+        div.querySelector('.cond-type').value = cond.type || 'attendance_pct_in_window';
+        div.querySelector('.cond-window').value = String(cond.window_days || 14);
+        div.querySelector('.cond-value').value = cond.value != null ? cond.value : 1;
+    }
+    list.appendChild(div);
+}
+
+function collectConditions() {
+    return Array.from(document.querySelectorAll('#att-cond-list .att-cond-row')).map(row => ({
+        type: row.querySelector('.cond-type').value,
+        window_days: parseInt(row.querySelector('.cond-window').value),
+        operator: '>=',
+        value: parseFloat(row.querySelector('.cond-value').value) || 0,
+    }));
+}
+
+async function saveRule() {
+    const statusEl = document.getElementById('att-rule-modal-status');
+    statusEl.textContent = 'Saving\u2026';
+    statusEl.className = 'att-status-msg';
+
+    const ruleId = document.getElementById('att-rule-id').value;
+    const targetRankIds = Array.from(
+        document.querySelectorAll('#att-rule-target-ranks input[type=checkbox]:checked')
+    ).map(cb => parseInt(cb.dataset.rankId));
+    const resultRankId = document.getElementById('att-rule-result-rank').value;
+
+    const body = {
+        name: document.getElementById('att-rule-name').value.trim(),
+        group_label: document.getElementById('att-rule-group-label').value.trim(),
+        group_type: document.getElementById('att-rule-group-type').value,
+        is_active: document.getElementById('att-rule-is-active').checked,
+        target_rank_ids: targetRankIds,
+        result_rank_id: resultRankId ? parseInt(resultRankId) : null,
+        conditions: collectConditions(),
+        sort_order: parseInt(document.getElementById('att-rule-sort-order').value) || 0,
+    };
+
+    if (!body.name) {
+        statusEl.textContent = 'Name is required';
+        statusEl.className = 'att-status-msg att-status-msg--err';
+        return;
+    }
+
+    const method = ruleId ? 'PATCH' : 'POST';
+    const url = ruleId
+        ? `/api/v1/admin/attendance/rules/${ruleId}`
+        : '/api/v1/admin/attendance/rules';
+
+    const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (json.ok) {
+        document.getElementById('att-rule-modal-backdrop').classList.remove('att-rule-modal-backdrop--open');
+        await loadRules();
+        await loadRuleMatches();
+    } else {
+        statusEl.textContent = 'Error: ' + (json.error || 'unknown');
+        statusEl.className = 'att-status-msg att-status-msg--err';
+    }
+}
+
+async function deleteRule() {
+    const ruleId = document.getElementById('att-rule-id').value;
+    if (!ruleId || !confirm('Delete this rule? This cannot be undone.')) return;
+    const res = await fetch(`/api/v1/admin/attendance/rules/${ruleId}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (json.ok) {
+        document.getElementById('att-rule-modal-backdrop').classList.remove('att-rule-modal-backdrop--open');
+        await loadRules();
+        await loadRuleMatches();
+    } else {
+        document.getElementById('att-rule-modal-status').textContent = 'Error: ' + (json.error || 'unknown');
+        document.getElementById('att-rule-modal-status').className = 'att-status-msg att-status-msg--err';
+    }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
