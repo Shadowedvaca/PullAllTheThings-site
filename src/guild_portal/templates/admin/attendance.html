@@ -47,11 +47,11 @@
 table.att-grid {
     border-collapse: collapse;
     width: 100%;
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     white-space: nowrap;
 }
 .att-grid th, .att-grid td {
-    padding: 0.35rem 0.6rem;
+    padding: 0.2rem 0.4rem;
     border: 1px solid var(--color-border);
     text-align: center;
 }
@@ -68,7 +68,7 @@ table.att-grid {
     left: 0;
     z-index: 2;
     background: #1a1a1f;
-    min-width: 150px;
+    min-width: 120px;
 }
 .att-grid td.att-col-player {
     text-align: left;
@@ -482,10 +482,7 @@ function renderGrid(data) {
             ? `<span class="att-habitual-badge" title="${escAttr(p.habitual_summary || 'Habitual pattern detected')}">⚠ Habitual</span>`
             : '';
         html += `<tr>
-  <td class="att-col-player">
-    <span>${escHtml(p.name)}${habitualBadge}</span>
-    <small style="color:#888;display:block">${escHtml(p.rank)}</small>
-  </td>`;
+  <td class="att-col-player">${escHtml(p.name)}${habitualBadge}</td>`;
 
         events.forEach(e => {
             const cell = (p.attendance || {})[String(e.id)] || { status: 'nodata' };

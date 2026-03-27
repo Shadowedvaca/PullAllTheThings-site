@@ -1508,13 +1508,16 @@ async def get_attendance_season(
         for row in att_rows:
             att_index[(row["event_id"], row["player_id"])] = row
 
-        # Load all players with ranks
+        # Load roster players: active, has a main character, not on hiatus, not initiate
         players = await conn.fetch(
             """
-            SELECT p.id, p.display_name, gr.name AS rank_name, gr.level AS rank_level
+            SELECT p.id, p.display_name, gr.level AS rank_level
             FROM guild_identity.players p
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
             WHERE p.is_active = TRUE
+              AND p.main_character_id IS NOT NULL
+              AND p.on_raid_hiatus = FALSE
+              AND COALESCE(gr.level, 0) > 1
             ORDER BY gr.level DESC NULLS LAST, p.display_name
             """
         )
@@ -1638,7 +1641,6 @@ async def get_attendance_season(
             player_objs.append({
                 "id": pid,
                 "name": p["display_name"] or f"Player#{pid}",
-                "rank": p["rank_name"] or "Unknown",
                 "rank_level": p["rank_level"] or 0,
                 "attendance": attendance,
                 "total_attended": total_attended,
@@ -1905,10 +1907,13 @@ async def export_attendance_csv(
         )
         players = await conn.fetch(
             """
-            SELECT p.id, p.display_name, gr.name AS rank_name
+            SELECT p.id, p.display_name
             FROM guild_identity.players p
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
             WHERE p.is_active = TRUE
+              AND p.main_character_id IS NOT NULL
+              AND p.on_raid_hiatus = FALSE
+              AND COALESCE(gr.level, 0) > 1
             ORDER BY gr.level DESC NULLS LAST, p.display_name
             """
         )
@@ -1930,7 +1935,7 @@ async def export_attendance_csv(
 
     # Header
     writer.writerow(
-        ["Player", "Rank"] + [f"{e['event_date']} — {e['title']}" for e in events] + ["Total", "Pct"]
+        ["Player"] + [f"{e['event_date']} — {e['title']}" for e in events] + ["Total", "Pct"]
     )
 
     for p in players:
@@ -1954,7 +1959,7 @@ async def export_attendance_csv(
                 cells.append("absent")
                 total_elig += 1
         pct_str = f"{round(total_att / total_elig * 100)}%" if total_elig > 0 else "—"
-        writer.writerow([p["display_name"] or f"#{pid}", p["rank_name"] or ""] + cells + [f"{total_att}/{total_elig}", pct_str])
+        writer.writerow([p["display_name"] or f"#{pid}"] + cells + [f"{total_att}/{total_elig}", pct_str])
 
     output.seek(0)
     filename = f"attendance-{season['id']}.csv"
