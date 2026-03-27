@@ -637,12 +637,13 @@ async def snapshot_event_signups(pool: asyncpg.Pool, event_id: int) -> dict:
         api_key = config["raid_helper_api_key"] if config else None
         server_id = config["raid_helper_server_id"] if config else None
 
-        # Load roster: active players with main character set and not on hiatus
+        # Load roster: active players with main character set and not on hiatus.
+        # players.discord_user_id is the FK → discord_users.id (not the reverse).
         roster = await conn.fetch(
             """
             SELECT p.id AS player_id, du.discord_id
             FROM guild_identity.players p
-            LEFT JOIN guild_identity.discord_users du ON du.player_id = p.id
+            LEFT JOIN guild_identity.discord_users du ON du.id = p.discord_user_id
             WHERE p.is_active = TRUE
               AND p.main_character_id IS NOT NULL
               AND p.on_raid_hiatus = FALSE
