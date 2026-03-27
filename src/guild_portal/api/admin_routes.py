@@ -1508,7 +1508,7 @@ async def get_attendance_season(
         for row in att_rows:
             att_index[(row["event_id"], row["player_id"])] = row
 
-        # Load roster players: active, has a main character, not on hiatus, not initiate
+        # Load roster players: active, has a main character, not on hiatus
         players = await conn.fetch(
             """
             SELECT p.id, p.display_name, gr.level AS rank_level
@@ -1517,7 +1517,6 @@ async def get_attendance_season(
             WHERE p.is_active = TRUE
               AND p.main_character_id IS NOT NULL
               AND p.on_raid_hiatus = FALSE
-              AND COALESCE(gr.level, 0) > 1
             ORDER BY gr.level DESC NULLS LAST, p.display_name
             """
         )
@@ -1913,7 +1912,6 @@ async def export_attendance_csv(
             WHERE p.is_active = TRUE
               AND p.main_character_id IS NOT NULL
               AND p.on_raid_hiatus = FALSE
-              AND COALESCE(gr.level, 0) > 1
             ORDER BY gr.level DESC NULLS LAST, p.display_name
             """
         )
