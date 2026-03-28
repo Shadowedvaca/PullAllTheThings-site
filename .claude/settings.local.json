@@ -105,7 +105,8 @@
       "Bash(source h:/Development/PullAllTheThings-site/.venv/Scripts/activate)",
       "Bash(source .venv/Scripts/activate)",
       "Bash(python -m pytest tests/unit/test_auth.py::TestPasswords tests/unit/test_admin_reset_password.py -v)",
-      "Bash(python -m pytest tests/unit/ -q)"
+      "Bash(python -m pytest tests/unit/ -q)",
+      "Bash(find /H/Development/PullAllTheThings-site -type f \\\\\\(-name *.sql -o -name *schema* -o -name *migration* \\\\\\))"
     ]
   },
   "defaultMode": "bypassPermissions"
