@@ -245,7 +245,7 @@ async def process_voice_pass(pool: asyncpg.Pool, event_id: int) -> dict:
             """
             SELECT du.discord_id, p.id AS player_id
             FROM guild_identity.discord_users du
-            JOIN guild_identity.players p ON p.id = du.player_id
+            JOIN guild_identity.players p ON p.discord_user_id = du.id
             WHERE du.discord_id = ANY($1::text[])
             """,
             all_discord_ids,
