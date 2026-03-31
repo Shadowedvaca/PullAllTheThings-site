@@ -143,7 +143,12 @@ async def create_event(
         )
 
     if not resp.is_success:
-        raise RaidHelperError(f"Raid-Helper API error {resp.status_code}: {resp.text[:200]}")
+        location = resp.headers.get("location", "")
+        raise RaidHelperError(
+            f"Raid-Helper API error {resp.status_code}"
+            + (f" → {location}" if location else "")
+            + f": {resp.text[:200]}"
+        )
 
     data = resp.json()
     event = data.get("event", data)
