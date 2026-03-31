@@ -136,7 +136,7 @@ async def create_event(
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{_BASE_URL}/servers/{server_id}/channels/{effective_channel}/event/",
+            f"{_BASE_URL}/servers/{server_id}/channels/{effective_channel}/event",
             headers={"Authorization": api_key, "Content-Type": "application/json"},
             json=payload,
             timeout=15.0,

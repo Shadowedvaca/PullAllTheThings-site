@@ -95,16 +95,12 @@ Our implementation: `raid_helper_service.test_connection()` in
 ## Create an Event
 
 ```http
-POST https://raid-helper.xyz/api/v2/servers/{serverId}/channels/{channelId}/event/
+POST https://raid-helper.xyz/api/v2/servers/{serverId}/channels/{channelId}/event
 Authorization: {api_key}
 Content-Type: application/json
 ```
 
 Note the channel ID is in the **path**, not the body.
-
-> ⚠️ **Trailing slash required.** Raid-Helper's nginx redirects `/event` → `/event/` (301).
-> Because HTTP 301 converts POST to GET, following the redirect breaks the call.
-> Always include the trailing slash in code to hit the endpoint directly.
 
 ### Request Body
 
