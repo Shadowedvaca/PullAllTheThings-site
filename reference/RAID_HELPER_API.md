@@ -27,7 +27,7 @@
 
 | Property | Value |
 |---|---|
-| Base URL | `https://raid-helper.xyz/api/v2` |
+| Base URL | `https://raid-helper.xyz/api/v4` |
 | Auth header | `Authorization: {api_key}` (no "Bearer" prefix) |
 | Content-Type | `application/json` |
 | Date format | `D-M-YYYY` — **not zero-padded**, not ISO (`3-18-2026` not `03-18-2026`) |
@@ -65,7 +65,7 @@ Both are loaded from the DB at request time — never hard-coded.
 ## Test the Connection
 
 ```http
-GET https://raid-helper.xyz/api/v2/servers/{serverId}/events
+GET https://raid-helper.xyz/api/v4/servers/{serverId}/events
 Authorization: {api_key}
 ```
 
@@ -75,7 +75,7 @@ array means the key and server ID are valid.
 **curl:**
 ```bash
 curl -s -H "Authorization: KbfhAKAP2LHt2gVrFJntXpnhkfJeUb67j36Haprk" \
-  "https://raid-helper.xyz/api/v2/servers/1288213206938026069/events"
+  "https://raid-helper.xyz/api/v4/servers/1288213206938026069/events"
 ```
 
 **Expected response:**
@@ -95,7 +95,7 @@ Our implementation: `raid_helper_service.test_connection()` in
 ## Create an Event
 
 ```http
-POST https://raid-helper.xyz/api/v2/servers/{serverId}/channels/{channelId}/event
+POST https://raid-helper.xyz/api/v4/servers/{serverId}/channels/{channelId}/event
 Authorization: {api_key}
 Content-Type: application/json
 ```
@@ -117,7 +117,7 @@ Note the channel ID is in the **path**, not the body.
 ### Example 1 — Wednesday heroic prog raid
 
 ```json
-POST /api/v2/servers/1288213206938026069/channels/1327719564842237993/event
+POST /api/v4/servers/1288213206938026069/channels/1327719564842237993/event
 
 {
   "leaderId": "195547238959677441",
@@ -133,7 +133,7 @@ POST /api/v2/servers/1288213206938026069/channels/1327719564842237993/event
 ### Example 2 — Saturday normal clear, different time
 
 ```json
-POST /api/v2/servers/1288213206938026069/channels/1327719564842237993/event
+POST /api/v4/servers/1288213206938026069/channels/1327719564842237993/event
 
 {
   "leaderId": "195547238959677441",
@@ -188,7 +188,7 @@ Signups are added **one at a time** after event creation, not as part of the cre
 call (the creation payload silently ignores any signup data you include).
 
 ```http
-POST https://raid-helper.xyz/api/v2/events/{eventId}/signups
+POST https://raid-helper.xyz/api/v4/events/{eventId}/signups
 Authorization: {api_key}
 Content-Type: application/json
 ```
@@ -208,7 +208,7 @@ Content-Type: application/json
 ### Example 1 — Balance Druid, accepted as ranged DPS
 
 ```json
-POST /api/v2/events/1482924660516716656/signups
+POST /api/v4/events/1482924660516716656/signups
 
 {
   "userId": "195547238959677441",
@@ -382,7 +382,7 @@ template. **Always use these exact strings** — they are case-sensitive.
 | Evoker | Augmentation | `Augmentation` |
 
 > **How to verify the template live:** fetch any existing event via
-> `GET /api/v2/events/{eventId}` and inspect the `classes` array. Each class object
+> `GET /api/v4/events/{eventId}` and inspect the `classes` array. Each class object
 > has `name` (the `className` to send) and a `specs` array where each spec has `name`
 > (the `specName` to send) and `roleName` (human-readable label).
 
@@ -429,7 +429,7 @@ on the Admin → Raid Tools page.
 **Step 1: Create the event**
 
 ```http
-POST https://raid-helper.xyz/api/v2/servers/1288213206938026069/channels/1327719564842237993/event
+POST https://raid-helper.xyz/api/v4/servers/1288213206938026069/channels/1327719564842237993/event
 Authorization: KbfhAKAP2LHt2gVrFJntXpnhkfJeUb67j36Haprk
 Content-Type: application/json
 
@@ -449,40 +449,40 @@ Response gives `event.id` → `"1482924660516716656"`.
 **Step 2: Add signups one at a time with 200 ms delay**
 
 ```http
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "195547238959677441", "className": "Ranged",   "specName": "Balance" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "967560340328038420", "className": "Tank",     "specName": "Protection" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "149815743066669056", "className": "Healer",   "specName": "Holy1" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "617906641232199740", "className": "Melee",    "specName": "Fury" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "328047843526836228", "className": "Melee",    "specName": "Outlaw" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "125394622489821184", "className": "Healer",   "specName": "Preservation" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "92127779528654848",  "className": "Ranged",   "specName": "Affliction" }
 
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "68097839854522368",  "className": "Ranged",   "specName": "Marksmanship" }
 
 # Player unavailable Wednesday — goes to Absence section
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "356120440105861120", "className": "Absence" }
 
 # Initiate (rank 1) — Tentative section
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "1353785807785431060", "className": "Tentative" }
 
 # Player on raid hiatus — also Absence
-POST https://raid-helper.xyz/api/v2/events/1482924660516716656/signups
+POST https://raid-helper.xyz/api/v4/events/1482924660516716656/signups
 { "userId": "190301107271106561", "className": "Absence" }
 ```
 
@@ -503,7 +503,7 @@ raw class name from the DB.
 **Diagnostic command** — fetch the event to see the exact class names the template defines:
 ```bash
 curl -s -H "Authorization: {api_key}" \
-  "https://raid-helper.xyz/api/v2/events/{eventId}" \
+  "https://raid-helper.xyz/api/v4/events/{eventId}" \
   | python3 -c "
 import json,sys
 data=json.load(sys.stdin)
@@ -527,10 +527,10 @@ no main spec set in the DB so the `SPEC_TO_RAID_HELPER` lookup returns `None`.
 ### `404 Not Found` on signup endpoint
 
 **Cause:** Using the wrong endpoint. We originally tried
-`PUT /api/v2/events/{id}/signup/{userId}` (singular, user ID in path). That endpoint
+`PUT /api/v4/events/{id}/signup/{userId}` (singular, user ID in path). That endpoint
 doesn't exist.
 
-**Correct endpoint:** `POST /api/v2/events/{id}/signups` (plural, user ID in body).
+**Correct endpoint:** `POST /api/v4/events/{id}/signups` (plural, user ID in body).
 
 ---
 

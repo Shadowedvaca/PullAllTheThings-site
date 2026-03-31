@@ -15,7 +15,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_BASE_URL = "https://raid-helper.xyz/api/v2"
+_BASE_URL = "https://raid-helper.xyz/api/v4"
 
 
 class RaidHelperError(Exception):
