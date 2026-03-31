@@ -151,6 +151,7 @@ async def create_event(
         )
 
     data = resp.json()
+    logger.info("Raid-Helper create_event response: %s", data)
     event = data.get("event", data)
     event_id = event.get("id")
     event_url = (
