@@ -134,9 +134,9 @@ async def create_event(
         rh_date, rh_time,
     )
 
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{_BASE_URL}/servers/{server_id}/channels/{effective_channel}/event",
+            f"{_BASE_URL}/servers/{server_id}/channels/{effective_channel}/event/",
             headers={"Authorization": api_key, "Content-Type": "application/json"},
             json=payload,
             timeout=15.0,
@@ -177,7 +177,7 @@ async def add_signups_to_event(
 
     ok = 0
     fail = 0
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with httpx.AsyncClient() as client:
         for s in signups:
             # Accept both field name conventions
             user_id = s.get("discord_id") or s.get("userId")
@@ -233,7 +233,7 @@ async def test_connection(config: dict[str, Any]) -> dict[str, Any]:
     if not server_id or not api_key:
         raise RaidHelperError("Missing raid_helper_server_id or raid_helper_api_key")
 
-    async with httpx.AsyncClient(follow_redirects=True) as client:
+    async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"{_BASE_URL}/servers/{server_id}/events",
             headers={"Authorization": api_key},
