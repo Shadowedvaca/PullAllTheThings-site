@@ -1,13 +1,13 @@
 services:
-  db-prod:
+  db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: guild_user
-      POSTGRES_PASSWORD: ${PROD_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: guild_db
     volumes:
-      - guild_pgdata_prod:/var/lib/postgresql/data
+      - guild_pgdata:/var/lib/postgresql/data
       - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U guild_user"]
@@ -15,16 +15,16 @@ services:
       timeout: 3s
       retries: 5
 
-  app-prod:
+  app:
     build: .
     restart: unless-stopped
     depends_on:
-      db-prod:
+      db:
         condition: service_healthy
     env_file:
-      - .env.prod
+      - .env
     ports:
       - "8100:8100"
 
 volumes:
-  guild_pgdata_prod:
+  guild_pgdata:
