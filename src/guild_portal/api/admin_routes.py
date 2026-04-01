@@ -1222,6 +1222,7 @@ class GuideSiteUpdate(BaseModel):
     role_dps_slug:      Optional[str]  = None
     role_tank_slug:     Optional[str]  = None
     role_healer_slug:   Optional[str]  = None
+    slug_separator:     Optional[str]  = None
     badge_bg_color:     Optional[str]  = None
     badge_text_color:   Optional[str]  = None
     badge_border_color: Optional[str]  = None
@@ -1260,6 +1261,7 @@ async def update_guide_site(
             "role_dps_slug": site.role_dps_slug,
             "role_tank_slug": site.role_tank_slug,
             "role_healer_slug": site.role_healer_slug,
+            "slug_separator": site.slug_separator,
             "badge_bg_color": site.badge_bg_color,
             "badge_text_color": site.badge_text_color,
             "badge_border_color": site.badge_border_color,

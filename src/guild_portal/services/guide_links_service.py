@@ -42,6 +42,7 @@ async def get_enabled_sites(db: AsyncSession) -> list[dict]:
             "role_dps_slug":      s.role_dps_slug,
             "role_tank_slug":     s.role_tank_slug,
             "role_healer_slug":   s.role_healer_slug,
+            "slug_separator":     s.slug_separator,
             "badge_bg_color":     s.badge_bg_color,
             "badge_text_color":   s.badge_text_color,
             "badge_border_color": s.badge_border_color or s.badge_bg_color,
@@ -78,6 +79,7 @@ def build_links_for_spec(
                 role_dps_slug    = s["role_dps_slug"],
                 role_tank_slug   = s["role_tank_slug"],
                 role_healer_slug = s["role_healer_slug"],
+                slug_separator   = s.get("slug_separator", "-"),
             ),
         }
         for s in sites

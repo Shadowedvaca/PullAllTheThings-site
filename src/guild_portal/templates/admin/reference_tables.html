@@ -460,6 +460,7 @@
                 <th style="width:60px">DPS</th>
                 <th style="width:60px">Tank</th>
                 <th style="width:70px">Healer</th>
+                <th style="width:55px" title="Word separator in class/spec slugs (- or _)">Sep</th>
                 <th>Bg Color</th>
                 <th>Text Color</th>
                 <th>Border Color</th>
@@ -499,6 +500,12 @@
                 <input class="rt-editable rt-field" name="role_healer_slug"
                        value="{{ site.role_healer_slug }}" data-orig="{{ site.role_healer_slug }}"
                        style="width:65px;font-size:0.85rem">
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="slug_separator"
+                       value="{{ site.slug_separator }}" data-orig="{{ site.slug_separator }}"
+                       maxlength="1" style="width:35px;font-family:monospace;font-size:0.9rem;text-align:center"
+                       title="Word separator in class/spec slugs (- for most sites, _ for u.gg)">
             </td>
             <td>
                 <div style="display:flex;align-items:center;gap:0.4rem">

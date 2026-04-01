@@ -6,9 +6,9 @@ site config and calling these functions.
 """
 
 
-def _slug(name: str) -> str:
-    """Convert a display name to a lowercase hyphenated URL slug."""
-    return name.lower().replace(" ", "-")
+def _slug(name: str, sep: str = "-") -> str:
+    """Convert a display name to a lowercase URL slug using sep as the word separator."""
+    return name.lower().replace(" ", sep)
 
 
 def _resolve_role_slug(
@@ -34,14 +34,18 @@ def build_link_for_site(
     role_dps_slug: str,
     role_tank_slug: str,
     role_healer_slug: str,
+    slug_separator: str = "-",
 ) -> str:
     """Return the URL for one guide site given spec and role metadata.
 
     Template placeholders: {class}, {spec}, {role}. Sites without {role}
     (e.g. u.gg) are unaffected — str.replace on a missing placeholder is a no-op.
+
+    slug_separator controls the word separator in class/spec slugs (e.g. '-' for
+    Wowhead/Icy Veins, '_' for u.gg which uses beast_mastery not beast-mastery).
     """
-    cls = _slug(class_name)
-    spec = _slug(spec_name)
+    cls = _slug(class_name, slug_separator)
+    spec = _slug(spec_name, slug_separator)
     role = _resolve_role_slug(role_name, role_dps_slug, role_tank_slug, role_healer_slug)
     return (
         url_template

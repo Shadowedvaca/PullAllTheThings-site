@@ -26,6 +26,7 @@ UGG = dict(
     role_dps_slug="dps",
     role_tank_slug="tank",
     role_healer_slug="healer",
+    slug_separator="_",
 )
 
 
@@ -38,6 +39,7 @@ def _build(site: dict, class_name: str, spec_name: str, role_name: str) -> str:
         role_dps_slug    = site["role_dps_slug"],
         role_tank_slug   = site["role_tank_slug"],
         role_healer_slug = site["role_healer_slug"],
+        slug_separator   = site.get("slug_separator", "-"),
     )
 
 
@@ -100,3 +102,30 @@ def test_ugg_no_role_placeholder():
     assert "dps" not in url
     assert "tank" not in url
     assert url == "https://u.gg/wow/arms/warrior/talents"
+
+
+def test_ugg_beast_mastery_uses_underscore():
+    # Regression: u.gg uses beast_mastery (underscore), not beast-mastery (hyphen)
+    url = _build(UGG, "Hunter", "Beast Mastery", "Ranged DPS")
+    assert url == "https://u.gg/wow/beast_mastery/hunter/talents"
+
+
+def test_ugg_death_knight_class_uses_underscore():
+    url = _build(UGG, "Death Knight", "Blood", "Tank")
+    assert url == "https://u.gg/wow/blood/death_knight/talents"
+
+
+def test_ugg_demon_hunter_class_uses_underscore():
+    url = _build(UGG, "Demon Hunter", "Havoc", "Melee DPS")
+    assert url == "https://u.gg/wow/havoc/demon_hunter/talents"
+
+
+def test_wowhead_beast_mastery_uses_hyphen():
+    # Non-u.gg sites still use hyphens (default separator)
+    url = _build(WOWHEAD, "Hunter", "Beast Mastery", "Ranged DPS")
+    assert url == "https://www.wowhead.com/guide/classes/hunter/beast-mastery/overview-pve-dps"
+
+
+def test_wowhead_death_knight_uses_hyphen():
+    url = _build(WOWHEAD, "Death Knight", "Blood", "Tank")
+    assert url == "https://www.wowhead.com/guide/classes/death-knight/blood/overview-pve-tank"

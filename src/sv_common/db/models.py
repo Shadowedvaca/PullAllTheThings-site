@@ -321,6 +321,7 @@ class GuideSite(Base):
     role_dps_slug:      Mapped[str]           = mapped_column(String(20), nullable=False)
     role_tank_slug:     Mapped[str]           = mapped_column(String(20), nullable=False)
     role_healer_slug:   Mapped[str]           = mapped_column(String(20), nullable=False)
+    slug_separator:     Mapped[str]           = mapped_column(String(1), nullable=False, default="-")
     badge_bg_color:     Mapped[str]           = mapped_column(String(7), nullable=False)
     badge_text_color:   Mapped[str]           = mapped_column(String(7), nullable=False)
     badge_border_color: Mapped[Optional[str]] = mapped_column(String(7))
