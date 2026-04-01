@@ -535,38 +535,35 @@ Configuration is resolved in priority order (highest → lowest):
 
 ### 5.1 Infrastructure Overview
 
+Three environments on three separate servers. Dev and test share CX23 nodes; prod is dedicated.
+
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Hetzner Server (5.78.114.224)                    │
-│                       Ubuntu — 1 physical host                     │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                     Docker Compose Stack                     │   │
-│  │                                                              │   │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │   │
-│  │  │   Nginx      │  │  guild-portal│  │   PostgreSQL 16   │  │   │
-│  │  │  (reverse    │  │  (FastAPI    │  │                   │  │   │
-│  │  │   proxy)     │  │   + Bot +    │  │  patt_db          │  │   │
-│  │  │              │  │   Scheduler) │  │  ├─ common.*      │  │   │
-│  │  │  :80 → :443  │  │              │  │  ├─ patt.*        │  │   │
-│  │  │  prod → 8100 │  │  prod: 8100  │  │  └─ guild_id.*   │  │   │
-│  │  │  test → 8101 │  │  test: 8101  │  │                   │  │   │
-│  │  │  dev  → 8102 │  │  dev:  8102  │  │  pgdata volume    │  │   │
-│  │  └──────────────┘  └──────────────┘  └──────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-         │                         │
-         │ HTTPS (443)             │ (internal Docker network)
-         │                         │ asyncpg postgres://
-         ▼                         ▼
-    Browser /               PostgreSQL 16
-    Discord client          port 5432
+my-web-apps-dev (91.99.112.160) — shared, Falkenstein DE
+┌─────────────────────────────────────────────────────┐
+│  Nginx → dev.pullallthethings.com (htpasswd auth)   │
+│  docker-compose.dev.yml                             │
+│  app (port 8100) + db (PostgreSQL 16)               │
+└─────────────────────────────────────────────────────┘
+
+my-web-apps-test (91.99.121.21) — shared, Falkenstein DE
+┌─────────────────────────────────────────────────────┐
+│  Nginx → test.pullallthethings.com (htpasswd auth)  │
+│  docker-compose.test.yml                            │
+│  app (port 8100) + db (PostgreSQL 16)               │
+└─────────────────────────────────────────────────────┘
+
+hetzner / prod (5.78.114.224) — dedicated, Hillsboro OR
+┌─────────────────────────────────────────────────────┐
+│  Nginx → pullallthethings.com                       │
+│  docker-compose.guild.yml                           │
+│  app-prod (port 8100) + db-prod (PostgreSQL 16)     │
+└─────────────────────────────────────────────────────┘
 ```
 
 ### 5.2 Container Layout
 
 One **app container** runs all three co-located processes:
-- FastAPI web server (uvicorn, port varies by environment)
+- FastAPI web server (uvicorn, port 8100 on every server)
 - Discord bot (discord.py, asyncio task in FastAPI lifespan)
 - APScheduler + background loops (asyncio tasks in FastAPI lifespan)
 
@@ -574,30 +571,27 @@ All three share the same Python process, event loop, and database connection poo
 
 ### 5.3 Environments
 
-| Env | Port | Deploy trigger | Purpose |
-|-----|------|---------------|---------|
-| prod | 8100 | `git tag prod-vX.Y.Z` → GitHub Actions | Live site at pullallthethings.com |
-| test | 8101 | Merge to `main` → GitHub Actions | Post-merge validation, officers can preview |
-| dev | 8102 | Manual `gh workflow run deploy-dev.yml -f branch=X` | Feature work, integration testing |
+| Env | Server | Port | Deploy trigger | Purpose |
+|-----|--------|------|---------------|---------|
+| prod | `hetzner` | 8100 | `git tag prod-vX.Y.Z` → GitHub Actions | Live site |
+| test | `my-web-apps-test` | 8100 | Merge to `main` → GitHub Actions | Post-merge validation |
+| dev | `my-web-apps-dev` | 8100 | Manual `gh workflow run deploy-dev.yml -f branch=X` | Feature work |
 
-All three environments use the same database server but separate databases. Migrations run automatically on container startup via `docker-entrypoint.sh` → `alembic upgrade head`.
+Each environment has its own database. Migrations run automatically on container startup via `docker-entrypoint.sh` → `alembic upgrade head`.
 
 ### 5.4 CI/CD Pipeline
 
 ```
 Developer
   │
-  ├─ git push feature/X
-  │     └─ GitHub Actions: run tests (unit, no DB needed)
-  │
   ├─ gh workflow run deploy-dev.yml -f branch=feature/X
-  │     └─ SSH to Hetzner → docker pull + compose up → migrations run
+  │     └─ SSH to my-web-apps-dev → git pull + docker build + compose up → health check
   │
   ├─ PR merged to main
-  │     └─ GitHub Actions: auto-deploy to test environment (~30s)
+  │     └─ GitHub Actions: auto-deploy to my-web-apps-test (~60s)
   │
   └─ git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z
-        └─ GitHub Actions: auto-deploy to prod environment (~30s)
+        └─ GitHub Actions: auto-deploy to hetzner/prod (~60s)
 ```
 
 **Critical rules:**
@@ -608,7 +602,8 @@ Developer
 
 ### 5.5 Networking
 
-- **Nginx** terminates TLS and routes by port. `pullallthethings.com` → prod:8100. Test/dev accessible by IP:port directly.
+- **Nginx** on each server terminates TLS and proxies the subdomain to `localhost:8100`
+- Dev and test are behind HTTP basic auth (`/etc/nginx/htpasswd/`)
 - **Internal Docker network**: app container reaches PostgreSQL as `db:5432` (Docker service name). No external DB exposure.
 - **External calls**: outbound from app container to Battle.net, Discord, Raider.IO, WCL, Raid-Helper. No inbound webhooks (Discord bot uses long-polling gateway, not webhooks).
 

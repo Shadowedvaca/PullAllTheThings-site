@@ -35,8 +35,13 @@ The platform uses **shared common services** (`sv_common`) reusable by other sit
 ## Architecture
 
 ```
-Hetzner Server (5.78.114.224)
-├── Nginx (reverse proxy) → Docker containers (prod:8100, test:8101, dev:8102)
+Three servers (see reference/git-cicd-workflow.md for full inventory):
+  dev:  my-web-apps-dev  (91.99.112.160) — shared CX23, Falkenstein
+  test: my-web-apps-test (91.99.121.21)  — shared CX23, Falkenstein
+  prod: hetzner          (5.78.114.224)  — CPX21, Hillsboro OR
+
+Prod Server (5.78.114.224)
+├── Nginx (reverse proxy) → Docker container (prod:8100)
 │
 ├── PostgreSQL 16
 │   ├── common.*         (users, guild_ranks, discord_config, invite_codes, screen_permissions,

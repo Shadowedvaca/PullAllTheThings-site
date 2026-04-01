@@ -9,56 +9,93 @@
 
 Three workflows, each with its own trigger:
 
-| Workflow | Trigger | Target | Port |
-|----------|---------|--------|------|
-| `deploy-dev.yml` | Push to **any branch except main** | `dev.pullallthethings.com` | 8102 |
-| `deploy-test.yml` | Push to **main** (PR merge) | `test.pullallthethings.com` | 8101 |
-| `deploy-prod.yml` | **Version tag** (`v*`) | `pullallthethings.com` | 8100 |
+| Workflow | Trigger | Target | Server |
+|----------|---------|--------|--------|
+| `deploy-dev.yml` | **Manual** (`gh workflow run deploy-dev.yml -f branch=X`) | `dev.pullallthethings.com` | `my-web-apps-dev` (91.99.112.160) |
+| `deploy-test.yml` | Push to **main** (PR merge) | `test.pullallthethings.com` | `my-web-apps-test` (91.99.121.21) |
+| `deploy-prod.yml` | **Version tag** (`prod-v*`) | `pullallthethings.com` | `hetzner` (5.78.114.224) |
 
-- SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (ed25519, authorized on server)
-- Deploy steps: git fetch/checkout → docker build → `docker compose up -d` → health check
+- SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (authorized on all three servers)
+- Host secrets: `DEV_HOST`, `TEST_HOST`, `PROD_HOST` in GitHub repo secrets
+- Deploy steps: git fetch/checkout → docker build → `docker compose up -d` → health check loop
 - **CRITICAL: Never push a version tag without explicit permission from Mike.**
 
 ## Branch Strategy
 
-- Feature branches → push → dev auto-deploys
+- Feature branches → push → manually deploy to dev for verification
 - Merge to main → test auto-deploys
-- Tag release (`git tag v1.x.x && git push --tags`) → prod deploys
-- Single developer — no PR review required, but the CI gates enforce environment promotion
+- Tag release (`git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z`) → prod deploys
+- See `reference/git-cicd-workflow.md` for full branch and release workflow
+
+---
 
 ## Docker Environments
 
-All three environments run as Docker containers on Hetzner (`5.78.114.224`):
+Three environments on **three separate servers**. Dev and test are shared CX23 nodes.
+
+### Prod — `hetzner` (5.78.114.224)
 
 ```
 /opt/guild-portal/
-├── docker-compose.guild.yml   ← 3-env compose file
-├── .env                       ← environment variables
+├── docker-compose.guild.yml   ← prod-only compose (app-prod + db-prod)
+├── .env.prod
 └── ...
 ```
 
-- `guild-portal-app-prod-1` / `guild-portal-db-prod-1` — prod, port 8100
-- `guild-portal-app-test-1` / `guild-portal-db-test-1` — test, port 8101
-- `guild-portal-app-dev-1`  / `guild-portal-db-dev-1`  — dev, port 8102
-- Dev and test are behind nginx basic auth (username: `admin`, passwords in `/etc/nginx/htpasswd/`)
-- App entrypoint: `guild_portal.app:create_app` (factory pattern), `PYTHONPATH=/app/src`
-
-### Useful Docker Commands (dev/test only)
+- `guild-portal-app-prod-1` / `guild-portal-db-prod-1` — port 8100
+- Nginx proxies `pullallthethings.com` → 8100
 
 ```bash
 ssh hetzner
 
-# View logs
-docker logs guild-portal-app-dev-1 -f
+# View prod logs
+docker logs guild-portal-app-prod-1 -f
+
+# Run a migration on prod (only with explicit permission)
+docker exec guild-portal-app-prod-1 alembic upgrade head
+
+# Access prod DB (only with explicit permission)
+docker exec guild-portal-db-prod-1 psql -U guild_user guild_db
+
+# Restart prod app
+docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod
+```
+
+### Dev — `my-web-apps-dev` (91.99.112.160)
+
+```
+/opt/guild-portal/
+├── docker-compose.dev.yml   ← single-env compose (app + db)
+├── .env                     ← dev env vars; DB_PASSWORD must match db service
+└── ...
+```
+
+- Service names: `app`, `db` — port 8100
+- Nginx proxies `dev.pullallthethings.com` → 8100 (behind htpasswd auth)
+
+```bash
+ssh my-web-apps-dev
+
+# View dev logs
+docker compose -f /opt/guild-portal/docker-compose.dev.yml logs app -f
 
 # Run a migration on dev
-docker exec guild-portal-app-dev-1 alembic upgrade head
+docker compose -f /opt/guild-portal/docker-compose.dev.yml exec app alembic upgrade head
 
 # Access dev DB
-docker exec guild-portal-db-dev-1 psql -U guild_user guild_db_dev
+docker compose -f /opt/guild-portal/docker-compose.dev.yml exec db psql -U guild_user guild_db
 
 # Restart dev app
-docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-dev
+docker compose -f /opt/guild-portal/docker-compose.dev.yml restart app
+```
+
+### Test — `my-web-apps-test` (91.99.121.21)
+
+Same layout as dev, using `docker-compose.test.yml` and `test.pullallthethings.com`.
+
+```bash
+ssh my-web-apps-test
+docker compose -f /opt/guild-portal/docker-compose.test.yml logs app -f
 ```
 
 ---
@@ -72,11 +109,11 @@ If Chrome shows a GitHub Pages 404 immediately after a deployment:
 - **Fix:** `chrome://net-internals/#sockets` → **Flush socket pools** → reload
 - Not a server problem — occasional, happens when deploys coincide with Chrome socket reuse
 
-### CRITICAL: `/etc/hosts` Override on the Hetzner Server
+### CRITICAL: `/etc/hosts` Override on the Hetzner Prod Server
 
 > **Full migration checklist: `docs/SERVER-IP-MIGRATION.md`**
 
-The server has a mandatory `/etc/hosts` entry forcing the domain to its own IP:
+The prod server has a mandatory `/etc/hosts` entry forcing the domain to its own IP:
 
 ```
 5.78.114.224    pullallthethings.com www.pullallthethings.com

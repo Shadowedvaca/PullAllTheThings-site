@@ -195,24 +195,20 @@ docker ps | grep guild-portal-app-prod
 
 ## Deploying Updates
 
-Updates deploy automatically when code is pushed to the `main` branch on GitHub.
-The GitHub Actions workflow:
-1. SSH into the server
-2. `git pull` latest code
-3. Install any new dependencies
-4. Run database migrations (`alembic upgrade head`)
-5. Restart the app
-6. Verify the health check passes
+Three environments, each with its own gate:
 
-Watch it at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
+| Environment | How it deploys |
+|-------------|---------------|
+| **dev** | Manual — `gh workflow run deploy-dev.yml -f branch=your-branch` |
+| **test** | Auto — every push to `main` (i.e. every merged PR) |
+| **prod** | Tag — `git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z` |
 
-To deploy manually (dev/test only — never do this for prod):
+Watch runs at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
+
+To manually restart dev (SSH only — never SSH-deploy prod):
 ```bash
-ssh hetzner
-cd /opt/guild-portal
-git pull
-docker compose -f docker-compose.guild.yml up -d --build app-dev
-docker exec guild-portal-app-dev-1 alembic upgrade head
+ssh my-web-apps-dev
+docker compose -f /opt/guild-portal/docker-compose.dev.yml restart app
 ```
 
 ---

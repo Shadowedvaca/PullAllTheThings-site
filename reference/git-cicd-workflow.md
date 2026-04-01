@@ -209,8 +209,7 @@ jobs:
             cd /opt/<app-name>
             git fetch --tags --force --prune origin
             git checkout ${{ github.ref_name }}
-            docker compose -f docker-compose.guild.yml build app-prod
-            docker compose -f docker-compose.guild.yml up -d app-prod
+            docker compose -f docker-compose.prod.yml up -d --build
             docker image prune -f
 
       - name: Health check
