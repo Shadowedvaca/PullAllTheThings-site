@@ -538,21 +538,21 @@ Configuration is resolved in priority order (highest → lowest):
 Three environments on three separate servers. Dev and test share CX23 nodes; prod is dedicated.
 
 ```
-my-web-apps-dev (91.99.112.160) — shared, Falkenstein DE
+my-web-apps-dev — shared CX23, Falkenstein DE
 ┌─────────────────────────────────────────────────────┐
 │  Nginx → dev.pullallthethings.com (htpasswd auth)   │
 │  docker-compose.dev.yml                             │
 │  app (port 8100) + db (PostgreSQL 16)               │
 └─────────────────────────────────────────────────────┘
 
-my-web-apps-test (91.99.121.21) — shared, Falkenstein DE
+my-web-apps-test — shared CX23, Falkenstein DE
 ┌─────────────────────────────────────────────────────┐
 │  Nginx → test.pullallthethings.com (htpasswd auth)  │
 │  docker-compose.test.yml                            │
 │  app (port 8100) + db (PostgreSQL 16)               │
 └─────────────────────────────────────────────────────┘
 
-hetzner / prod (5.78.114.224) — dedicated, Hillsboro OR
+hetzner / prod — dedicated CPX21, Hillsboro OR
 ┌─────────────────────────────────────────────────────┐
 │  Nginx → pullallthethings.com                       │
 │  docker-compose.guild.yml                           │

@@ -36,11 +36,11 @@ The platform uses **shared common services** (`sv_common`) reusable by other sit
 
 ```
 Three servers (see reference/git-cicd-workflow.md for full inventory):
-  dev:  my-web-apps-dev  (91.99.112.160) — shared CX23, Falkenstein
-  test: my-web-apps-test (91.99.121.21)  — shared CX23, Falkenstein
-  prod: hetzner          (5.78.114.224)  — CPX21, Hillsboro OR
+  dev:  my-web-apps-dev  — shared CX23, Falkenstein
+  test: my-web-apps-test — shared CX23, Falkenstein
+  prod: hetzner          — CPX21, Hillsboro OR
 
-Prod Server (5.78.114.224)
+Prod Server
 ├── Nginx (reverse proxy) → Docker container (prod:8100)
 │
 ├── PostgreSQL 16

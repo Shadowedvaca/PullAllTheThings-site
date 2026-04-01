@@ -11,9 +11,9 @@ Three workflows, each with its own trigger:
 
 | Workflow | Trigger | Target | Server |
 |----------|---------|--------|--------|
-| `deploy-dev.yml` | **Manual** (`gh workflow run deploy-dev.yml -f branch=X`) | `dev.pullallthethings.com` | `my-web-apps-dev` (91.99.112.160) |
-| `deploy-test.yml` | Push to **main** (PR merge) | `test.pullallthethings.com` | `my-web-apps-test` (91.99.121.21) |
-| `deploy-prod.yml` | **Version tag** (`prod-v*`) | `pullallthethings.com` | `hetzner` (5.78.114.224) |
+| `deploy-dev.yml` | **Manual** (`gh workflow run deploy-dev.yml -f branch=X`) | `dev.pullallthethings.com` | `my-web-apps-dev` |
+| `deploy-test.yml` | Push to **main** (PR merge) | `test.pullallthethings.com` | `my-web-apps-test` |
+| `deploy-prod.yml` | **Version tag** (`prod-v*`) | `pullallthethings.com` | `hetzner` |
 
 - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (authorized on all three servers)
 - Host secrets: `DEV_HOST`, `TEST_HOST`, `PROD_HOST` in GitHub repo secrets
@@ -33,7 +33,7 @@ Three workflows, each with its own trigger:
 
 Three environments on **three separate servers**. Dev and test are shared CX23 nodes.
 
-### Prod — `hetzner` (5.78.114.224)
+### Prod — `hetzner`
 
 ```
 /opt/guild-portal/
@@ -61,7 +61,7 @@ docker exec guild-portal-db-prod-1 psql -U guild_user guild_db
 docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod
 ```
 
-### Dev — `my-web-apps-dev` (91.99.112.160)
+### Dev — `my-web-apps-dev`
 
 ```
 /opt/guild-portal/

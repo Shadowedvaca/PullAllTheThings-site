@@ -22,11 +22,11 @@ Dev and test are **shared CX23 nodes** that host multiple apps. Prod is per-proj
 
 ### Server Inventory
 
-| Environment | SSH Alias | IP | Region | Spec | Purpose |
-|-------------|-----------|-----|--------|------|---------|
-| **dev** | `my-web-apps-dev` | 91.99.112.160 | Falkenstein, DE | CX23 (2vCPU / 4GB) | Shared sandbox. All dev environments. |
-| **test** | `my-web-apps-test` | 91.99.121.21 | Falkenstein, DE | CX23 (2vCPU / 4GB) | Shared integration gate. All test environments. |
-| **prod** | project-specific (e.g. `hetzner`) | project-specific | Hillsboro, OR or Falkenstein | CPX21 / CX32 | Live. Real users/data. |
+| Environment | SSH Alias | Region | Spec | Purpose |
+|-------------|-----------|--------|------|---------|
+| **dev** | `my-web-apps-dev` | Falkenstein, DE | CX23 (2vCPU / 4GB) | Shared sandbox. All dev environments. |
+| **test** | `my-web-apps-test` | Falkenstein, DE | CX23 (2vCPU / 4GB) | Shared integration gate. All test environments. |
+| **prod** | project-specific (e.g. `hetzner`) | Hillsboro, OR or Falkenstein | CPX21 / CX32 | Live. Real users/data. |
 
 **Why separate servers:**
 - Dev changes (schema experiments, model reloads, failed deploys) cannot cascade to prod or test
@@ -226,8 +226,8 @@ Each project repo needs these secrets set under **Settings → Secrets → Actio
 
 | Secret | Value |
 |--------|-------|
-| `DEV_HOST` | `91.99.112.160` (shared dev server) |
-| `TEST_HOST` | `91.99.121.21` (shared test server) |
+| `DEV_HOST` | IP of `my-web-apps-dev` (shared dev server — same for all projects) |
+| `TEST_HOST` | IP of `my-web-apps-test` (shared test server — same for all projects) |
 | `PROD_HOST` | IP of the prod server for this app |
 | `DEPLOY_SSH_KEY` | Private key that has root access on all three servers |
 
