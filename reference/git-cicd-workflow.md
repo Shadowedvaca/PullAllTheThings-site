@@ -18,18 +18,69 @@ Drop a reference to this file in each project's CLAUDE.md so the rules travel wi
 
 Three environments, **three separate servers**. This is not optional — blast radius isolation is the point.
 
-| Environment | SSH Alias | Region | Server | Purpose |
-|-------------|-----------|--------|--------|---------|
-| **dev** | `my-web-apps-dev` | Falkenstein, DE | CX23 (2vCPU / 4GB) | Sandbox. Break things here. Disposable. |
-| **test** | `my-web-apps-test` | Falkenstein, DE | CX23 (2vCPU / 4GB) | Integration gate. Mirrors prod config. |
-| **prod** | project-specific (e.g. `sv-tools`, `hetzner`) | Hillsboro, OR or Falkenstein | CPX21 / CX23 | Live. Real users/data. |
+Dev and test are **shared CX23 nodes** that host multiple apps. Prod is per-project.
+
+### Server Inventory
+
+| Environment | SSH Alias | IP | Region | Spec | Purpose |
+|-------------|-----------|-----|--------|------|---------|
+| **dev** | `my-web-apps-dev` | 91.99.112.160 | Falkenstein, DE | CX23 (2vCPU / 4GB) | Shared sandbox. All dev environments. |
+| **test** | `my-web-apps-test` | 91.99.121.21 | Falkenstein, DE | CX23 (2vCPU / 4GB) | Shared integration gate. All test environments. |
+| **prod** | project-specific (e.g. `hetzner`) | project-specific | Hillsboro, OR or Falkenstein | CPX21 / CX32 | Live. Real users/data. |
 
 **Why separate servers:**
 - Dev changes (schema experiments, model reloads, failed deploys) cannot cascade to prod or test
 - Test must mirror prod config exactly — shared servers allow drift
-- Prod-web (OR) is latency-sensitive; dev/test (Falkenstein) latency doesn't matter
+- Prod is latency-sensitive where applicable; dev/test latency doesn't matter
 
-See `reference/server-architecture.md` for full server inventory and per-app resource profiles.
+### SSH Access
+
+The shared GitHub Actions deploy key and personal key are installed on all servers.
+
+```bash
+ssh my-web-apps-dev   # shared dev server
+ssh my-web-apps-test  # shared test server
+ssh hetzner           # example prod alias (PATT)
+```
+
+### Port Assignments (Shared Dev / Test Servers)
+
+Each app occupies one port slot. Nginx routes by subdomain to that port. The same port is used on both dev and test — keeps configs symmetric.
+
+| Port | App | Subdomain (dev) | Subdomain (test) | Status |
+|------|-----|-----------------|------------------|--------|
+| **8100** | Pull All The Things (PATT) | `dev.pullallthethings.com` | `test.pullallthethings.com` | Active |
+| **8200** | _(open)_ | — | — | Available |
+| **8300** | _(open)_ | — | — | Available |
+| **8400** | _(open)_ | — | — | Available |
+| **8500** | _(open)_ | — | — | Available |
+| **8600** | _(open)_ | — | — | Available |
+| **8700** | _(open)_ | — | — | Available |
+| **8800** | _(open)_ | — | — | Available |
+| **8900** | _(open)_ | — | — | Available |
+| **9000** | _(open)_ | — | — | Available |
+
+**Rules:**
+- Claim the next available port, fill in the row, and copy this file into your project repo
+- App's `docker-compose.dev.yml` / `docker-compose.test.yml` maps `PORT:8100` (host:container)
+- Nginx vhost on each shared server proxies `subdomain → localhost:PORT`
+- Prod servers are single-app — no port coordination needed there
+
+### Per-App Server Layout
+
+Each app on a shared server follows this pattern:
+
+```
+/opt/<app-name>/
+├── .env                     # env vars for app + DB_PASSWORD for compose (never committed)
+├── docker-compose.dev.yml   # (or docker-compose.test.yml on test server)
+└── ... (rest of repo)
+```
+
+`.env` must contain:
+- `DB_PASSWORD` — used by compose to set the postgres container password
+- `DATABASE_URL` — must use service name `db` and database `guild_db` (not the old multi-container names)
+- All other app env vars
 
 ---
 
@@ -79,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to dev
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEV_HOST }}
           username: root
@@ -87,8 +138,10 @@ jobs:
           script: |
             cd /opt/<app-name>
             git fetch origin
-            git reset --hard origin/${{ github.event.inputs.branch }}
-            docker compose up -d --build
+            git checkout ${{ github.event.inputs.branch }}
+            git pull origin ${{ github.event.inputs.branch }}
+            docker compose -f docker-compose.dev.yml build app
+            docker compose -f docker-compose.dev.yml up -d app
             docker image prune -f
 
       - name: Health check
@@ -112,7 +165,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to test
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.TEST_HOST }}
           username: root
@@ -120,8 +173,10 @@ jobs:
           script: |
             cd /opt/<app-name>
             git fetch origin
-            git reset --hard origin/main
-            docker compose up -d --build
+            git checkout main
+            git pull origin main
+            docker compose -f docker-compose.test.yml build app
+            docker compose -f docker-compose.test.yml up -d app
             docker image prune -f
 
       - name: Health check
@@ -145,16 +200,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to prod
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.PROD_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             cd /opt/<app-name>
-            git fetch --tags
-            git reset --hard ${{ github.ref_name }}
-            docker compose up -d --build
+            git fetch --tags --force --prune origin
+            git checkout ${{ github.ref_name }}
+            docker compose -f docker-compose.guild.yml build app-prod
+            docker compose -f docker-compose.guild.yml up -d app-prod
             docker image prune -f
 
       - name: Health check
@@ -171,12 +227,26 @@ Each project repo needs these secrets set under **Settings → Secrets → Actio
 
 | Secret | Value |
 |--------|-------|
-| `DEV_HOST` | IP of `my-web-apps-dev` server |
-| `TEST_HOST` | IP of `my-web-apps-test` server |
+| `DEV_HOST` | `91.99.112.160` (shared dev server) |
+| `TEST_HOST` | `91.99.121.21` (shared test server) |
 | `PROD_HOST` | IP of the prod server for this app |
 | `DEPLOY_SSH_KEY` | Private key that has root access on all three servers |
 
 > **Single key for all three servers** — add the same public key to `/root/.ssh/authorized_keys` on dev, test, and prod. The private key lives only in GitHub Secrets.
+
+---
+
+## Adapting to a New Project
+
+When setting up CI/CD for a new project:
+
+1. Copy this file into `reference/git-cicd-workflow.md` in the new repo
+2. Claim the next open port in the Port Assignments table above; update the row and copy back
+3. Create three workflow files matching the templates above; replace `<app-name>` and `<app-domain>`
+4. Set `DEV_HOST`, `TEST_HOST`, `PROD_HOST`, and `DEPLOY_SSH_KEY` in GitHub repo secrets
+5. On `my-web-apps-dev` and `my-web-apps-test`: clone the repo to `/opt/<app-name>`, create `.env`
+6. On each shared server: create nginx vhost proxying the assigned port, get SSL cert via certbot
+7. On the prod server: set up repo, `.env`, nginx, SSL as appropriate
 
 ---
 
@@ -287,21 +357,6 @@ gh workflow run deploy-dev.yml -f branch=hotfix/what-is-broken  # → my-web-app
 git checkout main && git merge hotfix/what-is-broken --no-ff && git push origin main
 git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z  # → prod immediately
 ```
-
----
-
-## Adapting to a New Project
-
-When setting up CI/CD for a new project:
-
-1. Create three workflow files matching the templates above
-2. Replace `<app-name>` with the app directory name on the server (e.g. `/opt/sv-tools`)
-3. Replace `<app-domain>` with the domain/subdomain (e.g. `sv-tools.shadowedvaca.com`)
-4. Set `DEV_HOST`, `TEST_HOST`, `PROD_HOST`, and `DEPLOY_SSH_KEY` in GitHub repo secrets
-5. Ensure the app directory exists on all three servers with the repo checked out
-6. Confirm the deploy key's public key is in `/root/.ssh/authorized_keys` on all three servers
-
-The three-workflow pattern is consistent across all projects. The only things that change per project are: host secrets, app directory path, and health check URL.
 
 ---
 
