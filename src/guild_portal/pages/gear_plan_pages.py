@@ -1,0 +1,57 @@
+"""Gear Plan admin page routes."""
+
+import logging
+
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from guild_portal.deps import get_db
+from guild_portal.nav import load_nav_items
+from guild_portal.templating import templates
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["gear-plan-pages"])
+
+
+async def _require_gear_plan(request: Request, db: AsyncSession):
+    """Return player if they have Officer+ access (level 4), else None."""
+    from guild_portal.deps import get_page_member
+    from guild_portal.nav import get_min_rank_for_screen
+
+    player = await get_page_member(request, db)
+    if player is None:
+        return None
+    min_level = await get_min_rank_for_screen(db, "gear_plan")
+    rank_level = player.guild_rank.level if player.guild_rank else 0
+    if rank_level < min_level:
+        return None
+    return player
+
+
+@router.get("/admin/gear-plan", response_class=HTMLResponse)
+async def gear_plan_admin_page(request: Request):
+    """Admin BIS Sync Dashboard."""
+    from guild_portal.deps import get_db as _get_db
+    async for db in _get_db():
+        player = await _require_gear_plan(request, db)
+        if player is None:
+            return RedirectResponse("/admin/players")
+
+        nav_items = await load_nav_items(db, player)
+
+        # Determine if user is GL (level 5+) for write-access controls
+        rank_level = player.guild_rank.level if player.guild_rank else 0
+        is_gl = rank_level >= 5
+
+        return templates.TemplateResponse(
+            "admin/gear_plan.html",
+            {
+                "request": request,
+                "current_member": player,
+                "nav_items": nav_items,
+                "current_screen": "gear_plan",
+                "is_gl": is_gl,
+            },
+        )

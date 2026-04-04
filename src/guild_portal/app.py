@@ -440,6 +440,7 @@ def create_app() -> FastAPI:
     )
     from sv_common.guild_sync.api.routes import guild_sync_router, identity_router
     from sv_common.guild_sync.api.crafting_routes import crafting_router
+    from guild_portal.api.bis_routes import router as bis_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
@@ -454,6 +455,7 @@ def create_app() -> FastAPI:
     app.include_router(guild_sync_router)
     app.include_router(identity_router)
     app.include_router(crafting_router)
+    app.include_router(bis_router)
 
     # Register page routes (server-rendered HTML)
     from guild_portal.pages.auth_pages import router as auth_page_router
@@ -461,12 +463,14 @@ def create_app() -> FastAPI:
     from guild_portal.pages.admin_pages import router as admin_page_router
     from guild_portal.pages.public_pages import router as public_page_router
     from guild_portal.pages.profile_pages import router as profile_page_router
+    from guild_portal.pages.gear_plan_pages import router as gear_plan_page_router
 
     app.include_router(public_page_router)
     app.include_router(auth_page_router)
     app.include_router(vote_page_router)
     app.include_router(admin_page_router)
     app.include_router(profile_page_router)
+    app.include_router(gear_plan_page_router)
 
     # Setup wizard routes (API + pages)
     from guild_portal.api.setup_routes import router as setup_api_router
