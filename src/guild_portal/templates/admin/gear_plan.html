@@ -108,21 +108,17 @@
 .gp-cell__count    { font-weight: 700; }
 .gp-cell__tech     { font-size: 0.7rem; opacity: 0.7; }
 
-/* ── Hero talent selector row ─────────────────────────────────────────── */
-.gp-ht-selector {
-    display: inline-flex;
-    gap: 0.25rem;
-    align-items: center;
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
+/* ── Hero talent column ───────────────────────────────────────────────── */
+.gp-matrix th.gp-th-ht {
+    min-width: 130px;
+    white-space: nowrap;
 }
-.gp-ht-selector select {
-    background: #0a0a0b;
-    border: 1px solid var(--color-border);
-    color: var(--color-text);
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-    font-size: 0.75rem;
+.gp-matrix td.gp-td-ht {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-style: italic;
+    min-width: 130px;
+    white-space: nowrap;
 }
 
 /* ── Detail / drill-down panel ────────────────────────────────────────── */

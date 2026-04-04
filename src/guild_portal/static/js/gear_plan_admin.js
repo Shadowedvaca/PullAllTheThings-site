@@ -77,12 +77,17 @@ function renderMatrix() {
     const head = document.getElementById('gp-matrix-head');
     const body = document.getElementById('gp-matrix-body');
 
-    // Header row
+    // Header row — two spec columns: Spec + Hero Talent
     const headerRow = document.createElement('tr');
     const thSpec = document.createElement('th');
     thSpec.className = 'gp-th-spec';
     thSpec.textContent = 'Spec';
     headerRow.appendChild(thSpec);
+
+    const thHt = document.createElement('th');
+    thHt.className = 'gp-th-ht';
+    thHt.textContent = 'Hero Talent';
+    headerRow.appendChild(thHt);
 
     for (const src of _sources) {
         const th = document.createElement('th');
@@ -93,7 +98,7 @@ function renderMatrix() {
     head.innerHTML = '';
     head.appendChild(headerRow);
 
-    // Body rows — group by class
+    // Body rows — group by class; each spec becomes N sub-rows (one per HT)
     body.innerHTML = '';
     let lastClass = null;
 
@@ -103,74 +108,69 @@ function renderMatrix() {
             lastClass = sp.class_name;
             const divRow = document.createElement('tr');
             const divTd = document.createElement('td');
-            divTd.colSpan = _sources.length + 1;
+            divTd.colSpan = _sources.length + 2;
             divTd.style.cssText = 'padding:0.25rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
             divTd.textContent = sp.class_name;
             divRow.appendChild(divTd);
             body.appendChild(divRow);
         }
 
-        const row = document.createElement('tr');
-
-        // Spec cell
-        const tdSpec = document.createElement('td');
-        tdSpec.className = 'gp-td-spec';
         const htOptions = (_htBySpec[sp.id] || []);
-        if (htOptions.length > 0) {
-            // Show spec name + hero talent selector
-            const wrapper = document.createElement('div');
-            wrapper.style.cssText = 'display:flex; flex-direction:column; gap:0.15rem;';
-            const nameEl = document.createElement('span');
-            nameEl.textContent = sp.spec_name;
-            wrapper.appendChild(nameEl);
-            if (htOptions.length > 1) {
-                const sel = document.createElement('div');
-                sel.className = 'gp-ht-selector';
-                const label = document.createElement('span');
-                label.textContent = 'HT:';
-                sel.appendChild(label);
-                const select = document.createElement('select');
-                select.id = `ht-sel-${sp.id}`;
-                for (const ht of htOptions) {
-                    const opt = document.createElement('option');
-                    opt.value = ht.id;
-                    opt.textContent = ht.name;
-                    select.appendChild(opt);
-                }
-                select.addEventListener('change', () => updateSpecRow(sp.id, row));
-                sel.appendChild(select);
-                wrapper.appendChild(sel);
-            }
-            tdSpec.appendChild(wrapper);
-        } else {
+
+        if (htOptions.length === 0) {
+            // No hero talents — single row, HT cell shows "—"
+            const row = document.createElement('tr');
+
+            const tdSpec = document.createElement('td');
+            tdSpec.className = 'gp-td-spec';
             tdSpec.textContent = sp.spec_name;
-        }
-        row.appendChild(tdSpec);
+            row.appendChild(tdSpec);
 
-        // Source cells
-        for (const src of _sources) {
-            const td = document.createElement('td');
-            td.appendChild(renderCell(sp.id, src.id));
-            td.addEventListener('click', () => drillDown(sp.id, src.id));
-            row.appendChild(td);
-        }
+            const tdHt = document.createElement('td');
+            tdHt.className = 'gp-td-ht';
+            tdHt.textContent = '—';
+            row.appendChild(tdHt);
 
-        body.appendChild(row);
+            for (const src of _sources) {
+                const td = document.createElement('td');
+                td.appendChild(renderCell(sp.id, src.id));
+                td.addEventListener('click', () => drillDown(sp.id, src.id));
+                row.appendChild(td);
+            }
+            body.appendChild(row);
+        } else {
+            // One sub-row per hero talent; spec name spans all sub-rows
+            htOptions.forEach((ht, idx) => {
+                const row = document.createElement('tr');
+
+                if (idx === 0) {
+                    // Spec name cell spans all HT rows
+                    const tdSpec = document.createElement('td');
+                    tdSpec.className = 'gp-td-spec';
+                    tdSpec.rowSpan = htOptions.length;
+                    tdSpec.textContent = sp.spec_name;
+                    row.appendChild(tdSpec);
+                }
+
+                const tdHt = document.createElement('td');
+                tdHt.className = 'gp-td-ht';
+                tdHt.textContent = ht.name;
+                row.appendChild(tdHt);
+
+                for (const src of _sources) {
+                    const td = document.createElement('td');
+                    td.appendChild(renderCell(sp.id, src.id, ht.id));
+                    td.addEventListener('click', () => drillDown(sp.id, src.id, ht.id));
+                    row.appendChild(td);
+                }
+                body.appendChild(row);
+            });
+        }
     }
 }
 
-function updateSpecRow(specId, row) {
-    // Re-render source cells when hero talent selector changes
-    const cells = row.querySelectorAll('td:not(.gp-td-spec)');
-    cells.forEach((td, i) => {
-        if (i < _sources.length) {
-            td.innerHTML = '';
-            td.appendChild(renderCell(specId, _sources[i].id));
-        }
-    });
-}
-
-function renderCell(specId, sourceId) {
+function renderCell(specId, sourceId, htId) {
+    // _cells keyed by spec_id → source_id (the matrix endpoint aggregates across HTs)
     const cellData = (_cells[specId] || {})[sourceId];
     const wrapper = document.createElement('span');
 
@@ -368,13 +368,10 @@ async function syncAll() {
 // Drill-down
 // ---------------------------------------------------------------------------
 
-async function drillDown(specId, sourceId) {
+async function drillDown(specId, sourceId, htId) {
     _drillSpecId = specId;
     _drillSourceId = sourceId;
-
-    // Get current hero talent selection for this spec
-    const htSel = document.getElementById(`ht-sel-${specId}`);
-    _drillHtId = htSel ? htSel.value : null;
+    _drillHtId = htId || null;
 
     const specInfo = _specs.find(s => s.id == specId);
     const srcInfo  = _sources.find(s => s.id == sourceId);
