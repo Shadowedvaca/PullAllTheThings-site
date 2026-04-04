@@ -578,18 +578,14 @@ This is the full MVP. All components are needed to close the loop: sync gear →
 - 28 unit tests (quality track parsing + slot normalisation) — all pass ✅
 - Deployed to dev (commit c1499d9, migration confirmed healthy) ✅
 
-**1B: BIS discovery + extraction pipeline**
-- `bis_sync.py` — discovery-first pipeline with all parsers:
-  - URL discovery engine (auto-generate scrape targets for all spec × source × hero talent combos)
-  - Archon `json_embed` extractor (primary, most reliable)
-  - Wowhead `wh_gatherer` extractor (secondary, curated BIS)
-  - Icy Veins `html_parse` extractor (tertiary, best-effort)
-  - SimC import extractor (admin-uploaded, no scraping needed — delegates to `simc_parser.py`)
-  - Manual entry backstop
-- `simc_parser.py` — SimC profile parse/export utility (see SimC Integration section)
-- Scrape log table for transparency
-- Seed `bis_list_sources`, `hero_talents`, initial scrape targets
-- Admin BIS sync dashboard (matrix view, cross-reference, manual override)
+**1B: BIS discovery + extraction pipeline** ✅ COMPLETE — 2026-04-04
+- Migration 0067: 72 hero talent rows (36 specs × 2) + gear_plan screen permission ✅
+- `simc_parser.py` — SimcSlot/SimcProfile dataclasses, parse_profile, parse_gear_slots, export_gear_plan, bonus_ids_to_quality_track; 45 unit tests — all pass ✅
+- `bis_sync.py` — discover_targets, sync_source/sync_all/sync_target, extractors for Archon (json_embed), Wowhead (wh_gatherer), Icy Veins (html_parse), SimC; import_simc, cross_reference, get_matrix; slug maps for all 39 specs × 3 source origins ✅
+- `bis_routes.py` — admin BIS API (sources, entries, targets, matrix, sync, scrape-log, cross-reference, SimC import) — Officer+ / GL for write ops ✅
+- Admin BIS sync dashboard (`/admin/gear-plan`, GL-only) — matrix view, cell drill-down, cross-reference panel, scrape log, SimC import modal ✅
+- gear_plan_admin.js — full client-side interactions ✅
+- Deployed to dev (commit fd9e4cb, migration confirmed healthy) ✅
 
 **1C: Item source mapping**
 - `item_source_sync.py` — Blizzard Journal API sync
