@@ -325,9 +325,15 @@ select.gp-select {
         {% if is_gl %}
         <button class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
 
-        <span class="gp-controls__label">Sync source:</span>
-        <select class="gp-select" id="sync-source-select">
+        <span class="gp-controls__label">Website:</span>
+        <select class="gp-select" id="sync-origin-select">
             <option value="">— select —</option>
+        </select>
+        <span class="gp-controls__label">Plan Type:</span>
+        <select class="gp-select" id="sync-plan-type-select">
+            <option value="raid">Raid Only</option>
+            <option value="mythic_plus">M+ Only</option>
+            <option value="overall">Overall</option>
         </select>
         <button class="btn-sm btn-secondary" onclick="syncSource()">Sync Source</button>
         <button class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>

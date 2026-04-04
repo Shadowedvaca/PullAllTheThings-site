@@ -244,19 +244,34 @@ function populateSpecSelectors() {
     }
 }
 
+const _ORIGIN_LABELS = {
+    archon:    'Archon',
+    wowhead:   'Wowhead',
+    icy_veins: 'Icy Veins',
+};
+
 function populateSourceSelector() {
-    // Sync source dropdown in controls
-    const syncSel = document.getElementById('sync-source-select');
-    if (!syncSel) return;
-    syncSel.innerHTML = '<option value="">— select —</option>';
-    for (const src of _sources) {
-        const opt = document.createElement('option');
-        opt.value = src.id;
-        opt.textContent = src.name;
-        syncSel.appendChild(opt);
+    // Website (origin) dropdown — deduplicated, sorted by first appearance
+    const originSel = document.getElementById('sync-origin-select');
+    if (originSel) {
+        const seen = new Set();
+        const origins = [];
+        for (const src of _sources) {
+            if (src.origin && !seen.has(src.origin)) {
+                seen.add(src.origin);
+                origins.push(src.origin);
+            }
+        }
+        originSel.innerHTML = '<option value="">— select —</option>';
+        for (const origin of origins) {
+            const opt = document.createElement('option');
+            opt.value = origin;
+            opt.textContent = _ORIGIN_LABELS[origin] || origin;
+            originSel.appendChild(opt);
+        }
     }
 
-    // SimC modal source dropdown
+    // SimC modal source dropdown (keeps full source list)
     const simcSel = document.getElementById('simc-source-select');
     if (!simcSel) return;
     simcSel.innerHTML = '';
@@ -301,16 +316,33 @@ async function discoverTargets() {
 }
 
 async function syncSource() {
-    const sel = document.getElementById('sync-source-select');
-    if (!sel || !sel.value) {
-        setStatus('Select a source first.', 'error');
+    const originSel   = document.getElementById('sync-origin-select');
+    const planTypeSel = document.getElementById('sync-plan-type-select');
+
+    const origin      = originSel?.value;
+    const contentType = planTypeSel?.value;
+
+    if (!origin) {
+        setStatus('Select a website first.', 'error');
         return;
     }
-    const sourceId = sel.value;
-    const sourceName = sel.options[sel.selectedIndex].text;
+    if (!contentType) {
+        setStatus('Select a plan type first.', 'error');
+        return;
+    }
+
+    // Resolve to source_id
+    const src = _sources.find(s => s.origin === origin && s.content_type === contentType);
+    if (!src) {
+        const originLabel = _ORIGIN_LABELS[origin] || origin;
+        setStatus(`No source exists for ${originLabel} + ${planTypeSel.options[planTypeSel.selectedIndex].text}.`, 'error');
+        return;
+    }
+
+    const sourceName = src.name;
     setStatusHtml(`<span class="spinner"></span> Syncing ${sourceName}… (running in background)`, 'running');
     try {
-        const r = await fetch(`/api/v1/admin/bis/sync/${sourceId}`, { method: 'POST' });
+        const r = await fetch(`/api/v1/admin/bis/sync/${src.id}`, { method: 'POST' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
         setStatus(`${sourceName} sync started. Refresh matrix in a moment to see progress.`, 'success');
