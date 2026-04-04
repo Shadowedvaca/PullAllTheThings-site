@@ -106,7 +106,9 @@
       "Bash(source .venv/Scripts/activate)",
       "Bash(python -m pytest tests/unit/test_auth.py::TestPasswords tests/unit/test_admin_reset_password.py -v)",
       "Bash(python -m pytest tests/unit/ -q)",
-      "Bash(find /H/Development/PullAllTheThings-site -type f \\\\\\(-name *.sql -o -name *schema* -o -name *migration* \\\\\\))"
+      "Bash(find /H/Development/PullAllTheThings-site -type f \\\\\\(-name *.sql -o -name *schema* -o -name *migration* \\\\\\))",
+      "WebFetch(domain:raid-helper.xyz)",
+      "WebFetch(domain:discord.fandom.com)"
     ]
   },
   "defaultMode": "bypassPermissions"
