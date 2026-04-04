@@ -566,13 +566,17 @@ This is the full MVP. All components are needed to close the loop: sync gear →
 
 **Sub-phases:**
 
-**1A: Foundation (migration + equipment sync + item cache)**
-- Migration 0066: all 10 tables + `last_equipment_sync` column
-- `quality_track.py` — track detection from Blizzard response
-- `equipment_sync.py` — full slot-by-slot equipment sync
-- `item_service.py` — Wowhead tooltip fetch + `wow_items` caching
-- Extend `blizzard_client.py` with `get_character_equipment()`
-- Add equipment sync step to `scheduler.py`
+**1A: Foundation (migration + equipment sync + item cache)** ✅ COMPLETE — 2026-04-04
+- Migration 0066: all 10 tables + `last_equipment_sync` column ✅
+- `quality_track.py` — track detection from Blizzard response ✅
+- `equipment_sync.py` — full slot-by-slot equipment sync ✅
+- `item_service.py` — Wowhead tooltip fetch + `wow_items` caching ✅
+- Extend `blizzard_client.py` with `get_character_equipment()` + `CharacterEquipmentSlot` dataclass ✅
+- Add equipment sync step to `scheduler.py` (Step 8, non-fatal) ✅
+- ORM models for all 10 new tables ✅
+- `bis_list_sources` seeded with 5 rows (Archon Raid/M+, Wowhead Overall, Icy Veins Raid/M+) ✅
+- 28 unit tests (quality track parsing + slot normalisation) — all pass ✅
+- Deployed to dev (commit c1499d9, migration confirmed healthy) ✅
 
 **1B: BIS discovery + extraction pipeline**
 - `bis_sync.py` — discovery-first pipeline with all parsers:
