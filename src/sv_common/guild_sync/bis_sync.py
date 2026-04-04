@@ -408,8 +408,8 @@ async def sync_source(
     """
     async with pool.acquire() as conn:
         query = """
-            SELECT t.id, t.url, t.preferred_technique, t.spec_id, t.hero_talent_id,
-                   t.content_type
+            SELECT t.id, t.source_id, t.url, t.preferred_technique,
+                   t.spec_id, t.hero_talent_id, t.content_type
               FROM guild_identity.bis_scrape_targets t
              WHERE t.source_id = $1
                AND t.url IS NOT NULL

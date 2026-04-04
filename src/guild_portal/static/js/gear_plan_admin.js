@@ -73,30 +73,73 @@ async function loadMatrix() {
     }
 }
 
+const _CONTENT_TYPE_LABELS = {
+    raid: 'Raid',
+    mythic_plus: 'M+',
+    overall: 'Overall',
+};
+
 function renderMatrix() {
     const head = document.getElementById('gp-matrix-head');
     const body = document.getElementById('gp-matrix-body');
 
-    // Header row — two spec columns: Spec + Hero Talent
-    const headerRow = document.createElement('tr');
+    // Two-row header: row 1 = Spec (rowspan2) + HT (rowspan2) + website groups (colspan)
+    //                 row 2 = individual content-type sub-columns per website
+
+    // Build website groups in source order (dedup by origin, preserve first-seen order)
+    const originOrder = [];
+    const originSources = {};  // origin → [source, ...]
+    for (const src of _sources) {
+        const origin = src.origin || 'other';
+        if (!originSources[origin]) {
+            originSources[origin] = [];
+            originOrder.push(origin);
+        }
+        originSources[origin].push(src);
+    }
+
+    const row1 = document.createElement('tr');
+
+    // Spec — rowspan 2
     const thSpec = document.createElement('th');
     thSpec.className = 'gp-th-spec';
+    thSpec.rowSpan = 2;
     thSpec.textContent = 'Spec';
-    headerRow.appendChild(thSpec);
+    row1.appendChild(thSpec);
 
+    // Hero Talent — rowspan 2
     const thHt = document.createElement('th');
     thHt.className = 'gp-th-ht';
+    thHt.rowSpan = 2;
     thHt.textContent = 'Hero Talent';
-    headerRow.appendChild(thHt);
+    row1.appendChild(thHt);
 
-    for (const src of _sources) {
+    // Website group headers (row 1)
+    for (const origin of originOrder) {
+        const srcs = originSources[origin];
         const th = document.createElement('th');
-        th.textContent = src.short_label || src.name;
-        th.title = src.name;
-        headerRow.appendChild(th);
+        th.colSpan = srcs.length;
+        th.textContent = _ORIGIN_LABELS[origin] || origin;
+        th.style.cssText = 'text-align:center; border-left:1px solid #333;';
+        row1.appendChild(th);
     }
+
+    // Row 2: content-type sub-headers
+    const row2 = document.createElement('tr');
+    for (const origin of originOrder) {
+        const srcs = originSources[origin];
+        srcs.forEach((src, idx) => {
+            const th = document.createElement('th');
+            th.textContent = _CONTENT_TYPE_LABELS[src.content_type] || src.short_label || src.name;
+            th.title = src.name;
+            th.style.cssText = 'font-weight:400; font-size:0.72rem;' + (idx === 0 ? 'border-left:1px solid #333;' : '');
+            row2.appendChild(th);
+        });
+    }
+
     head.innerHTML = '';
-    head.appendChild(headerRow);
+    head.appendChild(row1);
+    head.appendChild(row2);
 
     // Body rows — group by class; each spec becomes N sub-rows (one per HT)
     body.innerHTML = '';
@@ -115,6 +158,14 @@ function renderMatrix() {
             body.appendChild(divRow);
         }
 
+        // Flatten sources in origin-group order (same as header)
+        const orderedSources = [];
+        for (const origin of originOrder) {
+            for (const src of (originSources[origin] || [])) {
+                orderedSources.push(src);
+            }
+        }
+
         const htOptions = (_htBySpec[sp.id] || []);
 
         if (htOptions.length === 0) {
@@ -131,12 +182,15 @@ function renderMatrix() {
             tdHt.textContent = '—';
             row.appendChild(tdHt);
 
-            for (const src of _sources) {
+            orderedSources.forEach((src, idx) => {
                 const td = document.createElement('td');
+                if (idx === 0 || orderedSources[idx - 1].origin !== src.origin) {
+                    td.style.borderLeft = '1px solid #333';
+                }
                 td.appendChild(renderCell(sp.id, src.id));
                 td.addEventListener('click', () => drillDown(sp.id, src.id));
                 row.appendChild(td);
-            }
+            });
             body.appendChild(row);
         } else {
             // One sub-row per hero talent; spec name spans all sub-rows
@@ -157,12 +211,15 @@ function renderMatrix() {
                 tdHt.textContent = ht.name;
                 row.appendChild(tdHt);
 
-                for (const src of _sources) {
+                orderedSources.forEach((src, srcIdx) => {
                     const td = document.createElement('td');
+                    if (srcIdx === 0 || orderedSources[srcIdx - 1].origin !== src.origin) {
+                        td.style.borderLeft = '1px solid #333';
+                    }
                     td.appendChild(renderCell(sp.id, src.id, ht.id));
                     td.addEventListener('click', () => drillDown(sp.id, src.id, ht.id));
                     row.appendChild(td);
-                }
+                });
                 body.appendChild(row);
             });
         }
