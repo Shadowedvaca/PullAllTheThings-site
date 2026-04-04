@@ -830,6 +830,7 @@ class WowCharacter(Base):
     addon_last_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     last_progression_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     last_profession_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_equipment_sync: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     first_seen: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -1563,3 +1564,276 @@ class VoiceAttendanceLog(Base):
     )
 
     event: Mapped["RaidEvent"] = relationship()
+
+
+# ---------------------------------------------------------------------------
+# guild_identity schema — Gear Plan (Phase 1A — migration 0066)
+# ---------------------------------------------------------------------------
+
+
+class WowItem(Base):
+    """Cached WoW item metadata sourced from the Wowhead tooltip API."""
+
+    __tablename__ = "wow_items"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    blizzard_item_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    icon_url: Mapped[Optional[str]] = mapped_column(String(500))
+    slot_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    armor_type: Mapped[Optional[str]] = mapped_column(String(20))
+    weapon_type: Mapped[Optional[str]] = mapped_column(String(30))
+    wowhead_tooltip_html: Mapped[Optional[str]] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+
+class ItemSource(Base):
+    """Boss / dungeon / world source for a WoW item."""
+
+    __tablename__ = "item_sources"
+    __table_args__ = (
+        UniqueConstraint("item_id", "source_type", "source_name", name="uq_item_source"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"), nullable=False
+    )
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_instance: Mapped[Optional[str]] = mapped_column(String(100))
+    blizzard_encounter_id: Mapped[Optional[int]] = mapped_column(Integer)
+    blizzard_instance_id: Mapped[Optional[int]] = mapped_column(Integer)
+    quality_tracks: Mapped[list] = mapped_column(
+        ARRAY(String), nullable=False, server_default="{}"
+    )
+
+    item: Mapped["WowItem"] = relationship()
+
+
+class HeroTalent(Base):
+    """Hero-talent tree reference row (spec → name + URL slug)."""
+
+    __tablename__ = "hero_talents"
+    __table_args__ = (
+        UniqueConstraint("spec_id", "name", name="uq_hero_talent_spec_name"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    spec_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.specializations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    slug: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    specialization: Mapped["Specialization"] = relationship()
+
+
+class BisListSource(Base):
+    """Named BIS list provider (Archon Raid, Wowhead Overall, etc.)."""
+
+    __tablename__ = "bis_list_sources"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    short_label: Mapped[Optional[str]] = mapped_column(String(30))
+    origin: Mapped[Optional[str]] = mapped_column(String(50))
+    content_type: Mapped[Optional[str]] = mapped_column(String(20))
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_synced: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
+class BisListEntry(Base):
+    """BIS item recommendation per spec × hero talent × slot from one source."""
+
+    __tablename__ = "bis_list_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_id", "spec_id", "hero_talent_id", "slot", "item_id",
+            name="uq_bis_entry",
+        ),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    spec_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.specializations.id", ondelete="CASCADE"), nullable=False
+    )
+    hero_talent_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.hero_talents.id", ondelete="SET NULL")
+    )
+    slot: Mapped[str] = mapped_column(String(20), nullable=False)
+    item_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"), nullable=False
+    )
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    source: Mapped["BisListSource"] = relationship()
+    item: Mapped["WowItem"] = relationship()
+
+
+class CharacterEquipment(Base):
+    """Current equipped gear per slot for a WoW character."""
+
+    __tablename__ = "character_equipment"
+    __table_args__ = (
+        UniqueConstraint("character_id", "slot", name="uq_char_equipment_slot"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"), nullable=False
+    )
+    slot: Mapped[str] = mapped_column(String(20), nullable=False)
+    blizzard_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="SET NULL")
+    )
+    item_name: Mapped[Optional[str]] = mapped_column(String(200))
+    item_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    quality_track: Mapped[Optional[str]] = mapped_column(String(1))
+    bonus_ids: Mapped[list] = mapped_column(ARRAY(Integer), nullable=False, server_default="{}")
+    enchant_id: Mapped[Optional[int]] = mapped_column(Integer)
+    gem_ids: Mapped[list] = mapped_column(ARRAY(Integer), nullable=False, server_default="{}")
+    synced_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    character: Mapped["WowCharacter"] = relationship()
+    item: Mapped[Optional["WowItem"]] = relationship()
+
+
+class GearPlan(Base):
+    """Player's gear plan — one per character."""
+
+    __tablename__ = "gear_plans"
+    __table_args__ = (
+        UniqueConstraint("player_id", "character_id", name="uq_gear_plan_player_char"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.players.id", ondelete="CASCADE"), nullable=False
+    )
+    character_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"), nullable=False
+    )
+    spec_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.specializations.id", ondelete="SET NULL")
+    )
+    hero_talent_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.hero_talents.id", ondelete="SET NULL")
+    )
+    bis_source_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="SET NULL")
+    )
+    simc_profile: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    player: Mapped["Player"] = relationship()
+    character: Mapped["WowCharacter"] = relationship()
+    slots: Mapped[list["GearPlanSlot"]] = relationship(
+        back_populates="plan", cascade="all, delete-orphan"
+    )
+
+
+class GearPlanSlot(Base):
+    """Desired item selection for one slot in a gear plan."""
+
+    __tablename__ = "gear_plan_slots"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "slot", name="uq_gear_plan_slot"),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    plan_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.gear_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    slot: Mapped[str] = mapped_column(String(20), nullable=False)
+    desired_item_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="SET NULL")
+    )
+    blizzard_item_id: Mapped[Optional[int]] = mapped_column(Integer)
+    item_name: Mapped[Optional[str]] = mapped_column(String(200))
+    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    plan: Mapped["GearPlan"] = relationship(back_populates="slots")
+    desired_item: Mapped[Optional["WowItem"]] = relationship()
+
+
+class BisScrapeTarget(Base):
+    """URL entry for an automated BIS extraction run (spec × source × hero talent)."""
+
+    __tablename__ = "bis_scrape_targets"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_id", "spec_id", "hero_talent_id", "content_type",
+            name="uq_scrape_target",
+        ),
+        {"schema": "guild_identity"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    spec_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.specializations.id", ondelete="CASCADE"), nullable=False
+    )
+    hero_talent_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("guild_identity.hero_talents.id", ondelete="SET NULL")
+    )
+    content_type: Mapped[Optional[str]] = mapped_column(String(20))
+    url: Mapped[Optional[str]] = mapped_column(Text)
+    preferred_technique: Mapped[Optional[str]] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")
+    items_found: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    last_fetched: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+    source: Mapped["BisListSource"] = relationship()
+    log_entries: Mapped[list["BisScrapeLog"]] = relationship(
+        back_populates="target", cascade="all, delete-orphan"
+    )
+
+
+class BisScrapeLog(Base):
+    """Extraction attempt history for a BIS scrape target."""
+
+    __tablename__ = "bis_scrape_log"
+    __table_args__ = {"schema": "guild_identity"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("guild_identity.bis_scrape_targets.id", ondelete="CASCADE"), nullable=False
+    )
+    technique: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    items_found: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    target: Mapped["BisScrapeTarget"] = relationship(back_populates="log_entries")

@@ -72,6 +72,19 @@ class CharacterProfileData:
     blizzard_character_id: Optional[int] = None
 
 
+@dataclass
+class CharacterEquipmentSlot:
+    """Per-slot equipment data from the Blizzard equipment endpoint."""
+    slot: str                           # normalised: head, neck, shoulder, …
+    blizzard_item_id: int
+    item_name: str
+    item_level: int
+    quality_track: Optional[str]        # V / C / H / M, or None
+    bonus_ids: list[int] = field(default_factory=list)
+    enchant_id: Optional[int] = None
+    gem_ids: list[int] = field(default_factory=list)
+
+
 # Blizzard class ID → class name mapping
 CLASS_ID_MAP = {
     1: "Warrior", 2: "Paladin", 3: "Hunter", 4: "Rogue",
@@ -326,6 +339,73 @@ class BlizzardClient:
             return None
 
         return data.get("equipped_item_level")
+
+    async def get_character_equipment(
+        self, realm_slug: str, character_name: str
+    ) -> Optional[list["CharacterEquipmentSlot"]]:
+        """
+        Fetch full per-slot equipment data for a character.
+
+        Endpoint: /profile/wow/character/{realmSlug}/{characterName}/equipment
+        Returns: list of CharacterEquipmentSlot (one per tracked slot), or None.
+        """
+        from .quality_track import normalize_slot, detect_quality_track
+
+        name_lower = character_name.lower()
+        name_encoded = quote(name_lower, safe='')
+
+        path = f"/profile/wow/character/{realm_slug}/{name_encoded}/equipment"
+        data = await self._api_get(path)
+
+        if not data or "equipped_items" not in data:
+            return None
+
+        slots: list[CharacterEquipmentSlot] = []
+        for item in data["equipped_items"]:
+            slot_raw = item.get("slot", {}).get("type", "")
+            slot = normalize_slot(slot_raw)
+            if not slot:
+                continue  # TABARD, SHIRT, etc.
+
+            blizzard_item_id = item.get("item", {}).get("id")
+            if not blizzard_item_id:
+                continue
+
+            item_name = item.get("name", "")
+            item_level = item.get("level", {}).get("value", 0)
+
+            # Quality track from display string
+            display_string = (
+                item.get("name_description", {}).get("display_string") or ""
+            )
+            bonus_ids = [b.get("id", 0) for b in item.get("bonus_list", [])]
+            quality_track = detect_quality_track(display_string, bonus_ids)
+
+            # Enchant
+            enchant_id = None
+            enchant_data = item.get("enchantments")
+            if enchant_data:
+                enchant_id = enchant_data[0].get("enchantment_id")
+
+            # Gems
+            gem_ids = [
+                s.get("item", {}).get("id", 0)
+                for s in item.get("sockets", [])
+                if s.get("item")
+            ]
+
+            slots.append(CharacterEquipmentSlot(
+                slot=slot,
+                blizzard_item_id=blizzard_item_id,
+                item_name=item_name,
+                item_level=item_level,
+                quality_track=quality_track,
+                bonus_ids=[b for b in bonus_ids if b],
+                enchant_id=enchant_id,
+                gem_ids=[g for g in gem_ids if g],
+            ))
+
+        return slots
 
     async def get_character_professions(
         self, realm_slug: str, character_name: str
