@@ -428,10 +428,17 @@ def _build_url(
 
     elif origin == "wowhead":
         # Wowhead always uses hyphens regardless of guide_sites separator.
-        # Wowhead has a single BIS page per spec (no raid/M+ split) at bis-gear#bis-gear.
+        # The page is bis-gear#bis-gear; raid/M+ variants use section anchors for
+        # future-proofing even if Wowhead currently shows one section per spec.
         cls_wh  = _slug(class_name, "-")
         spec_wh = _slug(spec_name,  "-")
-        return f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear#bis-gear"
+        base = f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear"
+        if content_type == "raid":
+            return base + "#raid-bis"
+        elif content_type == "mythic_plus":
+            return base + "#mythic-plus-bis"
+        else:
+            return base + "#bis-gear"
 
     elif origin == "icy_veins":
         # IV URLs require a role segment; area discovery populates these targets instead.
