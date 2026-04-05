@@ -30,6 +30,12 @@ def upgrade() -> None:
         schema="guild_identity",
     )
 
+    # Clear stale targets and log FIRST — must happen before constraint change
+    # because existing rows may have duplicate (source_id, spec_id, url) values
+    # (e.g. multiple hero_talent_id rows sharing the same Wowhead URL).
+    op.execute("DELETE FROM guild_identity.bis_scrape_log")
+    op.execute("DELETE FROM guild_identity.bis_scrape_targets")
+
     # Drop the old 4-column unique constraint
     # PostgreSQL auto-names inline UNIQUE as table_col1_col2_..._key
     op.execute("""
@@ -44,7 +50,7 @@ def upgrade() -> None:
         END $$;
     """)
 
-    # Add new URL-based unique constraint
+    # Add new URL-based unique constraint (table is now empty — no conflicts)
     op.execute("""
         ALTER TABLE guild_identity.bis_scrape_targets
         ADD CONSTRAINT uq_bis_scrape_targets_source_spec_url
@@ -57,10 +63,6 @@ def upgrade() -> None:
            SET is_active = FALSE
          WHERE name IN ('Wowhead Raid', 'Wowhead M+')
     """)
-
-    # Clear stale targets and log — re-discover after deploy
-    op.execute("DELETE FROM guild_identity.bis_scrape_log")
-    op.execute("DELETE FROM guild_identity.bis_scrape_targets")
 
 
 def downgrade() -> None:
