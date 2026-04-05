@@ -42,137 +42,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Slug maps — (class_name, spec_name) → URL slugs per source
 # ---------------------------------------------------------------------------
+# Slug helper — mirrors guide_links._slug, uses separator from guide_sites
 
-# u.gg (Archon) URL: /wow/{spec_slug}/{class_slug}/gear?hero={hero_slug}&role={role}
-_UGG_SLUG_MAP: dict[tuple[str, str], tuple[str, str]] = {
-    ("Death Knight", "Blood"):        ("death-knight", "blood"),
-    ("Death Knight", "Frost"):        ("death-knight", "frost"),
-    ("Death Knight", "Unholy"):       ("death-knight", "unholy"),
-    ("Demon Hunter", "Havoc"):        ("demon-hunter", "havoc"),
-    ("Demon Hunter", "Vengeance"):    ("demon-hunter", "vengeance"),
-    ("Druid",        "Balance"):      ("druid",         "balance"),
-    ("Druid",        "Feral"):        ("druid",         "feral"),
-    ("Druid",        "Guardian"):     ("druid",         "guardian"),
-    ("Druid",        "Restoration"):  ("druid",         "restoration"),
-    ("Evoker",       "Devastation"):  ("evoker",        "devastation"),
-    ("Evoker",       "Preservation"): ("evoker",        "preservation"),
-    ("Evoker",       "Augmentation"): ("evoker",        "augmentation"),
-    ("Hunter",       "Beast Mastery"):("hunter",        "beastmastery"),
-    ("Hunter",       "Marksmanship"): ("hunter",        "marksmanship"),
-    ("Hunter",       "Survival"):     ("hunter",        "survival"),
-    ("Mage",         "Arcane"):       ("mage",          "arcane"),
-    ("Mage",         "Fire"):         ("mage",          "fire"),
-    ("Mage",         "Frost"):        ("mage",          "frost"),
-    ("Monk",         "Brewmaster"):   ("monk",          "brewmaster"),
-    ("Monk",         "Mistweaver"):   ("monk",          "mistweaver"),
-    ("Monk",         "Windwalker"):   ("monk",          "windwalker"),
-    ("Paladin",      "Holy"):         ("paladin",       "holy"),
-    ("Paladin",      "Protection"):   ("paladin",       "protection"),
-    ("Paladin",      "Retribution"):  ("paladin",       "retribution"),
-    ("Priest",       "Discipline"):   ("priest",        "discipline"),
-    ("Priest",       "Holy"):         ("priest",        "holy"),
-    ("Priest",       "Shadow"):       ("priest",        "shadow"),
-    ("Rogue",        "Assassination"):("rogue",         "assassination"),
-    ("Rogue",        "Outlaw"):       ("rogue",         "outlaw"),
-    ("Rogue",        "Subtlety"):     ("rogue",         "subtlety"),
-    ("Shaman",       "Elemental"):    ("shaman",        "elemental"),
-    ("Shaman",       "Enhancement"):  ("shaman",        "enhancement"),
-    ("Shaman",       "Restoration"):  ("shaman",        "restoration"),
-    ("Warlock",      "Affliction"):   ("warlock",       "affliction"),
-    ("Warlock",      "Demonology"):   ("warlock",       "demonology"),
-    ("Warlock",      "Destruction"):  ("warlock",       "destruction"),
-    ("Warrior",      "Arms"):         ("warrior",       "arms"),
-    ("Warrior",      "Fury"):         ("warrior",       "fury"),
-    ("Warrior",      "Protection"):   ("warrior",       "protection"),
-}
 
-# Wowhead BIS URL: /guide/classes/{class_slug}/{spec_slug}/best-in-slot
-# Uses kebab-case for both class and spec
-_WOWHEAD_SLUG_MAP: dict[tuple[str, str], tuple[str, str]] = {
-    ("Death Knight", "Blood"):        ("death-knight",  "blood"),
-    ("Death Knight", "Frost"):        ("death-knight",  "frost"),
-    ("Death Knight", "Unholy"):       ("death-knight",  "unholy"),
-    ("Demon Hunter", "Havoc"):        ("demon-hunter",  "havoc"),
-    ("Demon Hunter", "Vengeance"):    ("demon-hunter",  "vengeance"),
-    ("Druid",        "Balance"):      ("druid",          "balance"),
-    ("Druid",        "Feral"):        ("druid",          "feral"),
-    ("Druid",        "Guardian"):     ("druid",          "guardian"),
-    ("Druid",        "Restoration"):  ("druid",          "restoration"),
-    ("Evoker",       "Devastation"):  ("evoker",         "devastation"),
-    ("Evoker",       "Preservation"): ("evoker",         "preservation"),
-    ("Evoker",       "Augmentation"): ("evoker",         "augmentation"),
-    ("Hunter",       "Beast Mastery"):("hunter",         "beast-mastery"),
-    ("Hunter",       "Marksmanship"): ("hunter",         "marksmanship"),
-    ("Hunter",       "Survival"):     ("hunter",         "survival"),
-    ("Mage",         "Arcane"):       ("mage",           "arcane"),
-    ("Mage",         "Fire"):         ("mage",           "fire"),
-    ("Mage",         "Frost"):        ("mage",           "frost"),
-    ("Monk",         "Brewmaster"):   ("monk",           "brewmaster"),
-    ("Monk",         "Mistweaver"):   ("monk",           "mistweaver"),
-    ("Monk",         "Windwalker"):   ("monk",           "windwalker"),
-    ("Paladin",      "Holy"):         ("paladin",        "holy"),
-    ("Paladin",      "Protection"):   ("paladin",        "protection"),
-    ("Paladin",      "Retribution"):  ("paladin",        "retribution"),
-    ("Priest",       "Discipline"):   ("priest",         "discipline"),
-    ("Priest",       "Holy"):         ("priest",         "holy"),
-    ("Priest",       "Shadow"):       ("priest",         "shadow"),
-    ("Rogue",        "Assassination"):("rogue",          "assassination"),
-    ("Rogue",        "Outlaw"):       ("rogue",          "outlaw"),
-    ("Rogue",        "Subtlety"):     ("rogue",          "subtlety"),
-    ("Shaman",       "Elemental"):    ("shaman",         "elemental"),
-    ("Shaman",       "Enhancement"):  ("shaman",         "enhancement"),
-    ("Shaman",       "Restoration"):  ("shaman",         "restoration"),
-    ("Warlock",      "Affliction"):   ("warlock",        "affliction"),
-    ("Warlock",      "Demonology"):   ("warlock",        "demonology"),
-    ("Warlock",      "Destruction"):  ("warlock",        "destruction"),
-    ("Warrior",      "Arms"):         ("warrior",        "arms"),
-    ("Warrior",      "Fury"):         ("warrior",        "fury"),
-    ("Warrior",      "Protection"):   ("warrior",        "protection"),
-}
-
-# Icy Veins BIS URL: /wow/{spec}-{class}-pve-best-in-slot
-# Uses kebab-case combined slug
-_ICYVEINS_SLUG_MAP: dict[tuple[str, str], str] = {
-    ("Death Knight", "Blood"):        "blood-death-knight",
-    ("Death Knight", "Frost"):        "frost-death-knight",
-    ("Death Knight", "Unholy"):       "unholy-death-knight",
-    ("Demon Hunter", "Havoc"):        "havoc-demon-hunter",
-    ("Demon Hunter", "Vengeance"):    "vengeance-demon-hunter",
-    ("Druid",        "Balance"):      "balance-druid",
-    ("Druid",        "Feral"):        "feral-druid",
-    ("Druid",        "Guardian"):     "guardian-druid",
-    ("Druid",        "Restoration"):  "restoration-druid",
-    ("Evoker",       "Devastation"):  "devastation-evoker",
-    ("Evoker",       "Preservation"): "preservation-evoker",
-    ("Evoker",       "Augmentation"): "augmentation-evoker",
-    ("Hunter",       "Beast Mastery"):"beast-mastery-hunter",
-    ("Hunter",       "Marksmanship"): "marksmanship-hunter",
-    ("Hunter",       "Survival"):     "survival-hunter",
-    ("Mage",         "Arcane"):       "arcane-mage",
-    ("Mage",         "Fire"):         "fire-mage",
-    ("Mage",         "Frost"):        "frost-mage",
-    ("Monk",         "Brewmaster"):   "brewmaster-monk",
-    ("Monk",         "Mistweaver"):   "mistweaver-monk",
-    ("Monk",         "Windwalker"):   "windwalker-monk",
-    ("Paladin",      "Holy"):         "holy-paladin",
-    ("Paladin",      "Protection"):   "protection-paladin",
-    ("Paladin",      "Retribution"):  "retribution-paladin",
-    ("Priest",       "Discipline"):   "discipline-priest",
-    ("Priest",       "Holy"):         "holy-priest",
-    ("Priest",       "Shadow"):       "shadow-priest",
-    ("Rogue",        "Assassination"):"assassination-rogue",
-    ("Rogue",        "Outlaw"):       "outlaw-rogue",
-    ("Rogue",        "Subtlety"):     "subtlety-rogue",
-    ("Shaman",       "Elemental"):    "elemental-shaman",
-    ("Shaman",       "Enhancement"):  "enhancement-shaman",
-    ("Shaman",       "Restoration"):  "restoration-shaman",
-    ("Warlock",      "Affliction"):   "affliction-warlock",
-    ("Warlock",      "Demonology"):   "demonology-warlock",
-    ("Warlock",      "Destruction"):  "destruction-warlock",
-    ("Warrior",      "Arms"):         "arms-warrior",
-    ("Warrior",      "Fury"):         "fury-warrior",
-    ("Warrior",      "Protection"):   "protection-warrior",
-}
+def _slug(name: str, sep: str = "-") -> str:
+    """Convert a display name to a lowercase URL slug."""
+    return name.lower().replace(" ", sep)
 
 # Archon slot names → our normalised internal keys
 _ARCHON_SLOT_MAP: dict[str, str] = {
@@ -238,10 +113,15 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
     Returns a stats dict: {inserted, skipped, total_expected}.
     """
     async with pool.acquire() as conn:
-        # Load all active sources
+        # Load all active sources, joining guide_sites for the slug_separator
         sources = await conn.fetch(
-            "SELECT id, name, origin, content_type, is_active "
-            "FROM guild_identity.bis_list_sources WHERE is_active = TRUE"
+            """
+            SELECT s.id, s.name, s.origin, s.content_type, s.is_active,
+                   COALESCE(gs.slug_separator, '-') AS slug_separator
+              FROM guild_identity.bis_list_sources s
+              LEFT JOIN common.guide_sites gs ON gs.id = s.guide_site_id
+             WHERE s.is_active = TRUE
+            """
         )
 
         # Load all specs with class names
@@ -288,9 +168,10 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
 
                     # Each source has exactly one content_type — use it directly
                     content_type = source["content_type"] or "overall"
+                    slug_sep = source["slug_separator"]
                     expected += 1
                     url = _build_url(
-                        origin, class_name, spec_name, ht_slug, content_type
+                        origin, class_name, spec_name, ht_slug, content_type, slug_sep
                     )
                     technique = _TECHNIQUE_ORDER.get(origin, ["html_parse"])[0]
 
@@ -325,45 +206,44 @@ def _build_url(
     spec_name: str,
     hero_slug: str,
     content_type: str,
+    slug_sep: str = "-",
 ) -> Optional[str]:
-    """Generate the BIS page URL for a given source origin + spec + hero + content type."""
-    key = (class_name, spec_name)
+    """Generate the BIS page URL for a given source origin + spec + hero + content type.
+
+    slug_sep comes from common.guide_sites.slug_separator for the linked site
+    (e.g. '_' for u.gg, '-' for Wowhead/Icy Veins).  This lets the admin fix
+    class/spec slug issues in the Reference Tables → Guide Sites UI.
+    """
+    cls  = _slug(class_name, slug_sep)
+    spec = _slug(spec_name,  slug_sep)
 
     if origin == "archon":
-        slugs = _UGG_SLUG_MAP.get(key)
-        if not slugs:
-            return None
-        class_slug, spec_slug = slugs
-        base = f"https://u.gg/wow/{spec_slug}/{class_slug}/gear?hero={hero_slug}"
+        base = f"https://u.gg/wow/{spec}/{cls}/gear?hero={hero_slug}"
         if content_type == "raid":
             return base + "&role=raid"
         elif content_type == "mythic_plus":
             return base + "&role=mythicdungeon"
-        else:  # overall — no role param
+        else:
             return base
 
     elif origin == "wowhead":
-        slugs = _WOWHEAD_SLUG_MAP.get(key)
-        if not slugs:
-            return None
-        class_slug, spec_slug = slugs
-        base = f"https://www.wowhead.com/guide/classes/{class_slug}/{spec_slug}/best-in-slot"
+        # Wowhead always uses hyphens regardless of guide_sites separator
+        cls_wh  = _slug(class_name, "-")
+        spec_wh = _slug(spec_name,  "-")
+        base = f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/best-in-slot"
         if content_type == "raid":
-            anchor = "#raid-bis"
+            return base + "#raid-bis"
         elif content_type == "mythic_plus":
-            anchor = "#mythic-plus-bis"
+            return base + "#mythic-plus-bis"
         else:
-            anchor = ""
-        return base + anchor
+            return base
 
     elif origin == "icy_veins":
-        combined = _ICYVEINS_SLUG_MAP.get(key)
-        if not combined:
-            return None
+        # Icy Veins always uses hyphens; URL is {spec}-{class}-best-in-slot
+        cls_iv  = _slug(class_name, "-")
+        spec_iv = _slug(spec_name,  "-")
         area = "2" if content_type == "raid" else "3" if content_type == "mythic_plus" else "1"
-        return (
-            f"https://www.icy-veins.com/wow/{combined}-best-in-slot?area=area_{area}"
-        )
+        return f"https://www.icy-veins.com/wow/{spec_iv}-{cls_iv}-best-in-slot?area=area_{area}"
 
     return None
 
