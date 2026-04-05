@@ -875,6 +875,8 @@ _WH_GATHERER_RE = re.compile(
     re.DOTALL,
 )
 _ITEM_MARKUP_RE = re.compile(r"\[item=(\d+)[^\]]*\]")
+# Raid/M+ "highlight" sections use [icon-badge=N] instead of [item=N]
+_ICON_BADGE_RE = re.compile(r"\[icon-badge=(\d+)")
 
 # slotbak inside jsonequip uses Blizzard API invtype IDs — NOT the old
 # Wowhead-internal slot numbering.  The two systems agree for slots 1–12
@@ -1015,9 +1017,27 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
     if not item_meta:
         return []
 
-    # Narrow to the requested content section before scanning item references
+    # Narrow to the requested content section before scanning item references.
+    # The Overall/BiS section uses [item=N] markup; Raid and M+ highlight
+    # sections use [icon-badge=N] instead.  Collect both and deduplicate while
+    # preserving document order.
     section_html = _wh_section_for_content_type(html, content_type)
-    referenced_ids = [int(x) for x in _ITEM_MARKUP_RE.findall(section_html)]
+    seen_ids: set[int] = set()
+    referenced_ids: list[int] = []
+    for pat in (_ITEM_MARKUP_RE, _ICON_BADGE_RE):
+        for m in pat.finditer(section_html):
+            iid = int(m.group(1))
+            if iid not in seen_ids:
+                seen_ids.add(iid)
+                referenced_ids.append(iid)
+    # Re-sort by first appearance position across both patterns
+    pos_map: dict[int, int] = {}
+    for pat in (_ITEM_MARKUP_RE, _ICON_BADGE_RE):
+        for m in pat.finditer(section_html):
+            iid = int(m.group(1))
+            if iid not in pos_map:
+                pos_map[iid] = m.start()
+    referenced_ids.sort(key=lambda iid: pos_map.get(iid, 0))
 
     # Walk items in document order; assign ring_1/ring_2 and trinket_1/trinket_2
     # by occurrence count since both slots share the same invtype code.
