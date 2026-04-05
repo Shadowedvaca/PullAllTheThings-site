@@ -1369,6 +1369,22 @@ async def _upsert_bis_entries(
     """
     upserted = 0
     async with pool.acquire() as conn:
+        # Clear all existing entries for this (source, spec, hero_talent) before
+        # inserting the new set.  Per-slot deletes miss slots that are absent from
+        # the new extraction (e.g. off_hand for 2H specs), leaving stale rows behind.
+        await conn.execute(
+            """
+            DELETE FROM guild_identity.bis_list_entries
+             WHERE source_id = $1
+               AND spec_id = $2
+               AND (
+                   ($3::int IS NULL AND hero_talent_id IS NULL)
+                   OR hero_talent_id = $3
+               )
+            """,
+            source_id, spec_id, hero_talent_id,
+        )
+
         for slot_data in slots:
             # Ensure wow_items row exists (stub — full metadata fetched by item_service)
             await conn.execute(
@@ -1390,31 +1406,11 @@ async def _upsert_bis_entries(
                 continue
             item_id = item_row["id"]
 
-            # Delete any existing entry for this (source, spec, ht, slot) combination
-            # before inserting the new item.  Without this, each sync accumulates rows —
-            # old items for the same slot persist alongside the new recommendation,
-            # which produces incorrect items_found counts and stale BIS display data.
-            await conn.execute(
-                """
-                DELETE FROM guild_identity.bis_list_entries
-                 WHERE source_id = $1
-                   AND spec_id = $2
-                   AND slot = $3
-                   AND (
-                       ($4::int IS NULL AND hero_talent_id IS NULL)
-                       OR hero_talent_id = $4
-                   )
-                """,
-                source_id, spec_id, slot_data.slot, hero_talent_id,
-            )
-
             await conn.execute(
                 """
                 INSERT INTO guild_identity.bis_list_entries
                     (source_id, spec_id, hero_talent_id, slot, item_id, priority)
                 VALUES ($1, $2, $3, $4, $5, 1)
-                ON CONFLICT (source_id, spec_id, hero_talent_id, slot, item_id)
-                DO UPDATE SET priority = 1
                 """,
                 source_id, spec_id, hero_talent_id, slot_data.slot, item_id,
             )
