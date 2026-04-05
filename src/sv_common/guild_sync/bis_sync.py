@@ -428,24 +428,15 @@ def _build_url(
 
     elif origin == "wowhead":
         # Wowhead always uses hyphens regardless of guide_sites separator.
-        # The page is bis-gear#bis-gear; raid/M+ variants use section anchors for
-        # future-proofing even if Wowhead currently shows one section per spec.
+        # All content types point to the same bis-gear page — Wowhead has one
+        # combined BIS section per spec with no raid/M+ split.
         cls_wh  = _slug(class_name, "-")
         spec_wh = _slug(spec_name,  "-")
-        base = f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear"
-        if content_type == "raid":
-            return base + "#raid-bis"
-        elif content_type == "mythic_plus":
-            return base + "#mythic-plus-bis"
-        else:
-            return base + "#bis-gear"
+        return f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear#bis-gear"
 
-    elif origin == "icy_veins":
-        # IV URLs require a role segment; area discovery populates these targets instead.
-        # This branch is kept for reference but discover_targets skips icy_veins.
-        cls_iv  = _slug(class_name, "-")
-        spec_iv = _slug(spec_name,  "-")
-        return f"https://www.icy-veins.com/wow/{spec_iv}-{cls_iv}-pve-dps-gear-best-in-slot"
+    # Icy Veins — targets come from discover_iv_areas (which uses _iv_base_url with
+    # the real role name).  discover_targets skips icy_veins, so this should never
+    # be reached; return None to surface any accidental call clearly.
 
     return None
 
@@ -688,14 +679,23 @@ def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
 
     Pattern: https://u.gg/wow/{spec}/{class}/gear?hero={hero}&role={role}
     → https://stats2.u.gg/wow/builds/v29/all/{Class}/{Class}_{spec}_itemsTable.json
+
+    u.gg uses underscore slugs (demon_hunter), stats2 expects PascalCase (DemonHunter).
     """
     m = re.search(r"u\.gg/wow/([^/]+)/([^/]+)/gear", page_url)
     if not m:
         return None
     spec_slug = m.group(1)
-    class_slug = m.group(2).replace("-", "")  # death-knight → deathknight
-    class_cap = class_slug.capitalize()
-    return f"{_UGG_STATS_BASE}/{class_cap}/{class_cap}_{spec_slug}_itemsTable.json"
+    class_pascal = _slug_to_pascal(m.group(2))
+    return f"{_UGG_STATS_BASE}/{class_pascal}/{class_pascal}_{spec_slug}_itemsTable.json"
+
+
+def _slug_to_pascal(slug: str) -> str:
+    """Convert snake_case or kebab-case slug to PascalCase.
+
+    'demon_hunter' → 'DemonHunter', 'death-knight' → 'DeathKnight'
+    """
+    return "".join(word.capitalize() for word in re.split(r"[-_]", slug))
 
 
 def _parse_archon_ssr(data: dict) -> list[SimcSlot]:
