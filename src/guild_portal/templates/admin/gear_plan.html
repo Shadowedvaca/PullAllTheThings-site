@@ -297,6 +297,35 @@ select.gp-select {
     font-size: 0.82rem;
 }
 
+/* ── Targets URL cell ────────────────────────────────────────────────── */
+.gp-target-url {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 340px;
+}
+.gp-target-url a {
+    color: var(--color-gold);
+    text-decoration: none;
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+.gp-target-url a:hover { text-decoration: underline; }
+.gp-target-url input {
+    flex: 1;
+    background: #0a0a0b;
+    border: 1px solid var(--color-gold);
+    color: var(--color-text);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    min-width: 0;
+}
+
 .spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -0.1em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -384,6 +413,49 @@ select.gp-select {
         </div>
     </div>
 
+    {# ── Scrape targets panel ────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleTargets()">
+            Scrape Targets <span class="toggle-icon" id="targets-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-targets-content" style="display:none;">
+            <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
+                <select class="gp-select" id="targets-filter-source" onchange="loadTargets()">
+                    <option value="">All websites</option>
+                </select>
+                <select class="gp-select" id="targets-filter-status" onchange="loadTargets()">
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="success">Success</option>
+                    <option value="partial">Partial</option>
+                    <option value="failed">Failed</option>
+                </select>
+                <button class="btn-sm btn-secondary" onclick="loadTargets()">Refresh</button>
+                <span id="targets-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+            </div>
+            <div style="overflow:auto; max-height:55vh;">
+                <table class="gp-log-table" style="min-width:900px;">
+                    <thead>
+                        <tr>
+                            <th>Spec</th>
+                            <th>Hero Talent</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                            <th>URL</th>
+                            <th>Status</th>
+                            <th>Items</th>
+                            <th>Last Synced</th>
+                            {% if is_gl %}<th></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody id="gp-targets-body">
+                        <tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     {# ── Scrape log ───────────────────────────────────────────────────────── #}
     <div class="gp-log-wrap">
         <h2 class="gp-log__title" onclick="toggleLog()">
@@ -441,6 +513,9 @@ select.gp-select {
 
 <script src="/static/js/gear_plan_admin.js"></script>
 <script>
+    // Expose GL flag to JS
+    window._isGl = {{ 'true' if is_gl else 'false' }};
+
     // Bootstrap — load matrix and sources on page load
     window.addEventListener('DOMContentLoaded', () => {
         loadMatrix();

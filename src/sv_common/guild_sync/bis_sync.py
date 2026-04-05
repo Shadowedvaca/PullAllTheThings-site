@@ -617,20 +617,103 @@ def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
 
 
 def _parse_archon_ssr(data: dict) -> list[SimcSlot]:
-    """Parse items from the window.__SSR_DATA__ blob."""
-    # Navigate: data → pageProps → wowData → items_table → items
+    """Parse items from the window.__SSR_DATA__ blob.
+
+    u.gg SSR format (current): the top-level dict is keyed by the stats2 URL.
+    The value has structure:  {data: {affixes: {affix_name: {item_level: {spec: {combos: {...}}}}}}}
+    This is M+ affix/combo performance data, not a simple per-slot BIS list.
+    We attempt best-effort extraction by looking at the most popular combo
+    per slot across all affixes and item levels.
+    """
     try:
-        page_props = data.get("pageProps") or data
-        wow_data = page_props.get("wowData") or page_props
-        items_table = wow_data.get("items_table", {})
-        items_by_slot = items_table.get("items", {})
-        return _archon_items_to_slots(items_by_slot)
+        # Outer key is the stats2 URL — iterate to get the first value
+        for _url_key, table_data in data.items():
+            if not isinstance(table_data, dict):
+                continue
+            inner = table_data.get("data") or table_data
+            # Try legacy items_table format first
+            items_by_slot = inner.get("items_table", {}).get("items", {})
+            if items_by_slot:
+                return _archon_items_to_slots(items_by_slot)
+            # Current format: data → affixes → {affix} → {item_level} → {spec} → combos
+            affixes = inner.get("affixes", {})
+            if affixes:
+                return _parse_archon_combo_data(affixes)
     except (AttributeError, TypeError):
-        return []
+        pass
+    return []
+
+
+def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
+    """Extract most popular item per slot from u.gg's affix+combo data structure.
+
+    Iterates all affixes and item levels, collects item IDs per slot key,
+    picks the most frequent item_id for each slot.
+    """
+    slot_counts: dict[str, dict[int, int]] = {}  # slot_key → {item_id: count}
+
+    for _affix, affix_data in affixes.items():
+        if not isinstance(affix_data, dict):
+            continue
+        for _item_level, level_data in affix_data.items():
+            if not isinstance(level_data, dict):
+                continue
+            for _spec_key, spec_data in level_data.items():
+                if not isinstance(spec_data, dict):
+                    continue
+                combos = spec_data.get("combos", {})
+                for combo_key, combo_val in combos.items():
+                    if not isinstance(combo_val, dict):
+                        continue
+                    # combo_key looks like "head", "ring1_ring2", "trinket1_trinket2", etc.
+                    # combo_val has "dps_item": [{first_item_id, second_item_id, count, ...}]
+                    items = combo_val.get("dps_item") or combo_val.get("items") or []
+                    if not items:
+                        continue
+                    top = max(items, key=lambda i: int(i.get("count", 0) or 0), default=None)
+                    if not top:
+                        continue
+                    # Extract slot(s) from the combo key
+                    parts = combo_key.split("_")
+                    first_id = top.get("first_item_id")
+                    second_id = top.get("second_item_id")
+                    # Map combo parts back to archon slot keys
+                    slot_keys = [combo_key] if "_" not in combo_key else [
+                        parts[0] if len(parts) >= 1 else None,
+                        "_".join(parts[1:]) if len(parts) >= 2 else None,
+                    ]
+                    for i, sk in enumerate(slot_keys):
+                        if not sk:
+                            continue
+                        item_id = first_id if i == 0 else second_id
+                        if not item_id:
+                            continue
+                        try:
+                            item_id_int = int(item_id)
+                        except (ValueError, TypeError):
+                            continue
+                        slot_counts.setdefault(sk, {})
+                        slot_counts[sk][item_id_int] = slot_counts[sk].get(item_id_int, 0) + 1
+
+    slots: list[SimcSlot] = []
+    for archon_slot, id_counts in slot_counts.items():
+        normalised = _ARCHON_SLOT_MAP.get(archon_slot.lower())
+        if not normalised:
+            continue
+        best_id = max(id_counts, key=lambda k: id_counts[k])
+        slots.append(SimcSlot(
+            slot=normalised,
+            blizzard_item_id=best_id,
+            bonus_ids=[],
+            enchant_id=None,
+            gem_ids=[],
+            quality_track=None,
+        ))
+    return slots
 
 
 def _parse_archon_items_table(data: dict) -> list[SimcSlot]:
-    """Parse items from the stats2.u.gg direct JSON response."""
+    """Parse items from the stats2.u.gg direct JSON response (legacy format)."""
     try:
         items_by_slot = data.get("items_table", {}).get("items", {})
         return _archon_items_to_slots(items_by_slot)

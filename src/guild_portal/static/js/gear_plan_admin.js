@@ -675,6 +675,209 @@ function renderXref(bySlot) {
 }
 
 // ---------------------------------------------------------------------------
+// Scrape targets
+// ---------------------------------------------------------------------------
+
+let _targetsVisible = false;
+let _allTargets = [];  // full list fetched from API
+
+function toggleTargets() {
+    _targetsVisible = !_targetsVisible;
+    document.getElementById('gp-targets-content').style.display = _targetsVisible ? 'block' : 'none';
+    document.getElementById('targets-toggle-icon').textContent = _targetsVisible ? '▲' : '▼';
+    if (_targetsVisible && _allTargets.length === 0) loadTargets();
+}
+
+async function loadTargets() {
+    const tbody = document.getElementById('gp-targets-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--color-text-muted);">Loading…</td></tr>';
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/targets');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        _allTargets = d.targets || [];
+        _populateTargetsSourceFilter();
+        _renderTargets();
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="9" style="color:#f87171;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function _populateTargetsSourceFilter() {
+    const sel = document.getElementById('targets-filter-source');
+    if (!sel) return;
+    const currentVal = sel.value;
+    // Unique origins from loaded targets, in appearance order
+    const seen = new Set();
+    const origins = [];
+    for (const t of _allTargets) {
+        const origin = t.origin || '';
+        if (origin && !seen.has(origin)) {
+            seen.add(origin);
+            origins.push(origin);
+        }
+    }
+    sel.innerHTML = '<option value="">All websites</option>';
+    for (const origin of origins) {
+        const opt = document.createElement('option');
+        opt.value = origin;
+        opt.textContent = _ORIGIN_LABELS[origin] || origin;
+        if (origin === currentVal) opt.selected = true;
+        sel.appendChild(opt);
+    }
+}
+
+function _renderTargets() {
+    const tbody = document.getElementById('gp-targets-body');
+    const countEl = document.getElementById('targets-count');
+    if (!tbody) return;
+
+    const filterOrigin = document.getElementById('targets-filter-source')?.value || '';
+    const filterStatus = document.getElementById('targets-filter-status')?.value || '';
+
+    const filtered = _allTargets.filter(t => {
+        if (filterOrigin && t.origin !== filterOrigin) return false;
+        if (filterStatus && t.status !== filterStatus) return false;
+        return true;
+    });
+
+    if (countEl) countEl.textContent = `${filtered.length} / ${_allTargets.length} targets`;
+
+    tbody.innerHTML = '';
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
+        return;
+    }
+
+    for (const t of filtered) {
+        const tr = document.createElement('tr');
+        tr.dataset.targetId = t.id;
+
+        const ts = t.last_fetched ? new Date(t.last_fetched).toLocaleDateString() : '—';
+        const statusClass = `gp-log-status-${t.status || 'pending'}`;
+        const ctLabel = _CONTENT_TYPE_LABELS[t.content_type] || t.content_type || '—';
+
+        // Build URL cell
+        const urlTd = document.createElement('td');
+        urlTd.style.maxWidth = '340px';
+        _renderTargetUrlCell(urlTd, t);
+
+        tr.innerHTML = `
+            <td>${t.class_name || ''} ${t.spec_name || ''}</td>
+            <td style="font-size:0.78rem; color:var(--color-text-muted); font-style:italic;">${t.hero_talent_name || '—'}</td>
+            <td>${_ORIGIN_LABELS[t.origin] || t.source_name || '—'}</td>
+            <td style="font-size:0.78rem;">${ctLabel}</td>
+        `;
+        tr.appendChild(urlTd);
+        tr.innerHTML += `
+            <td class="${statusClass}">${t.status || 'pending'}</td>
+            <td>${t.items_found || 0}</td>
+            <td style="font-size:0.75rem;">${ts}</td>
+        `;
+
+        // Actions cell (GL only — detected by presence of is_gl in page context)
+        const actTd = document.createElement('td');
+        actTd.style.cssText = 'white-space:nowrap;';
+        if (window._isGl) {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'btn-sm btn-secondary';
+            editBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem; margin-right:0.3rem;';
+            editBtn.textContent = 'Edit';
+            editBtn.onclick = () => _startEditUrl(tr, t);
+            actTd.appendChild(editBtn);
+
+            const syncBtn = document.createElement('button');
+            syncBtn.className = 'btn-sm btn-secondary';
+            syncBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem;';
+            syncBtn.textContent = 'Sync';
+            syncBtn.onclick = () => resyncTarget(t.id);
+            actTd.appendChild(syncBtn);
+        }
+        tr.appendChild(actTd);
+
+        tbody.appendChild(tr);
+    }
+}
+
+function _renderTargetUrlCell(td, target) {
+    td.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'gp-target-url';
+
+    if (target.url) {
+        const a = document.createElement('a');
+        a.href = target.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = target.url;
+        a.title = target.url;
+        wrapper.appendChild(a);
+    } else {
+        const empty = document.createElement('span');
+        empty.style.cssText = 'color:#444; font-style:italic; font-size:0.78rem;';
+        empty.textContent = '— no URL —';
+        wrapper.appendChild(empty);
+    }
+    td.appendChild(wrapper);
+}
+
+function _startEditUrl(tr, target) {
+    // Find the URL td (5th td, index 4)
+    const tds = tr.querySelectorAll('td');
+    const urlTd = tds[4];
+    urlTd.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'gp-target-url';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = target.url || '';
+    input.placeholder = 'Enter URL…';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn-sm btn-primary';
+    saveBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem; white-space:nowrap;';
+    saveBtn.textContent = 'Save';
+    saveBtn.onclick = () => _saveTargetUrl(target, input.value.trim(), tr);
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn-sm btn-secondary';
+    cancelBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem;';
+    cancelBtn.textContent = '✕';
+    cancelBtn.onclick = () => _renderTargetUrlCell(urlTd, target);
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(saveBtn);
+    wrapper.appendChild(cancelBtn);
+    urlTd.appendChild(wrapper);
+    input.focus();
+    input.select();
+}
+
+async function _saveTargetUrl(target, newUrl, tr) {
+    try {
+        const r = await fetch(`/api/v1/admin/bis/targets/${target.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: newUrl }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        // Update local state
+        target.url = newUrl;
+        const tds = tr.querySelectorAll('td');
+        _renderTargetUrlCell(tds[4], target);
+        setStatus(`URL updated for target ${target.id}.`, 'success');
+    } catch (err) {
+        setStatus('Failed to save URL: ' + err.message, 'error');
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Scrape log
 // ---------------------------------------------------------------------------
 
