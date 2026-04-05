@@ -27,6 +27,9 @@ let _drillSpecId = null;
 let _drillSourceId = null;
 let _drillHtId = null;
 
+// Collapsible class groups — null means "not yet initialised; collapse all on first render"
+let _collapsedClasses = null;
+
 // Operation locks — prevent overlapping operations
 let _syncInProgress      = false;
 let _discoveryInProgress = false;
@@ -193,77 +196,75 @@ function renderMatrix() {
     body.innerHTML = '';
     let lastClass = null;
 
+    // Flatten sources once (reused for every spec row)
+    const orderedSources = [];
+    for (const origin of originOrder) {
+        for (const src of (originSources[origin] || [])) orderedSources.push(src);
+    }
+
+    // Initialise collapsed state once (all collapsed on first load)
+    if (_collapsedClasses === null) {
+        _collapsedClasses = new Set(_specs.map(sp => sp.class_name));
+    }
+
     for (const sp of _specs) {
-        // Class group divider
+        // Class group divider row
         if (sp.class_name !== lastClass) {
             lastClass = sp.class_name;
             const divRow = document.createElement('tr');
+            divRow.className = 'gp-class-divider';
+            divRow.setAttribute('data-class-row', sp.class_name);
             const divTd = document.createElement('td');
-            divTd.colSpan = _sources.length + 2;
-            divTd.style.cssText = 'padding:0.25rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
-            divTd.textContent = sp.class_name;
+            divTd.colSpan = orderedSources.length + 2;
+            divTd.style.cssText = 'padding:0.3rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
+            const icon = document.createElement('span');
+            icon.className = 'gp-class-toggle-icon';
+            divTd.appendChild(icon);
+            divTd.appendChild(document.createTextNode(sp.class_name));
             divRow.appendChild(divTd);
+            divRow.addEventListener('click', () => _toggleClass(sp.class_name));
             body.appendChild(divRow);
-        }
-
-        // Flatten sources in origin-group order (same as header)
-        const orderedSources = [];
-        for (const origin of originOrder) {
-            for (const src of (originSources[origin] || [])) {
-                orderedSources.push(src);
-            }
         }
 
         const htOptions = (_htBySpec[sp.id] || []);
 
         if (htOptions.length === 0) {
-            // No hero talents — single row, HT cell shows "—"
             const row = document.createElement('tr');
-
+            row.setAttribute('data-class', sp.class_name);
             const tdSpec = document.createElement('td');
             tdSpec.className = 'gp-td-spec';
             tdSpec.textContent = sp.spec_name;
             row.appendChild(tdSpec);
-
             const tdHt = document.createElement('td');
             tdHt.className = 'gp-td-ht';
             tdHt.textContent = '—';
             row.appendChild(tdHt);
-
             orderedSources.forEach((src, idx) => {
                 const td = document.createElement('td');
-                if (idx === 0 || orderedSources[idx - 1].origin !== src.origin) {
-                    td.style.borderLeft = '1px solid #333';
-                }
+                if (idx === 0 || orderedSources[idx - 1].origin !== src.origin) td.style.borderLeft = '1px solid #333';
                 td.appendChild(renderCell(sp.id, src.id));
                 td.addEventListener('click', () => drillDown(sp.id, src.id));
                 row.appendChild(td);
             });
             body.appendChild(row);
         } else {
-            // One sub-row per hero talent; spec name spans all sub-rows
             htOptions.forEach((ht, idx) => {
                 const row = document.createElement('tr');
-
+                row.setAttribute('data-class', sp.class_name);
                 if (idx === 0) {
-                    // Spec name cell spans all HT rows
                     const tdSpec = document.createElement('td');
                     tdSpec.className = 'gp-td-spec';
                     tdSpec.rowSpan = htOptions.length;
                     tdSpec.textContent = sp.spec_name;
                     row.appendChild(tdSpec);
                 }
-
                 const tdHt = document.createElement('td');
                 tdHt.className = 'gp-td-ht';
                 tdHt.textContent = ht.name;
                 row.appendChild(tdHt);
-
                 orderedSources.forEach((src, srcIdx) => {
                     const td = document.createElement('td');
-                    if (srcIdx === 0 || orderedSources[srcIdx - 1].origin !== src.origin) {
-                        td.style.borderLeft = '1px solid #333';
-                    }
+                    if (srcIdx === 0 || orderedSources[srcIdx - 1].origin !== src.origin) td.style.borderLeft = '1px solid #333';
                     td.appendChild(renderCell(sp.id, src.id, ht.id));
                     td.addEventListener('click', () => drillDown(sp.id, src.id, ht.id));
                     row.appendChild(td);
@@ -271,6 +272,28 @@ function renderMatrix() {
                 body.appendChild(row);
             });
         }
+    }
+
+    _applyCollapsedState(body);
+}
+
+function _toggleClass(className) {
+    if (_collapsedClasses.has(className)) {
+        _collapsedClasses.delete(className);
+    } else {
+        _collapsedClasses.add(className);
+    }
+    _applyCollapsedState(document.getElementById('gp-matrix-body'));
+}
+
+function _applyCollapsedState(body) {
+    if (!body) return;
+    for (const row of body.querySelectorAll('tr[data-class]')) {
+        row.style.display = _collapsedClasses.has(row.getAttribute('data-class')) ? 'none' : '';
+    }
+    for (const row of body.querySelectorAll('tr[data-class-row]')) {
+        const icon = row.querySelector('.gp-class-toggle-icon');
+        if (icon) icon.textContent = _collapsedClasses.has(row.getAttribute('data-class-row')) ? '▶ ' : '▼ ';
     }
 }
 
@@ -623,8 +646,14 @@ function renderDrillDown(entries, specId, sourceId) {
             link.href = `https://www.wowhead.com/item=${e.blizzard_item_id}`;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
+            link.className = 'gp-item-name';
+            // item_name may be empty (stub) — Wowhead power.js will rename it
             link.textContent = e.item_name || `Item #${e.blizzard_item_id}`;
             itemEl.appendChild(link);
+            const idSpan = document.createElement('span');
+            idSpan.className = 'gp-item-id';
+            idSpan.textContent = `#${e.blizzard_item_id}`;
+            itemEl.appendChild(idSpan);
         } else {
             const miss = document.createElement('span');
             miss.className = 'gp-slot-row__missing';
@@ -634,6 +663,9 @@ function renderDrillDown(entries, specId, sourceId) {
         row.appendChild(itemEl);
         slotsEl.appendChild(row);
     }
+
+    // Let Wowhead script rename/tooltip the new links
+    if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
 function _slotLabel(slot) {
@@ -715,72 +747,110 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderXref(bySlot) {
     const content = document.getElementById('gp-xref-content');
 
-    if (Object.keys(bySlot).length === 0) {
-        content.innerHTML = '<span style="color:var(--color-text-muted);">No BIS data available for this spec.</span>';
+    // Check if there's any data at all (new format: slot objects with .sources)
+    const hasData = SLOT_ORDER.some(slot => (bySlot[slot]?.total_with_data || 0) > 0);
+    if (!hasData) {
+        content.innerHTML = '<span style="color:var(--color-text-muted);">No BIS data available for this spec. Run a sync first.</span>';
         return;
     }
 
+    // Filter to non-IV sources only (IV is always Coming Soon)
+    const activeSources = _sources.filter(s => s.origin !== 'icy_veins');
+
     const table = document.createElement('table');
     table.className = 'gp-xref-table';
+    table.style.tableLayout = 'fixed';
 
     // Header
     const thead = document.createElement('thead');
     const hRow = document.createElement('tr');
-    hRow.innerHTML = '<th>Slot</th>';
-    for (const src of _sources) {
+    const thSlot = document.createElement('th');
+    thSlot.textContent = 'Slot';
+    thSlot.style.width = '80px';
+    hRow.appendChild(thSlot);
+    for (const src of activeSources) {
         const th = document.createElement('th');
         th.textContent = src.short_label || src.name;
+        th.style.cssText = 'min-width:140px;';
         hRow.appendChild(th);
     }
-    hRow.innerHTML += '<th>Agreement</th>';
+    const thAgree = document.createElement('th');
+    thAgree.textContent = 'Consensus';
+    thAgree.style.cssText = 'min-width:160px;';
+    hRow.appendChild(thAgree);
     thead.appendChild(hRow);
     table.appendChild(thead);
 
     // Body
     const tbody = document.createElement('tbody');
     for (const slot of SLOT_ORDER) {
-        const entries = bySlot[slot] || [];
+        const slotData = bySlot[slot] || { sources: [], total_with_data: 0, all_agree: false, agree_count: 0, consensus_blizzard_item_id: null, consensus_item_name: '' };
+        const sources = slotData.sources || [];
+        const entryBySrc = {};
+        for (const e of sources) entryBySrc[e.source_id] = e;
+
         const row = document.createElement('tr');
+        if (slotData.total_with_data > 0) {
+            row.className = slotData.all_agree ? 'gp-xref-row--agree' : 'gp-xref-row--partial';
+        }
 
         const slotTd = document.createElement('td');
         slotTd.className = 'gp-xref-slot-label';
         slotTd.textContent = _slotLabel(slot);
         row.appendChild(slotTd);
 
-        // Per-source cells
-        const entryBySrc = {};
-        for (const e of entries) {
-            entryBySrc[e.source_id] = e;
-        }
-
-        for (const src of _sources) {
+        for (const src of activeSources) {
             const td = document.createElement('td');
             const e = entryBySrc[src.id];
-            if (e) {
+            if (e && e.blizzard_item_id) {
+                td.className = e.agrees ? 'gp-xref-cell--match' : 'gp-xref-cell--mismatch';
                 const link = document.createElement('a');
                 link.href = `https://www.wowhead.com/item=${e.blizzard_item_id}`;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
-                link.style.color = e.agrees ? '#4ade80' : '#fbbf24';
-                link.textContent = e.item_name || `#${e.blizzard_item_id}`;
+                link.className = 'gp-item-name';
+                link.textContent = e.item_name || `Item #${e.blizzard_item_id}`;
                 td.appendChild(link);
+                const idSpan = document.createElement('span');
+                idSpan.className = 'gp-item-id';
+                idSpan.textContent = `#${e.blizzard_item_id}`;
+                td.appendChild(idSpan);
             } else {
-                td.style.color = '#444';
+                td.className = 'gp-xref-cell--missing';
                 td.textContent = '—';
             }
             row.appendChild(td);
         }
 
-        // Agreement cell
+        // Agreement / consensus cell
         const agreeTd = document.createElement('td');
-        if (entries.length === 0) {
-            agreeTd.textContent = '—';
-            agreeTd.style.color = '#444';
+        const div = document.createElement('div');
+        div.className = 'gp-xref-agreement';
+        if (slotData.total_with_data === 0) {
+            div.className += ' gp-xref-agreement--split';
+            div.textContent = '— no data';
+        } else if (slotData.all_agree) {
+            div.className += ' gp-xref-agreement--unanimous';
+            div.textContent = `Unanimous (${slotData.agree_count}/${slotData.total_with_data})`;
+        } else if (slotData.consensus_blizzard_item_id) {
+            const majority = slotData.agree_count > slotData.total_with_data / 2;
+            div.className += majority ? ' gp-xref-agreement--partial' : ' gp-xref-agreement--split';
+            const countSpan = document.createElement('span');
+            countSpan.textContent = `${slotData.agree_count}/${slotData.total_with_data} agree — `;
+            div.appendChild(countSpan);
+            const link = document.createElement('a');
+            link.href = `https://www.wowhead.com/item=${slotData.consensus_blizzard_item_id}`;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.style.color = 'inherit';
+            link.className = 'gp-item-name';
+            link.textContent = slotData.consensus_item_name || `Item #${slotData.consensus_blizzard_item_id}`;
+            div.appendChild(link);
         } else {
-            const allAgree = entries.every(e => e.agrees);
-            agreeTd.textContent = allAgree ? '✓' : '!';
-            agreeTd.className = allAgree ? 'gp-xref-agree' : 'gp-xref-disagree';
+            div.className += ' gp-xref-agreement--split';
+            div.textContent = 'Split';
         }
+        agreeTd.appendChild(div);
         row.appendChild(agreeTd);
         tbody.appendChild(row);
     }
@@ -788,6 +858,9 @@ function renderXref(bySlot) {
 
     content.innerHTML = '';
     content.appendChild(table);
+
+    // Let Wowhead script rename/tooltip the new links
+    if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
 // ---------------------------------------------------------------------------

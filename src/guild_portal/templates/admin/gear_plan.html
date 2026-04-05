@@ -186,9 +186,27 @@
     border-bottom: 1px solid #2a2a2e;
     vertical-align: middle;
 }
-.gp-xref-agree { color: #4ade80; font-weight: 600; }
-.gp-xref-disagree { color: #fbbf24; font-weight: 600; }
 .gp-xref-slot-label { color: var(--color-text-muted); font-size: 0.78rem; min-width: 80px; }
+/* Row-level agreement shading */
+.gp-xref-row--agree    td { background: rgba(74, 222, 128, 0.04); }
+.gp-xref-row--partial  td { background: rgba(251, 191, 36, 0.04); }
+/* Per-cell agreement: match=gold, mismatch=muted red */
+.gp-xref-cell--match    { color: #4ade80; }
+.gp-xref-cell--mismatch { color: #f87171; opacity: 0.85; }
+.gp-xref-cell--missing  { color: #444; font-style: italic; }
+/* Item display inside cells */
+.gp-item-name   { display: block; font-size: 0.82rem; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.gp-item-name:hover { text-decoration: underline; }
+.gp-item-id     { display: block; font-size: 0.7rem; color: var(--color-text-muted); margin-top: 1px; }
+/* Agreement column */
+.gp-xref-agreement { font-size: 0.78rem; }
+.gp-xref-agreement--unanimous { color: #4ade80; font-weight: 600; }
+.gp-xref-agreement--partial   { color: #fbbf24; }
+.gp-xref-agreement--split     { color: #f87171; }
+/* Matrix class-group divider — collapsible */
+.gp-class-divider { cursor: pointer; user-select: none; }
+.gp-class-divider:hover td { background: #191920 !important; }
+.gp-class-toggle-icon { margin-right: 0.4rem; font-size: 0.7rem; color: var(--color-text-muted); }
 
 /* ── Scrape log ─────────────────────────────────────────────────────────── */
 .gp-log-wrap {
@@ -349,6 +367,11 @@ select.gp-select {
     white-space: nowrap;
 }
 </style>
+{# Wowhead item tooltips — renames item links to their display name and adds
+   hover tooltips.  renameLinks rewrites <a href="...wowhead.com/item=N"> text
+   to the actual item name.  Must appear before gear_plan_admin.js runs. #}
+<script>var whTooltips = {colorLinks: true, iconizeLinks: false, renameLinks: true, hide: {sellprice: true, ilvl: false, reqlevel: false, power: false}};</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
 {% endblock %}
 
 {% block content %}

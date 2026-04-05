@@ -819,6 +819,22 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
         if not normalised:
             continue
         best_id = max(id_counts, key=lambda k: id_counts[k])
+        best_votes = id_counts[best_id]
+        # Log a warning when a weapon slot produces a suspiciously low item ID.
+        # TWW items are generally 200 000+; IDs below 200 000 suggest stale data
+        # (Dragonflight or earlier).  This helps diagnose cases where u.gg's SSR
+        # blob contains outdated items for a specific spec/role combination.
+        if normalised in ("main_hand", "off_hand") and best_id < 200_000:
+            logger.warning(
+                "Archon extraction: slot '%s' → item %d (%d votes) — "
+                "item ID looks like pre-TWW data; full vote counts: %s",
+                normalised, best_id, best_votes, sorted(id_counts.items(), key=lambda x: -x[1])[:5],
+            )
+        else:
+            logger.debug(
+                "Archon extraction: slot '%s' → item %d (%d votes)",
+                normalised, best_id, best_votes,
+            )
         slots.append(SimcSlot(
             slot=normalised,
             blizzard_item_id=best_id,
@@ -1328,52 +1344,125 @@ async def cross_reference(
 ) -> dict:
     """Compare BIS recommendations across all sources for one spec + hero talent.
 
-    Returns a dict keyed by slot, where each value is a list of
-    {source_name, source_id, item_id, blizzard_item_id, item_name, agrees}
-    entries.  'agrees' is True when all active sources picked the same item.
+    hero_talent_id=None (All builds) fetches every entry across all hero talents
+    and picks the most common item per (source, slot) to show consensus.
+
+    NOTE: `e.hero_talent_id = NULL` is always false in SQL — we handle None
+    with a separate query branch to avoid the NULL equality trap.
+
+    Returns a dict keyed by slot.  Each value is:
+    {
+        "consensus_blizzard_item_id": int | None,  # most common across sources
+        "consensus_item_name": str,
+        "all_agree": bool,
+        "agree_count": int,      # sources whose item matches consensus
+        "total_with_data": int,  # sources that have any data for this slot
+        "sources": [
+            {"source_id", "source_name", "blizzard_item_id", "item_name", "agrees"},
+            ...
+        ]
+    }
     """
+    from collections import Counter
+
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT
-                e.slot,
-                s.id   AS source_id,
-                s.name AS source_name,
-                wi.id  AS item_id,
-                wi.blizzard_item_id,
-                wi.name AS item_name
-              FROM guild_identity.bis_list_entries e
-              JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
-              JOIN guild_identity.wow_items        wi ON wi.id = e.item_id
-             WHERE e.spec_id = $1
-               AND (e.hero_talent_id = $2 OR e.hero_talent_id IS NULL)
-               AND s.is_active = TRUE
-             ORDER BY e.slot, s.sort_order
-            """,
-            spec_id, hero_talent_id,
-        )
+        if hero_talent_id is None:
+            # All builds: aggregate across every hero talent.
+            # GROUP BY item so we can count how many HTs of each source pick it;
+            # ORDER DESC so the first row per (source, slot) is the winner.
+            rows = await conn.fetch(
+                """
+                SELECT e.slot,
+                       s.id AS source_id, s.name AS source_name, s.sort_order,
+                       wi.blizzard_item_id, wi.name AS item_name,
+                       COUNT(*) AS vote_count
+                  FROM guild_identity.bis_list_entries e
+                  JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
+                  JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                 WHERE e.spec_id = $1 AND s.is_active = TRUE
+                 GROUP BY e.slot, s.id, s.name, s.sort_order,
+                          wi.blizzard_item_id, wi.name
+                 ORDER BY e.slot, s.sort_order, vote_count DESC
+                """,
+                spec_id,
+            )
+            # Keep only the highest-voted item per (source_id, slot)
+            by_slot: dict[str, list[dict]] = {}
+            seen_src_slot: set = set()
+            for r in rows:
+                key = (r["source_id"], r["slot"])
+                if key in seen_src_slot:
+                    continue
+                seen_src_slot.add(key)
+                by_slot.setdefault(r["slot"], []).append({
+                    "source_id": r["source_id"],
+                    "source_name": r["source_name"],
+                    "blizzard_item_id": r["blizzard_item_id"],
+                    "item_name": r["item_name"] or "",
+                })
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT e.slot,
+                       s.id AS source_id, s.name AS source_name,
+                       wi.blizzard_item_id, wi.name AS item_name
+                  FROM guild_identity.bis_list_entries e
+                  JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
+                  JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                 WHERE e.spec_id = $1
+                   AND (e.hero_talent_id = $2 OR e.hero_talent_id IS NULL)
+                   AND s.is_active = TRUE
+                 ORDER BY e.slot, s.sort_order
+                """,
+                spec_id, hero_talent_id,
+            )
+            by_slot = {}
+            for r in rows:
+                by_slot.setdefault(r["slot"], []).append({
+                    "source_id": r["source_id"],
+                    "source_name": r["source_name"],
+                    "blizzard_item_id": r["blizzard_item_id"],
+                    "item_name": r["item_name"] or "",
+                })
 
-    # Group by slot
-    by_slot: dict[str, list[dict]] = {}
-    for row in rows:
-        slot = row["slot"]
-        by_slot.setdefault(slot, []).append({
-            "source_id": row["source_id"],
-            "source_name": row["source_name"],
-            "item_id": row["item_id"],
-            "blizzard_item_id": row["blizzard_item_id"],
-            "item_name": row["item_name"],
-        })
-
-    # Mark agreement
-    result: dict[str, list[dict]] = {}
+    # Build final result with consensus metadata per slot
+    result: dict[str, dict] = {}
     for slot in SLOT_ORDER:
         entries = by_slot.get(slot, [])
-        unique_items = {e["blizzard_item_id"] for e in entries}
-        agree = len(unique_items) <= 1
-        for entry in entries:
-            entry["agrees"] = agree
-        result[slot] = entries
+
+        # Consensus = most common blizzard_item_id across sources with data
+        item_counter: Counter = Counter(
+            e["blizzard_item_id"] for e in entries if e.get("blizzard_item_id")
+        )
+        consensus_id: Optional[int] = None
+        consensus_name = ""
+        agree_count = 0
+        if item_counter:
+            consensus_id, agree_count = item_counter.most_common(1)[0]
+            for e in entries:
+                if e["blizzard_item_id"] == consensus_id and e.get("item_name"):
+                    consensus_name = e["item_name"]
+                    break
+
+        source_entries = [
+            {
+                "source_id": e["source_id"],
+                "source_name": e["source_name"],
+                "blizzard_item_id": e.get("blizzard_item_id"),
+                "item_name": e.get("item_name") or "",
+                "agrees": e.get("blizzard_item_id") == consensus_id if consensus_id else False,
+            }
+            for e in entries
+        ]
+
+        result[slot] = {
+            "consensus_blizzard_item_id": consensus_id,
+            "consensus_item_name": consensus_name,
+            "all_agree": bool(entries) and agree_count == len(entries),
+            "agree_count": agree_count,
+            "total_with_data": len(entries),
+            "sources": source_entries,
+        }
 
     return result
 
