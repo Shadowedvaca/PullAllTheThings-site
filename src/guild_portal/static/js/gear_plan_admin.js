@@ -365,12 +365,14 @@ async function discoverTargets() {
         const r = await fetch('/api/v1/admin/bis/targets/discover', { method: 'POST' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus(
-            `Discovery complete — ${d.inserted} new targets added, ${d.skipped} already existed. ` +
-            `Icy Veins areas are being discovered in the background (~2 min) — refresh Targets panel when ready.`,
-            'success'
-        );
         await loadMatrix();
+        // Set status AFTER loadMatrix so it isn't overwritten by "Matrix loaded"
+        setStatusHtml(
+            `${d.inserted} targets added, ${d.skipped} already existed. ` +
+            `<span class="spinner"></span> Icy Veins areas discovering in background (~2 min) — ` +
+            `refresh Targets panel when done.`,
+            'running'
+        );
     } catch (err) {
         setStatus('Discovery failed: ' + err.message, 'error');
     }
