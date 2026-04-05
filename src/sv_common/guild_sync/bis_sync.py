@@ -387,16 +387,24 @@ def _categorize_iv_area(
     """Fuzzy-match an IV area tab label to (content_type, hero_talent_name).
 
     Rules (checked in order):
-      1. "mythic" in label → mythic_plus, no HT
-      2. Hero talent name in label → raid, matched HT name
-      3. Otherwise → overall, no HT
+      1. "mythic" in label → mythic_plus, no HT (M+ list applies to all builds)
+      2. "raid" in label (without HT name) → raid, no HT (raid list applies to all builds)
+      3. Hero talent name in label → overall, matched HT (this is the per-HT overall list)
+      4. Otherwise → overall, no HT (generic overall, applies to all builds)
+
+    The key insight: Icy Veins gives each hero talent its own "overall" BIS list,
+    while raid-only and M+-only lists are shared across both hero talents for that spec.
+    If no HT is specified in the label, hero_talent_id stays NULL which means
+    "applies to all builds" — the fallback when no HT-specific data exists.
     """
     low = label.lower()
     if "mythic" in low:
         return "mythic_plus", None
+    if "raid" in low:
+        return "raid", None
     for ht_name in hero_talent_names:
         if ht_name.lower() in low:
-            return "raid", ht_name
+            return "overall", ht_name
     return "overall", None
 
 
