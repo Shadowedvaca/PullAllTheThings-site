@@ -135,7 +135,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                    r.name AS role_name
               FROM guild_identity.specializations s
               JOIN guild_identity.classes c ON c.id = s.class_id
-              LEFT JOIN guild_identity.roles r ON r.id = s.role_id
+              LEFT JOIN guild_identity.roles r ON r.id = s.default_role_id
             ORDER BY c.name, s.name
             """
         )
