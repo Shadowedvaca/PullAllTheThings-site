@@ -580,7 +580,15 @@ async def sync_target(
         items_upserted = await _upsert_bis_entries(
             pool, source_id, spec_id, hero_talent_id, slots
         )
-        status = "success" if items_upserted == len(SLOT_ORDER) else "partial"
+        # Determine status from the unique slots that were extracted.
+        # A spec that uses a 2H weapon will never have an off_hand item —
+        # treat off_hand as the only missing slot → success (green), not partial.
+        extracted_slots = {s.slot for s in slots}
+        missing = set(SLOT_ORDER) - extracted_slots
+        if not missing or missing == {"off_hand"}:
+            status = "success"
+        else:
+            status = "partial"
     else:
         status = "failed"
 
@@ -674,21 +682,13 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
-    # Fallback: try the stats2 direct JSON endpoint
-    # Build the stats2 URL from the u.gg page URL
-    stats2_url = _ugg_to_stats2_url(url)
-    if stats2_url:
-        async with httpx.AsyncClient(
-            follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
-        ) as client:
-            try:
-                r2 = await client.get(stats2_url)
-                r2.raise_for_status()
-                data = r2.json()
-                return _parse_archon_items_table(data)
-            except Exception as exc:
-                logger.debug("stats2 fallback failed for %s: %s", stats2_url, exc)
-
+    # SSR parsing failed — do NOT fall back to the stats2.u.gg endpoint.
+    # The stats2 URL uses a versioned path (v29) that reflects a Dragonflight-era
+    # snapshot.  Falling back to it would write outdated item IDs for specs whose
+    # SSR blob failed to parse, silently contaminating BIS data with old items.
+    # Return [] so the caller marks the target as "failed" — that failure is visible
+    # in the scrape log and prompts investigation rather than silent corruption.
+    logger.warning("_extract_archon: SSR parse returned no items for %s", url)
     return []
 
 
@@ -1282,6 +1282,24 @@ async def _upsert_bis_entries(
             if item_row is None:
                 continue
             item_id = item_row["id"]
+
+            # Delete any existing entry for this (source, spec, ht, slot) combination
+            # before inserting the new item.  Without this, each sync accumulates rows —
+            # old items for the same slot persist alongside the new recommendation,
+            # which produces incorrect items_found counts and stale BIS display data.
+            await conn.execute(
+                """
+                DELETE FROM guild_identity.bis_list_entries
+                 WHERE source_id = $1
+                   AND spec_id = $2
+                   AND slot = $3
+                   AND (
+                       ($4::int IS NULL AND hero_talent_id IS NULL)
+                       OR hero_talent_id = $4
+                   )
+                """,
+                source_id, spec_id, slot_data.slot, hero_talent_id,
+            )
 
             await conn.execute(
                 """

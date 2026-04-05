@@ -380,8 +380,8 @@ select.gp-select {
             <option value="mythic_plus">M+ Only</option>
             <option value="overall">Overall</option>
         </select>
-        <button class="btn-sm btn-secondary" onclick="syncSource()">Sync Source</button>
-        <button class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
+        <button id="sync-source-btn" class="btn-sm btn-secondary" onclick="syncSource()">Sync Source</button>
+        <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
 
         <button class="btn-sm btn-secondary" onclick="openSimcModal()">Import SimC</button>
         {% endif %}

@@ -27,6 +27,9 @@ let _drillSpecId = null;
 let _drillSourceId = null;
 let _drillHtId = null;
 
+// Sync lock — prevents starting a second sync while one is in progress
+let _syncInProgress = false;
+
 // ---------------------------------------------------------------------------
 // Status bar helpers
 // ---------------------------------------------------------------------------
@@ -395,7 +398,16 @@ async function discoverTargets() {
     }
 }
 
+function _setSyncButtons(disabled) {
+    ['sync-source-btn', 'sync-all-btn'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = disabled;
+    });
+}
+
 async function syncSource() {
+    if (_syncInProgress) { setStatus('A sync is already running — please wait.', 'error'); return; }
+
     const originSel   = document.getElementById('sync-origin-select');
     const planTypeSel = document.getElementById('sync-plan-type-select');
 
@@ -411,25 +423,33 @@ async function syncSource() {
         return;
     }
 
+    _syncInProgress = true;
+    _setSyncButtons(true);
+
     // Per-spec loop: sync one spec at a time, show live progress
     const specs = _specs.filter(sp => true); // all specs
     let totalItems = 0, totalErrors = 0, processed = 0;
 
-    for (const sp of specs) {
-        setStatusHtml(
-            `<span class="spinner"></span> Syncing ${src.name} — ${sp.spec_name} (${++processed}/${specs.length})…`,
-            'running'
-        );
-        try {
-            const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
-            const d = await r.json();
-            if (d.ok) {
-                totalItems  += d.items_upserted || 0;
-                totalErrors += d.errors || 0;
-            } else {
-                totalErrors++;
-            }
-        } catch (_) { totalErrors++; }
+    try {
+        for (const sp of specs) {
+            setStatusHtml(
+                `<span class="spinner"></span> Syncing ${src.name} — ${sp.spec_name} (${++processed}/${specs.length})…`,
+                'running'
+            );
+            try {
+                const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
+                const d = await r.json();
+                if (d.ok) {
+                    totalItems  += d.items_upserted || 0;
+                    totalErrors += d.errors || 0;
+                } else {
+                    totalErrors++;
+                }
+            } catch (_) { totalErrors++; }
+        }
+    } finally {
+        _syncInProgress = false;
+        _setSyncButtons(false);
     }
 
     await loadMatrix();
@@ -439,29 +459,38 @@ async function syncSource() {
 }
 
 async function syncAll() {
+    if (_syncInProgress) { setStatus('A sync is already running — please wait.', 'error'); return; }
     if (!confirm('Run full BIS sync for all sources and all specs? This may take several minutes.')) return;
 
     // Per-spec loop: sync all non-IV sources for each spec in sequence
     const specs = _specs;
     if (!specs.length) { setStatus('Load matrix first.', 'error'); return; }
 
+    _syncInProgress = true;
+    _setSyncButtons(true);
+
     let totalItems = 0, totalErrors = 0, processed = 0;
 
-    for (const sp of specs) {
-        setStatusHtml(
-            `<span class="spinner"></span> Syncing all sources — ${sp.spec_name} (${++processed}/${specs.length})…`,
-            'running'
-        );
-        try {
-            const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
-            const d = await r.json();
-            if (d.ok) {
-                totalItems  += d.items_upserted || 0;
-                totalErrors += d.errors || 0;
-            } else {
-                totalErrors++;
-            }
-        } catch (_) { totalErrors++; }
+    try {
+        for (const sp of specs) {
+            setStatusHtml(
+                `<span class="spinner"></span> Syncing all sources — ${sp.spec_name} (${++processed}/${specs.length})…`,
+                'running'
+            );
+            try {
+                const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
+                const d = await r.json();
+                if (d.ok) {
+                    totalItems  += d.items_upserted || 0;
+                    totalErrors += d.errors || 0;
+                } else {
+                    totalErrors++;
+                }
+            } catch (_) { totalErrors++; }
+        }
+    } finally {
+        _syncInProgress = false;
+        _setSyncButtons(false);
     }
 
     await loadMatrix();
