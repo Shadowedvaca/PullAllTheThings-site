@@ -577,7 +577,9 @@ async function drillDown(specId, sourceId, htId) {
     const slotsEl = document.getElementById('gp-detail-slots');
     const actionsEl = document.getElementById('gp-detail-actions');
 
-    title.textContent = `BIS Entries — ${srcInfo?.name || sourceId} | ${specInfo?.class_name} ${specInfo?.spec_name}`;
+    const htInfo = _htBySpec[specId]?.find(h => h.id == htId);
+    const htLabel = htInfo ? ` — ${htInfo.name}` : (htId ? ` — HT ${htId}` : ' — All builds');
+    title.textContent = `BIS Entries — ${srcInfo?.name || sourceId} | ${specInfo?.class_name} ${specInfo?.spec_name}${htLabel}`;
     slotsEl.innerHTML = '<span style="color:var(--color-text-muted);">Loading…</span>';
     actionsEl.innerHTML = '';
     panel.classList.add('visible');
@@ -688,7 +690,7 @@ async function resyncTarget(targetId) {
         setStatus(`Re-sync complete — ${d.items_upserted} items, status: ${d.status}`, 'success');
         await loadMatrix();
         if (_drillSpecId && _drillSourceId) {
-            await drillDown(_drillSpecId, _drillSourceId);
+            await drillDown(_drillSpecId, _drillSourceId, _drillHtId);
         }
     } catch (err) {
         setStatus('Re-sync failed: ' + err.message, 'error');
