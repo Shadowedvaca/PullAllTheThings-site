@@ -88,7 +88,11 @@ _UGG_STATS_BASE = "https://stats2.u.gg/wow/builds/v29/all"
 _WOWHEAD_TOOLTIP_BASE = "https://nether.wowhead.com/tooltip/item"
 
 # Default headers to avoid obvious bot detection.
-# Wowhead requires Sec-Fetch-* and a full Accept set; without them it returns 403.
+# Wowhead requires Sec-Fetch-* headers; without them it returns 403.
+# Accept-Encoding is intentionally omitted — httpx manages encoding negotiation
+# itself and supports gzip/deflate natively.  Explicitly advertising Brotli
+# support causes u.gg to respond with Content-Encoding: br, which httpx cannot
+# decompress without the optional 'brotli' package.
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -97,9 +101,6 @@ _HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "none",
@@ -1017,30 +1018,48 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
     if not item_meta:
         return []
 
-    # Narrow to the requested content section before scanning item references.
-    # The Overall/BiS section uses [item=N] markup; Raid and M+ highlight
-    # sections use [icon-badge=N] instead.  Collect both and deduplicate while
-    # preserving document order.
+    # Extract items from the requested content section, then backfill any
+    # missing slots from the overall BiS section.  Raid and M+ sections only
+    # list the items specifically worth farming from that content; the overall
+    # section provides the complete recommended set for all other slots.
+    section_slots = _wh_slots_from_section(html, item_meta, content_type)
+
+    if content_type != "overall":
+        # Backfill missing slots with overall recommendations so every
+        # content_type ends up with a full 16-slot BIS list.
+        overall_slots = _wh_slots_from_section(html, item_meta, "overall")
+        filled: dict[str, int] = {s.slot: s.blizzard_item_id for s in overall_slots}
+        # Section-specific items take priority; they override overall
+        filled.update({s.slot: s.blizzard_item_id for s in section_slots})
+        section_slots = [
+            SimcSlot(slot=slot, blizzard_item_id=iid, bonus_ids=[], enchant_id=None,
+                     gem_ids=[], quality_track=None)
+            for slot, iid in filled.items()
+        ]
+
+    return section_slots
+
+
+def _wh_slots_from_section(
+    html: str, item_meta: dict, content_type: str
+) -> list[SimcSlot]:
+    """Extract SimcSlot list from a single Wowhead page section.
+
+    Scans both [item=N] and [icon-badge=N] markup within the section slice,
+    resolves slot codes via _WOWHEAD_SLOT_MAP, and assigns ring_1/ring_2 and
+    trinket_1/trinket_2 by document order.
+    """
     section_html = _wh_section_for_content_type(html, content_type)
-    seen_ids: set[int] = set()
-    referenced_ids: list[int] = []
-    for pat in (_ITEM_MARKUP_RE, _ICON_BADGE_RE):
-        for m in pat.finditer(section_html):
-            iid = int(m.group(1))
-            if iid not in seen_ids:
-                seen_ids.add(iid)
-                referenced_ids.append(iid)
-    # Re-sort by first appearance position across both patterns
+
+    # Collect item IDs in document order, deduped, across both markup patterns
     pos_map: dict[int, int] = {}
     for pat in (_ITEM_MARKUP_RE, _ICON_BADGE_RE):
         for m in pat.finditer(section_html):
             iid = int(m.group(1))
             if iid not in pos_map:
                 pos_map[iid] = m.start()
-    referenced_ids.sort(key=lambda iid: pos_map.get(iid, 0))
+    referenced_ids = sorted(pos_map.keys(), key=lambda iid: pos_map[iid])
 
-    # Walk items in document order; assign ring_1/ring_2 and trinket_1/trinket_2
-    # by occurrence count since both slots share the same invtype code.
     seen_slots: dict[str, int] = {}
     ring_count = 0
     trinket_count = 0
@@ -1063,7 +1082,7 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
                 slot = "ring_2"
                 ring_count += 1
             else:
-                continue  # third ring reference — skip
+                continue
         elif base_slot == "trinket":
             if trinket_count == 0:
                 slot = "trinket_1"
@@ -1072,23 +1091,17 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
                 slot = "trinket_2"
                 trinket_count += 1
             else:
-                continue  # third trinket reference — skip
+                continue
         else:
             slot = base_slot
             if slot in seen_slots:
-                continue  # already have this slot
+                continue
 
         seen_slots[slot] = item_id
 
     return [
-        SimcSlot(
-            slot=slot,
-            blizzard_item_id=iid,
-            bonus_ids=[],
-            enchant_id=None,
-            gem_ids=[],
-            quality_track=None,
-        )
+        SimcSlot(slot=slot, blizzard_item_id=iid, bonus_ids=[], enchant_id=None,
+                 gem_ids=[], quality_track=None)
         for slot, iid in seen_slots.items()
     ]
 
