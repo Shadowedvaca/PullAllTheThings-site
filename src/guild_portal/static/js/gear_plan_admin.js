@@ -365,22 +365,14 @@ async function discoverTargets() {
         const r = await fetch('/api/v1/admin/bis/targets/discover', { method: 'POST' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus(`Discovery complete — ${d.inserted} new targets added, ${d.skipped} already existed.`, 'success');
+        setStatus(
+            `Discovery complete — ${d.inserted} new targets added, ${d.skipped} already existed. ` +
+            `Icy Veins areas are being discovered in the background (~2 min) — refresh Targets panel when ready.`,
+            'success'
+        );
         await loadMatrix();
     } catch (err) {
         setStatus('Discovery failed: ' + err.message, 'error');
-    }
-}
-
-async function discoverIvAreas() {
-    setStatusHtml('<span class="spinner"></span> Discovering Icy Veins areas… (running in background)', 'running');
-    try {
-        const r = await fetch('/api/v1/admin/bis/targets/discover-areas', { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus('Icy Veins area discovery started. Refresh targets panel in a moment to see results.', 'success');
-    } catch (err) {
-        setStatus('IV area discovery failed: ' + err.message, 'error');
     }
 }
 

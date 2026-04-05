@@ -13,7 +13,6 @@ Endpoints:
   GET  /api/v1/admin/bis/targets
   GET  /api/v1/admin/bis/matrix
   POST /api/v1/admin/bis/targets/discover
-  POST /api/v1/admin/bis/targets/discover-areas
   PUT  /api/v1/admin/bis/targets/{id}
   POST /api/v1/admin/bis/sync
   POST /api/v1/admin/bis/sync/{source_id}
@@ -270,22 +269,20 @@ async def get_matrix(request: Request):
 
 
 @router.post("/targets/discover")
-async def discover_targets(request: Request):
-    """Auto-generate scrape targets for all missing spec × source × hero talent combos."""
-    pool = _pool(request)
-    from sv_common.guild_sync.bis_sync import discover_targets as _discover
-    stats = await _discover(pool)
-    return {"ok": True, **stats}
+async def discover_targets(request: Request, player: Player = Depends(require_rank(5))):
+    """Generate scrape targets for all sources.
 
-
-@router.post("/targets/discover-areas")
-async def discover_iv_areas(request: Request, player: Player = Depends(require_rank(5))):
-    """Discover Icy Veins area tabs for all specs and create scrape targets (GL only)."""
+    Archon + Wowhead targets are built immediately from URL patterns (fast).
+    Icy Veins targets require fetching each spec's page, so that part runs in
+    the background — refresh the Targets panel after ~2 minutes to see results.
+    """
     pool = _pool(request)
-    from sv_common.guild_sync.bis_sync import discover_iv_areas as _discover_iv
     import asyncio
+    from sv_common.guild_sync.bis_sync import discover_targets as _discover
+    from sv_common.guild_sync.bis_sync import discover_iv_areas as _discover_iv
+    stats = await _discover(pool)
     asyncio.create_task(_discover_iv(pool))
-    return {"ok": True, "message": "Icy Veins area discovery started in background"}
+    return {"ok": True, **stats, "iv_discovery": "started in background"}
 
 
 @router.put("/targets/{target_id}")
