@@ -375,21 +375,92 @@ def _build_url(
 
 
 async def sync_all(pool: asyncpg.Pool) -> dict:
-    """Run extraction for every active BIS source across all specs."""
+    """Run extraction for every active non-IV source, grouped by spec.
+
+    Processes all sources for one spec before moving to the next so that:
+      - requests to each site are naturally spaced across all specs
+      - per-spec data is complete before moving on
+      - Icy Veins targets are skipped (extraction not yet implemented)
+    """
     async with pool.acquire() as conn:
-        sources = await conn.fetch(
-            "SELECT id, name FROM guild_identity.bis_list_sources WHERE is_active = TRUE"
+        targets = await conn.fetch(
+            """
+            SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
+                   t.url, t.preferred_technique, s.origin
+              FROM guild_identity.bis_scrape_targets t
+              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+              JOIN guild_identity.specializations sp ON sp.id = t.spec_id
+              JOIN guild_identity.classes c ON c.id = sp.class_id
+             WHERE s.is_active = TRUE
+               AND s.origin != 'icy_veins'
+               AND t.url IS NOT NULL
+             ORDER BY c.name, sp.name, t.hero_talent_id, s.sort_order
+            """
         )
 
-    total_stats: dict = {"sources_run": 0, "items_upserted": 0, "targets_run": 0, "errors": 0}
-    for source in sources:
-        stats = await sync_source(pool, source["id"])
-        total_stats["sources_run"] += 1
-        total_stats["items_upserted"] += stats.get("items_upserted", 0)
-        total_stats["targets_run"] += stats.get("targets_run", 0)
-        total_stats["errors"] += stats.get("errors", 0)
+    # Group targets by spec so we process all sources for one spec together
+    spec_targets: dict[int, list[dict]] = {}
+    for t in targets:
+        spec_targets.setdefault(t["spec_id"], []).append(dict(t))
+
+    total_stats: dict = {"targets_run": 0, "items_upserted": 0, "errors": 0}
+
+    for spec_id, spec_target_list in spec_targets.items():
+        for target in spec_target_list:
+            try:
+                result = await sync_target(pool, target["id"], _target_row=target)
+                total_stats["targets_run"] += 1
+                total_stats["items_upserted"] += result.get("items_upserted", 0)
+                if result.get("status") == "failed":
+                    total_stats["errors"] += 1
+            except Exception as exc:
+                logger.error("Error syncing target %d: %s", target["id"], exc, exc_info=True)
+                total_stats["errors"] += 1
+            await asyncio.sleep(1.5)
+
+        # Brief pause between specs to spread load across sites
+        await asyncio.sleep(1.0)
 
     return total_stats
+
+
+async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
+    """Sync all active non-IV targets for one spec (synchronous).
+
+    Used by the frontend to drive per-spec progress updates — each call
+    handles one spec and returns immediately with results so the UI can
+    show live progress without polling.
+    """
+    async with pool.acquire() as conn:
+        targets = await conn.fetch(
+            """
+            SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
+                   t.url, t.preferred_technique, s.origin
+              FROM guild_identity.bis_scrape_targets t
+              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+             WHERE t.spec_id = $1
+               AND s.is_active = TRUE
+               AND s.origin != 'icy_veins'
+               AND t.url IS NOT NULL
+            """,
+            spec_id,
+        )
+
+    stats = {"targets_run": 0, "items_upserted": 0, "errors": 0}
+    for target in targets:
+        target_dict = dict(target)
+        try:
+            result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
+            stats["targets_run"] += 1
+            stats["items_upserted"] += result.get("items_upserted", 0)
+            if result.get("status") == "failed":
+                stats["errors"] += 1
+        except Exception as exc:
+            logger.error("Error syncing target %d: %s", target_dict["id"], exc, exc_info=True)
+            stats["errors"] += 1
+        await asyncio.sleep(1.0)
+
+    return stats
 
 
 async def sync_source(
@@ -399,9 +470,19 @@ async def sync_source(
 ) -> dict:
     """Run extraction for one BIS source, optionally filtered to specific specs.
 
+    Skips IV sources (extraction not yet implemented).
     Returns a stats dict: {targets_run, items_upserted, errors}.
     """
     async with pool.acquire() as conn:
+        # Check if this source is IV — skip if so
+        origin_row = await conn.fetchrow(
+            "SELECT origin FROM guild_identity.bis_list_sources WHERE id = $1", source_id
+        )
+        if origin_row and origin_row["origin"] == "icy_veins":
+            logger.info("sync_source skipping IV source %d", source_id)
+            return {"targets_run": 0, "items_upserted": 0, "errors": 0,
+                    "skipped": "icy_veins extraction not yet implemented"}
+
         query = """
             SELECT t.id, t.source_id, t.url, t.preferred_technique,
                    t.spec_id, t.hero_talent_id, t.content_type
@@ -463,6 +544,11 @@ async def sync_target(
                 _target_row["source_id"],
             )
             _target_row = {**_target_row, "origin": origin_row["origin"] if origin_row else ""}
+
+    # Skip IV targets — extraction not yet implemented; do not mark as failed
+    if _target_row.get("origin") == "icy_veins":
+        return {"items_upserted": 0, "technique": "html_parse", "status": "pending",
+                "skipped": "icy_veins extraction not yet implemented"}
 
     url = _target_row.get("url")
     technique = _target_row.get("preferred_technique") or _TECHNIQUE_ORDER.get(

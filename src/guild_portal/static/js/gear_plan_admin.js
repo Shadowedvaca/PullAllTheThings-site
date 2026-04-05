@@ -339,7 +339,13 @@ function populateSourceSelector() {
         for (const origin of origins) {
             const opt = document.createElement('option');
             opt.value = origin;
-            opt.textContent = _ORIGIN_LABELS[origin] || origin;
+            if (origin === 'icy_veins') {
+                opt.textContent = (_ORIGIN_LABELS[origin] || origin) + ' — Coming Soon';
+                opt.disabled = true;
+                opt.style.color = 'var(--color-text-muted)';
+            } else {
+                opt.textContent = _ORIGIN_LABELS[origin] || origin;
+            }
             originSel.appendChild(opt);
         }
     }
@@ -396,46 +402,72 @@ async function syncSource() {
     const origin      = originSel?.value;
     const contentType = planTypeSel?.value;
 
-    if (!origin) {
-        setStatus('Select a website first.', 'error');
-        return;
-    }
-    if (!contentType) {
-        setStatus('Select a plan type first.', 'error');
-        return;
-    }
+    if (!origin) { setStatus('Select a website first.', 'error'); return; }
+    if (!contentType) { setStatus('Select a plan type first.', 'error'); return; }
 
-    // Resolve to source_id
     const src = _sources.find(s => s.origin === origin && s.content_type === contentType);
     if (!src) {
-        const originLabel = _ORIGIN_LABELS[origin] || origin;
-        setStatus(`No source exists for ${originLabel} + ${planTypeSel.options[planTypeSel.selectedIndex].text}.`, 'error');
+        setStatus(`No source exists for ${_ORIGIN_LABELS[origin] || origin} + ${planTypeSel.options[planTypeSel.selectedIndex].text}.`, 'error');
         return;
     }
 
-    const sourceName = src.name;
-    setStatusHtml(`<span class="spinner"></span> Syncing ${sourceName}… (running in background)`, 'running');
-    try {
-        const r = await fetch(`/api/v1/admin/bis/sync/${src.id}`, { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus(`${sourceName} sync started. Refresh matrix in a moment to see progress.`, 'success');
-    } catch (err) {
-        setStatus('Sync failed: ' + err.message, 'error');
+    // Per-spec loop: sync one spec at a time, show live progress
+    const specs = _specs.filter(sp => true); // all specs
+    let totalItems = 0, totalErrors = 0, processed = 0;
+
+    for (const sp of specs) {
+        setStatusHtml(
+            `<span class="spinner"></span> Syncing ${src.name} — ${sp.spec_name} (${++processed}/${specs.length})…`,
+            'running'
+        );
+        try {
+            const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
+            const d = await r.json();
+            if (d.ok) {
+                totalItems  += d.items_upserted || 0;
+                totalErrors += d.errors || 0;
+            } else {
+                totalErrors++;
+            }
+        } catch (_) { totalErrors++; }
     }
+
+    await loadMatrix();
+    const msg = `${src.name} sync complete — ${totalItems} items upserted, ${totalErrors} errors.`;
+    setStatus(msg, totalErrors > 0 ? 'error' : 'success');
+    if (_targetsVisible) loadTargets();
 }
 
 async function syncAll() {
     if (!confirm('Run full BIS sync for all sources and all specs? This may take several minutes.')) return;
-    setStatusHtml('<span class="spinner"></span> Full BIS sync started… (running in background)', 'running');
-    try {
-        const r = await fetch('/api/v1/admin/bis/sync', { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus('Full sync started in background. Refresh matrix to track progress.', 'success');
-    } catch (err) {
-        setStatus('Sync failed: ' + err.message, 'error');
+
+    // Per-spec loop: sync all non-IV sources for each spec in sequence
+    const specs = _specs;
+    if (!specs.length) { setStatus('Load matrix first.', 'error'); return; }
+
+    let totalItems = 0, totalErrors = 0, processed = 0;
+
+    for (const sp of specs) {
+        setStatusHtml(
+            `<span class="spinner"></span> Syncing all sources — ${sp.spec_name} (${++processed}/${specs.length})…`,
+            'running'
+        );
+        try {
+            const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
+            const d = await r.json();
+            if (d.ok) {
+                totalItems  += d.items_upserted || 0;
+                totalErrors += d.errors || 0;
+            } else {
+                totalErrors++;
+            }
+        } catch (_) { totalErrors++; }
     }
+
+    await loadMatrix();
+    const msg = `Full sync complete — ${totalItems} items upserted, ${totalErrors} errors.`;
+    setStatus(msg, totalErrors > 0 ? 'error' : 'success');
+    if (_targetsVisible) loadTargets();
 }
 
 // ---------------------------------------------------------------------------
@@ -850,8 +882,14 @@ function _renderTargets() {
             const syncBtn = document.createElement('button');
             syncBtn.className = 'btn-sm btn-secondary';
             syncBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem;';
-            syncBtn.textContent = 'Sync';
-            syncBtn.onclick = () => resyncTarget(t.id);
+            if (isIV) {
+                syncBtn.textContent = 'Coming Soon';
+                syncBtn.disabled = true;
+                syncBtn.title = 'Icy Veins extraction not yet implemented';
+            } else {
+                syncBtn.textContent = 'Sync';
+                syncBtn.onclick = () => resyncTarget(t.id);
+            }
             actTd.appendChild(syncBtn);
         }
         tr.appendChild(actTd);

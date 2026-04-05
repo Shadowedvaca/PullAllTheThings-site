@@ -304,7 +304,10 @@ async def update_target(target_id: int, body: TargetUpdate, request: Request):
 
 @router.post("/sync")
 async def sync_all(request: Request, player: Player = Depends(require_rank(5))):
-    """Trigger full BIS pipeline across all active sources (GL only)."""
+    """Trigger full BIS pipeline across all active non-IV sources (GL only).
+
+    Runs in background — prefer the frontend per-spec loop for live progress.
+    """
     pool = _pool(request)
     from sv_common.guild_sync.bis_sync import sync_all as _sync_all
     import asyncio
@@ -312,16 +315,33 @@ async def sync_all(request: Request, player: Player = Depends(require_rank(5))):
     return {"ok": True, "message": "Full BIS sync started in background"}
 
 
+@router.post("/sync/spec/{spec_id}")
+async def sync_spec(
+    spec_id: int, request: Request, player: Player = Depends(require_rank(5))
+):
+    """Sync all active non-IV targets for one spec (synchronous, GL only).
+
+    Returns immediately with results so the frontend can drive per-spec
+    progress updates without long-lived HTTP connections or polling.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.bis_sync import sync_spec as _sync_spec
+    result = await _sync_spec(pool, spec_id)
+    return {"ok": True, **result}
+
+
 @router.post("/sync/{source_id}")
 async def sync_source(
     source_id: int, request: Request, player: Player = Depends(require_rank(5))
 ):
-    """Trigger BIS sync for one source across all specs (GL only)."""
+    """Sync one source for all specs, spec by spec (synchronous, GL only).
+
+    Skips IV sources. Returns when complete.
+    """
     pool = _pool(request)
     from sv_common.guild_sync.bis_sync import sync_source as _sync_source
-    import asyncio
-    asyncio.create_task(_sync_source(pool, source_id))
-    return {"ok": True, "message": f"Sync started for source {source_id}"}
+    result = await _sync_source(pool, source_id)
+    return {"ok": True, **result}
 
 
 @router.post("/sync/target/{target_id}")
