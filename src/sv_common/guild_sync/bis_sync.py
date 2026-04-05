@@ -908,48 +908,58 @@ _WOWHEAD_SLOT_MAP: dict[int, str] = {
     23: "off_hand",    # INVTYPE_HOLDABLE (held in off hand)
 }
 
-# Wowhead BBCode section-header pattern.  Each h2 announces a major content
-# section; h3 sub-sections appear within them.
-# Example: [h2 type=bar]Overall BiS[/h2]
+# Wowhead BBCode section-header pattern.  Section titles live in the `toc`
+# attribute, not between the tags.  The HTML is served inside a JSON string
+# so double-quotes are escaped as \".
+# Examples:
+#   [h2 toc=\"Raid Drops\" type=bar]
+#   [h3 toc=\"BiS Gear\"]
+#   [h3 toc=false]        ← skip: value is not a string
 _WH_SECTION_RE = re.compile(
-    r"\[h[23][^\]]*\]([^\[]+)\[/h[23]\]",
+    r'\[h([23])[^\]]*\btoc=(?:\\?")(.*?)(?:\\?")',
     re.IGNORECASE,
 )
 
-# Map content_type values to the section keywords we look for in section headers.
+# Map content_type values to the section keywords we look for in toc attributes.
 # Keys are the content_type values stored in bis_scrape_targets.
 _WH_SECTION_KEYWORDS: dict[str, list[str]] = {
-    "overall":     ["overall", "best in slot", "bis"],
-    "raid":        ["raid"],
-    "mythic_plus": ["mythic+", "mythic plus", "m+", "dungeon"],
+    "overall":     ["bis gear", "best in slot", "recommended gear", "overall"],
+    "raid":        ["raid drops", "raid"],
+    "mythic_plus": ["mythic+ drops", "mythic+", "mythic plus", "dungeon"],
 }
 
 
 def _wh_section_for_content_type(html: str, content_type: str) -> str:
     """Return the slice of HTML that belongs to the requested content_type section.
 
-    Wowhead guides use [h2 type=bar] headers to separate Overall, Raid, and
-    Mythic+ sections on the same page.  We find the start of the matching
-    section and the start of the next peer section, then return only that slice.
+    Wowhead guides use [h2/h3 toc="Section Name"] BBCode headers to separate
+    Overall, Raid, and Mythic+ sections on the same page.  The toc attribute
+    holds the display title (not the inner text).  Double-quotes in the HTML
+    are JSON-escaped as \\".
 
-    If no matching section is found (e.g. spec page doesn't have separate tabs)
-    the full HTML is returned so the caller still gets something useful.
+    Finds the first header whose toc value matches a keyword for the requested
+    content_type and returns the HTML from that point to the start of the next
+    h2-level header.  Falls back to the full page if no match is found.
     """
     keywords = _WH_SECTION_KEYWORDS.get(content_type, [])
     if not keywords:
         return html
 
-    # Collect all section positions: (start_pos, header_text)
-    sections: list[tuple[int, str]] = []
+    # Collect all h2/h3 positions with their toc labels
+    sections: list[tuple[int, int, str]] = []  # (pos, level, toc_lower)
     for m in _WH_SECTION_RE.finditer(html):
-        sections.append((m.start(), m.group(1).strip().lower()))
+        level = int(m.group(1))
+        toc_text = m.group(2).strip().lower()
+        sections.append((m.start(), level, toc_text))
 
-    # Find the first section whose header contains any of our keywords
+    # Find first section matching our keywords
     target_start: Optional[int] = None
+    target_level: Optional[int] = None
     target_idx: Optional[int] = None
-    for i, (pos, text) in enumerate(sections):
+    for i, (pos, level, text) in enumerate(sections):
         if any(kw in text for kw in keywords):
             target_start = pos
+            target_level = level
             target_idx = i
             break
 
@@ -957,11 +967,10 @@ def _wh_section_for_content_type(html: str, content_type: str) -> str:
         # No matching section found — fall back to full page
         return html
 
-    # The section ends where the next same-or-higher-level section begins
-    # (i.e. the next entry in sections list after our target)
-    if target_idx + 1 < len(sections):
-        target_end = sections[target_idx + 1][0]
-        return html[target_start:target_end]
+    # The section ends at the next header of equal or higher level (lower number)
+    for pos, level, _text in sections[target_idx + 1:]:
+        if level <= target_level:
+            return html[target_start:pos]
 
     return html[target_start:]
 
