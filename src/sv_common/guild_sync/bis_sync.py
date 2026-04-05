@@ -569,7 +569,8 @@ async def sync_target(
         return {"items_upserted": 0, "technique": technique, "status": "failed", "error": "No URL"}
 
     # Run extraction
-    slots, error = await _extract(url, technique)
+    content_type = _target_row.get("content_type") or "overall"
+    slots, error = await _extract(url, technique, content_type=content_type)
 
     now = datetime.now(timezone.utc)
     items_upserted = 0
@@ -610,7 +611,7 @@ async def sync_target(
 
 
 async def _extract(
-    url: str, technique: str
+    url: str, technique: str, content_type: str = "overall"
 ) -> tuple[list[SimcSlot], Optional[str]]:
     """Dispatch to the appropriate extractor.
 
@@ -620,7 +621,7 @@ async def _extract(
         if technique == "json_embed":
             slots = await _extract_archon(url)
         elif technique == "wh_gatherer":
-            slots = await _extract_wowhead(url)
+            slots = await _extract_wowhead(url, content_type=content_type)
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
         elif technique == "manual":
@@ -874,17 +875,112 @@ _WH_GATHERER_RE = re.compile(
     re.DOTALL,
 )
 _ITEM_MARKUP_RE = re.compile(r"\[item=(\d+)[^\]]*\]")
-_WOWHEAD_SLOT_MAP = {
-    1: "head", 2: "neck", 3: "shoulder", 5: "chest",
-    6: "waist", 7: "legs", 8: "feet", 9: "wrist", 10: "hands",
-    11: "ring_1", 16: "ring_2", 12: "trinket_1", 17: "trinket_2",
-    13: "back", 14: "main_hand", 15: "off_hand", 22: "main_hand",
-    23: "main_hand",
+
+# slotbak inside jsonequip uses Blizzard API invtype IDs — NOT the old
+# Wowhead-internal slot numbering.  The two systems agree for slots 1–12
+# but diverge at 13+.
+#
+# Old Wowhead internal: 13=back, 14=mainhand, 15=offhand, 16=ring2, 17=trinket2
+# Blizzard invtype IDs: 13=WEAPON(1H), 14=SHIELD, 16=CLOAK, 17=2HWEAPON,
+#                       20=ROBE, 21=MAINHAND, 22=OFFHAND, 23=HOLDABLE
+#
+# Rings (11) and trinkets (12) share a single invtype for both slots; the
+# extractor uses first/second occurrence order to assign _1 vs _2.
+_WOWHEAD_SLOT_MAP: dict[int, str] = {
+    1:  "head",
+    2:  "neck",
+    3:  "shoulder",
+    5:  "chest",       # INVTYPE_CHEST
+    6:  "waist",
+    7:  "legs",
+    8:  "feet",
+    9:  "wrist",
+    10: "hands",
+    11: "ring",        # both ring slots — resolved by occurrence order below
+    12: "trinket",     # both trinket slots — resolved by occurrence order below
+    13: "main_hand",   # INVTYPE_WEAPON (1H, equips in main hand)
+    14: "off_hand",    # INVTYPE_SHIELD
+    16: "back",        # INVTYPE_CLOAK
+    17: "main_hand",   # INVTYPE_2HWEAPON
+    20: "chest",       # INVTYPE_ROBE (same equip slot as chest)
+    21: "main_hand",   # INVTYPE_MAINHAND
+    22: "off_hand",    # INVTYPE_OFFHAND
+    23: "off_hand",    # INVTYPE_HOLDABLE (held in off hand)
+}
+
+# Wowhead BBCode section-header pattern.  Each h2 announces a major content
+# section; h3 sub-sections appear within them.
+# Example: [h2 type=bar]Overall BiS[/h2]
+_WH_SECTION_RE = re.compile(
+    r"\[h[23][^\]]*\]([^\[]+)\[/h[23]\]",
+    re.IGNORECASE,
+)
+
+# Map content_type values to the section keywords we look for in section headers.
+# Keys are the content_type values stored in bis_scrape_targets.
+_WH_SECTION_KEYWORDS: dict[str, list[str]] = {
+    "overall":     ["overall", "best in slot", "bis"],
+    "raid":        ["raid"],
+    "mythic_plus": ["mythic+", "mythic plus", "m+", "dungeon"],
 }
 
 
-async def _extract_wowhead(url: str) -> list[SimcSlot]:
-    """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls."""
+def _wh_section_for_content_type(html: str, content_type: str) -> str:
+    """Return the slice of HTML that belongs to the requested content_type section.
+
+    Wowhead guides use [h2 type=bar] headers to separate Overall, Raid, and
+    Mythic+ sections on the same page.  We find the start of the matching
+    section and the start of the next peer section, then return only that slice.
+
+    If no matching section is found (e.g. spec page doesn't have separate tabs)
+    the full HTML is returned so the caller still gets something useful.
+    """
+    keywords = _WH_SECTION_KEYWORDS.get(content_type, [])
+    if not keywords:
+        return html
+
+    # Collect all section positions: (start_pos, header_text)
+    sections: list[tuple[int, str]] = []
+    for m in _WH_SECTION_RE.finditer(html):
+        sections.append((m.start(), m.group(1).strip().lower()))
+
+    # Find the first section whose header contains any of our keywords
+    target_start: Optional[int] = None
+    target_idx: Optional[int] = None
+    for i, (pos, text) in enumerate(sections):
+        if any(kw in text for kw in keywords):
+            target_start = pos
+            target_idx = i
+            break
+
+    if target_start is None:
+        # No matching section found — fall back to full page
+        return html
+
+    # The section ends where the next same-or-higher-level section begins
+    # (i.e. the next entry in sections list after our target)
+    if target_idx + 1 < len(sections):
+        target_end = sections[target_idx + 1][0]
+        return html[target_start:target_end]
+
+    return html[target_start:]
+
+
+async def _extract_wowhead(url: str, content_type: str = "overall") -> list[SimcSlot]:
+    """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls.
+
+    content_type controls which page section is scanned:
+      - "overall"     → Overall BiS section (default)
+      - "raid"        → Raid Drops section
+      - "mythic_plus" → Mythic+ Drops section
+
+    Wowhead uses a single combined URL for all three; sections are delimited
+    by [h2 type=bar] BBCode headers in the static HTML.
+
+    slotbak values inside jsonequip use Blizzard API invtype IDs, not the old
+    Wowhead-internal slot numbering.  Rings and trinkets share a single invtype
+    each; first and second occurrences are assigned to _1 and _2 respectively.
+    """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
@@ -892,15 +988,16 @@ async def _extract_wowhead(url: str) -> list[SimcSlot]:
         response.raise_for_status()
         html = response.text
 
-    # Build item metadata map from WH.Gatherer.addData() calls
+    # Build item metadata map from ALL WH.Gatherer.addData() calls in the page.
+    # Metadata is declared globally (not per-section), so we always scan the
+    # full HTML for this step.
     item_meta: dict[int, dict] = {}
     for m in _WH_GATHERER_RE.finditer(html):
         try:
             chunk = json.loads(m.group(1))
             for item_id_str, meta in chunk.items():
                 try:
-                    iid = int(item_id_str)
-                    item_meta[iid] = meta
+                    item_meta[int(item_id_str)] = meta
                 except (ValueError, TypeError):
                     continue
         except json.JSONDecodeError:
@@ -909,20 +1006,50 @@ async def _extract_wowhead(url: str) -> list[SimcSlot]:
     if not item_meta:
         return []
 
-    # Find item references in the BIS content — [item=ID] markup
-    referenced_ids = [int(x) for x in _ITEM_MARKUP_RE.findall(html)]
+    # Narrow to the requested content section before scanning item references
+    section_html = _wh_section_for_content_type(html, content_type)
+    referenced_ids = [int(x) for x in _ITEM_MARKUP_RE.findall(section_html)]
 
-    seen_slots: dict[str, int] = {}  # slot → first item_id found
+    # Walk items in document order; assign ring_1/ring_2 and trinket_1/trinket_2
+    # by occurrence count since both slots share the same invtype code.
+    seen_slots: dict[str, int] = {}
+    ring_count = 0
+    trinket_count = 0
+
     for item_id in referenced_ids:
         meta = item_meta.get(item_id)
         if not meta:
             continue
-        # slotbak moved inside jsonequip in a Wowhead schema update
         je = meta.get("jsonequip") or {}
         slot_code = je.get("slotbak") if isinstance(je, dict) else meta.get("slotbak")
-        slot_name = _WOWHEAD_SLOT_MAP.get(slot_code)
-        if slot_name and slot_name not in seen_slots:
-            seen_slots[slot_name] = item_id
+        base_slot = _WOWHEAD_SLOT_MAP.get(slot_code)
+        if not base_slot:
+            continue
+
+        if base_slot == "ring":
+            if ring_count == 0:
+                slot = "ring_1"
+                ring_count += 1
+            elif ring_count == 1:
+                slot = "ring_2"
+                ring_count += 1
+            else:
+                continue  # third ring reference — skip
+        elif base_slot == "trinket":
+            if trinket_count == 0:
+                slot = "trinket_1"
+                trinket_count += 1
+            elif trinket_count == 1:
+                slot = "trinket_2"
+                trinket_count += 1
+            else:
+                continue  # third trinket reference — skip
+        else:
+            slot = base_slot
+            if slot in seen_slots:
+                continue  # already have this slot
+
+        seen_slots[slot] = item_id
 
     return [
         SimcSlot(
