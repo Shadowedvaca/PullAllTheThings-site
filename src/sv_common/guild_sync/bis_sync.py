@@ -87,15 +87,22 @@ _HTTP_TIMEOUT = 20.0
 _UGG_STATS_BASE = "https://stats2.u.gg/wow/builds/v29/all"
 _WOWHEAD_TOOLTIP_BASE = "https://nether.wowhead.com/tooltip/item"
 
-# Default headers to avoid obvious bot detection
+# Default headers to avoid obvious bot detection.
+# Wowhead requires Sec-Fetch-* and a full Accept set; without them it returns 403.
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
 }
 
 
