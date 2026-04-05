@@ -270,19 +270,15 @@ async def get_matrix(request: Request):
 
 @router.post("/targets/discover")
 async def discover_targets(request: Request, player: Player = Depends(require_rank(5))):
-    """Generate scrape targets for all sources.
+    """Generate scrape targets for all sources (Archon, Wowhead, Icy Veins).
 
-    Archon + Wowhead targets are built immediately from URL patterns (fast).
-    Icy Veins targets require fetching each spec's page, so that part runs in
-    the background — refresh the Targets panel after ~2 minutes to see results.
+    All targets are built synchronously from URL patterns — no background tasks.
+    IV targets use a role-derived base URL (one per spec per IV source).
     """
     pool = _pool(request)
-    import asyncio
     from sv_common.guild_sync.bis_sync import discover_targets as _discover
-    from sv_common.guild_sync.bis_sync import discover_iv_areas as _discover_iv
     stats = await _discover(pool)
-    asyncio.create_task(_discover_iv(pool))
-    return {"ok": True, **stats, "iv_discovery": "started in background"}
+    return {"ok": True, **stats}
 
 
 @router.put("/targets/{target_id}")

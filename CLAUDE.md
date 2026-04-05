@@ -235,12 +235,14 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Phase 1B** (in dev, unreleased) — BIS discovery + extraction pipeline: migration 0067 seeds 72 hero talent rows (36 specs × 2 each) + adds `gear_plan` screen permission. New modules: `simc_parser.py` (SimcSlot/SimcProfile dataclasses, parse_profile, parse_gear_slots, export_gear_plan, round-trip capable), `bis_sync.py` (discover_targets, sync_source/sync_all/sync_target, extractors for Archon json_embed/Wowhead wh_gatherer/Icy Veins html_parse/SimC, cross_reference, import_simc, get_matrix). New API: `bis_routes.py` (sources, entries, targets, matrix, sync, scrape-log, cross-reference, SimC import — Officer+ / GL for writes). New admin page: `/admin/gear-plan` (GL-only) — BIS sync dashboard with matrix view, cell drill-down, cross-reference panel, scrape log, SimC import modal. 45 new unit tests (simc_parser — all pass). Total: 1157 pass (2 pre-existing bnet template failures unchanged).
-- **Branch:** `main`
-- **Tests:** 1157 pass (45 new; 2 pre-existing bnet template failures unchanged)
-- **Last migration:** 0067
+- **Gear Plan Phase 1B** (in dev, unreleased, on feature/gear-plan-feature) — BIS discovery + extraction pipeline. 40 specs × 9 sources. Migrations 0067–0074. New modules: `simc_parser.py` (SimcSlot/SimcProfile, parse/export, round-trip), `bis_sync.py` (discover_targets for all 9 sources, sync_source/all/target, Archon json_embed + Wowhead wh_gatherer extractors working, Icy Veins html_parse **stubbed** — see below, SimC import, cross_reference, get_matrix). New API: `bis_routes.py`. New admin page: `/admin/gear-plan` (GL-only — matrix, drill-down, cross-reference, scrape log, SimC import modal). **Icy Veins extraction is intentionally out of scope for v1** — IV pages are fully JS-rendered; auto-extraction deferred; see `reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md`. IV sources show as "Coming Soon" in matrix. 35 new URL generation unit tests (all pass).
+- **Branch:** `feature/gear-plan-feature`
+- **Tests:** 1192 pass (35 new URL tests; 2 pre-existing bnet template failures unchanged)
+- **Last migration:** 0074
 - **Last tag:** `prod-v0.10.0` (Gear Plan not yet tagged to prod)
-- **Active branch:** `main`
+- **Active branch:** `feature/gear-plan-feature`
+- **Spec count:** 40 total (DK:3, DH:3 incl. Devourer, Druid:4, Evoker:3, Hunter:3, Mage:3, Monk:3, Paladin:3, Priest:3, Rogue:3, Shaman:3, Warlock:3, Warrior:3)
+- **Source count:** 9 (Archon Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall)
 - **Next:** Phase 1C — Item source mapping (Blizzard Journal API → `item_sources` table, `item_source_sync.py`)
 
 ### What Exists

@@ -119,8 +119,14 @@ function renderMatrix() {
         const srcs = originSources[origin];
         const th = document.createElement('th');
         th.colSpan = srcs.length;
-        th.textContent = _ORIGIN_LABELS[origin] || origin;
-        th.style.cssText = 'text-align:center; border-left:1px solid #333;';
+        const label = _ORIGIN_LABELS[origin] || origin;
+        th.textContent = origin === 'icy_veins' ? label + ' — Coming Soon' : label;
+        if (origin === 'icy_veins') {
+            th.title = 'Auto-extraction not yet implemented — see reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md';
+            th.style.cssText = 'text-align:center; border-left:1px solid #333; color:var(--color-text-muted);';
+        } else {
+            th.style.cssText = 'text-align:center; border-left:1px solid #333;';
+        }
         row1.appendChild(th);
     }
 
@@ -227,6 +233,16 @@ function renderMatrix() {
 }
 
 function renderCell(specId, sourceId, htId) {
+    // Icy Veins extraction is stubbed — show Coming Soon placeholder regardless of target status
+    const source = _sources.find(s => s.id == sourceId);
+    if (source && source.origin === 'icy_veins') {
+        const wrapper = document.createElement('span');
+        wrapper.className = 'gp-cell gp-cell--empty';
+        wrapper.title = 'Icy Veins — auto-extraction coming in a future release';
+        wrapper.textContent = '—';
+        return wrapper;
+    }
+
     // _cells keyed by spec_id → source_id (the matrix endpoint aggregates across HTs)
     const cellData = (_cells[specId] || {})[sourceId];
     const wrapper = document.createElement('span');
@@ -366,74 +382,11 @@ async function discoverTargets() {
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
         await loadMatrix();
-        setStatusHtml(
-            `${d.inserted} targets added, ${d.skipped} already existed. ` +
-            `<span class="spinner"></span> Icy Veins areas discovering in background…`,
-            'running'
-        );
-        _pollIvDiscovery();
+        setStatus(`Discovery complete — ${d.inserted} targets added, ${d.skipped} already existed.`, 'success');
+        if (_targetsVisible) loadTargets();
     } catch (err) {
         setStatus('Discovery failed: ' + err.message, 'error');
     }
-}
-
-// Poll for IV targets until the count stabilises, then refresh matrix + clear spinner.
-async function _pollIvDiscovery() {
-    let lastCount = -1;
-    let stableRounds = 0;
-    let zeroRounds = 0;
-    const MAX_POLLS = 18;   // 18 × 10s = 3 min hard cap
-    const ZERO_LIMIT = 6;   // give up after 60s with 0 targets found
-
-    for (let i = 0; i < MAX_POLLS; i++) {
-        await new Promise(res => setTimeout(res, 10000));
-        try {
-            const r = await fetch('/api/v1/admin/bis/targets');
-            const d = await r.json();
-            if (!d.ok) break;
-            const ivCount = (d.targets || []).filter(t => t.origin === 'icy_veins').length;
-
-            if (ivCount === 0) {
-                zeroRounds++;
-                if (zeroRounds >= ZERO_LIMIT) {
-                    // Still nothing after 60s — discovery likely failed or is very slow
-                    setStatus(
-                        'Icy Veins area discovery returned no targets. ' +
-                        'The site may have blocked the requests — you can edit URLs manually in the Targets panel.',
-                        'error'
-                    );
-                    if (_targetsVisible) loadTargets();
-                    return;
-                }
-                // Keep waiting — update message with elapsed time
-                setStatusHtml(
-                    `<span class="spinner"></span> Icy Veins areas discovering… (${zeroRounds * 10}s elapsed)`,
-                    'running'
-                );
-            } else if (ivCount === lastCount) {
-                stableRounds++;
-                if (stableRounds >= 2) {
-                    await loadMatrix();
-                    setStatus(`Discovery complete — ${ivCount} Icy Veins targets found.`, 'success');
-                    if (_targetsVisible) loadTargets();
-                    return;
-                }
-            } else {
-                stableRounds = 0;
-                zeroRounds = 0;
-                setStatusHtml(
-                    `<span class="spinner"></span> Icy Veins areas discovering… ${ivCount} found so far.`,
-                    'running'
-                );
-            }
-            lastCount = ivCount;
-        } catch (_) {
-            break;
-        }
-    }
-    await loadMatrix();
-    setStatus('Icy Veins discovery timed out — check Targets panel for what was found.', 'success');
-    if (_targetsVisible) loadTargets();
 }
 
 async function syncSource() {

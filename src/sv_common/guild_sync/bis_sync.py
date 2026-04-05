@@ -78,7 +78,7 @@ _ARCHON_SLOT_MAP: dict[str, str] = {
 _TECHNIQUE_ORDER: dict[str, list[str]] = {
     "archon":    ["json_embed"],
     "wowhead":   ["wh_gatherer"],
-    "icy_veins": ["html_parse"],
+    "icy_veins": ["html_parse"],  # STUB — html_parse returns [] for IV; see _extract_icy_veins
     "manual":    ["manual"],
 }
 
@@ -105,7 +105,11 @@ _HEADERS = {
 
 
 async def discover_targets(pool: asyncpg.Pool) -> dict:
-    """Auto-generate scrape targets for all active spec × source × hero talent combos.
+    """Auto-generate scrape targets for all active spec × source combos.
+
+    Archon + Wowhead: one target per spec × hero talent (URLs embed the HT slug).
+    Icy Veins: one target per spec (IV pages are not HT-specific; all content is
+               on a single page at a role-derived URL with no HT variation).
 
     Inserts missing rows into bis_scrape_targets.  Does NOT overwrite existing rows
     (uses ON CONFLICT DO NOTHING) so manually-entered URLs are preserved.
@@ -124,12 +128,14 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             """
         )
 
-        # Load all specs with class names
+        # Load all specs with class and role names
         specs = await conn.fetch(
             """
-            SELECT s.id AS spec_id, s.name AS spec_name, c.name AS class_name
+            SELECT s.id AS spec_id, s.name AS spec_name, c.name AS class_name,
+                   r.name AS role_name
               FROM guild_identity.specializations s
               JOIN guild_identity.classes c ON c.id = s.class_id
+              LEFT JOIN guild_identity.roles r ON r.id = s.role_id
             ORDER BY c.name, s.name
             """
         )
@@ -151,51 +157,71 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
         for source in sources:
             source_id = source["id"]
             origin = source["origin"]
-
-            # Icy Veins targets come from discover_iv_areas — skip here
-            if origin == "icy_veins":
-                continue
+            content_type = source["content_type"] or "overall"
 
             for spec in specs:
                 spec_id = spec["spec_id"]
                 class_name = spec["class_name"]
                 spec_name = spec["spec_name"]
+                role_name = spec["role_name"] or "dps"
 
-                spec_hero_talents = ht_by_spec.get(spec_id, [])
-                if not spec_hero_talents:
-                    # No hero talents seeded for this spec — skip
-                    continue
-
-                for ht in spec_hero_talents:
-                    ht_id = ht["id"]
-                    ht_slug = ht["slug"]
-
-                    # Each source has exactly one content_type — use it directly
-                    content_type = source["content_type"] or "overall"
-                    slug_sep = source["slug_separator"]
+                if origin == "icy_veins":
+                    # IV has one page per spec — no HT variation in the URL.
+                    # All content types (raid/m+/overall) live on the same page,
+                    # toggled client-side.  We insert one row per spec per IV source
+                    # with hero_talent_id=NULL so it applies to all builds.
+                    url = _iv_base_url(class_name, spec_name, role_name)
                     expected += 1
-                    url = _build_url(
-                        origin, class_name, spec_name, ht_slug, content_type, slug_sep
-                    )
-                    technique = _TECHNIQUE_ORDER.get(origin, ["html_parse"])[0]
-
                     result = await conn.fetchrow(
                         """
                         INSERT INTO guild_identity.bis_scrape_targets
                             (source_id, spec_id, hero_talent_id, content_type,
                              url, preferred_technique, status)
-                        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+                        VALUES ($1, $2, NULL, $3, $4, 'html_parse', 'pending')
                         ON CONFLICT (source_id, spec_id, url)
                         DO NOTHING
                         RETURNING id
                         """,
-                        source_id, spec_id, ht_id, content_type,
-                        url, technique,
+                        source_id, spec_id, content_type, url,
                     )
                     if result:
                         inserted += 1
                     else:
                         skipped += 1
+
+                else:
+                    spec_hero_talents = ht_by_spec.get(spec_id, [])
+                    if not spec_hero_talents:
+                        # No hero talents seeded for this spec — skip
+                        continue
+
+                    for ht in spec_hero_talents:
+                        ht_id = ht["id"]
+                        ht_slug = ht["slug"]
+                        slug_sep = source["slug_separator"]
+                        expected += 1
+                        url = _build_url(
+                            origin, class_name, spec_name, ht_slug, content_type, slug_sep
+                        )
+                        technique = _TECHNIQUE_ORDER.get(origin, ["html_parse"])[0]
+
+                        result = await conn.fetchrow(
+                            """
+                            INSERT INTO guild_identity.bis_scrape_targets
+                                (source_id, spec_id, hero_talent_id, content_type,
+                                 url, preferred_technique, status)
+                            VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+                            ON CONFLICT (source_id, spec_id, url)
+                            DO NOTHING
+                            RETURNING id
+                            """,
+                            source_id, spec_id, ht_id, content_type,
+                            url, technique,
+                        )
+                        if result:
+                            inserted += 1
+                        else:
+                            skipped += 1
 
     logger.info(
         "BIS target discovery: inserted=%d, already_existed=%d, total_expected=%d",
@@ -205,146 +231,20 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
 
 
 async def discover_iv_areas(pool: asyncpg.Pool) -> dict:
-    """Discover Icy Veins BIS area tabs for all specs and create scrape targets.
+    """No-op stub — IV discovery is now part of discover_targets.
 
-    Fetches each spec's Icy Veins BIS index page, extracts the ?area=area_N tab
-    links with their text labels, fuzzy-matches each label to a (hero_talent_id,
-    content_type) pair, and upserts a row into bis_scrape_targets.
-
-    Existing rows whose URL hasn't changed are left alone; new areas are added.
-
-    Returns {inserted, skipped, failed, total_specs}.
+    Icy Veins pages don't use URL-based area parameters; all content is
+    client-side toggled.  IV targets (one per spec per source) are now
+    generated directly in discover_targets using _iv_base_url().
     """
-    async with pool.acquire() as conn:
-        # Load active IV sources keyed by content_type
-        iv_sources = await conn.fetch(
-            """
-            SELECT id, name, content_type
-              FROM guild_identity.bis_list_sources
-             WHERE origin = 'icy_veins' AND is_active = TRUE
-            """
-        )
-        if not iv_sources:
-            return {"inserted": 0, "skipped": 0, "failed": 0, "total_specs": 0}
-
-        iv_by_ct = {row["content_type"]: dict(row) for row in iv_sources}
-
-        # Load specs with role names
-        specs = await conn.fetch(
-            """
-            SELECT sp.id AS spec_id, sp.name AS spec_name,
-                   c.name AS class_name, r.name AS role_name
-              FROM guild_identity.specializations sp
-              JOIN guild_identity.classes c ON c.id = sp.class_id
-              LEFT JOIN guild_identity.roles r ON r.id = sp.default_role_id
-             ORDER BY c.name, sp.name
-            """
-        )
-
-        # Load all hero talents per spec
-        hero_talents = await conn.fetch(
-            "SELECT id, spec_id, name, slug FROM guild_identity.hero_talents"
-        )
-
-    ht_by_spec: dict[int, list[dict]] = {}
-    for ht in hero_talents:
-        ht_by_spec.setdefault(ht["spec_id"], []).append(dict(ht))
-
-    inserted = 0
-    skipped = 0
-    failed = 0
-
-    # -----------------------------------------------------------------------
-    # Phase 1: HTTP fetching — no DB connection held.
-    # Collect {spec_id: [(source_id, spec_id, hero_talent_id, content_type,
-    #                      full_url, area_label), ...]} for all specs first,
-    # then write everything in one short-lived DB transaction.
-    # Holding a connection across 36+ HTTP requests + sleeps causes pool
-    # timeouts; this structure avoids that entirely.
-    # -----------------------------------------------------------------------
-    pending_rows: list[tuple] = []
-
-    for spec in specs:
-        spec_id = spec["spec_id"]
-        class_name = spec["class_name"]
-        spec_name = spec["spec_name"]
-        role_name = spec["role_name"] or "dps"
-        spec_hero_talents = ht_by_spec.get(spec_id, [])
-
-        base_url = _iv_base_url(class_name, spec_name, role_name)
-
-        try:
-            areas = await _fetch_iv_areas(base_url)
-        except Exception as exc:
-            logger.warning("IV area discovery failed for %s: %s", base_url, exc)
-            failed += 1
-            await asyncio.sleep(2.0)
-            continue
-
-        if not areas:
-            logger.debug("No area tabs found for %s", base_url)
-            failed += 1
-            await asyncio.sleep(2.0)
-            continue
-
-        for area_key, area_label in areas.items():
-            full_url = f"{base_url}?area={area_key}"
-            content_type, ht_name = _categorize_iv_area(
-                area_label, [ht["name"] for ht in spec_hero_talents]
-            )
-
-            hero_talent_id: Optional[int] = None
-            if ht_name:
-                for ht in spec_hero_talents:
-                    if ht["name"].lower() == ht_name.lower():
-                        hero_talent_id = ht["id"]
-                        break
-
-            source = iv_by_ct.get(content_type) or iv_by_ct.get("overall")
-            if source is None:
-                continue
-
-            pending_rows.append((
-                source["id"], spec_id, hero_talent_id, content_type,
-                full_url, area_label,
-            ))
-
-        await asyncio.sleep(2.0)  # Be polite between spec pages
-
-    # -----------------------------------------------------------------------
-    # Phase 2: DB writes — single short-lived connection, no HTTP calls.
-    # -----------------------------------------------------------------------
-    if pending_rows:
-        async with pool.acquire() as conn:
-            for row in pending_rows:
-                source_id, spec_id, hero_talent_id, content_type, full_url, area_label = row
-                result = await conn.fetchrow(
-                    """
-                    INSERT INTO guild_identity.bis_scrape_targets
-                        (source_id, spec_id, hero_talent_id, content_type,
-                         url, area_label, preferred_technique, status)
-                    VALUES ($1, $2, $3, $4, $5, $6, 'html_parse', 'pending')
-                    ON CONFLICT (source_id, spec_id, url)
-                    DO UPDATE SET area_label = EXCLUDED.area_label
-                    RETURNING (xmax = 0) AS was_inserted
-                    """,
-                    source_id, spec_id, hero_talent_id, content_type,
-                    full_url, area_label,
-                )
-                if result and result["was_inserted"]:
-                    inserted += 1
-                else:
-                    skipped += 1
-
-    logger.info(
-        "IV area discovery: inserted=%d, skipped=%d, failed=%d, specs=%d",
-        inserted, skipped, failed, len(specs),
-    )
-    return {"inserted": inserted, "skipped": skipped, "failed": failed,
-            "total_specs": len(specs)}
+    logger.info("discover_iv_areas called — IV targets now generated by discover_targets; no-op")
+    return {"inserted": 0, "skipped": 0, "failed": 0, "total_specs": 0}
 
 
-# IV area tab regex — finds links with ?area=area_N and captures label text
+# IV area tab regex — written assuming IV tabs used ?area=area_N URL params.
+# IV does NOT use URL parameters — tabs are CSS class toggles driven by JS.
+# This regex never matched anything on a live IV page.
+# Kept for context; see reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md.
 _IV_AREA_LINK_RE = re.compile(
     r'href="[^"]*\?area=(area_\d+)"[^>]*>\s*(.*?)\s*</a>',
     re.DOTALL | re.IGNORECASE,
@@ -353,7 +253,12 @@ _HTML_TAG_RE = re.compile(r"<[^>]+>")
 
 
 async def _fetch_iv_areas(base_url: str) -> dict[str, str]:
-    """Fetch an Icy Veins BIS page and return {area_key: label_text} for all area tabs."""
+    """Orphaned helper — discover_iv_areas is now a no-op stub.
+
+    Originally fetched IV pages to find ?area=area_N tab links.
+    IV doesn't use URL-based tabs; this always returned an empty dict.
+    Kept in place for reference; safe to remove in a future cleanup.
+    """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
@@ -925,77 +830,51 @@ async def _extract_wowhead(url: str) -> list[SimcSlot]:
 
 
 # ---------------------------------------------------------------------------
-# Icy Veins extractor  (html_parse)
+# Icy Veins extractor  (html_parse) — STUBBED, not yet implemented
+#
+# IV BIS pages are fully client-side rendered.  A plain httpx GET returns the
+# page shell only — all gear data is injected by a compiled JS bundle after
+# page load.  The regexes below were written against expected HTML patterns
+# but cannot match anything in the static response IV actually delivers.
+#
+# See reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md for full context,
+# what was tried, and what the next phase needs to solve before implementing.
 # ---------------------------------------------------------------------------
 
+# Kept for reference — these patterns assume item IDs are present in static
+# HTML, which IV's JS-rendered pages do not provide.
 _IV_ITEM_NAME_RE = re.compile(
     r'class="[^"]*recommended[^"]*"[^>]*>.*?<[^>]+>([^<]+)</[^>]+>',
     re.DOTALL | re.IGNORECASE,
 )
-_IV_ITEM_ID_RE = re.compile(r'data-item-id="(\d+)"')
-_IV_ITEM_LINK_RE = re.compile(r'wowhead\.com/item=(\d+)')
+_IV_ITEM_ID_RE = re.compile(r'data-item-id="(\d+)"')    # never matches IV static HTML
+_IV_ITEM_LINK_RE = re.compile(r'wowhead\.com/item=(\d+)')  # never matches IV static HTML
 
 
 async def _extract_icy_veins(url: str) -> list[SimcSlot]:
-    """Fetch Icy Veins BIS page and extract item IDs from HTML.
+    """STUB — Icy Veins item extraction is not yet implemented.
 
-    Icy Veins is the hardest to scrape (JS-heavy, no convenient JSON blob).
-    This extractor looks for item IDs embedded as data attributes or Wowhead
-    links within BIS table containers.  Results are best-effort.
+    IV BIS pages are fully client-side rendered.  The static HTML returned by
+    a plain httpx GET contains no item data — gear recommendations are injected
+    by a compiled JavaScript bundle after page load.  The regex approach below
+    (_IV_ITEM_LINK_RE, _IV_ITEM_ID_RE) was written assuming item IDs would be
+    present in static HTML; they are not.
+
+    What would be needed:
+      Option A — Headless browser (Playwright): render the full page, parse DOM.
+                 Heavy infrastructure, slow, executes all their JS (ads/trackers).
+      Option B — Reverse-engineer their JS bundle to find the private API call.
+                 Their private backend, not public, likely violates ToS.
+
+    Both are intentionally deferred.  See:
+        reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md
+
+    URL discovery IS fully functional — correct IV URLs are stored in
+    bis_scrape_targets (one per spec per source).  Only this extraction step
+    is a stub.  When this is implemented, no schema or URL changes are needed.
     """
-    async with httpx.AsyncClient(
-        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
-    ) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        html = response.text
-
-    # Collect all Wowhead item IDs mentioned on the page
-    item_ids_from_links = [int(x) for x in _IV_ITEM_LINK_RE.findall(html)]
-    item_ids_from_attrs = [int(x) for x in _IV_ITEM_ID_RE.findall(html)]
-
-    # Union, dedup, preserving order
-    seen: set[int] = set()
-    candidate_ids: list[int] = []
-    for iid in item_ids_from_links + item_ids_from_attrs:
-        if iid not in seen:
-            seen.add(iid)
-            candidate_ids.append(iid)
-
-    if not candidate_ids:
-        return []
-
-    # For each candidate item, fetch its Wowhead slot via tooltip API
-    # Limit to first 50 candidates to avoid too many requests
-    slots: list[SimcSlot] = []
-    seen_internal_slots: set[str] = set()
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for item_id in candidate_ids[:50]:
-            try:
-                r = await client.get(
-                    f"{_WOWHEAD_TOOLTIP_BASE}/{item_id}?dataEnv=1&locale=0"
-                )
-                if r.status_code != 200:
-                    continue
-                tooltip = r.json()
-                slot_code = tooltip.get("slotbak") or tooltip.get("slot")
-                slot_name = _WOWHEAD_SLOT_MAP.get(slot_code)
-                if slot_name and slot_name not in seen_internal_slots:
-                    seen_internal_slots.add(slot_name)
-                    slots.append(SimcSlot(
-                        slot=slot_name,
-                        blizzard_item_id=item_id,
-                        bonus_ids=[],
-                        enchant_id=None,
-                        gem_ids=[],
-                        quality_track=None,
-                    ))
-                await asyncio.sleep(0.3)
-            except Exception:
-                continue
-
-    return slots
+    logger.info("IV extraction stubbed — skipping %s (not yet implemented)", url)
+    return []
 
 
 # ---------------------------------------------------------------------------
