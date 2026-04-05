@@ -70,7 +70,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline' https://wow.zamimg.com; "
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://wow.zamimg.com; "
                 "font-src 'self' https://fonts.gstatic.com; "
                 "img-src 'self' https://drive.google.com https://lh3.googleusercontent.com "
                 "https://wow.zamimg.com data:; "
