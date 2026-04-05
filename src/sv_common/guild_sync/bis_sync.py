@@ -649,26 +649,21 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
         response.raise_for_status()
         html = response.text
 
-    # Try to find window.__SSR_DATA__ = {...}; in the HTML
-    ssr_match = re.search(
-        r"window\.__SSR_DATA__\s*=\s*(\{.+?\});\s*(?:window|</script>)",
-        html,
-        re.DOTALL,
-    )
-    if not ssr_match:
-        # Try alternate pattern (sometimes no trailing window)
-        ssr_match = re.search(
-            r"window\.__SSR_DATA__\s*=\s*(\{.+?\})\s*;",
-            html,
-            re.DOTALL,
-        )
-
-    if ssr_match:
-        try:
-            data = json.loads(ssr_match.group(1))
-            return _parse_archon_ssr(data)
-        except (json.JSONDecodeError, KeyError):
-            pass
+    # Extract window.__SSR_DATA__ using raw_decode so the nested JSON object is
+    # parsed correctly regardless of size.  A regex with (\{.+?\}) is non-greedy
+    # and stops at the first "}" in a 5 MB blob — it will never capture the full
+    # object.  raw_decode(html, idx) parses exactly as much JSON as needed.
+    marker = "window.__SSR_DATA__"
+    ssr_idx = html.find(marker)
+    if ssr_idx >= 0:
+        obj_start = html.find("{", ssr_idx)
+        if obj_start >= 0:
+            try:
+                decoder = json.JSONDecoder()
+                data, _ = decoder.raw_decode(html, obj_start)
+                return _parse_archon_ssr(data)
+            except (json.JSONDecodeError, KeyError, ValueError):
+                pass
 
     # Fallback: try the stats2 direct JSON endpoint
     # Build the stats2 URL from the u.gg page URL
