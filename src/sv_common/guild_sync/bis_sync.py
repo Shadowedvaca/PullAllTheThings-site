@@ -286,43 +286,31 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                     ht_id = ht["id"]
                     ht_slug = ht["slug"]
 
-                    # Archon has separate raid + M+ targets
-                    content_types = (
-                        ["raid", "mythic_plus"]
-                        if origin == "archon"
-                        else ["overall"]
-                        if origin == "wowhead"
-                        else (
-                            ["raid", "mythic_plus"]
-                            if origin == "icy_veins"
-                            else ["overall"]
-                        )
+                    # Each source has exactly one content_type — use it directly
+                    content_type = source["content_type"] or "overall"
+                    expected += 1
+                    url = _build_url(
+                        origin, class_name, spec_name, ht_slug, content_type
                     )
+                    technique = _TECHNIQUE_ORDER.get(origin, ["html_parse"])[0]
 
-                    for content_type in content_types:
-                        expected += 1
-                        url = _build_url(
-                            origin, class_name, spec_name, ht_slug, content_type
-                        )
-                        technique = _TECHNIQUE_ORDER.get(origin, ["html_parse"])[0]
-
-                        result = await conn.fetchrow(
-                            """
-                            INSERT INTO guild_identity.bis_scrape_targets
-                                (source_id, spec_id, hero_talent_id, content_type,
-                                 url, preferred_technique, status)
-                            VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-                            ON CONFLICT (source_id, spec_id, hero_talent_id, content_type)
-                            DO NOTHING
-                            RETURNING id
-                            """,
-                            source_id, spec_id, ht_id, content_type,
-                            url, technique,
-                        )
-                        if result:
-                            inserted += 1
-                        else:
-                            skipped += 1
+                    result = await conn.fetchrow(
+                        """
+                        INSERT INTO guild_identity.bis_scrape_targets
+                            (source_id, spec_id, hero_talent_id, content_type,
+                             url, preferred_technique, status)
+                        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+                        ON CONFLICT (source_id, spec_id, hero_talent_id, content_type)
+                        DO NOTHING
+                        RETURNING id
+                        """,
+                        source_id, spec_id, ht_id, content_type,
+                        url, technique,
+                    )
+                    if result:
+                        inserted += 1
+                    else:
+                        skipped += 1
 
     logger.info(
         "BIS target discovery: inserted=%d, already_existed=%d, total_expected=%d",
@@ -346,21 +334,27 @@ def _build_url(
         if not slugs:
             return None
         class_slug, spec_slug = slugs
-        role = "raid" if content_type == "raid" else "mythicdungeon"
-        return (
-            f"https://u.gg/wow/{spec_slug}/{class_slug}/gear"
-            f"?hero={hero_slug}&role={role}"
-        )
+        base = f"https://u.gg/wow/{spec_slug}/{class_slug}/gear?hero={hero_slug}"
+        if content_type == "raid":
+            return base + "&role=raid"
+        elif content_type == "mythic_plus":
+            return base + "&role=mythicdungeon"
+        else:  # overall — no role param
+            return base
 
     elif origin == "wowhead":
         slugs = _WOWHEAD_SLUG_MAP.get(key)
         if not slugs:
             return None
         class_slug, spec_slug = slugs
-        anchor = "#raid-bis" if content_type == "raid" else "#mythic-plus-bis"
-        return (
-            f"https://www.wowhead.com/guide/classes/{class_slug}/{spec_slug}/best-in-slot{anchor}"
-        )
+        base = f"https://www.wowhead.com/guide/classes/{class_slug}/{spec_slug}/best-in-slot"
+        if content_type == "raid":
+            anchor = "#raid-bis"
+        elif content_type == "mythic_plus":
+            anchor = "#mythic-plus-bis"
+        else:
+            anchor = ""
+        return base + anchor
 
     elif origin == "icy_veins":
         combined = _ICYVEINS_SLUG_MAP.get(key)
