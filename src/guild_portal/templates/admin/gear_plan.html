@@ -368,7 +368,7 @@ select.gp-select {
     {# ── Controls bar ─────────────────────────────────────────────────────── #}
     <div class="gp-controls">
         {% if is_gl %}
-        <button class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
+        <button id="discover-btn" class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
 
         <span class="gp-controls__label">Website:</span>
         <select class="gp-select" id="sync-origin-select">
@@ -383,7 +383,7 @@ select.gp-select {
         <button id="sync-source-btn" class="btn-sm btn-secondary" onclick="syncSource()">Sync Source</button>
         <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
 
-        <button class="btn-sm btn-secondary" onclick="openSimcModal()">Import SimC</button>
+        <button id="import-simc-btn" class="btn-sm btn-secondary" onclick="openSimcModal()">Import SimC</button>
         {% endif %}
 
         <button class="btn-sm btn-secondary" onclick="loadMatrix()" style="margin-left:auto;">

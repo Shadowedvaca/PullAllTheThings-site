@@ -27,8 +27,46 @@ let _drillSpecId = null;
 let _drillSourceId = null;
 let _drillHtId = null;
 
-// Sync lock — prevents starting a second sync while one is in progress
-let _syncInProgress = false;
+// Operation locks — prevent overlapping operations
+let _syncInProgress      = false;
+let _discoveryInProgress = false;
+
+// ---------------------------------------------------------------------------
+// Button state management
+// ---------------------------------------------------------------------------
+
+function _hasTargets() {
+    // Returns true if at least one non-IV scrape target exists (any cell has data).
+    // Used to gate sync buttons — sync does nothing useful before discover has run.
+    for (const src of _sources) {
+        if (src.origin === 'icy_veins') continue;
+        for (const specId of Object.keys(_cells)) {
+            if ((_cells[specId] || {})[src.id]) return true;
+        }
+    }
+    return false;
+}
+
+function _updateButtonStates() {
+    const busy      = _syncInProgress || _discoveryInProgress;
+    const canSync   = !busy && _hasTargets();
+    const canImport = !_syncInProgress;   // import ok during discover, not during sync
+
+    const rules = {
+        'discover-btn':     { disabled: busy,      title: busy ? 'Operation in progress — please wait.' : '' },
+        'sync-source-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
+        'sync-all-btn':     { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
+        'import-simc-btn':  { disabled: !canImport, title: !canImport ? 'Sync in progress — please wait.' : '' },
+    };
+
+    for (const [id, state] of Object.entries(rules)) {
+        const btn = document.getElementById(id);
+        if (!btn) continue;
+        btn.disabled = state.disabled;
+        if (state.title) btn.title = state.title;
+        else btn.removeAttribute('title');
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Status bar helpers
@@ -70,6 +108,7 @@ async function loadMatrix() {
         renderMatrix();
         populateSpecSelectors();
         populateSourceSelector();
+        _updateButtonStates();
         setStatus(`Matrix loaded — ${_specs.length} specs × ${_sources.length} sources.`);
     } catch (err) {
         setStatus('Error loading matrix: ' + err.message, 'error');
@@ -385,6 +424,9 @@ async function loadSources() {
 // ---------------------------------------------------------------------------
 
 async function discoverTargets() {
+    if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
+    _discoveryInProgress = true;
+    _updateButtonStates();
     setStatusHtml('<span class="spinner"></span> Discovering targets…', 'running');
     try {
         const r = await fetch('/api/v1/admin/bis/targets/discover', { method: 'POST' });
@@ -395,18 +437,14 @@ async function discoverTargets() {
         if (_targetsVisible) loadTargets();
     } catch (err) {
         setStatus('Discovery failed: ' + err.message, 'error');
+    } finally {
+        _discoveryInProgress = false;
+        _updateButtonStates();
     }
 }
 
-function _setSyncButtons(disabled) {
-    ['sync-source-btn', 'sync-all-btn'].forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) btn.disabled = disabled;
-    });
-}
-
 async function syncSource() {
-    if (_syncInProgress) { setStatus('A sync is already running — please wait.', 'error'); return; }
+    if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
 
     const originSel   = document.getElementById('sync-origin-select');
     const planTypeSel = document.getElementById('sync-plan-type-select');
@@ -424,7 +462,7 @@ async function syncSource() {
     }
 
     _syncInProgress = true;
-    _setSyncButtons(true);
+    _updateButtonStates();
 
     // Per-spec loop: sync one spec at a time, show live progress
     const specs = _specs.filter(sp => true); // all specs
@@ -449,7 +487,7 @@ async function syncSource() {
         }
     } finally {
         _syncInProgress = false;
-        _setSyncButtons(false);
+        _updateButtonStates();
     }
 
     await loadMatrix();
@@ -459,7 +497,7 @@ async function syncSource() {
 }
 
 async function syncAll() {
-    if (_syncInProgress) { setStatus('A sync is already running — please wait.', 'error'); return; }
+    if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
     if (!confirm('Run full BIS sync for all sources and all specs? This may take several minutes.')) return;
 
     // Per-spec loop: sync all non-IV sources for each spec in sequence
@@ -467,7 +505,7 @@ async function syncAll() {
     if (!specs.length) { setStatus('Load matrix first.', 'error'); return; }
 
     _syncInProgress = true;
-    _setSyncButtons(true);
+    _updateButtonStates();
 
     let totalItems = 0, totalErrors = 0, processed = 0;
 
@@ -490,7 +528,7 @@ async function syncAll() {
         }
     } finally {
         _syncInProgress = false;
-        _setSyncButtons(false);
+        _updateButtonStates();
     }
 
     await loadMatrix();
