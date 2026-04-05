@@ -741,10 +741,12 @@ def _parse_archon_ssr(data: dict) -> list[SimcSlot]:
 
 
 def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
-    """Extract most popular item per slot from u.gg's affix+combo data structure.
+    """Extract most popular item per slot from u.gg's affixes data structure.
 
-    Iterates all affixes and item levels, collects item IDs per slot key,
-    picks the most frequent item_id for each slot.
+    Handles both the current format (items → slot → dps_item → {item_id})
+    and the legacy format (combos → slot_pair → dps_item → [{first_item_id, count}]).
+    Iterates all affixes and item levels, collects item_id votes per slot,
+    picks the most frequent for each slot.
     """
     slot_counts: dict[str, dict[int, int]] = {}  # slot_key → {item_id: count}
 
@@ -757,23 +759,39 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
             for _spec_key, spec_data in level_data.items():
                 if not isinstance(spec_data, dict):
                     continue
-                combos = spec_data.get("combos", {})
+
+                # Current format: spec_data → items → {slot} → dps_item → {item_id: N}
+                item_slots = spec_data.get("items") or {}
+                for slot_key, slot_val in item_slots.items():
+                    if not isinstance(slot_val, dict):
+                        continue
+                    dps_item = slot_val.get("dps_item") or {}
+                    if not isinstance(dps_item, dict):
+                        continue
+                    item_id = dps_item.get("item_id")
+                    if not item_id:
+                        continue
+                    try:
+                        iid = int(item_id)
+                    except (ValueError, TypeError):
+                        continue
+                    slot_counts.setdefault(slot_key, {})
+                    slot_counts[slot_key][iid] = slot_counts[slot_key].get(iid, 0) + 1
+
+                # Legacy format: spec_data → combos → {slot_pair} → dps_item: [{first_item_id, count}]
+                combos = spec_data.get("combos") or {}
                 for combo_key, combo_val in combos.items():
                     if not isinstance(combo_val, dict):
                         continue
-                    # combo_key looks like "head", "ring1_ring2", "trinket1_trinket2", etc.
-                    # combo_val has "dps_item": [{first_item_id, second_item_id, count, ...}]
                     items = combo_val.get("dps_item") or combo_val.get("items") or []
-                    if not items:
+                    if not items or not isinstance(items, list):
                         continue
                     top = max(items, key=lambda i: int(i.get("count", 0) or 0), default=None)
                     if not top:
                         continue
-                    # Extract slot(s) from the combo key
                     parts = combo_key.split("_")
                     first_id = top.get("first_item_id")
                     second_id = top.get("second_item_id")
-                    # Map combo parts back to archon slot keys
                     slot_keys = [combo_key] if "_" not in combo_key else [
                         parts[0] if len(parts) >= 1 else None,
                         "_".join(parts[1:]) if len(parts) >= 2 else None,
@@ -785,11 +803,11 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
                         if not item_id:
                             continue
                         try:
-                            item_id_int = int(item_id)
+                            iid = int(item_id)
                         except (ValueError, TypeError):
                             continue
                         slot_counts.setdefault(sk, {})
-                        slot_counts[sk][item_id_int] = slot_counts[sk].get(item_id_int, 0) + 1
+                        slot_counts[sk][iid] = slot_counts[sk].get(iid, 0) + 1
 
     slots: list[SimcSlot] = []
     for archon_slot, id_counts in slot_counts.items():
