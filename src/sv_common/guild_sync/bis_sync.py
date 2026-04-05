@@ -152,6 +152,10 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             source_id = source["id"]
             origin = source["origin"]
 
+            # Icy Veins targets come from discover_iv_areas — skip here
+            if origin == "icy_veins":
+                continue
+
             for spec in specs:
                 spec_id = spec["spec_id"]
                 class_name = spec["class_name"]
@@ -181,7 +185,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                             (source_id, spec_id, hero_talent_id, content_type,
                              url, preferred_technique, status)
                         VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-                        ON CONFLICT (source_id, spec_id, hero_talent_id, content_type)
+                        ON CONFLICT (source_id, spec_id, url)
                         DO NOTHING
                         RETURNING id
                         """,
@@ -198,6 +202,202 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
         inserted, skipped, expected,
     )
     return {"inserted": inserted, "skipped": skipped, "total_expected": expected}
+
+
+async def discover_iv_areas(pool: asyncpg.Pool) -> dict:
+    """Discover Icy Veins BIS area tabs for all specs and create scrape targets.
+
+    Fetches each spec's Icy Veins BIS index page, extracts the ?area=area_N tab
+    links with their text labels, fuzzy-matches each label to a (hero_talent_id,
+    content_type) pair, and upserts a row into bis_scrape_targets.
+
+    Existing rows whose URL hasn't changed are left alone; new areas are added.
+
+    Returns {inserted, skipped, failed, total_specs}.
+    """
+    async with pool.acquire() as conn:
+        # Load active IV sources keyed by content_type
+        iv_sources = await conn.fetch(
+            """
+            SELECT id, name, content_type
+              FROM guild_identity.bis_list_sources
+             WHERE origin = 'icy_veins' AND is_active = TRUE
+            """
+        )
+        if not iv_sources:
+            return {"inserted": 0, "skipped": 0, "failed": 0, "total_specs": 0}
+
+        iv_by_ct = {row["content_type"]: dict(row) for row in iv_sources}
+
+        # Load specs with role names
+        specs = await conn.fetch(
+            """
+            SELECT sp.id AS spec_id, sp.name AS spec_name,
+                   c.name AS class_name, r.name AS role_name
+              FROM guild_identity.specializations sp
+              JOIN guild_identity.classes c ON c.id = sp.class_id
+              LEFT JOIN guild_identity.roles r ON r.id = sp.default_role_id
+             ORDER BY c.name, sp.name
+            """
+        )
+
+        # Load all hero talents per spec
+        hero_talents = await conn.fetch(
+            "SELECT id, spec_id, name, slug FROM guild_identity.hero_talents"
+        )
+
+    ht_by_spec: dict[int, list[dict]] = {}
+    for ht in hero_talents:
+        ht_by_spec.setdefault(ht["spec_id"], []).append(dict(ht))
+
+    inserted = 0
+    skipped = 0
+    failed = 0
+
+    async with pool.acquire() as conn:
+        for spec in specs:
+            spec_id = spec["spec_id"]
+            class_name = spec["class_name"]
+            spec_name = spec["spec_name"]
+            role_name = spec["role_name"] or "dps"
+            spec_hero_talents = ht_by_spec.get(spec_id, [])
+
+            base_url = _iv_base_url(class_name, spec_name, role_name)
+
+            try:
+                areas = await _fetch_iv_areas(base_url)
+            except Exception as exc:
+                logger.warning("IV area discovery failed for %s: %s", base_url, exc)
+                failed += 1
+                await asyncio.sleep(2.0)
+                continue
+
+            if not areas:
+                logger.debug("No area tabs found for %s", base_url)
+                failed += 1
+                await asyncio.sleep(2.0)
+                continue
+
+            for area_key, area_label in areas.items():
+                full_url = f"{base_url}?area={area_key}"
+                content_type, ht_name = _categorize_iv_area(
+                    area_label, [ht["name"] for ht in spec_hero_talents]
+                )
+
+                # Find hero_talent_id if matched
+                hero_talent_id: Optional[int] = None
+                if ht_name:
+                    for ht in spec_hero_talents:
+                        if ht["name"].lower() == ht_name.lower():
+                            hero_talent_id = ht["id"]
+                            break
+
+                # Find matching source
+                source = iv_by_ct.get(content_type)
+                if source is None:
+                    # Fall back to overall if specific type not active
+                    source = iv_by_ct.get("overall")
+                if source is None:
+                    continue
+                source_id = source["id"]
+
+                result = await conn.fetchrow(
+                    """
+                    INSERT INTO guild_identity.bis_scrape_targets
+                        (source_id, spec_id, hero_talent_id, content_type,
+                         url, area_label, preferred_technique, status)
+                    VALUES ($1, $2, $3, $4, $5, $6, 'html_parse', 'pending')
+                    ON CONFLICT (source_id, spec_id, url)
+                    DO UPDATE SET area_label = EXCLUDED.area_label
+                    RETURNING (xmax = 0) AS was_inserted
+                    """,
+                    source_id, spec_id, hero_talent_id, content_type,
+                    full_url, area_label,
+                )
+                if result and result["was_inserted"]:
+                    inserted += 1
+                else:
+                    skipped += 1
+
+            await asyncio.sleep(2.0)  # Be polite between spec pages
+
+    logger.info(
+        "IV area discovery: inserted=%d, skipped=%d, failed=%d, specs=%d",
+        inserted, skipped, failed, len(specs),
+    )
+    return {"inserted": inserted, "skipped": skipped, "failed": failed,
+            "total_specs": len(specs)}
+
+
+# IV area tab regex — finds links with ?area=area_N and captures label text
+_IV_AREA_LINK_RE = re.compile(
+    r'href="[^"]*\?area=(area_\d+)"[^>]*>\s*(.*?)\s*</a>',
+    re.DOTALL | re.IGNORECASE,
+)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+async def _fetch_iv_areas(base_url: str) -> dict[str, str]:
+    """Fetch an Icy Veins BIS page and return {area_key: label_text} for all area tabs."""
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
+    ) as client:
+        response = await client.get(base_url)
+        response.raise_for_status()
+        html = response.text
+
+    areas: dict[str, str] = {}
+    seen_labels: set[str] = set()
+    for m in _IV_AREA_LINK_RE.finditer(html):
+        area_key = m.group(1)
+        raw_label = m.group(2)
+        label = _HTML_TAG_RE.sub("", raw_label).strip()
+        if not label or area_key in areas:
+            continue
+        # Skip duplicate labels (same tab text appearing multiple times in nav/footer)
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        areas[area_key] = label
+
+    return areas
+
+
+def _iv_base_url(class_name: str, spec_name: str, role_name: str) -> str:
+    """Build the Icy Veins BIS base URL for a spec (without area param)."""
+    cls  = _slug(class_name, "-")
+    spec = _slug(spec_name,  "-")
+    role = _iv_bis_role(role_name)
+    return f"https://www.icy-veins.com/wow/{spec}-{cls}-pve-{role}-gear-best-in-slot"
+
+
+def _iv_bis_role(role_name: str) -> str:
+    """Map a WoW combat role name to the Icy Veins URL role slug."""
+    r = (role_name or "").lower()
+    if "tank" in r:
+        return "tank"
+    if "heal" in r:
+        return "healer"
+    return "dps"
+
+
+def _categorize_iv_area(
+    label: str, hero_talent_names: list[str]
+) -> tuple[str, Optional[str]]:
+    """Fuzzy-match an IV area tab label to (content_type, hero_talent_name).
+
+    Rules (checked in order):
+      1. "mythic" in label → mythic_plus, no HT
+      2. Hero talent name in label → raid, matched HT name
+      3. Otherwise → overall, no HT
+    """
+    low = label.lower()
+    if "mythic" in low:
+        return "mythic_plus", None
+    for ht_name in hero_talent_names:
+        if ht_name.lower() in low:
+            return "raid", ht_name
+    return "overall", None
 
 
 def _build_url(
@@ -227,23 +427,18 @@ def _build_url(
             return base
 
     elif origin == "wowhead":
-        # Wowhead always uses hyphens regardless of guide_sites separator
+        # Wowhead always uses hyphens regardless of guide_sites separator.
+        # Wowhead has a single BIS page per spec (no raid/M+ split) at bis-gear#bis-gear.
         cls_wh  = _slug(class_name, "-")
         spec_wh = _slug(spec_name,  "-")
-        base = f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/best-in-slot"
-        if content_type == "raid":
-            return base + "#raid-bis"
-        elif content_type == "mythic_plus":
-            return base + "#mythic-plus-bis"
-        else:
-            return base
+        return f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear#bis-gear"
 
     elif origin == "icy_veins":
-        # Icy Veins always uses hyphens; URL is {spec}-{class}-best-in-slot
+        # IV URLs require a role segment; area discovery populates these targets instead.
+        # This branch is kept for reference but discover_targets skips icy_veins.
         cls_iv  = _slug(class_name, "-")
         spec_iv = _slug(spec_name,  "-")
-        area = "2" if content_type == "raid" else "3" if content_type == "mythic_plus" else "1"
-        return f"https://www.icy-veins.com/wow/{spec_iv}-{cls_iv}-best-in-slot?area=area_{area}"
+        return f"https://www.icy-veins.com/wow/{spec_iv}-{cls_iv}-pve-dps-gear-best-in-slot"
 
     return None
 
@@ -813,25 +1008,42 @@ async def import_simc(
     status = "success" if slots else "failed"
     error_message = None if slots else "No gear slots found in SimC text"
 
-    # Upsert scrape target (simc technique, no URL needed)
+    # Upsert scrape target (simc technique, no URL — find existing by technique)
     async with pool.acquire() as conn:
-        target_row = await conn.fetchrow(
+        existing = await conn.fetchrow(
             """
-            INSERT INTO guild_identity.bis_scrape_targets
-                (source_id, spec_id, hero_talent_id, content_type,
-                 url, preferred_technique, status, items_found, last_fetched)
-            VALUES ($1, $2, $3, 'overall', NULL, 'simc', $4, $5, $6)
-            ON CONFLICT (source_id, spec_id, hero_talent_id, content_type)
-            DO UPDATE
-                SET preferred_technique = 'simc',
-                    status = EXCLUDED.status,
-                    items_found = EXCLUDED.items_found,
-                    last_fetched = EXCLUDED.last_fetched
-            RETURNING id
+            SELECT id FROM guild_identity.bis_scrape_targets
+             WHERE source_id = $1
+               AND spec_id = $2
+               AND ($3::int IS NULL AND hero_talent_id IS NULL
+                    OR hero_talent_id = $3)
+               AND preferred_technique = 'simc'
+            LIMIT 1
             """,
-            source_id, spec_id, hero_talent_id, status, items_upserted, now,
+            source_id, spec_id, hero_talent_id,
         )
-        target_id = target_row["id"]
+        if existing:
+            await conn.execute(
+                """
+                UPDATE guild_identity.bis_scrape_targets
+                   SET status = $1, items_found = $2, last_fetched = $3
+                 WHERE id = $4
+                """,
+                status, items_upserted, now, existing["id"],
+            )
+            target_id = existing["id"]
+        else:
+            target_row = await conn.fetchrow(
+                """
+                INSERT INTO guild_identity.bis_scrape_targets
+                    (source_id, spec_id, hero_talent_id, content_type,
+                     url, preferred_technique, status, items_found, last_fetched)
+                VALUES ($1, $2, $3, 'overall', NULL, 'simc', $4, $5, $6)
+                RETURNING id
+                """,
+                source_id, spec_id, hero_talent_id, status, items_upserted, now,
+            )
+            target_id = target_row["id"]
 
         await conn.execute(
             """

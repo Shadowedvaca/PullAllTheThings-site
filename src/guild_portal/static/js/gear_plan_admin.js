@@ -372,6 +372,18 @@ async function discoverTargets() {
     }
 }
 
+async function discoverIvAreas() {
+    setStatusHtml('<span class="spinner"></span> Discovering Icy Veins areas… (running in background)', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/targets/discover-areas', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        setStatus('Icy Veins area discovery started. Refresh targets panel in a moment to see results.', 'success');
+    } catch (err) {
+        setStatus('IV area discovery failed: ' + err.message, 'error');
+    }
+}
+
 async function syncSource() {
     const originSel   = document.getElementById('sync-origin-select');
     const planTypeSel = document.getElementById('sync-plan-type-select');
@@ -691,7 +703,7 @@ function toggleTargets() {
 async function loadTargets() {
     const tbody = document.getElementById('gp-targets-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--color-text-muted);">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="color:var(--color-text-muted);">Loading…</td></tr>';
 
     try {
         const r = await fetch('/api/v1/admin/bis/targets');
@@ -701,7 +713,7 @@ async function loadTargets() {
         _populateTargetsSourceFilter();
         _renderTargets();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="9" style="color:#f87171;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="color:#f87171;">Error: ${err.message}</td></tr>`;
     }
 }
 
@@ -747,7 +759,7 @@ function _renderTargets() {
 
     tbody.innerHTML = '';
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
         return;
     }
 
@@ -757,34 +769,76 @@ function _renderTargets() {
 
         const ts = t.last_fetched ? new Date(t.last_fetched).toLocaleDateString() : '—';
         const statusClass = `gp-log-status-${t.status || 'pending'}`;
-        const ctLabel = _CONTENT_TYPE_LABELS[t.content_type] || t.content_type || '—';
+        const isIV = t.origin === 'icy_veins';
 
-        // Build URL cell
+        // Spec cell
+        const specTd = document.createElement('td');
+        specTd.textContent = `${t.class_name || ''} ${t.spec_name || ''}`;
+        tr.appendChild(specTd);
+
+        // Hero Talent cell — editable select for IV rows
+        const htTd = document.createElement('td');
+        htTd.style.cssText = 'font-size:0.78rem;';
+        if (isIV && window._isGl) {
+            _renderHtSelect(htTd, t);
+        } else {
+            htTd.style.color = 'var(--color-text-muted)';
+            htTd.style.fontStyle = 'italic';
+            htTd.textContent = t.hero_talent_name || '—';
+        }
+        tr.appendChild(htTd);
+
+        // Area Label cell
+        const areaLabelTd = document.createElement('td');
+        areaLabelTd.className = 'gp-area-label';
+        areaLabelTd.title = t.area_label || '';
+        areaLabelTd.textContent = t.area_label || '—';
+        tr.appendChild(areaLabelTd);
+
+        // Source cell
+        const srcTd = document.createElement('td');
+        srcTd.textContent = _ORIGIN_LABELS[t.origin] || t.source_name || '—';
+        tr.appendChild(srcTd);
+
+        // Content Type cell — editable select for IV rows
+        const ctTd = document.createElement('td');
+        ctTd.style.cssText = 'font-size:0.78rem;';
+        if (isIV && window._isGl) {
+            _renderCtSelect(ctTd, t);
+        } else {
+            ctTd.textContent = _CONTENT_TYPE_LABELS[t.content_type] || t.content_type || '—';
+        }
+        tr.appendChild(ctTd);
+
+        // URL cell
         const urlTd = document.createElement('td');
         urlTd.style.maxWidth = '340px';
         _renderTargetUrlCell(urlTd, t);
-
-        tr.innerHTML = `
-            <td>${t.class_name || ''} ${t.spec_name || ''}</td>
-            <td style="font-size:0.78rem; color:var(--color-text-muted); font-style:italic;">${t.hero_talent_name || '—'}</td>
-            <td>${_ORIGIN_LABELS[t.origin] || t.source_name || '—'}</td>
-            <td style="font-size:0.78rem;">${ctLabel}</td>
-        `;
         tr.appendChild(urlTd);
-        tr.innerHTML += `
-            <td class="${statusClass}">${t.status || 'pending'}</td>
-            <td>${t.items_found || 0}</td>
-            <td style="font-size:0.75rem;">${ts}</td>
-        `;
 
-        // Actions cell (GL only — detected by presence of is_gl in page context)
+        // Status, Items, Last Synced
+        const statusTd = document.createElement('td');
+        statusTd.className = statusClass;
+        statusTd.textContent = t.status || 'pending';
+        tr.appendChild(statusTd);
+
+        const itemsTd = document.createElement('td');
+        itemsTd.textContent = t.items_found || 0;
+        tr.appendChild(itemsTd);
+
+        const tsTd = document.createElement('td');
+        tsTd.style.fontSize = '0.75rem';
+        tsTd.textContent = ts;
+        tr.appendChild(tsTd);
+
+        // Actions cell (GL only)
         const actTd = document.createElement('td');
         actTd.style.cssText = 'white-space:nowrap;';
         if (window._isGl) {
             const editBtn = document.createElement('button');
             editBtn.className = 'btn-sm btn-secondary';
             editBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem; margin-right:0.3rem;';
-            editBtn.textContent = 'Edit';
+            editBtn.textContent = 'Edit URL';
             editBtn.onclick = () => _startEditUrl(tr, t);
             actTd.appendChild(editBtn);
 
@@ -798,6 +852,76 @@ function _renderTargets() {
         tr.appendChild(actTd);
 
         tbody.appendChild(tr);
+    }
+}
+
+function _renderHtSelect(td, target) {
+    const specHts = _htBySpec[target.spec_id] || [];
+    const sel = document.createElement('select');
+    sel.className = 'gp-target-inline-select';
+
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '— any —';
+    if (!target.hero_talent_id) none.selected = true;
+    sel.appendChild(none);
+
+    for (const ht of specHts) {
+        const opt = document.createElement('option');
+        opt.value = ht.id;
+        opt.textContent = ht.name;
+        if (ht.id === target.hero_talent_id) opt.selected = true;
+        sel.appendChild(opt);
+    }
+
+    sel.onchange = async () => {
+        const htId = sel.value ? parseInt(sel.value) : null;
+        await _saveTargetMeta(target, { hero_talent_id: htId });
+        target.hero_talent_id = htId;
+        const htName = htId ? (specHts.find(h => h.id === htId)?.name || null) : null;
+        target.hero_talent_name = htName;
+    };
+
+    td.appendChild(sel);
+}
+
+function _renderCtSelect(td, target) {
+    const sel = document.createElement('select');
+    sel.className = 'gp-target-inline-select';
+
+    const opts = [
+        { value: 'overall', label: 'Overall' },
+        { value: 'raid', label: 'Raid' },
+        { value: 'mythic_plus', label: 'M+' },
+    ];
+    for (const o of opts) {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        if (o.value === target.content_type) opt.selected = true;
+        sel.appendChild(opt);
+    }
+
+    sel.onchange = async () => {
+        await _saveTargetMeta(target, { content_type: sel.value });
+        target.content_type = sel.value;
+    };
+
+    td.appendChild(sel);
+}
+
+async function _saveTargetMeta(target, updates) {
+    try {
+        const r = await fetch(`/api/v1/admin/bis/targets/${target.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        setStatus(`Target ${target.id} updated.`, 'success');
+    } catch (err) {
+        setStatus('Failed to update target: ' + err.message, 'error');
     }
 }
 
@@ -824,9 +948,9 @@ function _renderTargetUrlCell(td, target) {
 }
 
 function _startEditUrl(tr, target) {
-    // Find the URL td (5th td, index 4)
+    // Find the URL td (index 5 — after spec, HT, area_label, source, content_type)
     const tds = tr.querySelectorAll('td');
-    const urlTd = tds[4];
+    const urlTd = tds[5];
     urlTd.innerHTML = '';
 
     const wrapper = document.createElement('div');
@@ -870,7 +994,7 @@ async function _saveTargetUrl(target, newUrl, tr) {
         // Update local state
         target.url = newUrl;
         const tds = tr.querySelectorAll('td');
-        _renderTargetUrlCell(tds[4], target);
+        _renderTargetUrlCell(tds[5], target);
         setStatus(`URL updated for target ${target.id}.`, 'success');
     } catch (err) {
         setStatus('Failed to save URL: ' + err.message, 'error');

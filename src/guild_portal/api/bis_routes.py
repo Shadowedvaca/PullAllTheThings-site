@@ -13,6 +13,7 @@ Endpoints:
   GET  /api/v1/admin/bis/targets
   GET  /api/v1/admin/bis/matrix
   POST /api/v1/admin/bis/targets/discover
+  POST /api/v1/admin/bis/targets/discover-areas
   PUT  /api/v1/admin/bis/targets/{id}
   POST /api/v1/admin/bis/sync
   POST /api/v1/admin/bis/sync/{source_id}
@@ -72,6 +73,9 @@ class EntryCreate(BaseModel):
 class TargetUpdate(BaseModel):
     url: Optional[str] = None
     preferred_technique: Optional[str] = None
+    hero_talent_id: Optional[int] = None
+    content_type: Optional[str] = None
+    area_label: Optional[str] = None
 
 
 class SimcImport(BaseModel):
@@ -237,7 +241,7 @@ async def list_targets(
         rows = await conn.fetch(
             f"""
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
-                   t.content_type, t.url, t.preferred_technique,
+                   t.content_type, t.url, t.area_label, t.preferred_technique,
                    t.status, t.items_found, t.last_fetched,
                    s.name AS source_name, s.origin,
                    ht.name AS hero_talent_name, ht.slug AS hero_talent_slug,
@@ -272,6 +276,16 @@ async def discover_targets(request: Request):
     from sv_common.guild_sync.bis_sync import discover_targets as _discover
     stats = await _discover(pool)
     return {"ok": True, **stats}
+
+
+@router.post("/targets/discover-areas")
+async def discover_iv_areas(request: Request, player: Player = Depends(require_rank(5))):
+    """Discover Icy Veins area tabs for all specs and create scrape targets (GL only)."""
+    pool = _pool(request)
+    from sv_common.guild_sync.bis_sync import discover_iv_areas as _discover_iv
+    import asyncio
+    asyncio.create_task(_discover_iv(pool))
+    return {"ok": True, "message": "Icy Veins area discovery started in background"}
 
 
 @router.put("/targets/{target_id}")

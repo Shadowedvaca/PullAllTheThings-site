@@ -328,6 +328,26 @@ select.gp-select {
 
 .spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -0.1em; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Inline target-row edit selects ─────────────────────────────────────── */
+.gp-target-inline-select {
+    background: #0a0a0b;
+    border: 1px solid var(--color-gold);
+    color: var(--color-text);
+    padding: 0.15rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    max-width: 130px;
+}
+.gp-area-label {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-style: italic;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 </style>
 {% endblock %}
 
@@ -349,6 +369,7 @@ select.gp-select {
     <div class="gp-controls">
         {% if is_gl %}
         <button class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
+        <button class="btn-sm btn-secondary" onclick="discoverIvAreas()">Discover IV Areas</button>
 
         <span class="gp-controls__label">Website:</span>
         <select class="gp-select" id="sync-origin-select">
@@ -439,6 +460,7 @@ select.gp-select {
                         <tr>
                             <th>Spec</th>
                             <th>Hero Talent</th>
+                            <th>Area Label</th>
                             <th>Source</th>
                             <th>Type</th>
                             <th>URL</th>
@@ -449,7 +471,7 @@ select.gp-select {
                         </tr>
                     </thead>
                     <tbody id="gp-targets-body">
-                        <tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                        <tr><td colspan="10" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
                     </tbody>
                 </table>
             </div>
