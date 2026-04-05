@@ -254,53 +254,70 @@ async def discover_iv_areas(pool: asyncpg.Pool) -> dict:
     skipped = 0
     failed = 0
 
-    async with pool.acquire() as conn:
-        for spec in specs:
-            spec_id = spec["spec_id"]
-            class_name = spec["class_name"]
-            spec_name = spec["spec_name"]
-            role_name = spec["role_name"] or "dps"
-            spec_hero_talents = ht_by_spec.get(spec_id, [])
+    # -----------------------------------------------------------------------
+    # Phase 1: HTTP fetching — no DB connection held.
+    # Collect {spec_id: [(source_id, spec_id, hero_talent_id, content_type,
+    #                      full_url, area_label), ...]} for all specs first,
+    # then write everything in one short-lived DB transaction.
+    # Holding a connection across 36+ HTTP requests + sleeps causes pool
+    # timeouts; this structure avoids that entirely.
+    # -----------------------------------------------------------------------
+    pending_rows: list[tuple] = []
 
-            base_url = _iv_base_url(class_name, spec_name, role_name)
+    for spec in specs:
+        spec_id = spec["spec_id"]
+        class_name = spec["class_name"]
+        spec_name = spec["spec_name"]
+        role_name = spec["role_name"] or "dps"
+        spec_hero_talents = ht_by_spec.get(spec_id, [])
 
-            try:
-                areas = await _fetch_iv_areas(base_url)
-            except Exception as exc:
-                logger.warning("IV area discovery failed for %s: %s", base_url, exc)
-                failed += 1
-                await asyncio.sleep(2.0)
+        base_url = _iv_base_url(class_name, spec_name, role_name)
+
+        try:
+            areas = await _fetch_iv_areas(base_url)
+        except Exception as exc:
+            logger.warning("IV area discovery failed for %s: %s", base_url, exc)
+            failed += 1
+            await asyncio.sleep(2.0)
+            continue
+
+        if not areas:
+            logger.debug("No area tabs found for %s", base_url)
+            failed += 1
+            await asyncio.sleep(2.0)
+            continue
+
+        for area_key, area_label in areas.items():
+            full_url = f"{base_url}?area={area_key}"
+            content_type, ht_name = _categorize_iv_area(
+                area_label, [ht["name"] for ht in spec_hero_talents]
+            )
+
+            hero_talent_id: Optional[int] = None
+            if ht_name:
+                for ht in spec_hero_talents:
+                    if ht["name"].lower() == ht_name.lower():
+                        hero_talent_id = ht["id"]
+                        break
+
+            source = iv_by_ct.get(content_type) or iv_by_ct.get("overall")
+            if source is None:
                 continue
 
-            if not areas:
-                logger.debug("No area tabs found for %s", base_url)
-                failed += 1
-                await asyncio.sleep(2.0)
-                continue
+            pending_rows.append((
+                source["id"], spec_id, hero_talent_id, content_type,
+                full_url, area_label,
+            ))
 
-            for area_key, area_label in areas.items():
-                full_url = f"{base_url}?area={area_key}"
-                content_type, ht_name = _categorize_iv_area(
-                    area_label, [ht["name"] for ht in spec_hero_talents]
-                )
+        await asyncio.sleep(2.0)  # Be polite between spec pages
 
-                # Find hero_talent_id if matched
-                hero_talent_id: Optional[int] = None
-                if ht_name:
-                    for ht in spec_hero_talents:
-                        if ht["name"].lower() == ht_name.lower():
-                            hero_talent_id = ht["id"]
-                            break
-
-                # Find matching source
-                source = iv_by_ct.get(content_type)
-                if source is None:
-                    # Fall back to overall if specific type not active
-                    source = iv_by_ct.get("overall")
-                if source is None:
-                    continue
-                source_id = source["id"]
-
+    # -----------------------------------------------------------------------
+    # Phase 2: DB writes — single short-lived connection, no HTTP calls.
+    # -----------------------------------------------------------------------
+    if pending_rows:
+        async with pool.acquire() as conn:
+            for row in pending_rows:
+                source_id, spec_id, hero_talent_id, content_type, full_url, area_label = row
                 result = await conn.fetchrow(
                     """
                     INSERT INTO guild_identity.bis_scrape_targets
@@ -318,8 +335,6 @@ async def discover_iv_areas(pool: asyncpg.Pool) -> dict:
                     inserted += 1
                 else:
                     skipped += 1
-
-            await asyncio.sleep(2.0)  # Be polite between spec pages
 
     logger.info(
         "IV area discovery: inserted=%d, skipped=%d, failed=%d, specs=%d",
