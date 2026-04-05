@@ -366,16 +366,51 @@ async function discoverTargets() {
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
         await loadMatrix();
-        // Set status AFTER loadMatrix so it isn't overwritten by "Matrix loaded"
         setStatusHtml(
             `${d.inserted} targets added, ${d.skipped} already existed. ` +
-            `<span class="spinner"></span> Icy Veins areas discovering in background (~2 min) — ` +
-            `refresh Targets panel when done.`,
+            `<span class="spinner"></span> Icy Veins areas discovering in background…`,
             'running'
         );
+        _pollIvDiscovery();
     } catch (err) {
         setStatus('Discovery failed: ' + err.message, 'error');
     }
+}
+
+// Poll for IV targets until the count stabilises, then refresh matrix + clear spinner.
+async function _pollIvDiscovery() {
+    let lastCount = -1;
+    let stableRounds = 0;
+    const MAX_POLLS = 24;  // 24 × 10s = 4 min max
+
+    for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise(res => setTimeout(res, 10000));
+        try {
+            const r = await fetch('/api/v1/admin/bis/targets');
+            const d = await r.json();
+            if (!d.ok) break;
+            const ivCount = (d.targets || []).filter(t => t.origin === 'icy_veins').length;
+            if (ivCount > 0 && ivCount === lastCount) {
+                stableRounds++;
+                if (stableRounds >= 2) {
+                    // Count hasn't changed for 2 consecutive checks — discovery done
+                    await loadMatrix();
+                    setStatus(`Discovery complete — ${ivCount} Icy Veins targets found.`, 'success');
+                    if (_targetsVisible) loadTargets();
+                    return;
+                }
+            } else {
+                stableRounds = 0;
+            }
+            lastCount = ivCount;
+        } catch (_) {
+            break;
+        }
+    }
+    // Timed out or errored — still refresh matrix
+    await loadMatrix();
+    setStatus('Icy Veins discovery finished. Refresh Targets panel to review.', 'success');
+    if (_targetsVisible) loadTargets();
 }
 
 async function syncSource() {
