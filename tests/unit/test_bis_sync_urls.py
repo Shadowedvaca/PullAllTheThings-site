@@ -11,8 +11,11 @@ from sv_common.guild_sync.bis_sync import (
     _categorize_iv_area,
     _iv_base_url,
     _iv_bis_role,
+    _parse_archon_spec_items,
+    _parse_archon_ssr,
     _slug,
     _slug_to_pascal,
+    _ugg_url_to_spec_key,
 )
 
 
@@ -214,3 +217,128 @@ class TestCategorizeIvArea:
         ct, ht = _categorize_iv_area("General BiS", ["San'layn", "Deathbringer"])
         assert ct == "overall"
         assert ht is None
+
+
+# ---------------------------------------------------------------------------
+# _ugg_url_to_spec_key
+# ---------------------------------------------------------------------------
+
+
+class TestUggUrlToSpecKey:
+    def test_blood_dk(self):
+        url = "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=raid"
+        assert _ugg_url_to_spec_key(url) == "DeathKnight-Blood"
+
+    def test_frost_mage(self):
+        url = "https://u.gg/wow/frost/mage/gear?hero=spellslinger"
+        assert _ugg_url_to_spec_key(url) == "Mage-Frost"
+
+    def test_havoc_dh(self):
+        url = "https://u.gg/wow/havoc/demon_hunter/gear"
+        assert _ugg_url_to_spec_key(url) == "DemonHunter-Havoc"
+
+    def test_non_ugg_url_returns_empty(self):
+        assert _ugg_url_to_spec_key("https://www.wowhead.com/guide/classes/warrior/arms/bis-gear") == ""
+
+    def test_empty_url_returns_empty(self):
+        assert _ugg_url_to_spec_key("") == ""
+
+
+# ---------------------------------------------------------------------------
+# _parse_archon_ssr — spec key routing
+# ---------------------------------------------------------------------------
+
+
+def _make_ssr(spec_key: str, items: dict) -> dict:
+    """Build a minimal SSR data blob with a direct spec key."""
+    return {
+        "https://stats2.u.gg/wow/builds/v29/all/Fake/Fake.json": {
+            "data": {
+                spec_key: {"items": items},
+                "affixes": {
+                    "fortified": {
+                        "99999": {
+                            spec_key: {
+                                "items": {
+                                    "weapon1": {"dps_item": {"item_id": 999999}},
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+        }
+    }
+
+
+class TestParseArchonSsr:
+    def test_prefers_direct_spec_key_over_affixes(self):
+        """Direct spec data should win over affixes data for a known URL."""
+        ssr = _make_ssr(
+            "DeathKnight-Blood",
+            {"weapon1": {"dps_item": {"item_id": 237846}, "hps_item": {"item_id": 193716}}},
+        )
+        url = "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=raid"
+        slots = _parse_archon_ssr(ssr, url)
+        ids = {s.slot: s.blizzard_item_id for s in slots}
+        assert ids.get("main_hand") == 237846, "Should use dps_item from direct spec key, not affixes"
+
+    def test_skips_hps_item(self):
+        """hps_item should never be used; dps_item preferred."""
+        ssr = _make_ssr(
+            "DeathKnight-Blood",
+            {"weapon1": {"hps_item": {"item_id": 193716}, "dps_item": {"item_id": 237846}}},
+        )
+        url = "https://u.gg/wow/blood/death_knight/gear?hero=san-layn"
+        slots = _parse_archon_ssr(ssr, url)
+        ids = {s.slot: s.blizzard_item_id for s in slots}
+        assert ids.get("main_hand") == 237846
+
+    def test_falls_back_to_popularity_when_no_dps_item(self):
+        ssr = _make_ssr(
+            "Mage-Frost",
+            {"head": {"popularity_item": {"item_id": 249970}}},
+        )
+        url = "https://u.gg/wow/frost/mage/gear"
+        slots = _parse_archon_ssr(ssr, url)
+        ids = {s.slot: s.blizzard_item_id for s in slots}
+        assert ids.get("head") == 249970
+
+    def test_spec_key_not_in_data_falls_back_to_affixes(self):
+        """If the spec key is absent, fall back to affixes (which has item 999999)."""
+        ssr = _make_ssr(
+            "Warrior-Fury",  # different spec in the data
+            {"head": {"dps_item": {"item_id": 249970}}},
+        )
+        url = "https://u.gg/wow/arms/warrior/gear"  # spec key: Warrior-Arms (not in data)
+        slots = _parse_archon_ssr(ssr, url)
+        ids = {s.slot: s.blizzard_item_id for s in slots}
+        # Should fall back to affixes which has weapon1=999999
+        assert ids.get("main_hand") == 999999
+
+
+class TestParseArchonSpecItems:
+    def test_basic_slot_extraction(self):
+        spec_data = {
+            "items": {
+                "weapon1": {"dps_item": {"item_id": 237846}},
+                "head":    {"dps_item": {"item_id": 249970}},
+            }
+        }
+        slots = _parse_archon_spec_items(spec_data, "DeathKnight-Blood")
+        ids = {s.slot: s.blizzard_item_id for s in slots}
+        assert ids == {"main_hand": 237846, "head": 249970}
+
+    def test_unknown_slot_key_skipped(self):
+        spec_data = {"items": {"notaslot": {"dps_item": {"item_id": 12345}}}}
+        slots = _parse_archon_spec_items(spec_data, "X")
+        assert slots == []
+
+    def test_zero_item_id_skipped(self):
+        spec_data = {"items": {"weapon2": {"dps_item": {"item_id": 0}}}}
+        slots = _parse_archon_spec_items(spec_data, "X")
+        assert slots == []
+
+    def test_empty_items(self):
+        assert _parse_archon_spec_items({}, "X") == []
+        assert _parse_archon_spec_items({"items": {}}, "X") == []

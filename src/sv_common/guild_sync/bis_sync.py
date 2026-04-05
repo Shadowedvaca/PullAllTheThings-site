@@ -658,7 +658,7 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
     """Fetch u.gg page and extract BIS items from embedded SSR JSON.
 
     u.gg embeds a large `window.__SSR_DATA__` JSON blob in the HTML which
-    contains the items table with per-slot BIS data keyed by hero talent.
+    contains per-spec item data keyed by spec name (e.g. "DeathKnight-Blood").
     """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
@@ -679,7 +679,7 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
             try:
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(html, obj_start)
-                return _parse_archon_ssr(data)
+                return _parse_archon_ssr(data, url)
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
@@ -709,6 +709,20 @@ def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
     return f"{_UGG_STATS_BASE}/{class_pascal}/{class_pascal}_{spec_slug}_itemsTable.json"
 
 
+def _ugg_url_to_spec_key(url: str) -> str:
+    """Derive u.gg's internal spec key from the page URL.
+
+    https://u.gg/wow/blood/death_knight/gear → "DeathKnight-Blood"
+    https://u.gg/wow/frost/mage/gear          → "Mage-Frost"
+    """
+    m = re.search(r"u\.gg/wow/([^/]+)/([^/]+)/gear", url)
+    if not m:
+        return ""
+    spec_pascal  = _slug_to_pascal(m.group(1))   # "blood" → "Blood"
+    class_pascal = _slug_to_pascal(m.group(2))   # "death_knight" → "DeathKnight"
+    return f"{class_pascal}-{spec_pascal}"
+
+
 def _slug_to_pascal(slug: str) -> str:
     """Convert snake_case or kebab-case slug to PascalCase.
 
@@ -717,32 +731,104 @@ def _slug_to_pascal(slug: str) -> str:
     return "".join(word.capitalize() for word in re.split(r"[-_]", slug))
 
 
-def _parse_archon_ssr(data: dict) -> list[SimcSlot]:
+def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
     """Parse items from the window.__SSR_DATA__ blob.
 
-    u.gg SSR format (current): the top-level dict is keyed by the stats2 URL.
-    The value has structure:  {data: {affixes: {affix_name: {item_level: {spec: {combos: {...}}}}}}}
-    This is M+ affix/combo performance data, not a simple per-slot BIS list.
-    We attempt best-effort extraction by looking at the most popular combo
-    per slot across all affixes and item levels.
+    u.gg SSR format: the top-level dict is keyed by a stats2 URL.  Its value
+    has a "data" dict containing:
+      - Direct spec keys like "DeathKnight-Blood", "Mage-Frost" (preferred)
+      - An "affixes" key with M+-specific affix/dungeon data (fallback)
+
+    We prefer the direct spec key because it gives spec-targeted, current-
+    expansion recommendations.  The "affixes" path aggregates across all specs
+    and M+ dungeons, which can surface items from wrong specs or wrong seasons.
     """
+    target_spec_key = _ugg_url_to_spec_key(url)
+
     try:
-        # Outer key is the stats2 URL — iterate to get the first value
         for _url_key, table_data in data.items():
             if not isinstance(table_data, dict):
                 continue
             inner = table_data.get("data") or table_data
-            # Try legacy items_table format first
+
+            # Legacy items_table format (older u.gg pages)
             items_by_slot = inner.get("items_table", {}).get("items", {})
             if items_by_slot:
                 return _archon_items_to_slots(items_by_slot)
-            # Current format: data → affixes → {affix} → {item_level} → {spec} → combos
+
+            # Preferred: direct spec key (e.g. "DeathKnight-Blood")
+            if target_spec_key and isinstance(inner.get(target_spec_key), dict):
+                slots = _parse_archon_spec_items(inner[target_spec_key], target_spec_key)
+                if slots:
+                    return slots
+
+            # Fallback: try any key that looks like a spec (contains "-", has "items")
+            if not target_spec_key:
+                for key, val in inner.items():
+                    if key == "affixes" or not isinstance(val, dict):
+                        continue
+                    if "-" in key and isinstance(val.get("items"), dict):
+                        slots = _parse_archon_spec_items(val, key)
+                        if slots:
+                            return slots
+
+            # Last resort: affixes (M+ data — mixes specs and may contain stale items)
             affixes = inner.get("affixes", {})
             if affixes:
+                logger.debug(
+                    "_parse_archon_ssr: falling back to affixes path for %s "
+                    "(spec key '%s' not found in data)",
+                    url, target_spec_key,
+                )
                 return _parse_archon_combo_data(affixes)
     except (AttributeError, TypeError):
         pass
     return []
+
+
+def _parse_archon_spec_items(spec_data: dict, spec_key: str) -> list[SimcSlot]:
+    """Parse items from a direct spec data blob (e.g. data["DeathKnight-Blood"]).
+
+    Uses dps_item as the primary recommendation (sim-optimal), falling back to
+    popularity_item if dps_item is absent.  hps_item is intentionally skipped —
+    Blood DK's hps_item can reference old-expansion healers' picks.
+    """
+    slots: list[SimcSlot] = []
+    items = spec_data.get("items") or {}
+    for slot_key, slot_val in items.items():
+        if not isinstance(slot_val, dict):
+            continue
+        item_id: Optional[int] = None
+        for pref in ("dps_item", "popularity_item"):
+            candidate = slot_val.get(pref)
+            if isinstance(candidate, dict):
+                raw_id = candidate.get("item_id")
+                if raw_id:
+                    try:
+                        iid = int(raw_id)
+                        if iid > 0:
+                            item_id = iid
+                            break
+                    except (ValueError, TypeError):
+                        pass
+        if item_id is None:
+            continue
+        normalised = _ARCHON_SLOT_MAP.get(slot_key.lower())
+        if not normalised:
+            continue
+        logger.debug(
+            "Archon spec items [%s]: slot '%s' → item %d",
+            spec_key, normalised, item_id,
+        )
+        slots.append(SimcSlot(
+            slot=normalised,
+            blizzard_item_id=item_id,
+            bonus_ids=[],
+            enchant_id=None,
+            gem_ids=[],
+            quality_track=None,
+        ))
+    return slots
 
 
 def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
