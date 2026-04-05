@@ -577,6 +577,7 @@ async def sync_target(
     items_upserted = 0
 
     if slots:
+        await _warn_if_stale_expansion(pool, slots, url)
         items_upserted = await _upsert_bis_entries(
             pool, source_id, spec_id, hero_talent_id, slots
         )
@@ -820,21 +821,10 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
             continue
         best_id = max(id_counts, key=lambda k: id_counts[k])
         best_votes = id_counts[best_id]
-        # Log a warning when a weapon slot produces a suspiciously low item ID.
-        # TWW items are generally 200 000+; IDs below 200 000 suggest stale data
-        # (Dragonflight or earlier).  This helps diagnose cases where u.gg's SSR
-        # blob contains outdated items for a specific spec/role combination.
-        if normalised in ("main_hand", "off_hand") and best_id < 200_000:
-            logger.warning(
-                "Archon extraction: slot '%s' → item %d (%d votes) — "
-                "item ID looks like pre-TWW data; full vote counts: %s",
-                normalised, best_id, best_votes, sorted(id_counts.items(), key=lambda x: -x[1])[:5],
-            )
-        else:
-            logger.debug(
-                "Archon extraction: slot '%s' → item %d (%d votes)",
-                normalised, best_id, best_votes,
-            )
+        logger.debug(
+            "Archon extraction: slot '%s' → item %d (%d votes)",
+            normalised, best_id, best_votes,
+        )
         slots.append(SimcSlot(
             slot=normalised,
             blizzard_item_id=best_id,
@@ -1257,6 +1247,48 @@ async def import_simc(
         )
 
     return {"items_upserted": items_upserted, "status": status}
+
+
+# ---------------------------------------------------------------------------
+# Expansion mismatch detection
+# ---------------------------------------------------------------------------
+
+
+async def _warn_if_stale_expansion(
+    pool: asyncpg.Pool,
+    slots: list[SimcSlot],
+    url: str,
+) -> None:
+    """Warn if any extracted item appears to be from a prior expansion.
+
+    Uses the lowest blizzard_item_id currently in character_equipment as a
+    dynamic reference floor — items guild members are actually wearing are
+    always current-expansion gear, so this floor advances automatically each
+    new tier without any hardcoded thresholds.
+
+    If character_equipment is empty (equipment sync hasn't run yet) the check
+    is a no-op rather than a false positive.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT MIN(blizzard_item_id) AS floor
+              FROM guild_identity.character_equipment
+             WHERE blizzard_item_id > 0
+            """
+        )
+    floor: Optional[int] = row["floor"] if row else None
+    if floor is None:
+        return  # No character equipment synced — cannot establish a reference
+
+    for s in slots:
+        if s.blizzard_item_id < floor:
+            logger.warning(
+                "Possible stale-expansion item — URL: %s | slot: %s | "
+                "item: %d | current-gear floor: %d (min blizzard_item_id "
+                "in character_equipment)",
+                url, s.slot, s.blizzard_item_id, floor,
+            )
 
 
 # ---------------------------------------------------------------------------
