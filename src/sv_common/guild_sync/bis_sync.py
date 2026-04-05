@@ -917,7 +917,9 @@ async def _extract_wowhead(url: str) -> list[SimcSlot]:
         meta = item_meta.get(item_id)
         if not meta:
             continue
-        slot_code = meta.get("slotbak")
+        # slotbak moved inside jsonequip in a Wowhead schema update
+        je = meta.get("jsonequip") or {}
+        slot_code = je.get("slotbak") if isinstance(je, dict) else meta.get("slotbak")
         slot_name = _WOWHEAD_SLOT_MAP.get(slot_code)
         if slot_name and slot_name not in seen_slots:
             seen_slots[slot_name] = item_id
