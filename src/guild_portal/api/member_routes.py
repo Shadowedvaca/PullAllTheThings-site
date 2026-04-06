@@ -390,8 +390,15 @@ async def get_character_progression(
     ]
 
     # ── Mythic+ score ────────────────────────────────────────────────────────
-    cfg = get_site_config()
-    season_id: int | None = cfg.get("current_mplus_season_id")
+    # raid_seasons is the single source of truth for the current M+ season ID.
+    active_mplus_season_result = await db.execute(
+        select(RaidSeason.blizzard_mplus_season_id, RaidSeason.expansion_name, RaidSeason.season_number)
+        .where(RaidSeason.is_active == True)
+        .order_by(RaidSeason.start_date.desc())
+        .limit(1)
+    )
+    active_mplus_row = active_mplus_season_result.one_or_none()
+    season_id: int | None = active_mplus_row.blizzard_mplus_season_id if active_mplus_row else None
 
     mythic_plus = None
     if season_id:
@@ -407,19 +414,11 @@ async def get_character_progression(
             overall_score = max(float(r.overall_rating or 0) for r in mplus_rows)
             best_row = max(mplus_rows, key=lambda r: r.best_level or 0)
 
-            # Try to get a human-readable season name from raid_seasons
             season_name = f"Season {season_id}"
-            season_result = await db.execute(
-                select(RaidSeason).where(
-                    RaidSeason.blizzard_mplus_season_id == season_id
-                )
-            )
-            season = season_result.scalar_one_or_none()
-            if season:
-                if season.expansion_name and season.season_number:
-                    season_name = f"{season.expansion_name} Season {season.season_number}"
-                elif season.season_number:
-                    season_name = f"Season {season.season_number}"
+            if active_mplus_row and active_mplus_row.expansion_name and active_mplus_row.season_number:
+                season_name = f"{active_mplus_row.expansion_name} Season {active_mplus_row.season_number}"
+            elif active_mplus_row and active_mplus_row.season_number:
+                season_name = f"Season {active_mplus_row.season_number}"
 
             mythic_plus = {
                 "season_name": season_name,

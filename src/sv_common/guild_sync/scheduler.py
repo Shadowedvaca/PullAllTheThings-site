@@ -318,8 +318,7 @@ class GuildSyncScheduler:
 
                 # Step 7: Progression sync (raid + M+) — skip unchanged characters
                 try:
-                    # Prefer M+ season ID from the active raid season row; fall back
-                    # to site_config.current_mplus_season_id if not set on the season.
+                    # M+ season ID comes from raid_seasons (single source of truth).
                     mplus_season_id = None
                     async with self.db_pool.acquire() as _conn:
                         _season_row = await _conn.fetchrow(
@@ -328,9 +327,6 @@ class GuildSyncScheduler:
                         )
                         if _season_row and _season_row["blizzard_mplus_season_id"]:
                             mplus_season_id = _season_row["blizzard_mplus_season_id"]
-                    if mplus_season_id is None:
-                        cfg = get_site_config()
-                        mplus_season_id = cfg.get("current_mplus_season_id")
                     progression_chars, total_chars = await load_characters_for_progression_sync(
                         self.db_pool
                     )
