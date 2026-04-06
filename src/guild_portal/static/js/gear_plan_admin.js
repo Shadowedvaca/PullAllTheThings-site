@@ -18,7 +18,7 @@
 
 let _sources = [];
 let _specs = [];
-let _cells = {};        // {spec_id: {source_id: {status, items_found, ...}}}
+let _cells = {};        // {spec_id: {source_id: {ht_key: {status, items_found, ...}}}}
 let _htBySpec = {};     // {spec_id: [{id, name, slug}]}
 let _logVisible = false;
 
@@ -308,8 +308,9 @@ function renderCell(specId, sourceId, htId) {
         return wrapper;
     }
 
-    // _cells keyed by spec_id → source_id (the matrix endpoint aggregates across HTs)
-    const cellData = (_cells[specId] || {})[sourceId];
+    // _cells keyed by spec_id → source_id → ht_key (per-HT accuracy)
+    const htKey = htId != null ? String(htId) : 'null';
+    const cellData = ((_cells[specId] || {})[sourceId] || {})[htKey];
     const wrapper = document.createElement('span');
 
     if (!cellData) {
@@ -596,8 +597,9 @@ async function drillDown(specId, sourceId, htId) {
 
         renderDrillDown(d.entries || [], specId, sourceId);
 
-        // Actions row
-        const cellData = (_cells[specId] || {})[sourceId];
+        // Actions row — look up the HT-specific cell for the correct target_id
+        const _htKey = htId != null ? String(htId) : 'null';
+        const cellData = ((_cells[specId] || {})[sourceId] || {})[_htKey];
         if (cellData?.target_id) {
             const resyncBtn = document.createElement('button');
             resyncBtn.className = 'btn-sm btn-secondary';

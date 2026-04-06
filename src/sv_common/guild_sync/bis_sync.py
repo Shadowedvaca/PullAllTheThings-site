@@ -967,6 +967,7 @@ _WOWHEAD_SLOT_MAP: dict[int, str] = {
     12: "trinket",     # both trinket slots — resolved by occurrence order below
     13: "main_hand",   # INVTYPE_WEAPON (1H, equips in main hand)
     14: "off_hand",    # INVTYPE_SHIELD
+    15: "main_hand",   # INVTYPE_RANGED (bows, guns, crossbows — Hunter ranged weapon)
     16: "back",        # INVTYPE_CLOAK
     17: "main_hand",   # INVTYPE_2HWEAPON
     20: "chest",       # INVTYPE_ROBE (same equip slot as chest)
@@ -1562,24 +1563,21 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
     for ht in hero_talents:
         ht_by_spec.setdefault(ht["spec_id"], []).append(dict(ht))
 
-    # Build cell map: (spec_id, source_id) → best/combined status
-    cells: dict[str, dict[str, dict]] = {}
+    # Build cell map: cells[spec_id][source_id][ht_key] → target data
+    # ht_key is str(hero_talent_id) or "null" for targets that apply to all builds.
+    # Each HT has its own entry so the UI can show accurate per-HT counts.
+    cells: dict[str, dict[str, dict[str, dict]]] = {}
     for t in targets:
         spec_key = str(t["spec_id"])
         src_key = str(t["source_id"])
-        cells.setdefault(spec_key, {})
-        existing = cells[spec_key].get(src_key)
-        # Prefer success over partial over pending
-        status_rank = {"success": 3, "partial": 2, "pending": 1, "failed": 0}
-        new_rank = status_rank.get(t["status"] or "pending", 0)
-        if existing is None or new_rank > status_rank.get(existing.get("status", "pending"), 0):
-            cells[spec_key][src_key] = {
-                "status": t["status"],
-                "items_found": t["items_found"],
-                "last_fetched": t["last_fetched"].isoformat() if t["last_fetched"] else None,
-                "technique": t["preferred_technique"],
-                "target_id": t["target_id"],
-            }
+        ht_key = str(t["hero_talent_id"]) if t["hero_talent_id"] is not None else "null"
+        cells.setdefault(spec_key, {}).setdefault(src_key, {})[ht_key] = {
+            "status": t["status"],
+            "items_found": t["items_found"],
+            "last_fetched": t["last_fetched"].isoformat() if t["last_fetched"] else None,
+            "technique": t["preferred_technique"],
+            "target_id": t["target_id"],
+        }
 
     return {
         "sources": [dict(s) for s in sources],

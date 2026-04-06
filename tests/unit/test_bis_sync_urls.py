@@ -7,6 +7,7 @@ All URLs that are "known good" were manually verified against the live sites.
 import pytest
 
 from sv_common.guild_sync.bis_sync import (
+    _WOWHEAD_SLOT_MAP,
     _build_url,
     _categorize_iv_area,
     _iv_base_url,
@@ -353,3 +354,28 @@ class TestParseArchonSsr:
         url = "https://u.gg/wow/blood/death_knight/gear?role=raid"
         slots = _parse_archon_ssr(ssr, url)
         assert not any(s.slot == "off_hand" for s in slots)
+
+
+# ---------------------------------------------------------------------------
+# _WOWHEAD_SLOT_MAP — invtype coverage
+# ---------------------------------------------------------------------------
+
+
+class TestWowheadSlotMap:
+    """Spot-checks that critical invtype IDs map to the expected slot names."""
+
+    def test_ranged_weapon_maps_to_main_hand(self):
+        # INVTYPE_RANGED (15) = bows, guns, crossbows — Hunter ranged slot
+        assert _WOWHEAD_SLOT_MAP[15] == "main_hand"
+
+    def test_2h_weapon_maps_to_main_hand(self):
+        assert _WOWHEAD_SLOT_MAP[17] == "main_hand"
+
+    def test_1h_weapon_maps_to_main_hand(self):
+        assert _WOWHEAD_SLOT_MAP[13] == "main_hand"
+
+    def test_shield_maps_to_off_hand(self):
+        assert _WOWHEAD_SLOT_MAP[14] == "off_hand"
+
+    def test_cloak_maps_to_back(self):
+        assert _WOWHEAD_SLOT_MAP[16] == "back"
