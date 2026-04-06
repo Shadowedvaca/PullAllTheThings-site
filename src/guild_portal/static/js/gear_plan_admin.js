@@ -1489,9 +1489,10 @@ async function syncItemSources() {
         if (!d.ok) throw new Error(d.error || 'Sync failed');
 
         const errCount = (d.errors || []).length;
+        const enriched = d.items_enriched != null ? `, ${d.items_enriched} enriched` : '';
         const msg = `Loot table sync complete — ${d.expansion_name || 'expansion'}: ` +
             `${d.instances_synced} instances, ${d.encounters_synced} encounters, ` +
-            `${d.items_upserted} items` +
+            `${d.items_upserted} items${enriched}` +
             (errCount ? ` (${errCount} errors)` : '');
         setStatus(msg, errCount ? 'partial' : 'success');
 
@@ -1589,7 +1590,7 @@ function renderItemSources(rows) {
         }
 
         tr.innerHTML = `
-            <td>${icon}${row.item_name || '—'} <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span></td>
+            <td>${icon}<a href="https://www.wowhead.com/item=${row.blizzard_item_id}" target="_blank" rel="noopener" style="color:inherit;">${row.item_name || `Item #${row.blizzard_item_id}`}</a> <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span></td>
             <td>${slotLabel}</td>
             <td>${row.source_name || '—'}</td>
             <td>${row.source_instance || '—'}</td>

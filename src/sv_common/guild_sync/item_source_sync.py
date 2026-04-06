@@ -227,16 +227,24 @@ async def _sync_encounter(
             if not blizzard_item_id:
                 continue
 
-            item_name = item_entry.get("name", "")
+            # Name is nested under item_entry["item"]["name"], not at the top level.
+            item_name = item_obj.get("name", "")
 
-            # Ensure a wow_items stub row exists (ON CONFLICT DO NOTHING so we
-            # never overwrite rows that already have full metadata from item_service).
+            # Ensure a wow_items stub row exists.  Update name if it was previously
+            # stored blank (first sync had the extraction bug); never overwrite
+            # icon_url / slot_type that item_service has already populated.
             await conn.execute(
                 """
                 INSERT INTO guild_identity.wow_items
                        (blizzard_item_id, name, slot_type)
                 VALUES ($1, $2, 'other')
-                ON CONFLICT (blizzard_item_id) DO NOTHING
+                ON CONFLICT (blizzard_item_id) DO UPDATE SET
+                    name = CASE
+                        WHEN guild_identity.wow_items.name = '' OR
+                             guild_identity.wow_items.name IS NULL
+                        THEN EXCLUDED.name
+                        ELSE guild_identity.wow_items.name
+                    END
                 """,
                 blizzard_item_id,
                 item_name,

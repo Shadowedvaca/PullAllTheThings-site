@@ -307,7 +307,7 @@ class TestSyncEncounter:
                 "id": 2639,
                 "name": "Captain Dailcry",
                 "items": [
-                    {"id": 1, "name": "Warband Satchel", "item": {"id": 211438}},
+                    {"id": 1, "item": {"id": 211438, "name": "Warband Satchel"}},
                 ],
             }
         )

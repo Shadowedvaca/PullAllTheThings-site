@@ -508,7 +508,11 @@ async def sync_item_sources(
     pool = _pool(request)
     client = await _get_blizzard_client(request)
     from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync
+    from guild_portal.services.item_service import enrich_unenriched_items
     result = await _sync(pool, client, expansion_id=expansion_id)
+    enriched, enrich_errors = await enrich_unenriched_items(pool)
+    result["items_enriched"] = enriched
+    result.setdefault("errors", []).extend(enrich_errors)
     return {"ok": True, **result}
 
 
