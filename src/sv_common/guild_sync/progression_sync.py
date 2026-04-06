@@ -38,13 +38,17 @@ def _chunk(lst: list, size: int):
 # ---------------------------------------------------------------------------
 
 
-def _parse_raid_encounters(data: dict) -> list[dict]:
-    """Flatten the nested Blizzard encounter response into a list of records.
+def _parse_raid_encounters(data: dict) -> tuple[list[dict], dict]:
+    """Flatten the nested Blizzard encounter response into kill records and boss counts.
 
-    Each record: {raid_name, raid_id, difficulty, boss_name, boss_id, kill_count}
-    Only includes bosses with at least 1 kill.
+    Returns:
+        records: list of {raid_name, raid_id, difficulty, boss_name, boss_id, kill_count}
+                 Only includes bosses with at least 1 kill.
+        boss_counts: dict of {(raid_id, difficulty): total_boss_count}
+                     Includes all modes, even those with 0 kills.
     """
     records = []
+    boss_counts: dict[tuple[int, str], int] = {}
     for expansion in data.get("expansions", []):
         for instance in expansion.get("instances", []):
             inst = instance.get("instance", {})
@@ -54,6 +58,9 @@ def _parse_raid_encounters(data: dict) -> list[dict]:
             for mode in instance.get("modes", []):
                 diff_type = mode.get("difficulty", {}).get("type", "").lower()
                 progress = mode.get("progress", {})
+                total = progress.get("total_count", 0)
+                if raid_id and diff_type and total > 0:
+                    boss_counts[(raid_id, diff_type)] = total
                 for enc in progress.get("encounters", []):
                     boss = enc.get("encounter", {})
                     kills = enc.get("completed_count", 0)
@@ -66,7 +73,7 @@ def _parse_raid_encounters(data: dict) -> list[dict]:
                             "boss_id": boss.get("id", 0),
                             "kill_count": kills,
                         })
-    return records
+    return records, boss_counts
 
 
 async def sync_raid_progress(
@@ -106,7 +113,7 @@ async def sync_raid_progress(
                 stats["skipped"] += 1
                 continue
 
-            records = _parse_raid_encounters(result)
+            records, boss_counts = _parse_raid_encounters(result)
 
             async with pool.acquire() as conn:
                 for rec in records:
@@ -126,6 +133,18 @@ async def sync_raid_progress(
                         char["id"],
                         rec["raid_name"], rec["raid_id"], rec["difficulty"],
                         rec["boss_name"], rec["boss_id"], rec["kill_count"], now,
+                    )
+                # Upsert static boss counts — same for all characters, idempotent
+                for (raid_id, difficulty), boss_count in boss_counts.items():
+                    await conn.execute(
+                        """
+                        INSERT INTO guild_identity.raid_boss_counts
+                            (raid_id, difficulty, boss_count)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (raid_id, difficulty)
+                        DO UPDATE SET boss_count = EXCLUDED.boss_count
+                        """,
+                        raid_id, difficulty, boss_count,
                     )
 
             stats["synced"] += 1
