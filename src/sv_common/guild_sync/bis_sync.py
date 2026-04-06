@@ -577,7 +577,6 @@ async def sync_target(
     items_upserted = 0
 
     if slots:
-        await _warn_if_stale_expansion(pool, slots, url)
         items_upserted = await _upsert_bis_entries(
             pool, source_id, spec_id, hero_talent_id, slots
         )
@@ -1311,43 +1310,6 @@ async def import_simc(
 # ---------------------------------------------------------------------------
 # Expansion mismatch detection
 # ---------------------------------------------------------------------------
-
-
-async def _warn_if_stale_expansion(
-    pool: asyncpg.Pool,
-    slots: list[SimcSlot],
-    url: str,
-) -> None:
-    """Warn if any extracted item appears to be from a prior expansion.
-
-    Uses the lowest blizzard_item_id currently in character_equipment as a
-    dynamic reference floor — items guild members are actually wearing are
-    always current-expansion gear, so this floor advances automatically each
-    new tier without any hardcoded thresholds.
-
-    If character_equipment is empty (equipment sync hasn't run yet) the check
-    is a no-op rather than a false positive.
-    """
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT MIN(blizzard_item_id) AS floor
-              FROM guild_identity.character_equipment
-             WHERE blizzard_item_id > 0
-            """
-        )
-    floor: Optional[int] = row["floor"] if row else None
-    if floor is None:
-        return  # No character equipment synced — cannot establish a reference
-
-    for s in slots:
-        if s.blizzard_item_id < floor:
-            logger.warning(
-                "Possible stale-expansion item — URL: %s | slot: %s | "
-                "item: %d | current-gear floor: %d (min blizzard_item_id "
-                "in character_equipment)",
-                url, s.slot, s.blizzard_item_id, floor,
-            )
 
 
 # ---------------------------------------------------------------------------
