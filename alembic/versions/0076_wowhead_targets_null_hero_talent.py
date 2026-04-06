@@ -53,12 +53,12 @@ def upgrade() -> None:
     op.execute("""
         DELETE FROM guild_identity.bis_scrape_targets t
          USING (
-             SELECT source_id, spec_id, url,
-                    MAX(id) AS keep_id
+             SELECT tt.source_id, tt.spec_id, tt.url,
+                    MAX(tt.id) AS keep_id
                FROM guild_identity.bis_scrape_targets tt
                JOIN guild_identity.bis_list_sources s ON s.id = tt.source_id
               WHERE s.origin = 'wowhead'
-              GROUP BY source_id, spec_id, url
+              GROUP BY tt.source_id, tt.spec_id, tt.url
              HAVING COUNT(*) > 1
          ) dups
          WHERE t.source_id = dups.source_id
