@@ -175,6 +175,14 @@ function renderMatrix() {
         row1.appendChild(th);
     }
 
+    // Summary column header — rowspan 2, no row2 entry needed
+    const thSum = document.createElement('th');
+    thSum.className = 'gp-td-summary';
+    thSum.rowSpan = 2;
+    thSum.textContent = 'Row';
+    thSum.title = 'Green = success  ·  Yellow = partial  ·  Red = failed  ·  /Total (Icy Veins excluded)';
+    row1.appendChild(thSum);
+
     // Row 2: content-type sub-headers
     const row2 = document.createElement('tr');
     for (const origin of originOrder) {
@@ -215,7 +223,7 @@ function renderMatrix() {
             divRow.className = 'gp-class-divider';
             divRow.setAttribute('data-class-row', sp.class_name);
             const divTd = document.createElement('td');
-            divTd.colSpan = orderedSources.length + 2;
+            divTd.colSpan = orderedSources.length + 3; // +2 spec/HT + 1 summary
             divTd.style.cssText = 'padding:0.3rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
             const icon = document.createElement('span');
             icon.className = 'gp-class-toggle-icon';
@@ -246,6 +254,9 @@ function renderMatrix() {
                 td.addEventListener('click', () => drillDown(sp.id, src.id));
                 row.appendChild(td);
             });
+            row.appendChild(_makeSummaryTd(_countStatuses(
+                orderedSources.map(src => _cellStatus(sp.id, src.id, null))
+            )));
             body.appendChild(row);
         } else {
             htOptions.forEach((ht, idx) => {
@@ -269,12 +280,111 @@ function renderMatrix() {
                     td.addEventListener('click', () => drillDown(sp.id, src.id, ht.id));
                     row.appendChild(td);
                 });
+                row.appendChild(_makeSummaryTd(_countStatuses(
+                    orderedSources.map(src => _cellStatus(sp.id, src.id, ht.id))
+                )));
                 body.appendChild(row);
             });
         }
     }
 
+    // Column summary footer row (always visible — no data-class attribute)
+    const colSumRow = document.createElement('tr');
+    colSumRow.className = 'gp-col-summary-row';
+    const colLabel = document.createElement('td');
+    colLabel.colSpan = 2;
+    colLabel.className = 'gp-col-summary-label';
+    colLabel.textContent = 'Column totals';
+    colSumRow.appendChild(colLabel);
+
+    // Collect all spec/HT combinations for column counting
+    const allRows = [];
+    for (const sp of _specs) {
+        const hts = _htBySpec[sp.id] || [];
+        if (hts.length === 0) {
+            allRows.push({ specId: sp.id, htId: null });
+        } else {
+            for (const ht of hts) allRows.push({ specId: sp.id, htId: ht.id });
+        }
+    }
+
+    let grandCounts = { success: 0, partial: 0, failed: 0, total: 0 };
+    orderedSources.forEach((src, idx) => {
+        const source = _sources.find(s => s.id == src.id);
+        let td;
+        if (source && source.origin === 'icy_veins') {
+            td = document.createElement('td');
+            td.textContent = '—';
+            td.style.color = '#444';
+        } else {
+            const colStatuses = allRows.map(r => _cellStatus(r.specId, src.id, r.htId));
+            const counts = _countStatuses(colStatuses);
+            grandCounts.success += counts.success;
+            grandCounts.partial += counts.partial;
+            grandCounts.failed  += counts.failed;
+            grandCounts.total   += counts.total;
+            td = _makeSummaryTd(counts);
+        }
+        if (idx === 0 || orderedSources[idx - 1].origin !== src.origin) td.style.borderLeft = '1px solid #333';
+        colSumRow.appendChild(td);
+    });
+
+    colSumRow.appendChild(_makeSummaryTd(grandCounts));
+    body.appendChild(colSumRow);
+
     _applyCollapsedState(body);
+}
+
+// ---------------------------------------------------------------------------
+// Summary helpers
+// ---------------------------------------------------------------------------
+
+// Returns 'success' | 'partial' | 'failed' | 'pending' | null (IV excluded)
+function _cellStatus(specId, sourceId, htId) {
+    const source = _sources.find(s => s.id == sourceId);
+    if (!source || source.origin === 'icy_veins') return null;
+    const htKey = htId != null ? String(htId) : 'null';
+    const srcCells = (_cells[specId] || {})[sourceId] || {};
+    const cellData = srcCells[htKey] ?? srcCells['null'];
+    return cellData?.status || null;
+}
+
+function _countStatuses(statuses) {
+    let s = 0, p = 0, f = 0, t = 0;
+    for (const st of statuses) {
+        if (st === null) continue;   // IV or no target
+        t++;
+        if (st === 'success') s++;
+        else if (st === 'partial') p++;
+        else if (st === 'failed') f++;
+    }
+    return { success: s, partial: p, failed: f, total: t };
+}
+
+function _makeSummaryTd(counts, tag = 'td') {
+    const el = document.createElement(tag);
+    el.className = 'gp-td-summary';
+    if (counts.total === 0) {
+        el.textContent = '—';
+        el.style.color = '#444';
+        return el;
+    }
+    const parts = [
+        [counts.success, 'gp-sum--g'],
+        [counts.partial, 'gp-sum--y'],
+        [counts.failed,  'gp-sum--r'],
+    ];
+    for (const [count, cls] of parts) {
+        const sp = document.createElement('span');
+        sp.className = `gp-sum ${cls}`;
+        sp.textContent = count;
+        el.appendChild(sp);
+    }
+    const tot = document.createElement('span');
+    tot.className = 'gp-sum gp-sum--t';
+    tot.textContent = `/${counts.total}`;
+    el.appendChild(tot);
+    return el;
 }
 
 function _toggleClass(className) {

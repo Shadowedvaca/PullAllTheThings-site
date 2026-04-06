@@ -108,6 +108,38 @@
 .gp-cell__count    { font-weight: 700; }
 .gp-cell__tech     { font-size: 0.7rem; opacity: 0.7; }
 
+/* ── Summary column (right side of each row) ─────────────────────────── */
+.gp-td-summary {
+    text-align: right;
+    white-space: nowrap;
+    padding: 0.25rem 0.6rem;
+    border-left: 2px solid #333;
+    font-size: 0.75rem;
+}
+.gp-matrix th.gp-td-summary {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+.gp-sum { display: inline-block; min-width: 1.5em; text-align: right; font-weight: 700; }
+.gp-sum--g { color: #4ade80; }
+.gp-sum--y { color: #fbbf24; }
+.gp-sum--r { color: #f87171; }
+.gp-sum--t { color: #555; font-weight: 400; }
+
+/* ── Column-totals footer row ────────────────────────────────────────── */
+.gp-col-summary-row { background: #111114; border-top: 2px solid #333; }
+.gp-col-summary-row td { text-align: center; }
+.gp-col-summary-label {
+    text-align: left !important;
+    padding: 0.3rem 0.75rem;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
 /* ── Hero talent column ───────────────────────────────────────────────── */
 .gp-matrix th.gp-th-ht {
     min-width: 110px;
