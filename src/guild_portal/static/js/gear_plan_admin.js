@@ -383,7 +383,7 @@ function populateSpecSelectors() {
 }
 
 const _ORIGIN_LABELS = {
-    archon:    'Archon',
+    archon:    'u.gg',
     wowhead:   'Wowhead',
     icy_veins: 'Icy Veins',
 };
