@@ -313,7 +313,16 @@ function renderMatrix() {
     const colLabel = document.createElement('td');
     colLabel.colSpan = 2;
     colLabel.className = 'gp-col-summary-label';
-    colLabel.textContent = 'Column totals';
+    colLabel.style.display = 'flex';
+    colLabel.style.justifyContent = 'space-between';
+    colLabel.style.alignItems = 'center';
+    const colLabelText = document.createElement('span');
+    colLabelText.textContent = 'Column totals';
+    colLabel.appendChild(colLabelText);
+    // Grand total counts filled in after iterating sources; placeholder span for now
+    const grandSumSpan = document.createElement('span');
+    grandSumSpan.style.cssText = 'font-weight:400; letter-spacing:0; text-transform:none;';
+    colLabel.appendChild(grandSumSpan);
     colSumRow.appendChild(colLabel);
 
     // Collect all spec/HT combinations for column counting
@@ -348,7 +357,19 @@ function renderMatrix() {
         colSumRow.appendChild(td);
     });
 
-    colSumRow.appendChild(_makeSummaryTd(grandCounts));
+    // Populate grand total inline with the label
+    for (const [count, color] of [[grandCounts.success,'#4ade80'],[grandCounts.partial,'#fbbf24'],[grandCounts.failed,'#f87171']]) {
+        const sp = document.createElement('span');
+        sp.className = 'gp-sum';
+        sp.style.color = color;
+        sp.textContent = count;
+        grandSumSpan.appendChild(sp);
+    }
+    const grandTot = document.createElement('span');
+    grandTot.className = 'gp-sum gp-sum--t';
+    grandTot.textContent = `/${grandCounts.total}`;
+    grandSumSpan.appendChild(grandTot);
+
     body.appendChild(colSumRow);
 
     _applyCollapsedState(body);
