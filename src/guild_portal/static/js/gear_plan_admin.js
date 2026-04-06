@@ -308,9 +308,12 @@ function renderCell(specId, sourceId, htId) {
         return wrapper;
     }
 
-    // _cells keyed by spec_id → source_id → ht_key (per-HT accuracy)
+    // _cells keyed by spec_id → source_id → ht_key (per-HT accuracy).
+    // Fall back to "null" key for sources (Wowhead, IV) that use a shared
+    // per-spec target (hero_talent_id=NULL) rather than per-HT targets.
     const htKey = htId != null ? String(htId) : 'null';
-    const cellData = ((_cells[specId] || {})[sourceId] || {})[htKey];
+    const srcCells = (_cells[specId] || {})[sourceId] || {};
+    const cellData = srcCells[htKey] ?? srcCells['null'];
     const wrapper = document.createElement('span');
 
     if (!cellData) {
@@ -597,9 +600,10 @@ async function drillDown(specId, sourceId, htId) {
 
         renderDrillDown(d.entries || [], specId, sourceId);
 
-        // Actions row — look up the HT-specific cell for the correct target_id
+        // Actions row — look up the HT-specific cell; fall back to "null" for shared targets
         const _htKey = htId != null ? String(htId) : 'null';
-        const cellData = ((_cells[specId] || {})[sourceId] || {})[_htKey];
+        const _srcCells = (_cells[specId] || {})[sourceId] || {};
+        const cellData = _srcCells[_htKey] ?? _srcCells['null'];
         if (cellData?.target_id) {
             const resyncBtn = document.createElement('button');
             resyncBtn.className = 'btn-sm btn-secondary';

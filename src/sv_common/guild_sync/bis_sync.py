@@ -115,9 +115,10 @@ _HEADERS = {
 async def discover_targets(pool: asyncpg.Pool) -> dict:
     """Auto-generate scrape targets for all active spec × source combos.
 
-    Archon + Wowhead: one target per spec × hero talent (URLs embed the HT slug).
-    Icy Veins: one target per spec (IV pages are not HT-specific; all content is
-               on a single page at a role-derived URL with no HT variation).
+    Archon: one target per spec × hero talent (URLs embed the HT slug).
+    Wowhead + Icy Veins: one target per spec with hero_talent_id=NULL.
+      Wowhead's BIS page is not HT-specific — the same page/URL covers all builds.
+      IV pages are also not HT-specific and are JS-rendered (extraction stubbed).
 
     Inserts missing rows into bis_scrape_targets.  Does NOT overwrite existing rows
     (uses ON CONFLICT DO NOTHING) so manually-entered URLs are preserved.
@@ -173,24 +174,31 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                 spec_name = spec["spec_name"]
                 role_name = spec["role_name"] or "dps"
 
-                if origin == "icy_veins":
-                    # IV has one page per spec — no HT variation in the URL.
-                    # All content types (raid/m+/overall) live on the same page,
-                    # toggled client-side.  We insert one row per spec per IV source
-                    # with hero_talent_id=NULL so it applies to all builds.
-                    url = _iv_base_url(class_name, spec_name, role_name)
+                if origin in ("icy_veins", "wowhead"):
+                    # These sources have one page per spec — no HT variation in the URL.
+                    # Wowhead: one combined BIS page per spec; sections toggle raid/M+/overall.
+                    # IV: one page per spec, all content toggled client-side (extraction stubbed).
+                    # Both get hero_talent_id=NULL ("applies to all builds").
+                    if origin == "icy_veins":
+                        url = _iv_base_url(class_name, spec_name, role_name)
+                        technique = "html_parse"
+                    else:
+                        # Wowhead URL ignores ht_slug entirely
+                        url = _build_url(origin, class_name, spec_name, "", content_type,
+                                         source["slug_separator"])
+                        technique = "wh_gatherer"
                     expected += 1
                     result = await conn.fetchrow(
                         """
                         INSERT INTO guild_identity.bis_scrape_targets
                             (source_id, spec_id, hero_talent_id, content_type,
                              url, preferred_technique, status)
-                        VALUES ($1, $2, NULL, $3, $4, 'html_parse', 'pending')
+                        VALUES ($1, $2, NULL, $3, $4, $5, 'pending')
                         ON CONFLICT (source_id, spec_id, url)
                         DO NOTHING
                         RETURNING id
                         """,
-                        source_id, spec_id, content_type, url,
+                        source_id, spec_id, content_type, url, technique,
                     )
                     if result:
                         inserted += 1
