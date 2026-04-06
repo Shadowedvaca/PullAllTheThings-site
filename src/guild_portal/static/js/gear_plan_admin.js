@@ -175,14 +175,6 @@ function renderMatrix() {
         row1.appendChild(th);
     }
 
-    // Summary column header — rowspan 2, no row2 entry needed
-    const thSum = document.createElement('th');
-    thSum.className = 'gp-td-summary';
-    thSum.rowSpan = 2;
-    thSum.textContent = 'Row';
-    thSum.title = 'Green = success  ·  Yellow = partial  ·  Red = failed  ·  /Total (Icy Veins excluded)';
-    row1.appendChild(thSum);
-
     // Row 2: content-type sub-headers
     const row2 = document.createElement('tr');
     for (const origin of originOrder) {
@@ -215,6 +207,20 @@ function renderMatrix() {
         _collapsedClasses = new Set(_specs.map(sp => sp.class_name));
     }
 
+    // Pre-compute G/Y/R counts per class (across all specs, HTs, non-IV sources)
+    const classCountsMap = {};
+    for (const sp of _specs) {
+        const hts = _htBySpec[sp.id] || [];
+        const rows = hts.length > 0
+            ? hts.map(ht => ({ specId: sp.id, htId: ht.id }))
+            : [{ specId: sp.id, htId: null }];
+        const statuses = rows.flatMap(r => orderedSources.map(src => _cellStatus(r.specId, src.id, r.htId)));
+        const c = _countStatuses(statuses);
+        const acc = classCountsMap[sp.class_name] ||= { success: 0, partial: 0, failed: 0, total: 0 };
+        acc.success += c.success; acc.partial += c.partial;
+        acc.failed  += c.failed;  acc.total   += c.total;
+    }
+
     for (const sp of _specs) {
         // Class group divider row
         if (sp.class_name !== lastClass) {
@@ -223,12 +229,31 @@ function renderMatrix() {
             divRow.className = 'gp-class-divider';
             divRow.setAttribute('data-class-row', sp.class_name);
             const divTd = document.createElement('td');
-            divTd.colSpan = orderedSources.length + 3; // +2 spec/HT + 1 summary
-            divTd.style.cssText = 'padding:0.3rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
+            divTd.colSpan = orderedSources.length + 2;
+            divTd.style.cssText = 'padding:0.3rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; display:flex; justify-content:space-between; align-items:center;';
+            const leftPart = document.createElement('span');
             const icon = document.createElement('span');
             icon.className = 'gp-class-toggle-icon';
-            divTd.appendChild(icon);
-            divTd.appendChild(document.createTextNode(sp.class_name));
+            leftPart.appendChild(icon);
+            leftPart.appendChild(document.createTextNode(sp.class_name));
+            divTd.appendChild(leftPart);
+            // Summary counts on the right
+            const cc = classCountsMap[sp.class_name] || { success: 0, partial: 0, failed: 0, total: 0 };
+            const sumSpan = document.createElement('span');
+            sumSpan.style.cssText = 'font-weight:400; letter-spacing:0; text-transform:none;';
+            const parts = [[cc.success, '#4ade80'], [cc.partial, '#fbbf24'], [cc.failed, '#f87171']];
+            for (const [count, color] of parts) {
+                const sp2 = document.createElement('span');
+                sp2.className = 'gp-sum';
+                sp2.style.color = color;
+                sp2.textContent = count;
+                sumSpan.appendChild(sp2);
+            }
+            const tot = document.createElement('span');
+            tot.className = 'gp-sum gp-sum--t';
+            tot.textContent = `/${cc.total}`;
+            sumSpan.appendChild(tot);
+            divTd.appendChild(sumSpan);
             divRow.appendChild(divTd);
             divRow.addEventListener('click', () => _toggleClass(sp.class_name));
             body.appendChild(divRow);
@@ -254,9 +279,6 @@ function renderMatrix() {
                 td.addEventListener('click', () => drillDown(sp.id, src.id));
                 row.appendChild(td);
             });
-            row.appendChild(_makeSummaryTd(_countStatuses(
-                orderedSources.map(src => _cellStatus(sp.id, src.id, null))
-            )));
             body.appendChild(row);
         } else {
             htOptions.forEach((ht, idx) => {
@@ -280,9 +302,6 @@ function renderMatrix() {
                     td.addEventListener('click', () => drillDown(sp.id, src.id, ht.id));
                     row.appendChild(td);
                 });
-                row.appendChild(_makeSummaryTd(_countStatuses(
-                    orderedSources.map(src => _cellStatus(sp.id, src.id, ht.id))
-                )));
                 body.appendChild(row);
             });
         }
@@ -370,13 +389,14 @@ function _makeSummaryTd(counts, tag = 'td') {
         return el;
     }
     const parts = [
-        [counts.success, 'gp-sum--g'],
-        [counts.partial, 'gp-sum--y'],
-        [counts.failed,  'gp-sum--r'],
+        [counts.success, '#4ade80'],
+        [counts.partial, '#fbbf24'],
+        [counts.failed,  '#f87171'],
     ];
-    for (const [count, cls] of parts) {
+    for (const [count, color] of parts) {
         const sp = document.createElement('span');
-        sp.className = `gp-sum ${cls}`;
+        sp.className = 'gp-sum';
+        sp.style.color = color;
         sp.textContent = count;
         el.appendChild(sp);
     }
