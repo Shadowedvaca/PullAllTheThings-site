@@ -507,6 +507,56 @@ class BlizzardClient:
         path = f"/profile/wow/character/{realm_slug}/{name_encoded}/achievements"
         return await self._api_get(path)
 
+    # ------------------------------------------------------------------
+    # Journal API (static-us namespace)
+    # ------------------------------------------------------------------
+
+    async def get_journal_expansion_index(self) -> list[dict]:
+        """GET /data/wow/journal-expansion/index — all expansion tiers.
+
+        Returns a list of dicts like: [{"id": N, "name": "...", "key": {...}}]
+        Sorted ascending by id; most recent expansion has the highest id.
+        """
+        data = await self._api_get(
+            "/data/wow/journal-expansion/index",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+        if not data:
+            return []
+        return data.get("tiers", [])
+
+    async def get_journal_expansion(self, expansion_id: int) -> Optional[dict]:
+        """GET /data/wow/journal-expansion/{id} — dungeon/raid instances.
+
+        Returns a dict with "dungeons" and "raids" lists.
+        """
+        return await self._api_get(
+            f"/data/wow/journal-expansion/{expansion_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
+    async def get_journal_instance(self, instance_id: int) -> Optional[dict]:
+        """GET /data/wow/journal-instance/{id} — encounters + metadata.
+
+        Response includes encounters.encounters list and category.type
+        ("DUNGEON" or "RAID").
+        """
+        return await self._api_get(
+            f"/data/wow/journal-instance/{instance_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
+    async def get_journal_encounter(self, encounter_id: int) -> Optional[dict]:
+        """GET /data/wow/journal-encounter/{id} — items dropped by encounter.
+
+        Response includes an "items" list where each entry has an "item.id"
+        field with the Blizzard item ID and an optional top-level "name".
+        """
+        return await self._api_get(
+            f"/data/wow/journal-encounter/{encounter_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def get_connected_realm_id(self, realm_slug: str) -> int | None:
         """
         Resolve a realm slug to its connected realm ID.

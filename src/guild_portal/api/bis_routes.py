@@ -437,3 +437,76 @@ async def import_simc(
         body.hero_talent_id,
     )
     return {"ok": True, **result}
+
+
+# ---------------------------------------------------------------------------
+# Item Sources (Journal API loot tables)
+# ---------------------------------------------------------------------------
+
+
+def _blizzard_client(request: Request):
+    """Return the shared BlizzardClient from the running scheduler."""
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler is None:
+        raise HTTPException(status_code=503, detail="Scheduler not running — cannot use Blizzard API")
+    client = getattr(scheduler, "blizzard_client", None)
+    if client is None:
+        raise HTTPException(status_code=503, detail="Blizzard client not initialized")
+    return client
+
+
+@router.post("/sync-item-sources")
+async def sync_item_sources(
+    request: Request,
+    expansion_id: Optional[int] = None,
+    player: Player = Depends(require_rank(5)),
+):
+    """Trigger Journal API item source sync for the current (or given) expansion (GL only).
+
+    Populates guild_identity.item_sources with boss/dungeon loot tables.
+    Quality tracks: raid boss → C/H/M, dungeon → C/H.
+    """
+    pool = _pool(request)
+    client = _blizzard_client(request)
+    from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync
+    result = await _sync(pool, client, expansion_id=expansion_id)
+    return {"ok": True, **result}
+
+
+@router.get("/item-sources")
+async def list_item_sources(
+    request: Request,
+    instance_name: Optional[str] = None,
+    instance_id: Optional[int] = None,
+    source_type: Optional[str] = None,
+    limit: int = 500,
+):
+    """List item→source mappings, optionally filtered by instance or type."""
+    pool = _pool(request)
+    from sv_common.guild_sync.item_source_sync import get_item_sources, get_instance_names
+    sources = await get_item_sources(
+        pool,
+        instance_name=instance_name,
+        instance_id=instance_id,
+        source_type=source_type,
+        limit=limit,
+    )
+    instances = await get_instance_names(pool)
+    return {"ok": True, "sources": sources, "instances": instances}
+
+
+@router.delete("/item-sources/{source_id}")
+async def delete_item_source(
+    source_id: int, request: Request, player: Player = Depends(require_rank(5))
+):
+    """Delete an item source entry (GL only)."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM guild_identity.item_sources WHERE id = $1",
+            source_id,
+        )
+    deleted = result.split()[-1] if result else "0"
+    if deleted == "0":
+        raise HTTPException(status_code=404, detail="Source entry not found")
+    return {"ok": True}

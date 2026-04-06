@@ -1462,3 +1462,153 @@ async function submitSimcImport() {
         setStatus('SimC import failed: ' + err.message, 'error');
     }
 }
+
+// ---------------------------------------------------------------------------
+// Item Sources — Loot Tables
+// ---------------------------------------------------------------------------
+
+let _itemSourcesVisible = false;
+
+function toggleItemSources() {
+    _itemSourcesVisible = !_itemSourcesVisible;
+    document.getElementById('gp-item-sources-content').style.display =
+        _itemSourcesVisible ? 'block' : 'none';
+    document.getElementById('item-sources-toggle-icon').textContent =
+        _itemSourcesVisible ? '▲' : '▼';
+    if (_itemSourcesVisible) loadItemSources();
+}
+
+async function syncItemSources() {
+    const btn = document.getElementById('sync-item-sources-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Syncing loot tables from Blizzard Journal API…', 'running');
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/sync-item-sources', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Sync failed');
+
+        const errCount = (d.errors || []).length;
+        const msg = `Loot table sync complete — ${d.expansion_name || 'expansion'}: ` +
+            `${d.instances_synced} instances, ${d.encounters_synced} encounters, ` +
+            `${d.items_upserted} items` +
+            (errCount ? ` (${errCount} errors)` : '');
+        setStatus(msg, errCount ? 'partial' : 'success');
+
+        if (errCount) {
+            console.warn('Item source sync errors:', d.errors);
+        }
+
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Loot table sync failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function loadItemSources() {
+    const tbody = document.getElementById('gp-item-sources-body');
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);">Loading…</td></tr>';
+
+    const instance = document.getElementById('item-sources-filter-instance').value;
+    const type     = document.getElementById('item-sources-filter-type').value;
+
+    const params = new URLSearchParams();
+    if (instance) params.set('instance_name', instance);
+    if (type)     params.set('source_type', type);
+    params.set('limit', '500');
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/item-sources?' + params.toString());
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        // Populate instance filter dropdown on first load
+        _populateInstanceFilter(d.instances || []);
+
+        renderItemSources(d.sources || []);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:#f87171;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function _populateInstanceFilter(instances) {
+    const sel = document.getElementById('item-sources-filter-instance');
+    const cur = sel.value;
+    // Only rebuild if the list has changed (avoid losing current selection)
+    const existing = [...sel.options].map(o => o.value).filter(v => v);
+    if (JSON.stringify(existing) === JSON.stringify(instances)) return;
+
+    sel.innerHTML = '<option value="">All instances</option>';
+    for (const inst of instances) {
+        const opt = document.createElement('option');
+        opt.value = inst;
+        opt.textContent = inst;
+        if (inst === cur) opt.selected = true;
+        sel.appendChild(opt);
+    }
+}
+
+const _TRACK_COLORS = { C: '#0070dd', H: '#a335ee', M: '#ff8000', V: '#1eff00' };
+
+function renderItemSources(rows) {
+    const tbody = document.getElementById('gp-item-sources-body');
+    const countEl = document.getElementById('item-sources-count');
+    tbody.innerHTML = '';
+
+    if (countEl) countEl.textContent = `${rows.length} item${rows.length !== 1 ? 's' : ''}`;
+
+    if (rows.length === 0) {
+        const colspan = window._isGl ? 7 : 6;
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="color:var(--color-text-muted); padding:1rem;">No item sources found. Run "Sync Loot Tables" to populate.</td></tr>`;
+        return;
+    }
+
+    for (const row of rows) {
+        const tr = document.createElement('tr');
+
+        const tracks = (row.quality_tracks || [])
+            .map(t => `<span style="font-weight:700; color:${_TRACK_COLORS[t] || '#888'};">${t}</span>`)
+            .join(' ');
+
+        const typeLabel = row.source_type === 'raid_boss' ? 'Raid' : 'Dungeon';
+        const slotLabel = row.slot_type && row.slot_type !== 'other'
+            ? row.slot_type.replace(/_/g, ' ')
+            : '—';
+
+        const icon = row.icon_url
+            ? `<img src="${row.icon_url}" style="width:18px;height:18px;border-radius:2px;vertical-align:middle;margin-right:4px;" loading="lazy">`
+            : '';
+
+        let deleteCell = '';
+        if (window._isGl) {
+            deleteCell = `<td><button class="btn-sm btn-danger"
+                style="padding:0.1rem 0.4rem; font-size:0.75rem;"
+                onclick="deleteItemSource(${row.id})">✕</button></td>`;
+        }
+
+        tr.innerHTML = `
+            <td>${icon}${row.item_name || '—'} <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span></td>
+            <td>${slotLabel}</td>
+            <td>${row.source_name || '—'}</td>
+            <td>${row.source_instance || '—'}</td>
+            <td style="color:var(--color-text-muted);">${typeLabel}</td>
+            <td>${tracks}</td>
+            ${deleteCell}
+        `;
+        tbody.appendChild(tr);
+    }
+}
+
+async function deleteItemSource(sourceId) {
+    if (!confirm('Remove this item source entry?')) return;
+    try {
+        const r = await fetch(`/api/v1/admin/bis/item-sources/${sourceId}`, { method: 'DELETE' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Delete failed: ' + err.message, 'error');
+    }
+}

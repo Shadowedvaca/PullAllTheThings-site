@@ -537,6 +537,59 @@ select.gp-select {
         </div>
     </div>
 
+    {# ── Item Sources ─────────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleItemSources()">
+            Item Sources — Loot Tables
+            <span class="toggle-icon" id="item-sources-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-item-sources-content" style="display:none;">
+            <p style="color:var(--color-text-muted); font-size:0.85rem; margin:0 0 0.75rem;">
+                Populated from the Blizzard Journal API. Raid bosses drop C/H/M tracks; M+ dungeons drop C/H.
+                Sync once per season after new content launches.
+            </p>
+            <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
+                {% if is_gl %}
+                <button class="btn-sm btn-primary" id="sync-item-sources-btn"
+                        onclick="syncItemSources()">Sync Loot Tables</button>
+                {% endif %}
+                <select class="gp-select" id="item-sources-filter-instance"
+                        onchange="loadItemSources()">
+                    <option value="">All instances</option>
+                </select>
+                <select class="gp-select" id="item-sources-filter-type"
+                        onchange="loadItemSources()">
+                    <option value="">All types</option>
+                    <option value="raid_boss">Raid</option>
+                    <option value="dungeon">Dungeon</option>
+                </select>
+                <button class="btn-sm btn-secondary" onclick="loadItemSources()">Refresh</button>
+                <span id="item-sources-count"
+                      style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+            </div>
+            <div style="overflow:auto; max-height:55vh;">
+                <table class="gp-log-table" style="min-width:800px;">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Slot</th>
+                            <th>Boss / Dungeon</th>
+                            <th>Instance</th>
+                            <th>Type</th>
+                            <th>Tracks</th>
+                            {% if is_gl %}<th></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody id="gp-item-sources-body">
+                        <tr><td colspan="7" style="color:var(--color-text-muted); padding:1rem;">
+                            Click header to expand.
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 {# ── SimC import modal ────────────────────────────────────────────────────── #}
