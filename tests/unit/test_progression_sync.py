@@ -135,20 +135,57 @@ class TestParseRaidEncounters:
         ]
     }
 
+    SAMPLE_RESPONSE_WITH_TOTAL = {
+        "expansions": [
+            {
+                "expansion": {"name": "Midnight", "id": 506},
+                "instances": [
+                    {
+                        "instance": {"name": "Voidspire", "id": 1314},
+                        "modes": [
+                            {
+                                "difficulty": {"type": "HEROIC", "name": "Heroic"},
+                                "progress": {
+                                    "total_count": 6,
+                                    "completed_count": 4,
+                                    "encounters": [
+                                        {"encounter": {"name": "Boss A", "id": 3100}, "completed_count": 2},
+                                        {"encounter": {"name": "Boss B", "id": 3101}, "completed_count": 1},
+                                        {"encounter": {"name": "Boss C", "id": 3102}, "completed_count": 0},
+                                    ],
+                                },
+                            },
+                            {
+                                "difficulty": {"type": "NORMAL", "name": "Normal"},
+                                "progress": {
+                                    "total_count": 6,
+                                    "completed_count": 6,
+                                    "encounters": [
+                                        {"encounter": {"name": "Boss A", "id": 3100}, "completed_count": 5},
+                                    ],
+                                },
+                            },
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
     def test_parses_kills(self):
         """Boss kills are parsed correctly."""
-        records = _parse_raid_encounters(self.SAMPLE_RESPONSE)
+        records, _ = _parse_raid_encounters(self.SAMPLE_RESPONSE)
         assert len(records) == 3  # 2 heroic kills + 1 mythic kill (0-kill boss excluded)
 
     def test_excludes_zero_kill_bosses(self):
         """Bosses with 0 kills are not included."""
-        records = _parse_raid_encounters(self.SAMPLE_RESPONSE)
+        records, _ = _parse_raid_encounters(self.SAMPLE_RESPONSE)
         names = [r["boss_name"] for r in records]
         assert "Queen Ansurek" not in names
 
     def test_correct_kill_counts(self):
         """Kill counts match the Blizzard response."""
-        records = _parse_raid_encounters(self.SAMPLE_RESPONSE)
+        records, _ = _parse_raid_encounters(self.SAMPLE_RESPONSE)
         heroic_ulgrax = next(
             r for r in records
             if r["boss_name"] == "Ulgrax the Devourer" and r["difficulty"] == "heroic"
@@ -157,7 +194,7 @@ class TestParseRaidEncounters:
 
     def test_difficulty_lowercased(self):
         """Difficulty strings are lowercased."""
-        records = _parse_raid_encounters(self.SAMPLE_RESPONSE)
+        records, _ = _parse_raid_encounters(self.SAMPLE_RESPONSE)
         difficulties = {r["difficulty"] for r in records}
         assert "heroic" in difficulties
         assert "mythic" in difficulties
@@ -165,15 +202,40 @@ class TestParseRaidEncounters:
 
     def test_raid_metadata(self):
         """Raid name and ID are included in each record."""
-        records = _parse_raid_encounters(self.SAMPLE_RESPONSE)
+        records, _ = _parse_raid_encounters(self.SAMPLE_RESPONSE)
         for r in records:
             assert r["raid_name"] == "Nerub-ar Palace"
             assert r["raid_id"] == 1273
 
     def test_empty_response(self):
-        """Empty response returns empty list without error."""
-        assert _parse_raid_encounters({}) == []
-        assert _parse_raid_encounters({"expansions": []}) == []
+        """Empty response returns empty records and counts without error."""
+        records, boss_counts = _parse_raid_encounters({})
+        assert records == []
+        assert boss_counts == {}
+        records2, boss_counts2 = _parse_raid_encounters({"expansions": []})
+        assert records2 == []
+        assert boss_counts2 == {}
+
+    def test_boss_counts_extracted(self):
+        """total_count is captured per (raid_id, difficulty) when present."""
+        _, boss_counts = _parse_raid_encounters(self.SAMPLE_RESPONSE_WITH_TOTAL)
+        assert boss_counts[(1314, "heroic")] == 6
+        assert boss_counts[(1314, "normal")] == 6
+
+    def test_boss_counts_zero_kill_mode_included(self):
+        """Boss counts include modes where character has 0 kills (total_count still valid)."""
+        records, boss_counts = _parse_raid_encounters(self.SAMPLE_RESPONSE_WITH_TOTAL)
+        # Records only has kills (Boss A heroic + Boss B heroic + Boss A normal)
+        assert len(records) == 3
+        # But boss_counts has both heroic and normal
+        assert (1314, "heroic") in boss_counts
+        assert (1314, "normal") in boss_counts
+
+    def test_no_total_count_omitted(self):
+        """Modes without total_count are omitted from boss_counts."""
+        _, boss_counts = _parse_raid_encounters(self.SAMPLE_RESPONSE)
+        # SAMPLE_RESPONSE has no total_count fields
+        assert boss_counts == {}
 
 
 # ---------------------------------------------------------------------------

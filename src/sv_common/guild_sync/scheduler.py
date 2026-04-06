@@ -350,10 +350,7 @@ class GuildSyncScheduler:
                         )
 
                         # Raider.IO sync — runs after Blizzard M+, non-fatal
-                        realm_slug = (
-                            _cfg.get("home_realm_slug")
-                            or os.environ.get("GUILD_REALM_SLUG", "senjin")
-                        )
+                        realm_slug = self.blizzard_client.realm_slug
                         rio_client = RaiderIOClient(region="us")
                         await rio_client.initialize()
                         try:

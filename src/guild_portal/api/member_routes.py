@@ -342,19 +342,37 @@ async def get_character_progression(
     if current_raid_ids:
         raid_filter.append(CharacterRaidProgress.raid_id.in_(current_raid_ids))
 
-    raid_rows = await db.execute(
-        select(
-            CharacterRaidProgress.raid_name,
-            CharacterRaidProgress.difficulty,
-            func.count().label("total"),
-            func.sum(
-                case((CharacterRaidProgress.kill_count > 0, 1), else_=0)
-            ).label("killed"),
+    # Join with raid_boss_counts so "total" reflects the real boss count per
+    # difficulty, not just how many this character has killed.
+    if current_raid_ids:
+        raid_rows = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty,
+                       SUM(CASE WHEN crp.kill_count > 0 THEN 1 ELSE 0 END) AS killed,
+                       COALESCE(MAX(rbc.boss_count), COUNT(*)) AS total
+                FROM guild_identity.character_raid_progress crp
+                LEFT JOIN guild_identity.raid_boss_counts rbc
+                    ON rbc.raid_id = crp.raid_id AND rbc.difficulty = crp.difficulty
+                WHERE crp.character_id = :char_id
+                  AND crp.raid_id = ANY(:raid_ids)
+                GROUP BY crp.raid_name, crp.difficulty
+                ORDER BY crp.raid_name, crp.difficulty
+            """).bindparams(char_id=character_id, raid_ids=current_raid_ids)
         )
-        .where(*raid_filter)
-        .group_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
-        .order_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
-    )
+    else:
+        raid_rows = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty,
+                       SUM(CASE WHEN crp.kill_count > 0 THEN 1 ELSE 0 END) AS killed,
+                       COALESCE(MAX(rbc.boss_count), COUNT(*)) AS total
+                FROM guild_identity.character_raid_progress crp
+                LEFT JOIN guild_identity.raid_boss_counts rbc
+                    ON rbc.raid_id = crp.raid_id AND rbc.difficulty = crp.difficulty
+                WHERE crp.character_id = :char_id
+                GROUP BY crp.raid_name, crp.difficulty
+                ORDER BY crp.raid_name, crp.difficulty
+            """).bindparams(char_id=character_id)
+        )
 
     raid_by_name: dict[str, dict] = {}
     for row in raid_rows:

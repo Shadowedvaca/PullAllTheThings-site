@@ -100,12 +100,15 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         for r in rio_result.scalars():
             rio_by_char[r.character_id] = r
 
-    # Build avg parse map from character_report_parses.
+    # Build avg parse map and WCL raid kill counts from character_report_parses.
     # Zone IDs are stored directly on parse rows — no boss name matching needed.
     # Every row in character_report_parses is a kill parse (killType: Kills at ingest).
+    # WCL difficulty codes: 3=Normal, 4=Heroic, 5=Mythic
+    _WCL_DIFF = {3: "normal", 4: "heroic", 5: "mythic"}
     avg_parse_by_char: dict[int, float] = {}
+    wcl_kills_by_char: dict[int, dict[str, int]] = {}  # char_id → {diff: kill_count}
+    current_wcl_zone_ids: list[int] = []
     if all_char_ids:
-        # Get all zone IDs present in character_report_parses
         zone_result = await db.execute(
             text("""
                 SELECT DISTINCT zone_id
@@ -134,6 +137,80 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
                 for row in parse_result
             }
 
+            # Per-character WCL kill counts by difficulty for current tier
+            wcl_kill_result = await db.execute(
+                text("""
+                    SELECT character_id, difficulty,
+                           COUNT(DISTINCT encounter_id) AS kills
+                    FROM guild_identity.character_report_parses
+                    WHERE character_id = ANY(:char_ids)
+                      AND zone_id = ANY(:zone_ids)
+                      AND percentile > 0
+                      AND difficulty IN (3, 4, 5)
+                    GROUP BY character_id, difficulty
+                """).bindparams(
+                    char_ids=list(all_char_ids),
+                    zone_ids=current_wcl_zone_ids,
+                )
+            )
+            for row in wcl_kill_result:
+                diff_name = _WCL_DIFF.get(row.difficulty)
+                if diff_name:
+                    wcl_kills_by_char.setdefault(row.character_id, {})[diff_name] = int(row.kills)
+
+    # Blizzard raid progression per character from character_raid_progress,
+    # filtered to the active season's current raid IDs.
+    active_season_result = await db.execute(
+        select(RaidSeason).where(RaidSeason.is_active == True)
+    )
+    active_season = active_season_result.scalar_one_or_none()
+    current_raid_ids: list[int] = active_season.current_raid_ids or [] if active_season else []
+
+    bliz_kills_by_char: dict[int, dict[str, int]] = {}  # char_id → {diff: kill_count}
+    boss_counts_by_diff: dict[str, int] = {}  # difficulty → max boss_count across current raids
+    if all_char_ids and current_raid_ids:
+        bliz_result = await db.execute(
+            text("""
+                SELECT character_id, difficulty,
+                       COUNT(*) FILTER (WHERE kill_count > 0) AS kills
+                FROM guild_identity.character_raid_progress
+                WHERE character_id = ANY(:char_ids)
+                  AND raid_id = ANY(:raid_ids)
+                GROUP BY character_id, difficulty
+            """).bindparams(
+                char_ids=list(all_char_ids),
+                raid_ids=current_raid_ids,
+            )
+        )
+        for row in bliz_result:
+            bliz_kills_by_char.setdefault(row.character_id, {})[row.difficulty] = int(row.kills)
+
+        boss_count_result = await db.execute(
+            text("""
+                SELECT difficulty, MAX(boss_count) AS boss_count
+                FROM guild_identity.raid_boss_counts
+                WHERE raid_id = ANY(:raid_ids)
+                GROUP BY difficulty
+            """).bindparams(raid_ids=current_raid_ids)
+        )
+        boss_counts_by_diff = {row.difficulty: int(row.boss_count) for row in boss_count_result}
+
+    _DIFF_ORDER = ["mythic", "heroic", "normal"]
+    _DIFF_LABEL = {"mythic": "M", "heroic": "H", "normal": "N"}
+
+    def _raid_prog_string(char_id: int | None) -> str | None:
+        """Compute 'X/Y D' string from Blizzard data, overlaid with WCL where richer."""
+        if char_id is None:
+            return None
+        bliz = bliz_kills_by_char.get(char_id, {})
+        wcl = wcl_kills_by_char.get(char_id, {})
+        for diff in _DIFF_ORDER:
+            kills = max(bliz.get(diff, 0), wcl.get(diff, 0))
+            if kills > 0:
+                total = boss_counts_by_diff.get(diff)
+                label = _DIFF_LABEL[diff]
+                return f"{kills}/{total} {label}" if total else f"{kills} {label}"
+        return None
 
     def _wcl_url(char_name: str, realm_slug: str) -> str:
         return (
@@ -144,10 +221,12 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
     def _rio_data(char_id: int | None, char_name: str = "", realm_slug: str = "") -> dict:
         r = rio_by_char.get(char_id) if char_id else None
         avg = avg_parse_by_char.get(char_id) if char_id else None
+        bliz_prog = _raid_prog_string(char_id)
         return {
             "rio_score": float(r.overall_score) if r and r.overall_score else None,
             "rio_color": r.score_color if r else None,
             "rio_raid_prog": r.raid_progression if r else None,
+            "raid_prog": bliz_prog,
             "rio_url": r.profile_url if r else None,
             "avg_parse": round(avg) if avg is not None else None,
             "wcl_url": _wcl_url(char_name, realm_slug) if char_name and realm_slug else None,
