@@ -259,7 +259,7 @@ async def _sync_encounter(
                            (item_id, source_type, source_name, source_instance,
                             blizzard_encounter_id, blizzard_instance_id, quality_tracks)
                     VALUES ($1, $2, $3, $4, $5, $6, $7)
-                    ON CONFLICT ON CONSTRAINT uq_item_source
+                    ON CONFLICT (item_id, source_type, source_name)
                     DO UPDATE SET
                         source_instance       = EXCLUDED.source_instance,
                         blizzard_encounter_id = EXCLUDED.blizzard_encounter_id,
