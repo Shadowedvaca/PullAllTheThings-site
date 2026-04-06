@@ -228,33 +228,36 @@ function renderMatrix() {
             const divRow = document.createElement('tr');
             divRow.className = 'gp-class-divider';
             divRow.setAttribute('data-class-row', sp.class_name);
-            const divTd = document.createElement('td');
-            divTd.colSpan = orderedSources.length + 2;
-            divTd.style.cssText = 'padding:0.3rem 0.75rem; background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; display:flex; justify-content:space-between; align-items:center;';
-            const leftPart = document.createElement('span');
+            const divStyle = 'background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
+            // Spec column: class name + toggle icon
+            const divTdName = document.createElement('td');
+            divTdName.style.cssText = divStyle + ' padding:0.3rem 0.75rem;';
             const icon = document.createElement('span');
             icon.className = 'gp-class-toggle-icon';
-            leftPart.appendChild(icon);
-            leftPart.appendChild(document.createTextNode(sp.class_name));
-            divTd.appendChild(leftPart);
-            // Summary counts on the right
+            divTdName.appendChild(icon);
+            divTdName.appendChild(document.createTextNode(sp.class_name));
+            divRow.appendChild(divTdName);
+            // Hero Talent column: G/Y/R counts
             const cc = classCountsMap[sp.class_name] || { success: 0, partial: 0, failed: 0, total: 0 };
-            const sumSpan = document.createElement('span');
-            sumSpan.style.cssText = 'font-weight:400; letter-spacing:0; text-transform:none;';
-            const parts = [[cc.success, '#4ade80'], [cc.partial, '#fbbf24'], [cc.failed, '#f87171']];
-            for (const [count, color] of parts) {
+            const divTdCounts = document.createElement('td');
+            divTdCounts.style.cssText = divStyle + ' padding:0.3rem 0.5rem; font-weight:400; letter-spacing:0; text-transform:none;';
+            for (const [count, color] of [[cc.success,'#4ade80'],[cc.partial,'#fbbf24'],[cc.failed,'#f87171']]) {
                 const sp2 = document.createElement('span');
                 sp2.className = 'gp-sum';
                 sp2.style.color = color;
                 sp2.textContent = count;
-                sumSpan.appendChild(sp2);
+                divTdCounts.appendChild(sp2);
             }
-            const tot = document.createElement('span');
-            tot.className = 'gp-sum gp-sum--t';
-            tot.textContent = `/${cc.total}`;
-            sumSpan.appendChild(tot);
-            divTd.appendChild(sumSpan);
-            divRow.appendChild(divTd);
+            const divTot = document.createElement('span');
+            divTot.className = 'gp-sum gp-sum--t';
+            divTot.textContent = `/${cc.total}`;
+            divTdCounts.appendChild(divTot);
+            divRow.appendChild(divTdCounts);
+            // Source columns: one empty td spanning the rest
+            const divTdRest = document.createElement('td');
+            divTdRest.colSpan = orderedSources.length;
+            divTdRest.style.cssText = divStyle;
+            divRow.appendChild(divTdRest);
             divRow.addEventListener('click', () => _toggleClass(sp.class_name));
             body.appendChild(divRow);
         }
@@ -310,20 +313,17 @@ function renderMatrix() {
     // Column summary footer row (always visible — no data-class attribute)
     const colSumRow = document.createElement('tr');
     colSumRow.className = 'gp-col-summary-row';
+    // Spec column: label text
     const colLabel = document.createElement('td');
-    colLabel.colSpan = 2;
     colLabel.className = 'gp-col-summary-label';
-    colLabel.style.display = 'flex';
-    colLabel.style.justifyContent = 'space-between';
-    colLabel.style.alignItems = 'center';
-    const colLabelText = document.createElement('span');
-    colLabelText.textContent = 'Column totals';
-    colLabel.appendChild(colLabelText);
-    // Grand total counts filled in after iterating sources; placeholder span for now
-    const grandSumSpan = document.createElement('span');
-    grandSumSpan.style.cssText = 'font-weight:400; letter-spacing:0; text-transform:none;';
-    colLabel.appendChild(grandSumSpan);
+    colLabel.textContent = 'Column totals';
     colSumRow.appendChild(colLabel);
+    // Hero Talent column: grand total counts (filled in after iterating sources)
+    const grandTd = document.createElement('td');
+    grandTd.className = 'gp-col-summary-label';
+    grandTd.style.textTransform = 'none';
+    grandTd.style.fontWeight = '400';
+    colSumRow.appendChild(grandTd);
 
     // Collect all spec/HT combinations for column counting
     const allRows = [];
@@ -357,18 +357,18 @@ function renderMatrix() {
         colSumRow.appendChild(td);
     });
 
-    // Populate grand total inline with the label
+    // Populate grand total into the HT column td
     for (const [count, color] of [[grandCounts.success,'#4ade80'],[grandCounts.partial,'#fbbf24'],[grandCounts.failed,'#f87171']]) {
         const sp = document.createElement('span');
         sp.className = 'gp-sum';
         sp.style.color = color;
         sp.textContent = count;
-        grandSumSpan.appendChild(sp);
+        grandTd.appendChild(sp);
     }
     const grandTot = document.createElement('span');
     grandTot.className = 'gp-sum gp-sum--t';
     grandTot.textContent = `/${grandCounts.total}`;
-    grandSumSpan.appendChild(grandTot);
+    grandTd.appendChild(grandTot);
 
     body.appendChild(colSumRow);
 
