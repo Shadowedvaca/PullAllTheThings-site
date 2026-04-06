@@ -1,13 +1,13 @@
 services:
-  db-dev:
+  db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: guild_user
-      POSTGRES_PASSWORD: ${DEV_DB_PASSWORD}
-      POSTGRES_DB: guild_db_dev
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: guild_db
     volumes:
-      - guild_pgdata_dev:/var/lib/postgresql/data
+      - guild_pgdata:/var/lib/postgresql/data
       - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U guild_user"]
@@ -19,12 +19,12 @@ services:
     build: .
     restart: unless-stopped
     depends_on:
-      db-dev:
+      db:
         condition: service_healthy
     env_file:
-      - .env.dev
+      - .env
     ports:
-      - "8102:8100"
+      - "8100:8100"
 
 volumes:
-  guild_pgdata_dev:
+  guild_pgdata:
