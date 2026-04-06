@@ -235,12 +235,12 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.10.0** — Configurable Attendance Rule Engine (migration 0064). New `patt.attendance_rules` table stores admin-defined rules with JSONB conditions. Each rule has a group label/type (promotion/warning/info), target ranks, optional result rank, and one or more conditions. Rule evaluation runs synchronously on page load via `evaluate_attendance_rules()` in `attendance_processor.py`. Two condition types: `attendance_pct_in_window` (eligible/attended/pct with excused excluded from denominator) and `min_events_per_week` (all ISO weeks in window must meet threshold; weeks with 0 eligible events skipped). Auto-excuse contract identical to the main grid. Two seed rules ship with the migration: Initiate→Member (100% / 14d) and Member→Veteran (95% / 56d). UI: color-coded rule match cards above the attendance grid (green=promotion, gold=warning, blue=info); rule editor modal in settings panel with full condition builder. 5 new admin API endpoints (rules CRUD + rule-matches).
+- **prod-v0.10.10** — Hotfix: scheduler `_cfg` crash + raid boss counts + roster Blizzard raid prog (migration 0066). Fixed `NameError: name '_cfg' is not defined` in `scheduler.py:run_blizzard_sync` that crashed M+ and Raider.IO sync 4x/day. New `guild_identity.raid_boss_counts(raid_id, difficulty, boss_count)` table — populated from `progress.total_count` each Blizzard sync; My Characters now shows correct `3/6 H` not `3/3`. Roster `get_roster()` queries `character_raid_progress` + WCL `character_report_parses` per character for current raid_ids; builds `raid_prog` field (e.g. `4/6 H`) as primary source, falls back to Raider.IO string. **Pending (Issue 2):** M+ season ID in `raid_seasons.blizzard_mplus_season_id` is 41 but correct Midnight Season 1 ID from Blizzard is 17 — needs DB update AND `member_routes.get_character_progression` needs to read from `raid_seasons` instead of `site_config.current_mplus_season_id`.
 - **Branch:** `main`
-- **Tests:** 1079 pass (48 new; 2 pre-existing bnet template failures unchanged)
-- **Last migration:** 0064
-- **Last tag:** `prod-v0.10.0`
-- **Active branch:** `main`
+- **Tests:** 1059 pass (1 pre-existing bnet failure unchanged)
+- **Last migration:** 0066
+- **Last tag:** `prod-v0.10.10`
+- **Active branch:** `feature/gear-plan-feature` (gear plan work — migrations 0067–0076 not yet on main)
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
