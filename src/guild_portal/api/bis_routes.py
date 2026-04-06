@@ -444,14 +444,53 @@ async def import_simc(
 # ---------------------------------------------------------------------------
 
 
-def _blizzard_client(request: Request):
-    """Return the shared BlizzardClient from the running scheduler."""
+async def _get_blizzard_client(request: Request):
+    """Return a BlizzardClient — scheduler's shared instance if available,
+    otherwise a temporary one built from env vars / site_config.
+
+    The temporary path supports admin operations (like Journal API sync) even
+    when the scheduler hasn't started (e.g. audit channel not yet configured).
+    """
+    import os
+    from sv_common.guild_sync.blizzard_client import BlizzardClient
+    from sv_common.config_cache import get_site_config
+
+    # Prefer the already-initialised scheduler client (no extra token fetch).
     scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
-    if scheduler is None:
-        raise HTTPException(status_code=503, detail="Scheduler not running — cannot use Blizzard API")
-    client = getattr(scheduler, "blizzard_client", None)
-    if client is None:
-        raise HTTPException(status_code=503, detail="Blizzard client not initialized")
+    if scheduler is not None:
+        client = getattr(scheduler, "blizzard_client", None)
+        if client is not None:
+            return client
+
+    # Fallback: build a temporary client from env vars / site_config.
+    cfg = get_site_config() or {}
+    client_id = os.environ.get("BLIZZARD_CLIENT_ID") or cfg.get("blizzard_client_id") or ""
+    client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET", "")
+    if not client_secret and cfg.get("blizzard_client_secret_encrypted"):
+        from sv_common.crypto import decrypt_secret
+        import os as _os
+        jwt_secret = _os.environ.get("JWT_SECRET_KEY", "")
+        try:
+            client_secret = decrypt_secret(cfg["blizzard_client_secret_encrypted"], jwt_secret)
+        except Exception:
+            pass
+
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Blizzard API credentials not configured — set them in Admin → Site Config",
+        )
+
+    realm_slug = cfg.get("home_realm_slug") or os.environ.get("GUILD_REALM_SLUG", "senjin")
+    guild_slug = cfg.get("guild_name_slug") or os.environ.get("GUILD_NAME_SLUG", "pull-all-the-things")
+
+    client = BlizzardClient(
+        client_id=client_id,
+        client_secret=client_secret,
+        realm_slug=realm_slug,
+        guild_slug=guild_slug,
+    )
+    await client.initialize()
     return client
 
 
@@ -467,7 +506,7 @@ async def sync_item_sources(
     Quality tracks: raid boss → C/H/M, dungeon → C/H.
     """
     pool = _pool(request)
-    client = _blizzard_client(request)
+    client = await _get_blizzard_client(request)
     from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync
     result = await _sync(pool, client, expansion_id=expansion_id)
     return {"ok": True, **result}
