@@ -20,14 +20,14 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 |-------|--------|-------|
 | **1A** Foundation | ✅ COMPLETE | Migration 0066, equipment sync, quality tracks, item cache, ORM |
 | **1B** BIS discovery + extraction | ✅ COMPLETE | Migrations 0067–0076, bis_sync.py, simc_parser.py, admin matrix UI |
-| **1C** Item source mapping | ✅ COMPLETE | item_source_sync.py, Journal API, admin Item Sources section, migration 0077 bugfix |
+| **1C** Item source mapping | ✅ ON PROD | item_source_sync.py, Journal API, admin Item Sources + Re-sync Errors, migrations 0077–0078 |
 | **1D** Personal gear plan | ⬜ NEXT | gear_plan_service.py, gear_plan_routes.py, /gear-plan member page |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
-**Active branch:** `feature/gear-plan-feature`
-**Last migration:** 0077
-**Last prod tag:** `prod-v0.10.0` (Gear Plan not yet tagged to prod)
-**Test count:** 1211 pass (54 BIS + 18 item source unit tests; 2 pre-existing bnet template failures)
+**Active branch:** `main` (no active feature branch)
+**Last migration:** 0078
+**Last prod tag:** `prod-v0.11.2`
+**Test count:** 1229 pass (2 pre-existing bnet failures unchanged)
 
 ---
 
@@ -331,3 +331,7 @@ New endpoints:
 - **Wowhead targets `hero_talent_id=NULL`**: One target per spec, not per HT. Migration 0076 set all existing rows to NULL and fixed discover_targets to skip the HT loop for wowhead origin.
 - **Icy Veins**: Out of scope for v1 — pages are fully JS-rendered. Sources exist in DB but show as "Coming Soon" in matrix.
 - **Devourer DH spec**: 3rd DH spec added in migration 0073/0074. May 404 on u.gg if Midnight spec not yet published there — expected.
+- **Migration conflict (0066 duplicate)**: Hotfix `0066_raid_boss_counts` from main and feature `0066_gear_plan` both claimed revision="0066". Resolved by renaming hotfix to `0078_raid_boss_counts.py` with `down_revision="0077"` and `CREATE TABLE IF NOT EXISTS` (prod already had the table).
+- **Alembic drift on test/prod**: After merge, test DB had 0067–0071 DDL applied but alembic stuck at "0066"; prod was at old "0066" (raid_boss_counts). Fixed by stamping alembic directly: `UPDATE patt.alembic_version SET version_num = 'XXXX'` then re-deploying.
+- **Wowhead `slotbak` removed**: Wowhead nether tooltip API silently dropped `slotbak` field — response now only has `name`, `quality`, `icon`, `tooltip`, `spells`. `item_service.py` previously used `data.get("slotbak")` which returned None for everything. Fixed in prod-v0.11.2: `_slot_from_tooltip()` parses slot from tooltip HTML using `re.search(r'<table width="100%"><tr><td>([^<]+)</td>', search_str)` after "Binds when". Existing `slot_type='other'` rows fixed by re-running Sync Loot Tables (triggers `enrich_unenriched_items()`).
+- **u.gg rate limiting (Hillsboro OR prod IP)**: migration 0077 clears all `bis_scrape_targets` on deploy. Bulk fresh re-sync on prod triggered 403s from u.gg for ~69 healer/tank targets. Use "Re-sync Errors" button (retries only `status='failed'` targets) after rate limit clears. Dev IP (Falkenstein) was not affected.

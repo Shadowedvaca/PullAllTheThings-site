@@ -235,12 +235,12 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.11.0** — Gear Plan Phases 1A–1C. Migrations 0067–0078. Equipment sync + quality tracks (`wow_items`, `character_equipment`); BIS discovery pipeline — 40 specs × 9 sources (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall — IV stubbed/Coming Soon) via `bis_sync.py`; item source mapping via `item_source_sync.py` (Blizzard Journal API, raid_boss→C/H/M, dungeon→C/H). New admin page `/admin/gear-plan` (matrix, drill-down, cross-reference, scrape log, SimC import, item sources). Also includes hotfixes from prod-v0.10.8–0.10.10: scheduler `_cfg` crash, raid boss counts from Journal API, roster Blizzard raid prog, M+ rating fallback for all roster chars.
+- **prod-v0.11.2** — Gear Plan Phases 1A–1C + post-merge hotfixes. Migrations 0067–0078. Equipment sync + quality tracks (`wow_items`, `character_equipment`); BIS discovery pipeline — 40 specs × 9 sources (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall — IV stubbed/Coming Soon) via `bis_sync.py`; item source mapping via `item_source_sync.py` (Blizzard Journal API, raid_boss→C/H/M, dungeon→C/H). New admin page `/admin/gear-plan` (matrix, drill-down, cross-reference, scrape log, SimC import, item sources, **Re-sync Errors button**). Also includes hotfixes: scheduler `_cfg` crash, raid boss counts from Journal API, roster Blizzard raid prog, M+ rating fallback, **Wowhead `slotbak` field removed** — slot now parsed from tooltip HTML via `_slot_from_tooltip()` in `item_service.py`.
 - **Branch:** `main`
 - **Tests:** 1229 pass (2 pre-existing bnet failures unchanged)
 - **Last migration:** 0078
-- **Last tag:** `prod-v0.11.0`
-- **Active branch:** `feature/gear-plan-feature` (merging to main for this release)
+- **Last tag:** `prod-v0.11.2`
+- **Active branch:** `main` (no active feature branch)
 - **Next:** Phase 1D — Personal gear plan (`gear_plan_service.py`, `gear_plan_routes.py`, `/gear-plan` member page)
 
 ### What Exists
@@ -262,3 +262,5 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Liberation of Undermine** (encounters 3212–3214) returns 0 WCL rankings — WCL has not yet published rankings for that tier. Will populate automatically once WCL processes it.
 - **`compute_attendance` in `wcl_sync.py`** — JSONB `json.loads()` bug fixed in prod-v0.8.3. WCL Attendance admin tab should now work.
 - **Signup snapshot** — scheduler job runs at event start, not end. On test/dev `Guild sync scheduler skipped` (missing credentials) is expected; Re-snapshot button works manually.
+- **256 `wow_items` with `slot_type='other'`** — items stubbed before the Wowhead `slotbak` regression was fixed. Re-run "Sync Loot Tables" on `/admin/gear-plan` to trigger `enrich_unenriched_items()` which picks up all `slot_type='other'` rows.
+- **u.gg BIS scan rate limiting** — ~69 healer/tank targets returned 403 on prod (Hillsboro OR IP) during the bulk fresh re-sync at prod-v0.11.0. Use "Re-sync Errors" button on `/admin/gear-plan` (after rate limit clears) to retry only failed targets without a full re-scan.
