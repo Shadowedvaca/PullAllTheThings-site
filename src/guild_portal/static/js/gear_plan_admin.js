@@ -58,8 +58,9 @@ function _updateButtonStates() {
     const rules = {
         'discover-btn':     { disabled: busy,      title: busy ? 'Operation in progress — please wait.' : '' },
         'sync-source-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
-        'sync-all-btn':     { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
-        'import-simc-btn':  { disabled: !canImport, title: !canImport ? 'Sync in progress — please wait.' : '' },
+        'sync-all-btn':       { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
+        'resync-errors-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
+        'import-simc-btn':    { disabled: !canImport, title: !canImport ? 'Sync in progress — please wait.' : '' },
     };
 
     for (const [id, state] of Object.entries(rules)) {
@@ -711,6 +712,57 @@ async function syncAll() {
 
     await loadMatrix();
     const msg = `Full sync complete — ${totalItems} items upserted, ${totalErrors} errors.`;
+    setStatus(msg, totalErrors > 0 ? 'error' : 'success');
+    if (_targetsVisible) loadTargets();
+}
+
+async function resyncErrors() {
+    if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
+
+    // Fetch all targets, filter to failed ones
+    let failedTargets;
+    try {
+        const r = await fetch('/api/v1/admin/bis/targets');
+        const d = await r.json();
+        if (!d.ok) { setStatus('Could not load targets: ' + (d.error || 'unknown error'), 'error'); return; }
+        failedTargets = (d.targets || []).filter(t => t.status === 'failed');
+    } catch (err) {
+        setStatus('Could not load targets: ' + err.message, 'error');
+        return;
+    }
+
+    if (!failedTargets.length) { setStatus('No failed targets to re-sync.', 'success'); return; }
+    if (!confirm(`Re-sync ${failedTargets.length} failed targets?`)) return;
+
+    _syncInProgress = true;
+    _updateButtonStates();
+
+    let totalItems = 0, totalErrors = 0, processed = 0;
+
+    try {
+        for (const t of failedTargets) {
+            setStatusHtml(
+                `<span class="spinner"></span> Re-syncing errors — target ${t.id} (${++processed}/${failedTargets.length})…`,
+                'running'
+            );
+            try {
+                const r = await fetch(`/api/v1/admin/bis/sync/target/${t.id}`, { method: 'POST' });
+                const d = await r.json();
+                if (d.ok) {
+                    totalItems  += d.items_upserted || 0;
+                    if (d.status === 'failed') totalErrors++;
+                } else {
+                    totalErrors++;
+                }
+            } catch (_) { totalErrors++; }
+        }
+    } finally {
+        _syncInProgress = false;
+        _updateButtonStates();
+    }
+
+    await loadMatrix();
+    const msg = `Re-sync errors complete — ${totalItems} items upserted, ${totalErrors} still failing.`;
     setStatus(msg, totalErrors > 0 ? 'error' : 'success');
     if (_targetsVisible) loadTargets();
 }
