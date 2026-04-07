@@ -589,8 +589,10 @@ function renderDrawerBody(slotKey, sd) {
   }
 
   // Section 2: BIS recommendation grid
-  // Pass desired_blizzard_item_id so the matched item sorts to top in paired slots (rings/trinkets)
-  const bisGridHtml = renderBisGrid(slotKey, bis, sd.desired_blizzard_item_id || null);
+  // Paired slots (ring/trinket) share a combined pool — no pin, let source-count sort handle it.
+  // Other slots pin their effective desired item to the top row.
+  const _pairedSlots = new Set(['ring_1','ring_2','trinket_1','trinket_2']);
+  const bisGridHtml = renderBisGrid(slotKey, bis, _pairedSlots.has(slotKey) ? null : (sd.desired_blizzard_item_id || null));
 
   // Section 3: Your selection
   let selectionHtml;
