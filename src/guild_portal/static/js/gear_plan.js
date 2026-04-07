@@ -80,6 +80,26 @@ function showError(msg) {
 window.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+  // Validate all critical DOM elements are present before doing anything.
+  // If any are missing it usually means a stale cached JS is running against
+  // a newer (or older) template — hard-refresh (Ctrl+Shift+R) fixes it.
+  const REQUIRED_IDS = [
+    'gp-loading','gp-error','gp-no-chars','gp-main',
+    'gp-col-left','gp-col-right','gp-center','gp-status',
+    'gp-char-select','gp-ht-select','gp-source-select',
+    'gp-drawer','gp-simc-modal',
+  ];
+  const missing = REQUIRED_IDS.filter(id => !document.getElementById(id));
+  if (missing.length) {
+    console.error('[GearPlan] Missing DOM elements (stale cache?):', missing);
+    document.body.insertAdjacentHTML('afterbegin',
+      `<div style="background:#f87171;color:#000;padding:1rem;font-weight:bold;text-align:center">
+        Gear Plan failed to initialise — missing elements: ${missing.join(', ')}.<br>
+        Please hard-refresh the page (Ctrl+Shift+R / Cmd+Shift+R).
+      </div>`);
+    return;
+  }
+
   await loadCharacters();
 
   $('gp-char-select')   .addEventListener('change', onCharChange);
