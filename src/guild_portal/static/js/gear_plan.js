@@ -80,9 +80,12 @@ async function loadCharacters() {
     setLoading(false);
     $('gp-config-bar').hidden = false;
 
-    const firstId = inGuild[0].id;
-    $('gp-char-select').value = firstId;
-    await loadPlan(firstId);
+    const defaultId = resp.data.default_character_id;
+    const startId = (defaultId && inGuild.find(c => c.id === defaultId))
+      ? defaultId
+      : inGuild[0].id;
+    $('gp-char-select').value = startId;
+    await loadPlan(startId);
   } catch (err) {
     setLoading(false);
     showError(err.message);
