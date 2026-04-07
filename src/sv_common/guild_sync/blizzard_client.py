@@ -378,7 +378,7 @@ class BlizzardClient:
             display_string = (
                 item.get("name_description", {}).get("display_string") or ""
             )
-            bonus_ids = [b.get("id", 0) for b in item.get("bonus_list", [])]
+            bonus_ids = item.get("bonus_list") or []
             quality_track = detect_quality_track(display_string, bonus_ids)
 
             # Enchant
