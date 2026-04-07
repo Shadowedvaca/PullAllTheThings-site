@@ -145,22 +145,22 @@ async def _fetch_wowhead_tooltip(
 async def enrich_unenriched_items(
     pool: asyncpg.Pool,
 ) -> tuple[int, list[str]]:
-    """Fetch Wowhead data for all wow_items rows that have no icon_url yet.
+    """Fetch Wowhead data for all wow_items rows that still have slot_type='other'.
 
     Called after a Journal API sync to populate slot_type, icon_url, and
-    tooltip for newly-created stub rows.  Returns (enriched_count, errors).
+    tooltip for stub rows.  Returns (enriched_count, errors).
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT blizzard_item_id FROM guild_identity.wow_items"
-            " WHERE icon_url IS NULL ORDER BY blizzard_item_id"
+            " WHERE slot_type = 'other' ORDER BY blizzard_item_id"
         )
 
     if not rows:
         return 0, []
 
     item_ids = [r["blizzard_item_id"] for r in rows]
-    logger.info("Enriching %d unenriched wow_items from Wowhead", len(item_ids))
+    logger.info("Enriching %d stub wow_items (slot_type='other') from Wowhead", len(item_ids))
 
     enriched = 0
     errors: list[str] = []
