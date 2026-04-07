@@ -102,13 +102,15 @@ def _normalize_paired_slot(
 ) -> None:
     """Normalize a paired slot (rings, trinkets) by swapping equipped items for display.
 
-    Rules (only the equipped items are swapped; desired/BIS stay per-slot):
+    Rules:
     1. If swapping the equipped items increases the number of equipped==desired
-       matches, swap.
+       matches, swap equipped only (BIS data already consistent with desired).
     2. If neither assignment produces a match, sort equipped items alphabetically
-       by item name so the display is always consistent.
+       by item name so the display is always consistent, AND swap bis_by_slot to
+       match — so the BIS grid for ring_1 also shows the alphabetically-earlier
+       BIS item first rather than whatever the scraper happened to assign.
 
-    Modifies equipped_by_slot in-place.
+    Modifies equipped_by_slot in-place; modifies bis_by_slot in-place for rule 2.
     """
     eq_a = equipped_by_slot.get(slot_a)
     eq_b = equipped_by_slot.get(slot_b)
@@ -138,15 +140,23 @@ def _normalize_paired_slot(
                     (1 if des_b and eq_a_bid == des_b else 0)
 
     should_swap = match_swapped > match_current
+    also_swap_bis = False
     if not should_swap and match_current == 0 and match_swapped == 0:
-        # No match either way — alphabetical by item name for consistency
+        # No match either way — alphabetical by item name for consistency.
+        # Also swap BIS so ring_1/ring_2 BIS ordering aligns with equipped ordering.
         name_a = eq_a.get("item_name") or ""
         name_b = eq_b.get("item_name") or ""
         should_swap = name_b < name_a
+        also_swap_bis = should_swap
 
     if should_swap:
         equipped_by_slot[slot_a] = eq_b
         equipped_by_slot[slot_b] = eq_a
+        if also_swap_bis:
+            bis_a = bis_by_slot.get(slot_a, [])
+            bis_b = bis_by_slot.get(slot_b, [])
+            bis_by_slot[slot_a] = bis_b
+            bis_by_slot[slot_b] = bis_a
 
 
 async def verify_character_ownership(
