@@ -12,7 +12,7 @@ SimC bonus IDs.  The track letter maps to WoW's upgrade track system:
 import re
 from typing import Optional
 
-# Blizzard display_string → track letter
+# Blizzard display_string → track letter (TWW legacy format: "Hero 4/8")
 _DISPLAY_PATTERN = re.compile(
     r"^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$", re.IGNORECASE
 )
@@ -23,13 +23,23 @@ _DISPLAY_MAP = {
     "mythic": "M",
 }
 
-# SimC bonus ID → quality track for The War Within Season 2.
-# These IDs are season-specific.  The admin can update them via site_config
-# key "simc_track_bonus_ids" (JSON: {"C": [ids], "H": [ids], "M": [ids]}).
+# Midnight expansion bare-word display_string format (no upgrade counter).
+# "Heroic" and "Mythic+" are both Hero-tier quality; "Mythic" alone = Mythic raid.
+_DISPLAY_MAP_BARE = {
+    "veteran": "V",
+    "champion": "C",
+    "heroic": "H",
+    "mythic+": "H",   # M+ drops — Hero-tier equivalent
+    "mythic": "M",
+}
+
+# SimC bonus ID → quality track.
+# TWW Season 2 IDs kept for backward compat; Midnight IDs appended.
+# Admin can override via site_config key "simc_track_bonus_ids".
 _DEFAULT_SIMC_BONUS_IDS: dict[str, list[int]] = {
     "V": [1498, 1499],
-    "C": [1516, 1517, 1518],
-    "H": [1520, 1521, 1522],
+    "C": [1516, 1517, 1518, 12790, 12795],  # TWW S2 + Midnight base/normal
+    "H": [1520, 1521, 1522, 12798, 12801],  # TWW S2 + Midnight heroic/M+
     "M": [1524, 1525, 1526],
 }
 
@@ -37,15 +47,20 @@ _DEFAULT_SIMC_BONUS_IDS: dict[str, list[int]] = {
 def track_from_display_string(display_string: Optional[str]) -> Optional[str]:
     """Parse V/C/H/M from Blizzard name_description.display_string.
 
-    e.g. "Champion 4/8" → "C", "Hero 2/8" → "H", "Veteran 1/8" → "V"
+    Handles two formats:
+    - TWW legacy: "Champion 4/8" → "C", "Hero 2/8" → "H"
+    - Midnight bare: "Heroic" → "H", "Mythic+" → "H", "Champion" → "C"
     Returns None if not an upgrade-track item.
     """
     if not display_string:
         return None
-    m = _DISPLAY_PATTERN.match(display_string.strip())
-    if not m:
-        return None
-    return _DISPLAY_MAP.get(m.group(1).lower())
+    s = display_string.strip()
+    # TWW legacy format: "Hero 4/8", "Champion 3/8", etc.
+    m = _DISPLAY_PATTERN.match(s)
+    if m:
+        return _DISPLAY_MAP.get(m.group(1).lower())
+    # Midnight bare-word format: "Heroic", "Mythic+", "Champion", etc.
+    return _DISPLAY_MAP_BARE.get(s.lower())
 
 
 def track_from_bonus_ids(
@@ -125,8 +140,9 @@ def normalize_slot(blizzard_slot: str) -> Optional[str]:
     return BLIZZARD_SLOT_MAP.get(blizzard_slot.upper())
 
 
-# Crafted item bonus IDs (TWW; update for new expansions as needed)
-_CRAFTED_BONUS_IDS: frozenset[int] = frozenset({1808})
+# Crafted item bonus IDs.
+# TWW: 1808 = "Crafted by"; Midnight: 12214 appears on all Radiance Crafted items.
+_CRAFTED_BONUS_IDS: frozenset[int] = frozenset({1808, 12214})
 
 
 def is_crafted_item(bonus_ids: list[int]) -> bool:
