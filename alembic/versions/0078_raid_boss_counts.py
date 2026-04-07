@@ -14,14 +14,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "raid_boss_counts",
-        sa.Column("raid_id", sa.Integer(), nullable=False),
-        sa.Column("difficulty", sa.String(20), nullable=False),
-        sa.Column("boss_count", sa.Integer(), nullable=False),
-        sa.PrimaryKeyConstraint("raid_id", "difficulty"),
-        schema="guild_identity",
-    )
+    # Use IF NOT EXISTS — prod DB already has this table from the old 0066 migration
+    # that was renumbered to 0078 during the gear-plan merge.
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS guild_identity.raid_boss_counts (
+            raid_id    INTEGER NOT NULL,
+            difficulty VARCHAR(20) NOT NULL,
+            boss_count INTEGER NOT NULL,
+            PRIMARY KEY (raid_id, difficulty)
+        )
+    """)
 
 
 def downgrade() -> None:
