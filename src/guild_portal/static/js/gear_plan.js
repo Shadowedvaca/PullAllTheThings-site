@@ -62,7 +62,12 @@ function craftedBadge() {
  * Rows = unique items, sorted by how many sources recommend them (desc), then alpha.
  * Columns = one per active source. Cells = ✓ or greyed dash.
  */
-function renderBisGrid(slotKey, bis) {
+/**
+ * @param {string}      slotKey
+ * @param {Array}       bis        bis_recommendations array from slot data
+ * @param {number|null} primaryBid blizzard_item_id to pin to top (slot's effective desired item)
+ */
+function renderBisGrid(slotKey, bis, primaryBid = null) {
   if (!bis.length) {
     return '<div class="gp-drawer-empty">No BIS data for this slot</div>';
   }
@@ -86,8 +91,14 @@ function renderBisGrid(slotKey, bis) {
     itemMap.get(bid).srcIds.add(r.source_id);
   }
 
-  // Sort: most sources first, then alphabetical
+  // Sort: pin the slot's effective desired item first (so ring_1 and ring_2 each
+  // show their own matched BIS item at the top), then most-recommended, then alpha.
   const items = [...itemMap.values()].sort((a, b) => {
+    if (primaryBid) {
+      const aPin = a.bid === primaryBid ? 1 : 0;
+      const bPin = b.bid === primaryBid ? 1 : 0;
+      if (aPin !== bPin) return bPin - aPin;
+    }
     const d = b.srcIds.size - a.srcIds.size;
     return d !== 0 ? d : a.name.localeCompare(b.name);
   });
@@ -562,7 +573,8 @@ function renderDrawerBody(slotKey, sd) {
   }
 
   // Section 2: BIS recommendation grid
-  const bisGridHtml = renderBisGrid(slotKey, bis);
+  // Pass desired_blizzard_item_id so the matched item sorts to top in paired slots (rings/trinkets)
+  const bisGridHtml = renderBisGrid(slotKey, bis, sd.desired_blizzard_item_id || null);
 
   // Section 3: Your selection
   let selectionHtml;
