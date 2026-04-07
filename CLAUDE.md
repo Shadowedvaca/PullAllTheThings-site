@@ -235,10 +235,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.11.0** — Gear Plan Phases 1A–1C. Migrations 0067–0077. Equipment sync + quality tracks (`wow_items`, `character_equipment`); BIS discovery pipeline — 40 specs × 9 sources (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall — IV stubbed/Coming Soon) via `bis_sync.py`; item source mapping via `item_source_sync.py` (Blizzard Journal API, raid_boss→C/H/M, dungeon→C/H). New admin page `/admin/gear-plan` (matrix, drill-down, cross-reference, scrape log, SimC import, item sources). Also includes hotfixes from prod-v0.10.8–0.10.10: scheduler `_cfg` crash, raid boss counts from Journal API, roster Blizzard raid prog, M+ rating fallback for all roster chars.
+- **prod-v0.11.0** — Gear Plan Phases 1A–1C. Migrations 0067–0078. Equipment sync + quality tracks (`wow_items`, `character_equipment`); BIS discovery pipeline — 40 specs × 9 sources (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall — IV stubbed/Coming Soon) via `bis_sync.py`; item source mapping via `item_source_sync.py` (Blizzard Journal API, raid_boss→C/H/M, dungeon→C/H). New admin page `/admin/gear-plan` (matrix, drill-down, cross-reference, scrape log, SimC import, item sources). Also includes hotfixes from prod-v0.10.8–0.10.10: scheduler `_cfg` crash, raid boss counts from Journal API, roster Blizzard raid prog, M+ rating fallback for all roster chars.
 - **Branch:** `main`
 - **Tests:** 1229 pass (2 pre-existing bnet failures unchanged)
-- **Last migration:** 0077
+- **Last migration:** 0078
 - **Last tag:** `prod-v0.11.0`
 - **Active branch:** `feature/gear-plan-feature` (merging to main for this release)
 - **Next:** Phase 1D — Personal gear plan (`gear_plan_service.py`, `gear_plan_routes.py`, `/gear-plan` member page)

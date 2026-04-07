@@ -1,14 +1,14 @@
 """Add guild_identity.raid_boss_counts — static boss count per raid/difficulty
 
-Revision ID: 0066
-Revises: 0065
+Revision ID: 0078
+Revises: 0077
 Create Date: 2026-04-06
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0066"
-down_revision = "0065"
+revision = "0078"
+down_revision = "0077"
 branch_labels = None
 depends_on = None
 
