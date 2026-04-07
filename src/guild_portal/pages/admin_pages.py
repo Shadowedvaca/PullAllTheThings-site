@@ -2898,9 +2898,7 @@ async def admin_progression_sync_stats(
         )
         if season_row and season_row["blizzard_mplus_season_id"]:
             mplus_season_id = season_row["blizzard_mplus_season_id"]
-    if mplus_season_id is None:
-        from sv_common.config_cache import get_site_config
-        mplus_season_id = get_site_config().get("current_mplus_season_id")
+    # raid_seasons is the single source of truth — no site_config fallback.
 
     return JSONResponse({
         "ok": True,

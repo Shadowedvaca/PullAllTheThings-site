@@ -342,19 +342,37 @@ async def get_character_progression(
     if current_raid_ids:
         raid_filter.append(CharacterRaidProgress.raid_id.in_(current_raid_ids))
 
-    raid_rows = await db.execute(
-        select(
-            CharacterRaidProgress.raid_name,
-            CharacterRaidProgress.difficulty,
-            func.count().label("total"),
-            func.sum(
-                case((CharacterRaidProgress.kill_count > 0, 1), else_=0)
-            ).label("killed"),
+    # Join with raid_boss_counts so "total" reflects the real boss count per
+    # difficulty, not just how many this character has killed.
+    if current_raid_ids:
+        raid_rows = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty,
+                       SUM(CASE WHEN crp.kill_count > 0 THEN 1 ELSE 0 END) AS killed,
+                       COALESCE(MAX(rbc.boss_count), COUNT(*)) AS total
+                FROM guild_identity.character_raid_progress crp
+                LEFT JOIN guild_identity.raid_boss_counts rbc
+                    ON rbc.raid_id = crp.raid_id AND rbc.difficulty = crp.difficulty
+                WHERE crp.character_id = :char_id
+                  AND crp.raid_id = ANY(:raid_ids)
+                GROUP BY crp.raid_name, crp.difficulty
+                ORDER BY crp.raid_name, crp.difficulty
+            """).bindparams(char_id=character_id, raid_ids=current_raid_ids)
         )
-        .where(*raid_filter)
-        .group_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
-        .order_by(CharacterRaidProgress.raid_name, CharacterRaidProgress.difficulty)
-    )
+    else:
+        raid_rows = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty,
+                       SUM(CASE WHEN crp.kill_count > 0 THEN 1 ELSE 0 END) AS killed,
+                       COALESCE(MAX(rbc.boss_count), COUNT(*)) AS total
+                FROM guild_identity.character_raid_progress crp
+                LEFT JOIN guild_identity.raid_boss_counts rbc
+                    ON rbc.raid_id = crp.raid_id AND rbc.difficulty = crp.difficulty
+                WHERE crp.character_id = :char_id
+                GROUP BY crp.raid_name, crp.difficulty
+                ORDER BY crp.raid_name, crp.difficulty
+            """).bindparams(char_id=character_id)
+        )
 
     raid_by_name: dict[str, dict] = {}
     for row in raid_rows:
@@ -372,8 +390,15 @@ async def get_character_progression(
     ]
 
     # ── Mythic+ score ────────────────────────────────────────────────────────
-    cfg = get_site_config()
-    season_id: int | None = cfg.get("current_mplus_season_id")
+    # raid_seasons is the single source of truth for the current M+ season ID.
+    active_mplus_season_result = await db.execute(
+        select(RaidSeason.blizzard_mplus_season_id, RaidSeason.expansion_name, RaidSeason.season_number)
+        .where(RaidSeason.is_active == True)
+        .order_by(RaidSeason.start_date.desc())
+        .limit(1)
+    )
+    active_mplus_row = active_mplus_season_result.one_or_none()
+    season_id: int | None = active_mplus_row.blizzard_mplus_season_id if active_mplus_row else None
 
     mythic_plus = None
     if season_id:
@@ -389,19 +414,11 @@ async def get_character_progression(
             overall_score = max(float(r.overall_rating or 0) for r in mplus_rows)
             best_row = max(mplus_rows, key=lambda r: r.best_level or 0)
 
-            # Try to get a human-readable season name from raid_seasons
             season_name = f"Season {season_id}"
-            season_result = await db.execute(
-                select(RaidSeason).where(
-                    RaidSeason.blizzard_mplus_season_id == season_id
-                )
-            )
-            season = season_result.scalar_one_or_none()
-            if season:
-                if season.expansion_name and season.season_number:
-                    season_name = f"{season.expansion_name} Season {season.season_number}"
-                elif season.season_number:
-                    season_name = f"Season {season.season_number}"
+            if active_mplus_row and active_mplus_row.expansion_name and active_mplus_row.season_number:
+                season_name = f"{active_mplus_row.expansion_name} Season {active_mplus_row.season_number}"
+            elif active_mplus_row and active_mplus_row.season_number:
+                season_name = f"Season {active_mplus_row.season_number}"
 
             mythic_plus = {
                 "season_name": season_name,

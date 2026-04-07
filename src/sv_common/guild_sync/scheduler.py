@@ -321,8 +321,7 @@ class GuildSyncScheduler:
 
                 # Step 7: Progression sync (raid + M+) — skip unchanged characters
                 try:
-                    # Prefer M+ season ID from the active raid season row; fall back
-                    # to site_config.current_mplus_season_id if not set on the season.
+                    # M+ season ID comes from raid_seasons (single source of truth).
                     mplus_season_id = None
                     current_raid_ids: list[int] = []
                     async with self.db_pool.acquire() as _conn:
@@ -336,9 +335,6 @@ class GuildSyncScheduler:
                                 mplus_season_id = _season_row["blizzard_mplus_season_id"]
                             if _season_row["current_raid_ids"]:
                                 current_raid_ids = list(_season_row["current_raid_ids"])
-                    if mplus_season_id is None:
-                        cfg = get_site_config()
-                        mplus_season_id = cfg.get("current_mplus_season_id")
 
                     # Update boss counts from Journal API (authoritative, not player-dependent).
                     # Runs every sync to catch progressive releases without requiring a migration.
@@ -373,10 +369,7 @@ class GuildSyncScheduler:
                         )
 
                         # Raider.IO sync — runs after Blizzard M+, non-fatal
-                        realm_slug = (
-                            _cfg.get("home_realm_slug")
-                            or os.environ.get("GUILD_REALM_SLUG", "senjin")
-                        )
+                        realm_slug = self.blizzard_client.realm_slug
                         rio_client = RaiderIOClient(region="us")
                         await rio_client.initialize()
                         try:

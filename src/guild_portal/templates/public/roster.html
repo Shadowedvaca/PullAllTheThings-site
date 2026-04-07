@@ -196,6 +196,7 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
                 rio_score: mc.rio_score || 0,
                 rio_color: mc.rio_color || null,
                 rio_raid_prog: mc.rio_raid_prog || '',
+                raid_prog: mc.raid_prog || null,
                 rio_url: mc.rio_url || null,
                 avg_parse: mc.avg_parse ?? null,
                 wcl_url: mc.wcl_url || null,
@@ -219,6 +220,7 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
                 rio_score: sc.rio_score || 0,
                 rio_color: sc.rio_color || null,
                 rio_raid_prog: sc.rio_raid_prog || '',
+                raid_prog: sc.raid_prog || null,
                 rio_url: sc.rio_url || null,
                 avg_parse: sc.avg_parse ?? null,
                 wcl_url: sc.wcl_url || null,
@@ -248,6 +250,7 @@ function buildRows(showSecondary, showAlts, searchText, showInitiates) {
                     rio_score: char.rio_score || 0,
                     rio_color: char.rio_color || null,
                     rio_raid_prog: char.rio_raid_prog || '',
+                    raid_prog: char.raid_prog || null,
                     rio_url: char.rio_url || null,
                     avg_parse: char.avg_parse ?? null,
                     wcl_url: char.wcl_url || null,
@@ -309,7 +312,8 @@ function renderRoster() {
         const rioScoreHtml = r.rio_score
             ? `<span style="color:${r.rio_color || '#e8e8e8'};font-weight:600">${Math.round(r.rio_score)}</span>`
             : '—';
-        const rioRaidHtml = r.rio_raid_prog ? esc(r.rio_raid_prog) : '—';
+        const raidProgText = r.raid_prog || r.rio_raid_prog;
+        const rioRaidHtml = raidProgText ? esc(raidProgText) : '—';
         const rioLinkHtml = r.rio_url
             ? ` <a href="${esc(r.rio_url)}" target="_blank" rel="noopener" class="armory-link" title="Raider.IO Profile">⬡</a>`
             : '';

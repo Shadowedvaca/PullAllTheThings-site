@@ -235,17 +235,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Phase 1B** (in dev, validated, on feature/gear-plan-feature) — BIS discovery + extraction pipeline. 40 specs × 9 sources. Migrations 0067–0076. New modules: `simc_parser.py` (SimcSlot/SimcProfile, parse/export, round-trip), `bis_sync.py` (discover_targets for all 9 sources, sync_source/all/target, u.gg json_embed + Wowhead wh_gatherer extractors working, Icy Veins html_parse **stubbed** — see below, SimC import, cross_reference, get_matrix). New API: `bis_routes.py`. New admin page: `/admin/gear-plan` (GL-only — matrix, drill-down, cross-reference, scrape log, SimC import modal). **Icy Veins extraction is intentionally out of scope for v1** — IV pages are fully JS-rendered; auto-extraction deferred; see `reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md`. IV sources show as "Coming Soon" in matrix. 54 unit tests (all pass).
-- **Key extraction details:** u.gg uses `origin='archon'` code identifier (SSR json_embed technique); sources display as "u.gg Raid/M+/Overall" (renamed 0075). Wowhead uses `hero_talent_id=NULL` targets — one per spec, not per HT, because Wowhead pages are not HT-specific (0076). `_WOWHEAD_SLOT_MAP` includes `15→main_hand` (INVTYPE_RANGED — bows/guns/crossbows for Hunter). Matrix cells keyed by `(spec, source, ht_key)` for per-HT accuracy; class divider rows show G/Y/R summary counts; column footer shows per-source totals.
-- **Branch:** `feature/gear-plan-feature`
-- **Tests:** 1211 pass (54 BIS URL/slot tests; 2 pre-existing bnet template failures unchanged)
-- **Last migration:** 0076
-- **Last tag:** `prod-v0.10.0` (Gear Plan not yet tagged to prod)
-- **Active branch:** `feature/gear-plan-feature`
-- **Spec count:** 40 total (DK:3, DH:3 incl. Devourer, Druid:4, Evoker:3, Hunter:3, Mage:3, Monk:3, Paladin:3, Priest:3, Rogue:3, Shaman:3, Warlock:3, Warrior:3)
-- **Source count:** 9 (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall)
-- **Gear Plan Phase 1C** (in dev, on feature/gear-plan-feature) — Item source mapping. New `item_source_sync.py`: `sync_item_sources(pool, client, expansion_id=None)` fetches the latest expansion from Journal API (or explicit expansion_id), walks all dungeons + raids → encounters → items, stubs `wow_items` rows (ON CONFLICT DO NOTHING) and upserts into `item_sources` (raid_boss → C/H/M, dungeon → C/H). New Journal API methods on `BlizzardClient`: `get_journal_expansion_index`, `get_journal_expansion`, `get_journal_instance`, `get_journal_encounter` (static-us namespace). New API endpoints on `bis_routes.py`: `POST /sync-item-sources`, `GET /item-sources`, `DELETE /item-sources/{id}`. Admin gear plan page now has "Item Sources — Loot Tables" collapsible section with Sync Loot Tables button + instance/type filters + item table. 18 unit tests (all pass). No migration needed — tables exist from 0066.
-- **Next:** Phase 1D — Personal gear plan (gear_plan_service.py, gear_plan_routes.py, /gear-plan member page)
+- **prod-v0.11.0** — Gear Plan Phases 1A–1C. Migrations 0067–0077. Equipment sync + quality tracks (`wow_items`, `character_equipment`); BIS discovery pipeline — 40 specs × 9 sources (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall — IV stubbed/Coming Soon) via `bis_sync.py`; item source mapping via `item_source_sync.py` (Blizzard Journal API, raid_boss→C/H/M, dungeon→C/H). New admin page `/admin/gear-plan` (matrix, drill-down, cross-reference, scrape log, SimC import, item sources). Also includes hotfixes from prod-v0.10.8–0.10.10: scheduler `_cfg` crash, raid boss counts from Journal API, roster Blizzard raid prog, M+ rating fallback for all roster chars.
+- **Branch:** `main`
+- **Tests:** 1229 pass (2 pre-existing bnet failures unchanged)
+- **Last migration:** 0077
+- **Last tag:** `prod-v0.11.0`
+- **Active branch:** `feature/gear-plan-feature` (merging to main for this release)
+- **Next:** Phase 1D — Personal gear plan (`gear_plan_service.py`, `gear_plan_routes.py`, `/gear-plan` member page)
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
