@@ -21,13 +21,12 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1A** Foundation | ✅ COMPLETE | Migration 0066, equipment sync, quality tracks, item cache, ORM |
 | **1B** BIS discovery + extraction | ✅ COMPLETE | Migrations 0067–0076, bis_sync.py, simc_parser.py, admin matrix UI |
 | **1C** Item source mapping | ✅ ON PROD | item_source_sync.py, Journal API, admin Item Sources + Re-sync Errors, migrations 0077–0078 |
-| **1D** Personal gear plan | ⬜ NEXT | gear_plan_service.py, gear_plan_routes.py, /gear-plan member page |
+| **1D** Personal gear plan | 🔄 IN PROGRESS | Member page `/gear-plan` built and deployed to dev. See Phase 1D section. |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
-**Active branch:** `main` (no active feature branch)
-**Last migration:** 0078
+**Active branch:** `feature/gear-plan-phase-1d`
+**Last migration:** 0079
 **Last prod tag:** `prod-v0.11.2`
-**Test count:** 1229 pass (2 pre-existing bnet failures unchanged)
 
 ---
 
@@ -75,7 +74,7 @@ Parse `name_description.display_string` from Blizzard equipment endpoint: `"Cham
 | quality_tracks | TEXT[] | {C,H,M} for raid, {C,H} for dungeon |
 | UNIQUE | uq_item_source | (item_id, source_type, source_name) |
 
-Synced via `item_source_sync.py` → Blizzard Journal API. Raid bosses → C/H/M, dungeons → C/H.
+Synced via `item_source_sync.py` → Blizzard Journal API. Raid bosses → C/H/M tracks; V added in-service for raid boss items (prepended when C present but V absent).
 
 ### `guild_identity.hero_talents`
 | Column | Type | Notes |
@@ -131,6 +130,8 @@ Synced via `item_source_sync.py` → Blizzard Journal API. Raid bosses → C/H/M
 | gem_ids | INTEGER[] | |
 | UNIQUE | (character_id, slot) | |
 
+**Note:** SHIRT and TABARD slots are deliberately excluded from `BLIZZARD_SLOT_MAP` in `quality_track.py` — these are cosmetic slots not tracked in character_equipment. The gear plan UI displays them as greyed-out inactive placeholders.
+
 ### `guild_identity.gear_plans`
 | Column | Type | Notes |
 |--------|------|-------|
@@ -142,6 +143,8 @@ Synced via `item_source_sync.py` → Blizzard Journal API. Raid bosses → C/H/M
 | bis_source_id | INTEGER FK→bis_list_sources SET NULL | |
 | simc_profile | TEXT | last-imported SimC text verbatim |
 | is_active | BOOLEAN DEFAULT TRUE | |
+| created_at | TIMESTAMPTZ DEFAULT NOW() | |
+| updated_at | TIMESTAMPTZ DEFAULT NOW() | |
 | UNIQUE | (player_id, character_id) | |
 
 ### `guild_identity.gear_plan_slots`
@@ -236,46 +239,82 @@ SimC profile format is the universal gear artifact (used by Archon, Wowhead, Rai
 
 ---
 
-## Phase 1D: Personal Gear Plan (NEXT)
+## Phase 1D: Personal Gear Plan (IN PROGRESS)
 
-### New files needed
+### Branch: `feature/gear-plan-phase-1d`
+### Migration: 0079 (adds `my_gear_plan` screen permission)
+
+### Files created
 | File | Purpose |
 |------|---------|
-| `src/guild_portal/services/gear_plan_service.py` | Plan CRUD + upgrade computation + BIS population |
-| `src/guild_portal/api/gear_plan_routes.py` | Member + admin gear plan API endpoints |
-| `src/guild_portal/pages/gear_plan_pages.py` | Page route for `/gear-plan` |
-| `src/guild_portal/templates/member/gear_plan.html` | Personal gear plan UI |
-| `src/guild_portal/static/css/gear_plan.css` | Gear plan styles |
-| `src/guild_portal/static/js/gear_plan.js` | Personal plan client interactions |
+| `alembic/versions/0079_member_gear_plan_nav.py` | Screen permission for `/gear-plan` nav entry |
+| `src/guild_portal/services/gear_plan_service.py` | Plan CRUD, BIS population, upgrade computation |
+| `src/guild_portal/api/gear_plan_routes.py` | Member gear plan API + per-character equipment sync |
+| `src/guild_portal/pages/gear_plan_pages.py` | Page routes: `/gear-plan` (member) + `/admin/gear-plan` (admin) |
+| `src/guild_portal/templates/member/gear_plan.html` | Paperdoll UI template |
+| `src/guild_portal/static/css/gear_plan.css` | Paperdoll styles |
+| `src/guild_portal/static/js/gear_plan.js` | Client interactions |
+| `tests/unit/test_gear_plan_service.py` | 20 unit tests |
 
-### API endpoints for 1D
+### API endpoints
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/me/gear-plan/{character_id}` | Full plan: equipped + desired + BIS options + upgrade tracks per slot |
-| POST | `/api/v1/me/gear-plan/{character_id}` | Create plan (optionally from BIS source + hero talent) |
-| PUT | `/api/v1/me/gear-plan/{character_id}/slot/{slot}` | Update desired item for a slot |
-| POST | `/api/v1/me/gear-plan/{character_id}/populate` | Re-populate unlocked slots from a BIS source |
-| DELETE | `/api/v1/me/gear-plan/{character_id}` | Delete plan |
+| GET | `/api/v1/me/gear-plan/{character_id}` | Full plan detail: equipped + desired + BIS + upgrade tracks per slot |
+| POST | `/api/v1/me/gear-plan/{character_id}` | Create or retrieve plan |
+| PATCH | `/api/v1/me/gear-plan/{character_id}/config` | Update spec / hero talent / BIS source |
+| PUT | `/api/v1/me/gear-plan/{character_id}/slot/{slot}` | Set desired item for a slot |
+| POST | `/api/v1/me/gear-plan/{character_id}/populate` | Fill unlocked slots from BIS source |
+| DELETE | `/api/v1/me/gear-plan/{character_id}` | Reset plan |
 | POST | `/api/v1/me/gear-plan/{character_id}/import-simc` | Paste SimC → populate slots |
 | GET | `/api/v1/me/gear-plan/{character_id}/export-simc` | Download `.simc` file |
-| GET | `/api/v1/items/{blizzard_item_id}` | Fetch/cache item (Wowhead tooltip) |
+| POST | `/api/v1/me/gear-plan/{character_id}/sync-equipment` | Sync equipped gear from Blizzard for this character |
+| GET | `/api/v1/items/{blizzard_item_id}` | Fetch/cache item metadata from Wowhead |
 
-### UI: `/gear-plan` (member page)
-- Character selector + spec/hero talent display + Sync Gear button
-- BIS source selector dropdown + hero talent filter
-- 16 slot rows (Head → Off Hand, WoW order)
+### UI: `/gear-plan` (paperdoll layout)
 
-Each slot row:
-- Icon + name + ilvl + quality badge (V/C/H/M pill, colored)
-- Desired item name + upgrade track badges (needed tracks highlighted)
-- Click → expand drawer
+**Layout** — three-column grid (`200px 1fr 200px`, `align-items: stretch`):
 
-Slot drawer:
-- Currently Equipped: icon, name, ilvl, quality track, enchant, gems
-- BIS Recommendations: one row per source showing that source's recommendation + drop location
-- User's Selection: selected desired item + lock toggle
-- Manual Lookup: Wowhead item ID input + Fetch
-- Source info: where selected item drops, available quality tracks, which are upgrades
+| Left column (8 slots) | Centre panel | Right column (8 slots) |
+|---|---|---|
+| Head | Char badge (name · spec · realm) | Hands |
+| Neck | Hero Talent dropdown | Waist |
+| Shoulder | BIS Source dropdown | Legs |
+| Back | Fill BIS / Sync Gear / Import SimC / Export SimC / Reset Plan buttons | Feet |
+| Chest | Status bar | Ring 1 |
+| Shirt *(inactive — cosmetic)* | **Main Hand + Off Hand** (bottom, `margin-top: auto`) | Ring 2 |
+| Tabard *(inactive — cosmetic)* | | Trinket 1 |
+| Wrist | | Trinket 2 |
+
+**Slot cards:**
+- Equipped item: icon + name (coloured by quality track: V=green, C=blue, H=purple, M=orange) + ilvl + quality badge
+- Goal item row: small icon + name when desired ≠ equipped
+- Upgrade track row: coloured pills (V/C/H/M) showing which tracks would be upgrades
+- Green left border = already BIS; Red left border = needs upgrade
+- Shirt + Tabard slots are `is-inactive` (opacity 0.45, not clickable) — cosmetic only, no BIS/upgrade logic
+
+**Slot drawer** (expands below paperdoll on click):
+- Equipped: icon (quality-coloured border), name (quality-coloured), ilvl, enchant
+- BIS Recommendations: one row per source → "Use" button sets as goal
+- Your Goal: selected item + lock/unlock + clear; Manual Lookup by item ID
+- Drop Location: boss/dungeon name, available quality tracks, which are upgrade tracks
+
+**Character selector:** defaults to player's main character on load.
+
+**Sync Gear button:** calls `POST /gear-plan/{id}/sync-equipment` which:
+1. Uses the scheduler's BlizzardClient if available (scheduler running)
+2. Falls back to a per-request `BlizzardClient` created from `BLIZZARD_CLIENT_ID`/`BLIZZARD_CLIENT_SECRET` env vars if the scheduler isn't running (e.g. dev without audit channel configured)
+
+### Known issues / bugs fixed during 1D
+
+| Bug | Fix |
+|-----|-----|
+| `bonus_list` from Blizzard API is `list[int]`, not `list[dict]` | `blizzard_client.py` line 381: `[b.get("id",0) for b in ...]` → `item.get("bonus_list") or []` |
+| `btn--primary` / `btn--sm` BEM classes used throughout | Changed to `btn-primary` / `btn-sm` to match `main.css` definitions |
+| SimC modal visible on page load | `.gp-modal[hidden] { display: none !important }` in gear_plan.css |
+| `chars.filter is not a function` | `/api/v1/me/characters` returns `resp.data.characters` (nested), not `resp.data` |
+| Sync Gear called wrong endpoint | Was `/api/v1/me/refresh` → now `sync-equipment` endpoint |
+| V track missing from upgrade display | `_RAID_TRACKS` in `item_source_sync.py` now includes V; service-layer also prepends V for raid_boss items lacking it |
+| Guild sync scheduler skipped on dev | Scheduler requires audit_channel_id; sync-equipment endpoint bypasses scheduler entirely using env var credentials directly |
 
 ---
 
@@ -301,25 +340,34 @@ New endpoints:
 | `alembic/versions/0066_gear_plan.py` | 1A |
 | `alembic/versions/0067_hero_talents.py` | 1B |
 | `alembic/versions/0068–0077_*.py` | 1B/1C fixes |
+| `alembic/versions/0079_member_gear_plan_nav.py` | 1D |
 | `src/sv_common/guild_sync/quality_track.py` | 1A |
 | `src/sv_common/guild_sync/equipment_sync.py` | 1A |
 | `src/sv_common/guild_sync/bis_sync.py` | 1B |
 | `src/sv_common/guild_sync/simc_parser.py` | 1B |
 | `src/sv_common/guild_sync/item_source_sync.py` | 1C |
 | `src/guild_portal/services/item_service.py` | 1A |
+| `src/guild_portal/services/gear_plan_service.py` | 1D |
 | `src/guild_portal/api/bis_routes.py` | 1B |
+| `src/guild_portal/api/gear_plan_routes.py` | 1D |
+| `src/guild_portal/pages/gear_plan_pages.py` | 1D |
 | `src/guild_portal/templates/admin/gear_plan.html` | 1B |
-| `src/guild_portal/static/js/gear_plan_admin.js` | 1B |
+| `src/guild_portal/templates/member/gear_plan.html` | 1D |
+| `src/guild_portal/static/css/gear_plan.css` | 1D |
+| `src/guild_portal/static/js/gear_plan.js` | 1D |
 | `tests/unit/test_item_source_sync.py` | 1C |
+| `tests/unit/test_gear_plan_service.py` | 1D |
 
 ### Modified files
 | File | Change |
 |------|--------|
 | `src/sv_common/db/models.py` | 10 new model classes + `last_equipment_sync` on WowCharacter |
-| `src/sv_common/guild_sync/blizzard_client.py` | `get_character_equipment()` + 4 Journal API methods |
+| `src/sv_common/guild_sync/blizzard_client.py` | `get_character_equipment()` + 4 Journal API methods; `bonus_list` int fix |
 | `src/sv_common/guild_sync/scheduler.py` | Equipment sync step in `run_blizzard_sync()` |
-| `src/guild_portal/app.py` | Include bis_routes router |
+| `src/sv_common/guild_sync/item_source_sync.py` | `_RAID_TRACKS` now includes V |
+| `src/guild_portal/app.py` | Include bis_routes + gear_plan routers |
 | `src/guild_portal/pages/admin_pages.py` | `gear_plan` screen entry + nav item |
+| `src/guild_portal/templates/base.html` | Gear Plan nav link for logged-in members |
 
 ---
 
@@ -333,5 +381,8 @@ New endpoints:
 - **Devourer DH spec**: 3rd DH spec added in migration 0073/0074. May 404 on u.gg if Midnight spec not yet published there — expected.
 - **Migration conflict (0066 duplicate)**: Hotfix `0066_raid_boss_counts` from main and feature `0066_gear_plan` both claimed revision="0066". Resolved by renaming hotfix to `0078_raid_boss_counts.py` with `down_revision="0077"` and `CREATE TABLE IF NOT EXISTS` (prod already had the table).
 - **Alembic drift on test/prod**: After merge, test DB had 0067–0071 DDL applied but alembic stuck at "0066"; prod was at old "0066" (raid_boss_counts). Fixed by stamping alembic directly: `UPDATE patt.alembic_version SET version_num = 'XXXX'` then re-deploying.
-- **Wowhead `slotbak` removed**: Wowhead nether tooltip API silently dropped `slotbak` field — response now only has `name`, `quality`, `icon`, `tooltip`, `spells`. `item_service.py` previously used `data.get("slotbak")` which returned None for everything. Fixed in prod-v0.11.2: `_slot_from_tooltip()` parses slot from tooltip HTML using `re.search(r'<table width="100%"><tr><td>([^<]+)</td>', search_str)` after "Binds when". Existing `slot_type='other'` rows fixed by re-running Sync Loot Tables (triggers `enrich_unenriched_items()`).
-- **u.gg rate limiting (Hillsboro OR prod IP)**: migration 0077 clears all `bis_scrape_targets` on deploy. Bulk fresh re-sync on prod triggered 403s from u.gg for ~69 healer/tank targets. Use "Re-sync Errors" button (retries only `status='failed'` targets) after rate limit clears. Dev IP (Falkenstein) was not affected.
+- **Wowhead `slotbak` removed**: Wowhead nether tooltip API silently dropped `slotbak` field. `item_service.py` now parses slot from tooltip HTML via `_slot_from_tooltip()`. Existing `slot_type='other'` rows fixed by re-running Sync Loot Tables.
+- **u.gg rate limiting (Hillsboro OR prod IP)**: migration 0077 clears all `bis_scrape_targets` on deploy. Bulk fresh re-sync on prod triggered 403s from u.gg for ~69 healer/tank targets. Use "Re-sync Errors" button after rate limit clears. Dev IP (Falkenstein) was not affected.
+- **Scheduler skipped on dev**: `GuildSyncScheduler` requires `audit_channel_id` to be set in `discord_config`. Dev typically has no audit channel configured → scheduler is `None`. The `sync-equipment` endpoint handles this by creating a short-lived `BlizzardClient` from env vars directly.
+- **bonus_list is list[int] not list[dict]**: Blizzard equipment API returns `bonus_list` as plain integers. `blizzard_client.py` previously had `[b.get("id",0) for b in ...]` which crashed on any character with bonused items. Fixed to `item.get("bonus_list") or []`.
+- **Static file caching**: gear_plan.css and gear_plan.js use `?v=N` query strings for cache-busting. Increment N in `gear_plan.html` whenever JS or CSS changes are deployed. Current version: `?v=5`.
