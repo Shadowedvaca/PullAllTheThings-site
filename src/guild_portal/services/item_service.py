@@ -9,6 +9,7 @@ subsequent lookups.  No auth required — the endpoint is publicly accessible.
 
 import asyncio
 import logging
+import re
 from typing import Optional
 
 import asyncpg
@@ -20,28 +21,48 @@ _WOWHEAD_ENRICH_DELAY = 0.05  # seconds between requests during batch enrichment
 
 WOWHEAD_TOOLTIP_URL = "https://nether.wowhead.com/tooltip/item/{item_id}"
 
-# Map Wowhead numeric slot codes (slotbak) to our normalised slot names.
-# Incomplete items (cosmetics, etc.) map to None and are silently ignored.
-_WOWHEAD_SLOT_MAP: dict[int, str] = {
-    1: "head",
-    2: "neck",
-    3: "shoulder",
-    5: "chest",
-    6: "waist",
-    7: "legs",
-    8: "feet",
-    9: "wrist",
-    10: "hands",
-    11: "ring_1",    # first ring slot
-    12: "trinket_1", # first trinket
-    13: "back",
-    14: "main_hand",
-    15: "off_hand",
-    16: "ring_2",
-    17: "trinket_2",
-    22: "main_hand",  # two-hand
-    23: "main_hand",  # ranged
+# Wowhead's nether tooltip API no longer returns the numeric `slotbak` field.
+# Slot is instead parsed from the tooltip HTML (the <td>SLOT</td><th>TYPE</th>
+# table that appears after "Binds when picked up").
+_TOOLTIP_SLOT_MAP: dict[str, str] = {
+    "head":              "head",
+    "neck":              "neck",
+    "shoulder":          "shoulder",
+    "shoulders":         "shoulder",
+    "back":              "back",
+    "chest":             "chest",
+    "waist":             "waist",
+    "legs":              "legs",
+    "feet":              "feet",
+    "wrist":             "wrist",
+    "wrists":            "wrist",
+    "hands":             "hands",
+    "finger":            "ring_1",
+    "trinket":           "trinket_1",
+    "main hand":         "main_hand",
+    "one-hand":          "main_hand",
+    "two-hand":          "main_hand",
+    "off hand":          "off_hand",
+    "held in off-hand":  "off_hand",
+    "ranged":            "main_hand",
 }
+
+
+def _slot_from_tooltip(tooltip_html: str) -> str:
+    """Extract slot type from Wowhead tooltip HTML.
+
+    Wowhead embeds the slot as plain text in a stats table:
+        <table width="100%"><tr><td>Hands</td><th>...Plate...</th></tr></table>
+    This table always appears after "Binds when" in the tooltip.
+    """
+    if not tooltip_html:
+        return "other"
+    bwpu = tooltip_html.find("Binds when")
+    search_str = tooltip_html[bwpu:] if bwpu >= 0 else tooltip_html
+    m = re.search(r'<table width="100%"><tr><td>([^<]+)</td>', search_str)
+    if m:
+        return _TOOLTIP_SLOT_MAP.get(m.group(1).strip().lower(), "other")
+    return "other"
 
 
 async def get_or_fetch_item(
@@ -77,9 +98,8 @@ async def get_or_fetch_item(
         if icon_name else None
     )
 
-    # Derive slot from slotbak
-    slot_code = data.get("slotbak")
-    slot_type = _WOWHEAD_SLOT_MAP.get(slot_code, "other") if slot_code else "other"
+    tooltip_html = data.get("tooltip")
+    slot_type = _slot_from_tooltip(tooltip_html or "")
 
     # Armor / weapon type from json equip data
     jsonequip = data.get("jsonequip", {}) or {}
@@ -87,8 +107,6 @@ async def get_or_fetch_item(
     weapon_type = None
     if data.get("weaponinfo"):
         weapon_type = data.get("subclassname")
-
-    tooltip_html = data.get("tooltip")
 
     # 3. Upsert into cache
     async with pool.acquire() as conn:
@@ -179,8 +197,7 @@ async def enrich_unenriched_items(
                 f"https://wow.zamimg.com/images/wow/icons/medium/{icon_name}.jpg"
                 if icon_name else None
             )
-            slot_code = data.get("slotbak")
-            slot_type = _WOWHEAD_SLOT_MAP.get(slot_code, "other") if slot_code else "other"
+            slot_type = _slot_from_tooltip(data.get("tooltip") or "")
             jsonequip = data.get("jsonequip", {}) or {}
             armor_type = jsonequip.get("subclass") if isinstance(jsonequip, dict) else None
             weapon_type = data.get("subclassname") if data.get("weaponinfo") else None
