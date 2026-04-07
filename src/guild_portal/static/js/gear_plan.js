@@ -68,7 +68,7 @@ async function loadCharacters() {
   try {
     const resp = await apiFetch('/api/v1/me/characters');
     if (!resp.ok) throw new Error(resp.error || 'Failed to load characters');
-    const chars = resp.data || [];
+    const chars = (resp.data && resp.data.characters) || [];
     const inGuild = chars.filter(c => c.in_guild !== false);
     if (!inGuild.length) {
       setLoading(false);
