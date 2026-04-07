@@ -390,6 +390,9 @@
   justify-content: center;
 }
 
+/* hidden attribute is overridden by display:flex above — force it off */
+.gp-modal[hidden] { display: none !important; }
+
 .gp-modal__backdrop {
   position: absolute;
   inset: 0;
