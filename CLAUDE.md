@@ -235,18 +235,18 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.11.2** — Gear Plan Phases 1A–1C + post-merge hotfixes. Migrations 0067–0078. Equipment sync + quality tracks (`wow_items`, `character_equipment`); BIS discovery pipeline — 40 specs × 9 sources (u.gg Raid/M+/Overall, Wowhead Overall/Raid/M+, IV Raid/M+/Overall — IV stubbed/Coming Soon) via `bis_sync.py`; item source mapping via `item_source_sync.py` (Blizzard Journal API, raid_boss→C/H/M, dungeon→C/H). New admin page `/admin/gear-plan` (matrix, drill-down, cross-reference, scrape log, SimC import, item sources, **Re-sync Errors button**). Also includes hotfixes: scheduler `_cfg` crash, raid boss counts from Journal API, roster Blizzard raid prog, M+ rating fallback, **Wowhead `slotbak` field removed** — slot now parsed from tooltip HTML via `_slot_from_tooltip()` in `item_service.py`.
-- **Branch:** `main`
-- **Tests:** 1229 pass (2 pre-existing bnet failures unchanged)
-- **Last migration:** 0078
-- **Last tag:** `prod-v0.11.2`
-- **Active branch:** `main` (no active feature branch)
-- **Next:** Phase 1D — Personal gear plan (`gear_plan_service.py`, `gear_plan_routes.py`, `/gear-plan` member page)
+- **Phase 1D (in progress)** — Personal gear plan. Migration 0079. New member page `/gear-plan` with 16-slot table, slot drawer, BIS population, SimC import/export, upgrade track computation. New files: `gear_plan_service.py`, `gear_plan_routes.py`, `gear_plan.css`, `gear_plan.js`, `templates/member/gear_plan.html`. "Gear Plan" nav link added to `base.html` for logged-in members. 8 API endpoints under `/api/v1/me/gear-plan/{character_id}` + `/api/v1/items/{blizzard_item_id}`. 20 new unit tests.
+- **Branch:** `feature/gear-plan-phase-1d`
+- **Tests:** 1252 pass (2 pre-existing bnet failures unchanged)
+- **Last migration:** 0079
+- **Last prod tag:** `prod-v0.11.2`
+- **Active branch:** `feature/gear-plan-phase-1d`
+- **Next:** Merge Phase 1D → main → test; then Phase 1E — Roster aggregation grids
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
 - **Public pages:** `/` (index), `/roster` (**Avg Raid Parse column** — sourced from `character_report_parses`, color-coded, links to WCL profile), `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
-- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (sourced from `character_report_parses`; Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
+- **Member pages** (logged-in required): `/my-characters` — character selector + stat panel + **Spec Guide Links panel** (Phase G — Wowhead/Icy Veins/u.gg badges with spec dropdown) + progression panel (raid progress + M+ score; Phase 5.1) + WCL parse panel (sourced from `character_report_parses`; Phase 5.2) + Market panel (realm-aware AH prices; Phase 5.3) + Crafting & Raid Prep panel (Phase 5.4) + **Refresh Characters button** (H.3); `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4); **`/gear-plan`** — Personal gear plan (Phase 1D) — 16-slot table, expand drawer, BIS population, SimC import/export, upgrade track computation
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users` (expired-token indicator — H.4), `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables` (**Guide Sites section** — Phase G), `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`, `/admin/gear-plan` (GL only — BIS sync dashboard)
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
 - **Auth API:** `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
