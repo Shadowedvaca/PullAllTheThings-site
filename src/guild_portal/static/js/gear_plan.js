@@ -573,13 +573,16 @@ window.fetchAndSetItem = async function(slot) {
 // ── Plan actions ──────────────────────────────────────────────────────────
 
 async function onSyncGear() {
-  showStatus('Syncing characters…', 'info');
-  const resp = await apiFetch('/api/v1/me/bnet-sync', { method: 'POST' });
+  showStatus('Syncing equipped gear…', 'info');
+  const resp = await apiFetch(
+    `/api/v1/me/gear-plan/${_state.activeCharId}/sync-equipment`,
+    { method: 'POST' },
+  );
   if (resp.ok) {
-    showStatus('Sync complete — reloading…', 'ok');
-    setTimeout(() => loadPlan(_state.activeCharId), 1200);
+    showStatus('Gear synced — reloading…', 'ok');
+    setTimeout(() => loadPlan(_state.activeCharId), 800);
   } else {
-    showStatus(resp.error || 'Sync failed (Battle.net link required)', 'err');
+    showStatus(resp.error || 'Sync failed', 'err');
   }
 }
 

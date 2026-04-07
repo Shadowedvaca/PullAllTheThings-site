@@ -353,6 +353,76 @@ async def export_simc(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/me/gear-plan/{character_id}/sync-equipment
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{character_id}/sync-equipment")
+async def sync_character_equipment(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sync the equipped gear for this character using the guild's Blizzard client.
+
+    Populates / refreshes guild_identity.character_equipment so the gear plan
+    shows the player's current items with correct ilvl and quality tracks.
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse(
+            {"ok": False, "error": "Character not linked to your account"},
+            status_code=403,
+        )
+
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler is None or not hasattr(scheduler, "blizzard_client"):
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": (
+                    "Blizzard API not configured — ask your Guild Leader "
+                    "to set Blizzard API credentials in Site Config."
+                ),
+            },
+            status_code=503,
+        )
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse(
+            {"ok": False, "error": "Database pool unavailable"}, status_code=503
+        )
+
+    async with pool.acquire() as conn:
+        char_row = await conn.fetchrow(
+            """
+            SELECT id, character_name, realm_slug,
+                   last_login_timestamp, last_equipment_sync
+              FROM guild_identity.wow_characters
+             WHERE id = $1
+            """,
+            character_id,
+        )
+
+    if not char_row:
+        return JSONResponse(
+            {"ok": False, "error": "Character not found"}, status_code=404
+        )
+
+    from sv_common.guild_sync.equipment_sync import sync_equipment
+
+    stats = await sync_equipment(pool, scheduler.blizzard_client, [dict(char_row)])
+
+    if stats.get("equipment_errors", 0) > 0:
+        return JSONResponse(
+            {"ok": False, "error": "Equipment sync failed — check server logs"}
+        )
+
+    return JSONResponse({"ok": True, "data": stats})
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/items/{blizzard_item_id}
 # ---------------------------------------------------------------------------
 
