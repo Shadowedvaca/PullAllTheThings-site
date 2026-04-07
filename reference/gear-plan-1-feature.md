@@ -315,6 +315,52 @@ SimC profile format is the universal gear artifact (used by Archon, Wowhead, Rai
 | Sync Gear called wrong endpoint | Was `/api/v1/me/refresh` → now `sync-equipment` endpoint |
 | V track missing from upgrade display | `_RAID_TRACKS` in `item_source_sync.py` now includes V; service-layer also prepends V for raid_boss items lacking it |
 | Guild sync scheduler skipped on dev | Scheduler requires audit_channel_id; sync-equipment endpoint bypasses scheduler entirely using env var credentials directly |
+| Lock clears slot instead of locking | `update_slot` was deleting when `blizzard_item_id=None` regardless of `is_locked`; added lock-only path |
+| Use button broken for items with apostrophe in name | BIS row onclick passed item_name as JS string literal — broken by `Ky'veza's Ring` etc.; dropped item_name from onclick, service resolves from wow_items |
+| V recommended for non-Veteran equipped item | `_upgrade_tracks` returned all tracks when equipped_track=None (undetected); now returns [] when item is equipped but track unknown |
+| Blank slots (no border) for non-BIS items without track data | `needs_upgrade` was `bool(upgrade_tracks)` — now `bool(desired_bid and not is_bis)`; red border fires whenever a goal exists but isn't worn |
+| Icons missing for non-BIS equipped items | Items not in `wow_items` have no icon_url; equipment_sync now stubs `wow_items` rows; JS lazy-fetches icon via `/api/v1/items/{id}` |
+| Icon quality glow not visible | `overflow:hidden` on card was clipping box-shadow; changed to inset box-shadow; removed overflow:hidden from card |
+
+### Open issues / next steps (as of 2026-04-07)
+
+**Icon quality colour (quality_track = null)**
+- Blizzard API `name_description.display_string` regex `^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$` may not match Midnight expansion format
+- TWW S2 bonus ID map (`quality_track.py._DEFAULT_SIMC_BONUS_IDS`) is season-specific; Midnight uses different IDs
+- Result: most equipped items have `quality_track = null` → no coloured icon border
+- **Need:** Confirm what display_string Blizzard returns for Midnight track items, or provide Midnight bonus IDs
+
+**Crafted item quality track**
+- Crafted items (bonus_id 1808, may differ for Midnight) have `quality_track = null` because neither detection method matches
+- User wants: crafted items treated as H or M based on crest tier used to craft them
+- Two ilvl ranges (H-crest = ilvl range, M-crest = ilvl range), breakpoint varies by patch
+- **Need:** Decide mechanism for breakpoint — options: (a) configurable via `site_config.crafted_m_ilvl_threshold` (migration 0080, admin sets per season), (b) derive from highest H/M non-crafted items in roster
+- **Current state:** is_crafted detected from bonus_id 1808, shows "Crafted" badge, participates in upgrade logic; quality_track still null so upgrade tracks empty
+
+**Slot drawer — BIS Recommendations redesign**
+- Replace current list-style recommendations with a grid:
+  - Columns: one per (provider × list-type) combination, e.g. "u.gg Raid", "u.gg M+", "Wowhead"
+  - Rows: each unique item that appears in any BIS list for this slot, sorted by how many lists contain it (most-recommended first)
+  - Cell: ✓ (gold) if that provider/list has this item, — (greyed) if not
+  - "Use" button on each row
+- New data needed from service: `get_plan_detail` already returns `bis_recommendations` as flat list; needs to be restructured to support the grid (unique items × sources matrix)
+
+**Hover tooltip broken**
+- Slot card click opens drawer; hover interaction is unclear/broken
+- Diagnose on next session
+
+**Ring/Trinket BIS sort not right**
+- Equipped ring/trinket sort now works (alphabetical for no-match case)
+- BIS desired items in the drawer also need to be sorted to match — currently unsorted or reverse-alphabetical
+- Fix: sort `bis_recommendations` in the drawer the same way the slot card is normalised
+
+**Slot card hover state**
+- Cards don't clearly communicate "click to open drawer" — consider adding a subtle indicator
+- Hover cursor is `pointer` which is correct, but visual feedback is minimal
+
+**Upgrade track pills — crafted items**
+- Crafted items with no quality_track → no upgrade pills → no guidance to get higher crest tier
+- Blocked by quality_track detection fix above
 
 ---
 
@@ -385,4 +431,4 @@ New endpoints:
 - **u.gg rate limiting (Hillsboro OR prod IP)**: migration 0077 clears all `bis_scrape_targets` on deploy. Bulk fresh re-sync on prod triggered 403s from u.gg for ~69 healer/tank targets. Use "Re-sync Errors" button after rate limit clears. Dev IP (Falkenstein) was not affected.
 - **Scheduler skipped on dev**: `GuildSyncScheduler` requires `audit_channel_id` to be set in `discord_config`. Dev typically has no audit channel configured → scheduler is `None`. The `sync-equipment` endpoint handles this by creating a short-lived `BlizzardClient` from env vars directly.
 - **bonus_list is list[int] not list[dict]**: Blizzard equipment API returns `bonus_list` as plain integers. `blizzard_client.py` previously had `[b.get("id",0) for b in ...]` which crashed on any character with bonused items. Fixed to `item.get("bonus_list") or []`.
-- **Static file caching**: gear_plan.css and gear_plan.js use `?v=N` query strings for cache-busting. Increment N in `gear_plan.html` whenever JS or CSS changes are deployed. Current version: `?v=5`.
+- **Static file caching**: gear_plan.css and gear_plan.js use `?v=N` query strings for cache-busting. Increment N in `gear_plan.html` whenever JS or CSS changes are deployed. Current version: `?v=7`.
