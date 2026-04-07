@@ -141,6 +141,64 @@ async def sync_raid_progress(
 
 
 # ---------------------------------------------------------------------------
+# Journal-based boss count sync
+# ---------------------------------------------------------------------------
+
+
+async def sync_boss_counts_from_journal(
+    pool: asyncpg.Pool,
+    client: BlizzardClient,
+    raid_ids: list[int],
+) -> dict:
+    """Update raid_boss_counts from the Blizzard Journal API (authoritative).
+
+    Unlike the player profile endpoint, the Journal API returns the full
+    encounter list regardless of player progress or when the raid was first
+    synced. This ensures boss counts are correct after progressive releases.
+
+    Writes one row per (raid_id, difficulty) — same difficulties used by
+    character_raid_progress: normal, heroic, mythic.
+    """
+    if not raid_ids:
+        return {"updated": 0, "errors": 0}
+
+    stats = {"updated": 0, "errors": 0}
+    difficulties = ["normal", "heroic", "mythic"]
+
+    async with pool.acquire() as conn:
+        for raid_id in raid_ids:
+            data = await client.get_journal_instance(raid_id)
+            if not data:
+                logger.warning("Journal instance fetch returned nothing for raid_id=%d", raid_id)
+                stats["errors"] += 1
+                continue
+
+            encounters = data.get("encounters", {}).get("encounters", [])
+            boss_count = len(encounters)
+            if boss_count == 0:
+                logger.warning("Journal instance %d returned 0 encounters — skipping", raid_id)
+                stats["errors"] += 1
+                continue
+
+            logger.info("Journal: raid_id=%d has %d encounters", raid_id, boss_count)
+            for difficulty in difficulties:
+                await conn.execute(
+                    """
+                    INSERT INTO guild_identity.raid_boss_counts
+                        (raid_id, difficulty, boss_count)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (raid_id, difficulty)
+                    DO UPDATE SET boss_count = EXCLUDED.boss_count
+                    """,
+                    raid_id, difficulty, boss_count,
+                )
+                stats["updated"] += 1
+
+    logger.info("Boss count journal sync: %d rows updated, %d errors", stats["updated"], stats["errors"])
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # Mythic+ keystone profiles
 # ---------------------------------------------------------------------------
 
