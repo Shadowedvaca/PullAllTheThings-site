@@ -8,6 +8,7 @@ from guild_portal.services.gear_plan_service import (
     TRACK_ORDER,
     _upgrade_tracks,
 )
+from sv_common.guild_sync.quality_track import is_crafted_item
 
 
 # ---------------------------------------------------------------------------
@@ -120,3 +121,66 @@ class TestSlotDisplay:
 
     def test_trinket_2_label(self):
         assert SLOT_DISPLAY["trinket_2"] == "Trinket 2"
+
+
+# ---------------------------------------------------------------------------
+# is_crafted_item
+# ---------------------------------------------------------------------------
+
+
+class TestIsCraftedItem:
+    def test_crafted_bonus_id_detected(self):
+        assert is_crafted_item([1808]) is True
+
+    def test_crafted_among_other_bonus_ids(self):
+        assert is_crafted_item([100, 1808, 200]) is True
+
+    def test_non_crafted_returns_false(self):
+        assert is_crafted_item([1516, 1517]) is False
+
+    def test_empty_list_returns_false(self):
+        assert is_crafted_item([]) is False
+
+    def test_none_safe(self):
+        # Callers pass `bonus_ids or []` so None is never passed, but guard anyway
+        assert is_crafted_item([]) is False
+
+
+# ---------------------------------------------------------------------------
+# BIS upgrade fallback (inferred from equipped track when no item_sources)
+# ---------------------------------------------------------------------------
+
+
+class TestBisUpgradeFallback:
+    """The service applies a fallback when is_bis=True but available_tracks=[].
+    Verify _upgrade_tracks behaviour that the fallback builds on."""
+
+    def test_same_item_champion_empty_tracks_no_upgrade(self):
+        # Without fallback, empty available_tracks → empty result
+        assert _upgrade_tracks("C", 100, 100, []) == []
+
+    def test_same_item_champion_full_tracks_gives_hm(self):
+        # With all tracks as fallback: strictly higher than C → H, M
+        result = _upgrade_tracks("C", 100, 100, ["V", "C", "H", "M"])
+        assert result == ["H", "M"]
+
+    def test_same_item_veteran_full_tracks_excludes_v(self):
+        # At V track, strictly higher → C, H, M
+        result = _upgrade_tracks("V", 100, 100, ["V", "C", "H", "M"])
+        assert result == ["C", "H", "M"]
+
+    def test_same_item_mythic_full_tracks_no_upgrades(self):
+        # Already at M — no higher tracks
+        result = _upgrade_tracks("M", 100, 100, ["V", "C", "H", "M"])
+        assert result == []
+
+    def test_non_bis_champion_never_shows_v(self):
+        # Non-BIS at C: same and above → C, H, M (V excluded — 0 >= 1 is False)
+        result = _upgrade_tracks("C", 200, 100, ["V", "C", "H", "M"])
+        assert result == ["C", "H", "M"]
+        assert "V" not in result
+
+    def test_non_bis_hero_shows_hm_only(self):
+        # Non-BIS at H: same and above → H, M
+        result = _upgrade_tracks("H", 200, 100, ["V", "C", "H", "M"])
+        assert result == ["H", "M"]

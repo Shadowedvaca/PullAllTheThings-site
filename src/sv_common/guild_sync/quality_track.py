@@ -123,3 +123,14 @@ def normalize_slot(blizzard_slot: str) -> Optional[str]:
     Returns None for slots we don't track (TABARD, SHIRT, etc.).
     """
     return BLIZZARD_SLOT_MAP.get(blizzard_slot.upper())
+
+
+# Crafted item bonus IDs (TWW; update for new expansions as needed)
+_CRAFTED_BONUS_IDS: frozenset[int] = frozenset({1808})
+
+
+def is_crafted_item(bonus_ids: list[int]) -> bool:
+    """Return True if the item is crafted gear (not on V/C/H/M upgrade track)."""
+    if not bonus_ids:
+        return False
+    return bool(frozenset(bonus_ids) & _CRAFTED_BONUS_IDS)

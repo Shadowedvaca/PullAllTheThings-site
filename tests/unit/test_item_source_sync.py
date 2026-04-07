@@ -391,4 +391,4 @@ class TestTrackConstants:
         assert _DUNGEON_TRACKS == ["C", "H"]
 
     def test_raid_tracks(self):
-        assert _RAID_TRACKS == ["C", "H", "M"]
+        assert _RAID_TRACKS == ["V", "C", "H", "M"]

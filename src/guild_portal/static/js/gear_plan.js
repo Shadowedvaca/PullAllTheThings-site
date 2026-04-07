@@ -53,6 +53,40 @@ function trackBadge(t) {
   return `<span class="gp-track" style="background:${esc(trackColor(t))}" title="${esc(t)} track">${esc(t)}</span>`;
 }
 
+function craftedBadge() {
+  return `<span class="gp-track gp-track--crafted" title="Crafted item">Crafted</span>`;
+}
+
+function buildIcon(src, qColor) {
+  const img = document.createElement('img');
+  img.className = 'gp-slot-card__icon';
+  img.src = src;
+  img.alt = '';
+  img.loading = 'lazy';
+  if (qColor) {
+    img.style.borderColor = qColor;
+    img.style.boxShadow = `0 0 6px 1px ${qColor}60`;
+  } else {
+    img.style.borderColor = 'rgba(255,255,255,0.15)';
+  }
+  return img;
+}
+
+// Fetch icon from Wowhead cache and swap it in once loaded.
+// Called when the equipped item exists but has no cached icon_url yet.
+async function fetchSlotIcon(blizzardItemId, iconEl, qColor) {
+  try {
+    const resp = await apiFetch(`/api/v1/items/${blizzardItemId}`);
+    if (resp.ok && resp.data?.icon_url) {
+      // Only update if the element is still in the DOM (user may have changed char)
+      if (iconEl.isConnected) {
+        iconEl.innerHTML = '';
+        iconEl.appendChild(buildIcon(resp.data.icon_url, qColor));
+      }
+    }
+  } catch { /* non-critical — placeholder stays */ }
+}
+
 async function apiFetch(url, opts = {}) {
   const r = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
@@ -289,8 +323,9 @@ function buildSlotCard(slotKey) {
     dispTrack = eq.quality_track;
   }
 
-  // Quality colour for name + icon border (matches WoW item rarity colouring)
-  const qColor = dispTrack ? trackColor(dispTrack) : null;
+  // Crafted items use a neutral gold; otherwise use quality track colour
+  const isCrafted = eq?.is_crafted || false;
+  const qColor = dispTrack ? trackColor(dispTrack) : (isCrafted ? '#c0a060' : null);
 
   // Goal item (only for active slots)
   const primaryBis = !isInactive
@@ -306,21 +341,25 @@ function buildSlotCard(slotKey) {
     card.classList.add('is-inactive');
   } else {
     if (_state.openSlot === slotKey) card.classList.add('is-open');
-    if (sd.is_bis && !sd.needs_upgrade) card.classList.add('is-bis');
-    else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
+    // Crafted items skip the BIS/upgrade-track colouring — they upgrade differently
+    if (!isCrafted) {
+      if (sd.is_bis && !sd.needs_upgrade) card.classList.add('is-bis');
+      else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
+    }
     card.addEventListener('click', () => toggleDrawer(slotKey));
   }
 
   // ── Icon ────────────────────────────────────────────────────────
   const iconEl = document.createElement('div');
   if (iconSrc) {
-    const img = document.createElement('img');
-    img.className = 'gp-slot-card__icon';
-    img.src = iconSrc;
-    img.alt = '';
-    img.loading = 'lazy';
-    if (qColor) img.style.borderColor = qColor;
-    iconEl.appendChild(img);
+    iconEl.appendChild(buildIcon(iconSrc, qColor));
+  } else if (eq && eq.blizzard_item_id) {
+    // Item exists but icon not yet cached — show placeholder and lazy-fetch
+    const empty = document.createElement('div');
+    empty.className = 'gp-slot-card__icon--empty';
+    empty.textContent = (SLOT_LABELS[slotKey] || slotKey)[0];
+    iconEl.appendChild(empty);
+    fetchSlotIcon(eq.blizzard_item_id, iconEl, qColor);
   } else {
     const empty = document.createElement('div');
     empty.className = 'gp-slot-card__icon--empty';
@@ -350,7 +389,9 @@ function buildSlotCard(slotKey) {
     ilvl.textContent = dispIlvl;
     meta.appendChild(ilvl);
   }
-  if (dispTrack) {
+  if (isCrafted) {
+    meta.innerHTML += craftedBadge();
+  } else if (dispTrack) {
     meta.innerHTML += trackBadge(dispTrack);
   }
 
@@ -375,8 +416,8 @@ function buildSlotCard(slotKey) {
     body.appendChild(goal);
   }
 
-  // Upgrade track row (active slots only)
-  if (upgrades.length) {
+  // Upgrade track row (active, non-crafted slots only)
+  if (upgrades.length && !isCrafted) {
     const upgradeRow = document.createElement('div');
     upgradeRow.className = 'gp-upgrade-row';
     upgradeRow.innerHTML = upgrades.map(t => trackBadge(t)).join('');

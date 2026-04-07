@@ -130,6 +130,18 @@ async def _sync_one_character(
     async with pool.acquire() as conn:
         async with conn.transaction():
             for slot_data in slots:
+                # Stub wow_items row so icon enrichment can pick it up later.
+                # ON CONFLICT DO NOTHING — never overwrite richer existing data.
+                await conn.execute(
+                    """
+                    INSERT INTO guild_identity.wow_items
+                        (blizzard_item_id, name, slot_type)
+                    VALUES ($1, $2, 'other')
+                    ON CONFLICT (blizzard_item_id) DO NOTHING
+                    """,
+                    slot_data.blizzard_item_id, slot_data.item_name,
+                )
+
                 await conn.execute(
                     """
                     INSERT INTO guild_identity.character_equipment

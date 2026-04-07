@@ -12,6 +12,7 @@ from typing import Optional
 
 import asyncpg
 
+from sv_common.guild_sync.quality_track import is_crafted_item
 from sv_common.guild_sync.simc_parser import (
     SimcSlot,
     export_gear_plan,
@@ -512,7 +513,7 @@ async def get_plan_detail(
         equip_rows = await conn.fetch(
             """
             SELECT ce.slot, ce.blizzard_item_id, ce.item_name, ce.item_level,
-                   ce.quality_track, ce.enchant_id, ce.gem_ids,
+                   ce.quality_track, ce.enchant_id, ce.gem_ids, ce.bonus_ids,
                    wi.icon_url
               FROM guild_identity.character_equipment ce
               LEFT JOIN guild_identity.wow_items wi
@@ -521,7 +522,11 @@ async def get_plan_detail(
             """,
             character_id,
         )
-        equipped_by_slot: dict[str, dict] = {r["slot"]: dict(r) for r in equip_rows}
+        equipped_by_slot: dict[str, dict] = {}
+        for r in equip_rows:
+            d = dict(r)
+            d["is_crafted"] = is_crafted_item(d.get("bonus_ids") or [])
+            equipped_by_slot[r["slot"]] = d
 
         # Desired items (plan slots)
         desired_rows = await conn.fetch(
@@ -644,6 +649,18 @@ async def get_plan_detail(
         upgrade_tracks = _upgrade_tracks(equipped_track, equipped_bid, desired_bid, available_tracks)
 
         is_bis = bool(desired_bid and equipped_bid and equipped_bid == desired_bid)
+
+        # Fallback: if wearing BIS but item has no item_sources data, infer upgrade
+        # tracks from the equipped quality track (strictly above current track).
+        # Skip for crafted items (no V/C/H/M tracks) and for M-track (already maxed).
+        equipped_is_crafted = equipped.get("is_crafted", False) if equipped else False
+        if (is_bis and not upgrade_tracks and equipped_track
+                and equipped_track != "M" and not equipped_is_crafted):
+            eq_idx = TRACK_ORDER.get(equipped_track, -1)
+            upgrade_tracks = [
+                t for t in ("V", "C", "H", "M") if TRACK_ORDER.get(t, -1) > eq_idx
+            ]
+
         needs_upgrade = bool(upgrade_tracks)
 
         slots_data[slot] = {
