@@ -100,18 +100,17 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         for r in rio_result.scalars():
             rio_by_char[r.character_id] = r
 
-    # Blizzard M+ fallback: for characters with no RIO profile, pull max overall_rating
-    # from character_mythic_plus so scores are never blank just because RIO hasn't indexed them.
+    # Blizzard M+ fallback: always fetch for all chars so RIO score is never
+    # the only option — if RIO is missing or zero, Blizzard data fills the gap.
     blizzard_mplus_by_char: dict[int, float] = {}
-    missing_rio = [cid for cid in all_char_ids if cid not in rio_by_char]
-    if missing_rio:
+    if all_char_ids:
         bz_mplus_result = await db.execute(
             text("""
                 SELECT character_id, MAX(overall_rating) AS overall_rating
                 FROM guild_identity.character_mythic_plus
                 WHERE character_id = ANY(:char_ids) AND overall_rating > 0
                 GROUP BY character_id
-            """).bindparams(char_ids=missing_rio)
+            """).bindparams(char_ids=list(all_char_ids))
         )
         blizzard_mplus_by_char = {
             row.character_id: float(row.overall_rating)
