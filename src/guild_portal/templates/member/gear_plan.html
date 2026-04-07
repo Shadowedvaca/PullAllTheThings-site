@@ -6,93 +6,88 @@
 {% endblock %}
 
 {% block content %}
-<div class="gp-member-page">
+<div class="gp-page">
 
-  {# ── Page header ─────────────────────────────────────────── #}
+  {# ── Page header ─────────────────────────────────────────────── #}
   <div class="page-title-row">
-    <h1 class="gp-member-page__title">My Gear Plan</h1>
+    <h1 class="gp-page__title">Gear Plan</h1>
     <div class="page-title-actions">
-      <button id="gp-btn-sync" class="btn btn--secondary btn--sm" title="Sync your gear from Blizzard API">
-        Sync Gear
-      </button>
-      <button id="gp-btn-export-simc" class="btn btn--secondary btn--sm" title="Export gear plan as SimC profile">
-        Export SimC
-      </button>
+      <select id="gp-char-select" class="gp-select gp-select--char" hidden></select>
     </div>
   </div>
 
-  {# ── Character + plan config bar ─────────────────────────── #}
-  <div class="gp-config-bar" id="gp-config-bar" hidden>
+  {# ── Status / error ───────────────────────────────────────────── #}
+  <div id="gp-loading" class="gp-state-msg">Loading characters…</div>
+  <div id="gp-error"   class="gp-state-msg gp-state-msg--error" hidden></div>
+  <div id="gp-no-chars" class="gp-state-msg" hidden>
+    You have no claimed characters yet.
+    <a href="/profile" class="btn btn--primary" style="margin-left:1rem">Go to Settings → Character Claims</a>
+  </div>
 
-    <div class="gp-config-group">
-      <label for="gp-char-select" class="gp-label">Character</label>
-      <select id="gp-char-select" class="gp-select"></select>
+  {# ── Main paperdoll layout ────────────────────────────────────── #}
+  <div id="gp-main" class="gp-main" hidden>
+
+    {# Left column: Head → Waist #}
+    <div class="gp-col gp-col--left" id="gp-col-left"></div>
+
+    {# Centre: char summary + controls #}
+    <div class="gp-center" id="gp-center">
+      <div class="gp-char-badge" id="gp-char-badge">
+        <span id="gp-char-name" class="gp-char-badge__name"></span>
+        <span id="gp-char-meta" class="gp-char-badge__meta"></span>
+      </div>
+
+      <div class="gp-controls">
+        <div class="gp-ctrl-row">
+          <label class="gp-label">Hero Talent</label>
+          <select id="gp-ht-select" class="gp-select">
+            <option value="">— Any —</option>
+          </select>
+        </div>
+        <div class="gp-ctrl-row">
+          <label class="gp-label">BIS Source</label>
+          <select id="gp-source-select" class="gp-select"></select>
+        </div>
+        <div class="gp-ctrl-actions">
+          <button id="gp-btn-populate"     class="btn btn--primary btn--sm">Fill BIS</button>
+          <button id="gp-btn-sync"         class="btn btn--secondary btn--sm">Sync Gear</button>
+          <button id="gp-btn-import-simc"  class="btn btn--secondary btn--sm">Import SimC</button>
+          <button id="gp-btn-export-simc"  class="btn btn--secondary btn--sm">Export SimC</button>
+          <button id="gp-btn-delete-plan"  class="btn btn--danger btn--sm">Reset Plan</button>
+        </div>
+      </div>
+
+      <div id="gp-status" class="gp-status" hidden></div>
     </div>
 
-    <div class="gp-config-group">
-      <label for="gp-spec-display" class="gp-label">Spec</label>
-      <span id="gp-spec-display" class="gp-spec-pill"></span>
-    </div>
-
-    <div class="gp-config-group">
-      <label for="gp-ht-select" class="gp-label">Hero Talent</label>
-      <select id="gp-ht-select" class="gp-select">
-        <option value="">— Any —</option>
-      </select>
-    </div>
-
-    <div class="gp-config-group">
-      <label for="gp-source-select" class="gp-label">BIS Source</label>
-      <select id="gp-source-select" class="gp-select"></select>
-    </div>
-
-    <div class="gp-config-actions">
-      <button id="gp-btn-populate" class="btn btn--primary btn--sm">Fill BIS</button>
-      <button id="gp-btn-import-simc" class="btn btn--secondary btn--sm">Import SimC</button>
-      <button id="gp-btn-delete-plan" class="btn btn--danger btn--sm">Delete Plan</button>
-    </div>
+    {# Right column: Legs → Off Hand #}
+    <div class="gp-col gp-col--right" id="gp-col-right"></div>
 
   </div>
 
-  {# ── Status bar ───────────────────────────────────────────── #}
-  <div id="gp-status" class="gp-status" hidden></div>
-
-  {# ── Loading / error states ───────────────────────────────── #}
-  <div id="gp-loading" class="gp-loading" aria-live="polite">Loading characters…</div>
-  <div id="gp-error" class="gp-error" hidden></div>
-  <div id="gp-no-chars" class="gp-empty" hidden>
-    <p>You have no claimed characters yet.</p>
-    <a href="/profile" class="btn btn--primary">Go to Settings → Character Claims</a>
-  </div>
-
-  {# ── Gear slot table ──────────────────────────────────────── #}
-  <div id="gp-slots-container" class="gp-slots-container" hidden>
-
-    <div class="gp-slots-header">
-      <span class="gp-col-slot">Slot</span>
-      <span class="gp-col-equipped">Equipped</span>
-      <span class="gp-col-desired">Goal / BIS</span>
-      <span class="gp-col-status">Status</span>
+  {# ── Slot detail drawer ───────────────────────────────────────── #}
+  <div id="gp-drawer" class="gp-drawer" hidden>
+    <div class="gp-drawer__header">
+      <span id="gp-drawer-title" class="gp-drawer__title"></span>
+      <button id="gp-drawer-close" class="gp-drawer__close">&times;</button>
     </div>
-
-    <div id="gp-slots-body" class="gp-slots-body"></div>
-
+    <div id="gp-drawer-body" class="gp-drawer__body"></div>
   </div>
 
 </div>
 
-{# ── SimC Import Modal ────────────────────────────────────── #}
+{# ── SimC Import Modal ────────────────────────────────────────── #}
 <div id="gp-simc-modal" class="gp-modal" hidden>
   <div class="gp-modal__backdrop"></div>
   <div class="gp-modal__box">
     <div class="gp-modal__header">
       <h3 class="gp-modal__title">Import SimC Profile</h3>
-      <button class="gp-modal__close" id="gp-simc-close">&times;</button>
+      <button id="gp-simc-close" class="gp-modal__close">&times;</button>
     </div>
     <div class="gp-modal__body">
       <p class="gp-modal__hint">
-        Paste your SimC profile from the in-game SimulationCraft addon or from
-        <a href="https://archon.gg" target="_blank" rel="noopener">Archon</a> /
+        Paste your SimC profile from the in-game SimulationCraft addon,
+        <a href="https://archon.gg" target="_blank" rel="noopener">Archon</a>, or
         <a href="https://www.wowhead.com" target="_blank" rel="noopener">Wowhead</a>.
         Locked slots will not be overwritten.
       </p>
@@ -100,19 +95,10 @@
                 placeholder="Paste SimC profile here…" rows="12"></textarea>
     </div>
     <div class="gp-modal__footer">
-      <button class="btn btn--primary" id="gp-simc-submit">Import</button>
-      <button class="btn btn--secondary" id="gp-simc-cancel">Cancel</button>
+      <button id="gp-simc-submit" class="btn btn--primary">Import</button>
+      <button id="gp-simc-cancel" class="btn btn--secondary">Cancel</button>
     </div>
   </div>
-</div>
-
-{# ── Slot detail drawer (appended by JS) ───────────────────── #}
-<div id="gp-drawer" class="gp-drawer" hidden>
-  <div class="gp-drawer__header">
-    <span id="gp-drawer-title" class="gp-drawer__title"></span>
-    <button class="gp-drawer__close" id="gp-drawer-close">&times;</button>
-  </div>
-  <div id="gp-drawer-body" class="gp-drawer__body"></div>
 </div>
 {% endblock %}
 

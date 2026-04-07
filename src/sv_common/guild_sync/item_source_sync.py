@@ -24,7 +24,7 @@ from .blizzard_client import BlizzardClient
 
 logger = logging.getLogger(__name__)
 
-_RAID_TRACKS: list[str] = ["C", "H", "M"]
+_RAID_TRACKS: list[str] = ["V", "C", "H", "M"]
 _DUNGEON_TRACKS: list[str] = ["C", "H"]
 
 # Delay between encounter fetches to avoid hammering the API.

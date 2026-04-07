@@ -1,8 +1,5 @@
 /**
- * gear_plan.js — Personal Gear Plan member page
- *
- * Manages: character selector, plan config (spec/HT/source),
- * 16-slot table with expand/collapse drawer, SimC import/export.
+ * gear_plan.js — Personal Gear Plan paperdoll page
  */
 
 'use strict';
@@ -10,33 +7,73 @@
 // ── State ─────────────────────────────────────────────────────────────────
 
 let _state = {
-  characters: [],         // [{id, character_name, realm_slug, class_name, class_color, spec_name}]
+  characters: [],
   activeCharId: null,
-  plan: null,             // plan row from API
-  slots: {},              // slot key → slot detail
-  bisSources: [],         // [{id, name, short_label, content_type}]
-  heroTalents: [],        // [{id, name, slug}]
-  trackColors: {},        // {V: '#...', C: '#...', ...}
-  openSlot: null,         // currently open drawer slot key
+  plan: null,
+  slots: {},
+  bisSources: [],
+  heroTalents: [],
+  trackColors: {},
+  openSlot: null,
 };
+
+// WoW paperdoll layout — left column then right column
+const LEFT_SLOTS  = ['head','neck','shoulder','back','chest','wrist','hands','waist'];
+const RIGHT_SLOTS = ['legs','feet','ring_1','ring_2','trinket_1','trinket_2','main_hand','off_hand'];
 
 const SLOT_LABELS = {
-  head: 'Head', neck: 'Neck', shoulder: 'Shoulder', back: 'Back',
-  chest: 'Chest', wrist: 'Wrist', hands: 'Hands', waist: 'Waist',
-  legs: 'Legs', feet: 'Feet',
-  ring_1: 'Ring 1', ring_2: 'Ring 2',
-  trinket_1: 'Trinket 1', trinket_2: 'Trinket 2',
-  main_hand: 'Main Hand', off_hand: 'Off Hand',
+  head:'Head', neck:'Neck', shoulder:'Shoulder', back:'Back',
+  chest:'Chest', wrist:'Wrist', hands:'Hands', waist:'Waist',
+  legs:'Legs', feet:'Feet', ring_1:'Ring 1', ring_2:'Ring 2',
+  trinket_1:'Trinket 1', trinket_2:'Trinket 2',
+  main_hand:'Main Hand', off_hand:'Off Hand',
 };
 
-const WOW_SLOTS = [
-  'head','neck','shoulder','back','chest','wrist','hands','waist','legs','feet',
-  'ring_1','ring_2','trinket_1','trinket_2','main_hand','off_hand',
-];
-
-// ── DOM refs ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 const $ = id => document.getElementById(id);
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function trackColor(t) { return _state.trackColors[t] || '#888'; }
+
+function trackBadge(t) {
+  return `<span class="gp-track" style="background:${esc(trackColor(t))}" title="${esc(t)} track">${esc(t)}</span>`;
+}
+
+async function apiFetch(url, opts = {}) {
+  const r = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    ...opts,
+  });
+  try { return await r.json(); } catch { return { ok: false, error: `HTTP ${r.status}` }; }
+}
+
+function showStatus(msg, type) {
+  const el = $('gp-status');
+  el.textContent = msg;
+  el.className = `gp-status gp-status--${type}`;
+  el.hidden = false;
+}
+
+function clearStatus() {
+  $('gp-status').hidden = true;
+}
+
+function setLoading(on) {
+  $('gp-loading').hidden = !on;
+}
+
+function showError(msg) {
+  const el = $('gp-error');
+  el.textContent = msg;
+  el.hidden = false;
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -45,47 +82,50 @@ window.addEventListener('DOMContentLoaded', init);
 async function init() {
   await loadCharacters();
 
-  $('gp-char-select').addEventListener('change', onCharChange);
-  $('gp-ht-select').addEventListener('change', onConfigChange);
-  $('gp-source-select').addEventListener('change', onConfigChange);
-  $('gp-btn-sync').addEventListener('click', onSyncGear);
-  $('gp-btn-export-simc').addEventListener('click', onExportSimc);
-  $('gp-btn-populate').addEventListener('click', onPopulate);
+  $('gp-char-select')   .addEventListener('change', onCharChange);
+  $('gp-ht-select')     .addEventListener('change', onConfigChange);
+  $('gp-source-select') .addEventListener('change', onConfigChange);
+  $('gp-btn-sync')      .addEventListener('click',  onSyncGear);
+  $('gp-btn-populate')  .addEventListener('click',  onPopulate);
   $('gp-btn-import-simc').addEventListener('click', () => showSimcModal());
+  $('gp-btn-export-simc').addEventListener('click', onExportSimc);
   $('gp-btn-delete-plan').addEventListener('click', onDeletePlan);
-  $('gp-simc-submit').addEventListener('click', onSimcImport);
-  $('gp-simc-cancel').addEventListener('click', hideSimcModal);
-  $('gp-simc-close').addEventListener('click', hideSimcModal);
-  $('gp-drawer-close').addEventListener('click', closeDrawer);
-  $('gp-simc-modal').querySelector('.gp-modal__backdrop')
-    .addEventListener('click', hideSimcModal);
+  $('gp-drawer-close')  .addEventListener('click',  closeDrawer);
+  $('gp-simc-submit')   .addEventListener('click',  onSimcImport);
+  $('gp-simc-cancel')   .addEventListener('click',  hideSimcModal);
+  $('gp-simc-close')    .addEventListener('click',  hideSimcModal);
+  $('gp-simc-modal').querySelector('.gp-modal__backdrop').addEventListener('click', hideSimcModal);
 }
 
-// ── Character loading ─────────────────────────────────────────────────────
+// ── Load characters ───────────────────────────────────────────────────────
 
 async function loadCharacters() {
   setLoading(true);
   try {
     const resp = await apiFetch('/api/v1/me/characters');
     if (!resp.ok) throw new Error(resp.error || 'Failed to load characters');
+
     const chars = (resp.data && resp.data.characters) || [];
     const inGuild = chars.filter(c => c.in_guild !== false);
+
     if (!inGuild.length) {
       setLoading(false);
       $('gp-no-chars').hidden = false;
       return;
     }
+
     _state.characters = inGuild;
     populateCharSelector(inGuild);
     setLoading(false);
-    $('gp-config-bar').hidden = false;
+    $('gp-char-select').hidden = false;
 
     const defaultId = resp.data.default_character_id;
     const startId = (defaultId && inGuild.find(c => c.id === defaultId))
       ? defaultId
       : inGuild[0].id;
+
     $('gp-char-select').value = startId;
-    await loadPlan(startId);
+    await loadPlan(parseInt(startId, 10));
   } catch (err) {
     setLoading(false);
     showError(err.message);
@@ -109,39 +149,50 @@ async function onCharChange() {
   await loadPlan(charId);
 }
 
-// ── Plan loading ──────────────────────────────────────────────────────────
+// ── Load plan ─────────────────────────────────────────────────────────────
 
 async function loadPlan(charId) {
   _state.activeCharId = charId;
-  $('gp-slots-container').hidden = true;
-  showStatus('Loading plan…', 'info');
+  $('gp-main').hidden = true;
+  showStatus('Loading…', 'info');
 
   try {
     const resp = await apiFetch(`/api/v1/me/gear-plan/${charId}`);
     if (!resp.ok) throw new Error(resp.error || 'Failed to load plan');
+
     const data = resp.data;
-    _state.plan = data.plan;
-    _state.slots = data.slots;
+    _state.plan       = data.plan;
+    _state.slots      = data.slots;
     _state.bisSources = data.bis_sources || [];
     _state.heroTalents = data.hero_talents || [];
     _state.trackColors = data.track_colors || {};
 
-    updateSpecDisplay();
+    updateCharBadge(charId);
     updateHtSelect();
     updateSourceSelect();
-    renderSlots();
-    $('gp-slots-container').hidden = false;
+    renderPaperdoll();
+
+    $('gp-main').hidden = false;
     clearStatus();
   } catch (err) {
-    showError(err.message);
+    showStatus(err.message, 'err');
   }
 }
 
-// ── Config display ────────────────────────────────────────────────────────
+// ── Config controls ───────────────────────────────────────────────────────
 
-function updateSpecDisplay() {
-  const specName = _state.plan?.spec_name || '—';
-  $('gp-spec-display').textContent = specName;
+function updateCharBadge(charId) {
+  const char = _state.characters.find(c => c.id === charId);
+  if (!char) return;
+  $('gp-char-badge__name') && ($('gp-char-badge__name').textContent = char.character_name);
+  const nameEl = document.getElementById('gp-char-name');
+  const metaEl = document.getElementById('gp-char-meta');
+  if (nameEl) nameEl.textContent = char.character_name;
+  if (metaEl) {
+    const spec = _state.plan?.spec_name || char.spec_name || '';
+    const cls  = char.class_name || '';
+    metaEl.textContent = [spec, cls, char.realm_slug].filter(Boolean).join(' · ');
+  }
 }
 
 function updateHtSelect() {
@@ -168,300 +219,292 @@ function updateSourceSelect() {
   }
 }
 
-// ── Config change ─────────────────────────────────────────────────────────
-
 async function onConfigChange() {
-  const heroTalentId = $('gp-ht-select').value ? parseInt($('gp-ht-select').value, 10) : null;
-  const bisSourceId  = $('gp-source-select').value ? parseInt($('gp-source-select').value, 10) : null;
-
-  try {
-    const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/config`, {
-      method: 'PATCH',
-      body: JSON.stringify({ hero_talent_id: heroTalentId, bis_source_id: bisSourceId }),
-    });
-    if (!resp.ok) throw new Error(resp.error || 'Config update failed');
-    // Reload to refresh BIS recommendations
-    await loadPlan(_state.activeCharId);
-  } catch (err) {
-    showStatus(err.message, 'err');
-  }
+  const htId  = $('gp-ht-select').value  ? parseInt($('gp-ht-select').value, 10)  : null;
+  const srcId = $('gp-source-select').value ? parseInt($('gp-source-select').value, 10) : null;
+  const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/config`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hero_talent_id: htId, bis_source_id: srcId }),
+  });
+  if (resp.ok) await loadPlan(_state.activeCharId);
+  else showStatus(resp.error || 'Config update failed', 'err');
 }
 
-// ── Slot rendering ────────────────────────────────────────────────────────
+// ── Paperdoll rendering ───────────────────────────────────────────────────
 
-function renderSlots() {
-  const body = $('gp-slots-body');
-  body.innerHTML = '';
+function renderPaperdoll() {
+  const leftEl  = $('gp-col-left');
+  const rightEl = $('gp-col-right');
+  leftEl.innerHTML  = '';
+  rightEl.innerHTML = '';
 
-  for (const slotKey of WOW_SLOTS) {
-    const sd = _state.slots[slotKey];
-    if (!sd) continue;
-    const row = buildSlotRow(sd);
-    body.appendChild(row);
-  }
+  for (const slot of LEFT_SLOTS)  leftEl.appendChild(buildSlotCard(slot));
+  for (const slot of RIGHT_SLOTS) rightEl.appendChild(buildSlotCard(slot));
 }
 
-function buildSlotRow(sd) {
-  const row = document.createElement('div');
-  row.className = 'gp-slot-row';
-  row.dataset.slot = sd.slot;
-  if (_state.openSlot === sd.slot) row.classList.add('is-open');
+function buildSlotCard(slotKey) {
+  const sd = _state.slots[slotKey] || {};
+  const eq = sd.equipped;
+  const desired = sd.desired;
+  const upgrades = sd.upgrade_tracks || [];
+  const bisRecs  = sd.bis_recommendations || [];
 
-  // Col 1: Slot label
-  const colSlot = document.createElement('span');
-  colSlot.className = 'gp-col-slot';
-  colSlot.textContent = SLOT_LABELS[sd.slot] || sd.slot;
-
-  // Col 2: Equipped
-  const colEquipped = document.createElement('div');
-  colEquipped.className = 'gp-col-equipped';
-  colEquipped.innerHTML = renderItemCell(sd.equipped, 'equipped');
-
-  // Col 3: Desired / BIS
-  const colDesired = document.createElement('div');
-  colDesired.className = 'gp-col-desired';
-  const desiredItem = sd.desired || (sd.bis_recommendations.length ? _primaryBis(sd) : null);
-  colDesired.innerHTML = renderItemCell(desiredItem, 'desired');
-
-  // Col 4: Status
-  const colStatus = document.createElement('div');
-  colStatus.className = 'gp-col-status';
-  colStatus.innerHTML = renderStatusBadges(sd);
-
-  row.appendChild(colSlot);
-  row.appendChild(colEquipped);
-  row.appendChild(colDesired);
-  row.appendChild(colStatus);
-
-  row.addEventListener('click', () => toggleDrawer(sd.slot));
-  return row;
-}
-
-function _primaryBis(sd) {
-  // Return the BIS recommendation from the selected source
-  const srcId = _state.plan?.bis_source_id;
-  const recs = sd.bis_recommendations || [];
-  return recs.find(r => r.source_id === srcId) || recs[0] || null;
-}
-
-function renderItemCell(item, type) {
-  if (!item || !item.blizzard_item_id) {
-    return `<div class="gp-item-icon--placeholder"></div><span class="gp-empty-slot">—</span>`;
-  }
-  const iconSrc = item.icon_url
-    ? `<img class="gp-item-icon" src="${esc(item.icon_url)}" alt="" loading="lazy">`
-    : `<div class="gp-item-icon--placeholder"></div>`;
-
-  let meta = '';
-  if (type === 'equipped' && item.item_level) {
-    const trackBadge = item.quality_track
-      ? `<span class="gp-track-badge" style="background:${esc(trackColor(item.quality_track))}">${esc(item.quality_track)}</span>`
-      : '';
-    meta = `<span class="gp-item-meta">${item.item_level} ${trackBadge}</span>`;
+  // Determine icon + name to display (equipped item takes priority)
+  let iconSrc = null, dispName = null, dispIlvl = null, dispTrack = null;
+  if (eq && eq.blizzard_item_id) {
+    iconSrc   = eq.icon_url;
+    dispName  = eq.item_name;
+    dispIlvl  = eq.item_level;
+    dispTrack = eq.quality_track;
   }
 
-  return `${iconSrc}<div class="gp-item-info">
-    <div class="gp-item-name">${esc(item.item_name || 'Unknown')}</div>
-    ${meta}
-  </div>`;
-}
+  // Goal item (desired if different from equipped, or primary BIS rec if no desired set)
+  const primaryBis = bisRecs.find(r => r.source_id === _state.plan?.bis_source_id) || bisRecs[0];
+  const goalItem = desired || primaryBis;
+  const showGoal = goalItem && (!eq || goalItem.blizzard_item_id !== eq?.blizzard_item_id);
 
-function renderStatusBadges(sd) {
-  let html = '';
-  const locked = sd.desired?.is_locked;
+  const card = document.createElement('div');
+  card.className = 'gp-slot-card';
+  card.dataset.slot = slotKey;
+  if (_state.openSlot === slotKey) card.classList.add('is-open');
+  if (sd.is_bis && !sd.needs_upgrade) card.classList.add('is-bis');
+  else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
 
-  if (locked) {
-    html += `<span class="gp-status-badge gp-status-badge--locked">🔒 Locked</span>`;
+  // Icon
+  const iconEl = document.createElement('div');
+  if (iconSrc) {
+    const img = document.createElement('img');
+    img.className = 'gp-slot-card__icon';
+    img.src = iconSrc;
+    img.alt = '';
+    img.loading = 'lazy';
+    iconEl.appendChild(img);
+  } else {
+    const empty = document.createElement('div');
+    empty.className = 'gp-slot-card__icon--empty';
+    empty.textContent = SLOT_LABELS[slotKey] || slotKey;
+    iconEl.appendChild(empty);
   }
 
-  if (sd.is_bis && !sd.needs_upgrade) {
-    html += `<span class="gp-status-badge gp-status-badge--bis">✓ BIS</span>`;
-  } else if (sd.needs_upgrade) {
-    const tracks = sd.upgrade_tracks || [];
-    if (tracks.length) {
-      const pips = tracks.map(t =>
-        `<span class="gp-track-badge" style="background:${esc(trackColor(t))}">${esc(t)}</span>`
-      ).join('');
-      html += `<span class="gp-status-badge gp-status-badge--need">Need</span>`;
-      html += `<div class="gp-upgrade-tracks">${pips}</div>`;
+  // Body
+  const body = document.createElement('div');
+  body.className = 'gp-slot-card__body';
+
+  const label = document.createElement('div');
+  label.className = 'gp-slot-card__label';
+  label.textContent = SLOT_LABELS[slotKey] || slotKey;
+
+  const name = document.createElement('div');
+  name.className = 'gp-slot-card__name';
+  name.title = dispName || '—';
+  name.textContent = dispName || '—';
+
+  const meta = document.createElement('div');
+  meta.className = 'gp-slot-card__meta';
+  if (dispIlvl) {
+    const ilvl = document.createElement('span');
+    ilvl.className = 'gp-slot-card__ilvl';
+    ilvl.textContent = dispIlvl;
+    meta.appendChild(ilvl);
+  }
+  if (dispTrack) {
+    meta.innerHTML += trackBadge(dispTrack);
+  }
+
+  body.appendChild(label);
+  body.appendChild(name);
+  body.appendChild(meta);
+
+  // Goal row
+  if (showGoal) {
+    const goal = document.createElement('div');
+    goal.className = 'gp-slot-card__goal';
+    const gName = goalItem.item_name || goalItem.name || '?';
+    if (goalItem.icon_url) {
+      goal.innerHTML = `<img class="gp-slot-card__goal-icon" src="${esc(goalItem.icon_url)}" alt="" loading="lazy">`;
+    } else {
+      goal.innerHTML = `<span style="color:var(--color-accent)">→</span>`;
     }
-  } else if (!sd.equipped && !sd.desired) {
-    html += `<span class="gp-status-badge gp-status-badge--none">—</span>`;
+    const gText = document.createElement('span');
+    gText.textContent = gName;
+    gText.title = gName;
+    goal.appendChild(gText);
+    body.appendChild(goal);
   }
 
-  return html;
-}
+  // Upgrade track row
+  if (upgrades.length) {
+    const upgradeRow = document.createElement('div');
+    upgradeRow.className = 'gp-upgrade-row';
+    upgradeRow.innerHTML = upgrades.map(t => trackBadge(t)).join('');
+    body.appendChild(upgradeRow);
+  }
 
-function trackColor(track) {
-  return _state.trackColors[track] || '#888';
+  card.appendChild(iconEl);
+  card.appendChild(body);
+  card.addEventListener('click', () => toggleDrawer(slotKey));
+  return card;
 }
 
 // ── Drawer ────────────────────────────────────────────────────────────────
 
 function toggleDrawer(slotKey) {
-  if (_state.openSlot === slotKey) {
-    closeDrawer();
-  } else {
-    openDrawer(slotKey);
-  }
+  if (_state.openSlot === slotKey) closeDrawer();
+  else openDrawer(slotKey);
 }
 
 function openDrawer(slotKey) {
   _state.openSlot = slotKey;
-  const sd = _state.slots[slotKey];
-  if (!sd) return;
 
-  // Mark open row
-  document.querySelectorAll('.gp-slot-row').forEach(r => {
-    r.classList.toggle('is-open', r.dataset.slot === slotKey);
+  // Highlight open card
+  document.querySelectorAll('.gp-slot-card').forEach(c => {
+    c.classList.toggle('is-open', c.dataset.slot === slotKey);
   });
 
-  $('gp-drawer-title').textContent = `${SLOT_LABELS[slotKey] || slotKey} — Details`;
-  $('gp-drawer-body').innerHTML = renderDrawerBody(sd);
+  const sd = _state.slots[slotKey] || {};
+  $('gp-drawer-title').textContent = `${SLOT_LABELS[slotKey] || slotKey}`;
+  $('gp-drawer-body').innerHTML = renderDrawerBody(slotKey, sd);
   $('gp-drawer').hidden = false;
-
-  // Insert drawer after the open row
-  const openRow = document.querySelector(`.gp-slot-row[data-slot="${slotKey}"]`);
-  const drawer = $('gp-drawer');
-  const body = $('gp-slots-body');
-  if (openRow && body.contains(openRow)) {
-    openRow.after(drawer);
-    drawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  // Wire up drawer controls
-  wireDrawerControls(sd);
+  $('gp-drawer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function closeDrawer() {
   _state.openSlot = null;
-  document.querySelectorAll('.gp-slot-row').forEach(r => r.classList.remove('is-open'));
-  const drawer = $('gp-drawer');
-  drawer.hidden = true;
-  $('gp-slots-body').appendChild(drawer); // return to end
+  document.querySelectorAll('.gp-slot-card').forEach(c => c.classList.remove('is-open'));
+  $('gp-drawer').hidden = true;
 }
 
-function renderDrawerBody(sd) {
-  const equip = sd.equipped;
+function renderDrawerBody(slotKey, sd) {
+  const eq      = sd.equipped;
   const desired = sd.desired;
-  const bis = sd.bis_recommendations || [];
+  const bis     = sd.bis_recommendations || [];
   const sources = sd.item_sources || [];
-  const tracks = sd.available_tracks || [];
+  const tracks  = sd.available_tracks || [];
   const upgrades = sd.upgrade_tracks || [];
 
   // Section 1: Equipped
-  let equippedHtml = '';
-  if (equip) {
-    const enchant = equip.enchant_id ? `<div class="gp-drop-source">Enchant: ${equip.enchant_id}</div>` : '';
+  let equippedHtml;
+  if (eq && eq.blizzard_item_id) {
+    const track = eq.quality_track ? trackBadge(eq.quality_track) : '';
     equippedHtml = `
-      <div class="gp-bis-row">
-        ${equip.icon_url ? `<img class="gp-item-icon" src="${esc(equip.icon_url)}" alt="" loading="lazy">` : ''}
-        <div class="gp-item-info">
-          <div class="gp-item-name">${esc(equip.item_name || 'Unknown')}</div>
-          <div class="gp-item-meta">
-            ${equip.item_level || ''}&nbsp;
-            ${equip.quality_track ? `<span class="gp-track-badge" style="background:${esc(trackColor(equip.quality_track))}">${esc(equip.quality_track)}</span>` : ''}
-          </div>
-          ${enchant}
+      <div class="gp-drawer-item">
+        ${eq.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(eq.icon_url)}" alt="" loading="lazy">` : ''}
+        <div class="gp-drawer-item__info">
+          <div class="gp-drawer-item__name">${esc(eq.item_name || 'Unknown')}</div>
+          <div class="gp-drawer-item__meta">${eq.item_level || ''}&nbsp;${track}</div>
+          ${eq.enchant_id ? `<div class="gp-drawer-item__meta">Enchant: ${eq.enchant_id}</div>` : ''}
         </div>
       </div>`;
   } else {
-    equippedHtml = '<div class="gp-empty-slot">Nothing equipped</div>';
+    equippedHtml = '<div class="gp-drawer-empty">Nothing equipped</div>';
   }
 
-  // Section 2: BIS Recommendations
-  let bisHtml = '';
+  // Section 2: BIS recommendations
+  let bisHtml;
   if (bis.length) {
     bisHtml = bis.map(r => `
       <div class="gp-bis-row">
-        ${r.icon_url ? `<img class="gp-item-icon" src="${esc(r.icon_url)}" alt="" loading="lazy">` : ''}
-        <span class="gp-bis-source-label">${esc(r.short_label || r.source_name)}</span>
-        <span class="gp-bis-item-name">${esc(r.item_name)}</span>
-        <button class="btn btn--sm btn--secondary" onclick="setDesiredFromBis('${esc(sd.slot)}', ${r.blizzard_item_id}, '${esc(r.item_name)}')">
-          Use
-        </button>
+        ${r.icon_url ? `<img class="gp-drawer-item__icon" style="width:24px;height:24px" src="${esc(r.icon_url)}" alt="" loading="lazy">` : ''}
+        <span class="gp-bis-row__source">${esc(r.short_label || r.source_name)}</span>
+        <span class="gp-bis-row__name">${esc(r.item_name)}</span>
+        <button class="btn btn--sm btn--secondary" style="padding:0.1rem 0.4rem;font-size:0.72rem"
+                onclick="setDesiredItem('${esc(slotKey)}',${r.blizzard_item_id},'${esc(r.item_name)}')">Use</button>
       </div>`).join('');
   } else {
-    bisHtml = '<div class="gp-empty-slot">No BIS data for this slot</div>';
+    bisHtml = '<div class="gp-drawer-empty">No BIS data for this slot</div>';
   }
 
-  // Section 3: Selection + lock
-  let selectionHtml = '';
-  if (desired) {
+  // Section 3: Your selection
+  let selectionHtml;
+  if (desired && desired.blizzard_item_id) {
+    const locked = desired.is_locked;
     selectionHtml = `
-      <div class="gp-bis-row">
-        ${desired.icon_url ? `<img class="gp-item-icon" src="${esc(desired.icon_url)}" alt="" loading="lazy">` : ''}
-        <span class="gp-bis-item-name">${esc(desired.item_name || 'Unknown')}</span>
-        <button class="gp-lock-btn ${desired.is_locked ? 'locked' : ''}" onclick="toggleLock('${esc(sd.slot)}', ${desired.is_locked})">
-          ${desired.is_locked ? '🔒 Locked' : '🔓 Lock'}
+      <div class="gp-drawer-item" style="margin-bottom:0.5rem">
+        ${desired.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(desired.icon_url)}" alt="" loading="lazy">` : ''}
+        <div class="gp-drawer-item__info">
+          <div class="gp-drawer-item__name">${esc(desired.item_name || 'Unknown')}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+        <button class="gp-lock-btn ${locked ? 'locked' : ''}"
+                onclick="toggleLock('${esc(slotKey)}',${locked})">
+          ${locked ? '🔒 Locked' : '🔓 Lock'}
         </button>
-        <button class="btn btn--sm btn--secondary" onclick="clearSlot('${esc(sd.slot)}')">Clear</button>
+        <button class="btn btn--sm btn--secondary"
+                onclick="clearSlot('${esc(slotKey)}')">Clear</button>
       </div>`;
   } else {
-    selectionHtml = '<div class="gp-empty-slot">No desired item set</div>';
+    selectionHtml = '<div class="gp-drawer-empty">No goal item set</div>';
   }
 
   // Manual lookup
   const manualHtml = `
-    <div class="gp-manual-lookup" style="margin-top:0.5rem">
-      <input type="number" class="gp-manual-lookup__input" id="gp-manual-id-${esc(sd.slot)}"
-             placeholder="Item ID" min="1">
-      <button class="btn btn--sm btn--secondary" onclick="fetchAndSetItem('${esc(sd.slot)}')">Fetch</button>
+    <div class="gp-manual-row">
+      <input type="number" class="gp-manual-input" id="gp-mid-${esc(slotKey)}" placeholder="Item ID" min="1">
+      <button class="btn btn--sm btn--secondary" onclick="fetchAndSetItem('${esc(slotKey)}')">Fetch</button>
     </div>`;
 
-  // Drop location
-  let dropHtml = '';
+  // Section 4: Drop location + tracks
+  let dropHtml;
   if (sources.length) {
     const loc = sources[0];
-    const trackPills = tracks.map(t =>
-      `<span class="gp-track-badge" style="background:${esc(trackColor(t))}">${esc(t)}</span>`
-    ).join(' ');
-    dropHtml = `<div class="gp-drop-source">
-      ${esc(loc.source_name)}${loc.source_instance ? ` — ${esc(loc.source_instance)}` : ''}
-      &nbsp;${trackPills}
-    </div>`;
-    if (upgrades.length) {
-      const upgPills = upgrades.map(t =>
-        `<span class="gp-track-badge" style="background:${esc(trackColor(t))}">${esc(t)}</span>`
-      ).join(' ');
-      dropHtml += `<div class="gp-drop-source" style="margin-top:0.2rem">
-        Upgrade tracks: ${upgPills}
-      </div>`;
-    }
+    const trackPills = tracks.map(t => trackBadge(t)).join(' ');
+    const upgPills   = upgrades.map(t => trackBadge(t)).join(' ');
+    dropHtml = `
+      <div class="gp-drawer-item__meta" style="flex-wrap:wrap;gap:4px">
+        <span>${esc(loc.source_name)}${loc.source_instance ? ` — ${esc(loc.source_instance)}` : ''}</span>
+      </div>
+      <div class="gp-drawer-item__meta" style="margin-top:4px">
+        <span style="color:var(--color-text-muted);font-size:0.7rem">Available:</span>
+        ${trackPills}
+      </div>
+      ${upgrades.length ? `
+      <div class="gp-drawer-item__meta" style="margin-top:4px">
+        <span style="color:var(--color-text-muted);font-size:0.7rem">Upgrade:</span>
+        ${upgPills}
+      </div>` : ''}`;
+  } else {
+    dropHtml = '<div class="gp-drawer-empty">No drop source data</div>';
   }
 
   return `
-    <div class="gp-drawer-section">
-      <div class="gp-drawer-section__title">Currently Equipped</div>
+    <div>
+      <div class="gp-drawer-section__title">Equipped</div>
       ${equippedHtml}
     </div>
-    <div class="gp-drawer-section">
+    <div>
       <div class="gp-drawer-section__title">BIS Recommendations</div>
       ${bisHtml}
     </div>
-    <div class="gp-drawer-section">
-      <div class="gp-drawer-section__title">Your Selection</div>
+    <div>
+      <div class="gp-drawer-section__title">Your Goal</div>
       ${selectionHtml}
       ${manualHtml}
     </div>
-    <div class="gp-drawer-section">
-      <div class="gp-drawer-section__title">Drop Location &amp; Tracks</div>
-      ${dropHtml || '<div class="gp-empty-slot">No source data</div>'}
+    <div>
+      <div class="gp-drawer-section__title">Drop Location</div>
+      ${dropHtml}
     </div>`;
 }
 
-function wireDrawerControls() {
-  // Controls are wired via inline onclick for simplicity; global functions below
-}
+// ── Drawer action globals ─────────────────────────────────────────────────
 
-// ── Drawer actions (globals for inline handlers) ──────────────────────────
-
-window.setDesiredFromBis = async function(slot, blizzardItemId, itemName) {
-  await setSlot(slot, blizzardItemId, itemName);
+window.setDesiredItem = async function(slot, blizzardItemId, itemName) {
+  const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/slot/${slot}`, {
+    method: 'PUT',
+    body: JSON.stringify({ blizzard_item_id: blizzardItemId, item_name: itemName }),
+  });
+  if (resp.ok) { showStatus('Goal updated', 'ok'); await reloadPlan(); }
+  else showStatus(resp.error || 'Failed', 'err');
 };
 
 window.clearSlot = async function(slot) {
-  await setSlot(slot, null, null);
+  const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/slot/${slot}`, {
+    method: 'PUT',
+    body: JSON.stringify({ blizzard_item_id: null }),
+  });
+  if (resp.ok) { showStatus('Slot cleared', 'ok'); await reloadPlan(); }
+  else showStatus(resp.error || 'Failed', 'err');
 };
 
 window.toggleLock = async function(slot, currentlyLocked) {
@@ -469,63 +512,36 @@ window.toggleLock = async function(slot, currentlyLocked) {
     method: 'PUT',
     body: JSON.stringify({ is_locked: !currentlyLocked }),
   });
-  if (resp.ok) {
-    showStatus(!currentlyLocked ? 'Slot locked' : 'Slot unlocked', 'ok');
-    await reloadSlots();
-  } else {
-    showStatus(resp.error || 'Failed to update lock', 'err');
-  }
+  if (resp.ok) { showStatus(!currentlyLocked ? 'Slot locked' : 'Slot unlocked', 'ok'); await reloadPlan(); }
+  else showStatus(resp.error || 'Failed', 'err');
 };
 
 window.fetchAndSetItem = async function(slot) {
-  const input = document.getElementById(`gp-manual-id-${slot}`);
+  const input = document.getElementById(`gp-mid-${slot}`);
   const itemId = parseInt(input?.value, 10);
   if (!itemId) return;
-
   showStatus('Fetching item…', 'info');
   const itemResp = await apiFetch(`/api/v1/items/${itemId}`);
-  if (!itemResp.ok) {
-    showStatus(itemResp.error || 'Item not found', 'err');
-    return;
-  }
-  const item = itemResp.data;
-  await setSlot(slot, item.blizzard_item_id, item.name);
+  if (!itemResp.ok) { showStatus(itemResp.error || 'Item not found', 'err'); return; }
+  await window.setDesiredItem(slot, itemResp.data.blizzard_item_id, itemResp.data.name);
 };
-
-async function setSlot(slot, blizzardItemId, itemName) {
-  const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/slot/${slot}`, {
-    method: 'PUT',
-    body: JSON.stringify({ blizzard_item_id: blizzardItemId, item_name: itemName }),
-  });
-  if (resp.ok) {
-    showStatus('Slot updated', 'ok');
-    await reloadSlots();
-  } else {
-    showStatus(resp.error || 'Failed to update slot', 'err');
-  }
-}
 
 // ── Plan actions ──────────────────────────────────────────────────────────
 
 async function onSyncGear() {
-  showStatus('Syncing gear from Blizzard…', 'info');
-  // Trigger character refresh via existing endpoint
-  try {
-    const resp = await apiFetch('/api/v1/me/refresh', { method: 'POST' });
-    if (resp.ok) {
-      showStatus('Gear synced — reloading plan…', 'ok');
-      setTimeout(() => loadPlan(_state.activeCharId), 1500);
-    } else {
-      showStatus(resp.error || 'Sync failed', 'err');
-    }
-  } catch {
-    showStatus('Sync request failed', 'err');
+  showStatus('Syncing characters…', 'info');
+  const resp = await apiFetch('/api/v1/me/bnet-sync', { method: 'POST' });
+  if (resp.ok) {
+    showStatus('Sync complete — reloading…', 'ok');
+    setTimeout(() => loadPlan(_state.activeCharId), 1200);
+  } else {
+    showStatus(resp.error || 'Sync failed (Battle.net link required)', 'err');
   }
 }
 
 async function onPopulate() {
   const srcId = $('gp-source-select').value ? parseInt($('gp-source-select').value, 10) : null;
-  const htId  = $('gp-ht-select').value ? parseInt($('gp-ht-select').value, 10) : null;
+  const htId  = $('gp-ht-select').value     ? parseInt($('gp-ht-select').value, 10)     : null;
   showStatus('Filling unlocked slots from BIS…', 'info');
   const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/populate`, {
     method: 'POST',
@@ -533,135 +549,65 @@ async function onPopulate() {
   });
   if (resp.ok) {
     showStatus(`${resp.data?.populated || 0} slots filled`, 'ok');
-    await reloadSlots();
+    await reloadPlan();
   } else {
     showStatus(resp.error || 'Populate failed', 'err');
   }
 }
 
 async function onDeletePlan() {
-  if (!confirm('Delete this gear plan? All slot selections will be lost.')) return;
+  if (!confirm('Reset this gear plan? All goal items will be cleared.')) return;
   const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}`, { method: 'DELETE' });
-  if (resp.ok) {
-    showStatus('Plan deleted', 'ok');
-    closeDrawer();
-    await loadPlan(_state.activeCharId);
-  } else {
-    showStatus(resp.error || 'Delete failed', 'err');
-  }
+  if (resp.ok) { showStatus('Plan reset', 'ok'); closeDrawer(); await loadPlan(_state.activeCharId); }
+  else showStatus(resp.error || 'Failed', 'err');
 }
 
 async function onExportSimc() {
-  showStatus('Generating SimC profile…', 'info');
+  showStatus('Generating SimC…', 'info');
   try {
     const resp = await fetch(`/api/v1/me/gear-plan/${_state.activeCharId}/export-simc`, {
-      headers: { 'Accept': 'text/plain' },
+      credentials: 'include',
     });
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({}));
-      showStatus(data.error || 'Export failed', 'err');
-      return;
-    }
+    if (!resp.ok) { const d = await resp.json().catch(() => ({})); showStatus(d.error || 'Export failed', 'err'); return; }
     const text = await resp.text();
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'gear_plan.simc';
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })),
+      download: 'gear_plan.simc',
+    });
     a.click();
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(a.href);
     clearStatus();
-  } catch (err) {
-    showStatus(err.message, 'err');
-  }
+  } catch (err) { showStatus(err.message, 'err'); }
 }
 
-// ── SimC import modal ─────────────────────────────────────────────────────
+// ── SimC modal ────────────────────────────────────────────────────────────
 
-function showSimcModal() {
-  $('gp-simc-modal').hidden = false;
-  $('gp-simc-text').value = '';
-  $('gp-simc-text').focus();
-}
-
-function hideSimcModal() {
-  $('gp-simc-modal').hidden = true;
-}
+function showSimcModal() { $('gp-simc-modal').hidden = false; $('gp-simc-text').value = ''; $('gp-simc-text').focus(); }
+function hideSimcModal() { $('gp-simc-modal').hidden = true; }
 
 async function onSimcImport() {
   const text = $('gp-simc-text').value.trim();
   if (!text) return;
-  showStatus('Importing SimC profile…', 'info');
   hideSimcModal();
+  showStatus('Importing…', 'info');
   const resp = await apiFetch(`/api/v1/me/gear-plan/${_state.activeCharId}/import-simc`, {
     method: 'POST',
     body: JSON.stringify({ simc_text: text }),
   });
   if (resp.ok) {
     const d = resp.data || {};
-    showStatus(
-      `Imported: ${d.populated || 0} slots set` +
-      (d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''),
-      'ok'
-    );
-    await reloadSlots();
+    showStatus(`Imported: ${d.populated||0} slots set${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`, 'ok');
+    await reloadPlan();
   } else {
     showStatus(resp.error || 'Import failed', 'err');
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Reload helper ─────────────────────────────────────────────────────────
 
-async function reloadSlots() {
+async function reloadPlan() {
   const openSlot = _state.openSlot;
   closeDrawer();
   await loadPlan(_state.activeCharId);
-  if (openSlot) {
-    openDrawer(openSlot);
-  }
-}
-
-async function apiFetch(url, options = {}) {
-  const defaults = {
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  };
-  const resp = await fetch(url, { ...defaults, ...options });
-  try {
-    return await resp.json();
-  } catch {
-    return { ok: false, error: `HTTP ${resp.status}` };
-  }
-}
-
-function setLoading(on) {
-  $('gp-loading').style.display = on ? '' : 'none';
-}
-
-function showStatus(msg, type) {
-  const el = $('gp-status');
-  el.textContent = msg;
-  el.className = `gp-status gp-status--${type}`;
-  el.hidden = false;
-}
-
-function clearStatus() {
-  const el = $('gp-status');
-  el.hidden = true;
-  el.textContent = '';
-}
-
-function showError(msg) {
-  $('gp-error').textContent = msg;
-  $('gp-error').hidden = false;
-}
-
-function esc(str) {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  if (openSlot && _state.slots[openSlot]) openDrawer(openSlot);
 }

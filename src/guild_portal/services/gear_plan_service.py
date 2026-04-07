@@ -585,6 +585,9 @@ async def get_plan_detail(
             for r in src_rows:
                 bid = r["blizzard_item_id"]
                 tracks = list(r["quality_tracks"] or [])
+                # Raid boss items always include V (LFR) even if not stored in older data
+                if r["source_type"] == "raid_boss" and "V" not in tracks and "C" in tracks:
+                    tracks = ["V"] + tracks
                 existing_tracks = tracks_by_item.get(bid, [])
                 # Merge + deduplicate, preserving order V<C<H<M
                 merged = sorted(
