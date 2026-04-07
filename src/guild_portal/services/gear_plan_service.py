@@ -68,13 +68,19 @@ def _upgrade_tracks(
     """Return which available tracks would be upgrades over the equipped item.
 
     Rules:
+    - Empty slot → anything is an upgrade
+    - Item equipped, track unknown → cannot determine upgrades (return [])
     - Same item, lower track → need strictly higher track
-    - Different item (or no desired set) → same track and above are upgrades
+    - Different item → same track and above (never recommends a lower track)
     """
     if not available_tracks:
         return []
     if equipped_track is None:
-        return available_tracks  # anything is an upgrade
+        # Empty slot: anything is an upgrade.
+        # Item equipped but track undetected: cannot recommend upgrades safely —
+        # returning all tracks would incorrectly include Veteran as an upgrade
+        # for someone wearing a non-LFR item whose display_string wasn't detected.
+        return available_tracks if equipped_item_id is None else []
 
     eq_idx = TRACK_ORDER.get(equipped_track, -1)
 
@@ -82,8 +88,65 @@ def _upgrade_tracks(
         # Same item — need strictly higher track
         return [t for t in available_tracks if TRACK_ORDER.get(t, -1) > eq_idx]
     else:
-        # Different item — same track and above are upgrades
+        # Different item — same track and above (never lower)
         return [t for t in available_tracks if TRACK_ORDER.get(t, -1) >= eq_idx]
+
+
+def _normalize_paired_slot(
+    slot_a: str,
+    slot_b: str,
+    equipped_by_slot: dict,
+    desired_by_slot: dict,
+    bis_by_slot: dict,
+    bis_source_id: Optional[int],
+) -> None:
+    """Normalize a paired slot (rings, trinkets) by swapping equipped items for display.
+
+    Rules (only the equipped items are swapped; desired/BIS stay per-slot):
+    1. If swapping the equipped items increases the number of equipped==desired
+       matches, swap.
+    2. If neither assignment produces a match, sort equipped items alphabetically
+       by item name so the display is always consistent.
+
+    Modifies equipped_by_slot in-place.
+    """
+    eq_a = equipped_by_slot.get(slot_a)
+    eq_b = equipped_by_slot.get(slot_b)
+    if not eq_a or not eq_b:
+        return  # nothing to normalize if either slot is empty
+
+    eq_a_bid = eq_a["blizzard_item_id"]
+    eq_b_bid = eq_b["blizzard_item_id"]
+
+    def _desired_bid(slot: str) -> Optional[int]:
+        des = desired_by_slot.get(slot)
+        if des and des.get("blizzard_item_id"):
+            return des["blizzard_item_id"]
+        recs = bis_by_slot.get(slot, [])
+        if recs and bis_source_id:
+            for rec in recs:
+                if rec["source_id"] == bis_source_id:
+                    return rec["blizzard_item_id"]
+        return None
+
+    des_a = _desired_bid(slot_a)
+    des_b = _desired_bid(slot_b)
+
+    match_current = (1 if des_a and eq_a_bid == des_a else 0) + \
+                    (1 if des_b and eq_b_bid == des_b else 0)
+    match_swapped = (1 if des_a and eq_b_bid == des_a else 0) + \
+                    (1 if des_b and eq_a_bid == des_b else 0)
+
+    should_swap = match_swapped > match_current
+    if not should_swap and match_current == 0 and match_swapped == 0:
+        # No match either way — alphabetical by item name for consistency
+        name_a = eq_a.get("item_name") or ""
+        name_b = eq_b.get("item_name") or ""
+        should_swap = name_b < name_a
+
+    if should_swap:
+        equipped_by_slot[slot_a] = eq_b
+        equipped_by_slot[slot_b] = eq_a
 
 
 async def verify_character_ownership(
@@ -201,6 +264,14 @@ async def update_slot(
         plan_id = plan_row["id"]
 
         if blizzard_item_id is None:
+            if is_locked is not None:
+                # Lock / unlock only — preserve the existing item
+                await conn.execute(
+                    "UPDATE guild_identity.gear_plan_slots SET is_locked=$1"
+                    " WHERE plan_id=$2 AND slot=$3",
+                    is_locked, plan_id, slot,
+                )
+                return True
             # Clear the slot
             await conn.execute(
                 "DELETE FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND slot=$2",
@@ -626,6 +697,11 @@ async def get_plan_detail(
             )
             ht_list = [dict(r) for r in ht_rows]
 
+    # Normalize ring and trinket pairs: swap equipped items to maximise BIS matches
+    # and ensure consistent alphabetical ordering when no match exists.
+    _normalize_paired_slot("ring_1", "ring_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id)
+    _normalize_paired_slot("trinket_1", "trinket_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id)
+
     # Build per-slot data
     slots_data: dict[str, dict] = {}
     for slot in WOW_SLOTS:
@@ -652,16 +728,18 @@ async def get_plan_detail(
 
         # Fallback: if wearing BIS but item has no item_sources data, infer upgrade
         # tracks from the equipped quality track (strictly above current track).
-        # Skip for crafted items (no V/C/H/M tracks) and for M-track (already maxed).
-        equipped_is_crafted = equipped.get("is_crafted", False) if equipped else False
-        if (is_bis and not upgrade_tracks and equipped_track
-                and equipped_track != "M" and not equipped_is_crafted):
+        # Requires a detected quality track; crafted items with null track are excluded
+        # by the equipped_track guard rather than a separate crafted check.
+        if (is_bis and not upgrade_tracks and equipped_track and equipped_track != "M"):
             eq_idx = TRACK_ORDER.get(equipped_track, -1)
             upgrade_tracks = [
                 t for t in ("V", "C", "H", "M") if TRACK_ORDER.get(t, -1) > eq_idx
             ]
 
-        needs_upgrade = bool(upgrade_tracks)
+        # Red border = has a goal but not wearing it (independent of track data).
+        # Green border = wearing the desired/BIS item.
+        # No border = no goal set for this slot (no data to compare).
+        needs_upgrade = bool(desired_bid and not is_bis)
 
         slots_data[slot] = {
             "slot": slot,

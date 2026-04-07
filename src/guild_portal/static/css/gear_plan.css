@@ -53,7 +53,6 @@
   transition: border-color 0.15s, background 0.15s;
   min-height: 52px;
   position: relative;
-  overflow: hidden;
 }
 
 /* Cards inside a slot column grow to equal height */

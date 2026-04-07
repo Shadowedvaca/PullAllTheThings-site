@@ -22,9 +22,16 @@ class TestUpgradeTracks:
     def test_no_available_tracks_returns_empty(self):
         assert _upgrade_tracks("C", 100, 100, []) == []
 
-    def test_no_equipped_track_all_available_are_upgrades(self):
+    def test_empty_slot_all_available_are_upgrades(self):
+        # Nothing equipped (equipped_item_id=None) → anything is an upgrade
         result = _upgrade_tracks(None, None, None, ["C", "H", "M"])
         assert result == ["C", "H", "M"]
+
+    def test_item_equipped_unknown_track_returns_empty(self):
+        # Something is equipped but quality_track wasn't detected → no upgrade recs
+        # (avoids incorrectly recommending Veteran as an upgrade)
+        result = _upgrade_tracks(None, 999, 100, ["V", "C", "H", "M"])
+        assert result == []
 
     def test_same_item_strictly_higher_only(self):
         # Equipped: same item, Champion track — need Hero or Mythic

@@ -63,9 +63,11 @@ function buildIcon(src, qColor) {
   img.src = src;
   img.alt = '';
   img.loading = 'lazy';
+  // Inset box-shadow doesn't overflow the element boundary — not clipped by
+  // parent overflow:hidden — and gives a visible thick coloured ring on the icon.
   if (qColor) {
-    img.style.borderColor = qColor;
-    img.style.boxShadow = `0 0 6px 1px ${qColor}60`;
+    img.style.boxShadow = `inset 0 0 0 3px ${qColor}, 0 0 8px ${qColor}80`;
+    img.style.borderColor = 'transparent';
   } else {
     img.style.borderColor = 'rgba(255,255,255,0.15)';
   }
@@ -341,11 +343,8 @@ function buildSlotCard(slotKey) {
     card.classList.add('is-inactive');
   } else {
     if (_state.openSlot === slotKey) card.classList.add('is-open');
-    // Crafted items skip the BIS/upgrade-track colouring — they upgrade differently
-    if (!isCrafted) {
-      if (sd.is_bis && !sd.needs_upgrade) card.classList.add('is-bis');
-      else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
-    }
+    if (sd.is_bis) card.classList.add('is-bis');
+    else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
     card.addEventListener('click', () => toggleDrawer(slotKey));
   }
 
@@ -416,8 +415,8 @@ function buildSlotCard(slotKey) {
     body.appendChild(goal);
   }
 
-  // Upgrade track row (active, non-crafted slots only)
-  if (upgrades.length && !isCrafted) {
+  // Upgrade track row (active slots only)
+  if (upgrades.length) {
     const upgradeRow = document.createElement('div');
     upgradeRow.className = 'gp-upgrade-row';
     upgradeRow.innerHTML = upgrades.map(t => trackBadge(t)).join('');
@@ -493,7 +492,7 @@ function renderDrawerBody(slotKey, sd) {
         <span class="gp-bis-row__source">${esc(r.short_label || r.source_name)}</span>
         <span class="gp-bis-row__name">${esc(r.item_name)}</span>
         <button class="btn btn-sm btn-secondary" style="padding:0.1rem 0.4rem;font-size:0.72rem"
-                onclick="setDesiredItem('${esc(slotKey)}',${r.blizzard_item_id},'${esc(r.item_name)}')">Use</button>
+                onclick="setDesiredItem('${esc(slotKey)}',${r.blizzard_item_id})">Use</button>
       </div>`).join('');
   } else {
     bisHtml = '<div class="gp-drawer-empty">No BIS data for this slot</div>';
