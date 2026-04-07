@@ -2,7 +2,7 @@
 {% block title %}Gear Plan — {{ site().guild_name }}{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/css/gear_plan.css?v=3">
+<link rel="stylesheet" href="/static/css/gear_plan.css?v=4">
 {% endblock %}
 
 {% block content %}
@@ -21,16 +21,16 @@
   <div id="gp-error"   class="gp-state-msg gp-state-msg--error" hidden></div>
   <div id="gp-no-chars" class="gp-state-msg" hidden>
     You have no claimed characters yet.
-    <a href="/profile" class="btn btn--primary" style="margin-left:1rem">Go to Settings → Character Claims</a>
+    <a href="/profile" class="btn btn-primary" style="margin-left:1rem">Go to Settings → Character Claims</a>
   </div>
 
   {# ── Main paperdoll layout ────────────────────────────────────── #}
   <div id="gp-main" class="gp-main" hidden>
 
-    {# Left column: Head → Waist #}
+    {# Left column: Head → Wrist (shirt + tabard as inactive cosmetic) #}
     <div class="gp-col gp-col--left" id="gp-col-left"></div>
 
-    {# Centre: char summary + controls #}
+    {# Centre: char summary + controls + weapons at bottom #}
     <div class="gp-center" id="gp-center">
       <div class="gp-char-badge" id="gp-char-badge">
         <span id="gp-char-name" class="gp-char-badge__name"></span>
@@ -49,18 +49,21 @@
           <select id="gp-source-select" class="gp-select"></select>
         </div>
         <div class="gp-ctrl-actions">
-          <button id="gp-btn-populate"     class="btn btn--primary btn--sm">Fill BIS</button>
-          <button id="gp-btn-sync"         class="btn btn--secondary btn--sm">Sync Gear</button>
-          <button id="gp-btn-import-simc"  class="btn btn--secondary btn--sm">Import SimC</button>
-          <button id="gp-btn-export-simc"  class="btn btn--secondary btn--sm">Export SimC</button>
-          <button id="gp-btn-delete-plan"  class="btn btn--danger btn--sm">Reset Plan</button>
+          <button id="gp-btn-populate"     class="btn btn-primary btn-sm">Fill BIS</button>
+          <button id="gp-btn-sync"         class="btn btn-secondary btn-sm">Sync Gear</button>
+          <button id="gp-btn-import-simc"  class="btn btn-secondary btn-sm">Import SimC</button>
+          <button id="gp-btn-export-simc"  class="btn btn-secondary btn-sm">Export SimC</button>
+          <button id="gp-btn-delete-plan"  class="btn btn-danger btn-sm">Reset Plan</button>
         </div>
       </div>
 
       <div id="gp-status" class="gp-status" hidden></div>
+
+      {# Weapons row — main hand + off hand, anchored to grid bottom #}
+      <div id="gp-col-weapons" class="gp-weapons-row"></div>
     </div>
 
-    {# Right column: Legs → Off Hand #}
+    {# Right column: Hands → Trinket 2 #}
     <div class="gp-col gp-col--right" id="gp-col-right"></div>
 
   </div>
@@ -95,13 +98,13 @@
                 placeholder="Paste SimC profile here…" rows="12"></textarea>
     </div>
     <div class="gp-modal__footer">
-      <button id="gp-simc-submit" class="btn btn--primary">Import</button>
-      <button id="gp-simc-cancel" class="btn btn--secondary">Cancel</button>
+      <button id="gp-simc-submit" class="btn btn-primary">Import</button>
+      <button id="gp-simc-cancel" class="btn btn-secondary">Cancel</button>
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/gear_plan.js?v=3"></script>
+<script src="/static/js/gear_plan.js?v=4"></script>
 {% endblock %}

@@ -17,14 +17,22 @@ let _state = {
   openSlot: null,
 };
 
-// WoW paperdoll layout — left column then right column
-const LEFT_SLOTS  = ['head','neck','shoulder','back','chest','wrist','hands','waist'];
-const RIGHT_SLOTS = ['legs','feet','ring_1','ring_2','trinket_1','trinket_2','main_hand','off_hand'];
+// WoW paperdoll layout
+// Left:    Head → Wrist  (shirt + tabard are cosmetic/inactive)
+// Right:   Hands → Trinket 2
+// Centre:  Main Hand + Off Hand  (at grid bottom)
+const LEFT_SLOTS    = ['head','neck','shoulder','back','chest','shirt','tabard','wrist'];
+const RIGHT_SLOTS   = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
+const WEAPON_SLOTS  = ['main_hand','off_hand'];
+
+// Cosmetic slots: synced from Blizzard for display but no BIS / upgrade logic.
+const INACTIVE_SLOTS = new Set(['shirt','tabard']);
 
 const SLOT_LABELS = {
   head:'Head', neck:'Neck', shoulder:'Shoulder', back:'Back',
-  chest:'Chest', wrist:'Wrist', hands:'Hands', waist:'Waist',
-  legs:'Legs', feet:'Feet', ring_1:'Ring 1', ring_2:'Ring 2',
+  chest:'Chest', shirt:'Shirt', tabard:'Tabard', wrist:'Wrist',
+  hands:'Hands', waist:'Waist', legs:'Legs', feet:'Feet',
+  ring_1:'Ring 1', ring_2:'Ring 2',
   trinket_1:'Trinket 1', trinket_2:'Trinket 2',
   main_hand:'Main Hand', off_hand:'Off Hand',
 };
@@ -85,7 +93,7 @@ async function init() {
   // a newer (or older) template — hard-refresh (Ctrl+Shift+R) fixes it.
   const REQUIRED_IDS = [
     'gp-loading','gp-error','gp-no-chars','gp-main',
-    'gp-col-left','gp-col-right','gp-center','gp-status',
+    'gp-col-left','gp-col-right','gp-col-weapons','gp-center','gp-status',
     'gp-char-select','gp-ht-select','gp-source-select',
     'gp-drawer','gp-simc-modal',
   ];
@@ -204,9 +212,8 @@ async function loadPlan(charId) {
 function updateCharBadge(charId) {
   const char = _state.characters.find(c => c.id === charId);
   if (!char) return;
-  $('gp-char-badge__name') && ($('gp-char-badge__name').textContent = char.character_name);
-  const nameEl = document.getElementById('gp-char-name');
-  const metaEl = document.getElementById('gp-char-meta');
+  const nameEl = $('gp-char-name');
+  const metaEl = $('gp-char-meta');
   if (nameEl) nameEl.textContent = char.character_name;
   if (metaEl) {
     const spec = _state.plan?.spec_name || char.spec_name || '';
@@ -253,23 +260,27 @@ async function onConfigChange() {
 // ── Paperdoll rendering ───────────────────────────────────────────────────
 
 function renderPaperdoll() {
-  const leftEl  = $('gp-col-left');
-  const rightEl = $('gp-col-right');
-  leftEl.innerHTML  = '';
-  rightEl.innerHTML = '';
+  const leftEl    = $('gp-col-left');
+  const rightEl   = $('gp-col-right');
+  const weaponsEl = $('gp-col-weapons');
+  leftEl.innerHTML    = '';
+  rightEl.innerHTML   = '';
+  weaponsEl.innerHTML = '';
 
-  for (const slot of LEFT_SLOTS)  leftEl.appendChild(buildSlotCard(slot));
-  for (const slot of RIGHT_SLOTS) rightEl.appendChild(buildSlotCard(slot));
+  for (const slot of LEFT_SLOTS)   leftEl.appendChild(buildSlotCard(slot));
+  for (const slot of RIGHT_SLOTS)  rightEl.appendChild(buildSlotCard(slot));
+  for (const slot of WEAPON_SLOTS) weaponsEl.appendChild(buildSlotCard(slot));
 }
 
 function buildSlotCard(slotKey) {
+  const isInactive = INACTIVE_SLOTS.has(slotKey);
   const sd = _state.slots[slotKey] || {};
   const eq = sd.equipped;
   const desired = sd.desired;
-  const upgrades = sd.upgrade_tracks || [];
-  const bisRecs  = sd.bis_recommendations || [];
+  const upgrades = isInactive ? [] : (sd.upgrade_tracks || []);
+  const bisRecs  = isInactive ? [] : (sd.bis_recommendations || []);
 
-  // Determine icon + name to display (equipped item takes priority)
+  // Equipped item display values
   let iconSrc = null, dispName = null, dispIlvl = null, dispTrack = null;
   if (eq && eq.blizzard_item_id) {
     iconSrc   = eq.icon_url;
@@ -278,19 +289,29 @@ function buildSlotCard(slotKey) {
     dispTrack = eq.quality_track;
   }
 
-  // Goal item (desired if different from equipped, or primary BIS rec if no desired set)
-  const primaryBis = bisRecs.find(r => r.source_id === _state.plan?.bis_source_id) || bisRecs[0];
-  const goalItem = desired || primaryBis;
+  // Quality colour for name + icon border (matches WoW item rarity colouring)
+  const qColor = dispTrack ? trackColor(dispTrack) : null;
+
+  // Goal item (only for active slots)
+  const primaryBis = !isInactive
+    ? (bisRecs.find(r => r.source_id === _state.plan?.bis_source_id) || bisRecs[0])
+    : null;
+  const goalItem = !isInactive ? (desired || primaryBis) : null;
   const showGoal = goalItem && (!eq || goalItem.blizzard_item_id !== eq?.blizzard_item_id);
 
   const card = document.createElement('div');
   card.className = 'gp-slot-card';
   card.dataset.slot = slotKey;
-  if (_state.openSlot === slotKey) card.classList.add('is-open');
-  if (sd.is_bis && !sd.needs_upgrade) card.classList.add('is-bis');
-  else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
+  if (isInactive) {
+    card.classList.add('is-inactive');
+  } else {
+    if (_state.openSlot === slotKey) card.classList.add('is-open');
+    if (sd.is_bis && !sd.needs_upgrade) card.classList.add('is-bis');
+    else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
+    card.addEventListener('click', () => toggleDrawer(slotKey));
+  }
 
-  // Icon
+  // ── Icon ────────────────────────────────────────────────────────
   const iconEl = document.createElement('div');
   if (iconSrc) {
     const img = document.createElement('img');
@@ -298,6 +319,7 @@ function buildSlotCard(slotKey) {
     img.src = iconSrc;
     img.alt = '';
     img.loading = 'lazy';
+    if (qColor) img.style.borderColor = qColor;
     iconEl.appendChild(img);
   } else {
     const empty = document.createElement('div');
@@ -306,7 +328,7 @@ function buildSlotCard(slotKey) {
     iconEl.appendChild(empty);
   }
 
-  // Body
+  // ── Body ─────────────────────────────────────────────────────────
   const body = document.createElement('div');
   body.className = 'gp-slot-card__body';
 
@@ -318,6 +340,7 @@ function buildSlotCard(slotKey) {
   name.className = 'gp-slot-card__name';
   name.title = dispName || '—';
   name.textContent = dispName || '—';
+  if (qColor) name.style.color = qColor;
 
   const meta = document.createElement('div');
   meta.className = 'gp-slot-card__meta';
@@ -335,7 +358,7 @@ function buildSlotCard(slotKey) {
   body.appendChild(name);
   body.appendChild(meta);
 
-  // Goal row
+  // Goal row (active slots only)
   if (showGoal) {
     const goal = document.createElement('div');
     goal.className = 'gp-slot-card__goal';
@@ -352,7 +375,7 @@ function buildSlotCard(slotKey) {
     body.appendChild(goal);
   }
 
-  // Upgrade track row
+  // Upgrade track row (active slots only)
   if (upgrades.length) {
     const upgradeRow = document.createElement('div');
     upgradeRow.className = 'gp-upgrade-row';
@@ -362,7 +385,6 @@ function buildSlotCard(slotKey) {
 
   card.appendChild(iconEl);
   card.appendChild(body);
-  card.addEventListener('click', () => toggleDrawer(slotKey));
   return card;
 }
 
@@ -376,7 +398,6 @@ function toggleDrawer(slotKey) {
 function openDrawer(slotKey) {
   _state.openSlot = slotKey;
 
-  // Highlight open card
   document.querySelectorAll('.gp-slot-card').forEach(c => {
     c.classList.toggle('is-open', c.dataset.slot === slotKey);
   });
@@ -406,11 +427,14 @@ function renderDrawerBody(slotKey, sd) {
   let equippedHtml;
   if (eq && eq.blizzard_item_id) {
     const track = eq.quality_track ? trackBadge(eq.quality_track) : '';
+    const qColor = eq.quality_track ? trackColor(eq.quality_track) : null;
+    const nameStyle = qColor ? ` style="color:${qColor}"` : '';
+    const borderStyle = qColor ? ` style="border-color:${qColor}"` : '';
     equippedHtml = `
       <div class="gp-drawer-item">
-        ${eq.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(eq.icon_url)}" alt="" loading="lazy">` : ''}
+        ${eq.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(eq.icon_url)}" alt="" loading="lazy"${borderStyle}>` : ''}
         <div class="gp-drawer-item__info">
-          <div class="gp-drawer-item__name">${esc(eq.item_name || 'Unknown')}</div>
+          <div class="gp-drawer-item__name"${nameStyle}>${esc(eq.item_name || 'Unknown')}</div>
           <div class="gp-drawer-item__meta">${eq.item_level || ''}&nbsp;${track}</div>
           ${eq.enchant_id ? `<div class="gp-drawer-item__meta">Enchant: ${eq.enchant_id}</div>` : ''}
         </div>
@@ -427,7 +451,7 @@ function renderDrawerBody(slotKey, sd) {
         ${r.icon_url ? `<img class="gp-drawer-item__icon" style="width:24px;height:24px" src="${esc(r.icon_url)}" alt="" loading="lazy">` : ''}
         <span class="gp-bis-row__source">${esc(r.short_label || r.source_name)}</span>
         <span class="gp-bis-row__name">${esc(r.item_name)}</span>
-        <button class="btn btn--sm btn--secondary" style="padding:0.1rem 0.4rem;font-size:0.72rem"
+        <button class="btn btn-sm btn-secondary" style="padding:0.1rem 0.4rem;font-size:0.72rem"
                 onclick="setDesiredItem('${esc(slotKey)}',${r.blizzard_item_id},'${esc(r.item_name)}')">Use</button>
       </div>`).join('');
   } else {
@@ -450,7 +474,7 @@ function renderDrawerBody(slotKey, sd) {
                 onclick="toggleLock('${esc(slotKey)}',${locked})">
           ${locked ? '🔒 Locked' : '🔓 Lock'}
         </button>
-        <button class="btn btn--sm btn--secondary"
+        <button class="btn btn-sm btn-secondary"
                 onclick="clearSlot('${esc(slotKey)}')">Clear</button>
       </div>`;
   } else {
@@ -461,7 +485,7 @@ function renderDrawerBody(slotKey, sd) {
   const manualHtml = `
     <div class="gp-manual-row">
       <input type="number" class="gp-manual-input" id="gp-mid-${esc(slotKey)}" placeholder="Item ID" min="1">
-      <button class="btn btn--sm btn--secondary" onclick="fetchAndSetItem('${esc(slotKey)}')">Fetch</button>
+      <button class="btn btn-sm btn-secondary" onclick="fetchAndSetItem('${esc(slotKey)}')">Fetch</button>
     </div>`;
 
   // Section 4: Drop location + tracks
