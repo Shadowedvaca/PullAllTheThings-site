@@ -100,6 +100,24 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         for r in rio_result.scalars():
             rio_by_char[r.character_id] = r
 
+    # Blizzard M+ fallback: for characters with no RIO profile, pull max overall_rating
+    # from character_mythic_plus so scores are never blank just because RIO hasn't indexed them.
+    blizzard_mplus_by_char: dict[int, float] = {}
+    missing_rio = [cid for cid in all_char_ids if cid not in rio_by_char]
+    if missing_rio:
+        bz_mplus_result = await db.execute(
+            text("""
+                SELECT character_id, MAX(overall_rating) AS overall_rating
+                FROM guild_identity.character_mythic_plus
+                WHERE character_id = ANY(:char_ids) AND overall_rating > 0
+                GROUP BY character_id
+            """).bindparams(char_ids=missing_rio)
+        )
+        blizzard_mplus_by_char = {
+            row.character_id: float(row.overall_rating)
+            for row in bz_mplus_result
+        }
+
     # Build avg parse map and WCL raid kill counts from character_report_parses.
     # Zone IDs are stored directly on parse rows — no boss name matching needed.
     # Every row in character_report_parses is a kill parse (killType: Kills at ingest).
@@ -222,8 +240,11 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
         r = rio_by_char.get(char_id) if char_id else None
         avg = avg_parse_by_char.get(char_id) if char_id else None
         bliz_prog = _raid_prog_string(char_id)
+        rio_score = float(r.overall_score) if r and r.overall_score else None
+        # Fall back to Blizzard M+ rating when RIO has no data for this character
+        mplus_score = rio_score or blizzard_mplus_by_char.get(char_id or -1)
         return {
-            "rio_score": float(r.overall_score) if r and r.overall_score else None,
+            "rio_score": mplus_score,
             "rio_color": r.score_color if r else None,
             "rio_raid_prog": r.raid_progression if r else None,
             "raid_prog": bliz_prog,
