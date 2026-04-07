@@ -153,10 +153,22 @@ def _normalize_paired_slot(
         equipped_by_slot[slot_a] = eq_b
         equipped_by_slot[slot_b] = eq_a
         if also_swap_bis:
-            bis_a = bis_by_slot.get(slot_a, [])
-            bis_b = bis_by_slot.get(slot_b, [])
-            bis_by_slot[slot_a] = bis_b
-            bis_by_slot[slot_b] = bis_a
+            # Swap BIS recs and desired items so all three stay consistent with
+            # the alphabetical ordering we just applied to equipped.
+            bis_by_slot[slot_a], bis_by_slot[slot_b] = (
+                bis_by_slot.get(slot_b, []),
+                bis_by_slot.get(slot_a, []),
+            )
+            des_a = desired_by_slot.get(slot_a)
+            des_b = desired_by_slot.get(slot_b)
+            if des_a is not None:
+                desired_by_slot[slot_b] = des_a
+            elif slot_b in desired_by_slot:
+                del desired_by_slot[slot_b]
+            if des_b is not None:
+                desired_by_slot[slot_a] = des_b
+            elif slot_a in desired_by_slot:
+                del desired_by_slot[slot_a]
 
 
 async def verify_character_ownership(
