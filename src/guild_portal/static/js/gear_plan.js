@@ -572,7 +572,7 @@ function renderDrawerBody(slotKey, sd) {
     const track = eq.quality_track ? trackBadge(eq.quality_track) : '';
     const qColor = eq.quality_track ? trackColor(eq.quality_track) : null;
     const nameStyle = qColor ? ` style="color:${qColor}"` : '';
-    const borderStyle = qColor ? ` style="border-color:${qColor}"` : '';
+    const borderStyle = qColor ? ` style="border-color:${qColor};box-shadow:0 0 6px ${qColor}80"` : '';
     equippedHtml = `
       <div class="gp-drawer-item">
         ${eq.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(eq.icon_url)}" alt="" loading="lazy"${borderStyle}>` : ''}

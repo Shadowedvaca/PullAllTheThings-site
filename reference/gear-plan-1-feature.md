@@ -354,13 +354,34 @@ SimC profile format is the universal gear artifact (used by Archon, Wowhead, Rai
 - `_normalize_paired_slot` now swaps `desired_by_slot` and `bis_by_slot` in the alphabetical fallback case, not just `equipped_by_slot`
 - JS `renderBisGrid` pins `desired_blizzard_item_id` to top row
 
-**Slot card hover state**
-- Cards don't clearly communicate "click to open drawer" — consider adding a subtle indicator
-- Hover cursor is `pointer` which is correct, but visual feedback is minimal
+**Slot card hover state** ✅ NOT AN ISSUE
+- Confirmed by Mike — hover state is already perfect as-is
 
-**Upgrade track pills — crafted items**
-- Crafted items with no quality_track → no upgrade pills → no guidance to get higher crest tier
-- Blocked by quality_track detection fix above
+**Icon quality colour / quality_track detection (Midnight expansion)**
+- `display_string` regex `^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$` may not match Midnight format
+- TWW S2 bonus ID map is season-specific; Midnight uses different bonus IDs
+- Result: most items have `quality_track = null` → no coloured icon border or glow
+- Icon coloring IS wired up (paperdoll + drawer both apply border-color + box-shadow) — just needs correct detection
+- **Pending:** Mike to confirm Midnight display_string format and/or supply bonus ID map
+
+**Tier set items**
+- Tier set items may need special handling — badge display, BIS matching, upgrade logic TBD
+- **Pending:** design discussion with Mike
+
+**Veteran (V) track exclusion from upgrade recommendations**
+- V track (LFR) items are currently included in upgrade track pills
+- May want to suppress V recommendations entirely as they are not meaningful for heroic+ raiders
+- **Pending:** decision from Mike
+
+**Crafted item quality track**
+- Crafted items (bonus_id 1808, may differ for Midnight) have `quality_track = null`
+- Crafted badge shows correctly; upgrade pills empty because track is null
+- Need ilvl → H/M track mapping: either `site_config.crafted_m_ilvl_threshold` (admin-configured per season) or derived from roster data
+- **Pending:** design decision from Mike
+
+**Upgrade track recommendations — troubleshooting**
+- Need to verify upgrade pill logic is correct end-to-end once quality_track detection is fixed
+- Edge cases: wearing BIS item at lower track, wearing non-BIS item, empty slot
 
 ---
 
