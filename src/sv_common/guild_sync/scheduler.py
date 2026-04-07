@@ -37,6 +37,7 @@ from .progression_sync import (
     sync_mythic_plus,
     sync_achievements,
     sync_raiderio_profiles,
+    sync_boss_counts_from_journal,
     create_weekly_snapshot,
     update_last_progression_sync,
 )
@@ -320,13 +321,33 @@ class GuildSyncScheduler:
                 try:
                     # M+ season ID comes from raid_seasons (single source of truth).
                     mplus_season_id = None
+                    current_raid_ids: list[int] = []
                     async with self.db_pool.acquire() as _conn:
                         _season_row = await _conn.fetchrow(
-                            """SELECT blizzard_mplus_season_id FROM patt.raid_seasons
+                            """SELECT blizzard_mplus_season_id, current_raid_ids
+                               FROM patt.raid_seasons
                                WHERE is_active = TRUE ORDER BY start_date DESC LIMIT 1"""
                         )
-                        if _season_row and _season_row["blizzard_mplus_season_id"]:
-                            mplus_season_id = _season_row["blizzard_mplus_season_id"]
+                        if _season_row:
+                            if _season_row["blizzard_mplus_season_id"]:
+                                mplus_season_id = _season_row["blizzard_mplus_season_id"]
+                            if _season_row["current_raid_ids"]:
+                                current_raid_ids = list(_season_row["current_raid_ids"])
+
+                    # Update boss counts from Journal API (authoritative, not player-dependent).
+                    # Runs every sync to catch progressive releases without requiring a migration.
+                    if current_raid_ids:
+                        try:
+                            journal_stats = await sync_boss_counts_from_journal(
+                                self.db_pool, self.blizzard_client, current_raid_ids
+                            )
+                            logger.info("Journal boss count sync: %s", journal_stats)
+                        except Exception as journal_exc:
+                            logger.warning(
+                                "Journal boss count sync failed (non-fatal): %s", journal_exc,
+                                exc_info=True,
+                            )
+
                     progression_chars, total_chars = await load_characters_for_progression_sync(
                         self.db_pool
                     )

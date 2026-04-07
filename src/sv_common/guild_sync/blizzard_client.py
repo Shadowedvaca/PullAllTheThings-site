@@ -465,6 +465,17 @@ class BlizzardClient:
             params={"namespace": "dynamic-us", "locale": self.locale},
         )
 
+    async def get_journal_instance(self, instance_id: int) -> dict | None:
+        """GET /data/wow/journal-instance/{id} — authoritative encounter list for a raid/dungeon.
+
+        Uses the static-us namespace (not player-dependent). The response
+        includes an encounters.encounters list with one entry per boss.
+        """
+        return await self._api_get(
+            f"/data/wow/journal-instance/{instance_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def sync_full_roster(
         self,
         rank_map: dict[int, str] | None = None,
