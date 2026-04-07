@@ -41,6 +41,7 @@ from .progression_sync import (
     create_weekly_snapshot,
     update_last_progression_sync,
 )
+from .equipment_sync import load_characters_for_equipment_sync, sync_equipment
 from .raiderio_client import RaiderIOClient
 from .reporter import send_new_issues_report, send_sync_summary, send_error
 from .sync_logger import SyncLogEntry
@@ -267,7 +268,8 @@ class GuildSyncScheduler:
           5. purge_fully_departed_players() — remove ghosts with no chars + no Discord
           6. [NEW] sync_raid_progress() — boss kill counts (last-login filtered)
           7. [NEW] sync_mythic_plus()   — M+ ratings (last-login filtered)
-          8. send_sync_summary()        — Discord report if notable
+          8. [NEW] sync_equipment()     — per-slot gear + quality tracks (last-login filtered)
+          9. send_sync_summary()        — Discord report if notable
         """
         channel = self._get_audit_channel()
         guild = channel.guild if channel else None
@@ -393,7 +395,24 @@ class GuildSyncScheduler:
                 except Exception as prog_exc:
                     logger.error("Progression sync failed: %s", prog_exc, exc_info=True)
 
-                # Step 8: Retry onboarding verifications
+                # Step 8: Equipment sync (full per-slot gear) — non-fatal
+                equipment_stats: dict = {}
+                try:
+                    equipment_chars, equipment_total = await load_characters_for_equipment_sync(
+                        self.db_pool
+                    )
+                    logger.info(
+                        "Equipment sync: %d of %d characters to sync",
+                        len(equipment_chars), equipment_total,
+                    )
+                    if equipment_chars:
+                        equipment_stats = await sync_equipment(
+                            self.db_pool, self.blizzard_client, equipment_chars
+                        )
+                except Exception as equip_exc:
+                    logger.error("Equipment sync failed: %s", equip_exc, exc_info=True)
+
+                # Step 9: Retry onboarding verifications (was step 8)
                 await self.run_onboarding_check()
 
                 duration = time.time() - start

@@ -71,6 +71,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/attendance",      "attendance_report"),
     ("/admin/quotes",          "quotes"),
     ("/admin/error-routing",   "error_routing"),
+    ("/admin/gear-plan",       "gear_plan"),
 ]
 
 
