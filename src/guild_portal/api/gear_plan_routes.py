@@ -364,28 +364,19 @@ async def sync_character_equipment(
     current_player: Player = Depends(get_current_player),
     db: AsyncSession = Depends(get_db),
 ):
-    """Sync the equipped gear for this character using the guild's Blizzard client.
+    """Sync the equipped gear for this character using the Blizzard API.
 
-    Populates / refreshes guild_identity.character_equipment so the gear plan
-    shows the player's current items with correct ilvl and quality tracks.
+    Tries the running scheduler's client first (most efficient).
+    Falls back to creating a short-lived client from env vars if the
+    scheduler isn't running (e.g. audit channel not configured on dev).
+    Populates / refreshes guild_identity.character_equipment.
     """
+    import os
+
     if not await _verify_ownership(current_player, character_id, db):
         return JSONResponse(
             {"ok": False, "error": "Character not linked to your account"},
             status_code=403,
-        )
-
-    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
-    if scheduler is None or not hasattr(scheduler, "blizzard_client"):
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": (
-                    "Blizzard API not configured — ask your Guild Leader "
-                    "to set Blizzard API credentials in Site Config."
-                ),
-            },
-            status_code=503,
         )
 
     pool = await _get_pool(request)
@@ -410,9 +401,42 @@ async def sync_character_equipment(
             {"ok": False, "error": "Character not found"}, status_code=404
         )
 
+    from sv_common.guild_sync.blizzard_client import BlizzardClient
     from sv_common.guild_sync.equipment_sync import sync_equipment
 
-    stats = await sync_equipment(pool, scheduler.blizzard_client, [dict(char_row)])
+    # Prefer the long-lived scheduler client; fall back to a per-request client.
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    owned_client: Optional[BlizzardClient] = None
+
+    if scheduler is not None and hasattr(scheduler, "blizzard_client"):
+        blizzard_client = scheduler.blizzard_client
+    else:
+        client_id     = os.environ.get("BLIZZARD_CLIENT_ID", "")
+        client_secret = os.environ.get("BLIZZARD_CLIENT_SECRET", "")
+        if not client_id or not client_secret:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": (
+                        "Blizzard API credentials not configured. "
+                        "Ask your Guild Leader to add BLIZZARD_CLIENT_ID / "
+                        "BLIZZARD_CLIENT_SECRET to the server's .env file."
+                    ),
+                },
+                status_code=503,
+            )
+        owned_client = BlizzardClient(
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        await owned_client.initialize()
+        blizzard_client = owned_client
+
+    try:
+        stats = await sync_equipment(pool, blizzard_client, [dict(char_row)])
+    finally:
+        if owned_client is not None:
+            await owned_client.close()
 
     if stats.get("equipment_errors", 0) > 0:
         return JSONResponse(
