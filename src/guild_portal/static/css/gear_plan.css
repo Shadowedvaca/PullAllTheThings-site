@@ -366,9 +366,16 @@
 
 .gp-drawer__body {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   padding: 1rem;
+}
+
+/* BIS grid section spans the full drawer width */
+.gp-drawer__bis-section {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.5rem;
 }
 
 @media (max-width: 800px) { .gp-drawer__body { grid-template-columns: repeat(2, 1fr); } }
@@ -424,29 +431,97 @@
   font-style: italic;
 }
 
-/* ── BIS recommendation rows ─────────────────────────────────── */
-.gp-bis-row {
+/* ── BIS recommendation grid ─────────────────────────────────── */
+.gp-bis-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.gp-bis-grid thead th {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  padding: 0 0.4rem 0.4rem;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.gp-bis-grid__name-col {
+  text-align: left !important;
+  min-width: 120px;
+}
+
+.gp-bis-grid tbody tr:not(:last-child) td {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.gp-bis-grid__name {
+  text-align: left;
+  padding: 0.28rem 0.5rem 0.28rem 0;
+  max-width: 220px;
+}
+
+.gp-bis-grid__name-inner {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  margin-bottom: 0.35rem;
+  gap: 5px;
+  overflow: hidden;
 }
 
-.gp-bis-row__source {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  min-width: 64px;
-  flex-shrink: 0;
-}
-
-.gp-bis-row__name {
-  flex: 1;
-  color: var(--color-text);
+.gp-bis-grid__name-inner > span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--color-text);
+  min-width: 0;
+}
+
+.gp-bis-grid__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.gp-bis-grid__icon-ph {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--color-bg-panel);
+  border: 1px dashed var(--color-border);
+  display: inline-block;
+}
+
+.gp-bis-grid__src {
+  min-width: 44px;
+}
+
+.gp-bis-grid__check {
+  text-align: center;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.82rem;
+}
+
+.gp-bis-grid__check--yes {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.gp-bis-grid__check--no {
+  color: var(--color-text-muted);
+  opacity: 0.4;
+}
+
+.gp-bis-grid__action {
+  text-align: right;
+  padding-left: 0.5rem;
+  white-space: nowrap;
 }
 
 /* ── Manual lookup ───────────────────────────────────────────── */

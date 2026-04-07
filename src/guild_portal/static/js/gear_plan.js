@@ -57,19 +57,96 @@ function craftedBadge() {
   return `<span class="gp-track gp-track--crafted" title="Crafted item">Crafted</span>`;
 }
 
+/**
+ * Build a provider × item BIS recommendation grid for a drawer section.
+ * Rows = unique items, sorted by how many sources recommend them (desc), then alpha.
+ * Columns = one per active source. Cells = ✓ or greyed dash.
+ */
+function renderBisGrid(slotKey, bis) {
+  if (!bis.length) {
+    return '<div class="gp-drawer-empty">No BIS data for this slot</div>';
+  }
+
+  // Unique sources in appearance order
+  const srcMap = new Map(); // source_id → short_label
+  for (const r of bis) {
+    if (!srcMap.has(r.source_id)) {
+      srcMap.set(r.source_id, r.short_label || r.source_name || `Source ${r.source_id}`);
+    }
+  }
+  const sources = [...srcMap.entries()].map(([id, label]) => ({ id, label }));
+
+  // Unique items + which sources include them
+  const itemMap = new Map(); // blizzard_item_id → {bid, name, icon, srcIds}
+  for (const r of bis) {
+    const bid = r.blizzard_item_id;
+    if (!itemMap.has(bid)) {
+      itemMap.set(bid, { bid, name: r.item_name, icon: r.icon_url, srcIds: new Set() });
+    }
+    itemMap.get(bid).srcIds.add(r.source_id);
+  }
+
+  // Sort: most sources first, then alphabetical
+  const items = [...itemMap.values()].sort((a, b) => {
+    const d = b.srcIds.size - a.srcIds.size;
+    return d !== 0 ? d : a.name.localeCompare(b.name);
+  });
+
+  const headerCells = sources.map(s =>
+    `<th class="gp-bis-grid__src" title="${esc(s.label)}">${esc(s.label)}</th>`
+  ).join('');
+
+  const bodyRows = items.map(item => {
+    const cells = sources.map(s =>
+      item.srcIds.has(s.id)
+        ? `<td class="gp-bis-grid__check gp-bis-grid__check--yes">✓</td>`
+        : `<td class="gp-bis-grid__check gp-bis-grid__check--no">—</td>`
+    ).join('');
+    const iconHtml = item.icon
+      ? `<img class="gp-bis-grid__icon" src="${esc(item.icon)}" alt="" loading="lazy">`
+      : `<span class="gp-bis-grid__icon-ph"></span>`;
+    return `
+      <tr>
+        <td class="gp-bis-grid__name" title="${esc(item.name)}">
+          <div class="gp-bis-grid__name-inner">${iconHtml}<span>${esc(item.name)}</span></div>
+        </td>
+        ${cells}
+        <td class="gp-bis-grid__action">
+          <button class="btn btn-sm btn-secondary"
+                  style="padding:0.1rem 0.4rem;font-size:0.72rem"
+                  onclick="setDesiredItem('${esc(slotKey)}',${item.bid})">Use</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <table class="gp-bis-grid">
+      <thead>
+        <tr>
+          <th class="gp-bis-grid__name-col">Item</th>
+          ${headerCells}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${bodyRows}</tbody>
+    </table>`;
+}
+
 function buildIcon(src, qColor) {
   const img = document.createElement('img');
   img.className = 'gp-slot-card__icon';
   img.src = src;
   img.alt = '';
   img.loading = 'lazy';
-  // Inset box-shadow doesn't overflow the element boundary — not clipped by
-  // parent overflow:hidden — and gives a visible thick coloured ring on the icon.
+  // Use border-color + outer box-shadow: inset shadows are drawn behind the
+  // image's own pixels and would be invisible. Outer glow works fine as long
+  // as the parent has no overflow:hidden.
   if (qColor) {
-    img.style.boxShadow = `inset 0 0 0 3px ${qColor}, 0 0 8px ${qColor}80`;
-    img.style.borderColor = 'transparent';
+    img.style.borderColor = qColor;
+    img.style.boxShadow   = `0 0 6px ${qColor}80`;
   } else {
     img.style.borderColor = 'rgba(255,255,255,0.15)';
+    img.style.boxShadow   = '';
   }
   return img;
 }
@@ -350,6 +427,7 @@ function buildSlotCard(slotKey) {
 
   // ── Icon ────────────────────────────────────────────────────────
   const iconEl = document.createElement('div');
+  if (dispName) iconEl.title = dispName;
   if (iconSrc) {
     iconEl.appendChild(buildIcon(iconSrc, qColor));
   } else if (eq && eq.blizzard_item_id) {
@@ -483,20 +561,8 @@ function renderDrawerBody(slotKey, sd) {
     equippedHtml = '<div class="gp-drawer-empty">Nothing equipped</div>';
   }
 
-  // Section 2: BIS recommendations
-  let bisHtml;
-  if (bis.length) {
-    bisHtml = bis.map(r => `
-      <div class="gp-bis-row">
-        ${r.icon_url ? `<img class="gp-drawer-item__icon" style="width:24px;height:24px" src="${esc(r.icon_url)}" alt="" loading="lazy">` : ''}
-        <span class="gp-bis-row__source">${esc(r.short_label || r.source_name)}</span>
-        <span class="gp-bis-row__name">${esc(r.item_name)}</span>
-        <button class="btn btn-sm btn-secondary" style="padding:0.1rem 0.4rem;font-size:0.72rem"
-                onclick="setDesiredItem('${esc(slotKey)}',${r.blizzard_item_id})">Use</button>
-      </div>`).join('');
-  } else {
-    bisHtml = '<div class="gp-drawer-empty">No BIS data for this slot</div>';
-  }
+  // Section 2: BIS recommendation grid
+  const bisGridHtml = renderBisGrid(slotKey, bis);
 
   // Section 3: Your selection
   let selectionHtml;
@@ -557,10 +623,6 @@ function renderDrawerBody(slotKey, sd) {
       ${equippedHtml}
     </div>
     <div>
-      <div class="gp-drawer-section__title">BIS Recommendations</div>
-      ${bisHtml}
-    </div>
-    <div>
       <div class="gp-drawer-section__title">Your Goal</div>
       ${selectionHtml}
       ${manualHtml}
@@ -568,6 +630,10 @@ function renderDrawerBody(slotKey, sd) {
     <div>
       <div class="gp-drawer-section__title">Drop Location</div>
       ${dropHtml}
+    </div>
+    <div class="gp-drawer__bis-section">
+      <div class="gp-drawer-section__title">BIS Recommendations</div>
+      ${bisGridHtml}
     </div>`;
 }
 
