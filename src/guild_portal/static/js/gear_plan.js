@@ -119,7 +119,7 @@ function renderBisGrid(slotKey, bis, primaryBid = null) {
     return `
       <tr>
         <td class="gp-bis-grid__name" title="${esc(item.name)}">
-          <div class="gp-bis-grid__name-inner">${iconHtml}<span>${esc(item.name)}</span></div>
+          <div class="gp-bis-grid__name-inner">${iconHtml}<a href="https://www.wowhead.com/item=${item.bid}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(item.name)}</a></div>
         </td>
         ${cells}
         <td class="gp-bis-grid__action">
@@ -394,6 +394,7 @@ function renderPaperdoll() {
   for (const slot of LEFT_SLOTS)   leftEl.appendChild(buildSlotCard(slot));
   for (const slot of RIGHT_SLOTS)  rightEl.appendChild(buildSlotCard(slot));
   for (const slot of WEAPON_SLOTS) weaponsEl.appendChild(buildSlotCard(slot));
+  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
 function buildSlotCard(slotKey) {
@@ -466,8 +467,20 @@ function buildSlotCard(slotKey) {
   const name = document.createElement('div');
   name.className = 'gp-slot-card__name';
   name.title = dispName || '—';
-  name.textContent = dispName || '—';
-  if (qColor) name.style.color = qColor;
+  if (eq && eq.blizzard_item_id && dispName) {
+    const link = document.createElement('a');
+    link.href = `https://www.wowhead.com/item=${eq.blizzard_item_id}`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = dispName;
+    link.style.color = qColor || 'inherit';
+    link.style.textDecoration = 'none';
+    link.addEventListener('click', e => e.stopPropagation());
+    name.appendChild(link);
+  } else {
+    name.textContent = dispName || '—';
+    if (qColor) name.style.color = qColor;
+  }
 
   const meta = document.createElement('div');
   meta.className = 'gp-slot-card__meta';
@@ -536,6 +549,7 @@ function openDrawer(slotKey) {
   $('gp-drawer-body').innerHTML = renderDrawerBody(slotKey, sd);
   $('gp-drawer').hidden = false;
   $('gp-drawer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
 function closeDrawer() {
@@ -563,7 +577,9 @@ function renderDrawerBody(slotKey, sd) {
       <div class="gp-drawer-item">
         ${eq.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(eq.icon_url)}" alt="" loading="lazy"${borderStyle}>` : ''}
         <div class="gp-drawer-item__info">
-          <div class="gp-drawer-item__name"${nameStyle}>${esc(eq.item_name || 'Unknown')}</div>
+          <div class="gp-drawer-item__name"${nameStyle}>
+            <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(eq.item_name || 'Unknown')}</a>
+          </div>
           <div class="gp-drawer-item__meta">${eq.item_level || ''}&nbsp;${track}</div>
           ${eq.enchant_id ? `<div class="gp-drawer-item__meta">Enchant: ${eq.enchant_id}</div>` : ''}
         </div>
@@ -584,7 +600,9 @@ function renderDrawerBody(slotKey, sd) {
       <div class="gp-drawer-item" style="margin-bottom:0.5rem">
         ${desired.icon_url ? `<img class="gp-drawer-item__icon" src="${esc(desired.icon_url)}" alt="" loading="lazy">` : ''}
         <div class="gp-drawer-item__info">
-          <div class="gp-drawer-item__name">${esc(desired.item_name || 'Unknown')}</div>
+          <div class="gp-drawer-item__name">
+            <a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${esc(desired.item_name || 'Unknown')}</a>
+          </div>
         </div>
       </div>
       <div style="display:flex;gap:0.4rem;flex-wrap:wrap">

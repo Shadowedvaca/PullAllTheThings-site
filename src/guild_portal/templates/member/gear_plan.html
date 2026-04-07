@@ -2,7 +2,7 @@
 {% block title %}Gear Plan — {{ site().guild_name }}{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/css/gear_plan.css?v=9">
+<link rel="stylesheet" href="/static/css/gear_plan.css?v=10">
 {% endblock %}
 
 {% block content %}
@@ -106,5 +106,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/gear_plan.js?v=9"></script>
+<script>var whTooltips = {colorLinks: true, iconizeLinks: false, renameLinks: false, hide: {sellprice: true, ilvl: false, reqlevel: false, power: false}};</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
+<script src="/static/js/gear_plan.js?v=10"></script>
 {% endblock %}
