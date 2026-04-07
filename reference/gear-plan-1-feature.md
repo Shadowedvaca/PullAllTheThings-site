@@ -345,14 +345,14 @@ SimC profile format is the universal gear artifact (used by Archon, Wowhead, Rai
   - "Use" button on each row
 - New data needed from service: `get_plan_detail` already returns `bis_recommendations` as flat list; needs to be restructured to support the grid (unique items × sources matrix)
 
-**Hover tooltip broken**
-- Slot card click opens drawer; hover interaction is unclear/broken
-- Diagnose on next session
+**Hover tooltip** ✅ RESOLVED
+- Added `whTooltips` config + Wowhead `power.js` to member gear plan template
+- Item names in slot cards, drawer equipped/desired, and BIS grid wrapped in `<a href="https://www.wowhead.com/item=N">` links
+- `$WowheadPower.refreshLinks()` called after paperdoll render and drawer open
 
-**Ring/Trinket BIS sort not right**
-- Equipped ring/trinket sort now works (alphabetical for no-match case)
-- BIS desired items in the drawer also need to be sorted to match — currently unsorted or reverse-alphabetical
-- Fix: sort `bis_recommendations` in the drawer the same way the slot card is normalised
+**Ring/Trinket BIS sort** ✅ RESOLVED
+- `_normalize_paired_slot` now swaps `desired_by_slot` and `bis_by_slot` in the alphabetical fallback case, not just `equipped_by_slot`
+- JS `renderBisGrid` pins `desired_blizzard_item_id` to top row
 
 **Slot card hover state**
 - Cards don't clearly communicate "click to open drawer" — consider adding a subtle indicator

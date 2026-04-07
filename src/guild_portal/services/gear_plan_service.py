@@ -92,6 +92,29 @@ def _upgrade_tracks(
         return [t for t in available_tracks if TRACK_ORDER.get(t, -1) >= eq_idx]
 
 
+def _merge_paired_bis(bis_by_slot: dict, slot_a: str, slot_b: str) -> None:
+    """Merge BIS recommendation lists for a paired slot (rings, trinkets).
+
+    Both slots get the full combined pool of items so the drawer shows every
+    possible ring/trinket, not just items that happened to be scraped under
+    one specific slot key.  Deduplicates by (source_id, blizzard_item_id).
+    Called AFTER _normalize_paired_slot so slot ordering is already settled.
+    """
+    recs_a = bis_by_slot.get(slot_a, [])
+    recs_b = bis_by_slot.get(slot_b, [])
+    if not recs_a and not recs_b:
+        return
+    seen: set[tuple] = set()
+    merged: list[dict] = []
+    for rec in recs_a + recs_b:
+        key = (rec["source_id"], rec["blizzard_item_id"])
+        if key not in seen:
+            seen.add(key)
+            merged.append(rec)
+    bis_by_slot[slot_a] = merged
+    bis_by_slot[slot_b] = merged
+
+
 def _normalize_paired_slot(
     slot_a: str,
     slot_b: str,
@@ -723,6 +746,11 @@ async def get_plan_detail(
     # and ensure consistent alphabetical ordering when no match exists.
     _normalize_paired_slot("ring_1", "ring_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id)
     _normalize_paired_slot("trinket_1", "trinket_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id)
+
+    # Merge BIS pools for paired slots so each slot's drawer shows all possible
+    # ring (or trinket) items, not just those scraped under that specific slot key.
+    _merge_paired_bis(bis_by_slot, "ring_1", "ring_2")
+    _merge_paired_bis(bis_by_slot, "trinket_1", "trinket_2")
 
     # Build per-slot data
     slots_data: dict[str, dict] = {}
