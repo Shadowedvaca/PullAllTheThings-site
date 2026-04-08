@@ -1,10 +1,10 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** Planning — not started  
-> **Branch strategy:** All work on `feature/my-characters-redesign`  
+> **Status:** UI-1B complete (summary cards + panel switching); UI-1C next  
+> **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
-> **Last updated:** 2026-04-07
+> **Last updated:** 2026-04-08
 
 ---
 
@@ -292,6 +292,8 @@ the placeholder detail view. Back button returns to cards. Deploy to dev, verify
 
 **Purpose:** Replace the current gear_plan slot cards with the new two-box design (upgrade
 box + equipped box). Wire into the existing gear_plan_service — no service changes.
+
+Edit: We need to preserve the blizzard look so Put main hand and off hand at the bottom middle.
 
 **Scope:**
 - New slot card render function `buildSlotCard(slotKey, slotData)` in
