@@ -78,7 +78,6 @@
         <span class="mcn-paperdoll__slot-ph" title="Shirt"></span>
         <span class="mcn-paperdoll__slot-ph" title="Tabard"></span>
         <span class="mcn-paperdoll__slot-ph" title="Wrist"></span>
-        <span class="mcn-paperdoll__slot-ph" title="Main Hand"></span>
       </div>
     </div>
 
@@ -108,13 +107,46 @@
         <span class="mcn-paperdoll__slot-ph" title="Ring 2"></span>
         <span class="mcn-paperdoll__slot-ph" title="Trinket 1"></span>
         <span class="mcn-paperdoll__slot-ph" title="Trinket 2"></span>
-        <span class="mcn-paperdoll__slot-ph" title="Off Hand"></span>
       </div>
     </div>
 
   </div>{# end #mcn-body #}
 
+  {# ── Slot detail drawer — Phase UI-1C ─────────────────────────────────── #}
+  <div id="mcn-gp-drawer" class="mcn-drawer" hidden>
+    <div class="mcn-drawer__header">
+      <span id="mcn-gp-drawer-title" class="mcn-drawer__title"></span>
+      <button id="mcn-gp-drawer-close" class="mcn-drawer__close" type="button">&times;</button>
+    </div>
+    <div id="mcn-gp-drawer-body" class="mcn-drawer__body"></div>
+  </div>
+
 </div>{# end .mcn-page #}
+
+{# ── SimC Import Modal — Phase UI-1C ─────────────────────────────────────── #}
+<div id="mcn-simc-modal" class="mcn-modal" hidden>
+  <div class="mcn-modal__backdrop"></div>
+  <div class="mcn-modal__box">
+    <div class="mcn-modal__header">
+      <h3 class="mcn-modal__title">Import SimC Profile</h3>
+      <button id="mcn-simc-close" class="mcn-modal__close" type="button">&times;</button>
+    </div>
+    <div class="mcn-modal__body">
+      <p class="mcn-modal__hint">
+        Paste your SimC profile from the in-game SimulationCraft addon,
+        <a href="https://archon.gg" target="_blank" rel="noopener">Archon</a>, or
+        <a href="https://www.wowhead.com" target="_blank" rel="noopener">Wowhead</a>.
+        Locked slots will not be overwritten.
+      </p>
+      <textarea id="mcn-simc-text" class="mcn-simc-textarea"
+                placeholder="Paste SimC profile here&hellip;" rows="12"></textarea>
+    </div>
+    <div class="mcn-modal__footer">
+      <button id="mcn-simc-submit" class="btn btn-primary" type="button">Import</button>
+      <button id="mcn-simc-cancel" class="btn btn-secondary" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

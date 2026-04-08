@@ -407,7 +407,17 @@ function _renderDetailArea(key) {
   const area = document.getElementById("mcn-detail-area");
   if (!area) return;
 
-  // All panels are placeholders in UI-1B; later phases fill these in.
+  if (key === "gear") {
+    const charId = _selectedChar?.id;
+    if (charId) {
+      _gpActivateTab(charId);
+    } else {
+      area.innerHTML = '<div class="mcn-detail-placeholder">Select a character to view gear plan</div>';
+    }
+    return;
+  }
+
+  // Other panels are placeholders; later phases fill these in.
   area.innerHTML = `
     <div class="mcn-detail-area__heading">${_tabTitle(key)}</div>
     <div class="mcn-detail-placeholder">${_tabTitle(key)} detail &mdash; coming soon</div>
@@ -450,6 +460,8 @@ function _selectChar(charId) {
   _selectedChar = char;
   _renderHeader(char);
   _renderGuides(char);
+  _gpResetPaperdolls();   // reset to placeholder; gear loads on gear-tab activation
+  _gpCloseDrawer();
   _loadSummary(charId);
 }
 
@@ -529,3 +541,691 @@ async function _init() {
 }
 
 document.addEventListener("DOMContentLoaded", _init);
+
+// =============================================================================
+// GEAR PLAN — Phase UI-1C
+// Two-box paperdoll slot cards, gear controls, drawer, SimC modal
+// =============================================================================
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const GP_LEFT_SLOTS   = ['head','neck','shoulder','back','chest','shirt','tabard','wrist'];
+const GP_RIGHT_SLOTS  = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
+const GP_WEAPON_SLOTS = ['main_hand','off_hand'];
+const GP_INACTIVE_SLOTS = new Set(['shirt','tabard']);
+
+const GP_SLOT_LABELS = {
+  head:'Head', neck:'Neck', shoulder:'Shoulder', back:'Back',
+  chest:'Chest', shirt:'Shirt', tabard:'Tabard', wrist:'Wrist',
+  hands:'Hands', waist:'Waist', legs:'Legs', feet:'Feet',
+  ring_1:'Ring 1', ring_2:'Ring 2',
+  trinket_1:'Trinket 1', trinket_2:'Trinket 2',
+  main_hand:'Main Hand', off_hand:'Off Hand',
+};
+
+// Fallback track colors before API data loads
+const GP_TRACK_FALLBACK = { V: '#22c55e', C: '#3b82f6', H: '#a855f7', M: '#f97316' };
+
+// ── Per-character cache ────────────────────────────────────────────────────────
+
+const _gpCache = {};   // charId → API data (plan, slots, bisSources, heroTalents, trackColors)
+let _gpOpenSlot = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function _gpEsc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function _gpFetch(url, opts) {
+  const r = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    ...(opts || {}),
+  });
+  try { return await r.json(); }
+  catch { return { ok: false, error: `HTTP ${r.status}` }; }
+}
+
+function _gpColor(t, tc) {
+  return (tc && tc[t]) || GP_TRACK_FALLBACK[t] || '#888';
+}
+
+function _gpPill(t, tc) {
+  const c = _gpColor(t, tc);
+  return `<span class="mcn-track-pill" style="background:${_gpEsc(c)}">${_gpEsc(t)}</span>`;
+}
+
+// ── Status ─────────────────────────────────────────────────────────────────────
+
+function _gpShowStatus(msg, type) {
+  const el = document.getElementById('mcn-gp-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className   = `mcn-gp-status mcn-gp-status--${type}`;
+  el.hidden      = false;
+}
+
+function _gpClearStatus() {
+  const el = document.getElementById('mcn-gp-status');
+  if (el) el.hidden = true;
+}
+
+// ── Paperdoll placeholder reset ───────────────────────────────────────────────
+
+function _gpResetPaperdolls() {
+  const leftEl  = document.getElementById('mcn-left-paperdoll');
+  const rightEl = document.getElementById('mcn-right-paperdoll');
+  if (leftEl) {
+    leftEl.innerHTML = '<div class="mcn-paperdoll__placeholder">'
+      + GP_LEFT_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
+      + '</div>';
+  }
+  if (rightEl) {
+    rightEl.innerHTML = '<div class="mcn-paperdoll__placeholder">'
+      + GP_RIGHT_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
+      + '</div>';
+  }
+}
+
+// ── Slot card builder — two-box design ────────────────────────────────────────
+
+function _gpBuildSlotCard(slotKey, sd, tc) {
+  const isInactive = GP_INACTIVE_SLOTS.has(slotKey);
+  sd = sd || {};
+  const eq       = sd.equipped;
+  const desired  = sd.desired;
+  const upgrades = isInactive ? [] : (sd.upgrade_tracks || []);
+  const bisRecs  = isInactive ? [] : (sd.bis_recommendations || []);
+
+  const isBis       = !isInactive && !!sd.is_bis;
+  const isBisMythic = isBis && eq?.quality_track === 'M';
+
+  // Goal: explicit desired first, then first BIS rec
+  const primaryBis = bisRecs[0] || null;
+  const goalItem   = !isInactive ? (desired || primaryBis) : null;
+  const showGoal   = goalItem && (!eq || goalItem.blizzard_item_id !== eq?.blizzard_item_id);
+
+  const card = document.createElement('div');
+  card.className  = 'mcn-slot-card' + (isInactive ? ' is-inactive' : '');
+  card.dataset.slot = slotKey;
+  if (!isInactive) {
+    if (isBis)            card.classList.add('is-bis');
+    else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
+    if (_gpOpenSlot === slotKey) card.classList.add('is-open');
+    card.addEventListener('click', () => _gpToggleDrawer(slotKey));
+  }
+
+  // Slot label row
+  const label = document.createElement('div');
+  label.className = 'mcn-slot-card__label';
+  label.textContent = GP_SLOT_LABELS[slotKey] || slotKey;
+  card.appendChild(label);
+
+  // Two-box row
+  const boxes = document.createElement('div');
+  boxes.className = 'mcn-slot-card__boxes';
+
+  // — Upgrade box —
+  const uBox = document.createElement('div');
+  uBox.className = 'mcn-slot-card__upgrade';
+
+  if (isInactive) {
+    uBox.appendChild(Object.assign(document.createElement('div'), { className: 'mcn-slot-icon--no-goal' }));
+  } else if (isBisMythic) {
+    uBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--bis-mythic" title="BIS at Mythic track">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg></div>`;
+  } else if (isBis) {
+    uBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--bis" title="BIS">
+      <svg viewBox="0 0 24 24" fill="#d4a84b" stroke="#b8922e" stroke-width="0.5" stroke-linejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg></div>`;
+    if (upgrades.length) {
+      const pills = document.createElement('div');
+      pills.className = 'mcn-track-pills';
+      pills.innerHTML = upgrades.map(t => _gpPill(t, tc)).join('');
+      uBox.appendChild(pills);
+    }
+  } else if (showGoal && goalItem.icon_url) {
+    const qc = goalItem.quality_track ? _gpColor(goalItem.quality_track, tc)
+      : (upgrades[0] ? _gpColor(upgrades[0], tc) : null);
+    const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
+    uBox.innerHTML = `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+      <img class="mcn-slot-icon" src="${_gpEsc(goalItem.icon_url)}" alt="" title="${_gpEsc(goalItem.item_name || goalItem.name || '')}"${bs} loading="lazy">
+    </a>`;
+    if (upgrades.length) {
+      const pills = document.createElement('div');
+      pills.className = 'mcn-track-pills';
+      pills.innerHTML = upgrades.map(t => _gpPill(t, tc)).join('');
+      uBox.appendChild(pills);
+    }
+  } else if (showGoal) {
+    const el = document.createElement('div');
+    el.className   = 'mcn-slot-icon mcn-slot-icon--empty';
+    el.title       = goalItem.item_name || goalItem.name || 'Goal';
+    el.textContent = '\u2192';
+    uBox.appendChild(el);
+    if (upgrades.length) {
+      const pills = document.createElement('div');
+      pills.className = 'mcn-track-pills';
+      pills.innerHTML = upgrades.map(t => _gpPill(t, tc)).join('');
+      uBox.appendChild(pills);
+    }
+  } else {
+    uBox.appendChild(Object.assign(document.createElement('div'), {
+      className: 'mcn-slot-icon mcn-slot-icon--no-goal',
+      title: 'No goal set',
+    }));
+    if (upgrades.length) {
+      const pills = document.createElement('div');
+      pills.className = 'mcn-track-pills';
+      pills.innerHTML = upgrades.map(t => _gpPill(t, tc)).join('');
+      uBox.appendChild(pills);
+    }
+  }
+
+  // — Equipped box —
+  const eBox = document.createElement('div');
+  eBox.className = 'mcn-slot-card__equipped';
+
+  if (eq && eq.blizzard_item_id) {
+    const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : (eq.is_crafted ? '#c0a060' : null);
+    const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
+    if (eq.icon_url) {
+      eBox.innerHTML = `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+        <img class="mcn-slot-icon" src="${_gpEsc(eq.icon_url)}" alt="" title="${_gpEsc(eq.item_name || '')}"${bs} loading="lazy">
+      </a>
+      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
+    } else {
+      eBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--empty" title="${_gpEsc(eq.item_name || '')}">${_gpEsc((GP_SLOT_LABELS[slotKey] || slotKey)[0])}</div>
+      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
+    }
+  } else {
+    eBox.appendChild(Object.assign(document.createElement('div'), { className: 'mcn-slot-icon mcn-slot-icon--no-goal' }));
+  }
+
+  boxes.appendChild(uBox);
+  boxes.appendChild(eBox);
+  card.appendChild(boxes);
+  return card;
+}
+
+// ── Render paperdoll columns ───────────────────────────────────────────────────
+
+function _gpRenderPaperdolls(slots, tc) {
+  const leftEl  = document.getElementById('mcn-left-paperdoll');
+  const rightEl = document.getElementById('mcn-right-paperdoll');
+  if (leftEl) {
+    leftEl.innerHTML = '';
+    GP_LEFT_SLOTS.forEach(k => leftEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+  }
+  if (rightEl) {
+    rightEl.innerHTML = '';
+    GP_RIGHT_SLOTS.forEach(k => rightEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+  }
+  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
+}
+
+// ── Render weapons in center panel ────────────────────────────────────────────
+
+function _gpRenderWeapons(slots, tc) {
+  const el = document.getElementById('mcn-gp-weapons');
+  if (!el) return;
+  el.innerHTML = '';
+  GP_WEAPON_SLOTS.forEach(k => el.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
+}
+
+// ── Render gear controls in center detail area ────────────────────────────────
+
+function _gpRenderCenterPanel(data) {
+  const area = document.getElementById('mcn-detail-area');
+  if (!area) return;
+
+  const { plan, bisSources, heroTalents } = data;
+
+  const htOpts = ['<option value="">\u2014 Any \u2014</option>']
+    .concat((heroTalents || []).map(ht =>
+      `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
+    )).join('');
+
+  const srcOpts = (bisSources || []).map(s =>
+    `<option value="${s.id}"${plan?.bis_source_id === s.id ? ' selected' : ''}>${_gpEsc(s.name)}</option>`
+  ).join('');
+
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">Gear Plan</div>
+    <div class="mcn-gear-controls">
+      <div class="mcn-gear-ctrl-row">
+        <label class="mcn-gear-label">Hero Talent</label>
+        <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>
+        <label class="mcn-gear-label">Source</label>
+        <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
+      </div>
+      <div class="mcn-gear-actions">
+        <button id="mcn-gp-btn-sync"   class="btn btn-secondary btn-sm" type="button">Sync Gear</button>
+        <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>
+        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
+        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
+        <button id="mcn-gp-btn-reset"  class="btn btn-danger btn-sm"    type="button">Reset Plan</button>
+      </div>
+    </div>
+    <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
+    <div id="mcn-gp-weapons" class="mcn-weapons-row"></div>
+  `;
+
+  // Wire selects + buttons
+  document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-src-sel') ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-btn-sync')  ?.addEventListener('click', _gpOnSyncGear);
+  document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
+  document.getElementById('mcn-gp-btn-import')?.addEventListener('click', _gpShowSimcModal);
+  document.getElementById('mcn-gp-btn-export')?.addEventListener('click', _gpOnExportSimc);
+  document.getElementById('mcn-gp-btn-reset') ?.addEventListener('click', _gpOnDeletePlan);
+
+  // Wire SimC modal once
+  const modal = document.getElementById('mcn-simc-modal');
+  if (modal && !modal._gpWired) {
+    modal._gpWired = true;
+    document.getElementById('mcn-simc-close') ?.addEventListener('click', _gpHideSimcModal);
+    document.getElementById('mcn-simc-cancel')?.addEventListener('click', _gpHideSimcModal);
+    document.getElementById('mcn-simc-submit')?.addEventListener('click', _gpOnSimcImport);
+    modal.querySelector('.mcn-modal__backdrop')?.addEventListener('click', _gpHideSimcModal);
+  }
+
+  // Wire drawer close
+  const drawerClose = document.getElementById('mcn-gp-drawer-close');
+  if (drawerClose && !drawerClose._gpWired) {
+    drawerClose._gpWired = true;
+    drawerClose.addEventListener('click', _gpCloseDrawer);
+  }
+}
+
+// ── Load gear plan ─────────────────────────────────────────────────────────────
+
+async function _gpLoadPlan(charId, forceReload) {
+  if (!forceReload && _gpCache[charId]) {
+    const d = _gpCache[charId];
+    _gpOpenSlot = null;
+    _gpRenderPaperdolls(d.slots, d.trackColors);
+    _gpRenderCenterPanel(d);
+    _gpRenderWeapons(d.slots, d.trackColors);
+    return;
+  }
+
+  const area = document.getElementById('mcn-detail-area');
+  if (area) area.innerHTML = '<div class="mcn-detail-placeholder">Loading gear plan\u2026</div>';
+
+  try {
+    const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}`);
+    if (!resp.ok) throw new Error(resp.error || 'Failed to load gear plan');
+
+    _gpCache[charId] = resp.data;
+    _gpOpenSlot      = null;
+
+    _gpRenderPaperdolls(resp.data.slots, resp.data.trackColors);
+    _gpRenderCenterPanel(resp.data);
+    _gpRenderWeapons(resp.data.slots, resp.data.trackColors);
+    _gpCloseDrawer();
+
+  } catch (err) {
+    const area2 = document.getElementById('mcn-detail-area');
+    if (area2) area2.innerHTML = `<div class="mcn-detail-placeholder" style="color:#f87171">Could not load gear plan: ${_gpEsc(err.message)}</div>`;
+  }
+}
+
+async function _gpActivateTab(charId) {
+  await _gpLoadPlan(charId);
+}
+
+async function _gpReload() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  delete _gpCache[charId];
+  await _gpLoadPlan(charId, true);
+}
+
+// ── Action handlers ────────────────────────────────────────────────────────────
+
+async function _gpOnConfigChange() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const htSel  = document.getElementById('mcn-gp-ht-sel');
+  const srcSel = document.getElementById('mcn-gp-src-sel');
+  const htId   = htSel?.value  ? parseInt(htSel.value,  10) : null;
+  const srcId  = srcSel?.value ? parseInt(srcSel.value, 10) : null;
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/config`, {
+    method: 'PATCH',
+    body: JSON.stringify({ hero_talent_id: htId, bis_source_id: srcId }),
+  });
+  if (resp.ok) { await _gpReload(); }
+  else _gpShowStatus(resp.error || 'Config update failed', 'err');
+}
+
+async function _gpOnSyncGear() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Syncing equipped gear\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/sync-equipment`, { method: 'POST' });
+  if (resp.ok) {
+    _gpShowStatus('Gear synced \u2014 reloading\u2026', 'ok');
+    setTimeout(() => _gpReload(), 800);
+  } else {
+    _gpShowStatus(resp.error || 'Sync failed', 'err');
+  }
+}
+
+async function _gpOnPopulate() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const htSel  = document.getElementById('mcn-gp-ht-sel');
+  const srcSel = document.getElementById('mcn-gp-src-sel');
+  const htId   = htSel?.value  ? parseInt(htSel.value,  10) : null;
+  const srcId  = srcSel?.value ? parseInt(srcSel.value, 10) : null;
+  _gpShowStatus('Filling unlocked slots from BIS\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/populate`, {
+    method: 'POST',
+    body: JSON.stringify({ source_id: srcId, hero_talent_id: htId }),
+  });
+  if (resp.ok) {
+    _gpShowStatus(`${resp.data?.populated || 0} slots filled`, 'ok');
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Populate failed', 'err');
+  }
+}
+
+async function _gpOnDeletePlan() {
+  if (!confirm('Reset this gear plan? All goal items will be cleared.')) return;
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}`, { method: 'DELETE' });
+  if (resp.ok) {
+    _gpShowStatus('Plan reset', 'ok');
+    _gpCloseDrawer();
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Failed', 'err');
+  }
+}
+
+async function _gpOnExportSimc() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Generating SimC\u2026', 'info');
+  try {
+    const resp = await fetch(`/api/v1/me/gear-plan/${charId}/export-simc`, { credentials: 'include' });
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}));
+      _gpShowStatus(d.error || 'Export failed', 'err');
+      return;
+    }
+    const text = await resp.text();
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })),
+      download: 'gear_plan.simc',
+    });
+    a.click();
+    URL.revokeObjectURL(a.href);
+    _gpClearStatus();
+  } catch (err) {
+    _gpShowStatus(err.message, 'err');
+  }
+}
+
+// ── SimC modal ─────────────────────────────────────────────────────────────────
+
+function _gpShowSimcModal() {
+  const modal    = document.getElementById('mcn-simc-modal');
+  const textarea = document.getElementById('mcn-simc-text');
+  if (modal)    modal.hidden = false;
+  if (textarea) { textarea.value = ''; textarea.focus(); }
+}
+
+function _gpHideSimcModal() {
+  const modal = document.getElementById('mcn-simc-modal');
+  if (modal) modal.hidden = true;
+}
+
+async function _gpOnSimcImport() {
+  const textarea = document.getElementById('mcn-simc-text');
+  const text = textarea?.value?.trim();
+  if (!text) return;
+  _gpHideSimcModal();
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Importing\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/import-simc`, {
+    method: 'POST',
+    body: JSON.stringify({ simc_text: text }),
+  });
+  if (resp.ok) {
+    const d = resp.data || {};
+    _gpShowStatus(`Imported: ${d.populated || 0} slots set${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`, 'ok');
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Import failed', 'err');
+  }
+}
+
+// ── Slot drawer ────────────────────────────────────────────────────────────────
+
+function _gpToggleDrawer(slotKey) {
+  if (_gpOpenSlot === slotKey) _gpCloseDrawer();
+  else _gpOpenDrawer(slotKey);
+}
+
+function _gpOpenDrawer(slotKey) {
+  _gpOpenSlot = slotKey;
+
+  document.querySelectorAll('.mcn-slot-card').forEach(c => {
+    c.classList.toggle('is-open', c.dataset.slot === slotKey);
+  });
+
+  const charId = _selectedChar?.id;
+  const data   = charId ? _gpCache[charId] : null;
+  const sd     = data?.slots?.[slotKey] || {};
+  const tc     = data?.trackColors || {};
+
+  const titleEl = document.getElementById('mcn-gp-drawer-title');
+  const bodyEl  = document.getElementById('mcn-gp-drawer-body');
+  const drawer  = document.getElementById('mcn-gp-drawer');
+
+  if (titleEl) titleEl.textContent = GP_SLOT_LABELS[slotKey] || slotKey;
+  if (bodyEl)  bodyEl.innerHTML    = _gpRenderDrawerBody(slotKey, sd, tc);
+  if (drawer)  {
+    drawer.hidden = false;
+    drawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
+}
+
+function _gpCloseDrawer() {
+  _gpOpenSlot = null;
+  document.querySelectorAll('.mcn-slot-card').forEach(c => c.classList.remove('is-open'));
+  const drawer = document.getElementById('mcn-gp-drawer');
+  if (drawer) drawer.hidden = true;
+}
+
+function _gpRenderDrawerBody(slotKey, sd, tc) {
+  const eq      = sd.equipped;
+  const desired = sd.desired;
+  const bis     = sd.bis_recommendations || [];
+  const sources = sd.item_sources        || [];
+  const tracks  = sd.available_tracks    || [];
+  const upgrades = sd.upgrade_tracks     || [];
+
+  // 1 — Equipped
+  let equippedHtml;
+  if (eq && eq.blizzard_item_id) {
+    const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : null;
+    const ns = qc && qc !== '#888' ? ` style="color:${qc}"` : '';
+    const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 6px ${qc}80"` : '';
+    const badge = eq.quality_track ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>` : '';
+    equippedHtml = `<div class="mcn-drawer-item">
+      ${eq.icon_url ? `<img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}>` : ''}
+      <div class="mcn-drawer-item__info">
+        <div class="mcn-drawer-item__name"${ns}>
+          <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(eq.item_name || 'Unknown')}</a>
+        </div>
+        <div class="mcn-drawer-item__meta">${eq.item_level ? eq.item_level + '\u00a0' : ''}${badge}</div>
+      </div>
+    </div>`;
+  } else {
+    equippedHtml = '<div class="mcn-drawer-empty">Nothing equipped</div>';
+  }
+
+  // 2 — BIS grid
+  const PAIRED = new Set(['ring_1','ring_2','trinket_1','trinket_2']);
+  const bisHtml = _gpRenderBisGrid(slotKey, bis, tc, PAIRED.has(slotKey) ? null : (sd.desired_blizzard_item_id || null));
+
+  // 3 — Your goal
+  let goalHtml;
+  if (desired && desired.blizzard_item_id) {
+    const locked = desired.is_locked;
+    goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
+      ${desired.icon_url ? `<img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy">` : ''}
+      <div class="mcn-drawer-item__info">
+        <div class="mcn-drawer-item__name">
+          <a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(desired.item_name || 'Unknown')}</a>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">
+      <button class="mcn-lock-btn${locked ? ' locked' : ''}" type="button"
+              onclick="mcnGpToggleLock('${_gpEsc(slotKey)}',${locked})">
+        ${locked ? '&#x1F512; Locked' : '&#x1F513; Lock'}
+      </button>
+      <button class="btn btn-sm btn-secondary" type="button"
+              onclick="mcnGpClearSlot('${_gpEsc(slotKey)}')">Clear</button>
+    </div>`;
+  } else {
+    goalHtml = '<div class="mcn-drawer-empty">No goal item set</div>';
+  }
+
+  const manualHtml = `<div class="mcn-manual-row">
+    <input type="number" class="mcn-manual-input" id="mcn-mid-${_gpEsc(slotKey)}" placeholder="Item ID" min="1">
+    <button class="btn btn-sm btn-secondary" type="button" onclick="mcnGpFetchAndSet('${_gpEsc(slotKey)}')">Fetch</button>
+  </div>`;
+
+  // 4 — Drop source
+  let dropHtml;
+  if (sources.length) {
+    const loc = sources[0];
+    const tPills = tracks.map(t => _gpPill(t, tc)).join(' ');
+    const uPills = upgrades.map(t => _gpPill(t, tc)).join(' ');
+    dropHtml = `<div class="mcn-drawer-item__meta">${_gpEsc(loc.source_name)}${loc.source_instance ? ` \u2014 ${_gpEsc(loc.source_instance)}` : ''}</div>
+      ${tPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Available:</span> ${tPills}</div>` : ''}
+      ${uPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Upgrade to:</span> ${uPills}</div>` : ''}`;
+  } else {
+    dropHtml = '<div class="mcn-drawer-empty">No drop source data</div>';
+  }
+
+  return `
+    <div><div class="mcn-drawer-section__title">Equipped</div>${equippedHtml}</div>
+    <div><div class="mcn-drawer-section__title">Your Goal</div>${goalHtml}${manualHtml}</div>
+    <div><div class="mcn-drawer-section__title">Drop Location</div>${dropHtml}</div>
+    <div class="mcn-drawer__bis-section"><div class="mcn-drawer-section__title">BIS Recommendations</div>${bisHtml}</div>`;
+}
+
+function _gpRenderBisGrid(slotKey, bis, tc, primaryBid) {
+  if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
+
+  const srcMap = new Map();
+  for (const r of bis) {
+    if (!srcMap.has(r.source_id)) srcMap.set(r.source_id, r.short_label || r.source_name || `Source ${r.source_id}`);
+  }
+  const sources = [...srcMap.entries()].map(([id, label]) => ({ id, label }));
+
+  const itemMap = new Map();
+  for (const r of bis) {
+    if (!itemMap.has(r.blizzard_item_id)) itemMap.set(r.blizzard_item_id, { bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url, srcIds: new Set() });
+    itemMap.get(r.blizzard_item_id).srcIds.add(r.source_id);
+  }
+
+  const items = [...itemMap.values()].sort((a, b) => {
+    if (primaryBid) {
+      const d = (b.bid === primaryBid ? 1 : 0) - (a.bid === primaryBid ? 1 : 0);
+      if (d !== 0) return d;
+    }
+    const d2 = b.srcIds.size - a.srcIds.size;
+    return d2 !== 0 ? d2 : a.name.localeCompare(b.name);
+  });
+
+  const hdrCells = sources.map(s => `<th class="mcn-bis-grid__src" title="${_gpEsc(s.label)}">${_gpEsc(s.label)}</th>`).join('');
+
+  const rows = items.map(item => {
+    const cells = sources.map(s =>
+      item.srcIds.has(s.id)
+        ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;</td>`
+        : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no">&mdash;</td>`
+    ).join('');
+    const icon = item.icon
+      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy">`
+      : `<span class="mcn-bis-grid__icon-ph"></span>`;
+    return `<tr>
+      <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}<a href="https://www.wowhead.com/item=${item.bid}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a></div></td>
+      ${cells}
+      <td class="mcn-bis-grid__action"><button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(slotKey)}',${item.bid})">Use</button></td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="mcn-bis-grid">
+    <thead><tr><th class="mcn-bis-grid__name-col">Item</th>${hdrCells}<th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ── Slot action globals (called from onclick attrs in drawer) ──────────────────
+
+window.mcnGpSetDesiredItem = async function(slot, blizzardItemId) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/slot/${slot}`, {
+    method: 'PUT',
+    body: JSON.stringify({ blizzard_item_id: blizzardItemId }),
+  });
+  if (resp.ok) { _gpShowStatus('Goal updated', 'ok'); await _gpReload(); }
+  else _gpShowStatus(resp.error || 'Failed', 'err');
+};
+
+window.mcnGpClearSlot = async function(slot) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/slot/${slot}`, {
+    method: 'PUT',
+    body: JSON.stringify({ blizzard_item_id: null }),
+  });
+  if (resp.ok) { _gpShowStatus('Slot cleared', 'ok'); await _gpReload(); }
+  else _gpShowStatus(resp.error || 'Failed', 'err');
+};
+
+window.mcnGpToggleLock = async function(slot, currentlyLocked) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/slot/${slot}`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_locked: !currentlyLocked }),
+  });
+  if (resp.ok) {
+    _gpShowStatus(!currentlyLocked ? 'Slot locked' : 'Slot unlocked', 'ok');
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Failed', 'err');
+  }
+};
+
+window.mcnGpFetchAndSet = async function(slot) {
+  const input  = document.getElementById(`mcn-mid-${slot}`);
+  const itemId = parseInt(input?.value, 10);
+  if (!itemId) return;
+  _gpShowStatus('Fetching item\u2026', 'info');
+  const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
+  if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
+  await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+};
