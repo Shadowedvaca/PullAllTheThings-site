@@ -549,9 +549,11 @@ document.addEventListener("DOMContentLoaded", _init);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GP_LEFT_SLOTS  = ['head','neck','shoulder','back','chest','shirt','tabard','wrist','main_hand'];
-const GP_RIGHT_SLOTS = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2','off_hand'];
-const GP_INACTIVE_SLOTS = new Set(['shirt','tabard']);
+const GP_LEFT_BODY_SLOTS   = ['head','neck','shoulder','back','chest','wrist'];
+const GP_LEFT_WEAPON_SLOTS = ['main_hand','off_hand'];
+const GP_LEFT_SLOTS        = [...GP_LEFT_BODY_SLOTS, ...GP_LEFT_WEAPON_SLOTS];
+const GP_RIGHT_SLOTS       = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
+const GP_INACTIVE_SLOTS    = new Set();
 
 const GP_SLOT_LABELS = {
   head:'Head', neck:'Neck', shoulder:'Shoulder', back:'Back',
@@ -620,7 +622,9 @@ function _gpResetPaperdolls() {
   const rightEl = document.getElementById('mcn-right-paperdoll');
   if (leftEl) {
     leftEl.innerHTML = '<div class="mcn-paperdoll__placeholder">'
-      + GP_LEFT_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
+      + GP_LEFT_BODY_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
+      + '<div class="mcn-paperdoll__weapon-sep"></div>'
+      + GP_LEFT_WEAPON_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
       + '</div>';
   }
   if (rightEl) {
@@ -762,7 +766,12 @@ function _gpRenderPaperdolls(slots, tc) {
   const rightEl = document.getElementById('mcn-right-paperdoll');
   if (leftEl) {
     leftEl.innerHTML = '';
-    GP_LEFT_SLOTS.forEach(k => leftEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+    GP_LEFT_BODY_SLOTS.forEach(k => leftEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+    // Weapon separator — visual break between body and weapon slots
+    const sep = document.createElement('div');
+    sep.className = 'mcn-paperdoll__weapon-sep';
+    leftEl.appendChild(sep);
+    GP_LEFT_WEAPON_SLOTS.forEach(k => leftEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
   }
   if (rightEl) {
     rightEl.innerHTML = '';

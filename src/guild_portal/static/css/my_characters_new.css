@@ -320,6 +320,14 @@
   padding-left: 0.5rem;
 }
 
+/* Separator between body slots and weapon slots in left column */
+.mcn-paperdoll__weapon-sep {
+  height: 10px;
+  border-top: 1px solid var(--color-border);
+  margin: 2px 0;
+  opacity: 0.4;
+}
+
 /* ── Center panel ────────────────────────────────────────────── */
 .mcn-center {
   background: var(--color-bg-card);
