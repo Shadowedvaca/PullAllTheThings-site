@@ -21,11 +21,11 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1A** Foundation | ✅ COMPLETE | Migration 0066, equipment sync, quality tracks, item cache, ORM |
 | **1B** BIS discovery + extraction | ✅ COMPLETE | Migrations 0067–0076, bis_sync.py, simc_parser.py, admin matrix UI |
 | **1C** Item source mapping | ✅ ON PROD | item_source_sync.py, Journal API, admin Item Sources + Re-sync Errors, migrations 0077–0078 |
-| **1D** Personal gear plan | 🔄 IN PROGRESS | Member page `/gear-plan` built and deployed to dev. See Phase 1D section. |
+| **1D** Personal gear plan | ✅ COMPLETE | Gear plan integrated into `/my-characters` (UI redesign UI-1A–1H). `/gear-plan` redirects. Migration 0079–0081. |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
 **Active branch:** `feature/gear-plan-phase-1d`
-**Last migration:** 0079
+**Last migration:** 0081
 **Last prod tag:** `prod-v0.11.2`
 
 ---

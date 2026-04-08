@@ -1,9 +1,9 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1G complete (Professions + Market panels, icon fixes, recipe table redesign); UI-1H next  
-> **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
-> **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
+> **Status:** ALL PHASES COMPLETE (UI-1A through UI-1H). `/my-characters` is the unified character sheet. `/gear-plan` redirects to it. Old pages deleted. Ready for merge to main.  
+> **Branch:** `feature/gear-plan-phase-1d`  
+> **Last migration:** 0081  
 > **Last updated:** 2026-04-08
 
 ---
@@ -461,53 +461,24 @@ Tabs work (Raid shows data; M+ shows "no data" gracefully). Deploy to dev, verif
 
 ---
 
-### Phase UI-1H — Cleanup + migration to canonical URLs
+### Phase UI-1H — Cleanup + migration to canonical URLs ✓ COMPLETE
 
-**Purpose:** Remove the old pages. The new page becomes `/my-characters`. `/gear-plan`
-becomes a redirect.
-
-**Scope:**
-- Rename route `/my-characters-new` → `/my-characters` in `gear_plan_pages.py`.
-- Rename template `my_characters_new.html` → `my_characters.html` (after deleting old one).
-- Rename CSS/JS: `my_characters_new.css` → `my_characters.css`, same for JS
-  (delete old `my_characters.css` / `my_characters.js`).
-- `/gear-plan` route: return HTTP 302 redirect to `/my-characters`.
-- Remove Gear Plan nav link from `base.html`.
-- `screen_permissions`: migration 0081 — check if `my_gear_plan` screen permission row
-  should be merged into `my_characters` or retired.
-- Old template `my_characters.html` (pre-redesign): delete.
-- Old gear_plan template and standalone JS: `gear_plan.html` → delete (or repurpose as
-  redirect page). `gear_plan.js` and `gear_plan.css` → delete after confirming no other
-  references. CSS that is still needed (slot card styles, drawer styles) should already
-  have been migrated into `my_characters_new.css` in earlier phases.
-- Smoke test: all links in nav, all character-related flows, no broken CSS/JS references.
-- Update `CLAUDE.md` current phase section.
-- Update `gear-plan-1-feature.md` to reflect Phase 1D → complete, 1E superseded by UI redesign.
-
-**Migration:** 0081 — screen permissions cleanup.
-
-**Files changed:**
-- `src/guild_portal/pages/gear_plan_pages.py`
-- `src/guild_portal/templates/base.html` (remove Gear Plan nav link)
-- `src/guild_portal/templates/member/my_characters_new.html` → rename
-- `src/guild_portal/static/css/my_characters_new.css` → rename + delete old
-- `src/guild_portal/static/js/my_characters_new.js` → rename + delete old
-- `src/guild_portal/templates/member/my_characters.html` (old) → delete
-- `src/guild_portal/templates/member/gear_plan.html` → delete
-- `src/guild_portal/static/css/gear_plan.css` → delete
-- `src/guild_portal/static/js/gear_plan.js` → delete
-- `alembic/versions/0081_screen_permissions_cleanup.py` (new)
-- `CLAUDE.md` (phase status update)
-
-**Done when:** Single `/my-characters` page. `/gear-plan` redirects cleanly. No 404s. No
-orphaned CSS/JS. Old My Characters page and Gear Plan page are gone. Prod-ready.
+**As shipped:**
+- `/my-characters-new` route renamed to `/my-characters` in `gear_plan_pages.py`; function renamed `my_characters_page`.
+- Old `/my-characters` handler removed from `profile_pages.py`.
+- `/gear-plan` handler replaced with HTTP 302 redirect to `/my-characters`.
+- Gear Plan nav link removed from `base.html`.
+- `my_characters_new.html` → `my_characters.html`; CSS/JS renamed to match (old files deleted).
+- `gear_plan.html`, `gear_plan.css`, `gear_plan.js` (member-facing) deleted. Admin `gear_plan.html`/`gear_plan_admin.js` untouched.
+- Migration 0081: deletes `my_gear_plan` screen_permission (`url_path=/gear-plan`); upserts `my_characters` permission (`url_path=/my-characters`, nav_order=4, level 1+).
+- Unit tests updated for phases 5.0, 5.1, 5.2, 5.4 to reference new `mcn-*` class names and function names.
+- CLAUDE.md updated.
 
 **Post-deploy prod action required:**
 After tagging and deploying to prod, trigger a WCL sync from **Admin → Warcraft Logs**.
 This re-queries all stored reports and uses `difficulty = EXCLUDED.difficulty` in the
 upsert to correct every row that was previously hardcoded to `3` (Normal). Until this
 runs, the Parses panel "By Difficulty" section may still show all rows as Normal on prod.
-The Chimaerus Normal vs Heroic split should be visible and correctly labelled after the sync.
 
 ---
 
