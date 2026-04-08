@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1B complete (summary cards + panel switching); UI-1C next  
+> **Status:** UI-1B complete (stat strip + panel switching); UI-1C next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
