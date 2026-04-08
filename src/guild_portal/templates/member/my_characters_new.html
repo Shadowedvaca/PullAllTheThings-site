@@ -20,49 +20,49 @@
     <a href="/profile" class="btn btn-primary">Go to Settings &rarr; Character Claims</a>
   </div>
 
-  {# ── Selector bar ──────────────────────────────────────────────────────── #}
-  <div id="mcn-selector-bar" class="mcn-selector-bar" hidden>
-    <select id="mcn-char-select" class="mcn-char-select" aria-label="Select character"></select>
-    <button id="mcn-btn-refresh" class="btn btn--secondary btn--sm" type="button">
-      Refresh
-    </button>
-    <span id="mcn-bnet-status" class="mcn-bnet-status"></span>
+  {# ── Header area: centered title + top-right selector ────────────────── #}
+  <div class="mcn-header-area">
+
+    {# Selector — top-right corner, outside the centered header #}
+    <div id="mcn-selector-bar" class="mcn-selector-bar" hidden>
+      <select id="mcn-char-select" class="mcn-char-select" aria-label="Select character"></select>
+      <button id="mcn-btn-refresh" class="mcn-btn-refresh" type="button" title="Refresh characters">&#8635;</button>
+    </div>
+
+    {# Persistent character header — centered #}
+    <div id="mcn-header" class="mcn-header" hidden>
+
+      {# Row 1: name + realm + BNet badge #}
+      <div class="mcn-header__identity">
+        <span id="mcn-char-name" class="mcn-char-name"></span>
+        <span class="mcn-header__sep">&mdash;</span>
+        <span id="mcn-char-realm" class="mcn-char-realm"></span>
+        <span id="mcn-bnet-badge" class="mcn-bnet-badge" hidden>BNet</span>
+      </div>
+
+      {# Row 2: class icon + spec + spec icon + race + role icon + role + badges #}
+      <div class="mcn-header__details">
+        <span id="mcn-class-icon" class="mcn-icon-wrap"></span>
+        <span id="mcn-class-spec" class="mcn-class-spec"></span>
+        <span id="mcn-spec-icon" class="mcn-icon-wrap"></span>
+        <span id="mcn-race-sep" class="mcn-details-sep" hidden>&middot;</span>
+        <span id="mcn-race" class="mcn-race" hidden></span>
+        <span class="mcn-details-sep">&middot;</span>
+        <span id="mcn-role-icon" class="mcn-icon-wrap"></span>
+        <span id="mcn-role-label" class="mcn-role-label" hidden></span>
+        <span id="mcn-main-badge" class="mcn-badge mcn-badge--main" hidden>Main</span>
+        <span id="mcn-offspec-badge" class="mcn-badge mcn-badge--offspec" hidden>Off</span>
+      </div>
+
+    </div>{# end #mcn-header #}
+
+  </div>{# end .mcn-header-area #}
+
+  {# ── Guide links bar — between header and body ────────────────────────── #}
+  <div id="mcn-guides" class="mcn-guides-bar" hidden>
+    <select id="mcn-guide-spec" class="mcn-guide-spec-sel" aria-label="Spec for guides"></select>
+    <div id="mcn-guide-badges" class="mcn-guide-badges"></div>
   </div>
-
-  {# ── Persistent character header ───────────────────────────────────────── #}
-  <div id="mcn-header" class="mcn-header" hidden>
-
-    {# Row 1: name + realm + BNet badge #}
-    <div class="mcn-header__identity">
-      <span id="mcn-char-name" class="mcn-char-name"></span>
-      <span class="mcn-header__sep">&mdash;</span>
-      <span id="mcn-char-realm" class="mcn-char-realm"></span>
-      <span id="mcn-bnet-badge" class="mcn-bnet-badge" hidden>BNet</span>
-    </div>
-
-    {# Row 2: class icon + spec + spec icon + race + role icon + role + badges #}
-    <div class="mcn-header__details">
-      <span id="mcn-class-icon" class="mcn-icon-wrap"></span>
-      <span id="mcn-class-spec" class="mcn-class-spec"></span>
-      <span id="mcn-spec-icon" class="mcn-icon-wrap"></span>
-      <span id="mcn-race-sep" class="mcn-details-sep" hidden>&middot;</span>
-      <span id="mcn-race" class="mcn-race" hidden></span>
-      <span class="mcn-details-sep">&middot;</span>
-      <span id="mcn-role-icon" class="mcn-icon-wrap"></span>
-      <span id="mcn-role-label" class="mcn-role-label" hidden></span>
-      <span id="mcn-main-badge" class="mcn-badge mcn-badge--main" hidden>Main</span>
-      <span id="mcn-offspec-badge" class="mcn-badge mcn-badge--offspec" hidden>Off</span>
-    </div>
-
-    {# Row 3: guide links — compact two-dropdown + Go button #}
-    <div id="mcn-guides" class="mcn-guides" hidden>
-      <label class="mcn-guides__label" for="mcn-guide-spec">Guides</label>
-      <select id="mcn-guide-spec" class="mcn-guides__select" aria-label="Spec"></select>
-      <select id="mcn-guide-type" class="mcn-guides__select" aria-label="Guide site"></select>
-      <button id="mcn-guide-go" class="btn btn--secondary btn--sm" type="button">Go</button>
-    </div>
-
-  </div>{# end #mcn-header #}
 
   {# ── Three-column body ─────────────────────────────────────────────────── #}
   <div id="mcn-body" class="mcn-body" hidden>

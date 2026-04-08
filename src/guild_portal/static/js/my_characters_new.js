@@ -262,6 +262,22 @@ function _renderHeader(char) {
 // Guide section
 // ---------------------------------------------------------------------------
 
+function _renderGuideBadges(links) {
+  const container = document.getElementById("mcn-guide-badges");
+  if (!container) return;
+  if (!links || !links.length) {
+    container.innerHTML = '<span class="mcn-guide-empty">No guides configured</span>';
+    return;
+  }
+  container.innerHTML = links.map(l =>
+    `<a href="${l.url}" target="_blank" rel="noopener noreferrer"
+        class="mcn-guide-badge"
+        style="background:${l.badge_bg_color};color:${l.badge_text_color};border-color:${l.badge_border_color}">
+      ${l.badge_label}
+    </a>`
+  ).join("");
+}
+
 function _renderGuides(char) {
   const guideEl = document.getElementById("mcn-guides");
   if (!guideEl) return;
@@ -273,55 +289,27 @@ function _renderGuides(char) {
 
   _guideSpecsByChar[char.id] = char.class_specs;
 
-  const specSel  = document.getElementById("mcn-guide-spec");
-  const typeSel  = document.getElementById("mcn-guide-type");
-  const goBtn    = document.getElementById("mcn-guide-go");
-  if (!specSel || !typeSel || !goBtn) return;
+  const specSel = document.getElementById("mcn-guide-spec");
+  if (!specSel) return;
 
-  // Build spec dropdown
   const defaultSpec = char.spec_name || char.class_specs[0]?.name;
   specSel.innerHTML = char.class_specs
     .map(s => `<option value="${s.name}"${s.name === defaultSpec ? " selected" : ""}>${s.name}</option>`)
     .join("");
 
-  function _fillTypeDropdown(specName) {
+  function _showBadgesForSpec(specName) {
     const specs = _guideSpecsByChar[char.id] || [];
     const spec  = specs.find(s => s.name === specName) || specs[0];
-    const links = spec?.guide_links || [];
-    typeSel.innerHTML = links.length
-      ? links.map((l, i) => `<option value="${i}">${l.badge_label}</option>`).join("")
-      : `<option value="">No guides configured</option>`;
-    return links;
+    _renderGuideBadges(spec?.guide_links || []);
   }
 
-  let _currentLinks = _fillTypeDropdown(defaultSpec);
+  _showBadgesForSpec(defaultSpec);
 
-  specSel.addEventListener("change", () => {
-    _currentLinks = _fillTypeDropdown(specSel.value);
-  });
-
-  goBtn.addEventListener("click", () => {
-    const idx = parseInt(typeSel.value, 10);
-    const link = _currentLinks[idx];
-    if (link && link.url) window.open(link.url, "_blank", "noopener,noreferrer");
-  });
+  specSel.addEventListener("change", () => _showBadgesForSpec(specSel.value));
 
   guideEl.hidden = false;
 }
 
-// ---------------------------------------------------------------------------
-// BNet status display
-// ---------------------------------------------------------------------------
-
-function _renderBnetStatus(bnetLinked, bnetTokenExpired) {
-  const el = document.getElementById("mcn-bnet-status");
-  if (!el) return;
-  if (bnetLinked) {
-    el.textContent = bnetTokenExpired ? "BNet linked (token expired)" : "BNet linked";
-  } else {
-    el.textContent = "Battle.net not linked";
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Character selection
@@ -388,7 +376,6 @@ async function _init() {
     _chars.forEach(c => { c.bnet_linked = bnet_linked; });
 
     _populateSelector(_chars, default_character_id);
-    _renderBnetStatus(bnet_linked, bnet_token_expired);
 
     _show("mcn-selector-bar");
     _show("mcn-body");

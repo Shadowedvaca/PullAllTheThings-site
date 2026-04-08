@@ -25,32 +25,53 @@
   color: #f87171;
 }
 
-/* ── Selector bar ────────────────────────────────────────────── */
+/* ── Header area wrapper (positions selector top-right) ──────── */
+.mcn-header-area {
+  position: relative;
+}
+
+/* ── Selector — top-right corner ─────────────────────────────── */
 .mcn-selector-bar {
+  position: absolute;
+  top: 0.5rem;
+  right: 0;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  gap: 0.4rem;
 }
 
 .mcn-char-select {
-  flex: 1;
-  max-width: 380px;
-  background: var(--color-bg);
+  background: var(--color-bg-card);
   color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
   padding: 0.3rem 0.5rem;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  max-width: 220px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.mcn-char-select:hover,
+.mcn-char-select:focus {
+  border-color: var(--color-accent-dim);
 }
 
-.mcn-bnet-status {
-  margin-left: auto;
-  font-size: 0.8rem;
+.mcn-btn-refresh {
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.25rem 0.45rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.mcn-btn-refresh:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent-dim);
 }
 
 /* ── Persistent character header ─────────────────────────────── */
@@ -185,32 +206,64 @@
   border: 1px solid #2563eb55;
 }
 
-/* Row 3: guide links — hidden for now, styled in next phase */
-.mcn-guides {
+/* ── Guide links bar — between header and body ───────────────── */
+.mcn-guides-bar {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
-  margin-top: 0.25rem;
+  padding: 0.4rem 0;
 }
 
-.mcn-guides__label {
+.mcn-guide-spec-sel {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  border-bottom: 1px solid var(--color-border-light);
+  border-radius: 0;
+  padding: 0.1rem 0.25rem;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  outline: none;
+}
+.mcn-guide-spec-sel:hover,
+.mcn-guide-spec-sel:focus {
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent-dim);
+}
+
+.mcn-guide-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.mcn-guide-badge {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.78rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.65rem;
+  border-radius: 3px;
+  border: 1px solid;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.15s, filter 0.15s;
+}
+.mcn-guide-badge:hover {
+  opacity: 0.85;
+  filter: brightness(1.1);
+  text-decoration: none;
 }
 
-.mcn-guides__select {
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 0.25rem 0.4rem;
-  font-size: 0.85rem;
+.mcn-guide-empty {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 /* ── Three-column body grid ──────────────────────────────────── */
