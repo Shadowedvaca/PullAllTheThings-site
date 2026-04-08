@@ -549,9 +549,8 @@ document.addEventListener("DOMContentLoaded", _init);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GP_LEFT_SLOTS   = ['head','neck','shoulder','back','chest','shirt','tabard','wrist'];
-const GP_RIGHT_SLOTS  = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
-const GP_WEAPON_SLOTS = ['main_hand','off_hand'];
+const GP_LEFT_SLOTS  = ['head','neck','shoulder','back','chest','shirt','tabard','wrist','main_hand'];
+const GP_RIGHT_SLOTS = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2','off_hand'];
 const GP_INACTIVE_SLOTS = new Set(['shirt','tabard']);
 
 const GP_SLOT_LABELS = {
@@ -630,6 +629,7 @@ function _gpResetPaperdolls() {
       + '</div>';
   }
 }
+
 
 // ── Slot card builder — two-box design ────────────────────────────────────────
 
@@ -816,7 +816,6 @@ function _gpRenderCenterPanel(data) {
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
-    <div id="mcn-gp-weapons" class="mcn-weapons-row"></div>
   `;
 
   // Wire selects + buttons
@@ -854,7 +853,6 @@ async function _gpLoadPlan(charId, forceReload) {
     _gpOpenSlot = null;
     _gpRenderPaperdolls(d.slots, d.trackColors);
     _gpRenderCenterPanel(d);
-    _gpRenderWeapons(d.slots, d.trackColors);
     return;
   }
 
@@ -870,7 +868,6 @@ async function _gpLoadPlan(charId, forceReload) {
 
     _gpRenderPaperdolls(resp.data.slots, resp.data.trackColors);
     _gpRenderCenterPanel(resp.data);
-    _gpRenderWeapons(resp.data.slots, resp.data.trackColors);
     _gpCloseDrawer();
 
   } catch (err) {

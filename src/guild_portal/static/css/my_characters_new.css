@@ -540,6 +540,8 @@
   align-items: center;
   gap: 3px;
   min-width: 0;
+  /* Ensures inactive slots (shirt/tabard) match height of active slots */
+  min-height: 52px;
 }
 
 /* ── Item icon (shared by both boxes) ────────────────────────── */
