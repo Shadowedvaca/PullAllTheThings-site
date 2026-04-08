@@ -235,7 +235,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase UI-1G (complete)** — Professions + Market detail panels on `/my-characters-new`. Professions tab: profession grid with Wowhead icons + recipe count cards, filterable recipe table. Market tab: AH price table with gold formatting + category badges; tab count updates dynamically after load. Summary endpoint extended with `profession_names[]`. Phases UI-1A–1F also complete.
+- **Phase UI-1G (complete)** — Professions + Market detail panels on `/my-characters-new`. Professions tab: profession grid with Wowhead icons (fixed slugs: `trade_engraving` for Enchanting, `inv_misc_food_15` for Cooking) + recipe count cards; 4-col recipe table (Profession / Expansion / Recipe / WH link) with Profession dropdown, Expansion dropdown, search field, 15-row pagination. Market tab: AH price table with gold formatting + category badges + last-updated timestamp (upper right); tab count updates dynamically after load. All dropdowns use dark theme (`--color-bg-card`). Summary endpoint extended with `profession_names[]`. Market API returns `last_updated` ISO timestamp. Phases UI-1A–1F also complete.
 - **Branch:** `feature/gear-plan-phase-1d`
 - **Tests:** 1269 pass (2 pre-existing bnet failures unchanged)
 - **Last migration:** 0080

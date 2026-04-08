@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1G complete (Professions + Market panels); UI-1H next  
+> **Status:** UI-1G complete (Professions + Market panels, icon fixes, recipe table redesign); UI-1H next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
@@ -446,15 +446,11 @@ Tabs work (Raid shows data; M+ shows "no data" gracefully). Deploy to dev, verif
 
 **Purpose:** Fill in the two remaining summary cards.
 
-**As shipped:**
-- Professions panel: grid of known professions with Wowhead icons + recipe counts;
-  filterable recipe table below (profession dropdown); uses existing `/crafting` endpoint.
-  Profession icon slugs hardcoded in `PROFESSION_ICONS` map (13 professions).
-- Market panel: full AH price table with category badges, gold formatting, realm-specific
-  footnote; market tab count updates dynamically after data loads.
-  `_updateMarketTabCount()` patches the tab button without re-rendering the strip.
-- `/character/{id}/summary` endpoint extended: now returns `profession_names: list[str]`
-  in addition to `profession_count` (replaces count-only query; same DB cost, richer data).
+**As shipped + post-ship fixes:**
+- Professions panel: grid of known professions with Wowhead icons + recipe counts; uses existing `/crafting` endpoint. Profession icon slugs hardcoded in `PROFESSION_ICONS` map (13 professions). Fixed slugs: `trade_engraving` for Enchanting, `inv_misc_food_15` for Cooking (`trade_enchanting` / `trade_cooking` / `ability_cooking` all 404 on Wowhead CDN).
+- Recipe table redesigned: 4 columns — Profession / Expansion / Recipe / WH link badge. Filter bar has Profession dropdown + Expansion dropdown (populated from actual data) + search field; all controls dark-themed via `--color-bg-card` (was `--color-surface` which is undefined → browser default light grey). 15-row pagination with Prev/Next.
+- Market panel: full AH price table with category badges, gold formatting, realm-specific footnote + last-updated timestamp in upper-right of panel heading (derived from `MAX(snapshot_at)` across returned rows; displayed in user's local time via `toLocaleTimeString()`). Market API now returns `last_updated` ISO timestamp. Tab count updates dynamically after data loads.
+- `/character/{id}/summary` endpoint extended: now returns `profession_names: list[str]` in addition to `profession_count`.
 - `goldStr` and `escHtml` helpers added to `my_characters_new.js`.
 - `_craftingCache` and `_marketCache` added (same pattern as progression/parses caches).
 
