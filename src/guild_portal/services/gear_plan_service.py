@@ -122,6 +122,7 @@ def _normalize_paired_slot(
     desired_by_slot: dict,
     bis_by_slot: dict,
     bis_source_id: Optional[int],
+    slot_remapping: dict,
 ) -> None:
     """Normalize a paired slot (rings, trinkets) by swapping equipped items for display.
 
@@ -129,11 +130,13 @@ def _normalize_paired_slot(
     1. If swapping the equipped items increases the number of equipped==desired
        matches, swap equipped only (BIS data already consistent with desired).
     2. If neither assignment produces a match, sort equipped items alphabetically
-       by item name so the display is always consistent, AND swap bis_by_slot to
-       match — so the BIS grid for ring_1 also shows the alphabetically-earlier
-       BIS item first rather than whatever the scraper happened to assign.
+       by item name so the display is always consistent, AND swap bis_by_slot and
+       desired_by_slot to match — so the BIS grid for ring_1 also shows the
+       alphabetically-earlier BIS item first.  Records the swap in slot_remapping
+       so callers know which DB slot key corresponds to each visual position.
 
-    Modifies equipped_by_slot in-place; modifies bis_by_slot in-place for rule 2.
+    Modifies equipped_by_slot in-place; modifies bis_by_slot / desired_by_slot
+    in-place for rule 2; updates slot_remapping in-place for rule 2 swaps.
     """
     eq_a = equipped_by_slot.get(slot_a)
     eq_b = equipped_by_slot.get(slot_b)
@@ -192,6 +195,11 @@ def _normalize_paired_slot(
                 desired_by_slot[slot_a] = des_b
             elif slot_a in desired_by_slot:
                 del desired_by_slot[slot_a]
+            # Record the visual→DB mapping so the frontend uses the correct DB
+            # slot key when writing (e.g. the visual ring_1 position now
+            # corresponds to DB slot ring_2 and vice-versa).
+            slot_remapping[slot_a] = slot_b
+            slot_remapping[slot_b] = slot_a
 
 
 async def verify_character_ownership(
@@ -744,8 +752,11 @@ async def get_plan_detail(
 
     # Normalize ring and trinket pairs: swap equipped items to maximise BIS matches
     # and ensure consistent alphabetical ordering when no match exists.
-    _normalize_paired_slot("ring_1", "ring_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id)
-    _normalize_paired_slot("trinket_1", "trinket_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id)
+    # slot_remapping tracks any visual→DB slot swaps so the frontend can write
+    # to the correct DB slot when the user changes a goal in the detail panel.
+    slot_remapping: dict[str, str] = {}
+    _normalize_paired_slot("ring_1", "ring_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id, slot_remapping)
+    _normalize_paired_slot("trinket_1", "trinket_2", equipped_by_slot, desired_by_slot, bis_by_slot, bis_source_id, slot_remapping)
 
     # Merge BIS pools for paired slots so each slot's drawer shows all possible
     # ring (or trinket) items, not just those scraped under that specific slot key.
@@ -759,13 +770,12 @@ async def get_plan_detail(
         desired = desired_by_slot.get(slot)
         bis_recs = bis_by_slot.get(slot, [])
 
-        # Determine effective desired blizzard_item_id
+        # Effective desired blizzard_item_id — only from explicit gear_plan_slots.
+        # We deliberately do NOT fall back to BIS recommendations here: for paired
+        # slots (rings/trinkets), after _merge_paired_bis both slots share the same
+        # merged pool, so the fallback would assign the same "implied" item to both
+        # slots and produce bogus is_bis / needs_upgrade flags.
         desired_bid: Optional[int] = desired["blizzard_item_id"] if desired else None
-        if desired_bid is None and bis_recs and bis_source_id:
-            for rec in bis_recs:
-                if rec["source_id"] == bis_source_id:
-                    desired_bid = rec["blizzard_item_id"]
-                    break
 
         available_tracks = tracks_by_item.get(desired_bid, []) if desired_bid else []
         item_sources = sources_by_item.get(desired_bid, []) if desired_bid else []
@@ -793,6 +803,7 @@ async def get_plan_detail(
 
         slots_data[slot] = {
             "slot": slot,
+            "canonical_slot": slot_remapping.get(slot, slot),
             "display_name": SLOT_DISPLAY.get(slot, slot.replace("_", " ").title()),
             "equipped": equipped,
             "desired": desired,

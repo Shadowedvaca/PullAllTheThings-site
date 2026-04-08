@@ -941,7 +941,9 @@ function _gpRenderCenterPanel(data) {
   const area = document.getElementById('mcn-detail-area');
   if (!area) return;
 
-  const { plan, bisSources, heroTalents } = data;
+  const plan        = data.plan;
+  const bisSources  = data.bis_sources  || [];
+  const heroTalents = data.hero_talents || [];
 
   const htOpts = ['<option value="">\u2014 Any \u2014</option>']
     .concat((heroTalents || []).map(ht =>
@@ -971,13 +973,13 @@ function _gpRenderCenterPanel(data) {
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
-    ${_gpRenderGearTable(data.slots, data.trackColors)}
+    ${_gpRenderGearTable(data.slots, data.track_colors)}
   `;
 
   // If a slot is currently selected, re-populate its detail panel
   if (_gpOpenSlot) {
     const sd = data.slots?.[_gpOpenSlot] || {};
-    _gpPopulateSlotDetail(_gpOpenSlot, sd, data.trackColors || {});
+    _gpPopulateSlotDetail(_gpOpenSlot, sd, data.track_colors || {});
     document.querySelectorAll('.mcn-slot-card').forEach(c => {
       c.classList.toggle('is-open', c.dataset.slot === _gpOpenSlot);
     });
@@ -1037,7 +1039,7 @@ function _gpUpdateSlotDetail(slotKey) {
   const data   = charId ? _gpCache[charId] : null;
   if (!data) return;
   const sd = data.slots?.[slotKey] || {};
-  _gpPopulateSlotDetail(slotKey, sd, data.trackColors || {});
+  _gpPopulateSlotDetail(slotKey, sd, data.track_colors || {});
   document.querySelectorAll('.mcn-slot-card').forEach(c => {
     c.classList.toggle('is-open', c.dataset.slot === slotKey);
   });
@@ -1068,7 +1070,7 @@ window.mcnGpCloseSlotDetail = function() {
 async function _gpLoadPlan(charId, forceReload) {
   if (!forceReload && _gpCache[charId]) {
     const d = _gpCache[charId];
-    _gpRenderPaperdolls(d.slots, d.trackColors);
+    _gpRenderPaperdolls(d.slots, d.track_colors);
     _gpRenderCenterPanel(d);
     return;
   }
@@ -1082,7 +1084,7 @@ async function _gpLoadPlan(charId, forceReload) {
 
     _gpCache[charId] = resp.data;
 
-    _gpRenderPaperdolls(resp.data.slots, resp.data.trackColors);
+    _gpRenderPaperdolls(resp.data.slots, resp.data.track_colors);
     _gpRenderCenterPanel(resp.data);
 
   } catch (err) {
@@ -1265,6 +1267,10 @@ function _gpCloseDrawer() {
 }
 
 function _gpRenderDrawerBody(slotKey, sd, tc) {
+  // dbSlot is the actual DB slot key for write operations. After paired-slot
+  // normalization the visual position may differ from the DB slot (e.g. visual
+  // ring_1 might correspond to DB ring_2 after an alphabetical swap).
+  const dbSlot  = sd.canonical_slot || slotKey;
   const eq      = sd.equipped;
   const desired = sd.desired;
   const bis     = sd.bis_recommendations || [];
@@ -1294,7 +1300,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
 
   // 2 — BIS grid
   const PAIRED = new Set(['ring_1','ring_2','trinket_1','trinket_2']);
-  const bisHtml = _gpRenderBisGrid(slotKey, bis, tc, PAIRED.has(slotKey) ? null : (sd.desired_blizzard_item_id || null));
+  const bisHtml = _gpRenderBisGrid(slotKey, bis, tc, PAIRED.has(slotKey) ? null : (sd.desired_blizzard_item_id || null), dbSlot);
 
   // 3 — Your goal
   let goalHtml;
@@ -1310,19 +1316,19 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     </div>
     <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">
       <button class="mcn-lock-btn${locked ? ' locked' : ''}" type="button"
-              onclick="mcnGpToggleLock('${_gpEsc(slotKey)}',${locked})">
+              onclick="mcnGpToggleLock('${_gpEsc(dbSlot)}',${locked})">
         ${locked ? '&#x1F512; Locked' : '&#x1F513; Lock'}
       </button>
       <button class="btn btn-sm btn-secondary" type="button"
-              onclick="mcnGpClearSlot('${_gpEsc(slotKey)}')">Clear</button>
+              onclick="mcnGpClearSlot('${_gpEsc(dbSlot)}')">Clear</button>
     </div>`;
   } else {
     goalHtml = '<div class="mcn-drawer-empty">No goal item set</div>';
   }
 
   const manualHtml = `<div class="mcn-manual-row">
-    <input type="number" class="mcn-manual-input" id="mcn-mid-${_gpEsc(slotKey)}" placeholder="Item ID" min="1">
-    <button class="btn btn-sm btn-secondary" type="button" onclick="mcnGpFetchAndSet('${_gpEsc(slotKey)}')">Fetch</button>
+    <input type="number" class="mcn-manual-input" id="mcn-mid-${_gpEsc(dbSlot)}" placeholder="Item ID" min="1">
+    <button class="btn btn-sm btn-secondary" type="button" onclick="mcnGpFetchAndSet('${_gpEsc(dbSlot)}')">Fetch</button>
   </div>`;
 
   // 4 — Drop source
@@ -1345,7 +1351,8 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     <div class="mcn-drawer__bis-section"><div class="mcn-drawer-section__title">BIS Recommendations</div>${bisHtml}</div>`;
 }
 
-function _gpRenderBisGrid(slotKey, bis, tc, primaryBid) {
+function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
+  dbSlot = dbSlot || slotKey;
   if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
 
   const srcMap = new Map();
@@ -1383,7 +1390,7 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid) {
     return `<tr>
       <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}<a href="https://www.wowhead.com/item=${item.bid}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a></div></td>
       ${cells}
-      <td class="mcn-bis-grid__action"><button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(slotKey)}',${item.bid})">Use</button></td>
+      <td class="mcn-bis-grid__action"><button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.bid})">Use</button></td>
     </tr>`;
   }).join('');
 
