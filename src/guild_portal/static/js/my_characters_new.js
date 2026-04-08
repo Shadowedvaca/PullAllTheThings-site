@@ -173,6 +173,7 @@ function raceIcon(race, gender) {  // eslint-disable-line no-unused-vars
 let _chars = [];           // full character list from API
 let _selectedChar = null;  // currently displayed character
 const _guideSpecsByChar = {};
+const _summaryCache = {};  // keyed by character_id
 
 // ---------------------------------------------------------------------------
 // UI helpers
@@ -312,6 +313,126 @@ function _renderGuides(char) {
 
 
 // ---------------------------------------------------------------------------
+// Summary cards + panel switching
+// ---------------------------------------------------------------------------
+
+const _CARD_DEFS = [
+  { key: "gear",   title: "Gear",        mod: "gear"   },
+  { key: "mplus",  title: "M+",          mod: "mplus"  },
+  { key: "raid",   title: "Raid",        mod: "raid"   },
+  { key: "parse",  title: "Parses",      mod: "parse"  },
+  { key: "prof",   title: "Professions", mod: "prof"   },
+  { key: "market", title: "Market",      mod: "market" },
+];
+
+function _cardValue(key, summary) {
+  switch (key) {
+    case "gear":
+      return summary.avg_ilvl != null
+        ? { value: summary.avg_ilvl, sub: "avg item level" }
+        : { value: null, sub: "No equipment data" };
+    case "mplus":
+      return summary.mplus_score != null && summary.mplus_score > 0
+        ? { value: Math.round(summary.mplus_score), sub: "M+ score", color: summary.mplus_color }
+        : { value: null, sub: "No score yet" };
+    case "raid":
+      return summary.raid_summary
+        ? { value: summary.raid_summary, sub: "current tier" }
+        : { value: null, sub: "No data" };
+    case "parse":
+      return summary.avg_parse != null
+        ? { value: `${summary.avg_parse}%`, sub: "avg parse" }
+        : { value: null, sub: "No parses" };
+    case "prof":
+      return summary.profession_count > 0
+        ? { value: summary.profession_count, sub: summary.profession_count === 1 ? "profession" : "professions" }
+        : { value: null, sub: "None known" };
+    case "market":
+      return { value: null, sub: "AH prices" };
+    default:
+      return { value: null, sub: "" };
+  }
+}
+
+function _buildCard(def, summary) {
+  const { key, title, mod } = def;
+  const { value, sub, color } = _cardValue(key, summary);
+
+  let valueHtml;
+  if (value != null) {
+    const style = color ? ` style="color:${color}"` : "";
+    valueHtml = `<span class="mcn-card__value"${style}>${value}</span>`;
+  } else {
+    valueHtml = `<span class="mcn-card__value mcn-card__value--none">${sub || "—"}</span>`;
+  }
+  const subHtml = value != null ? `<span class="mcn-card__sub">${sub}</span>` : "";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `mcn-card mcn-card--${mod}`;
+  btn.setAttribute("data-panel", key);
+  btn.innerHTML = `
+    <span class="mcn-card__title">${title}</span>
+    ${valueHtml}
+    ${subHtml}
+  `;
+  btn.addEventListener("click", () => setDetailPanel(key, title));
+  return btn;
+}
+
+function _renderCards(summary) {
+  const grid = document.getElementById("mcn-cards-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  _CARD_DEFS.forEach(def => grid.appendChild(_buildCard(def, summary)));
+}
+
+function setDetailPanel(panelKey, panelTitle) {
+  const overview = document.getElementById("mcn-overview");
+  const detail   = document.getElementById("mcn-detail");
+  if (!overview || !detail) return;
+
+  _text("mcn-detail-title", panelTitle || panelKey);
+
+  const body = document.getElementById("mcn-detail-body");
+  if (body) {
+    body.innerHTML = `<div class="mcn-detail-placeholder">${panelTitle} detail &mdash; coming in a future phase</div>`;
+  }
+
+  overview.hidden = true;
+  detail.hidden   = false;
+}
+
+function _showOverview() {
+  const overview = document.getElementById("mcn-overview");
+  const detail   = document.getElementById("mcn-detail");
+  if (overview) overview.hidden = false;
+  if (detail)   detail.hidden   = true;
+}
+
+async function _loadSummary(charId) {
+  if (_summaryCache[charId]) {
+    _renderCards(_summaryCache[charId]);
+    return;
+  }
+  const grid = document.getElementById("mcn-cards-grid");
+  if (grid) grid.innerHTML = '<div class="mcn-cards-loading">Loading&hellip;</div>';
+
+  try {
+    const resp = await fetch(`/api/v1/me/character/${charId}/summary`);
+    const body = await resp.json().catch(() => ({}));
+    if (body.ok) {
+      _summaryCache[charId] = body.data;
+      _renderCards(body.data);
+    } else {
+      if (grid) grid.innerHTML = '<div class="mcn-cards-loading">Could not load summary.</div>';
+    }
+  } catch {
+    if (grid) grid.innerHTML = '<div class="mcn-cards-loading">Could not load summary.</div>';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Character selection
 // ---------------------------------------------------------------------------
 
@@ -319,8 +440,20 @@ function _selectChar(charId) {
   const char = _chars.find(c => c.id === charId);
   if (!char) return;
   _selectedChar = char;
+  _showOverview();
   _renderHeader(char);
   _renderGuides(char);
+  _loadSummary(charId);
+}
+
+// ---------------------------------------------------------------------------
+// Back button
+// ---------------------------------------------------------------------------
+
+function _initBackButton() {
+  const btn = document.getElementById("mcn-back-btn");
+  if (!btn) return;
+  btn.addEventListener("click", _showOverview);
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +523,7 @@ async function _init() {
     }
 
     _initRefreshButton();
+    _initBackButton();
 
   } catch (err) {
     _hide("mcn-loading");

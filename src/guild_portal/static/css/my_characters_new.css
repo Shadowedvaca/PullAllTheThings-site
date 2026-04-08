@@ -328,18 +328,150 @@
   padding: 1rem;
   min-height: 300px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
 }
 
-.mcn-center__coming-soon {
-  text-align: center;
+/* ── Overview: 6-card grid ───────────────────────────────────── */
+.mcn-overview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.mcn-coming-soon-label {
+.mcn-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, auto);
+  gap: 0.6rem;
+  flex: 1;
+  align-content: center;
+}
+
+.mcn-cards-loading {
   color: var(--color-text-muted);
   font-size: 0.85rem;
+  text-align: center;
+  grid-column: 1 / -1;
+  padding: 2rem 0;
+}
+
+/* ── Summary card ────────────────────────────────────────────── */
+.mcn-card {
+  background: var(--color-bg-elevated, #1a1a1e);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: border-color 0.15s, background 0.15s;
+  min-height: 90px;
+  position: relative;
+  overflow: hidden;
+}
+.mcn-card:hover {
+  border-color: var(--color-accent-dim, #a07830);
+  background: #1f1c14;
+}
+
+.mcn-card__title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+.mcn-card__value {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1.1;
+}
+
+.mcn-card__value--none {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  font-weight: 400;
   font-style: italic;
+}
+
+.mcn-card__sub {
+  font-size: 0.77rem;
+  color: var(--color-text-muted);
+  line-height: 1.2;
+}
+
+/* Card color accent strip on left border */
+.mcn-card--gear   { border-left: 3px solid #a07830; }
+.mcn-card--mplus  { border-left: 3px solid #a335ee; }
+.mcn-card--raid   { border-left: 3px solid #4ade80; }
+.mcn-card--parse  { border-left: 3px solid #f87171; }
+.mcn-card--prof   { border-left: 3px solid #fbbf24; }
+.mcn-card--market { border-left: 3px solid #60a5fa; }
+
+/* mplus score value: use the RIO color if available (applied via inline style) */
+.mcn-card--mplus .mcn-card__value { color: inherit; }
+
+/* ── Detail panel ────────────────────────────────────────────── */
+.mcn-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 0.75rem;
+}
+
+.mcn-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mcn-back-btn {
+  background: transparent;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.mcn-back-btn:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent-dim);
+}
+
+.mcn-detail-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mcn-detail-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.mcn-detail-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-style: italic;
+  padding: 2rem;
+  text-align: center;
 }
 
 /* ── Responsive: collapse to single column on narrow screens ─── */
@@ -354,5 +486,8 @@
   .mcn-paperdoll__slot-ph {
     flex: 1;
     min-width: 80px;
+  }
+  .mcn-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

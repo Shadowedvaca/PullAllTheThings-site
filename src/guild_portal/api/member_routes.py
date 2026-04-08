@@ -690,3 +690,101 @@ async def get_character_crafting(
             "consumables": consumables,
         },
     }
+
+
+@router.get("/character/{character_id}/summary")
+async def get_character_summary(
+    character_id: int,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return summary stats for a character: avg ilvl, M+, raid, parses, professions."""
+    # Verify ownership
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # ── avg ilvl from character_equipment (shirt/tabard excluded at sync time) ──
+    ilvl_result = await db.execute(
+        text("""
+            SELECT ROUND(AVG(item_level)::numeric, 0)::int AS avg_ilvl
+            FROM guild_identity.character_equipment
+            WHERE character_id = :char_id
+        """),
+        {"char_id": character_id},
+    )
+    ilvl_row = ilvl_result.fetchone()
+    avg_ilvl = int(ilvl_row.avg_ilvl) if ilvl_row and ilvl_row.avg_ilvl else None
+
+    # ── M+ score + color + raid summary from raiderio_profiles ──────────────
+    rio_result = await db.execute(
+        text("""
+            SELECT overall_score, score_color, raid_progression
+            FROM guild_identity.raiderio_profiles
+            WHERE character_id = :char_id AND season = 'current'
+            LIMIT 1
+        """),
+        {"char_id": character_id},
+    )
+    rio_row = rio_result.fetchone()
+    mplus_score: float | None = None
+    mplus_color: str | None = None
+    raid_summary: str | None = None
+    if rio_row:
+        mplus_score = float(rio_row.overall_score) if rio_row.overall_score else None
+        mplus_color = rio_row.score_color
+        raid_summary = rio_row.raid_progression  # already "8/8 H" style string
+
+    # ── avg parse from character_report_parses (current zone) ───────────────
+    zone_result = await db.execute(
+        text("""
+            SELECT DISTINCT zone_id
+            FROM guild_identity.character_report_parses
+            WHERE zone_id IS NOT NULL AND zone_id > 0
+        """)
+    )
+    zone_ids = [r.zone_id for r in zone_result]
+    avg_parse: int | None = None
+    if zone_ids:
+        parse_result = await db.execute(
+            text("""
+                SELECT AVG(percentile)::numeric(5,1) AS avg_pct
+                FROM guild_identity.character_report_parses
+                WHERE character_id = :char_id
+                  AND zone_id = ANY(:zone_ids)
+                  AND percentile > 0
+            """).bindparams(char_id=character_id, zone_ids=zone_ids)
+        )
+        parse_row = parse_result.fetchone()
+        if parse_row and parse_row.avg_pct is not None:
+            avg_parse = round(float(parse_row.avg_pct))
+
+    # ── profession count from character_recipes ──────────────────────────────
+    prof_result = await db.execute(
+        text("""
+            SELECT COUNT(DISTINCT r.profession_id) AS prof_count
+            FROM guild_identity.character_recipes cr
+            JOIN guild_identity.recipes r ON r.id = cr.recipe_id
+            WHERE cr.character_id = :char_id
+        """),
+        {"char_id": character_id},
+    )
+    prof_row = prof_result.fetchone()
+    profession_count = int(prof_row.prof_count) if prof_row and prof_row.prof_count else 0
+
+    return {
+        "ok": True,
+        "data": {
+            "avg_ilvl": avg_ilvl,
+            "mplus_score": mplus_score,
+            "mplus_color": mplus_color,
+            "raid_summary": raid_summary,
+            "avg_parse": avg_parse,
+            "profession_count": profession_count,
+        },
+    }

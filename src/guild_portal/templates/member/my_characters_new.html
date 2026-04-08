@@ -82,11 +82,28 @@
       </div>
     </div>
 
-    {# Center panel — Phase UI-1B (summary cards placeholder) #}
+    {# Center panel — switches between overview cards and detail views #}
     <div class="mcn-center" id="mcn-center">
-      <div class="mcn-center__coming-soon">
-        <p class="mcn-coming-soon-label">Summary cards &mdash; coming in Phase UI-1B</p>
+
+      {# Default: 6 summary cards #}
+      <div id="mcn-overview" class="mcn-overview">
+        <div class="mcn-cards-grid" id="mcn-cards-grid">
+          {# Cards injected by JS after summary data loads #}
+          <div class="mcn-cards-loading">Loading&hellip;</div>
+        </div>
       </div>
+
+      {# Detail panel — swapped in when a card is clicked #}
+      <div id="mcn-detail" class="mcn-detail" hidden>
+        <div class="mcn-detail__header">
+          <button id="mcn-back-btn" class="mcn-back-btn" type="button">&#8592; Overview</button>
+          <span id="mcn-detail-title" class="mcn-detail-title"></span>
+        </div>
+        <div id="mcn-detail-body" class="mcn-detail-body">
+          {# Detail content injected by JS #}
+        </div>
+      </div>
+
     </div>
 
     {# Right paperdoll — Phase UI-1C #}
