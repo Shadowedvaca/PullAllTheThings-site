@@ -1467,3 +1467,15 @@
   font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
 }
+
+.mcn-parses-section-label {
+  margin-top: 1.1rem;
+  margin-bottom: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.75rem;
+}

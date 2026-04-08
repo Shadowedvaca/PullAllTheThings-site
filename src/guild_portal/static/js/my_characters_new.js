@@ -599,93 +599,126 @@ function _parseTierColor(pct) {
   return "var(--color-text-muted)";
 }
 
-function _buildParsesTable(rows, showDiff) {
-  if (!rows || !rows.length) {
-    return '<div class="mcn-detail-placeholder">No data available.</div>';
-  }
-  const diffHeader = showDiff ? '<th class="mcn-parses-th">Difficulty</th>' : '';
-  const rowsHtml = rows.map(r => {
-    const bestPct = r.best_pct != null
-      ? `<span style="color:${_parseTierColor(r.best_pct)};font-weight:700">${Math.round(r.best_pct)}%</span>`
-      : '&mdash;';
-    const avgPct = r.avg_pct != null
-      ? `<span style="color:${_parseTierColor(r.avg_pct)}">${Math.round(r.avg_pct)}%</span>`
-      : '&mdash;';
-    const bestDps = r.best_dps != null ? Math.round(r.best_dps).toLocaleString() : '&mdash;';
-    const diffCell = showDiff
-      ? `<td class="mcn-parses-td mcn-parses-diff">${r.difficulty_label}</td>`
-      : '';
-    return `<tr>
-      <td class="mcn-parses-td mcn-parses-boss">${r.encounter_name}</td>
-      ${diffCell}
-      <td class="mcn-parses-td mcn-parses-pct">${bestPct}</td>
-      <td class="mcn-parses-td mcn-parses-kills">${r.total_kills}</td>
-      <td class="mcn-parses-td mcn-parses-avg">${avgPct}</td>
-      <td class="mcn-parses-td mcn-parses-dps">${bestDps}</td>
-    </tr>`;
-  }).join('');
-  return `<table class="mcn-parses-table">
-    <thead><tr>
-      <th class="mcn-parses-th mcn-parses-th--boss">Boss</th>
-      ${diffHeader}
-      <th class="mcn-parses-th">Best %</th>
-      <th class="mcn-parses-th">Kills</th>
-      <th class="mcn-parses-th">Avg %</th>
-      <th class="mcn-parses-th">Best DPS</th>
-    </tr></thead>
-    <tbody>${rowsHtml}</tbody>
-  </table>`;
-}
-
 function _renderParsesDetail(area, data) {
-  const parseTabs = [
-    { key: "raid",    label: "Raid"    },
-    { key: "mplus",   label: "M+"      },
-    { key: "overall", label: "Overall" },
-  ];
-  let activeParseTab = "raid";
+  const rows = data.raid || [];
 
-  const wclUrl = _selectedChar?.wcl_url || null;
-  const wclLink = wclUrl
-    ? ` &mdash; <a class="mcn-char-ext-link" href="${wclUrl}" target="_blank" rel="noopener noreferrer">WCL Profile</a>`
-    : '';
-
-  function buildTabStrip(selected) {
-    return parseTabs.map(t =>
-      `<button type="button" class="mcn-diff-tab${t.key === selected ? ' is-active' : ''}" data-parse-tab="${t.key}">${t.label}</button>`
-    ).join('');
+  if (!rows.length) {
+    area.innerHTML = `
+      <div class="mcn-detail-area__heading">Parses</div>
+      <div class="mcn-prog-panel">
+        <div class="mcn-detail-placeholder">No parse data yet.</div>
+      </div>
+    `;
+    return;
   }
 
-  function buildContent(tabKey) {
-    if (tabKey === "raid") return _buildParsesTable(data.raid, true);
-    if (tabKey === "mplus") {
-      const rows = data.mythic_plus || [];
-      return rows.length
-        ? _buildParsesTable(rows, false)
-        : '<div class="mcn-detail-placeholder">No M+ parse data available.</div>';
+  // ── Helpers ────────────────────────────────────────────────────────────
+  function pctCell(val, bold) {
+    if (val == null) return '&mdash;';
+    const style = `color:${_parseTierColor(val)}${bold ? ';font-weight:700' : ''}`;
+    return `<span style="${style}">${Math.round(val)}%</span>`;
+  }
+
+  // ── Per-boss detail table ──────────────────────────────────────────────
+  function buildDetailTable() {
+    const rowsHtml = rows.map(r => `<tr>
+      <td class="mcn-parses-td mcn-parses-boss">${r.encounter_name}</td>
+      <td class="mcn-parses-td mcn-parses-diff">${r.difficulty_label}</td>
+      <td class="mcn-parses-td mcn-parses-pct">${pctCell(r.best_pct, true)}</td>
+      <td class="mcn-parses-td mcn-parses-kills">${r.total_kills}</td>
+      <td class="mcn-parses-td mcn-parses-avg">${pctCell(r.avg_pct, false)}</td>
+      <td class="mcn-parses-td mcn-parses-dps">${r.best_dps != null ? Math.round(r.best_dps).toLocaleString() : '&mdash;'}</td>
+    </tr>`).join('');
+    return `<table class="mcn-parses-table">
+      <thead><tr>
+        <th class="mcn-parses-th mcn-parses-th--boss">Boss</th>
+        <th class="mcn-parses-th">Difficulty</th>
+        <th class="mcn-parses-th">Best %</th>
+        <th class="mcn-parses-th">Kills</th>
+        <th class="mcn-parses-th">Avg %</th>
+        <th class="mcn-parses-th">Best DPS</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  }
+
+  // ── By Difficulty summary ──────────────────────────────────────────────
+  function buildDiffSummary() {
+    const diffMap = {};
+    for (const r of rows) {
+      const key = r.difficulty_label;
+      if (!diffMap[key]) diffMap[key] = { difficulty: r.difficulty, bestPcts: [], avgPcts: [], kills: 0 };
+      if (r.best_pct != null) diffMap[key].bestPcts.push(r.best_pct);
+      if (r.avg_pct != null)  diffMap[key].avgPcts.push(r.avg_pct);
+      diffMap[key].kills += r.total_kills;
     }
-    if (tabKey === "overall") return _buildParsesTable(data.overall, false);
-    return '';
+    // Sort highest difficulty first (Mythic > Heroic > Normal)
+    const labels = Object.keys(diffMap).sort((a, b) => diffMap[b].difficulty - diffMap[a].difficulty);
+    const rowsHtml = labels.map(label => {
+      const d = diffMap[label];
+      const avg = arr => arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null;
+      return `<tr>
+        <td class="mcn-parses-td mcn-parses-boss">${label}</td>
+        <td class="mcn-parses-td mcn-parses-pct">${pctCell(avg(d.bestPcts), true)}</td>
+        <td class="mcn-parses-td mcn-parses-kills">${d.kills}</td>
+        <td class="mcn-parses-td mcn-parses-avg">${pctCell(avg(d.avgPcts), false)}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="mcn-parses-section-label">By Difficulty</div>
+    <table class="mcn-parses-table">
+      <thead><tr>
+        <th class="mcn-parses-th mcn-parses-th--boss">Difficulty</th>
+        <th class="mcn-parses-th">Avg Best %</th>
+        <th class="mcn-parses-th">Total Kills</th>
+        <th class="mcn-parses-th">Avg %</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  }
+
+  // ── By Boss summary ────────────────────────────────────────────────────
+  function buildBossSummary() {
+    const bossMap = {};
+    for (const r of rows) {
+      const name = r.encounter_name;
+      if (!bossMap[name]) bossMap[name] = { bestPct: null, avgPcts: [], kills: 0 };
+      if (r.best_pct != null && (bossMap[name].bestPct == null || r.best_pct > bossMap[name].bestPct)) {
+        bossMap[name].bestPct = r.best_pct;
+      }
+      if (r.avg_pct != null) bossMap[name].avgPcts.push(r.avg_pct);
+      bossMap[name].kills += r.total_kills;
+    }
+    const bossNames = Object.keys(bossMap).sort();
+    const rowsHtml = bossNames.map(name => {
+      const b = bossMap[name];
+      const avgAvg = b.avgPcts.length ? b.avgPcts.reduce((s, v) => s + v, 0) / b.avgPcts.length : null;
+      return `<tr>
+        <td class="mcn-parses-td mcn-parses-boss">${name}</td>
+        <td class="mcn-parses-td mcn-parses-pct">${pctCell(b.bestPct, true)}</td>
+        <td class="mcn-parses-td mcn-parses-kills">${b.kills}</td>
+        <td class="mcn-parses-td mcn-parses-avg">${pctCell(avgAvg, false)}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="mcn-parses-section-label">By Boss</div>
+    <table class="mcn-parses-table">
+      <thead><tr>
+        <th class="mcn-parses-th mcn-parses-th--boss">Boss</th>
+        <th class="mcn-parses-th">Best %</th>
+        <th class="mcn-parses-th">Total Kills</th>
+        <th class="mcn-parses-th">Avg %</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
   }
 
   area.innerHTML = `
-    <div class="mcn-detail-area__heading">Parses${wclLink}</div>
+    <div class="mcn-detail-area__heading">Parses</div>
     <div class="mcn-prog-panel">
-      <div class="mcn-diff-tabs" id="mcn-parses-tabs">${buildTabStrip(activeParseTab)}</div>
-      <div id="mcn-parses-content">${buildContent(activeParseTab)}</div>
+      ${buildDetailTable()}
+      ${buildDiffSummary()}
+      ${buildBossSummary()}
     </div>
   `;
-
-  area.querySelectorAll('[data-parse-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      activeParseTab = btn.dataset.parseTab;
-      area.querySelectorAll('[data-parse-tab]').forEach(b =>
-        b.classList.toggle('is-active', b.dataset.parseTab === activeParseTab)
-      );
-      const contentEl = area.querySelector('#mcn-parses-content');
-      if (contentEl) contentEl.innerHTML = buildContent(activeParseTab);
-    });
-  });
 }
 
 // ---------------------------------------------------------------------------
