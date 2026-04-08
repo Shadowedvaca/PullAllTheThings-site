@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1E complete (Raid + M+ detail panels + RIO/WCL/Armory links in guides bar); UI-1F next  
+> **Status:** UI-1F complete (Parses detail panel); UI-1G next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
@@ -395,7 +395,7 @@ Wowhead tooltips fire, BIS/upgrade row coloring correct. Deploy to dev, verify.
 
 ---
 
-### Phase UI-1F — Parses detail panel
+### Phase UI-1F — Parses detail panel ✓ COMPLETE
 
 **Purpose:** Clicking the Parses summary card shows a WCL-based per-encounter breakdown.
 
@@ -431,6 +431,14 @@ Wowhead tooltips fire, BIS/upgrade row coloring correct. Deploy to dev, verify.
 
 **Done when:** Parses detail shows per-boss table for Trogmoon with correct color coding.
 Tabs work (Raid shows data; M+ shows "no data" gracefully). Deploy to dev, verify.
+
+**As shipped:**
+- Raid tab includes a Difficulty column (Normal/Heroic/Mythic) rather than difficulty sub-tabs, keeping the table flat and scannable.
+- M+ tab shows a clean "No M+ parse data available" empty state (WCL does not publish M+ parses).
+- Overall tab: one row per encounter name, highest difficulty kept.
+- WCL Profile link rendered inline in the panel heading.
+- Parse coloring uses same tier thresholds as the existing `parsePercentileTier` in `my_characters.js`: ≥100 pink, ≥99 gold, ≥95 orange, ≥75 purple, ≥50 blue, ≥25 green, else gray.
+- Results cached in `_parsesCache` per character_id (same pattern as `_progressionCache`).
 
 ---
 
