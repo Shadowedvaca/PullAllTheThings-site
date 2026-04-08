@@ -1560,7 +1560,7 @@ function _gpRenderGearTable(slots, tc) {
       upgradesHtml = '<span class="mcn-gt__empty">&mdash;</span>';
     }
 
-    return `<tr class="${rowClass}">
+    return `<tr class="${rowClass}" onclick="_gpSelectSlotInCenter('${slotKey}')" style="cursor:pointer">
       <td class="mcn-gt__slot-cell">${_gpEsc(GP_SLOT_LABELS[slotKey] || slotKey)}</td>
       <td class="mcn-gt__equipped-cell">${equippedHtml}</td>
       <td class="mcn-gt__goal-cell">${goalHtml}</td>

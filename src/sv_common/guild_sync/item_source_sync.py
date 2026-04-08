@@ -25,7 +25,10 @@ from .blizzard_client import BlizzardClient
 logger = logging.getLogger(__name__)
 
 _RAID_TRACKS: list[str] = ["V", "C", "H", "M"]
-_DUNGEON_TRACKS: list[str] = ["C", "H"]
+# Midnight Season 1 key thresholds: Hero = 6+ direct / 4+ vault, Mythic = 10+ vault.
+# M-track dungeon items are vault-only but are obtainable, so include M here.
+# Re-run "Sync Loot Tables" after deploy to update existing rows.
+_DUNGEON_TRACKS: list[str] = ["C", "H", "M"]
 
 # Delay between encounter fetches to avoid hammering the API.
 _ENCOUNTER_DELAY = 0.2

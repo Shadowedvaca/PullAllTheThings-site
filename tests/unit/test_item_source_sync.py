@@ -388,7 +388,7 @@ class TestSyncEncounter:
 
 class TestTrackConstants:
     def test_dungeon_tracks(self):
-        assert _DUNGEON_TRACKS == ["C", "H"]
+        assert _DUNGEON_TRACKS == ["C", "H", "M"]
 
     def test_raid_tracks(self):
         assert _RAID_TRACKS == ["V", "C", "H", "M"]

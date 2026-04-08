@@ -22,6 +22,9 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1B** BIS discovery + extraction | ✅ COMPLETE | Migrations 0067–0076, bis_sync.py, simc_parser.py, admin matrix UI |
 | **1C** Item source mapping | ✅ ON PROD | item_source_sync.py, Journal API, admin Item Sources + Re-sync Errors, migrations 0077–0078 |
 | **1D** Personal gear plan | ✅ COMPLETE | Gear plan integrated into `/my-characters` (UI redesign UI-1A–1H). `/gear-plan` redirects. Migration 0079–0081. |
+| **1D.1** Small fixes | 🔶 PARTIAL | Fix 2 (M-track dungeon) + Fix 3 (table row click) done; Fix 1 (tier source) pending DB investigation |
+| **1D.2** Enhanced source display | ⬜ TODO | Instance / Boss / Minimum level in gear table; key thresholds |
+| **1D.3** Crafted items | ⬜ TODO | Crest-based H/M detection, crafter lookup popup, Crafting Corner link |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
 **Active branch:** `feature/gear-plan-phase-1d`
@@ -35,9 +38,13 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | Track | Letter | Color | Sources |
 |-------|--------|-------|---------|
 | Veteran | V | Green (#1eff00) | Raid Finder |
-| Champion | C | Blue (#0070dd) | Normal Raid, M+ 0–5 |
-| Hero | H | Purple (#a335ee) | Heroic Raid, M+ 6+ |
-| Mythic | M | Orange (#ff8000) | Mythic Raid only |
+| Champion | C | Blue (#0070dd) | Normal Raid, M+ any key (direct drop) |
+| Hero | H | Purple (#a335ee) | Heroic Raid, M+ 6+ direct drop, M+ 4+ vault |
+| Mythic | M | Orange (#ff8000) | Mythic Raid, M+ 10+ vault |
+
+All four tracks should be included in upgrade recommendations — V is relevant for players who have non-BIS or low-track items and can use Raid Finder to fill gaps.
+
+M+ key thresholds (Midnight Season 1): hero vault = 4+, hero direct drop = 6+, mythic vault = 10+. These are stored in `patt.raid_seasons` (add columns if not present) or hardcoded per season. See Phase 1D.1.
 
 Parse `name_description.display_string` from Blizzard equipment endpoint: `"Champion 4/8"` → `C`. Regex: `^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$`. Also detect via SimC `bonus_ids` (season-specific mapping in `site_config.simc_track_bonus_ids`).
 
@@ -322,66 +329,198 @@ SimC profile format is the universal gear artifact (used by Archon, Wowhead, Rai
 | Icons missing for non-BIS equipped items | Items not in `wow_items` have no icon_url; equipment_sync now stubs `wow_items` rows; JS lazy-fetches icon via `/api/v1/items/{id}` |
 | Icon quality glow not visible | `overflow:hidden` on card was clipping box-shadow; changed to inset box-shadow; removed overflow:hidden from card |
 
-### Open issues / next steps (as of 2026-04-07)
+### Open issues / resolved decisions (as of 2026-04-08)
 
-**Icon quality colour (quality_track = null)**
-- Blizzard API `name_description.display_string` regex `^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$` may not match Midnight expansion format
-- TWW S2 bonus ID map (`quality_track.py._DEFAULT_SIMC_BONUS_IDS`) is season-specific; Midnight uses different IDs
-- Result: most equipped items have `quality_track = null` → no coloured icon border
-- **Need:** Confirm what display_string Blizzard returns for Midnight track items, or provide Midnight bonus IDs
-
-**Crafted item quality track**
-- Crafted items (bonus_id 1808, may differ for Midnight) have `quality_track = null` because neither detection method matches
-- User wants: crafted items treated as H or M based on crest tier used to craft them
-- Two ilvl ranges (H-crest = ilvl range, M-crest = ilvl range), breakpoint varies by patch
-- **Need:** Decide mechanism for breakpoint — options: (a) configurable via `site_config.crafted_m_ilvl_threshold` (migration 0080, admin sets per season), (b) derive from highest H/M non-crafted items in roster
-- **Current state:** is_crafted detected from bonus_id 1808, shows "Crafted" badge, participates in upgrade logic; quality_track still null so upgrade tracks empty
-
-**Slot drawer — BIS Recommendations redesign**
-- Replace current list-style recommendations with a grid:
-  - Columns: one per (provider × list-type) combination, e.g. "u.gg Raid", "u.gg M+", "Wowhead"
-  - Rows: each unique item that appears in any BIS list for this slot, sorted by how many lists contain it (most-recommended first)
-  - Cell: ✓ (gold) if that provider/list has this item, — (greyed) if not
-  - "Use" button on each row
-- New data needed from service: `get_plan_detail` already returns `bis_recommendations` as flat list; needs to be restructured to support the grid (unique items × sources matrix)
-
-**Hover tooltip** ✅ RESOLVED
-- Added `whTooltips` config + Wowhead `power.js` to member gear plan template
-- Item names in slot cards, drawer equipped/desired, and BIS grid wrapped in `<a href="https://www.wowhead.com/item=N">` links
-- `$WowheadPower.refreshLinks()` called after paperdoll render and drawer open
-
-**Ring/Trinket BIS sort** ✅ RESOLVED
-- `_normalize_paired_slot` now swaps `desired_by_slot` and `bis_by_slot` in the alphabetical fallback case, not just `equipped_by_slot`
-- JS `renderBisGrid` pins `desired_blizzard_item_id` to top row
-
-**Slot card hover state** ✅ NOT AN ISSUE
-- Confirmed by Mike — hover state is already perfect as-is
-
-**Icon quality colour / quality_track detection (Midnight expansion)**
+**Icon quality colour / quality_track detection (Midnight expansion)** — OPEN, external dependency
 - `display_string` regex `^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$` may not match Midnight format
 - TWW S2 bonus ID map is season-specific; Midnight uses different bonus IDs
-- Result: most items have `quality_track = null` → no coloured icon border or glow
-- Icon coloring IS wired up (paperdoll + drawer both apply border-color + box-shadow) — just needs correct detection
-- **Pending:** Mike to confirm Midnight display_string format and/or supply bonus ID map
+- Icon coloring IS wired up — just needs correct detection data
+- **Pending:** Pull a Midnight character equipment API response and confirm display_string format + supply bonus ID map when available. Not blocking other work.
 
-**Tier set items**
-- Tier set items may need special handling — badge display, BIS matching, upgrade logic TBD
-- **Pending:** design discussion with Mike
+**Crafted item quality track** — → See Phase 1D.3
 
-**Veteran (V) track exclusion from upgrade recommendations**
-- V track (LFR) items are currently included in upgrade track pills
-- May want to suppress V recommendations entirely as they are not meaningful for heroic+ raiders
-- **Pending:** decision from Mike
+**Tier set items** — → See Phase 1D.1 (source display fix only; BIS + upgrade logic confirmed working)
 
-**Crafted item quality track**
-- Crafted items (bonus_id 1808, may differ for Midnight) have `quality_track = null`
-- Crafted badge shows correctly; upgrade pills empty because track is null
-- Need ilvl → H/M track mapping: either `site_config.crafted_m_ilvl_threshold` (admin-configured per season) or derived from roster data
-- **Pending:** design decision from Mike
+**Veteran (V) track exclusion** — ✅ DECISION MADE: Keep V in upgrade recommendations. LFR is a valid source for players filling gaps.
 
-**Upgrade track recommendations — troubleshooting**
-- Need to verify upgrade pill logic is correct end-to-end once quality_track detection is fixed
-- Edge cases: wearing BIS item at lower track, wearing non-BIS item, empty slot
+**Upgrade track recommendations** — ✅ CLOSED. Logic is correct. Will verify end-to-end once quality_track detection (Midnight) is resolved.
+
+**Hover tooltip** — ✅ RESOLVED
+
+**Ring/Trinket BIS sort** — ✅ RESOLVED
+
+**Slot card hover state** — ✅ NOT AN ISSUE
+
+**Slot drawer — BIS Recommendations grid redesign** — DEFERRED. Current flat list is functional. Revisit post-1E.
+
+---
+
+## Phase 1D.1: Small Fixes Bundle
+
+### Fix 1 — Tier set source display
+
+**Status: PENDING INVESTIGATION**
+
+**Problem:** Tier set items show no source in the gear table "Source" column.
+
+**Investigation result (2026-04-08):** The `gear_plan_service.py` source lookup is correct — it includes BIS recommendation item IDs in `all_bids` and joins `item_sources` on `wow_items.blizzard_item_id`. The code path is fine.
+
+**Root cause:** The tier item's `blizzard_item_id` (from u.gg/Wowhead BIS scraping) is likely not in `guild_identity.item_sources`. This happens when either:
+1. The Blizzard Journal API doesn't list the tier piece directly (e.g., catalyst-converted items have different IDs than journal drops), OR
+2. "Sync Loot Tables" hasn't been re-run since tier pieces were added to BIS data.
+
+**To investigate on dev:** After deploying, run "Sync Loot Tables" from `/admin/gear-plan`. Then check:
+```sql
+SELECT wi.blizzard_item_id, wi.name, is2.source_name, is2.source_instance
+  FROM guild_identity.bis_list_entries ble
+  JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
+  LEFT JOIN guild_identity.item_sources is2 ON is2.item_id = wi.id
+ WHERE ble.slot IN ('head','shoulder','chest','hands','legs')
+   AND is2.id IS NULL
+ LIMIT 20;
+```
+If rows come back, the Journal isn't returning those item IDs. Further code changes needed in `item_source_sync.py` to handle catalyst tier piece IDs.
+
+**Done when:** Tier item rows in the gear table show the raid boss + instance source.
+
+### Fix 2 — M+ dungeon items eligible for Mythic track (Great Vault) ✅ COMPLETE
+
+**Change:** `item_source_sync.py` — `_DUNGEON_TRACKS` changed from `["C", "H"]` to `["C", "H", "M"]`. Season 1 thresholds documented in a comment (Hero=6+/4+ vault, Mythic=10+ vault). Existing rows update on next "Sync Loot Tables" run.
+
+### Fix 3 — Gear table row click → slot detail panel ✅ COMPLETE
+
+**Change:** `my_characters.js` `_gpRenderGearTable()` — added `onclick="_gpSelectSlotInCenter('${slotKey}')"` and `style="cursor:pointer"` to each `<tr>`.
+
+---
+
+## Phase 1D.2: Enhanced Source Display
+
+**Purpose:** The gear table "Source" column currently shows "Boss • Instance" in a single line. Expand it to three lines: Instance / Boss / Minimum Level. This makes it immediately clear where to go and what difficulty/key is needed.
+
+### Display format
+
+**Raid item:**
+```
+March on Quel'Danas    ← source_instance
+Midnight Falls          ← source_name (boss)
+Normal+                 ← lowest difficulty where the item drops (C present → Normal)
+```
+
+**M+ dungeon item:**
+```
+Magisters' Terrace     ← source_instance (dungeon name)
+Gemellus               ← source_name (boss, if applicable; else omit)
+4+ Key                 ← minimum key for a meaningful track (see below)
+```
+
+**No source (crafted, world, other):** Handled by Phase 1D.3 or show "—".
+
+### Minimum level derivation
+
+**Raid:** derive from `quality_tracks` on the `item_sources` row:
+- `C` present → "Normal+"
+- `H` is lowest → "Heroic+"
+- `M` is lowest → "Mythic+"
+
+**M+ dungeon:** use key thresholds from `patt.raid_seasons` (added in Phase 1D.1 if column approach chosen):
+- Show the threshold for the lowest track that is an upgrade for this player — or, if showing generically, show "4+ Key" (hero vault, the most accessible meaningful step for most players).
+- If the player already has Hero track, show "10+ Key (Vault)" for the M track option.
+
+Context-aware display (show the relevant minimum for the player's current gear) is ideal but optional for initial ship — generic minimum is acceptable.
+
+### API changes
+
+`get_plan_detail` in `gear_plan_service.py` already returns source info per slot. Extend it to include:
+```python
+"source_min_level": "Normal+"   # or "4+ Key", "Heroic+", etc.
+```
+This can be computed server-side from `quality_tracks` + season config.
+
+### Files changed
+- `src/guild_portal/services/gear_plan_service.py` — compute `source_min_level` per slot
+- `src/guild_portal/api/gear_plan_routes.py` — expose in response
+- `src/guild_portal/static/js/my_characters.js` — update `renderGearTable` cell render
+- `src/guild_portal/static/css/my_characters.css` — three-line source cell styles
+- `patt.raid_seasons` migration (if column approach used in 1D.1)
+
+**Done when:** Each row in the gear table Source column shows three lines (instance / boss / min level) for raid and M+ items.
+
+---
+
+## Phase 1D.3: Crafted Items
+
+**Purpose:** Crafted items currently show a "Crafted" badge but have no quality track (upgrade pills empty) and no source information. This phase fully wires up crafted items: detect H vs M track from the crafting crest used, show who in the guild can make the item, and link to the Crafting Corner for ordering.
+
+This is the largest standalone fix — it touches quality detection, service layer, and UI. Own phase, own branch, own session.
+
+### Part A — Crafted item quality track detection
+
+**Goal:** Determine whether a crafted item is Hero-track or Mythic-track equivalent.
+
+**Preferred method — crest bonus ID detection:**
+
+Crafted items in WoW use specific bonus IDs to encode the quality of crest used. In TWW: Resonant Crests = Hero tier, Gilded Crests = Mythic tier. Midnight will have equivalent crests with new bonus IDs.
+
+Steps:
+1. Pull a Midnight crafted item from the Blizzard equipment endpoint. Inspect `bonus_ids` on the item.
+2. Identify which bonus IDs correspond to Hero-crest crafting vs Mythic-crest crafting.
+3. Add these to `quality_track.py` — either as a `_CRAFTED_BONUS_IDS` dict (mapping bonus_id → track letter H/M) or by updating `_DEFAULT_SIMC_BONUS_IDS` with the crafted-specific IDs.
+4. Update `_detect_quality_track()` (or wherever track detection runs) to check crafted bonus IDs before falling back to null.
+
+**Fallback method — admin-configured ilvl threshold:**
+
+If crest bonus IDs are not identifiable from the API (or for early Midnight before the meta is established):
+- Migration: add `crafted_m_ilvl_threshold INT` to `site_config` (nullable; null = use bonus ID method only).
+- Admin → Site Config: expose this field with a label like "Crafted M-track minimum ilvl".
+- `quality_track.py`: if `is_crafted` and `quality_track` still null after bonus ID check, compare `item_level` to threshold → H or M.
+
+**Detection for `is_crafted`:** Currently uses bonus_id 1808. Confirm this is still the Midnight crafted marker, or find the new one.
+
+### Part B — Crafted item source display
+
+Crafted items have no `item_sources` row (source_type = 'profession' is not currently synced by `item_source_sync.py`). Rather than adding them to item_sources, handle them as a special case in the gear plan service.
+
+**In `get_plan_detail`:**
+- Detect `is_crafted` on the desired item (check `character_equipment.bonus_ids` or a flag on `wow_items`).
+- If crafted: skip the normal source lookup; instead return a `crafted_source` block:
+  ```python
+  "crafted_source": {
+      "track": "H",        # or "M" — derived from Part A
+      "crafter_count": 3,  # guild members who can make this item
+      "crafters": [        # list of player display names
+          {"player_name": "Trogmoon", "character_name": "Trogmoon"},
+          ...
+      ],
+      "crafting_corner_item_id": 12345  # blizzard_item_id for Crafting Corner link
+  }
+  ```
+- **Crafter lookup query:** join `character_recipes` → `recipes` → `wow_items` on `blizzard_item_id`. Filter to `guild_identity.wow_characters.in_guild = TRUE` and linked to an active player. Return player display names.
+
+### Part C — UI changes
+
+**Gear table Source column:**
+- If `crafted_source` present: show "Crafted Item" + "H-Crest" or "M-Crest" (two lines). Replace min level with crafter count: "3 crafters →" as a link opening the crafter popup.
+
+**Slot detail panel (paperdoll click or table row click):**
+- New "Crafters" section below the BIS grid (only visible when desired item is crafted).
+- Shows a small list of guild members who can make it, with their character names.
+- "Order in Crafting Corner" link — links to `/crafting-corner` with a query string or anchor pointing to the relevant recipe. (If Crafting Corner doesn't support deep links today, link to `/crafting-corner` plain for now with a TODO.)
+
+### Migration
+
+If fallback ilvl threshold is implemented:
+- `alembic/versions/0082_crafted_m_ilvl_threshold.py` — add `crafted_m_ilvl_threshold INT` to `common.site_config`.
+
+### Files changed
+- `src/sv_common/guild_sync/quality_track.py` — crafted track detection
+- `src/guild_portal/services/gear_plan_service.py` — crafted_source block in get_plan_detail
+- `src/guild_portal/api/gear_plan_routes.py` — pass through crafted_source
+- `src/guild_portal/static/js/my_characters.js` — crafted source display + crafter popup
+- `src/guild_portal/static/css/my_characters.css` — crafted source styles
+- `alembic/versions/0082_crafted_m_ilvl_threshold.py` (if fallback approach used)
+- Admin Site Config template (if fallback approach used)
+
+**Done when:** A crafted desired item shows H or M track, upgrade pills work, crafter count shows in the table, crafter popup opens from slot detail with guild member names, Crafting Corner link present.
 
 ---
 
