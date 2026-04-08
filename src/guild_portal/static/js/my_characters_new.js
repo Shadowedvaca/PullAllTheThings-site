@@ -596,7 +596,7 @@ function escHtml(str) {
 const PROFESSION_ICONS = {
   "Alchemy":        "trade_alchemy",
   "Blacksmithing":  "trade_blacksmithing",
-  "Enchanting":     "trade_enchanting",
+  "Enchanting":     "trade_engraving",
   "Engineering":    "trade_engineering",
   "Herbalism":      "trade_herbalism",
   "Inscription":    "trade_inscription",
@@ -605,7 +605,7 @@ const PROFESSION_ICONS = {
   "Mining":         "trade_mining",
   "Skinning":       "trade_skinning",
   "Tailoring":      "trade_tailoring",
-  "Cooking":        "trade_cooking",
+  "Cooking":        "ability_cooking",
   "Fishing":        "trade_fishing",
 };
 
@@ -807,9 +807,20 @@ function _renderProfessionsDetail(area, data) {
     </div>`;
   }).join("");
 
+  // Build unique sorted expansion list for the filter dropdown
+  const expansions = [...new Set(
+    craftable.map(r => r.expansion_name).filter(Boolean)
+  )].sort();
+
   const profOptions = profNames.map(p =>
     `<option value="${escHtml(p)}">${escHtml(p)}</option>`
   ).join("");
+  const expOptions = expansions.map(e =>
+    `<option value="${escHtml(e)}">${escHtml(e)}</option>`
+  ).join("");
+
+  const PAGE_SIZE = 15;
+  let _page = 0;
 
   area.innerHTML = `
     <div class="mcn-detail-area__heading">Professions</div>
@@ -817,35 +828,79 @@ function _renderProfessionsDetail(area, data) {
       <div class="mcn-prof-grid">${profCards}</div>
       <div class="mcn-parses-section-label">Recipes</div>
       <div class="mcn-prof-filters">
-        <select id="mcn-prof-filter" class="mcn-prof-filter-sel">
+        <select id="mcn-prof-filter" class="mcn-filter-sel">
           <option value="">All Professions</option>${profOptions}
         </select>
+        <select id="mcn-exp-filter" class="mcn-filter-sel">
+          <option value="">All Expansions</option>${expOptions}
+        </select>
+        <input id="mcn-recipe-search" class="mcn-filter-input" type="text" placeholder="Search recipes…">
       </div>
       <table class="mcn-prof-table">
-        <thead><tr><th>Profession</th><th>Recipe</th></tr></thead>
+        <thead><tr><th>Profession</th><th>Expansion</th><th>Recipe</th><th></th></tr></thead>
         <tbody id="mcn-prof-tbody"></tbody>
       </table>
+      <div class="mcn-prof-pagination" id="mcn-prof-pagination"></div>
     </div>
   `;
 
-  function updateTable() {
-    const filter = document.getElementById("mcn-prof-filter")?.value || "";
-    const filtered = filter ? craftable.filter(r => r.profession === filter) : craftable;
-    const tbody = document.getElementById("mcn-prof-tbody");
-    if (!tbody) return;
-    tbody.innerHTML = filtered.map(r => {
-      const expansion = r.expansion_name
-        ? `<span class="mcn-prof-expansion">${escHtml(r.expansion_name)}</span>`
-        : "";
-      return `<tr>
-        <td class="mcn-prof-td-prof">${escHtml(r.profession)}${expansion}</td>
-        <td><a href="${r.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mcn-prof-recipe-link">${escHtml(r.recipe_name)}</a></td>
-      </tr>`;
-    }).join("");
+  function getFiltered() {
+    const pf  = document.getElementById("mcn-prof-filter")?.value  || "";
+    const ef  = document.getElementById("mcn-exp-filter")?.value   || "";
+    const sf  = (document.getElementById("mcn-recipe-search")?.value || "").toLowerCase().trim();
+    return craftable.filter(r => {
+      if (pf && r.profession !== pf) return false;
+      if (ef && r.expansion_name !== ef) return false;
+      if (sf && !r.recipe_name.toLowerCase().includes(sf)) return false;
+      return true;
+    });
   }
 
-  updateTable();
-  document.getElementById("mcn-prof-filter")?.addEventListener("change", updateTable);
+  function renderTable() {
+    const filtered = getFiltered();
+    const total    = filtered.length;
+    const maxPage  = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+    if (_page > maxPage) _page = maxPage;
+    const slice    = filtered.slice(_page * PAGE_SIZE, _page * PAGE_SIZE + PAGE_SIZE);
+
+    const tbody = document.getElementById("mcn-prof-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = slice.map(r => {
+      const exp  = escHtml(r.expansion_name || "—");
+      const name = escHtml(r.recipe_name);
+      const url  = r.wowhead_url || "#";
+      return `<tr>
+        <td class="mcn-prof-td-prof">${escHtml(r.profession)}</td>
+        <td class="mcn-prof-td-exp">${exp}</td>
+        <td class="mcn-prof-td-recipe">${name}</td>
+        <td class="mcn-prof-td-link"><a href="${url}" target="_blank" rel="noopener noreferrer" class="mcn-prof-wh-link" title="View on Wowhead">WH</a></td>
+      </tr>`;
+    }).join("");
+
+    // Pagination controls
+    const pg = document.getElementById("mcn-prof-pagination");
+    if (!pg) return;
+    if (total <= PAGE_SIZE) {
+      pg.innerHTML = `<span class="mcn-prof-pg-info">${total} recipe${total !== 1 ? "s" : ""}</span>`;
+    } else {
+      const start = _page * PAGE_SIZE + 1;
+      const end   = Math.min((_page + 1) * PAGE_SIZE, total);
+      pg.innerHTML = `
+        <button class="mcn-prof-pg-btn" id="mcn-pg-prev" ${_page === 0 ? "disabled" : ""}>&#8592; Prev</button>
+        <span class="mcn-prof-pg-info">${start}–${end} of ${total}</span>
+        <button class="mcn-prof-pg-btn" id="mcn-pg-next" ${_page >= maxPage ? "disabled" : ""}>Next &#8594;</button>
+      `;
+      document.getElementById("mcn-pg-prev")?.addEventListener("click", () => { _page--; renderTable(); });
+      document.getElementById("mcn-pg-next")?.addEventListener("click", () => { _page++; renderTable(); });
+    }
+  }
+
+  function resetAndRender() { _page = 0; renderTable(); }
+
+  renderTable();
+  document.getElementById("mcn-prof-filter")?.addEventListener("change", resetAndRender);
+  document.getElementById("mcn-exp-filter")?.addEventListener("change", resetAndRender);
+  document.getElementById("mcn-recipe-search")?.addEventListener("input", resetAndRender);
 }
 
 // ---------------------------------------------------------------------------
@@ -876,7 +931,7 @@ function _updateMarketTabCount(count) {
 }
 
 function _renderMarketDetail(area, data) {
-  const { prices, available } = data;
+  const { prices, available, last_updated } = data;
 
   if (!available || !prices || prices.length === 0) {
     area.innerHTML = `
@@ -910,8 +965,17 @@ function _renderMarketDetail(area, data) {
     ? '<p class="mcn-market-footnote">* Realm-specific auction price.</p>'
     : "";
 
+  let updatedStr = "";
+  if (last_updated) {
+    const d = new Date(last_updated);
+    updatedStr = `<span class="mcn-market-updated">Updated ${d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}</span>`;
+  }
+
   area.innerHTML = `
-    <div class="mcn-detail-area__heading">Market</div>
+    <div class="mcn-market-header-row">
+      <div class="mcn-detail-area__heading">Market</div>
+      ${updatedStr}
+    </div>
     <div class="mcn-prog-panel">
       <table class="mcn-market-table">
         <thead><tr><th>Item</th><th>Min Price</th><th>Available</th></tr></thead>

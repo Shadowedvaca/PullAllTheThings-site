@@ -636,12 +636,20 @@ async def get_character_market(
         prices = await get_prices_for_realm(pool, realm_id)
         prices_filtered = [p for p in prices if p.get("min_buyout") is not None]
 
+        # Derive the most recent snapshot timestamp across all returned rows
+        last_updated = None
+        for p in prices_filtered:
+            snap = p.get("snapshot_at")
+            if snap and (last_updated is None or snap > last_updated):
+                last_updated = snap
+
         return {
             "ok": True,
             "data": {
                 "prices": prices_filtered,
                 "realm_id": realm_id,
                 "available": bool(prices_filtered),
+                "last_updated": last_updated.isoformat() if last_updated else None,
             },
         }
     except Exception:

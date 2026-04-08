@@ -1524,16 +1524,39 @@
 }
 
 .mcn-prof-filters {
-  margin-bottom: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  align-items: center;
 }
 
-.mcn-prof-filter-sel {
-  background: var(--color-surface);
+/* Shared dark select / input used in professions filters */
+.mcn-filter-sel,
+.mcn-filter-input {
+  background: var(--color-bg-card);
   color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
   font-size: 0.8rem;
+  font-family: inherit;
+}
+
+.mcn-filter-sel option {
+  background: var(--color-bg-card);
+  color: var(--color-text);
+}
+
+.mcn-filter-sel:focus,
+.mcn-filter-input:focus {
+  outline: none;
+  border-color: var(--color-accent-dim);
+}
+
+.mcn-filter-input {
+  flex: 1;
+  min-width: 8rem;
 }
 
 .mcn-prof-table {
@@ -1569,21 +1592,68 @@
   font-size: 0.75rem;
 }
 
-.mcn-prof-expansion {
-  display: block;
-  font-size: 0.65rem;
+.mcn-prof-td-exp {
+  white-space: nowrap;
   color: var(--color-text-muted);
-  opacity: 0.7;
+  font-size: 0.75rem;
 }
 
-.mcn-prof-recipe-link {
+.mcn-prof-td-recipe {
   color: var(--color-text);
-  text-decoration: none;
 }
 
-.mcn-prof-recipe-link:hover {
+.mcn-prof-td-link {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mcn-prof-wh-link {
+  font-size: 0.7rem;
+  font-weight: 700;
   color: var(--color-accent);
-  text-decoration: underline;
+  text-decoration: none;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--color-accent-dim);
+  border-radius: 3px;
+}
+
+.mcn-prof-wh-link:hover {
+  background: rgba(212,168,75,0.12);
+}
+
+/* Pagination row */
+.mcn-prof-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+}
+
+.mcn-prof-pg-info {
+  color: var(--color-text-muted);
+  flex: 1;
+  text-align: center;
+}
+
+.mcn-prof-pg-btn {
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.mcn-prof-pg-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.mcn-prof-pg-btn:not(:disabled):hover {
+  border-color: var(--color-accent-dim);
+  color: var(--color-accent);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1673,4 +1743,26 @@
   margin-top: 0.5rem;
   font-size: 0.72rem;
   color: var(--color-text-muted);
+}
+
+.mcn-market-header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.4rem;
+}
+
+.mcn-market-header-row .mcn-detail-area__heading {
+  margin-bottom: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.mcn-market-updated {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
