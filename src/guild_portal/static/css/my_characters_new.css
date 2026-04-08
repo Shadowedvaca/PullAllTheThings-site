@@ -217,7 +217,7 @@
 }
 
 .mcn-guide-spec-sel {
-  background: transparent;
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   border: none;
   border-bottom: 1px solid var(--color-border-light);
@@ -232,6 +232,10 @@
 .mcn-guide-spec-sel:focus {
   color: var(--color-text);
   border-bottom-color: var(--color-accent-dim);
+}
+.mcn-guide-spec-sel option {
+  background: var(--color-bg-card);
+  color: var(--color-text);
 }
 
 .mcn-guide-badges {
