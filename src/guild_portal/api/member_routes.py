@@ -811,18 +811,20 @@ async def get_character_summary(
         if parse_row and parse_row.avg_pct is not None:
             avg_parse = round(float(parse_row.avg_pct))
 
-    # ── profession count from character_recipes ──────────────────────────────
+    # ── profession names + count from character_recipes ──────────────────────
     prof_result = await db.execute(
         text("""
-            SELECT COUNT(DISTINCT r.profession_id) AS prof_count
+            SELECT DISTINCT p.name AS profession_name
             FROM guild_identity.character_recipes cr
             JOIN guild_identity.recipes r ON r.id = cr.recipe_id
+            JOIN guild_identity.professions p ON p.id = r.profession_id
             WHERE cr.character_id = :char_id
+            ORDER BY p.name
         """),
         {"char_id": character_id},
     )
-    prof_row = prof_result.fetchone()
-    profession_count = int(prof_row.prof_count) if prof_row and prof_row.prof_count else 0
+    profession_names = [row.profession_name for row in prof_result]
+    profession_count = len(profession_names)
 
     return {
         "ok": True,
@@ -833,6 +835,7 @@ async def get_character_summary(
             "raid_summary": raid_summary,
             "avg_parse": avg_parse,
             "profession_count": profession_count,
+            "profession_names": profession_names,
         },
     }
 

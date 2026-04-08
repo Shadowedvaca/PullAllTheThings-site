@@ -173,7 +173,9 @@ function raceIcon(race, gender) {  // eslint-disable-line no-unused-vars
 let _chars = [];           // full character list from API
 let _selectedChar = null;  // currently displayed character
 const _guideSpecsByChar = {};
-const _summaryCache = {};  // keyed by character_id
+const _summaryCache    = {};  // keyed by character_id
+const _craftingCache   = {};  // keyed by character_id
+const _marketCache     = {};  // keyed by character_id
 
 // ---------------------------------------------------------------------------
 // UI helpers
@@ -572,6 +574,42 @@ function _renderMplusDetail(area, data) {
 }
 
 // ---------------------------------------------------------------------------
+// Shared helpers (market + professions)
+// ---------------------------------------------------------------------------
+
+function goldStr(copper) {
+  if (!copper) return "\u2014";
+  const gold   = Math.floor(copper / 10000);
+  const silver = Math.floor((copper % 10000) / 100);
+  if (gold > 0) return `${gold.toLocaleString()}g ${silver}s`;
+  return `${silver}s`;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+const PROFESSION_ICONS = {
+  "Alchemy":        "trade_alchemy",
+  "Blacksmithing":  "trade_blacksmithing",
+  "Enchanting":     "trade_enchanting",
+  "Engineering":    "trade_engineering",
+  "Herbalism":      "trade_herbalism",
+  "Inscription":    "trade_inscription",
+  "Jewelcrafting":  "trade_jewelcrafting",
+  "Leatherworking": "trade_leatherworking",
+  "Mining":         "trade_mining",
+  "Skinning":       "trade_skinning",
+  "Tailoring":      "trade_tailoring",
+  "Cooking":        "trade_cooking",
+  "Fishing":        "trade_fishing",
+};
+
+// ---------------------------------------------------------------------------
 // Parses detail panel
 // ---------------------------------------------------------------------------
 
@@ -722,6 +760,169 @@ function _renderParsesDetail(area, data) {
 }
 
 // ---------------------------------------------------------------------------
+// Professions detail panel
+// ---------------------------------------------------------------------------
+
+async function _fetchCrafting(charId) {
+  if (_craftingCache[charId]) return _craftingCache[charId];
+  try {
+    const resp = await fetch(`/api/v1/me/character/${charId}/crafting`);
+    const body = await resp.json().catch(() => ({}));
+    if (body.ok) {
+      _craftingCache[charId] = body.data;
+      return body.data;
+    }
+  } catch {}
+  return null;
+}
+
+function _renderProfessionsDetail(area, data) {
+  const craftable = data.craftable || [];
+
+  if (craftable.length === 0) {
+    area.innerHTML = `
+      <div class="mcn-detail-area__heading">Professions</div>
+      <div class="mcn-prog-panel">
+        <div class="mcn-detail-placeholder">No profession data for this character.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Build profession → recipe count map
+  const profMap = {};
+  for (const r of craftable) {
+    profMap[r.profession] = (profMap[r.profession] || 0) + 1;
+  }
+  const profNames = Object.keys(profMap).sort();
+
+  const profCards = profNames.map(name => {
+    const slug    = PROFESSION_ICONS[name] || "trade_engineering";
+    const count   = profMap[name];
+    const iconUrl = `https://wow.zamimg.com/images/wow/icons/medium/${slug}.jpg`;
+    return `<div class="mcn-prof-item">
+      <img class="mcn-prof-icon" src="${iconUrl}" alt="${name}" loading="lazy">
+      <div class="mcn-prof-name">${name}</div>
+      <div class="mcn-prof-count">${count} recipe${count !== 1 ? "s" : ""}</div>
+    </div>`;
+  }).join("");
+
+  const profOptions = profNames.map(p =>
+    `<option value="${escHtml(p)}">${escHtml(p)}</option>`
+  ).join("");
+
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">Professions</div>
+    <div class="mcn-prog-panel">
+      <div class="mcn-prof-grid">${profCards}</div>
+      <div class="mcn-parses-section-label">Recipes</div>
+      <div class="mcn-prof-filters">
+        <select id="mcn-prof-filter" class="mcn-prof-filter-sel">
+          <option value="">All Professions</option>${profOptions}
+        </select>
+      </div>
+      <table class="mcn-prof-table">
+        <thead><tr><th>Profession</th><th>Recipe</th></tr></thead>
+        <tbody id="mcn-prof-tbody"></tbody>
+      </table>
+    </div>
+  `;
+
+  function updateTable() {
+    const filter = document.getElementById("mcn-prof-filter")?.value || "";
+    const filtered = filter ? craftable.filter(r => r.profession === filter) : craftable;
+    const tbody = document.getElementById("mcn-prof-tbody");
+    if (!tbody) return;
+    tbody.innerHTML = filtered.map(r => {
+      const expansion = r.expansion_name
+        ? `<span class="mcn-prof-expansion">${escHtml(r.expansion_name)}</span>`
+        : "";
+      return `<tr>
+        <td class="mcn-prof-td-prof">${escHtml(r.profession)}${expansion}</td>
+        <td><a href="${r.wowhead_url}" target="_blank" rel="noopener noreferrer" class="mcn-prof-recipe-link">${escHtml(r.recipe_name)}</a></td>
+      </tr>`;
+    }).join("");
+  }
+
+  updateTable();
+  document.getElementById("mcn-prof-filter")?.addEventListener("change", updateTable);
+}
+
+// ---------------------------------------------------------------------------
+// Market detail panel
+// ---------------------------------------------------------------------------
+
+async function _fetchMarket(charId) {
+  if (_marketCache[charId]) return _marketCache[charId];
+  try {
+    const resp = await fetch(`/api/v1/me/character/${charId}/market`);
+    const body = await resp.json().catch(() => ({}));
+    if (body.ok) {
+      _marketCache[charId] = body.data;
+      return body.data;
+    }
+  } catch {}
+  return null;
+}
+
+function _updateMarketTabCount(count) {
+  const btn = document.querySelector('.mcn-stat-tab[data-tab-key="market"]');
+  if (!btn) return;
+  const valEl = btn.querySelector(".mcn-stat-tab__value");
+  if (valEl) {
+    valEl.textContent = String(count);
+    valEl.classList.remove("mcn-stat-tab__value--muted");
+  }
+}
+
+function _renderMarketDetail(area, data) {
+  const { prices, available } = data;
+
+  if (!available || !prices || prices.length === 0) {
+    area.innerHTML = `
+      <div class="mcn-detail-area__heading">Market</div>
+      <div class="mcn-prog-panel">
+        <div class="mcn-detail-placeholder">No market data available for your realm yet.</div>
+      </div>
+    `;
+    return;
+  }
+
+  _updateMarketTabCount(prices.length);
+
+  const rows = prices.map(item => {
+    const realmCls  = item.is_realm_specific ? " mcn-market-row--realm" : "";
+    const realmFlag = item.is_realm_specific ? '<span class="mcn-market-realm-flag">*</span>' : "";
+    const wowheadName = item.item_name.replace(/ /g, "+").replace(/'/g, "%27");
+    const qty = item.quantity_available ? item.quantity_available.toLocaleString() : "\u2014";
+    return `<tr class="${realmCls}">
+      <td class="mcn-market-name">
+        <span class="mcn-market-cat mcn-market-cat--${item.category}">${item.category}</span>
+        <a href="https://www.wowhead.com/search?q=${wowheadName}" target="_blank" rel="noopener noreferrer" class="mcn-market-item-link">${item.item_name}</a>${realmFlag}
+      </td>
+      <td class="mcn-market-price">${goldStr(item.min_buyout)}</td>
+      <td class="mcn-market-qty">${qty}</td>
+    </tr>`;
+  }).join("");
+
+  const hasRealmSpecific = prices.some(p => p.is_realm_specific);
+  const footnote = hasRealmSpecific
+    ? '<p class="mcn-market-footnote">* Realm-specific auction price.</p>'
+    : "";
+
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">Market</div>
+    <div class="mcn-prog-panel">
+      <table class="mcn-market-table">
+        <thead><tr><th>Item</th><th>Min Price</th><th>Available</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${footnote}
+    </div>
+  `;
+}
+
+// ---------------------------------------------------------------------------
 // Detail area router
 // ---------------------------------------------------------------------------
 
@@ -774,11 +975,39 @@ function _renderDetailArea(key) {
     return;
   }
 
-  // Other panels are placeholders; later phases fill these in.
-  area.innerHTML = `
-    <div class="mcn-detail-area__heading">${_tabTitle(key)}</div>
-    <div class="mcn-detail-placeholder">${_tabTitle(key)} detail &mdash; coming soon</div>
-  `;
+  if (key === "prof") {
+    const charId = _selectedChar?.id;
+    if (!charId) {
+      area.innerHTML = '<div class="mcn-detail-placeholder">Select a character</div>';
+      return;
+    }
+    area.innerHTML = '<div class="mcn-detail-placeholder">Loading&hellip;</div>';
+    _fetchCrafting(charId).then(data => {
+      if (!data) {
+        area.innerHTML = '<div class="mcn-detail-placeholder">Could not load profession data.</div>';
+        return;
+      }
+      _renderProfessionsDetail(area, data);
+    });
+    return;
+  }
+
+  if (key === "market") {
+    const charId = _selectedChar?.id;
+    if (!charId) {
+      area.innerHTML = '<div class="mcn-detail-placeholder">Select a character</div>';
+      return;
+    }
+    area.innerHTML = '<div class="mcn-detail-placeholder">Loading&hellip;</div>';
+    _fetchMarket(charId).then(data => {
+      if (!data) {
+        area.innerHTML = '<div class="mcn-detail-placeholder">Could not load market data.</div>';
+        return;
+      }
+      _renderMarketDetail(area, data);
+    });
+    return;
+  }
 }
 
 async function _loadSummary(charId) {

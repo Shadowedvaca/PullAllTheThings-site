@@ -1479,3 +1479,198 @@
   border-top: 1px solid var(--color-border);
   padding-top: 0.75rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Professions detail panel
+   --------------------------------------------------------------------------- */
+
+.mcn-prof-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.mcn-prof-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  min-width: 80px;
+  text-align: center;
+}
+
+.mcn-prof-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+}
+
+.mcn-prof-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.mcn-prof-count {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+}
+
+.mcn-prof-filters {
+  margin-bottom: 0.5rem;
+}
+
+.mcn-prof-filter-sel {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.mcn-prof-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.mcn-prof-table th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.mcn-prof-table td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--color-text);
+}
+
+.mcn-prof-table tr:last-child td {
+  border-bottom: none;
+}
+
+.mcn-prof-td-prof {
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.mcn-prof-expansion {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.mcn-prof-recipe-link {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.mcn-prof-recipe-link:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------------------
+   Market detail panel
+   --------------------------------------------------------------------------- */
+
+.mcn-market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.mcn-market-table th {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.mcn-market-table td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  vertical-align: middle;
+}
+
+.mcn-market-table tr:last-child td {
+  border-bottom: none;
+}
+
+.mcn-market-row--realm {
+  background: rgba(212, 168, 75, 0.05);
+}
+
+.mcn-market-realm-flag {
+  color: var(--color-accent);
+  font-weight: 700;
+  margin-left: 0.2rem;
+  font-size: 0.75rem;
+}
+
+.mcn-market-name {
+  color: var(--color-text);
+}
+
+.mcn-market-price {
+  font-weight: 700;
+  color: #f5c842;
+  white-space: nowrap;
+}
+
+.mcn-market-qty {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.mcn-market-cat {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.mcn-market-cat--consumable { background: #1e3a1e; color: #86efac; }
+.mcn-market-cat--enchant    { background: #1e2a5f; color: #93c5fd; }
+.mcn-market-cat--gem        { background: #3b1a5f; color: #d8b4fe; }
+.mcn-market-cat--material   { background: #3a2a10; color: #fcd34d; }
+.mcn-market-cat--gear       { background: #2a1e1e; color: #fca5a5; }
+
+.mcn-market-item-link {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.mcn-market-item-link:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.mcn-market-footnote {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
