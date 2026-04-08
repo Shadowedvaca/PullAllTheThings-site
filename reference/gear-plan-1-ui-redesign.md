@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1F complete (Parses detail panel); UI-1G next  
+> **Status:** UI-1G complete (Professions + Market panels); UI-1H next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
@@ -442,36 +442,26 @@ Tabs work (Raid shows data; M+ shows "no data" gracefully). Deploy to dev, verif
 
 ---
 
-### Phase UI-1G — Professions + Market detail panels
+### Phase UI-1G — Professions + Market detail panels ✓ COMPLETE
 
 **Purpose:** Fill in the two remaining summary cards.
 
-**Scope:**
+**As shipped:**
+- Professions panel: grid of known professions with Wowhead icons + recipe counts;
+  filterable recipe table below (profession dropdown); uses existing `/crafting` endpoint.
+  Profession icon slugs hardcoded in `PROFESSION_ICONS` map (13 professions).
+- Market panel: full AH price table with category badges, gold formatting, realm-specific
+  footnote; market tab count updates dynamically after data loads.
+  `_updateMarketTabCount()` patches the tab button without re-rendering the strip.
+- `/character/{id}/summary` endpoint extended: now returns `profession_names: list[str]`
+  in addition to `profession_count` (replaces count-only query; same DB cost, richer data).
+- `goldStr` and `escHtml` helpers added to `my_characters_new.js`.
+- `_craftingCache` and `_marketCache` added (same pattern as progression/parses caches).
 
-**Professions panel:**
-- Summary card: count of known professions + WoW profession icons as small badges.
-- Detail panel: list of professions with large icon + name + expansion level if field exists
-  (check `character_recipes` / `professions` schema for level data).
-  If level data unavailable: name + icon only. No level display — cleaner.
-  Fishing and Cooking: include if `professions` table has them; skip if not.
-- "View Recipes" link per profession — opens the existing crafting view (reuse
-  existing `/api/v1/me/character/{id}/crafting` endpoint and render logic).
-- Profession icon slugs: hardcoded map in JS (`PROFESSION_ICONS` dict).
-
-**Market panel:**
-- Summary card: count of items tracked + "Updated X min ago" timestamp.
-- Detail panel: full AH price table — reuse existing `renderMarketPanel` logic from
-  `my_characters.js` verbatim, just rendered inside the new center panel slot.
-- Reuse `/api/v1/me/character/{id}/market` endpoint unchanged.
-
-**API changes:** None.
-
-**Files created/changed:**
-- `src/guild_portal/static/css/my_characters_new.css`
-- `src/guild_portal/static/js/my_characters_new.js` (renderProfessionsDetail, renderMarketDetail)
-
-**Done when:** Professions detail shows Trogmoon's professions with icons. Market detail
-shows AH prices. Summary cards for both show meaningful values. Deploy to dev, verify.
+**Files changed:**
+- `src/guild_portal/api/member_routes.py` (summary endpoint: profession_names)
+- `src/guild_portal/static/css/my_characters_new.css` (prof + market styles)
+- `src/guild_portal/static/js/my_characters_new.js` (fetch/render functions + router)
 
 ---
 
