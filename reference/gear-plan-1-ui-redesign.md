@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1D complete (Option C gear table + slot detail panel + bug fixes); UI-1E next  
+> **Status:** UI-1E complete (Raid + M+ detail panels + RIO/WCL/Armory links in guides bar); UI-1F next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
@@ -367,41 +367,31 @@ Wowhead tooltips fire, BIS/upgrade row coloring correct. Deploy to dev, verify.
 
 ---
 
-### Phase UI-1E — Raid and M+ detail panels
+### Phase UI-1E — Raid and M+ detail panels ✓ COMPLETE
 
 **Purpose:** Clicking the Raid or M+ summary card shows meaningful detail.
 
-**Scope:**
+**As shipped:**
+- Raid panel: difficulty tabs (Normal/Heroic/Mythic) with killed/total counts; tab defaults
+  to highest difficulty with any kills; per-boss list with ✓ (green) / ✗ (muted) rows.
+  Filtered to active season via `current_raid_ids` from `patt.raid_seasons`.
+- M+ panel: `_mplusScoreTier()` color-coded overall score (large, Cinzel font) + season name
+  + per-dungeon table (Dungeon / Best Key [+level + ⏱ if timed] / Score); zero-run dungeons
+  dimmed. Filtered to active season via `blizzard_mplus_season_id` from `patt.raid_seasons`.
+- `GET /api/v1/me/character/{id}/progression` extended: added `raid_bosses` list (per-boss
+  detail with difficulty/boss_name/killed bool) and `mythic_plus.dungeons` list
+  (dungeon_name/best_level/best_timed/best_score). `_progressionCache` prevents re-fetches.
+- RIO / WCL / Armory links moved from detail panels to the **persistent guides bar** — always
+  visible regardless of active tab. Separated from guide badges by a subtle border. Update
+  automatically when character selector changes.
 
-**Raid detail:**
-- Source: `GET /api/v1/me/character/{id}/progression` (already exists).
-- Per-boss list grouped by difficulty: RF / Normal / Heroic / Mythic.
-- Each row: boss icon (Wowhead encounter icon if available, else placeholder) + boss name
-  + killed ✓ / not killed ✗.
-- Difficulty tabs or collapsible sections.
-- Link to Warcraftlogs profile at the top.
-
-**M+ detail:**
-- Source: `raiderio_profiles` data (returned by same progression endpoint).
-- Overall score + color-coded badge (reuse `mplusScoreTier` logic from existing JS).
-- Per-dungeon table: dungeon name + best key level + score contribution (if available
-  from Raider.IO JSON stored in the profile).
-  - Note: `raiderio_profiles.raid_progression` stores raid data. M+ per-dungeon data
-    may need a new field or a separate API call — assess what's already stored in the
-    `raiderio_profiles` row vs. what needs a fresh Raider.IO fetch.
-  - If per-dungeon M+ data is not stored: summary view only (overall score + link to RIO).
-    Defer per-dungeon breakdown to a future phase.
-- Raider.IO profile link badge prominent on this panel.
-
-**API changes:** Likely none if per-dungeon M+ data is already in `raiderio_profiles`. If
-not, defer per-dungeon to a later cleanup pass and ship the summary view.
-
-**Files created/changed:**
-- `src/guild_portal/static/css/my_characters_new.css`
-- `src/guild_portal/static/js/my_characters_new.js` (renderRaidDetail, renderMplusDetail)
-
-**Done when:** Raid detail shows per-boss kill status for Trogmoon. M+ detail shows at
-minimum overall score and Raider.IO link. Deploy to dev, verify.
+**Files changed:**
+- `src/guild_portal/api/member_routes.py` (progression endpoint extended)
+- `src/guild_portal/static/js/my_characters_new.js` (_renderRaidDetail, _renderMplusDetail,
+  _progressionCache, ext-links in _renderHeader)
+- `src/guild_portal/static/css/my_characters_new.css` (.mcn-prog-panel, .mcn-diff-tab,
+  .mcn-boss-row, .mcn-mplus-*, .mcn-char-ext-link)
+- `src/guild_portal/templates/member/my_characters_new.html` (mcn-char-ext-links div)
 
 ---
 
