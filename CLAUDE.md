@@ -235,9 +235,9 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase UI-1F (complete)** — Parses detail panel on `/my-characters-new`. New `GET /api/v1/me/character/{id}/parses-detail` endpoint aggregates `character_report_parses` by (encounter_name, zone_id, difficulty), returning raid rows, empty mythic_plus list, and overall (best difficulty per encounter). Three-tab UI (Raid / M+ / Overall): Raid tab shows flat table with Difficulty column + Boss/Best%/Kills/Avg%/Best DPS; M+ shows graceful empty state; Overall shows one row per encounter. Parse percentile values color-coded using WCL tier thresholds. WCL Profile link in panel heading. Results cached per character. Phases UI-1A–1E also complete.
+- **Phase UI-1F (complete)** — Parses detail panel (simplified): three stacked sections (per-boss detail table / By Difficulty summary / By Boss summary), no tabs. WCL sync bug fixed: `_parse_report_rankings` now reads `difficulty` from each fight object instead of hardcoding `3`; upsert includes `difficulty = EXCLUDED.difficulty` so a re-sync corrects stale rows. 5 new tests. **Post-prod-deploy action required: trigger WCL sync from Admin → Warcraft Logs to correct existing difficulty=3 rows** (noted in UI-1H plan). Phases UI-1A–1E also complete.
 - **Branch:** `feature/gear-plan-phase-1d`
-- **Tests:** 1264 pass (2 pre-existing bnet failures unchanged)
+- **Tests:** 1269 pass (2 pre-existing bnet failures unchanged)
 - **Last migration:** 0080
 - **Last prod tag:** `prod-v0.11.2`
 - **Active branch:** `feature/gear-plan-phase-1d`
@@ -258,6 +258,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **GuildSync addon** + **companion app** — functional, syncing guild notes via `/guildsync` WoW slash command
 
 ### Known Gaps / Dormant Features
+- **`character_report_parses.difficulty` stale on prod** — all existing rows have difficulty=3 (Normal) due to a hardcoded bug in `sync_report_parses` (fixed in UI-1F). After deploying to prod, trigger a WCL sync from **Admin → Warcraft Logs** to correct them. The upsert now includes `difficulty = EXCLUDED.difficulty` so every re-queried report row will be corrected automatically.
 - `guild_identity.identity_engine`: some tests skipped due to import error — pre-existing, non-blocking
 - **Liberation of Undermine** (encounters 3212–3214) returns 0 WCL rankings — WCL has not yet published rankings for that tier. Will populate automatically once WCL processes it.
 - **`compute_attendance` in `wcl_sync.py`** — JSONB `json.loads()` bug fixed in prod-v0.8.3. WCL Attendance admin tab should now work.

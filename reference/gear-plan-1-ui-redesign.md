@@ -516,6 +516,13 @@ becomes a redirect.
 **Done when:** Single `/my-characters` page. `/gear-plan` redirects cleanly. No 404s. No
 orphaned CSS/JS. Old My Characters page and Gear Plan page are gone. Prod-ready.
 
+**Post-deploy prod action required:**
+After tagging and deploying to prod, trigger a WCL sync from **Admin → Warcraft Logs**.
+This re-queries all stored reports and uses `difficulty = EXCLUDED.difficulty` in the
+upsert to correct every row that was previously hardcoded to `3` (Normal). Until this
+runs, the Parses panel "By Difficulty" section may still show all rows as Normal on prod.
+The Chimaerus Normal vs Heroic split should be visible and correctly labelled after the sync.
+
 ---
 
 ## 9. Phase Dependency Map
