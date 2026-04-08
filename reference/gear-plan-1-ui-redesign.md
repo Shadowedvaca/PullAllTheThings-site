@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1C complete (paperdoll redesign + Gear tab wired); UI-1D next  
+> **Status:** UI-1D complete (Option C gear table + slot detail panel + bug fixes); UI-1E next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
@@ -360,6 +360,10 @@ Option C full-width table (for readable per-slot details) below it. They show th
 
 **Done when:** Gear detail shows paperdoll on top and table below. Table has correct data,
 Wowhead tooltips fire, BIS/upgrade row coloring correct. Deploy to dev, verify.
+
+**As shipped + post-ship fixes:**
+- Paperdoll slot click routes into center panel (above "Gear Plan" heading) instead of the bottom drawer. Gold-bordered slot detail section shows equipped, goal, BIS grid, drop source; same slot click or × closes it.
+- Three `gear_plan_service.py` bugs fixed: (1) wrong paired slot updated — `_normalize_paired_slot` now records `canonical_slot` per slot; frontend uses it for all writes; (2) empty Hero Talent + BIS Source dropdowns — API returns snake_case (`bis_sources`, `hero_talents`, `track_colors`), JS now reads those keys correctly; (3) duplicate paired slots after Reset Plan — removed BIS fallback for `desired_bid` in slot-building loop.
 
 ---
 

@@ -235,7 +235,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase UI-1D (complete)** — Gear detail Option C table on `/my-characters-new`. Full-width 16-row table (Slot / Equipped / Goal / Source / Upgrades) rendered in the Gear detail center panel beneath the action buttons, populated from the same `get_plan_detail` endpoint as the paperdoll. Green left border on BIS rows, red on needs-upgrade rows. Wowhead item links on all icons and names. BIS states render star (gold) / check (green) SVG icons. Empty-data state shows helper message. Phases UI-1A, UI-1B, UI-1C also complete.
+- **Phase UI-1D (complete)** — Gear detail Option C table on `/my-characters-new`. Full-width 16-row table (Slot / Equipped / Goal / Source / Upgrades) rendered in the Gear detail center panel beneath the action buttons. Paperdoll slot click opens an inline slot detail panel (above "Gear Plan" heading) showing equipped item, goal, BIS grid, and drop source; same slot click or × closes it. Three gear_plan_service bugs fixed post-ship: (1) wrong ring/trinket updated — `_normalize_paired_slot` alphabetical swap now records `canonical_slot` per slot so the frontend writes to the correct DB key; (2) empty dropdowns — JS was reading `bisSources`/`heroTalents`/`trackColors` (camelCase) but API returns snake_case; (3) duplicate paired slots after Reset — removed BIS fallback for `desired_bid` in slot-building loop so only explicit goals drive `is_bis`/`needs_upgrade`. Phases UI-1A, UI-1B, UI-1C also complete.
 - **Branch:** `feature/gear-plan-phase-1d`
 - **Tests:** 1264 pass (2 pre-existing bnet failures unchanged)
 - **Last migration:** 0080
