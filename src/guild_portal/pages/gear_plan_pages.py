@@ -64,21 +64,21 @@ async def gear_plan_admin_page(request: Request):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/my-characters-new", response_class=HTMLResponse)
-async def my_characters_new_page(
+@router.get("/my-characters", response_class=HTMLResponse)
+async def my_characters_page(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_member: Player | None = Depends(get_page_member),
 ):
-    """New unified character sheet (UI redesign in progress — parallel to /my-characters)."""
+    """Unified character sheet."""
     if current_member is None:
-        return RedirectResponse(url="/login?next=/my-characters-new", status_code=302)
+        return RedirectResponse(url="/login?next=/my-characters", status_code=302)
 
     active = await campaign_service.list_campaigns(db, status="live")
     nav_items = await load_nav_items(db, current_member)
 
     return templates.TemplateResponse(
-        "member/my_characters_new.html",
+        "member/my_characters.html",
         {
             "request": request,
             "current_member": current_member,
@@ -90,25 +90,6 @@ async def my_characters_new_page(
 
 
 @router.get("/gear-plan", response_class=HTMLResponse)
-async def gear_plan_member_page(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_member: Player | None = Depends(get_page_member),
-):
-    """Personal gear plan page — logged-in members only."""
-    if current_member is None:
-        return RedirectResponse(url="/login?next=/gear-plan", status_code=302)
-
-    active = await campaign_service.list_campaigns(db, status="live")
-    nav_items = await load_nav_items(db, current_member)
-
-    return templates.TemplateResponse(
-        "member/gear_plan.html",
-        {
-            "request": request,
-            "current_member": current_member,
-            "active_campaigns": active,
-            "nav_items": nav_items,
-            "current_screen": "my_gear_plan",
-        },
-    )
+async def gear_plan_redirect(request: Request):
+    """Gear Plan has moved — redirect to /my-characters."""
+    return RedirectResponse(url="/my-characters", status_code=302)

@@ -6,65 +6,153 @@
 {% endblock %}
 
 {% block content %}
-<div class="mc-page">
-  <div class="page-title-row">
-    <h1 class="mc-page__title">My Characters</h1>
-    <div class="page-title-actions">
-      <button id="btn-refresh-chars" class="btn btn--secondary btn--sm">
-        Refresh Characters
-      </button>
-      <p class="refresh-note">
-        Connecting with Battle.net lets us see your full character list for 24 hours.
-      </p>
-    </div>
-  </div>
+<div class="mcn-page">
 
-  <div id="mc-loading" class="mc-loading" aria-live="polite">
+  {# ── Loading / error states ────────────────────────────────────────────── #}
+  <div id="mcn-loading" class="mcn-state-msg" aria-live="polite">
     Loading characters&hellip;
   </div>
-
-  <div id="mc-error" class="mc-error" hidden>
-    <p>Could not load characters. Please refresh and try again.</p>
+  <div id="mcn-error" class="mcn-state-msg mcn-state-msg--error" hidden>
+    Could not load characters. Please refresh and try again.
+  </div>
+  <div id="mcn-empty" class="mcn-state-msg" hidden>
+    <p>You have no claimed characters yet.</p>
+    <a href="/profile" class="btn btn-primary">Go to Settings &rarr; Character Claims</a>
   </div>
 
-  {# Selector bar — populated by JS #}
-  <div id="mc-selector-bar" class="mc-selector-bar" hidden>
-    <label for="mc-selector" class="mc-selector-label">Character</label>
-    <select id="mc-selector" class="mc-selector"></select>
-    <span id="mc-selector-meta" class="mc-selector-meta"></span>
+  {# ── Header area: centered title + top-right selector ────────────────── #}
+  <div class="mcn-header-area">
+
+    {# Selector — top-right corner, outside the centered header #}
+    <div id="mcn-selector-bar" class="mcn-selector-bar" hidden>
+      <select id="mcn-char-select" class="mcn-char-select" aria-label="Select character"></select>
+      <button id="mcn-btn-refresh" class="mcn-btn-refresh" type="button" title="Refresh characters">&#8635;</button>
+    </div>
+
+    {# Persistent character header — centered #}
+    <div id="mcn-header" class="mcn-header" hidden>
+
+      {# Row 1: name + realm + BNet badge #}
+      <div class="mcn-header__identity">
+        <span id="mcn-char-name" class="mcn-char-name"></span>
+        <span class="mcn-header__sep">&mdash;</span>
+        <span id="mcn-char-realm" class="mcn-char-realm"></span>
+        <span id="mcn-bnet-badge" class="mcn-bnet-badge" hidden>BNet</span>
+      </div>
+
+      {# Row 2: class icon + spec + spec icon + race + role icon + role + badges #}
+      <div class="mcn-header__details">
+        <span id="mcn-class-icon" class="mcn-icon-wrap"></span>
+        <span id="mcn-class-spec" class="mcn-class-spec"></span>
+        <span id="mcn-spec-icon" class="mcn-icon-wrap"></span>
+        <span id="mcn-race-sep" class="mcn-details-sep" hidden>&middot;</span>
+        <span id="mcn-race" class="mcn-race" hidden></span>
+        <span class="mcn-details-sep">&middot;</span>
+        <span id="mcn-role-icon" class="mcn-icon-wrap"></span>
+        <span id="mcn-role-label" class="mcn-role-label" hidden></span>
+        <span id="mcn-main-badge" class="mcn-badge mcn-badge--main" hidden>Main</span>
+        <span id="mcn-offspec-badge" class="mcn-badge mcn-badge--offspec" hidden>Off</span>
+      </div>
+
+    </div>{# end #mcn-header #}
+
+  </div>{# end .mcn-header-area #}
+
+  {# ── Guide links bar — between header and body ────────────────────────── #}
+  <div id="mcn-guides" class="mcn-guides-bar" hidden>
+    <select id="mcn-guide-spec" class="mcn-guide-spec-sel" aria-label="Spec for guides"></select>
+    <div id="mcn-guide-badges" class="mcn-guide-badges"></div>
+    <div id="mcn-char-ext-links" class="mcn-char-ext-links"></div>
   </div>
 
-  {# Stale data notice — shown by JS when blizzard_last_sync > 7 days old #}
-  <div id="mc-stale-notice" class="mc-stale-notice" hidden>
-    ⚠ Character data may be outdated (last synced over 7 days ago).
+  {# ── Three-column body ─────────────────────────────────────────────────── #}
+  <div id="mcn-body" class="mcn-body" hidden>
+
+    {# Left paperdoll — Phase UI-1C #}
+    <div class="mcn-paperdoll mcn-paperdoll--left" id="mcn-left-paperdoll">
+      <div class="mcn-paperdoll__placeholder">
+        <span class="mcn-paperdoll__slot-ph" title="Head"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Neck"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Shoulder"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Back"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Chest"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Wrist"></span>
+        <div class="mcn-paperdoll__weapon-sep"></div>
+        <span class="mcn-paperdoll__slot-ph" title="Main Hand"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Off Hand"></span>
+      </div>
+    </div>
+
+    {# Center panel — stat strip on top, detail area below #}
+    <div class="mcn-center" id="mcn-center">
+
+      {# Stat strip — always visible, acts as navigation tabs #}
+      <div class="mcn-stat-strip" id="mcn-stat-strip">
+        {# Tabs injected by JS after summary data loads #}
+      </div>
+
+      {# Detail area — fills remaining space; content driven by active tab #}
+      <div class="mcn-detail-area" id="mcn-detail-area">
+        {# Content injected by JS #}
+      </div>
+
+    </div>
+
+    {# Right paperdoll — Phase UI-1C #}
+    <div class="mcn-paperdoll mcn-paperdoll--right" id="mcn-right-paperdoll">
+      <div class="mcn-paperdoll__placeholder">
+        <span class="mcn-paperdoll__slot-ph" title="Hands"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Waist"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Legs"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Feet"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Ring 1"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Ring 2"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Trinket 1"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Trinket 2"></span>
+      </div>
+    </div>
+
+  </div>{# end #mcn-body #}
+
+  {# ── Slot detail drawer — Phase UI-1C ─────────────────────────────────── #}
+  <div id="mcn-gp-drawer" class="mcn-drawer" hidden>
+    <div class="mcn-drawer__header">
+      <span id="mcn-gp-drawer-title" class="mcn-drawer__title"></span>
+      <button id="mcn-gp-drawer-close" class="mcn-drawer__close" type="button">&times;</button>
+    </div>
+    <div id="mcn-gp-drawer-body" class="mcn-drawer__body"></div>
   </div>
 
-  {# Stat panel — populated by JS #}
-  <div id="mc-panel" class="mc-panel" hidden></div>
+</div>{# end .mcn-page #}
 
-  {# Spec Guide Links panel — populated by JS, no fetch required #}
-  <div id="mc-guides" class="mc-guides" hidden></div>
-
-  {# Progression panel — populated by JS after character is selected #}
-  <div id="mc-progression" class="mc-progression" hidden></div>
-
-  {# Parses panel — populated by JS after character is selected #}
-  <div id="mc-parses" class="mc-parses" hidden></div>
-
-  {# Market panel — populated by JS after character is selected #}
-  <div id="mc-market" class="mc-market" hidden></div>
-
-  {# Crafting & Raid Prep panel — populated by JS after character is selected #}
-  <div id="mc-crafting" class="mc-crafting" hidden></div>
-
-  {# Empty state — shown by JS when member has no characters #}
-  <div id="mc-empty" class="mc-empty" hidden>
-    <p class="mc-empty__text">You have no claimed characters yet.</p>
-    <a href="/profile" class="btn btn-primary">Go to Settings → Character Claims</a>
+{# ── SimC Import Modal — Phase UI-1C ─────────────────────────────────────── #}
+<div id="mcn-simc-modal" class="mcn-modal" hidden>
+  <div class="mcn-modal__backdrop"></div>
+  <div class="mcn-modal__box">
+    <div class="mcn-modal__header">
+      <h3 class="mcn-modal__title">Import SimC Profile</h3>
+      <button id="mcn-simc-close" class="mcn-modal__close" type="button">&times;</button>
+    </div>
+    <div class="mcn-modal__body">
+      <p class="mcn-modal__hint">
+        Paste your SimC profile from the in-game SimulationCraft addon,
+        <a href="https://archon.gg" target="_blank" rel="noopener">Archon</a>, or
+        <a href="https://www.wowhead.com" target="_blank" rel="noopener">Wowhead</a>.
+        Locked slots will not be overwritten.
+      </p>
+      <textarea id="mcn-simc-text" class="mcn-simc-textarea"
+                placeholder="Paste SimC profile here&hellip;" rows="12"></textarea>
+    </div>
+    <div class="mcn-modal__footer">
+      <button id="mcn-simc-submit" class="btn btn-primary" type="button">Import</button>
+      <button id="mcn-simc-cancel" class="btn btn-secondary" type="button">Cancel</button>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script>var whTooltips = {colorLinks: true, iconizeLinks: false, renameLinks: false, hide: {sellprice: true, ilvl: false, reqlevel: false, power: false}};</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
 <script src="/static/js/my_characters.js"></script>
 {% endblock %}

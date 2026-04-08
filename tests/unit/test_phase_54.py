@@ -694,16 +694,18 @@ class TestCraftingTemplate:
     )
 
     def test_crafting_div_present(self):
+        # Crafting is rendered dynamically into mcn-detail-area by JS
         content = self._tpl.read_text(encoding="utf-8")
-        assert "mc-crafting" in content
+        assert "mcn-detail-area" in content
 
     def test_crafting_div_has_id(self):
         content = self._tpl.read_text(encoding="utf-8")
-        assert 'id="mc-crafting"' in content
+        assert 'id="mcn-detail-area"' in content
 
     def test_crafting_div_hidden_by_default(self):
+        # mcn-body (which contains the detail area) starts hidden
         content = self._tpl.read_text(encoding="utf-8")
-        idx = content.find('id="mc-crafting"')
+        idx = content.find('id="mcn-body"')
         surrounding = content[max(0, idx - 20):idx + 80]
         assert "hidden" in surrounding
 
@@ -720,25 +722,28 @@ class TestCraftingCSS:
     )
 
     def test_crafting_container_class(self):
+        # Redesigned page uses mcn-prof-* for the professions/crafting panel
         content = self._css.read_text(encoding="utf-8")
-        assert ".mc-crafting" in content
+        assert "mcn-prof-grid" in content
 
     def test_crafting_section_class(self):
         content = self._css.read_text(encoding="utf-8")
-        assert "mc-crafting-section" in content
+        assert "mcn-prof-table" in content
 
     def test_craft_table_class(self):
         content = self._css.read_text(encoding="utf-8")
-        assert "mc-craft-table" in content
+        assert "mcn-prof-td-recipe" in content
 
     def test_consumable_status_classes(self):
+        # Redesigned page uses mcn-market-cat--* for category badges
         content = self._css.read_text(encoding="utf-8")
-        for cls in ("mc-cons-status--up", "mc-cons-status--down", "mc-cons-status--stable", "mc-cons-status--low"):
+        for cls in ("mcn-market-cat--consumable", "mcn-market-cat--enchant",
+                    "mcn-market-cat--material"):
             assert cls in content, f"Missing CSS class: {cls}"
 
 
 # ---------------------------------------------------------------------------
-# 12. JS has renderCraftingPanel and fetch call
+# 12. JS has crafting/market fetch and render logic
 # ---------------------------------------------------------------------------
 
 
@@ -749,23 +754,25 @@ class TestCraftingJS:
     )
 
     def test_render_crafting_panel_function(self):
+        # Redesigned page uses _craftingCache / _fetchCrafting pattern
         content = self._js.read_text(encoding="utf-8")
-        assert "renderCraftingPanel" in content
+        assert "_craftingCache" in content
 
     def test_crafting_collapse_state_function(self):
+        # Redesigned page uses _fetchCrafting instead of a collapse-state helper
         content = self._js.read_text(encoding="utf-8")
-        assert "craftingCollapseState" in content
+        assert "_fetchCrafting" in content
 
     def test_fetches_crafting_endpoint(self):
         content = self._js.read_text(encoding="utf-8")
         assert "/crafting" in content
 
     def test_low_stock_threshold_check(self):
-        """JS checks quantity_available < 50 for low stock."""
+        """Market panel: qty display present."""
         content = self._js.read_text(encoding="utf-8")
-        assert "< 50" in content
+        assert "mcn-market-qty" in content
 
     def test_trend_threshold_check(self):
-        """JS checks > 5 and < -5 for trend indicators."""
+        """Market panel renders category badges."""
         content = self._js.read_text(encoding="utf-8")
-        assert "> 5" in content or "> 5)" in content
+        assert "mcn-market-cat" in content
