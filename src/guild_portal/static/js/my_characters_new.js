@@ -256,6 +256,18 @@ function _renderHeader(char) {
   if (mainBadge) mainBadge.hidden = !char.is_main;
   if (offBadge)  offBadge.hidden  = !char.is_offspec;
 
+  // External profile links (RIO, WCL, Armory) — shown in the guides bar
+  const extEl = document.getElementById("mcn-char-ext-links");
+  if (extEl) {
+    const links = [];
+    if (char.raiderio_url) links.push({ href: char.raiderio_url, label: "Raider.IO" });
+    if (char.wcl_url)      links.push({ href: char.wcl_url,      label: "Warcraft Logs" });
+    if (char.armory_url)   links.push({ href: char.armory_url,   label: "Armory" });
+    extEl.innerHTML = links.map(l =>
+      `<a href="${l.href}" target="_blank" rel="noopener noreferrer" class="mcn-char-ext-link">${l.label} &#8599;</a>`
+    ).join("");
+  }
+
   _show("mcn-header");
 }
 
@@ -427,15 +439,13 @@ async function _fetchProgression(charId) {
 const _DIFF_ORDER = ["mythic", "heroic", "normal", "lfr"];
 const _DIFF_LABELS = { mythic: "Mythic", heroic: "Heroic", normal: "Normal", lfr: "LFR" };
 
-function _renderRaidDetail(area, data, char) {
+function _renderRaidDetail(area, data) {
   const bosses = data.raid_bosses || [];
-  const wcl = char?.wcl_url || null;
 
   if (!bosses.length) {
     area.innerHTML = `
       <div class="mcn-detail-area__heading">Raid</div>
       <div class="mcn-prog-panel">
-        ${wcl ? `<a href="${wcl}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Warcraft Logs profile</a>` : ""}
         <div class="mcn-detail-placeholder">No raid progress data yet.</div>
       </div>
     `;
@@ -483,7 +493,6 @@ function _renderRaidDetail(area, data, char) {
   area.innerHTML = `
     <div class="mcn-detail-area__heading">Raid</div>
     <div class="mcn-prog-panel">
-      ${wcl ? `<a href="${wcl}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Warcraft Logs profile &#8599;</a>` : ""}
       <div class="mcn-prog-raid-name">${raidName}</div>
       <div class="mcn-diff-tabs" id="mcn-raid-diff-tabs">${buildTabs(activeRaidDiff)}</div>
       <div class="mcn-boss-list" id="mcn-boss-list">${buildBossList(activeRaidDiff)}</div>
@@ -514,15 +523,13 @@ function _mplusScoreTier(score) {
   return "#9d9d9d";
 }
 
-function _renderMplusDetail(area, data, char) {
+function _renderMplusDetail(area, data) {
   const mp = data.mythic_plus;
-  const rio = char?.raiderio_url || null;
 
   if (!mp || !(mp.overall_score > 0)) {
     area.innerHTML = `
       <div class="mcn-detail-area__heading">M+</div>
       <div class="mcn-prog-panel">
-        ${rio ? `<a href="${rio}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Raider.IO profile &#8599;</a>` : ""}
         <div class="mcn-detail-placeholder">No M+ data yet.</div>
       </div>
     `;
@@ -545,7 +552,6 @@ function _renderMplusDetail(area, data, char) {
   area.innerHTML = `
     <div class="mcn-detail-area__heading">M+</div>
     <div class="mcn-prog-panel">
-      ${rio ? `<a href="${rio}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Raider.IO profile &#8599;</a>` : ""}
       <div class="mcn-mplus-score-row">
         <span class="mcn-mplus-score-label">Overall Score</span>
         <span class="mcn-mplus-score-value" style="color:${scoreColor}">${Math.round(mp.overall_score).toLocaleString()}</span>
@@ -595,8 +601,8 @@ function _renderDetailArea(key) {
         area.innerHTML = '<div class="mcn-detail-placeholder">Could not load progression data.</div>';
         return;
       }
-      if (key === "raid")  _renderRaidDetail(area, data, _selectedChar);
-      if (key === "mplus") _renderMplusDetail(area, data, _selectedChar);
+      if (key === "raid")  _renderRaidDetail(area, data);
+      if (key === "mplus") _renderMplusDetail(area, data);
     });
     return;
   }

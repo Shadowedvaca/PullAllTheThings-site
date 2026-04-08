@@ -270,6 +270,27 @@
   font-style: italic;
 }
 
+/* External profile links (RIO, WCL, Armory) in the guides bar */
+.mcn-char-ext-links {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-left: 0.25rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--color-border);
+}
+.mcn-char-ext-links:empty { display: none; }
+
+.mcn-char-ext-link {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.12s;
+}
+.mcn-char-ext-link:hover { color: var(--color-accent); text-decoration: none; }
+
 /* ── Three-column body grid ──────────────────────────────────── */
 .mcn-body {
   display: grid;
@@ -1240,17 +1261,6 @@
   gap: 0.6rem;
   padding: 0.25rem 0;
 }
-
-/* External profile link (WCL / RIO) */
-.mcn-prog-ext-link {
-  display: inline-block;
-  font-size: 0.72rem;
-  color: var(--color-accent);
-  text-decoration: none;
-  opacity: 0.85;
-  margin-bottom: 0.1rem;
-}
-.mcn-prog-ext-link:hover { opacity: 1; text-decoration: underline; }
 
 /* ── Raid panel ───────────────────────────────────────────────── */
 
