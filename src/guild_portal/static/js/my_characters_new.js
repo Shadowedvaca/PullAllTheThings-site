@@ -228,10 +228,14 @@ function _renderHeader(char) {
   // spec icon
   _html("mcn-spec-icon", specIcon(char.class_name, char.spec_name));
 
-  // race text
-  _text("mcn-race", char.race || "");
+  // race text + its separator
   const raceEl = document.getElementById("mcn-race");
-  if (raceEl) raceEl.hidden = !char.race;
+  const raceSepEl = document.getElementById("mcn-race-sep");
+  if (raceEl) {
+    raceEl.textContent = char.race || "";
+    raceEl.hidden = !char.race;
+  }
+  if (raceSepEl) raceSepEl.hidden = !char.race;
 
   // role icon + label
   _html("mcn-role-icon", roleIcon(char.role));

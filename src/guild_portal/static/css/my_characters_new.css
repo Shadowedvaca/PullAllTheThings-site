@@ -55,62 +55,70 @@
 
 /* ── Persistent character header ─────────────────────────────── */
 .mcn-header {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1.5rem 1rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0.25rem;
 }
 
-/* Row 1: name + realm */
+/* Row 1: name — realm — BNet badge */
 .mcn-header__identity {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
   flex-wrap: wrap;
 }
 
 .mcn-char-name {
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--color-accent);
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 .mcn-header__sep {
-  color: var(--color-text-muted);
-  font-size: 1rem;
+  color: var(--color-border);
+  font-size: 1.25rem;
+  font-weight: 300;
 }
 
 .mcn-char-realm {
-  font-size: 1rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
   color: var(--color-text-muted);
+  font-weight: 400;
 }
 
 .mcn-bnet-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 0.15rem 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
   border-radius: 3px;
   background: #1c3a5e;
   color: #60a5fa;
   border: 1px solid #2563eb55;
   text-transform: uppercase;
+  vertical-align: middle;
+  position: relative;
+  top: -0.15rem;
 }
 
-/* Row 2: class icon + spec + race + role */
+/* Row 2: icons + spec + race + role — centered subtitle */
 .mcn-header__details {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.45rem;
   flex-wrap: wrap;
+  color: var(--color-text-muted);
 }
 
 .mcn-icon-wrap {
@@ -120,10 +128,11 @@
 }
 
 .mcn-icon-wrap img {
-  width: 22px;
-  height: 22px;
-  border-radius: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
   object-fit: cover;
+  opacity: 0.9;
 }
 
 .mcn-class-spec {
@@ -132,24 +141,20 @@
   font-weight: 500;
 }
 
-.mcn-race {
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-}
-.mcn-race::before {
-  content: "\2022";
-  margin-right: 0.4rem;
+.mcn-details-sep {
   color: var(--color-border);
+  font-size: 0.85rem;
+  user-select: none;
+}
+
+.mcn-race {
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
 }
 
 .mcn-role-label {
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-}
-.mcn-role-label::before {
-  content: "\2022";
-  margin-right: 0.4rem;
-  color: var(--color-border);
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 
 /* Role label colouring */
@@ -162,9 +167,9 @@
 .mcn-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   padding: 0.15rem 0.45rem;
   border-radius: 3px;
   text-transform: uppercase;
@@ -180,14 +185,14 @@
   border: 1px solid #2563eb55;
 }
 
-/* Row 3: guide links */
+/* Row 3: guide links — hidden for now, styled in next phase */
 .mcn-guides {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  padding-top: 0.25rem;
-  border-top: 1px solid var(--color-border);
+  margin-top: 0.25rem;
 }
 
 .mcn-guides__label {
