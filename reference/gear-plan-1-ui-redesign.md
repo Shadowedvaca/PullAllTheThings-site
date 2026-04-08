@@ -1,7 +1,7 @@
 # My Characters — Full UI Redesign Plan
 # (Incorporates Gear Plan; replaces /my-characters + /gear-plan)
 
-> **Status:** UI-1B complete (stat strip + panel switching); UI-1C next  
+> **Status:** UI-1C complete (paperdoll redesign + Gear tab wired); UI-1D next  
 > **Branch strategy:** All work on `feature/gear-plan-phase-1d`  
 > **Temp URL during dev:** `/my-characters-new` (delete old pages, rename at end)  
 > **Last updated:** 2026-04-08
@@ -288,7 +288,7 @@ the placeholder detail view. Back button returns to cards. Deploy to dev, verify
 
 ---
 
-### Phase UI-1C — Paperdoll redesign
+### Phase UI-1C — Paperdoll redesign ✓ COMPLETE
 
 **Purpose:** Replace the current gear_plan slot cards with the new two-box design (upgrade
 box + equipped box). Wire into the existing gear_plan_service — no service changes.
@@ -328,6 +328,12 @@ Edit: We need to preserve the blizzard look so Put main hand and off hand at the
 **Done when:** Gear detail panel shows the paperdoll with new two-box cards. Trogmoon's
 items show quality borders, ilvls, upgrade states. Sync Gear / Fill BIS / SimC import work.
 Drawer opens on card click. Deploy to dev, verify all slot states visible.
+
+**As shipped (deviations from spec):**
+- Shirt and Tabard removed entirely (not dimmed — gone)
+- Both Main Hand and Off Hand in left column (bottom), separated from body slots by a faint rule
+- Right column: Hands → Trinket 2 only (8 slots, no weapon)
+- `GP_LEFT_BODY_SLOTS` + `GP_LEFT_WEAPON_SLOTS` split for clean render with separator
 
 ---
 
