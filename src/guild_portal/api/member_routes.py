@@ -835,3 +835,71 @@ async def get_character_summary(
             "profession_count": profession_count,
         },
     }
+
+
+@router.get("/character/{character_id}/parses-detail")
+async def get_character_parses_detail(
+    character_id: int,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-encounter WCL parse breakdown for the Parses detail panel."""
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    rows_result = await db.execute(
+        text("""
+            SELECT encounter_name, zone_id, zone_name, difficulty,
+                   MAX(percentile)::numeric(5,1)  AS best_pct,
+                   COUNT(*)                        AS total_kills,
+                   AVG(percentile)::numeric(5,1)   AS avg_pct,
+                   MAX(amount)::numeric(14,1)       AS best_dps
+            FROM guild_identity.character_report_parses
+            WHERE character_id = :char_id
+            GROUP BY encounter_name, zone_id, zone_name, difficulty
+            ORDER BY zone_id, difficulty DESC, encounter_name
+        """),
+        {"char_id": character_id},
+    )
+    rows = rows_result.fetchall()
+
+    _DIFF_LABEL = {3: "Normal", 4: "Heroic", 5: "Mythic"}
+
+    raid_rows: list[dict] = []
+    overall_map: dict[str, dict] = {}  # encounter_name -> highest-difficulty row
+
+    for r in rows:
+        entry = {
+            "encounter_name": r.encounter_name,
+            "zone_id": r.zone_id,
+            "zone_name": r.zone_name,
+            "difficulty": r.difficulty,
+            "difficulty_label": _DIFF_LABEL.get(r.difficulty, str(r.difficulty)),
+            "best_pct": float(r.best_pct) if r.best_pct is not None else None,
+            "total_kills": int(r.total_kills),
+            "avg_pct": float(r.avg_pct) if r.avg_pct is not None else None,
+            "best_dps": float(r.best_dps) if r.best_dps is not None else None,
+        }
+        raid_rows.append(entry)
+
+        # Overall: keep highest difficulty row per encounter name
+        enc_key = r.encounter_name
+        if enc_key not in overall_map or r.difficulty > overall_map[enc_key]["difficulty"]:
+            overall_map[enc_key] = entry
+
+    overall_rows = sorted(overall_map.values(), key=lambda x: x["encounter_name"])
+
+    return {
+        "ok": True,
+        "data": {
+            "raid": raid_rows,
+            "mythic_plus": [],  # WCL does not currently return M+ parses
+            "overall": overall_rows,
+        },
+    }

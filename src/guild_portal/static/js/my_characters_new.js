@@ -572,6 +572,123 @@ function _renderMplusDetail(area, data) {
 }
 
 // ---------------------------------------------------------------------------
+// Parses detail panel
+// ---------------------------------------------------------------------------
+
+const _parsesCache = {};  // keyed by character_id
+
+async function _fetchParsesDetail(charId) {
+  if (_parsesCache[charId]) return _parsesCache[charId];
+  const resp = await fetch(`/api/v1/me/character/${charId}/parses-detail`);
+  const body = await resp.json().catch(() => ({}));
+  if (body.ok) {
+    _parsesCache[charId] = body.data;
+    return body.data;
+  }
+  return null;
+}
+
+function _parseTierColor(pct) {
+  if (pct == null) return "var(--color-text-muted)";
+  if (pct >= 100) return "#e268a8";
+  if (pct >= 99)  return "#e5cc80";
+  if (pct >= 95)  return "#ff8000";
+  if (pct >= 75)  return "#a335ee";
+  if (pct >= 50)  return "#0070ff";
+  if (pct >= 25)  return "#1eff00";
+  return "var(--color-text-muted)";
+}
+
+function _buildParsesTable(rows, showDiff) {
+  if (!rows || !rows.length) {
+    return '<div class="mcn-detail-placeholder">No data available.</div>';
+  }
+  const diffHeader = showDiff ? '<th class="mcn-parses-th">Difficulty</th>' : '';
+  const rowsHtml = rows.map(r => {
+    const bestPct = r.best_pct != null
+      ? `<span style="color:${_parseTierColor(r.best_pct)};font-weight:700">${Math.round(r.best_pct)}%</span>`
+      : '&mdash;';
+    const avgPct = r.avg_pct != null
+      ? `<span style="color:${_parseTierColor(r.avg_pct)}">${Math.round(r.avg_pct)}%</span>`
+      : '&mdash;';
+    const bestDps = r.best_dps != null ? Math.round(r.best_dps).toLocaleString() : '&mdash;';
+    const diffCell = showDiff
+      ? `<td class="mcn-parses-td mcn-parses-diff">${r.difficulty_label}</td>`
+      : '';
+    return `<tr>
+      <td class="mcn-parses-td mcn-parses-boss">${r.encounter_name}</td>
+      ${diffCell}
+      <td class="mcn-parses-td mcn-parses-pct">${bestPct}</td>
+      <td class="mcn-parses-td mcn-parses-kills">${r.total_kills}</td>
+      <td class="mcn-parses-td mcn-parses-avg">${avgPct}</td>
+      <td class="mcn-parses-td mcn-parses-dps">${bestDps}</td>
+    </tr>`;
+  }).join('');
+  return `<table class="mcn-parses-table">
+    <thead><tr>
+      <th class="mcn-parses-th mcn-parses-th--boss">Boss</th>
+      ${diffHeader}
+      <th class="mcn-parses-th">Best %</th>
+      <th class="mcn-parses-th">Kills</th>
+      <th class="mcn-parses-th">Avg %</th>
+      <th class="mcn-parses-th">Best DPS</th>
+    </tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>`;
+}
+
+function _renderParsesDetail(area, data) {
+  const parseTabs = [
+    { key: "raid",    label: "Raid"    },
+    { key: "mplus",   label: "M+"      },
+    { key: "overall", label: "Overall" },
+  ];
+  let activeParseTab = "raid";
+
+  const wclUrl = _selectedChar?.wcl_url || null;
+  const wclLink = wclUrl
+    ? ` &mdash; <a class="mcn-char-ext-link" href="${wclUrl}" target="_blank" rel="noopener noreferrer">WCL Profile</a>`
+    : '';
+
+  function buildTabStrip(selected) {
+    return parseTabs.map(t =>
+      `<button type="button" class="mcn-diff-tab${t.key === selected ? ' is-active' : ''}" data-parse-tab="${t.key}">${t.label}</button>`
+    ).join('');
+  }
+
+  function buildContent(tabKey) {
+    if (tabKey === "raid") return _buildParsesTable(data.raid, true);
+    if (tabKey === "mplus") {
+      const rows = data.mythic_plus || [];
+      return rows.length
+        ? _buildParsesTable(rows, false)
+        : '<div class="mcn-detail-placeholder">No M+ parse data available.</div>';
+    }
+    if (tabKey === "overall") return _buildParsesTable(data.overall, false);
+    return '';
+  }
+
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">Parses${wclLink}</div>
+    <div class="mcn-prog-panel">
+      <div class="mcn-diff-tabs" id="mcn-parses-tabs">${buildTabStrip(activeParseTab)}</div>
+      <div id="mcn-parses-content">${buildContent(activeParseTab)}</div>
+    </div>
+  `;
+
+  area.querySelectorAll('[data-parse-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeParseTab = btn.dataset.parseTab;
+      area.querySelectorAll('[data-parse-tab]').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.parseTab === activeParseTab)
+      );
+      const contentEl = area.querySelector('#mcn-parses-content');
+      if (contentEl) contentEl.innerHTML = buildContent(activeParseTab);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Detail area router
 // ---------------------------------------------------------------------------
 
@@ -603,6 +720,23 @@ function _renderDetailArea(key) {
       }
       if (key === "raid")  _renderRaidDetail(area, data);
       if (key === "mplus") _renderMplusDetail(area, data);
+    });
+    return;
+  }
+
+  if (key === "parse") {
+    const charId = _selectedChar?.id;
+    if (!charId) {
+      area.innerHTML = '<div class="mcn-detail-placeholder">Select a character</div>';
+      return;
+    }
+    area.innerHTML = '<div class="mcn-detail-placeholder">Loading&hellip;</div>';
+    _fetchParsesDetail(charId).then(data => {
+      if (!data) {
+        area.innerHTML = '<div class="mcn-detail-placeholder">Could not load parse data.</div>';
+        return;
+      }
+      _renderParsesDetail(area, data);
     });
     return;
   }
