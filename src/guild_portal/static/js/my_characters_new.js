@@ -313,122 +313,130 @@ function _renderGuides(char) {
 
 
 // ---------------------------------------------------------------------------
-// Summary cards + panel switching
+// Stat strip + detail area
 // ---------------------------------------------------------------------------
 
-const _CARD_DEFS = [
-  { key: "gear",   title: "Gear",        mod: "gear"   },
-  { key: "mplus",  title: "M+",          mod: "mplus"  },
-  { key: "raid",   title: "Raid",        mod: "raid"   },
-  { key: "parse",  title: "Parses",      mod: "parse"  },
-  { key: "prof",   title: "Professions", mod: "prof"   },
-  { key: "market", title: "Market",      mod: "market" },
+const _TABS = [
+  { key: "gear",   label: "Gear"   },
+  { key: "mplus",  label: "M+"     },
+  { key: "raid",   label: "Raid"   },
+  { key: "parse",  label: "Parses" },
+  { key: "prof",   label: "Profs"  },
+  { key: "market", label: "Market" },
 ];
 
-function _cardValue(key, summary) {
+let _activeTab = "gear";
+
+function _tabValue(key, summary) {
   switch (key) {
     case "gear":
       return summary.avg_ilvl != null
-        ? { value: summary.avg_ilvl, sub: "avg item level" }
-        : { value: null, sub: "No equipment data" };
-    case "mplus":
-      return summary.mplus_score != null && summary.mplus_score > 0
-        ? { value: Math.round(summary.mplus_score), sub: "M+ score", color: summary.mplus_color }
-        : { value: null, sub: "No score yet" };
+        ? { display: String(summary.avg_ilvl), muted: false }
+        : { display: "—", muted: true };
+    case "mplus": {
+      const score = summary.mplus_score;
+      if (score && score > 0) {
+        const color = summary.mplus_color || null;
+        return { display: Math.round(score).toLocaleString(), muted: false, color };
+      }
+      return { display: "—", muted: true };
+    }
     case "raid":
       return summary.raid_summary
-        ? { value: summary.raid_summary, sub: "current tier" }
-        : { value: null, sub: "No data" };
+        ? { display: summary.raid_summary, muted: false }
+        : { display: "—", muted: true };
     case "parse":
       return summary.avg_parse != null
-        ? { value: `${summary.avg_parse}%`, sub: "avg parse" }
-        : { value: null, sub: "No parses" };
+        ? { display: `${summary.avg_parse}%`, muted: false }
+        : { display: "—", muted: true };
     case "prof":
       return summary.profession_count > 0
-        ? { value: summary.profession_count, sub: summary.profession_count === 1 ? "profession" : "professions" }
-        : { value: null, sub: "None known" };
+        ? { display: String(summary.profession_count), muted: false }
+        : { display: "—", muted: true };
     case "market":
-      return { value: null, sub: "AH prices" };
+      return { display: "—", muted: true };
     default:
-      return { value: null, sub: "" };
+      return { display: "—", muted: true };
   }
 }
 
-function _buildCard(def, summary) {
-  const { key, title, mod } = def;
-  const { value, sub, color } = _cardValue(key, summary);
-
-  let valueHtml;
-  if (value != null) {
-    const style = color ? ` style="color:${color}"` : "";
-    valueHtml = `<span class="mcn-card__value"${style}>${value}</span>`;
-  } else {
-    valueHtml = `<span class="mcn-card__value mcn-card__value--none">${sub || "—"}</span>`;
-  }
-  const subHtml = value != null ? `<span class="mcn-card__sub">${sub}</span>` : "";
+function _buildTab(tabDef, summary) {
+  const { key, label } = tabDef;
+  const { display, muted, color } = _tabValue(key, summary);
 
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = `mcn-card mcn-card--${mod}`;
-  btn.setAttribute("data-panel", key);
+  btn.className = "mcn-stat-tab" + (key === _activeTab ? " is-active" : "");
+  btn.dataset.tabKey = key;
+
+  const valueClass = muted ? "mcn-stat-tab__value mcn-stat-tab__value--muted" : "mcn-stat-tab__value";
+  const colorStyle = color ? ` style="color:${color}"` : "";
+
   btn.innerHTML = `
-    <span class="mcn-card__title">${title}</span>
-    ${valueHtml}
-    ${subHtml}
+    <span class="${valueClass}"${colorStyle}>${display}</span>
+    <span class="mcn-stat-tab__label">${label}</span>
   `;
-  btn.addEventListener("click", () => setDetailPanel(key, title));
+
+  btn.addEventListener("click", () => _activateTab(key));
   return btn;
 }
 
-function _renderCards(summary) {
-  const grid = document.getElementById("mcn-cards-grid");
-  if (!grid) return;
-  grid.innerHTML = "";
-  _CARD_DEFS.forEach(def => grid.appendChild(_buildCard(def, summary)));
+function _renderStrip(summary) {
+  const strip = document.getElementById("mcn-stat-strip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  _TABS.forEach(def => strip.appendChild(_buildTab(def, summary)));
 }
 
-function setDetailPanel(panelKey, panelTitle) {
-  const overview = document.getElementById("mcn-overview");
-  const detail   = document.getElementById("mcn-detail");
-  if (!overview || !detail) return;
+function _activateTab(key) {
+  _activeTab = key;
 
-  _text("mcn-detail-title", panelTitle || panelKey);
+  // Update active class on tabs
+  document.querySelectorAll(".mcn-stat-tab").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.tabKey === key);
+  });
 
-  const body = document.getElementById("mcn-detail-body");
-  if (body) {
-    body.innerHTML = `<div class="mcn-detail-placeholder">${panelTitle} detail &mdash; coming in a future phase</div>`;
-  }
-
-  overview.hidden = true;
-  detail.hidden   = false;
+  _renderDetailArea(key);
 }
 
-function _showOverview() {
-  const overview = document.getElementById("mcn-overview");
-  const detail   = document.getElementById("mcn-detail");
-  if (overview) overview.hidden = false;
-  if (detail)   detail.hidden   = true;
+function _tabTitle(key) {
+  return _TABS.find(t => t.key === key)?.label || key;
+}
+
+function _renderDetailArea(key) {
+  const area = document.getElementById("mcn-detail-area");
+  if (!area) return;
+
+  // All panels are placeholders in UI-1B; later phases fill these in.
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">${_tabTitle(key)}</div>
+    <div class="mcn-detail-placeholder">${_tabTitle(key)} detail &mdash; coming soon</div>
+  `;
 }
 
 async function _loadSummary(charId) {
+  const strip = document.getElementById("mcn-stat-strip");
+
   if (_summaryCache[charId]) {
-    _renderCards(_summaryCache[charId]);
+    _renderStrip(_summaryCache[charId]);
+    _renderDetailArea(_activeTab);
     return;
   }
-  const grid = document.getElementById("mcn-cards-grid");
-  if (grid) grid.innerHTML = '<div class="mcn-cards-loading">Loading&hellip;</div>';
+
+  if (strip) strip.innerHTML = '<span class="mcn-strip-loading">Loading&hellip;</span>';
 
   try {
     const resp = await fetch(`/api/v1/me/character/${charId}/summary`);
     const body = await resp.json().catch(() => ({}));
     if (body.ok) {
       _summaryCache[charId] = body.data;
-      _renderCards(body.data);
+      _renderStrip(body.data);
+      _renderDetailArea(_activeTab);
     } else {
-      if (grid) grid.innerHTML = '<div class="mcn-cards-loading">Could not load summary.</div>';
+      if (strip) strip.innerHTML = '<span class="mcn-strip-loading">Could not load.</span>';
     }
   } catch {
-    if (grid) grid.innerHTML = '<div class="mcn-cards-loading">Could not load summary.</div>';
+    if (strip) strip.innerHTML = '<span class="mcn-strip-loading">Could not load.</span>';
   }
 }
 
@@ -440,20 +448,9 @@ function _selectChar(charId) {
   const char = _chars.find(c => c.id === charId);
   if (!char) return;
   _selectedChar = char;
-  _showOverview();
   _renderHeader(char);
   _renderGuides(char);
   _loadSummary(charId);
-}
-
-// ---------------------------------------------------------------------------
-// Back button
-// ---------------------------------------------------------------------------
-
-function _initBackButton() {
-  const btn = document.getElementById("mcn-back-btn");
-  if (!btn) return;
-  btn.addEventListener("click", _showOverview);
 }
 
 // ---------------------------------------------------------------------------
@@ -523,7 +520,6 @@ async function _init() {
     }
 
     _initRefreshButton();
-    _initBackButton();
 
   } catch (err) {
     _hide("mcn-loading");

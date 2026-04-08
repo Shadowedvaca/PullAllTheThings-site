@@ -82,26 +82,17 @@
       </div>
     </div>
 
-    {# Center panel — switches between overview cards and detail views #}
+    {# Center panel — stat strip on top, detail area below #}
     <div class="mcn-center" id="mcn-center">
 
-      {# Default: 6 summary cards #}
-      <div id="mcn-overview" class="mcn-overview">
-        <div class="mcn-cards-grid" id="mcn-cards-grid">
-          {# Cards injected by JS after summary data loads #}
-          <div class="mcn-cards-loading">Loading&hellip;</div>
-        </div>
+      {# Stat strip — always visible, acts as navigation tabs #}
+      <div class="mcn-stat-strip" id="mcn-stat-strip">
+        {# Tabs injected by JS after summary data loads #}
       </div>
 
-      {# Detail panel — swapped in when a card is clicked #}
-      <div id="mcn-detail" class="mcn-detail" hidden>
-        <div class="mcn-detail__header">
-          <button id="mcn-back-btn" class="mcn-back-btn" type="button">&#8592; Overview</button>
-          <span id="mcn-detail-title" class="mcn-detail-title"></span>
-        </div>
-        <div id="mcn-detail-body" class="mcn-detail-body">
-          {# Detail content injected by JS #}
-        </div>
+      {# Detail area — fills remaining space; content driven by active tab #}
+      <div class="mcn-detail-area" id="mcn-detail-area">
+        {# Content injected by JS #}
       </div>
 
     </div>
