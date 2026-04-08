@@ -1010,3 +1010,178 @@
   justify-content: flex-end;
   flex-shrink: 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Phase UI-1D — Gear table (Option C)
+   ═══════════════════════════════════════════════════════════════ */
+
+.mcn-gear-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.6rem;
+  /* Thin scrollbar so it doesn't look heavy */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.mcn-gear-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.mcn-gear-table th,
+.mcn-gear-table td {
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.mcn-gear-table thead th {
+  background: #0d0d0f;
+  color: var(--color-text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mcn-gear-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* BIS row — green left border */
+.mcn-gt__row--bis {
+  border-left: 3px solid #4ade80;
+}
+
+/* Needs-upgrade row — red left border */
+.mcn-gt__row--upgrade {
+  border-left: 3px solid #f87171;
+}
+
+/* Transparent left border on plain rows to preserve alignment */
+.mcn-gt__row:not(.mcn-gt__row--bis):not(.mcn-gt__row--upgrade) {
+  border-left: 3px solid transparent;
+}
+
+/* ── Column widths ───────────────────────────────────────────── */
+
+.mcn-gt__slot-cell {
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  width: 68px;
+  padding-left: 0.55rem;
+}
+
+.mcn-gt__equipped-cell,
+.mcn-gt__goal-cell {
+  min-width: 120px;
+  max-width: 200px;
+}
+
+.mcn-gt__source-cell {
+  min-width: 80px;
+  max-width: 150px;
+}
+
+.mcn-gt__upgrades-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 80px;
+}
+
+/* ── Item layout within a cell ──────────────────────────────── */
+
+.mcn-gt__item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mcn-gt__item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcn-gt__icon {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+
+.mcn-gt__name {
+  font-size: 0.77rem;
+  color: var(--color-text);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  display: block;
+}
+.mcn-gt__name:hover {
+  text-decoration: underline;
+  color: var(--color-accent);
+}
+
+.mcn-gt__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.1rem;
+}
+
+.mcn-gt__ilvl {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.mcn-gt__empty {
+  color: var(--color-text-muted);
+  opacity: 0.35;
+}
+
+.mcn-gt__source-text {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+/* ── BIS status indicators ──────────────────────────────────── */
+
+.mcn-gt__bis-check,
+.mcn-gt__bis-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mcn-gt__bis-check { color: #4ade80; }
+.mcn-gt__bis-star  { color: var(--color-accent); }
+
+/* ── Empty state (no data at all) ───────────────────────────── */
+
+.mcn-gear-table-empty {
+  padding: 1.25rem 1rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.mcn-gear-table-empty strong {
+  color: var(--color-text);
+}

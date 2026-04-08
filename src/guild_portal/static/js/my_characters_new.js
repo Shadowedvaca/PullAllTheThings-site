@@ -555,6 +555,14 @@ const GP_LEFT_SLOTS        = [...GP_LEFT_BODY_SLOTS, ...GP_LEFT_WEAPON_SLOTS];
 const GP_RIGHT_SLOTS       = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
 const GP_INACTIVE_SLOTS    = new Set();
 
+// Ordered list of all slots for the gear table (WoW equipment order)
+const GP_ALL_SLOTS = [
+  'head','neck','shoulder','back','chest','wrist',
+  'hands','waist','legs','feet',
+  'ring_1','ring_2','trinket_1','trinket_2',
+  'main_hand','off_hand',
+];
+
 const GP_SLOT_LABELS = {
   head:'Head', neck:'Neck', shoulder:'Shoulder', back:'Back',
   chest:'Chest', shirt:'Shirt', tabard:'Tabard', wrist:'Wrist',
@@ -790,6 +798,143 @@ function _gpRenderWeapons(slots, tc) {
   if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
+// ── Gear table (Option C) — full-width slot table ─────────────────────────────
+
+function _gpRenderGearTable(slots, tc) {
+  const allSlots = slots || {};
+
+  const hasAnyData = GP_ALL_SLOTS.some(k => {
+    const sd = allSlots[k];
+    return sd && (sd.equipped?.blizzard_item_id || sd.desired?.blizzard_item_id || (sd.bis_recommendations || []).length > 0);
+  });
+
+  if (!hasAnyData) {
+    return `<div class="mcn-gear-table-empty">
+      No gear data yet. Use <strong>Sync Gear</strong> to load your equipped items,
+      then <strong>Fill BIS</strong> to set goal items.
+    </div>`;
+  }
+
+  const rows = GP_ALL_SLOTS.map(slotKey => {
+    const sd      = allSlots[slotKey] || {};
+    const eq      = sd.equipped;
+    const desired = sd.desired;
+    const bisRecs = sd.bis_recommendations || [];
+    const sources = sd.item_sources        || [];
+    const upgrades = sd.upgrade_tracks     || [];
+    const isBis       = !!sd.is_bis;
+    const isBisMythic = isBis && eq?.quality_track === 'M';
+
+    // Row class
+    let rowClass = 'mcn-gt__row';
+    if (isBis)           rowClass += ' mcn-gt__row--bis';
+    else if (sd.needs_upgrade) rowClass += ' mcn-gt__row--upgrade';
+
+    // ── Equipped cell ──────────────────────────────────────────────────────
+    let equippedHtml;
+    if (eq && eq.blizzard_item_id) {
+      const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : null;
+      const iconBs = qc ? ` style="border-color:${_gpEsc(qc)}"` : '';
+      const badge  = eq.quality_track
+        ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>`
+        : '';
+      const icon = eq.icon_url
+        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer">
+             <img class="mcn-gt__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${iconBs}>
+           </a>`
+        : '';
+      const nameColor = qc ? ` style="color:${_gpEsc(qc)}"` : '';
+      equippedHtml = `<div class="mcn-gt__item">
+        ${icon}
+        <div class="mcn-gt__item-info">
+          <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer"
+             class="mcn-gt__name"${nameColor}>${_gpEsc(eq.item_name || 'Unknown')}</a>
+          <div class="mcn-gt__meta">
+            ${eq.item_level ? `<span class="mcn-gt__ilvl">${eq.item_level}</span>` : ''}
+            ${badge}
+          </div>
+        </div>
+      </div>`;
+    } else {
+      equippedHtml = '<span class="mcn-gt__empty">&mdash;</span>';
+    }
+
+    // ── Goal cell ──────────────────────────────────────────────────────────
+    let goalHtml;
+    if (isBisMythic) {
+      goalHtml = `<span class="mcn-gt__bis-check" title="BIS at Mythic track">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        BIS
+      </span>`;
+    } else if (isBis) {
+      goalHtml = `<span class="mcn-gt__bis-star" title="BIS">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#d4a84b" stroke="#b8922e" stroke-width="0.5" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        BIS
+      </span>`;
+    } else {
+      const goalItem = desired || (bisRecs.length ? bisRecs[0] : null);
+      if (goalItem && goalItem.blizzard_item_id) {
+        const icon = goalItem.icon_url
+          ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer">
+               <img class="mcn-gt__icon" src="${_gpEsc(goalItem.icon_url)}" alt="" loading="lazy">
+             </a>`
+          : '';
+        goalHtml = `<div class="mcn-gt__item">
+          ${icon}
+          <a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer"
+             class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}</a>
+        </div>`;
+      } else {
+        goalHtml = '<span class="mcn-gt__empty">&mdash;</span>';
+      }
+    }
+
+    // ── Source cell ────────────────────────────────────────────────────────
+    let sourceHtml;
+    if (sources.length) {
+      const src   = sources[0];
+      const parts = [_gpEsc(src.source_name)];
+      if (src.source_instance) parts.push(_gpEsc(src.source_instance));
+      sourceHtml = `<span class="mcn-gt__source-text">${parts.join(' &bull; ')}</span>`;
+    } else {
+      sourceHtml = '<span class="mcn-gt__empty">&mdash;</span>';
+    }
+
+    // ── Upgrades cell ──────────────────────────────────────────────────────
+    let upgradesHtml;
+    if (isBisMythic) {
+      upgradesHtml = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" title="Mythic BIS"><polyline points="20 6 9 17 4 12"/></svg>`;
+    } else if (upgrades.length) {
+      upgradesHtml = `<div class="mcn-track-pills">${upgrades.map(t => _gpPill(t, tc)).join('')}</div>`;
+    } else {
+      upgradesHtml = '<span class="mcn-gt__empty">&mdash;</span>';
+    }
+
+    return `<tr class="${rowClass}">
+      <td class="mcn-gt__slot-cell">${_gpEsc(GP_SLOT_LABELS[slotKey] || slotKey)}</td>
+      <td class="mcn-gt__equipped-cell">${equippedHtml}</td>
+      <td class="mcn-gt__goal-cell">${goalHtml}</td>
+      <td class="mcn-gt__source-cell">${sourceHtml}</td>
+      <td class="mcn-gt__upgrades-cell">${upgradesHtml}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="mcn-gear-table-wrap">
+    <table class="mcn-gear-table">
+      <thead>
+        <tr>
+          <th class="mcn-gt__slot-cell">Slot</th>
+          <th class="mcn-gt__equipped-cell">Equipped</th>
+          <th class="mcn-gt__goal-cell">Goal</th>
+          <th class="mcn-gt__source-cell">Source</th>
+          <th class="mcn-gt__upgrades-cell">Upgrades</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
 // ── Render gear controls in center detail area ────────────────────────────────
 
 function _gpRenderCenterPanel(data) {
@@ -825,6 +970,7 @@ function _gpRenderCenterPanel(data) {
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
+    ${_gpRenderGearTable(data.slots, data.trackColors)}
   `;
 
   // Wire selects + buttons
