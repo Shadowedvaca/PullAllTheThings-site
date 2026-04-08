@@ -1011,6 +1011,49 @@
   flex-shrink: 0;
 }
 
+/* ── Slot detail panel — pinned above "Gear Plan" heading ────── */
+
+#mcn-gp-slot-detail {
+  background: rgba(212, 168, 75, 0.04);
+  border: 1px solid rgba(212, 168, 75, 0.25);
+  border-radius: 5px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.mcn-slot-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.75rem;
+  background: rgba(212, 168, 75, 0.07);
+  border-bottom: 1px solid rgba(212, 168, 75, 0.18);
+}
+
+.mcn-slot-detail__title {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.mcn-slot-detail__close {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.1rem;
+}
+.mcn-slot-detail__close:hover { color: var(--color-text); }
+
+.mcn-slot-detail__body {
+  padding: 0.75rem !important;  /* override .mcn-drawer__body padding */
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Phase UI-1D — Gear table (Option C)
    ═══════════════════════════════════════════════════════════════ */

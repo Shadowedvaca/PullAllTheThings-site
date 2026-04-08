@@ -668,7 +668,7 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
     if (isBis)            card.classList.add('is-bis');
     else if (sd.needs_upgrade) card.classList.add('needs-upgrade');
     if (_gpOpenSlot === slotKey) card.classList.add('is-open');
-    card.addEventListener('click', () => _gpToggleDrawer(slotKey));
+    card.addEventListener('click', () => _gpSelectSlotInCenter(slotKey));
   }
 
   // Slot label row
@@ -953,6 +953,7 @@ function _gpRenderCenterPanel(data) {
   ).join('');
 
   area.innerHTML = `
+    <div id="mcn-gp-slot-detail" hidden></div>
     <div class="mcn-detail-area__heading">Gear Plan</div>
     <div class="mcn-gear-controls">
       <div class="mcn-gear-ctrl-row">
@@ -972,6 +973,15 @@ function _gpRenderCenterPanel(data) {
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
     ${_gpRenderGearTable(data.slots, data.trackColors)}
   `;
+
+  // If a slot is currently selected, re-populate its detail panel
+  if (_gpOpenSlot) {
+    const sd = data.slots?.[_gpOpenSlot] || {};
+    _gpPopulateSlotDetail(_gpOpenSlot, sd, data.trackColors || {});
+    document.querySelectorAll('.mcn-slot-card').forEach(c => {
+      c.classList.toggle('is-open', c.dataset.slot === _gpOpenSlot);
+    });
+  }
 
   // Wire selects + buttons
   document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
@@ -1000,12 +1010,64 @@ function _gpRenderCenterPanel(data) {
   }
 }
 
+// ── Slot selection — routes paperdoll clicks into center panel ────────────────
+
+function _gpSelectSlotInCenter(slotKey) {
+  // Toggle: clicking the open slot closes it
+  if (_gpOpenSlot === slotKey) {
+    window.mcnGpCloseSlotDetail();
+    return;
+  }
+
+  _gpOpenSlot = slotKey;
+
+  // If gear tab isn't active, activate it.
+  // _gpRenderCenterPanel (called async inside) will see _gpOpenSlot and populate the panel.
+  if (_activeTab !== 'gear') {
+    _activateTab('gear');
+    return;
+  }
+
+  // Gear tab already showing — update slot detail in-place
+  _gpUpdateSlotDetail(slotKey);
+}
+
+function _gpUpdateSlotDetail(slotKey) {
+  const charId = _selectedChar?.id;
+  const data   = charId ? _gpCache[charId] : null;
+  if (!data) return;
+  const sd = data.slots?.[slotKey] || {};
+  _gpPopulateSlotDetail(slotKey, sd, data.trackColors || {});
+  document.querySelectorAll('.mcn-slot-card').forEach(c => {
+    c.classList.toggle('is-open', c.dataset.slot === slotKey);
+  });
+}
+
+function _gpPopulateSlotDetail(slotKey, sd, tc) {
+  const el = document.getElementById('mcn-gp-slot-detail');
+  if (!el) return;
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="mcn-slot-detail__header">
+      <span class="mcn-slot-detail__title">${_gpEsc(GP_SLOT_LABELS[slotKey] || slotKey)}</span>
+      <button class="mcn-slot-detail__close" type="button" onclick="mcnGpCloseSlotDetail()">&times;</button>
+    </div>
+    <div class="mcn-slot-detail__body mcn-drawer__body">${_gpRenderDrawerBody(slotKey, sd, tc)}</div>
+  `;
+}
+
+window.mcnGpCloseSlotDetail = function() {
+  _gpOpenSlot = null;
+  const el = document.getElementById('mcn-gp-slot-detail');
+  if (el) el.hidden = true;
+  document.querySelectorAll('.mcn-slot-card').forEach(c => c.classList.remove('is-open'));
+};
+
 // ── Load gear plan ─────────────────────────────────────────────────────────────
 
 async function _gpLoadPlan(charId, forceReload) {
   if (!forceReload && _gpCache[charId]) {
     const d = _gpCache[charId];
-    _gpOpenSlot = null;
     _gpRenderPaperdolls(d.slots, d.trackColors);
     _gpRenderCenterPanel(d);
     return;
@@ -1019,11 +1081,9 @@ async function _gpLoadPlan(charId, forceReload) {
     if (!resp.ok) throw new Error(resp.error || 'Failed to load gear plan');
 
     _gpCache[charId] = resp.data;
-    _gpOpenSlot      = null;
 
     _gpRenderPaperdolls(resp.data.slots, resp.data.trackColors);
     _gpRenderCenterPanel(resp.data);
-    _gpCloseDrawer();
 
   } catch (err) {
     const area2 = document.getElementById('mcn-detail-area');
