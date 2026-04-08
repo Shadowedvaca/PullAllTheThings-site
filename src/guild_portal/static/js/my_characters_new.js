@@ -605,7 +605,7 @@ const PROFESSION_ICONS = {
   "Mining":         "trade_mining",
   "Skinning":       "trade_skinning",
   "Tailoring":      "trade_tailoring",
-  "Cooking":        "ability_cooking",
+  "Cooking":        "inv_misc_food_15",
   "Fishing":        "trade_fishing",
 };
 
