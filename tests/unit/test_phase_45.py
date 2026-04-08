@@ -639,6 +639,110 @@ class TestParseReportRankings:
         result = parse(blob)
         assert result == []
 
+    def test_fight_object_difficulty_extracted(self):
+        """difficulty is taken from the fight object, not hardcoded."""
+        parse = self._get_parser()
+        blob = {
+            "data": [
+                {
+                    "fightID": 1,
+                    "difficulty": 4,  # Heroic
+                    "roles": {"dps": {"characters": [
+                        {"name": "Trogmoon", "spec": "Balance",
+                         "rankPercent": 75.5, "amount": 150000},
+                    ]}},
+                }
+            ]
+        }
+        result = parse(blob)
+        assert len(result) == 1
+        assert result[0]["difficulty"] == 4
+
+    def test_fight_object_difficulty_normal(self):
+        """Normal difficulty (3) is preserved correctly."""
+        parse = self._get_parser()
+        blob = {
+            "data": [
+                {
+                    "fightID": 1,
+                    "difficulty": 3,  # Normal
+                    "roles": {"dps": {"characters": [
+                        {"name": "Trogmoon", "spec": "Balance",
+                         "rankPercent": 60.0, "amount": 120000},
+                    ]}},
+                }
+            ]
+        }
+        result = parse(blob)
+        assert len(result) == 1
+        assert result[0]["difficulty"] == 3
+
+    def test_fight_object_difficulty_defaults_to_heroic_if_missing(self):
+        """Fight objects without difficulty field default to 4 (Heroic)."""
+        parse = self._get_parser()
+        blob = {
+            "data": [
+                {
+                    "fightID": 1,
+                    # no difficulty key
+                    "roles": {"dps": {"characters": [
+                        {"name": "Trogmoon", "spec": "Balance",
+                         "rankPercent": 75.5, "amount": 150000},
+                    ]}},
+                }
+            ]
+        }
+        result = parse(blob)
+        assert len(result) == 1
+        assert result[0]["difficulty"] == 4
+
+    def test_fight_object_multiple_difficulties(self):
+        """Each fight carries its own difficulty through to its characters."""
+        parse = self._get_parser()
+        blob = {
+            "data": [
+                {
+                    "fightID": 1,
+                    "difficulty": 3,  # Normal kill
+                    "roles": {"dps": {"characters": [
+                        {"name": "Trogmoon", "spec": "Balance",
+                         "rankPercent": 60.0, "amount": 100000},
+                    ]}},
+                },
+                {
+                    "fightID": 2,
+                    "difficulty": 4,  # Heroic kill
+                    "roles": {"dps": {"characters": [
+                        {"name": "Trogmoon", "spec": "Balance",
+                         "rankPercent": 75.5, "amount": 150000},
+                    ]}},
+                },
+            ]
+        }
+        result = parse(blob)
+        assert len(result) == 2
+        normal_entry = next(e for e in result if e["difficulty"] == 3)
+        heroic_entry = next(e for e in result if e["difficulty"] == 4)
+        assert normal_entry["percentile"] == 60.0
+        assert heroic_entry["percentile"] == 75.5
+
+    def test_legacy_format_defaults_difficulty_to_heroic(self):
+        """Legacy dict format has no per-fight difficulty — defaults to 4."""
+        parse = self._get_parser()
+        blob = {
+            "data": {
+                "roles": {
+                    "dps": {"characters": [
+                        {"name": "Trogmoon", "spec": "Balance",
+                         "rankPercent": 75.5, "amount": 150000},
+                    ]}
+                }
+            }
+        }
+        result = parse(blob)
+        assert len(result) == 1
+        assert result[0]["difficulty"] == 4
+
 
 # ---------------------------------------------------------------------------
 # 10. sync_report_parses — module structure and import
