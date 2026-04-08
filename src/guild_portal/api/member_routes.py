@@ -395,6 +395,40 @@ async def get_character_progression(
         for name, diffs in raid_by_name.items()
     ]
 
+    # Per-boss detail query (for the Raid detail panel in UI-1E)
+    if current_raid_ids:
+        boss_rows_result = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty, crp.boss_name,
+                       crp.boss_id, crp.kill_count
+                FROM guild_identity.character_raid_progress crp
+                WHERE crp.character_id = :char_id
+                  AND crp.raid_id = ANY(:raid_ids)
+                ORDER BY crp.difficulty, crp.boss_id
+            """).bindparams(char_id=character_id, raid_ids=current_raid_ids)
+        )
+    else:
+        boss_rows_result = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty, crp.boss_name,
+                       crp.boss_id, crp.kill_count
+                FROM guild_identity.character_raid_progress crp
+                WHERE crp.character_id = :char_id
+                ORDER BY crp.difficulty, crp.boss_id
+            """).bindparams(char_id=character_id)
+        )
+
+    raid_bosses = [
+        {
+            "raid_name": row.raid_name,
+            "difficulty": row.difficulty.lower(),
+            "boss_name": row.boss_name,
+            "boss_id": row.boss_id,
+            "killed": (row.kill_count or 0) > 0,
+        }
+        for row in boss_rows_result
+    ]
+
     # ── Mythic+ score ────────────────────────────────────────────────────────
     # raid_seasons is the single source of truth for the current M+ season ID.
     active_mplus_season_result = await db.execute(
@@ -431,6 +465,18 @@ async def get_character_progression(
                 "overall_score": round(overall_score, 1),
                 "best_run_level": best_row.best_level,
                 "best_run_dungeon": best_row.dungeon_name,
+                "dungeons": sorted(
+                    [
+                        {
+                            "dungeon_name": r.dungeon_name,
+                            "best_level": r.best_level or 0,
+                            "best_timed": r.best_timed,
+                            "best_score": round(float(r.best_score or 0), 1),
+                        }
+                        for r in mplus_rows
+                    ],
+                    key=lambda d: d["dungeon_name"],
+                ),
             }
 
     return {
@@ -438,6 +484,7 @@ async def get_character_progression(
         "data": {
             "character_id": character_id,
             "raid_progress": raid_progress,
+            "raid_bosses": raid_bosses,
             "mythic_plus": mythic_plus,
         },
     }

@@ -1228,3 +1228,176 @@
 .mcn-gear-table-empty strong {
   color: var(--color-text);
 }
+
+/* =========================================================================
+   Phase UI-1E — Raid + M+ detail panels
+   ========================================================================= */
+
+/* Shared panel wrapper */
+.mcn-prog-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.25rem 0;
+}
+
+/* External profile link (WCL / RIO) */
+.mcn-prog-ext-link {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  opacity: 0.85;
+  margin-bottom: 0.1rem;
+}
+.mcn-prog-ext-link:hover { opacity: 1; text-decoration: underline; }
+
+/* ── Raid panel ───────────────────────────────────────────────── */
+
+.mcn-prog-raid-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* Difficulty tab strip */
+.mcn-diff-tabs {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.mcn-diff-tab {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.mcn-diff-tab:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--color-text);
+}
+.mcn-diff-tab.is-active {
+  background: rgba(212,168,75,0.12);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.mcn-diff-tab__count {
+  font-size: 0.65rem;
+  opacity: 0.75;
+}
+
+/* Boss list */
+.mcn-boss-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.mcn-boss-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.78rem;
+}
+
+.mcn-boss-row--killed   { background: rgba(74,222,128,0.06); }
+.mcn-boss-row--not-killed { background: rgba(255,255,255,0.02); }
+
+.mcn-boss-kill-icon {
+  font-size: 0.72rem;
+  font-weight: 700;
+  width: 1rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+.mcn-boss-row--killed     .mcn-boss-kill-icon { color: #4ade80; }
+.mcn-boss-row--not-killed .mcn-boss-kill-icon { color: var(--color-text-muted); }
+
+.mcn-boss-name {
+  color: var(--color-text);
+}
+.mcn-boss-row--not-killed .mcn-boss-name {
+  color: var(--color-text-muted);
+}
+
+/* ── M+ panel ─────────────────────────────────────────────────── */
+
+.mcn-mplus-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.mcn-mplus-score-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mcn-mplus-score-value {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mcn-mplus-season-name {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.mcn-mplus-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.mcn-mplus-table th {
+  text-align: left;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mcn-mplus-table td {
+  padding: 0.2rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.mcn-mplus-row--zero { opacity: 0.45; }
+
+.mcn-mplus-dungeon { color: var(--color-text); }
+.mcn-mplus-level   { color: #fbbf24; font-weight: 600; white-space: nowrap; }
+.mcn-mplus-score   { color: var(--color-text-muted); }
+
+.mcn-mplus-timed {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.mcn-mplus-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 0.75rem 0;
+  font-size: 0.78rem;
+}

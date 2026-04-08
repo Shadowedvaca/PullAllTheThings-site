@@ -403,6 +403,172 @@ function _tabTitle(key) {
   return _TABS.find(t => t.key === key)?.label || key;
 }
 
+// ---------------------------------------------------------------------------
+// Progression cache + fetch (used by Raid and M+ panels)
+// ---------------------------------------------------------------------------
+
+const _progressionCache = {};  // keyed by character_id
+
+async function _fetchProgression(charId) {
+  if (_progressionCache[charId]) return _progressionCache[charId];
+  const resp = await fetch(`/api/v1/me/character/${charId}/progression`);
+  const body = await resp.json().catch(() => ({}));
+  if (body.ok) {
+    _progressionCache[charId] = body.data;
+    return body.data;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Raid detail panel
+// ---------------------------------------------------------------------------
+
+const _DIFF_ORDER = ["mythic", "heroic", "normal", "lfr"];
+const _DIFF_LABELS = { mythic: "Mythic", heroic: "Heroic", normal: "Normal", lfr: "LFR" };
+
+function _renderRaidDetail(area, data, char) {
+  const bosses = data.raid_bosses || [];
+  const wcl = char?.wcl_url || null;
+
+  if (!bosses.length) {
+    area.innerHTML = `
+      <div class="mcn-detail-area__heading">Raid</div>
+      <div class="mcn-prog-panel">
+        ${wcl ? `<a href="${wcl}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Warcraft Logs profile</a>` : ""}
+        <div class="mcn-detail-placeholder">No raid progress data yet.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Group bosses by difficulty
+  const byDiff = {};
+  for (const b of bosses) {
+    const d = b.difficulty;
+    if (!byDiff[d]) byDiff[d] = [];
+    byDiff[d].push(b);
+  }
+  const availDiffs = _DIFF_ORDER.filter(d => byDiff[d] && byDiff[d].length > 0);
+
+  // Default to highest difficulty with any kills, or first available
+  const hasDiffWithKill = availDiffs.find(d => byDiff[d].some(b => b.killed));
+  let activeRaidDiff = hasDiffWithKill || availDiffs[0];
+
+  function buildBossList(diff) {
+    const rows = byDiff[diff] || [];
+    return rows.map(b => `
+      <div class="mcn-boss-row ${b.killed ? 'mcn-boss-row--killed' : 'mcn-boss-row--not-killed'}">
+        <span class="mcn-boss-kill-icon">${b.killed ? '&#10003;' : '&#10007;'}</span>
+        <span class="mcn-boss-name">${b.boss_name}</span>
+      </div>
+    `).join("");
+  }
+
+  function buildTabs(selected) {
+    return availDiffs.map(d => {
+      const killed = (byDiff[d] || []).filter(b => b.killed).length;
+      const total  = (byDiff[d] || []).length;
+      return `<button type="button"
+        class="mcn-diff-tab${d === selected ? ' is-active' : ''}"
+        data-diff="${d}">
+        ${_DIFF_LABELS[d] || d}
+        <span class="mcn-diff-tab__count">${killed}/${total}</span>
+      </button>`;
+    }).join("");
+  }
+
+  const raidName = bosses[0]?.raid_name || "Raid";
+
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">Raid</div>
+    <div class="mcn-prog-panel">
+      ${wcl ? `<a href="${wcl}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Warcraft Logs profile &#8599;</a>` : ""}
+      <div class="mcn-prog-raid-name">${raidName}</div>
+      <div class="mcn-diff-tabs" id="mcn-raid-diff-tabs">${buildTabs(activeRaidDiff)}</div>
+      <div class="mcn-boss-list" id="mcn-boss-list">${buildBossList(activeRaidDiff)}</div>
+    </div>
+  `;
+
+  // Wire up tab clicks (re-render boss list)
+  area.querySelectorAll(".mcn-diff-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const diff = btn.dataset.diff;
+      area.querySelectorAll(".mcn-diff-tab").forEach(b => b.classList.toggle("is-active", b.dataset.diff === diff));
+      const list = area.querySelector("#mcn-boss-list");
+      if (list) list.innerHTML = buildBossList(diff);
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// M+ detail panel
+// ---------------------------------------------------------------------------
+
+function _mplusScoreTier(score) {
+  if (score >= 2500) return "#ff44ff";
+  if (score >= 2000) return "#ff8000";
+  if (score >= 1500) return "#a335ee";
+  if (score >= 1000) return "#0070dd";
+  if (score >= 750)  return "#1eff00";
+  return "#9d9d9d";
+}
+
+function _renderMplusDetail(area, data, char) {
+  const mp = data.mythic_plus;
+  const rio = char?.raiderio_url || null;
+
+  if (!mp || !(mp.overall_score > 0)) {
+    area.innerHTML = `
+      <div class="mcn-detail-area__heading">M+</div>
+      <div class="mcn-prog-panel">
+        ${rio ? `<a href="${rio}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Raider.IO profile &#8599;</a>` : ""}
+        <div class="mcn-detail-placeholder">No M+ data yet.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const scoreColor = _mplusScoreTier(mp.overall_score);
+  const dungeons = mp.dungeons || [];
+
+  const dungeonRows = dungeons.length
+    ? dungeons.map(d => `
+        <tr class="mcn-mplus-row ${d.best_level > 0 ? '' : 'mcn-mplus-row--zero'}">
+          <td class="mcn-mplus-dungeon">${d.dungeon_name}</td>
+          <td class="mcn-mplus-level">${d.best_level > 0 ? `+${d.best_level}${d.best_timed ? ' <span class="mcn-mplus-timed" title="Timed">&#9201;</span>' : ''}` : '&mdash;'}</td>
+          <td class="mcn-mplus-score">${d.best_score > 0 ? d.best_score.toFixed(1) : '&mdash;'}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="3" class="mcn-mplus-empty">No dungeon runs recorded.</td></tr>`;
+
+  area.innerHTML = `
+    <div class="mcn-detail-area__heading">M+</div>
+    <div class="mcn-prog-panel">
+      ${rio ? `<a href="${rio}" target="_blank" rel="noopener noreferrer" class="mcn-prog-ext-link">Raider.IO profile &#8599;</a>` : ""}
+      <div class="mcn-mplus-score-row">
+        <span class="mcn-mplus-score-label">Overall Score</span>
+        <span class="mcn-mplus-score-value" style="color:${scoreColor}">${Math.round(mp.overall_score).toLocaleString()}</span>
+        <span class="mcn-mplus-season-name">${mp.season_name}</span>
+      </div>
+      <table class="mcn-mplus-table">
+        <thead>
+          <tr>
+            <th>Dungeon</th>
+            <th>Best Key</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>${dungeonRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ---------------------------------------------------------------------------
+// Detail area router
+// ---------------------------------------------------------------------------
+
 function _renderDetailArea(key) {
   const area = document.getElementById("mcn-detail-area");
   if (!area) return;
@@ -414,6 +580,24 @@ function _renderDetailArea(key) {
     } else {
       area.innerHTML = '<div class="mcn-detail-placeholder">Select a character to view gear plan</div>';
     }
+    return;
+  }
+
+  if (key === "raid" || key === "mplus") {
+    const charId = _selectedChar?.id;
+    if (!charId) {
+      area.innerHTML = '<div class="mcn-detail-placeholder">Select a character</div>';
+      return;
+    }
+    area.innerHTML = '<div class="mcn-detail-placeholder">Loading&hellip;</div>';
+    _fetchProgression(charId).then(data => {
+      if (!data) {
+        area.innerHTML = '<div class="mcn-detail-placeholder">Could not load progression data.</div>';
+        return;
+      }
+      if (key === "raid")  _renderRaidDetail(area, data, _selectedChar);
+      if (key === "mplus") _renderMplusDetail(area, data, _selectedChar);
+    });
     return;
   }
 
