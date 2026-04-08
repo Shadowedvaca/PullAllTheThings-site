@@ -912,6 +912,7 @@
   align-items: center;
   justify-content: center;
 }
+.mcn-modal[hidden] { display: none; }
 
 .mcn-modal__backdrop {
   position: absolute;
