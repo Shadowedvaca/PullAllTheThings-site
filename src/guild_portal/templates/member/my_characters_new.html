@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}My Characters — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/my_characters_new.css">
+{% endblock %}
+
+{% block content %}
+<div class="mcn-page">
+
+  {# ── Loading / error states ────────────────────────────────────────────── #}
+  <div id="mcn-loading" class="mcn-state-msg" aria-live="polite">
+    Loading characters&hellip;
+  </div>
+  <div id="mcn-error" class="mcn-state-msg mcn-state-msg--error" hidden>
+    Could not load characters. Please refresh and try again.
+  </div>
+  <div id="mcn-empty" class="mcn-state-msg" hidden>
+    <p>You have no claimed characters yet.</p>
+    <a href="/profile" class="btn btn-primary">Go to Settings &rarr; Character Claims</a>
+  </div>
+
+  {# ── Selector bar ──────────────────────────────────────────────────────── #}
+  <div id="mcn-selector-bar" class="mcn-selector-bar" hidden>
+    <select id="mcn-char-select" class="mcn-char-select" aria-label="Select character"></select>
+    <button id="mcn-btn-refresh" class="btn btn--secondary btn--sm" type="button">
+      Refresh
+    </button>
+    <span id="mcn-bnet-status" class="mcn-bnet-status"></span>
+  </div>
+
+  {# ── Persistent character header ───────────────────────────────────────── #}
+  <div id="mcn-header" class="mcn-header" hidden>
+
+    {# Row 1: name + realm + BNet badge #}
+    <div class="mcn-header__identity">
+      <span id="mcn-char-name" class="mcn-char-name"></span>
+      <span class="mcn-header__sep">&mdash;</span>
+      <span id="mcn-char-realm" class="mcn-char-realm"></span>
+      <span id="mcn-bnet-badge" class="mcn-bnet-badge" hidden>BNet</span>
+    </div>
+
+    {# Row 2: class icon + spec + spec icon + race + role icon + role + role badges #}
+    <div class="mcn-header__details">
+      <span id="mcn-class-icon" class="mcn-icon-wrap"></span>
+      <span id="mcn-class-spec" class="mcn-class-spec"></span>
+      <span id="mcn-spec-icon" class="mcn-icon-wrap"></span>
+      <span id="mcn-race" class="mcn-race"></span>
+      <span id="mcn-role-icon" class="mcn-icon-wrap"></span>
+      <span id="mcn-role-label" class="mcn-role-label"></span>
+      <span id="mcn-main-badge" class="mcn-badge mcn-badge--main" hidden>Main</span>
+      <span id="mcn-offspec-badge" class="mcn-badge mcn-badge--offspec" hidden>Off</span>
+    </div>
+
+    {# Row 3: guide links — compact two-dropdown + Go button #}
+    <div id="mcn-guides" class="mcn-guides" hidden>
+      <label class="mcn-guides__label" for="mcn-guide-spec">Guides</label>
+      <select id="mcn-guide-spec" class="mcn-guides__select" aria-label="Spec"></select>
+      <select id="mcn-guide-type" class="mcn-guides__select" aria-label="Guide site"></select>
+      <button id="mcn-guide-go" class="btn btn--secondary btn--sm" type="button">Go</button>
+    </div>
+
+  </div>{# end #mcn-header #}
+
+  {# ── Three-column body ─────────────────────────────────────────────────── #}
+  <div id="mcn-body" class="mcn-body" hidden>
+
+    {# Left paperdoll — Phase UI-1C #}
+    <div class="mcn-paperdoll mcn-paperdoll--left" id="mcn-left-paperdoll">
+      <div class="mcn-paperdoll__placeholder">
+        <span class="mcn-paperdoll__slot-ph" title="Head"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Neck"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Shoulder"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Back"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Chest"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Shirt"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Tabard"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Wrist"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Main Hand"></span>
+      </div>
+    </div>
+
+    {# Center panel — Phase UI-1B (summary cards placeholder) #}
+    <div class="mcn-center" id="mcn-center">
+      <div class="mcn-center__coming-soon">
+        <p class="mcn-coming-soon-label">Summary cards &mdash; coming in Phase UI-1B</p>
+      </div>
+    </div>
+
+    {# Right paperdoll — Phase UI-1C #}
+    <div class="mcn-paperdoll mcn-paperdoll--right" id="mcn-right-paperdoll">
+      <div class="mcn-paperdoll__placeholder">
+        <span class="mcn-paperdoll__slot-ph" title="Hands"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Waist"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Legs"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Feet"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Ring 1"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Ring 2"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Trinket 1"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Trinket 2"></span>
+        <span class="mcn-paperdoll__slot-ph" title="Off Hand"></span>
+      </div>
+    </div>
+
+  </div>{# end #mcn-body #}
+
+</div>{# end .mcn-page #}
+{% endblock %}
+
+{% block scripts %}
+<script>var whTooltips = {colorLinks: true, iconizeLinks: false, renameLinks: false, hide: {sellprice: true, ilvl: false, reqlevel: false, power: false}};</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
+<script src="/static/js/my_characters_new.js"></script>
+{% endblock %}

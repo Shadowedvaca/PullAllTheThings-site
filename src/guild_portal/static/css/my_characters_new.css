@@ -1,0 +1,296 @@
+/* ═══════════════════════════════════════════════════════════════
+   My Characters (New) — unified character sheet
+   Clean-slate design; no styles shared with my_characters.css
+   or gear_plan.css.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Page shell ──────────────────────────────────────────────── */
+.mcn-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── State messages ──────────────────────────────────────────── */
+.mcn-state-msg {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+.mcn-state-msg--error {
+  color: #f87171;
+}
+
+/* ── Selector bar ────────────────────────────────────────────── */
+.mcn-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.mcn-char-select {
+  flex: 1;
+  max-width: 380px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.mcn-bnet-status {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Persistent character header ─────────────────────────────── */
+.mcn-header {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Row 1: name + realm */
+.mcn-header__identity {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mcn-char-name {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  line-height: 1.1;
+}
+
+.mcn-header__sep {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+}
+
+.mcn-char-realm {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+}
+
+.mcn-bnet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  background: #1c3a5e;
+  color: #60a5fa;
+  border: 1px solid #2563eb55;
+  text-transform: uppercase;
+}
+
+/* Row 2: class icon + spec + race + role */
+.mcn-header__details {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mcn-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mcn-icon-wrap img {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.mcn-class-spec {
+  font-size: 0.95rem;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.mcn-race {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+.mcn-race::before {
+  content: "\2022";
+  margin-right: 0.4rem;
+  color: var(--color-border);
+}
+
+.mcn-role-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+.mcn-role-label::before {
+  content: "\2022";
+  margin-right: 0.4rem;
+  color: var(--color-border);
+}
+
+/* Role label colouring */
+.mcn-role-label--tank   { color: #60a5fa; }
+.mcn-role-label--healer { color: #4ade80; }
+.mcn-role-label--melee  { color: #f87171; }
+.mcn-role-label--ranged { color: #fbbf24; }
+
+/* Badges */
+.mcn-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.mcn-badge--main {
+  background: #3b2800;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent-dim, #a07830);
+}
+.mcn-badge--offspec {
+  background: #0d2b45;
+  color: #93c5fd;
+  border: 1px solid #2563eb55;
+}
+
+/* Row 3: guide links */
+.mcn-guides {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.mcn-guides__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.mcn-guides__select {
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.85rem;
+}
+
+/* ── Three-column body grid ──────────────────────────────────── */
+.mcn-body {
+  display: grid;
+  grid-template-columns: 180px 1fr 180px;
+  grid-template-rows: 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  min-height: 480px;
+}
+
+/* ── Paperdoll columns ───────────────────────────────────────── */
+.mcn-paperdoll {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mcn-paperdoll__placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mcn-paperdoll__slot-ph {
+  display: block;
+  height: 52px;
+  background: var(--color-bg-card);
+  border: 1px dashed var(--color-border);
+  border-radius: 4px;
+  opacity: 0.4;
+}
+.mcn-paperdoll__slot-ph::after {
+  content: attr(title);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.5rem;
+  height: 100%;
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mcn-paperdoll--right .mcn-paperdoll__slot-ph::after {
+  justify-content: flex-start;
+  padding-right: 0;
+  padding-left: 0.5rem;
+}
+
+/* ── Center panel ────────────────────────────────────────────── */
+.mcn-center {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1rem;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mcn-center__coming-soon {
+  text-align: center;
+}
+
+.mcn-coming-soon-label {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* ── Responsive: collapse to single column on narrow screens ─── */
+@media (max-width: 700px) {
+  .mcn-body {
+    grid-template-columns: 1fr;
+  }
+  .mcn-paperdoll__placeholder {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .mcn-paperdoll__slot-ph {
+    flex: 1;
+    min-width: 80px;
+  }
+}

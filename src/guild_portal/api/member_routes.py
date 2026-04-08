@@ -102,6 +102,10 @@ def _build_char_dict(
                 ),
             })
 
+    role_name = None
+    if char.active_spec and char.active_spec.default_role:
+        role_name = char.active_spec.default_role.name
+
     return {
         "id": char.id,
         "character_name": char_name,
@@ -111,6 +115,8 @@ def _build_char_dict(
         "class_color": class_color,
         "class_emoji": class_emoji,
         "spec_name": spec_name,
+        "race": char.race,
+        "role": role_name,
         "avg_item_level": char.item_level,
         "last_login_ms": char.last_login_timestamp,
         "last_synced_at": last_synced_at,

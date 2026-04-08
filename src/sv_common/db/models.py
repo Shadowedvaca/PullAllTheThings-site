@@ -836,6 +836,7 @@ class WowCharacter(Base):
     )
     removed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     in_guild: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    race: Mapped[Optional[str]] = mapped_column(String(40))
 
     wow_class: Mapped[Optional[WowClass]] = relationship(back_populates="wow_characters")
     active_spec: Mapped[Optional[Specialization]] = relationship()

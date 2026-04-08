@@ -64,6 +64,31 @@ async def gear_plan_admin_page(request: Request):
 # ---------------------------------------------------------------------------
 
 
+@router.get("/my-characters-new", response_class=HTMLResponse)
+async def my_characters_new_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    """New unified character sheet (UI redesign in progress — parallel to /my-characters)."""
+    if current_member is None:
+        return RedirectResponse(url="/login?next=/my-characters-new", status_code=302)
+
+    active = await campaign_service.list_campaigns(db, status="live")
+    nav_items = await load_nav_items(db, current_member)
+
+    return templates.TemplateResponse(
+        "member/my_characters_new.html",
+        {
+            "request": request,
+            "current_member": current_member,
+            "active_campaigns": active,
+            "nav_items": nav_items,
+            "current_screen": "my_characters",
+        },
+    )
+
+
 @router.get("/gear-plan", response_class=HTMLResponse)
 async def gear_plan_member_page(
     request: Request,
