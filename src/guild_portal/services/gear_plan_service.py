@@ -18,6 +18,12 @@ from sv_common.guild_sync.simc_parser import (
     export_gear_plan,
     parse_gear_slots,
 )
+from sv_common.guild_sync.source_config import (
+    get_display_name as _get_display_name,
+    get_tracks as _get_tracks,
+    get_track_label as _get_track_label,
+    track_to_label as _track_to_label,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +97,39 @@ def _upgrade_tracks(
     else:
         # Different item — same track and above (never lower)
         return [t for t in available_tracks if TRACK_ORDER.get(t, -1) >= eq_idx]
+
+
+def _contextual_sources(sources: list[dict], upgrade_tracks: list[str]) -> list[dict]:
+    """Filter and relabel sources based on what tracks the player actually needs.
+
+    - World boss sources are excluded when C is not in upgrade_tracks
+      (world bosses only drop Champion-track loot).
+    - Each source's track_label is replaced with the label for the minimum
+      track from (instance_tracks ∩ upgrade_tracks), so it shows what the
+      player actually needs to run, not the lowest the instance offers.
+    - Sources that offer no useful upgrade tracks are excluded entirely.
+    """
+    if not upgrade_tracks:
+        return sources  # Can't determine needs — show all with default labels
+
+    result = []
+    for src in sources:
+        inst_type = src["instance_type"]
+        instance_tracks = _get_tracks(inst_type)
+
+        # World boss only drops C. Skip if player doesn't need C.
+        if inst_type == "world_boss" and "C" not in upgrade_tracks:
+            continue
+
+        useful_tracks = [t for t in instance_tracks if t in upgrade_tracks]
+        if not useful_tracks:
+            continue
+
+        # Show the minimum useful track (closest to what the player needs now)
+        min_useful = min(useful_tracks, key=lambda t: TRACK_ORDER.get(t, 99))
+        result.append({**src, "track_label": _track_to_label(min_useful, inst_type)})
+
+    return result
 
 
 def _merge_paired_bis(bis_by_slot: dict, slot_a: str, slot_b: str) -> None:
@@ -702,11 +741,6 @@ async def get_plan_detail(
         # Source location info for display
         sources_by_item: dict[int, list[dict]] = {}
         if all_bids:
-            from sv_common.guild_sync.source_config import (
-                get_tracks as _get_tracks,
-                get_display_name as _get_display_name,
-                get_track_label as _get_track_label,
-            )
             src_rows = await conn.fetch(
                 """
                 SELECT wi.blizzard_item_id, is2.instance_type,
@@ -814,7 +848,7 @@ async def get_plan_detail(
             "desired": desired,
             "desired_blizzard_item_id": desired_bid,
             "bis_recommendations": bis_recs,
-            "item_sources": item_sources,
+            "item_sources": _contextual_sources(item_sources, upgrade_tracks),
             "available_tracks": available_tracks,
             "upgrade_tracks": upgrade_tracks,
             "is_bis": is_bis,
