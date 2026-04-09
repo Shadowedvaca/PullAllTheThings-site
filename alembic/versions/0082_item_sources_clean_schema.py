@@ -14,7 +14,7 @@ depends_on = None
 
 def upgrade():
     # ── 1. Drop the old unique constraint (references old column names) ──────
-    op.drop_constraint("uq_item_source", "item_sources", schema="guild_identity")
+    op.execute("ALTER TABLE guild_identity.item_sources DROP CONSTRAINT IF EXISTS uq_item_source")
 
     # ── 2. Rename columns to clean names ────────────────────────────────────
     op.alter_column("item_sources", "source_type",     new_column_name="instance_type", schema="guild_identity")
