@@ -697,11 +697,27 @@ async def get_plan_detail(
             d["is_crafted"] = is_crafted_item(d.get("bonus_ids") or [])
             equipped_by_slot[r["slot"]] = d
 
-        # Desired items (plan slots) — include tooltip for crafted detection
+        # Build bid → equipment data lookup BEFORE _normalize_paired_slot swaps
+        # ring/trinket slot assignments.  Crafted detection must be slot-order-
+        # independent: after normalization, ring_1 equipped item may have been
+        # swapped with ring_2, so comparing equipped[slot].bid == desired_bid
+        # would silently fail for the swapped slot.
+        equipped_data_by_bid: dict[int, dict] = {}
+        for eq_item in equip_rows:
+            bid = eq_item.get("blizzard_item_id")
+            if bid and bid not in equipped_data_by_bid:
+                _bonus_ids = eq_item.get("bonus_ids") or []
+                equipped_data_by_bid[bid] = {
+                    "bonus_ids": _bonus_ids,
+                    "item_level": eq_item.get("item_level"),
+                    "is_crafted": is_crafted_item(_bonus_ids),
+                }
+
+        # Desired items (plan slots)
         desired_rows = await conn.fetch(
             """
             SELECT gps.slot, gps.blizzard_item_id, gps.item_name, gps.is_locked,
-                   wi.icon_url, wi.wowhead_tooltip_html
+                   wi.icon_url
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
              WHERE gps.plan_id = $1
@@ -853,30 +869,16 @@ async def get_plan_detail(
         # No border = no goal set for this slot (no data to compare).
         needs_upgrade = bool(desired_bid and not is_bis)
 
-        # Crafted item detection for the desired item.
-        # Primary: if the desired item is also equipped, reuse equipped bonus_ids.
-        # Fallback: check Wowhead tooltip for "Optional Reagent Slot" text.
+        # Crafted item detection: look up the desired blizzard_item_id in
+        # equipped_data_by_bid (keyed by item ID, not slot — slot-order-independent
+        # so ring/trinket normalization swaps don't break detection).
         crafted_source: Optional[dict] = None
         if desired_bid:
-            equipped_bonus_ids: Optional[list[int]] = None
-            equipped_ilvl: Optional[int] = None
-            if equipped and equipped.get("blizzard_item_id") == desired_bid:
-                equipped_bonus_ids = equipped.get("bonus_ids") or []
-                equipped_ilvl = equipped.get("item_level")
-
-            is_desired_crafted = False
-            if equipped_bonus_ids is not None:
-                is_desired_crafted = is_crafted_item(equipped_bonus_ids)
-            else:
-                # Fallback: check tooltip for crafted indicator
-                tooltip = desired.get("wowhead_tooltip_html") if desired else None
-                if tooltip and "Optional Reagent Slot" in tooltip:
-                    is_desired_crafted = True
-
-            if is_desired_crafted:
+            eq_data = equipped_data_by_bid.get(desired_bid)
+            if eq_data and eq_data["is_crafted"]:
                 crafted_track = detect_crafted_track(
-                    bonus_ids=equipped_bonus_ids,
-                    item_level=equipped_ilvl,
+                    bonus_ids=eq_data["bonus_ids"],
+                    item_level=eq_data["item_level"],
                     m_ilvl_threshold=crafted_m_ilvl_threshold,
                 )
                 crafted_source = {
