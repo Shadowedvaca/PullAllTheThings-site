@@ -717,14 +717,26 @@ async def get_plan_detail(
         desired_rows = await conn.fetch(
             """
             SELECT gps.slot, gps.blizzard_item_id, gps.item_name, gps.is_locked,
-                   wi.icon_url
+                   wi.icon_url, wi.wowhead_tooltip_html
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
              WHERE gps.plan_id = $1
             """,
             plan_id,
         )
-        desired_by_slot: dict[str, dict] = {r["slot"]: dict(r) for r in desired_rows}
+        # Track which desired blizzard_item_ids are craftable (Wowhead tooltip has
+        # "Random Stat" — crafted items have random secondary stats, drops do not).
+        # Strip wowhead_tooltip_html from the row before storing in desired_by_slot
+        # to keep it out of the API response payload.
+        craftable_desired_bids: set[int] = set()
+        desired_by_slot: dict[str, dict] = {}
+        for r in desired_rows:
+            bid = r["blizzard_item_id"]
+            tooltip = r["wowhead_tooltip_html"] or ""
+            if bid and "Random Stat" in tooltip:
+                craftable_desired_bids.add(bid)
+            row_dict = {k: v for k, v in dict(r).items() if k != "wowhead_tooltip_html"}
+            desired_by_slot[r["slot"]] = row_dict
 
         # Admin-configured ilvl threshold for crafted M-track detection
         cfg_row = await conn.fetchrow(
@@ -848,7 +860,29 @@ async def get_plan_detail(
         available_tracks = tracks_by_item.get(desired_bid, []) if desired_bid else []
         item_sources = sources_by_item.get(desired_bid, []) if desired_bid else []
 
+        # Craftable items have no item_sources rows (they're not drops), so
+        # available_tracks is normally empty.  Override to ["H", "M"] — crafted
+        # gear in Midnight can always be made at Hero or Mythic crest quality.
+        if desired_bid and desired_bid in craftable_desired_bids and not available_tracks:
+            available_tracks = ["H", "M"]
+
         equipped_track = equipped["quality_track"] if equipped else None
+
+        # For equipped crafted items whose quality_track wasn't detected during sync
+        # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
+        # detect_crafted_track() uses track_from_bonus_ids; if those IDs aren't in
+        # the map it falls through to the ilvl threshold then defaults to "H".
+        # Write the computed track back into the equipped dict so the frontend
+        # receives the correct value rather than null.
+        if equipped and equipped_track is None and equipped.get("is_crafted"):
+            equipped_track = detect_crafted_track(
+                bonus_ids=equipped.get("bonus_ids") or [],
+                item_level=equipped.get("item_level"),
+                m_ilvl_threshold=crafted_m_ilvl_threshold,
+            )
+            if equipped_track:
+                equipped["quality_track"] = equipped_track
+
         equipped_bid = equipped["blizzard_item_id"] if equipped else None
         upgrade_tracks = _upgrade_tracks(equipped_track, equipped_bid, desired_bid, available_tracks)
 

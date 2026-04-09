@@ -349,7 +349,10 @@ class BlizzardClient:
         Endpoint: /profile/wow/character/{realmSlug}/{characterName}/equipment
         Returns: list of CharacterEquipmentSlot (one per tracked slot), or None.
         """
-        from .quality_track import normalize_slot, detect_quality_track
+        from .quality_track import (
+            normalize_slot, detect_quality_track,
+            track_from_display_string, is_crafted_item,
+        )
 
         name_lower = character_name.lower()
         name_encoded = quote(name_lower, safe='')
@@ -380,6 +383,15 @@ class BlizzardClient:
             )
             bonus_ids = item.get("bonus_list") or []
             quality_track = detect_quality_track(display_string, bonus_ids)
+
+            # Crafted items don't carry a display_string or standard track bonus IDs.
+            # Fall back to the item API with bonus IDs applied — Blizzard returns the
+            # correct name_description.display_string (e.g. "Heroic") when bonus IDs
+            # are provided, letting us detect track without hardcoding any IDs.
+            if quality_track is None and is_crafted_item(bonus_ids):
+                crafted_ds = await self.get_item_preview(blizzard_item_id, bonus_ids)
+                if crafted_ds:
+                    quality_track = track_from_display_string(crafted_ds)
 
             # Enchant
             enchant_id = None
@@ -563,6 +575,28 @@ class BlizzardClient:
             f"/data/wow/item/{item_id}",
             params={"namespace": "static-us", "locale": self.locale},
         )
+
+    async def get_item_preview(
+        self, item_id: int, bonus_ids: list[int]
+    ) -> Optional[str]:
+        """Return the name_description.display_string for an item with bonus IDs applied.
+
+        Calls GET /data/wow/item/{id}?bl={bonus_ids} which makes Blizzard return a
+        preview_item block reflecting those bonus IDs (e.g. "Heroic" for a Hero-crest
+        crafted item).  Used to detect quality track for crafted items without
+        maintaining a hardcoded bonus-ID map.
+
+        Returns the raw display_string (e.g. "Heroic", "Mythic") or None.
+        """
+        bl = ":".join(str(b) for b in bonus_ids)
+        data = await self._api_get(
+            f"/data/wow/item/{item_id}",
+            params={"namespace": "static-us", "locale": self.locale, "bl": bl},
+        )
+        if not data:
+            return None
+        preview = data.get("preview_item", {})
+        return preview.get("name_description", {}).get("display_string") or None
 
     async def get_connected_realm_id(self, realm_slug: str) -> int | None:
         """
