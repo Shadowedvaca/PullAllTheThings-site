@@ -87,11 +87,17 @@ async def sync_item_sources(
     expansion_name = exp_data.get("name", expansion_name)
 
     # Collect all instances: dungeons first, then raids.
+    # Blizzard groups world boss encounters under a synthetic "instance" whose name
+    # matches the expansion (e.g. "Midnight").  Rename those to "World Boss" so the
+    # source displays correctly on the gear plan page.
     instances: list[dict] = []
     for inst in exp_data.get("dungeons", []):
         instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "dungeon"})
     for inst in exp_data.get("raids", []):
-        instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "raid"})
+        inst_name = inst.get("name", "")
+        if inst_name == expansion_name:
+            inst_name = "World Boss"
+        instances.append({"id": inst["id"], "name": inst_name, "type": "raid"})
 
     if not instances:
         return {
