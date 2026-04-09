@@ -235,13 +235,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase UI-1H (complete)** — Cleanup + migration to canonical URLs. `/my-characters-new` → `/my-characters`; old `/my-characters` (profile_pages) removed; `/gear-plan` → HTTP 302 → `/my-characters`; Gear Plan nav link removed; files renamed (`my_characters_new.{html,css,js}` → canonical); old `my_characters.{html,css,js}` + `gear_plan.{html,css,js}` deleted; migration 0081 retires `my_gear_plan` screen_permission, adds `my_characters`. Phases UI-1A–1G also complete.
+- **Phase 1D.1 (complete)** — Small fixes bundle. Fix 1: tier set source display via `enrich_catalyst_tier_items()` in `item_source_sync.py`. Fix 2: M+ dungeon items eligible for Mythic track. Fix 3: gear table row click → slot panel. Also: ELT refactor for item_sources (migration 0082 — renames columns, drops `quality_tracks`), `source_config.py` as single source of truth for track assignments and display names, contextual track labels (show what player needs not instance minimum), world boss sources hidden when C not in upgrade_tracks, world boss shows no track suffix. Phases UI-1A–1H also complete.
 - **Branch:** `feature/gear-plan-phase-1d`
 - **Tests:** 1269 pass (2 pre-existing bnet failures unchanged)
-- **Last migration:** 0081
+- **Last migration:** 0082
 - **Last prod tag:** `prod-v0.11.2`
 - **Active branch:** `feature/gear-plan-phase-1d`
-- **Next:** Merge to main / prod tag.
+- **Next:** Merge to main / prod tag. Then Phase 1D.2 (enhanced source display) or 1D.3 (crafted items).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

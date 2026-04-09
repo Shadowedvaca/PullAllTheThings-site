@@ -22,7 +22,7 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1B** BIS discovery + extraction | ✅ COMPLETE | Migrations 0067–0076, bis_sync.py, simc_parser.py, admin matrix UI |
 | **1C** Item source mapping | ✅ ON PROD | item_source_sync.py, Journal API, admin Item Sources + Re-sync Errors, migrations 0077–0078 |
 | **1D** Personal gear plan | ✅ COMPLETE | Gear plan integrated into `/my-characters` (UI redesign UI-1A–1H). `/gear-plan` redirects. Migration 0079–0081. |
-| **1D.1** Small fixes | 🔶 PARTIAL | Fix 2 (M-track dungeon) + Fix 3 (table row click) done; Fix 1 (tier source) pending DB investigation |
+| **1D.1** Small fixes | ✅ COMPLETE | Fix 1 (tier source via `enrich_catalyst_tier_items`), Fix 2 (M-track dungeon), Fix 3 (table row click) all done |
 | **1D.2** Enhanced source display | ⬜ TODO | Instance / Boss / Minimum level in gear table; key thresholds |
 | **1D.3** Crafted items | ⬜ TODO | Crest-based H/M detection, crafter lookup popup, Crafting Corner link |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
@@ -357,31 +357,9 @@ SimC profile format is the universal gear artifact (used by Archon, Wowhead, Rai
 
 ## Phase 1D.1: Small Fixes Bundle
 
-### Fix 1 — Tier set source display
+### Fix 1 — Tier set source display ✅ COMPLETE
 
-**Status: PENDING INVESTIGATION**
-
-**Problem:** Tier set items show no source in the gear table "Source" column.
-
-**Investigation result (2026-04-08):** The `gear_plan_service.py` source lookup is correct — it includes BIS recommendation item IDs in `all_bids` and joins `item_sources` on `wow_items.blizzard_item_id`. The code path is fine.
-
-**Root cause:** The tier item's `blizzard_item_id` (from u.gg/Wowhead BIS scraping) is likely not in `guild_identity.item_sources`. This happens when either:
-1. The Blizzard Journal API doesn't list the tier piece directly (e.g., catalyst-converted items have different IDs than journal drops), OR
-2. "Sync Loot Tables" hasn't been re-run since tier pieces were added to BIS data.
-
-**To investigate on dev:** After deploying, run "Sync Loot Tables" from `/admin/gear-plan`. Then check:
-```sql
-SELECT wi.blizzard_item_id, wi.name, is2.source_name, is2.source_instance
-  FROM guild_identity.bis_list_entries ble
-  JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-  LEFT JOIN guild_identity.item_sources is2 ON is2.item_id = wi.id
- WHERE ble.slot IN ('head','shoulder','chest','hands','legs')
-   AND is2.id IS NULL
- LIMIT 20;
-```
-If rows come back, the Journal isn't returning those item IDs. Further code changes needed in `item_source_sync.py` to handle catalyst tier piece IDs.
-
-**Done when:** Tier item rows in the gear table show the raid boss + instance source.
+**Solution:** `enrich_catalyst_tier_items()` in `item_source_sync.py`. Tier pieces arrive from the Journal under catalyst-converted IDs, not the base drop IDs. The enrichment step queries `item_sources` for all raid/world_boss boss rows in the current expansion, matches tier slots (head/shoulder/chest/hands/legs) by armor type, and upserts matching source rows for the catalyst tier item IDs. Runs automatically at the end of each "Sync Loot Tables" call.
 
 ### Fix 2 — M+ dungeon items eligible for Mythic track (Great Vault) ✅ COMPLETE
 
