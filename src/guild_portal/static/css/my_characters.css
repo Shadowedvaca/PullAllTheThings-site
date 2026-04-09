@@ -1221,6 +1221,41 @@
   line-height: 1.35;
 }
 
+.mcn-gt__source-group + .mcn-gt__source-group {
+  margin-top: 0.3rem;
+}
+
+.mcn-gt__source-inst {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+.mcn-gt__source-boss {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+  padding-left: 0.5rem;
+}
+
+/* Drawer drop-location source blocks */
+.mcn-drawer-source__group + .mcn-drawer-source__group {
+  margin-top: 0.3rem;
+}
+
+.mcn-drawer-source__inst {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.mcn-drawer-source__boss {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  padding-left: 0.6rem;
+}
+
 /* ── BIS status indicators ──────────────────────────────────── */
 
 .mcn-gt__bis-check,

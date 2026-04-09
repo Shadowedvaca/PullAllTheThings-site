@@ -1258,6 +1258,42 @@ function _gpPill(t, tc) {
   return `<span class="mcn-track-pill" style="background:${_gpEsc(c)}">${_gpEsc(t)}</span>`;
 }
 
+// Convert quality_tracks array to human-readable difficulty label string.
+// Raid:   V→RF  C→N  H→H  M→M  (e.g. "RF/N/H/M")
+// Dungeon: C→0+  H→4+  M→10+   (e.g. "0+/4+/10+")
+function _gpSourceTrackLabel(tracks, sourceType) {
+  if (!tracks || !tracks.length) return '';
+  if (sourceType === 'dungeon') {
+    const m = { C: '0+', H: '4+', M: '10+' };
+    return tracks.filter(t => m[t]).map(t => m[t]).join('/');
+  }
+  const m = { V: 'RF', C: 'N', H: 'H', M: 'M' };
+  return tracks.filter(t => m[t]).map(t => m[t]).join('/');
+}
+
+// Build grouped source HTML: one block per instance, bosses indented below.
+function _gpSourceHtml(sources, groupCls, instCls, bossCls) {
+  if (!sources.length) return '';
+  // Group by source_instance, preserving encounter order.
+  const instMap = new Map();
+  for (const src of sources) {
+    const key = src.source_instance || '';
+    if (!instMap.has(key)) {
+      instMap.set(key, { sourceType: src.source_type, tracks: src.quality_tracks || [], bosses: [] });
+    }
+    instMap.get(key).bosses.push(src.source_name);
+  }
+  return [...instMap.entries()].map(([inst, { sourceType, tracks, bosses }]) => {
+    const trackLabel = _gpSourceTrackLabel(tracks, sourceType);
+    const header = inst
+      ? `${_gpEsc(inst)}${trackLabel ? ` (${trackLabel})` : ''}`
+      : (trackLabel || '');
+    const instLine = `<div class="${instCls}">${header}</div>`;
+    const bossLines = bosses.map(b => `<div class="${bossCls}">${_gpEsc(b)}</div>`).join('');
+    return `<div class="${groupCls}">${instLine}${bossLines}</div>`;
+  }).join('');
+}
+
 // ── Status ─────────────────────────────────────────────────────────────────────
 
 function _gpShowStatus(msg, type) {
@@ -1540,25 +1576,9 @@ function _gpRenderGearTable(slots, tc) {
     }
 
     // ── Source cell ────────────────────────────────────────────────────────
-    let sourceHtml;
-    if (sources.length === 1) {
-      const src = sources[0];
-      const parts = [_gpEsc(src.source_name)];
-      if (src.source_instance) parts.push(_gpEsc(src.source_instance));
-      sourceHtml = `<span class="mcn-gt__source-text">${parts.join(' &bull; ')}</span>`;
-    } else if (sources.length > 1) {
-      // Group by instance, list boss names per instance.
-      const byInst = {};
-      for (const src of sources) {
-        const inst = src.source_instance || '';
-        (byInst[inst] = byInst[inst] || []).push(src.source_name);
-      }
-      sourceHtml = Object.entries(byInst).map(([inst, bosses]) =>
-        `<div class="mcn-gt__source-group">${inst ? `<span class="mcn-gt__source-inst">${_gpEsc(inst)}:</span> ` : ''}${bosses.map(_gpEsc).join(', ')}</div>`
-      ).join('');
-    } else {
-      sourceHtml = '<span class="mcn-gt__empty">&mdash;</span>';
-    }
+    const sourceHtml = sources.length
+      ? _gpSourceHtml(sources, 'mcn-gt__source-group', 'mcn-gt__source-inst', 'mcn-gt__source-boss')
+      : '<span class="mcn-gt__empty">&mdash;</span>';
 
     // ── Upgrades cell ──────────────────────────────────────────────────────
     let upgradesHtml;
@@ -1996,10 +2016,13 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   if (sources.length) {
     const tPills = tracks.map(t => _gpPill(t, tc)).join(' ');
     const uPills = upgrades.map(t => _gpPill(t, tc)).join(' ');
-    const srcLines = sources.map(loc =>
-      `<div class="mcn-drawer-item__meta">${_gpEsc(loc.source_name)}${loc.source_instance ? ` \u2014 ${_gpEsc(loc.source_instance)}` : ''}</div>`
-    ).join('');
-    dropHtml = srcLines +
+    const srcBlock = _gpSourceHtml(
+      sources,
+      'mcn-drawer-source__group',
+      'mcn-drawer-source__inst',
+      'mcn-drawer-source__boss',
+    );
+    dropHtml = srcBlock +
       (tPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Available:</span> ${tPills}</div>` : '') +
       (uPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Upgrade to:</span> ${uPills}</div>` : '');
   } else {
