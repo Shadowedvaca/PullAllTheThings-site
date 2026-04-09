@@ -1547,9 +1547,10 @@ async function syncItemSources() {
 
         const errCount = (d.errors || []).length;
         const enriched = d.items_enriched != null ? `, ${d.items_enriched} enriched` : '';
+        const catalyst = d.catalyst_tier_items ? `, ${d.catalyst_tier_items} tier (Catalyst)` : '';
         const msg = `Loot table sync complete — ${d.expansion_name || 'expansion'}: ` +
             `${d.instances_synced} instances, ${d.encounters_synced} encounters, ` +
-            `${d.items_upserted} items${enriched}` +
+            `${d.items_upserted} items${enriched}${catalyst}` +
             (errCount ? ` (${errCount} errors)` : '');
         setStatus(msg, errCount ? 'partial' : 'success');
 

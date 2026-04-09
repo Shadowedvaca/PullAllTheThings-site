@@ -557,6 +557,13 @@ class BlizzardClient:
             params={"namespace": "static-us", "locale": self.locale},
         )
 
+    async def get_item(self, item_id: int) -> Optional[dict]:
+        """GET /data/wow/item/{id} — static item metadata (name, item_set, etc.)."""
+        return await self._api_get(
+            f"/data/wow/item/{item_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def get_connected_realm_id(self, realm_slug: str) -> int | None:
         """
         Resolve a realm slug to its connected realm ID.

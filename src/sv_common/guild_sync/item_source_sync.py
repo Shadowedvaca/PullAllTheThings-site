@@ -129,11 +129,18 @@ async def sync_item_sources(
             logger.error(msg)
             errors.append(msg)
 
+    # ── Tier set / Catalyst enrichment ────────────────────────────────────────
+    catalyst_added, catalyst_errors = await enrich_catalyst_tier_items(
+        pool, client, expansion_name
+    )
+    errors.extend(catalyst_errors)
+
     return {
         "expansion_name": expansion_name,
         "instances_synced": instances_synced,
         "encounters_synced": total_encounters,
         "items_upserted": total_items,
+        "catalyst_tier_items": catalyst_added,
         "errors": errors,
     }
 
@@ -293,6 +300,98 @@ async def _sync_encounter(
                 )
 
     return upserted, errors
+
+
+# Tier set item slots — the only slots where Catalyst-obtained items can exist.
+_TIER_SLOTS = {"head", "shoulder", "chest", "hands", "legs"}
+
+# Small delay between item API fetches to avoid hammering the API.
+_ITEM_DELAY = 0.1
+
+
+async def enrich_catalyst_tier_items(
+    pool: asyncpg.Pool,
+    client: "BlizzardClient",
+    expansion_name: str,
+) -> tuple[int, list[str]]:
+    """Add Revival Catalyst source rows for tier set BIS items missing from item_sources.
+
+    Tier set pieces (e.g. "Blind Oath's Leggings") are obtained by converting a
+    raid boss drop via the Revival Catalyst — they never appear in the Blizzard
+    Journal encounter item lists.  This function finds BIS items in tier slots
+    that have no item_sources row, calls the Item API to confirm they belong to
+    an item set, and inserts a synthetic source row for them.
+
+    Returns (rows_added, errors).
+    """
+    errors: list[str] = []
+
+    # Find BIS items in tier slots that have no item_sources entry.
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name
+              FROM guild_identity.bis_list_entries ble
+              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
+              LEFT JOIN guild_identity.item_sources isr ON isr.item_id = wi.id
+             WHERE ble.slot = ANY($1::text[])
+               AND isr.id IS NULL
+            """,
+            list(_TIER_SLOTS),
+        )
+
+    if not rows:
+        return 0, []
+
+    logger.info(
+        "Checking %d tier-slot BIS items for Catalyst eligibility", len(rows)
+    )
+
+    added = 0
+    async with pool.acquire() as conn:
+        for row in rows:
+            blizzard_item_id = row["blizzard_item_id"]
+            wow_item_id = row["wow_item_id"]
+            item_name = row["name"]
+
+            try:
+                data = await client.get_item(blizzard_item_id)
+                await asyncio.sleep(_ITEM_DELAY)
+            except Exception as exc:
+                errors.append(f"Item API error for {blizzard_item_id} ({item_name}): {exc}")
+                continue
+
+            if not data or "item_set" not in data:
+                # Not a tier set item — skip.
+                continue
+
+            # It's a tier set piece.  Add a Catalyst source row.
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO guild_identity.item_sources
+                           (item_id, source_type, source_name, source_instance, quality_tracks)
+                    VALUES ($1, 'raid_boss', 'Revival Catalyst', $2, $3)
+                    ON CONFLICT (item_id, source_type, source_name)
+                    DO UPDATE SET
+                        source_instance = EXCLUDED.source_instance,
+                        quality_tracks  = EXCLUDED.quality_tracks
+                    """,
+                    wow_item_id,
+                    expansion_name,
+                    _RAID_TRACKS,
+                )
+                logger.debug(
+                    "Added Catalyst source for %s (%d) — set: %s",
+                    item_name, blizzard_item_id, data["item_set"].get("name", "?"),
+                )
+                added += 1
+            except Exception as exc:
+                errors.append(
+                    f"DB error adding Catalyst source for {blizzard_item_id} ({item_name}): {exc}"
+                )
+
+    return added, errors
 
 
 async def get_item_sources(
