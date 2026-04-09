@@ -1258,17 +1258,19 @@ function _gpPill(t, tc) {
   return `<span class="mcn-track-pill" style="background:${_gpEsc(c)}">${_gpEsc(t)}</span>`;
 }
 
-// Convert quality_tracks array to human-readable difficulty label string.
-// Raid:   V→RF  C→N  H→H  M→M  (e.g. "RF/N/H/M")
-// Dungeon: C→0+  H→4+  M→10+   (e.g. "0+/4+/10+")
+// Convert quality_tracks to a minimum-difficulty label.
+// Shows the lowest available track with "+" (obtainable at that level and above).
+// Raid:    V→RF+  C→N+  H→H+  M→M
+// Dungeon: C→0+   H→4+  M→10+
 function _gpSourceTrackLabel(tracks, sourceType) {
   if (!tracks || !tracks.length) return '';
+  const order = ['V', 'C', 'H', 'M'];
+  const min = order.find(t => tracks.includes(t));
+  if (!min) return '';
   if (sourceType === 'dungeon') {
-    const m = { C: '0+', H: '4+', M: '10+' };
-    return tracks.filter(t => m[t]).map(t => m[t]).join('/');
+    return { C: '0+', H: '4+', M: '10+' }[min] || '';
   }
-  const m = { V: 'RF', C: 'N', H: 'H', M: 'M' };
-  return tracks.filter(t => m[t]).map(t => m[t]).join('/');
+  return { V: 'RF+', C: 'N+', H: 'H+', M: 'M' }[min] || '';
 }
 
 // Build grouped source HTML: one block per instance, bosses indented below.
