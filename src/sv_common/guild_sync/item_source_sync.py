@@ -131,7 +131,7 @@ async def sync_item_sources(
 
     # ── Tier set / Catalyst enrichment ────────────────────────────────────────
     catalyst_added, catalyst_errors = await enrich_catalyst_tier_items(
-        pool, client, expansion_name
+        pool, expansion_name
     )
     errors.extend(catalyst_errors)
 
@@ -305,29 +305,29 @@ async def _sync_encounter(
 # Tier set item slots — the only slots where Catalyst-obtained items can exist.
 _TIER_SLOTS = {"head", "shoulder", "chest", "hands", "legs"}
 
-# Small delay between item API fetches to avoid hammering the API.
-_ITEM_DELAY = 0.1
-
 
 async def enrich_catalyst_tier_items(
     pool: asyncpg.Pool,
-    client: "BlizzardClient",
     expansion_name: str,
 ) -> tuple[int, list[str]]:
     """Add Revival Catalyst source rows for tier set BIS items missing from item_sources.
 
-    Tier set pieces (e.g. "Blind Oath's Leggings") are obtained by converting a
-    raid boss drop via the Revival Catalyst — they never appear in the Blizzard
-    Journal encounter item lists.  This function finds BIS items in tier slots
-    that have no item_sources row, calls the Item API to confirm they belong to
-    an item set, and inserts a synthetic source row for them.
+    Tier set pieces (e.g. "Blind Oath's Leggings") don't appear in the Blizzard
+    Journal encounter item lists — they're obtained by converting a boss drop via
+    the Revival Catalyst.  The Blizzard Item API also doesn't reliably expose
+    item_set data for in-development expansions.
+
+    Detection: we use the Wowhead tooltip HTML already stored in wow_items — tier
+    set pieces always contain an /item-set=N/ link in the tooltip (e.g.
+    href="/item-set=1986/blind-oaths-burden").  No extra API calls needed.
 
     Returns (rows_added, errors).
     """
     errors: list[str] = []
 
-    # Find BIS items in tier slots that have no item_sources entry.
     async with pool.acquire() as conn:
+        # Single query: find BIS items in tier slots with no item_sources AND
+        # whose Wowhead tooltip HTML contains an /item-set= link.
         rows = await conn.fetch(
             """
             SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name
@@ -336,36 +336,20 @@ async def enrich_catalyst_tier_items(
               LEFT JOIN guild_identity.item_sources isr ON isr.item_id = wi.id
              WHERE ble.slot = ANY($1::text[])
                AND isr.id IS NULL
+               AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
             """,
             list(_TIER_SLOTS),
         )
 
-    if not rows:
-        return 0, []
+        if not rows:
+            return 0, []
 
-    logger.info(
-        "Checking %d tier-slot BIS items for Catalyst eligibility", len(rows)
-    )
+        logger.info(
+            "Adding Catalyst source rows for %d tier set items", len(rows)
+        )
 
-    added = 0
-    async with pool.acquire() as conn:
+        added = 0
         for row in rows:
-            blizzard_item_id = row["blizzard_item_id"]
-            wow_item_id = row["wow_item_id"]
-            item_name = row["name"]
-
-            try:
-                data = await client.get_item(blizzard_item_id)
-                await asyncio.sleep(_ITEM_DELAY)
-            except Exception as exc:
-                errors.append(f"Item API error for {blizzard_item_id} ({item_name}): {exc}")
-                continue
-
-            if not data or "item_set" not in data:
-                # Not a tier set item — skip.
-                continue
-
-            # It's a tier set piece.  Add a Catalyst source row.
             try:
                 await conn.execute(
                     """
@@ -377,18 +361,15 @@ async def enrich_catalyst_tier_items(
                         source_instance = EXCLUDED.source_instance,
                         quality_tracks  = EXCLUDED.quality_tracks
                     """,
-                    wow_item_id,
+                    row["wow_item_id"],
                     expansion_name,
                     _RAID_TRACKS,
-                )
-                logger.debug(
-                    "Added Catalyst source for %s (%d) — set: %s",
-                    item_name, blizzard_item_id, data["item_set"].get("name", "?"),
                 )
                 added += 1
             except Exception as exc:
                 errors.append(
-                    f"DB error adding Catalyst source for {blizzard_item_id} ({item_name}): {exc}"
+                    f"DB error adding Catalyst source for {row['blizzard_item_id']} "
+                    f"({row['name']}): {exc}"
                 )
 
     return added, errors
