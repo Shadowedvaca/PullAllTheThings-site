@@ -125,6 +125,11 @@ def _contextual_sources(sources: list[dict], upgrade_tracks: list[str]) -> list[
         if not useful_tracks:
             continue
 
+        # World boss has its own category — no track suffix
+        if inst_type == "world_boss":
+            result.append({**src, "track_label": ""})
+            continue
+
         # Show the minimum useful track (closest to what the player needs now)
         min_useful = min(useful_tracks, key=lambda t: TRACK_ORDER.get(t, 99))
         result.append({**src, "track_label": _track_to_label(min_useful, inst_type)})
