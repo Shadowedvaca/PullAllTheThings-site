@@ -1258,35 +1258,21 @@ function _gpPill(t, tc) {
   return `<span class="mcn-track-pill" style="background:${_gpEsc(c)}">${_gpEsc(t)}</span>`;
 }
 
-// Convert quality_tracks to a minimum-difficulty label.
-// Shows the lowest available track with "+" (obtainable at that level and above).
-// Raid:    V→RF+  C→N+  H→H+  M→M
-// Dungeon: C→0+   H→4+  M→10+
-function _gpSourceTrackLabel(tracks, sourceType) {
-  if (!tracks || !tracks.length) return '';
-  const order = ['V', 'C', 'H', 'M'];
-  const min = order.find(t => tracks.includes(t));
-  if (!min) return '';
-  if (sourceType === 'dungeon') {
-    return { C: '0+', H: '4+', M: '10+' }[min] || '';
-  }
-  return { V: 'RF+', C: 'N+', H: 'H+', M: 'M' }[min] || '';
-}
-
 // Build grouped source HTML: one block per instance, bosses indented below.
+// track_label is computed server-side and stored on each source object.
 function _gpSourceHtml(sources, groupCls, instCls, bossCls) {
   if (!sources.length) return '';
   // Group by source_instance, preserving encounter order.
+  // All sources within the same instance share the same track_label.
   const instMap = new Map();
   for (const src of sources) {
     const key = src.source_instance || '';
     if (!instMap.has(key)) {
-      instMap.set(key, { sourceType: src.source_type, tracks: src.quality_tracks || [], bosses: [] });
+      instMap.set(key, { trackLabel: src.track_label || '', bosses: [] });
     }
     instMap.get(key).bosses.push(src.source_name);
   }
-  return [...instMap.entries()].map(([inst, { sourceType, tracks, bosses }]) => {
-    const trackLabel = _gpSourceTrackLabel(tracks, sourceType);
+  return [...instMap.entries()].map(([inst, { trackLabel, bosses }]) => {
     const header = inst
       ? `${_gpEsc(inst)}${trackLabel ? ` (${trackLabel})` : ''}`
       : (trackLabel || '');

@@ -51,6 +51,23 @@ SLOT_DISPLAY = {
 # Quality track ranking (lowest to highest)
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
 
+
+def _track_label(tracks: list[str], source_type: str) -> str:
+    """Return the minimum-difficulty display label for a set of quality tracks.
+
+    Shows the lowest available track with "+" to mean "this level and above".
+    Raid:    V→RF+  C→N+  H→H+  M→M
+    Dungeon: C→0+   H→4+  M→10+
+    """
+    if not tracks:
+        return ""
+    min_track = next((t for t in ("V", "C", "H", "M") if t in tracks), None)
+    if not min_track:
+        return ""
+    if source_type == "dungeon":
+        return {"C": "0+", "H": "4+", "M": "10+"}.get(min_track, "")
+    return {"V": "RF+", "C": "N+", "H": "H+", "M": "M"}.get(min_track, "")
+
 TRACK_COLORS: dict[str, str] = {
     "V": "#1eff00",
     "C": "#0070dd",
@@ -714,9 +731,6 @@ async def get_plan_detail(
             for r in src_rows:
                 bid = r["blizzard_item_id"]
                 tracks = list(r["quality_tracks"] or [])
-                # Raid boss items always include V (LFR) even if not stored in older data
-                if r["source_type"] == "raid_boss" and "V" not in tracks and "C" in tracks:
-                    tracks = ["V"] + tracks
                 existing_tracks = tracks_by_item.get(bid, [])
                 # Merge + deduplicate, preserving order V<C<H<M
                 merged = sorted(
@@ -729,6 +743,7 @@ async def get_plan_detail(
                     "source_name": r["source_name"],
                     "source_instance": r["source_instance"],
                     "quality_tracks": tracks,
+                    "track_label": _track_label(tracks, r["source_type"]),
                 })
 
         # Available BIS sources (for UI dropdowns)

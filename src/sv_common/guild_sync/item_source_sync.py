@@ -25,6 +25,8 @@ from .blizzard_client import BlizzardClient
 logger = logging.getLogger(__name__)
 
 _RAID_TRACKS: list[str] = ["V", "C", "H", "M"]
+# World bosses are outdoor encounters — no Raid Finder tier exists for them.
+_WORLD_BOSS_TRACKS: list[str] = ["C", "H", "M"]
 # Midnight Season 1 key thresholds: Hero = 6+ direct / 4+ vault, Mythic = 10+ vault.
 # M-track dungeon items are vault-only but are obtainable, so include M here.
 # Re-run "Sync Loot Tables" after deploy to update existing rows.
@@ -88,16 +90,18 @@ async def sync_item_sources(
 
     # Collect all instances: dungeons first, then raids.
     # Blizzard groups world boss encounters under a synthetic "instance" whose name
-    # matches the expansion (e.g. "Midnight").  Rename those to "World Boss" so the
-    # source displays correctly on the gear plan page.
+    # matches the expansion (e.g. "Midnight").  Detect these by name equality and
+    # classify them as "world_boss" so they get the correct tracks (no RF tier)
+    # and display as "World Boss" on the gear plan page.
     instances: list[dict] = []
     for inst in exp_data.get("dungeons", []):
         instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "dungeon"})
     for inst in exp_data.get("raids", []):
         inst_name = inst.get("name", "")
         if inst_name == expansion_name:
-            inst_name = "World Boss"
-        instances.append({"id": inst["id"], "name": inst_name, "type": "raid"})
+            instances.append({"id": inst["id"], "name": "World Boss", "type": "world_boss"})
+        else:
+            instances.append({"id": inst["id"], "name": inst_name, "type": "raid"})
 
     if not instances:
         return {
@@ -179,7 +183,12 @@ async def _sync_instance(
         logger.debug("No encounters in instance %s (%d)", instance_name, instance_id)
         return 0, 0, []
 
-    quality_tracks = _DUNGEON_TRACKS if instance_type == "dungeon" else _RAID_TRACKS
+    if instance_type == "dungeon":
+        quality_tracks = _DUNGEON_TRACKS
+    elif instance_type == "world_boss":
+        quality_tracks = _WORLD_BOSS_TRACKS
+    else:
+        quality_tracks = _RAID_TRACKS
     total_items = 0
 
     for enc in encounter_list:
@@ -231,7 +240,7 @@ async def _sync_encounter(
     if not items:
         return 0, []
 
-    db_source_type = "raid_boss" if source_type == "raid" else "dungeon"
+    db_source_type = "dungeon" if source_type == "dungeon" else "raid_boss"
     upserted = 0
 
     async with pool.acquire() as conn:
@@ -360,10 +369,12 @@ async def enrich_catalyst_tier_items(
         if not tier_items:
             return 0, []
 
-        # Build slot → [(boss_name, instance)] mapping from existing raid sources.
+        # Build slot → [(boss_name, instance, quality_tracks)] from existing raid sources.
+        # Include quality_tracks so world boss entries don't inherit full RAID_TRACKS (no RF).
         boss_rows = await conn.fetch(
             """
-            SELECT DISTINCT is2.source_name, is2.source_instance, wi.slot_type
+            SELECT DISTINCT is2.source_name, is2.source_instance,
+                            is2.quality_tracks, wi.slot_type
               FROM guild_identity.item_sources is2
               JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
              WHERE is2.source_type = 'raid_boss'
@@ -371,12 +382,12 @@ async def enrich_catalyst_tier_items(
             """,
             list(_TIER_SLOTS),
         )
-        slot_to_bosses: dict[str, list[tuple[str, str]]] = {}
+        slot_to_bosses: dict[str, list[tuple[str, str, list[str]]]] = {}
         for r in boss_rows:
             st = r["slot_type"]
             if st:
                 slot_to_bosses.setdefault(st, []).append(
-                    (r["source_name"], r["source_instance"])
+                    (r["source_name"], r["source_instance"], list(r["quality_tracks"] or []))
                 )
 
         logger.info(
@@ -388,9 +399,9 @@ async def enrich_catalyst_tier_items(
             bosses = slot_to_bosses.get(tier["eff_slot"], [])
             if not bosses:
                 # No boss data for this slot yet — use generic fallback.
-                bosses = [("Revival Catalyst", expansion_name)]
+                bosses = [("Revival Catalyst", expansion_name, _RAID_TRACKS)]
 
-            for boss_name, boss_instance in bosses:
+            for boss_name, boss_instance, boss_tracks in bosses:
                 try:
                     await conn.execute(
                         """
@@ -405,7 +416,7 @@ async def enrich_catalyst_tier_items(
                         tier["wow_item_id"],
                         boss_name,
                         boss_instance,
-                        _RAID_TRACKS,
+                        boss_tracks,
                     )
                     added += 1
                 except Exception as exc:
