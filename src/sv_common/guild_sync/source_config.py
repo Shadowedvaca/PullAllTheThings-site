@@ -63,6 +63,17 @@ def get_track_label(instance_type: str) -> str:
     min_track = next((t for t in ("V", "C", "H", "M") if t in tracks), None)
     if not min_track:
         return ""
+    return track_to_label(min_track, instance_type)
+
+
+def track_to_label(track: str, instance_type: str) -> str:
+    """Convert a specific track letter to its display label for the given instance type.
+
+    Used when the label must reflect the player's actual upgrade need rather than
+    the lowest track the instance offers.
+    Raid/world boss: V→RF+  C→N+  H→H+  M→M
+    Dungeon:         C→0+   H→4+  M→10+
+    """
     if instance_type == "dungeon":
-        return {"C": "0+", "H": "4+", "M": "10+"}.get(min_track, "")
-    return {"V": "RF+", "C": "N+", "H": "H+", "M": "M"}.get(min_track, "")
+        return {"C": "0+", "H": "4+", "M": "10+"}.get(track, "")
+    return {"V": "RF+", "C": "N+", "H": "H+", "M": "M"}.get(track, "")
