@@ -35,6 +35,9 @@ async def _require_gear_plan(request: Request, db: AsyncSession):
 @router.get("/admin/gear-plan", response_class=HTMLResponse)
 async def gear_plan_admin_page(request: Request):
     """Admin BIS Sync Dashboard."""
+    import os
+    from sv_common.config_cache import get_site_config
+
     from guild_portal.deps import get_db as _get_db
     async for db in _get_db():
         player = await _require_gear_plan(request, db)
@@ -47,6 +50,15 @@ async def gear_plan_admin_page(request: Request):
         rank_level = player.guild_rank.level if player.guild_rank else 0
         is_gl = rank_level >= 5
 
+        # Check whether Blizzard API credentials are configured so the template
+        # can grey out the Sync Loot Tables button when they're missing.
+        cfg = get_site_config() or {}
+        has_blizzard = bool(
+            os.environ.get("BLIZZARD_CLIENT_ID") or cfg.get("blizzard_client_id")
+        ) and bool(
+            os.environ.get("BLIZZARD_CLIENT_SECRET") or cfg.get("blizzard_client_secret_encrypted")
+        )
+
         return templates.TemplateResponse(
             "admin/gear_plan.html",
             {
@@ -55,6 +67,7 @@ async def gear_plan_admin_page(request: Request):
                 "nav_items": nav_items,
                 "current_screen": "gear_plan",
                 "is_gl": is_gl,
+                "has_blizzard": has_blizzard,
             },
         )
 

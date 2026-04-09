@@ -17,6 +17,7 @@
     padding: 1rem 1.25rem;
 }
 .gp-controls__label { color: var(--color-text-muted); font-size: 0.85rem; margin-right: 0.25rem; }
+.gp-controls__divider { width: 1px; height: 1.4rem; background: var(--color-border); align-self: center; }
 
 .gp-status-bar {
     background: var(--color-card);
@@ -408,6 +409,14 @@ select.gp-select {
     {# ── Controls bar ─────────────────────────────────────────────────────── #}
     <div class="gp-controls">
         {% if is_gl %}
+        <button id="sync-item-sources-btn" class="btn-sm btn-primary"
+                onclick="syncItemSources()"
+                {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}>
+            Sync Loot Tables
+        </button>
+
+        <div class="gp-controls__divider"></div>
+
         <button id="discover-btn" class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
 
         <span class="gp-controls__label">Website:</span>
@@ -550,10 +559,6 @@ select.gp-select {
                 Sync once per season after new content launches.
             </p>
             <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
-                {% if is_gl %}
-                <button class="btn-sm btn-primary" id="sync-item-sources-btn"
-                        onclick="syncItemSources()">Sync Loot Tables</button>
-                {% endif %}
                 <select class="gp-select" id="item-sources-filter-instance"
                         onchange="loadItemSources()">
                     <option value="">All instances</option>
