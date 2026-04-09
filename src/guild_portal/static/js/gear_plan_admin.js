@@ -1537,8 +1537,13 @@ async function syncItemSources() {
 
     try {
         const r = await fetch('/api/v1/admin/bis/sync-item-sources', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: server returned non-JSON response. Check app logs.\n${text.slice(0, 200)}`);
+        }
         const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Sync failed');
+        if (!d.ok) throw new Error(d.error || d.detail || 'Sync failed');
 
         const errCount = (d.errors || []).length;
         const enriched = d.items_enriched != null ? `, ${d.items_enriched} enriched` : '';

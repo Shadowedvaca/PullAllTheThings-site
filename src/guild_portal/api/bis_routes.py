@@ -477,7 +477,7 @@ async def _get_blizzard_client(request: Request):
 
     if not client_id or not client_secret:
         raise HTTPException(
-            status_code=503,
+            status_code=400,
             detail="Blizzard API credentials not configured — set them in Admin → Site Config",
         )
 
@@ -503,7 +503,7 @@ async def sync_item_sources(
     """Trigger Journal API item source sync for the current (or given) expansion (GL only).
 
     Populates guild_identity.item_sources with boss/dungeon loot tables.
-    Quality tracks: raid boss → C/H/M, dungeon → C/H.
+    Quality tracks: raid boss → V/C/H/M, dungeon → C/H/M (Midnight S1).
     """
     pool = _pool(request)
     client = await _get_blizzard_client(request)
