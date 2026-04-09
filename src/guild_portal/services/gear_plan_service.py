@@ -52,22 +52,6 @@ SLOT_DISPLAY = {
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
 
 
-def _track_label(tracks: list[str], source_type: str) -> str:
-    """Return the minimum-difficulty display label for a set of quality tracks.
-
-    Shows the lowest available track with "+" to mean "this level and above".
-    Raid:    V→RF+  C→N+  H→H+  M→M
-    Dungeon: C→0+   H→4+  M→10+
-    """
-    if not tracks:
-        return ""
-    min_track = next((t for t in ("V", "C", "H", "M") if t in tracks), None)
-    if not min_track:
-        return ""
-    if source_type == "dungeon":
-        return {"C": "0+", "H": "4+", "M": "10+"}.get(min_track, "")
-    return {"V": "RF+", "C": "N+", "H": "H+", "M": "M"}.get(min_track, "")
-
 TRACK_COLORS: dict[str, str] = {
     "V": "#1eff00",
     "C": "#0070dd",
@@ -713,15 +697,20 @@ async def get_plan_detail(
             if d.get("blizzard_item_id"):
                 all_bids.add(d["blizzard_item_id"])
 
-        # Available quality tracks per blizzard_item_id
+        # Available quality tracks per blizzard_item_id (derived from source_config)
         tracks_by_item: dict[int, list[str]] = {}
-        # Also get source location info
+        # Source location info for display
         sources_by_item: dict[int, list[dict]] = {}
         if all_bids:
+            from sv_common.guild_sync.source_config import (
+                get_tracks as _get_tracks,
+                get_display_name as _get_display_name,
+                get_track_label as _get_track_label,
+            )
             src_rows = await conn.fetch(
                 """
-                SELECT wi.blizzard_item_id, is2.source_type, is2.source_name,
-                       is2.source_instance, is2.quality_tracks
+                SELECT wi.blizzard_item_id, is2.instance_type,
+                       is2.encounter_name, is2.instance_name
                   FROM guild_identity.item_sources is2
                   JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
                  WHERE wi.blizzard_item_id = ANY($1::int[])
@@ -730,7 +719,8 @@ async def get_plan_detail(
             )
             for r in src_rows:
                 bid = r["blizzard_item_id"]
-                tracks = list(r["quality_tracks"] or [])
+                inst_type = r["instance_type"]
+                tracks = _get_tracks(inst_type)
                 existing_tracks = tracks_by_item.get(bid, [])
                 # Merge + deduplicate, preserving order V<C<H<M
                 merged = sorted(
@@ -739,11 +729,11 @@ async def get_plan_detail(
                 )
                 tracks_by_item[bid] = merged
                 sources_by_item.setdefault(bid, []).append({
-                    "source_type": r["source_type"],
-                    "source_name": r["source_name"],
-                    "source_instance": r["source_instance"],
-                    "quality_tracks": tracks,
-                    "track_label": _track_label(tracks, r["source_type"]),
+                    "instance_type": inst_type,
+                    "encounter_name": r["encounter_name"],
+                    "instance_name": r["instance_name"],
+                    "display_name": _get_display_name(r["instance_name"] or "", inst_type),
+                    "track_label": _get_track_label(inst_type),
                 })
 
         # Available BIS sources (for UI dropdowns)

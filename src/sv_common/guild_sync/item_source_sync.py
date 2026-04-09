@@ -3,15 +3,14 @@
 Fetches loot tables for the current expansion's raid + M+ dungeons and
 upserts into guild_identity.item_sources.
 
-Quality tracks inferred from source type:
-  - Raid boss  → {C, H, M}
-  - M+ dungeon → {C, H}
+instance_type values:
+  'raid'       — regular raid boss
+  'world_boss' — outdoor world boss (raid instance named after the expansion)
+  'dungeon'    — M+ dungeon encounter
 
-Run once per season via Admin → Gear Plan (Item Sources section).
-
-Stub wow_items rows are created for any item not yet in the cache; full
-metadata (icon, slot type, tooltip) is populated lazily by item_service.py
-when the item is first viewed.
+Track assignments and display names live in source_config.py.
+Re-run "Sync Loot Tables" only when Blizzard data changes (new season/content).
+Display/track rule changes only require a code deploy — no re-sync.
 """
 
 import asyncio
@@ -21,19 +20,15 @@ from typing import Optional
 import asyncpg
 
 from .blizzard_client import BlizzardClient
+from .source_config import get_tracks
 
 logger = logging.getLogger(__name__)
 
-_RAID_TRACKS: list[str] = ["V", "C", "H", "M"]
-# World bosses are outdoor encounters — no Raid Finder tier exists for them.
-_WORLD_BOSS_TRACKS: list[str] = ["C", "H", "M"]
-# Midnight Season 1 key thresholds: Hero = 6+ direct / 4+ vault, Mythic = 10+ vault.
-# M-track dungeon items are vault-only but are obtainable, so include M here.
-# Re-run "Sync Loot Tables" after deploy to update existing rows.
-_DUNGEON_TRACKS: list[str] = ["C", "H", "M"]
-
 # Delay between encounter fetches to avoid hammering the API.
 _ENCOUNTER_DELAY = 0.2
+
+# Tier set item slots — the only slots where Catalyst-obtained items can exist.
+_TIER_SLOTS = {"head", "shoulder", "chest", "hands", "legs"}
 
 
 async def sync_item_sources(
@@ -43,16 +38,11 @@ async def sync_item_sources(
 ) -> dict:
     """Sync item→source mappings for the latest (or given) expansion.
 
-    1. Resolve expansion (index → max id, or use provided expansion_id).
-    2. For each dungeon and raid instance, fetch encounter list.
-    3. For each encounter, fetch items and upsert into item_sources.
+    Stores raw API data — instance names, encounter names, instance type.
+    Track assignment and display names are derived at read time from source_config.
 
-    Returns a summary dict:
-        expansion_name  — display name
-        instances_synced — number of instances processed without fatal error
-        encounters_synced — total encounter rows processed
-        items_upserted  — total item_sources rows written
-        errors          — list of non-fatal error strings
+    Returns a summary dict with expansion_name, instances_synced,
+    encounters_synced, items_upserted, catalyst_tier_items, errors.
     """
     errors: list[str] = []
 
@@ -67,7 +57,6 @@ async def sync_item_sources(
                 "items_upserted": 0,
                 "errors": ["Could not fetch expansion index from Blizzard API"],
             }
-        # Most recent expansion has the highest id.
         tier = max(tiers, key=lambda t: t.get("id", 0))
         expansion_id = tier["id"]
         expansion_name = tier.get("name", f"Expansion {expansion_id}")
@@ -88,20 +77,18 @@ async def sync_item_sources(
 
     expansion_name = exp_data.get("name", expansion_name)
 
-    # Collect all instances: dungeons first, then raids.
-    # Blizzard groups world boss encounters under a synthetic "instance" whose name
-    # matches the expansion (e.g. "Midnight").  Detect these by name equality and
-    # classify them as "world_boss" so they get the correct tracks (no RF tier)
-    # and display as "World Boss" on the gear plan page.
+    # Collect instances.  Blizzard groups world boss encounters under a
+    # synthetic raid instance named after the expansion — classify those as
+    # 'world_boss'.  All other raid instances are 'raid'; M+ are 'dungeon'.
+    # instance_name is stored RAW from the API; display name is derived by
+    # source_config at read time.
     instances: list[dict] = []
     for inst in exp_data.get("dungeons", []):
         instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "dungeon"})
     for inst in exp_data.get("raids", []):
         inst_name = inst.get("name", "")
-        if inst_name == expansion_name:
-            instances.append({"id": inst["id"], "name": "World Boss", "type": "world_boss"})
-        else:
-            instances.append({"id": inst["id"], "name": inst_name, "type": "raid"})
+        inst_type = "world_boss" if inst_name == expansion_name else "raid"
+        instances.append({"id": inst["id"], "name": inst_name, "type": inst_type})
 
     if not instances:
         return {
@@ -139,10 +126,8 @@ async def sync_item_sources(
             logger.error(msg)
             errors.append(msg)
 
-    # ── Tier set / Catalyst enrichment ────────────────────────────────────────
-    catalyst_added, catalyst_errors = await enrich_catalyst_tier_items(
-        pool, expansion_name
-    )
+    # ── 3. Tier set / Catalyst enrichment ─────────────────────────────────
+    catalyst_added, catalyst_errors = await enrich_catalyst_tier_items(pool)
     errors.extend(catalyst_errors)
 
     return {
@@ -172,7 +157,6 @@ async def _sync_instance(
     if not inst_data:
         return 0, 0, [f"Could not fetch instance {instance_id} from Blizzard API"]
 
-    # encounters may be nested: {"encounters": {"encounters": [...]}}
     enc_section = inst_data.get("encounters", {})
     if isinstance(enc_section, dict):
         encounter_list = enc_section.get("encounters", [])
@@ -183,14 +167,7 @@ async def _sync_instance(
         logger.debug("No encounters in instance %s (%d)", instance_name, instance_id)
         return 0, 0, []
 
-    if instance_type == "dungeon":
-        quality_tracks = _DUNGEON_TRACKS
-    elif instance_type == "world_boss":
-        quality_tracks = _WORLD_BOSS_TRACKS
-    else:
-        quality_tracks = _RAID_TRACKS
     total_items = 0
-
     for enc in encounter_list:
         enc_id = enc.get("id")
         enc_name = enc.get("name", "")
@@ -202,7 +179,7 @@ async def _sync_instance(
                 pool, client,
                 enc_id, enc_name,
                 instance_id, instance_name,
-                instance_type, quality_tracks,
+                instance_type,
             )
             total_items += item_count
             errors.extend(enc_errors)
@@ -223,11 +200,11 @@ async def _sync_encounter(
     encounter_name: str,
     instance_id: int,
     instance_name: str,
-    source_type: str,
-    quality_tracks: list[str],
+    instance_type: str,
 ) -> tuple[int, list[str]]:
     """Fetch items for one encounter and upsert into item_sources.
 
+    Stores raw names and instance_type.  No quality_tracks column.
     Returns (items_upserted, errors).
     """
     errors: list[str] = []
@@ -240,24 +217,17 @@ async def _sync_encounter(
     if not items:
         return 0, []
 
-    db_source_type = "dungeon" if source_type == "dungeon" else "raid_boss"
     upserted = 0
 
     async with pool.acquire() as conn:
         for item_entry in items:
-            # Actual Blizzard item ID lives under item.id, not the top-level id
-            # (the top-level id is the journal encounter-item join key).
             item_obj = item_entry.get("item") or {}
             blizzard_item_id = item_obj.get("id")
             if not blizzard_item_id:
                 continue
 
-            # Name is nested under item_entry["item"]["name"], not at the top level.
             item_name = item_obj.get("name", "")
 
-            # Ensure a wow_items stub row exists.  Update name if it was previously
-            # stored blank (first sync had the extraction bug); never overwrite
-            # icon_url / slot_type that item_service has already populated.
             await conn.execute(
                 """
                 INSERT INTO guild_identity.wow_items
@@ -275,7 +245,6 @@ async def _sync_encounter(
                 item_name,
             )
 
-            # Look up the internal id (may have just been inserted above).
             row = await conn.fetchrow(
                 "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
                 blizzard_item_id,
@@ -284,28 +253,25 @@ async def _sync_encounter(
                 continue
             wow_item_id = row["id"]
 
-            # Upsert into item_sources.
             try:
                 await conn.execute(
                     """
                     INSERT INTO guild_identity.item_sources
-                           (item_id, source_type, source_name, source_instance,
-                            blizzard_encounter_id, blizzard_instance_id, quality_tracks)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                    ON CONFLICT (item_id, source_type, source_name)
+                           (item_id, instance_type, encounter_name, instance_name,
+                            blizzard_encounter_id, blizzard_instance_id)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (item_id, instance_type, encounter_name)
                     DO UPDATE SET
-                        source_instance       = EXCLUDED.source_instance,
+                        instance_name         = EXCLUDED.instance_name,
                         blizzard_encounter_id = EXCLUDED.blizzard_encounter_id,
-                        blizzard_instance_id  = EXCLUDED.blizzard_instance_id,
-                        quality_tracks        = EXCLUDED.quality_tracks
+                        blizzard_instance_id  = EXCLUDED.blizzard_instance_id
                     """,
                     wow_item_id,
-                    db_source_type,
+                    instance_type,
                     encounter_name,
                     instance_name,
                     encounter_id,
                     instance_id,
-                    quality_tracks,
                 )
                 upserted += 1
             except Exception as exc:
@@ -317,35 +283,26 @@ async def _sync_encounter(
     return upserted, errors
 
 
-# Tier set item slots — the only slots where Catalyst-obtained items can exist.
-_TIER_SLOTS = {"head", "shoulder", "chest", "hands", "legs"}
-
-
 async def enrich_catalyst_tier_items(
     pool: asyncpg.Pool,
-    expansion_name: str,
 ) -> tuple[int, list[str]]:
     """Add per-boss source rows for tier set BIS items obtained via Revival Catalyst.
 
-    Tier set pieces (e.g. "Blind Oath's Leggings") don't appear in the Blizzard
-    Journal encounter item lists.  They're obtained by converting any eligible
-    boss drop via the Revival Catalyst.
-
-    Detection: items in tier slots whose Wowhead tooltip HTML contains an
-    /item-set=N/ link.  For each such item, we mirror the source rows of all
-    raid bosses that drop gear in the same slot — those are the bosses a player
-    would farm to get a Catalyst-convertible piece.
+    Tier set pieces don't appear in the Blizzard Journal encounter item lists.
+    Detection: Wowhead tooltip HTML contains an /item-set=N/ link.
+    For each such item, mirror source rows of all bosses that drop gear in the
+    same slot — those are the bosses a player farms to get a Catalyst piece.
 
     Returns (rows_added, errors).
     """
     errors: list[str] = []
 
     async with pool.acquire() as conn:
-        # Remove stale "Revival Catalyst" generic rows (replaced by per-boss rows).
+        # Remove stale generic "Revival Catalyst" rows (replaced by per-boss rows).
         await conn.execute(
             """
             DELETE FROM guild_identity.item_sources
-             WHERE source_name = 'Revival Catalyst'
+             WHERE encounter_name = 'Revival Catalyst'
                AND item_id IN (
                    SELECT wi.id FROM guild_identity.wow_items wi
                     WHERE wi.wowhead_tooltip_html LIKE '%/item-set=%'
@@ -369,25 +326,26 @@ async def enrich_catalyst_tier_items(
         if not tier_items:
             return 0, []
 
-        # Build slot → [(boss_name, instance, quality_tracks)] from existing raid sources.
-        # Include quality_tracks so world boss entries don't inherit full RAID_TRACKS (no RF).
+        # Build slot → [(encounter_name, instance_name, instance_type)] from
+        # existing boss sources (raid + world_boss).
         boss_rows = await conn.fetch(
             """
-            SELECT DISTINCT is2.source_name, is2.source_instance,
-                            is2.quality_tracks, wi.slot_type
+            SELECT DISTINCT is2.encounter_name, is2.instance_name,
+                            is2.instance_type, wi.slot_type
               FROM guild_identity.item_sources is2
               JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
-             WHERE is2.source_type = 'raid_boss'
+             WHERE is2.instance_type IN ('raid', 'world_boss')
                AND wi.slot_type = ANY($1::text[])
             """,
             list(_TIER_SLOTS),
         )
-        slot_to_bosses: dict[str, list[tuple[str, str, list[str]]]] = {}
+
+        slot_to_bosses: dict[str, list[tuple[str, str, str]]] = {}
         for r in boss_rows:
             st = r["slot_type"]
             if st:
                 slot_to_bosses.setdefault(st, []).append(
-                    (r["source_name"], r["source_instance"], list(r["quality_tracks"] or []))
+                    (r["encounter_name"], r["instance_name"], r["instance_type"])
                 )
 
         logger.info(
@@ -398,31 +356,29 @@ async def enrich_catalyst_tier_items(
         for tier in tier_items:
             bosses = slot_to_bosses.get(tier["eff_slot"], [])
             if not bosses:
-                # No boss data for this slot yet — use generic fallback.
-                bosses = [("Revival Catalyst", expansion_name, _RAID_TRACKS)]
+                bosses = [("Revival Catalyst", "Revival Catalyst", "raid")]
 
-            for boss_name, boss_instance, boss_tracks in bosses:
+            for enc_name, inst_name, inst_type in bosses:
                 try:
                     await conn.execute(
                         """
                         INSERT INTO guild_identity.item_sources
-                               (item_id, source_type, source_name, source_instance, quality_tracks)
-                        VALUES ($1, 'raid_boss', $2, $3, $4)
-                        ON CONFLICT (item_id, source_type, source_name)
+                               (item_id, instance_type, encounter_name, instance_name)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (item_id, instance_type, encounter_name)
                         DO UPDATE SET
-                            source_instance = EXCLUDED.source_instance,
-                            quality_tracks  = EXCLUDED.quality_tracks
+                            instance_name = EXCLUDED.instance_name
                         """,
                         tier["wow_item_id"],
-                        boss_name,
-                        boss_instance,
-                        boss_tracks,
+                        inst_type,
+                        enc_name,
+                        inst_name,
                     )
                     added += 1
                 except Exception as exc:
                     errors.append(
                         f"DB error for {tier['blizzard_item_id']} ({tier['name']}) "
-                        f"boss {boss_name!r}: {exc}"
+                        f"boss {enc_name!r}: {exc}"
                     )
 
     return added, errors
@@ -432,7 +388,7 @@ async def get_item_sources(
     pool: asyncpg.Pool,
     instance_name: Optional[str] = None,
     instance_id: Optional[int] = None,
-    source_type: Optional[str] = None,
+    instance_type: Optional[str] = None,
     limit: int = 500,
 ) -> list[dict]:
     """Query item sources, optionally filtered.
@@ -447,10 +403,10 @@ async def get_item_sources(
         conditions.append(f"s.blizzard_instance_id = ${len(args)}")
     if instance_name:
         args.append(instance_name)
-        conditions.append(f"s.source_instance = ${len(args)}")
-    if source_type:
-        args.append(source_type)
-        conditions.append(f"s.source_type = ${len(args)}")
+        conditions.append(f"s.instance_name = ${len(args)}")
+    if instance_type:
+        args.append(instance_type)
+        conditions.append(f"s.instance_type = ${len(args)}")
 
     args.append(limit)
     where = " AND ".join(conditions)
@@ -458,15 +414,14 @@ async def get_item_sources(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             f"""
-            SELECT s.id, s.source_type, s.source_name, s.source_instance,
+            SELECT s.id, s.instance_type, s.encounter_name, s.instance_name,
                    s.blizzard_encounter_id, s.blizzard_instance_id,
-                   s.quality_tracks,
                    wi.blizzard_item_id, wi.name AS item_name,
                    wi.slot_type, wi.icon_url
               FROM guild_identity.item_sources s
               JOIN guild_identity.wow_items wi ON wi.id = s.item_id
              WHERE {where}
-             ORDER BY s.source_instance, s.source_name, wi.slot_type, wi.name
+             ORDER BY s.instance_name, s.encounter_name, wi.slot_type, wi.name
              LIMIT ${len(args)}
             """,
             *args,
@@ -475,14 +430,14 @@ async def get_item_sources(
 
 
 async def get_instance_names(pool: asyncpg.Pool) -> list[str]:
-    """Return distinct source_instance values for filter dropdowns."""
+    """Return distinct instance_name values for filter dropdowns."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT DISTINCT source_instance
+            SELECT DISTINCT instance_name
               FROM guild_identity.item_sources
-             WHERE source_instance IS NOT NULL
-             ORDER BY source_instance
+             WHERE instance_name IS NOT NULL
+             ORDER BY instance_name
             """
         )
-    return [r["source_instance"] for r in rows]
+    return [r["instance_name"] for r in rows]

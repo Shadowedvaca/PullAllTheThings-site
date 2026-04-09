@@ -566,7 +566,8 @@ select.gp-select {
                 <select class="gp-select" id="item-sources-filter-type"
                         onchange="loadItemSources()">
                     <option value="">All types</option>
-                    <option value="raid_boss">Raid</option>
+                    <option value="raid">Raid</option>
+                    <option value="world_boss">World Boss</option>
                     <option value="dungeon">Dungeon</option>
                 </select>
                 <button class="btn-sm btn-secondary" onclick="loadItemSources()">Refresh</button>
@@ -579,10 +580,10 @@ select.gp-select {
                         <tr>
                             <th>Item</th>
                             <th>Slot</th>
-                            <th>Boss / Dungeon</th>
+                            <th>Encounter</th>
                             <th>Instance</th>
                             <th>Type</th>
-                            <th>Tracks</th>
+                            <th>Category</th>
                             {% if is_gl %}<th></th>{% endif %}
                         </tr>
                     </thead>

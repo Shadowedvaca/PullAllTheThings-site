@@ -1575,7 +1575,7 @@ async function loadItemSources() {
 
     const params = new URLSearchParams();
     if (instance) params.set('instance_name', instance);
-    if (type)     params.set('source_type', type);
+    if (type)     params.set('instance_type', type);
     params.set('limit', '500');
 
     try {
@@ -1627,11 +1627,8 @@ function renderItemSources(rows) {
     for (const row of rows) {
         const tr = document.createElement('tr');
 
-        const tracks = (row.quality_tracks || [])
-            .map(t => `<span style="font-weight:700; color:${_TRACK_COLORS[t] || '#888'};">${t}</span>`)
-            .join(' ');
-
-        const typeLabel = row.source_type === 'raid_boss' ? 'Raid' : 'Dungeon';
+        const TYPE_LABELS = { raid: 'Raid', world_boss: 'World Boss', dungeon: 'Dungeon' };
+        const typeLabel = TYPE_LABELS[row.instance_type] || row.instance_type || '—';
         const slotLabel = row.slot_type && row.slot_type !== 'other'
             ? row.slot_type.replace(/_/g, ' ')
             : '—';
@@ -1650,10 +1647,10 @@ function renderItemSources(rows) {
         tr.innerHTML = `
             <td>${icon}<a href="https://www.wowhead.com/item=${row.blizzard_item_id}" target="_blank" rel="noopener" style="color:inherit;">${row.item_name || `Item #${row.blizzard_item_id}`}</a> <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span></td>
             <td>${slotLabel}</td>
-            <td>${row.source_name || '—'}</td>
-            <td>${row.source_instance || '—'}</td>
+            <td>${row.encounter_name || '—'}</td>
+            <td>${row.instance_name || '—'}</td>
             <td style="color:var(--color-text-muted);">${typeLabel}</td>
-            <td>${tracks}</td>
+            <td style="color:var(--color-text-muted); font-size:0.8rem;">${row.instance_type || '—'}</td>
             ${deleteCell}
         `;
         tbody.appendChild(tr);

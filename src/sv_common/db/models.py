@@ -1592,11 +1592,11 @@ class WowItem(Base):
 
 
 class ItemSource(Base):
-    """Boss / dungeon / world source for a WoW item."""
+    """Boss / dungeon / world boss source for a WoW item."""
 
     __tablename__ = "item_sources"
     __table_args__ = (
-        UniqueConstraint("item_id", "source_type", "source_name", name="uq_item_source"),
+        UniqueConstraint("item_id", "instance_type", "encounter_name", name="uq_item_source"),
         {"schema": "guild_identity"},
     )
 
@@ -1604,14 +1604,11 @@ class ItemSource(Base):
     item_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"), nullable=False
     )
-    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    source_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    source_instance: Mapped[Optional[str]] = mapped_column(String(100))
+    instance_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    encounter_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    instance_name: Mapped[Optional[str]] = mapped_column(String(100))
     blizzard_encounter_id: Mapped[Optional[int]] = mapped_column(Integer)
     blizzard_instance_id: Mapped[Optional[int]] = mapped_column(Integer)
-    quality_tracks: Mapped[list] = mapped_column(
-        ARRAY(String), nullable=False, server_default="{}"
-    )
 
     item: Mapped["WowItem"] = relationship()
 

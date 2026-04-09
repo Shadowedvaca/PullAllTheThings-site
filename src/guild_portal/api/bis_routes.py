@@ -521,7 +521,7 @@ async def list_item_sources(
     request: Request,
     instance_name: Optional[str] = None,
     instance_id: Optional[int] = None,
-    source_type: Optional[str] = None,
+    instance_type: Optional[str] = None,
     limit: int = 500,
 ):
     """List item→source mappings, optionally filtered by instance or type."""
@@ -531,7 +531,7 @@ async def list_item_sources(
         pool,
         instance_name=instance_name,
         instance_id=instance_id,
-        source_type=source_type,
+        instance_type=instance_type,
         limit=limit,
     )
     instances = await get_instance_names(pool)
