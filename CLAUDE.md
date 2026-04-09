@@ -235,13 +235,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1D.1 (complete)** — Small fixes bundle. Fix 1: tier set source display via `enrich_catalyst_tier_items()` in `item_source_sync.py`. Fix 2: M+ dungeon items eligible for Mythic track. Fix 3: gear table row click → slot panel. Also: ELT refactor for item_sources (migration 0082 — renames columns, drops `quality_tracks`), `source_config.py` as single source of truth for track assignments and display names, contextual track labels (show what player needs not instance minimum), world boss sources hidden when C not in upgrade_tracks, world boss shows no track suffix. Phases UI-1A–1H also complete.
+- **Phase 1D.3 (complete)** — Crafted item support. `detect_crafted_track()` in `quality_track.py` — detects H vs M from bonus IDs with admin-configured ilvl fallback (`site_config.crafted_m_ilvl_threshold`, migration 0083). `get_plan_detail()` detects crafted desired items (from equipped bonus_ids or Wowhead tooltip "Optional Reagent Slot") and returns `crafted_source` block per slot. Gear table Source column shows "Crafted Item + [H/M] pill". Slot drawer Drop Location shows crafted section with track + Crafting Corner link. Admin → Site Config: new Gear Plan card with crafted threshold field. Crafter count/names deferred (requires `result_item_id` on `recipes` table — see Known Gaps). Phases 1D.1 also complete.
 - **Branch:** `feature/gear-plan-phase-1d`
-- **Tests:** 1269 pass (2 pre-existing bnet failures unchanged)
-- **Last migration:** 0082
+- **Tests:** 1275 pass (2 pre-existing bnet failures unchanged)
+- **Last migration:** 0083
 - **Last prod tag:** `prod-v0.11.2`
 - **Active branch:** `feature/gear-plan-phase-1d`
-- **Next:** Merge to main / prod tag. Then Phase 1D.2 (enhanced source display) or 1D.3 (crafted items).
+- **Next:** Merge to main / prod tag. Then Phase 1D.2 (enhanced source display) or 1E (roster aggregation).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

@@ -1563,9 +1563,20 @@ function _gpRenderGearTable(slots, tc) {
     }
 
     // ── Source cell ────────────────────────────────────────────────────────
-    const sourceHtml = sources.length
-      ? _gpSourceHtml(sources, 'mcn-gt__source-group', 'mcn-gt__source-inst', 'mcn-gt__source-boss')
-      : '<span class="mcn-gt__empty">&mdash;</span>';
+    const craftedSrc = sd.crafted_source || null;
+    let sourceHtml;
+    if (craftedSrc) {
+      const ct = craftedSrc.track || 'H';
+      const cc = _gpColor(ct, tc);
+      sourceHtml = `<div class="mcn-gt__crafted-source">
+        <span class="mcn-gt__crafted-label">Crafted Item</span>
+        <span class="mcn-track-pill" style="background:${_gpEsc(cc)}">${_gpEsc(ct)}</span>
+      </div>`;
+    } else if (sources.length) {
+      sourceHtml = _gpSourceHtml(sources, 'mcn-gt__source-group', 'mcn-gt__source-inst', 'mcn-gt__source-boss');
+    } else {
+      sourceHtml = '<span class="mcn-gt__empty">&mdash;</span>';
+    }
 
     // ── Upgrades cell ──────────────────────────────────────────────────────
     let upgradesHtml;
@@ -1999,8 +2010,23 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   </div>`;
 
   // 4 — Drop source
+  const craftedSource = sd.crafted_source || null;
   let dropHtml;
-  if (sources.length) {
+  if (craftedSource) {
+    const ct = craftedSource.track || 'H';
+    const cc = _gpColor(ct, tc);
+    const pill = `<span class="mcn-track-pill" style="background:${_gpEsc(cc)}">${_gpEsc(ct)}-Crest</span>`;
+    const ccUrl = _gpEsc(craftedSource.crafting_corner_url || '/crafting-corner');
+    dropHtml = `<div class="mcn-crafted-section">
+      <div class="mcn-crafted-section__header">
+        <span class="mcn-crafted-section__label">Crafted Item</span>
+        ${pill}
+      </div>
+      <a href="${ccUrl}" class="mcn-crafted-section__link" target="_self">
+        Order in Crafting Corner &rarr;
+      </a>
+    </div>`;
+  } else if (sources.length) {
     const tPills = tracks.map(t => _gpPill(t, tc)).join(' ');
     const uPills = upgrades.map(t => _gpPill(t, tc)).join(' ');
     const srcBlock = _gpSourceHtml(

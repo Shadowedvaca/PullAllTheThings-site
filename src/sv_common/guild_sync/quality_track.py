@@ -150,3 +150,37 @@ def is_crafted_item(bonus_ids: list[int]) -> bool:
     if not bonus_ids:
         return False
     return bool(frozenset(bonus_ids) & _CRAFTED_BONUS_IDS)
+
+
+def detect_crafted_track(
+    bonus_ids: Optional[list[int]],
+    item_level: Optional[int] = None,
+    m_ilvl_threshold: Optional[int] = None,
+    custom_bonus_map: Optional[dict[str, list[int]]] = None,
+) -> Optional[str]:
+    """Detect H or M quality track for a crafted item.
+
+    Priority:
+    1. Bonus ID detection — H/M crest bonus IDs overlap with the standard
+       track mapping (_DEFAULT_SIMC_BONUS_IDS) so ``track_from_bonus_ids``
+       already covers them.
+    2. Admin-configured ilvl threshold — if item_level >= m_ilvl_threshold → M.
+    3. Default fallback — crafted items default to Hero (H) track.
+
+    Returns None if bonus_ids do not indicate a crafted item at all.
+    """
+    if not is_crafted_item(bonus_ids or []):
+        return None
+
+    # Try bonus ID map for H or M
+    if bonus_ids:
+        track = track_from_bonus_ids(bonus_ids, custom_bonus_map)
+        if track in ("H", "M"):
+            return track
+
+    # Fallback: admin-configured ilvl threshold
+    if m_ilvl_threshold and item_level and item_level >= m_ilvl_threshold:
+        return "M"
+
+    # Default: crafted gear is Hero-track equivalent
+    return "H"

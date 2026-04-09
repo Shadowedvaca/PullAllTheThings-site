@@ -12,7 +12,7 @@ from typing import Optional
 
 import asyncpg
 
-from sv_common.guild_sync.quality_track import is_crafted_item
+from sv_common.guild_sync.quality_track import detect_crafted_track, is_crafted_item
 from sv_common.guild_sync.simc_parser import (
     SimcSlot,
     export_gear_plan,
@@ -697,11 +697,11 @@ async def get_plan_detail(
             d["is_crafted"] = is_crafted_item(d.get("bonus_ids") or [])
             equipped_by_slot[r["slot"]] = d
 
-        # Desired items (plan slots)
+        # Desired items (plan slots) — include tooltip for crafted detection
         desired_rows = await conn.fetch(
             """
             SELECT gps.slot, gps.blizzard_item_id, gps.item_name, gps.is_locked,
-                   wi.icon_url
+                   wi.icon_url, wi.wowhead_tooltip_html
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
              WHERE gps.plan_id = $1
@@ -709,6 +709,14 @@ async def get_plan_detail(
             plan_id,
         )
         desired_by_slot: dict[str, dict] = {r["slot"]: dict(r) for r in desired_rows}
+
+        # Admin-configured ilvl threshold for crafted M-track detection
+        cfg_row = await conn.fetchrow(
+            "SELECT crafted_m_ilvl_threshold FROM common.site_config LIMIT 1"
+        )
+        crafted_m_ilvl_threshold: Optional[int] = (
+            cfg_row["crafted_m_ilvl_threshold"] if cfg_row else None
+        )
 
         # BIS recommendations for this spec + hero_talent
         bis_by_slot: dict[str, list[dict]] = {}
@@ -845,6 +853,37 @@ async def get_plan_detail(
         # No border = no goal set for this slot (no data to compare).
         needs_upgrade = bool(desired_bid and not is_bis)
 
+        # Crafted item detection for the desired item.
+        # Primary: if the desired item is also equipped, reuse equipped bonus_ids.
+        # Fallback: check Wowhead tooltip for "Optional Reagent Slot" text.
+        crafted_source: Optional[dict] = None
+        if desired_bid:
+            equipped_bonus_ids: Optional[list[int]] = None
+            equipped_ilvl: Optional[int] = None
+            if equipped and equipped.get("blizzard_item_id") == desired_bid:
+                equipped_bonus_ids = equipped.get("bonus_ids") or []
+                equipped_ilvl = equipped.get("item_level")
+
+            is_desired_crafted = False
+            if equipped_bonus_ids is not None:
+                is_desired_crafted = is_crafted_item(equipped_bonus_ids)
+            else:
+                # Fallback: check tooltip for crafted indicator
+                tooltip = desired.get("wowhead_tooltip_html") if desired else None
+                if tooltip and "Optional Reagent Slot" in tooltip:
+                    is_desired_crafted = True
+
+            if is_desired_crafted:
+                crafted_track = detect_crafted_track(
+                    bonus_ids=equipped_bonus_ids,
+                    item_level=equipped_ilvl,
+                    m_ilvl_threshold=crafted_m_ilvl_threshold,
+                )
+                crafted_source = {
+                    "track": crafted_track or "H",
+                    "crafting_corner_url": "/crafting-corner",
+                }
+
         slots_data[slot] = {
             "slot": slot,
             "canonical_slot": slot_remapping.get(slot, slot),
@@ -858,6 +897,7 @@ async def get_plan_detail(
             "upgrade_tracks": upgrade_tracks,
             "is_bis": is_bis,
             "needs_upgrade": needs_upgrade,
+            "crafted_source": crafted_source,
         }
 
     return {

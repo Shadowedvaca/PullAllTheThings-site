@@ -24,11 +24,11 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1D** Personal gear plan | ✅ COMPLETE | Gear plan integrated into `/my-characters` (UI redesign UI-1A–1H). `/gear-plan` redirects. Migration 0079–0081. |
 | **1D.1** Small fixes | ✅ COMPLETE | Fix 1 (tier source via `enrich_catalyst_tier_items`), Fix 2 (M-track dungeon), Fix 3 (table row click) all done |
 | **1D.2** Enhanced source display | ⬜ TODO | Instance / Boss / Minimum level in gear table; key thresholds |
-| **1D.3** Crafted items | ⬜ TODO | Crest-based H/M detection, crafter lookup popup, Crafting Corner link |
+| **1D.3** Crafted items | ✅ COMPLETE | H/M detection via bonus IDs + admin ilvl threshold fallback; crafted_source block in get_plan_detail; gear table shows Crafted+track pill; drawer shows track + Crafting Corner link. Crafter names deferred (need result_item_id on recipes table). |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
 **Active branch:** `feature/gear-plan-phase-1d`
-**Last migration:** 0081
+**Last migration:** 0083
 **Last prod tag:** `prod-v0.11.2`
 
 ---

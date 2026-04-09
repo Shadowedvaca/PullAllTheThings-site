@@ -1256,6 +1256,53 @@
   padding-left: 0.6rem;
 }
 
+/* ── Crafted item source — gear table cell ──────────────────── */
+
+.mcn-gt__crafted-source {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.mcn-gt__crafted-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ── Crafted item section — slot drawer ─────────────────────── */
+
+.mcn-crafted-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mcn-crafted-section__header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.mcn-crafted-section__label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.mcn-crafted-section__link {
+  font-size: 0.82rem;
+  color: var(--color-gold);
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.mcn-crafted-section__link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
 /* ── BIS status indicators ──────────────────────────────────── */
 
 .mcn-gt__bis-check,
