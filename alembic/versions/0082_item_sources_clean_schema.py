@@ -13,65 +13,136 @@ depends_on = None
 
 
 def upgrade():
-    # ── 1. Drop the old unique constraint (references old column names) ──────
-    op.execute("ALTER TABLE guild_identity.item_sources DROP CONSTRAINT IF EXISTS uq_item_source")
-
-    # ── 2. Rename columns to clean names ────────────────────────────────────
-    op.alter_column("item_sources", "source_type",     new_column_name="instance_type", schema="guild_identity")
-    op.alter_column("item_sources", "source_name",     new_column_name="encounter_name", schema="guild_identity")
-    op.alter_column("item_sources", "source_instance", new_column_name="instance_name",  schema="guild_identity")
-
-    # ── 3. Drop quality_tracks — now derived from source_config at read time ─
-    op.drop_column("item_sources", "quality_tracks", schema="guild_identity")
-
-    # ── 4. Migrate instance_type values ─────────────────────────────────────
-    # Classify known world boss rows first (instance_name matches expansion name
-    # or was already renamed to 'World Boss' by a previous partial fix).
+    # Use a single DO block so every step is idempotent — safe to re-run if a
+    # prior attempt partially applied.
     op.execute("""
+    DO $$
+    BEGIN
+
+        -- 1. Drop old constraints (IF EXISTS handles partial-apply case)
+        ALTER TABLE guild_identity.item_sources
+            DROP CONSTRAINT IF EXISTS uq_item_source;
+        ALTER TABLE guild_identity.item_sources
+            DROP CONSTRAINT IF EXISTS item_sources_source_type_check;
+        ALTER TABLE guild_identity.item_sources
+            DROP CONSTRAINT IF EXISTS item_sources_instance_type_check;
+
+        -- 2. Rename columns (skip if already renamed)
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'source_type'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources
+                RENAME COLUMN source_type TO instance_type;
+        END IF;
+
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'source_name'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources
+                RENAME COLUMN source_name TO encounter_name;
+        END IF;
+
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'source_instance'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources
+                RENAME COLUMN source_instance TO instance_name;
+        END IF;
+
+        -- 3. Drop quality_tracks (skip if already gone)
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'quality_tracks'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources DROP COLUMN quality_tracks;
+        END IF;
+
+        -- 4. Migrate instance_type values (CHECK constraint already dropped above)
+        --    World boss rows: any row whose instance_name indicates it was a world boss.
         UPDATE guild_identity.item_sources
            SET instance_type = 'world_boss'
-         WHERE instance_type = 'raid_boss'
-           AND instance_name IN ('World Boss', 'Midnight')
-    """)
-    # Remaining 'raid_boss' rows are regular raid encounters.
-    op.execute("""
+         WHERE instance_type IN ('raid_boss', 'raid')
+           AND instance_name IN ('World Boss', 'Midnight');
+
+        --    Remaining 'raid_boss' rows are regular raid encounters.
         UPDATE guild_identity.item_sources
            SET instance_type = 'raid'
-         WHERE instance_type = 'raid_boss'
-    """)
+         WHERE instance_type = 'raid_boss';
 
-    # ── 5. Drop old CHECK constraint and add clean one ───────────────────────
-    op.execute("""
+        -- 5. Add clean CHECK constraint
         ALTER TABLE guild_identity.item_sources
-        DROP CONSTRAINT IF EXISTS item_sources_source_type_check
-    """)
-    op.execute("""
-        ALTER TABLE guild_identity.item_sources
-        ADD CONSTRAINT item_sources_instance_type_check
-        CHECK (instance_type IN ('raid', 'dungeon', 'world_boss'))
-    """)
+            ADD CONSTRAINT item_sources_instance_type_check
+            CHECK (instance_type IN ('raid', 'dungeon', 'world_boss'));
 
-    # ── 6. Recreate unique constraint on new column names ───────────────────
-    op.create_unique_constraint(
-        "uq_item_source",
-        "item_sources",
-        ["item_id", "instance_type", "encounter_name"],
-        schema="guild_identity",
-    )
+        -- 6. Recreate unique constraint on new column names
+        ALTER TABLE guild_identity.item_sources
+            ADD CONSTRAINT uq_item_source
+            UNIQUE (item_id, instance_type, encounter_name);
+
+    END $$;
+    """)
 
 
 def downgrade():
-    op.drop_constraint("uq_item_source", "item_sources", schema="guild_identity")
-    op.execute("ALTER TABLE guild_identity.item_sources DROP CONSTRAINT IF EXISTS item_sources_instance_type_check")
+    op.execute("""
+    DO $$
+    BEGIN
+        ALTER TABLE guild_identity.item_sources
+            DROP CONSTRAINT IF EXISTS uq_item_source;
+        ALTER TABLE guild_identity.item_sources
+            DROP CONSTRAINT IF EXISTS item_sources_instance_type_check;
 
-    op.alter_column("item_sources", "instance_type",  new_column_name="source_type",    schema="guild_identity")
-    op.alter_column("item_sources", "encounter_name", new_column_name="source_name",     schema="guild_identity")
-    op.alter_column("item_sources", "instance_name",  new_column_name="source_instance", schema="guild_identity")
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'instance_type'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources
+                RENAME COLUMN instance_type TO source_type;
+        END IF;
 
-    op.execute("UPDATE guild_identity.item_sources SET source_type = 'raid_boss' WHERE source_type IN ('raid', 'world_boss')")
-    op.execute("ALTER TABLE guild_identity.item_sources ADD CONSTRAINT item_sources_source_type_check CHECK (source_type IN ('raid_boss', 'dungeon'))")
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'encounter_name'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources
+                RENAME COLUMN encounter_name TO source_name;
+        END IF;
 
-    import sqlalchemy as sa
-    from sqlalchemy.dialects import postgresql
-    op.add_column("item_sources", sa.Column("quality_tracks", postgresql.ARRAY(sa.String()), server_default="{}", nullable=False), schema="guild_identity")
-    op.create_unique_constraint("uq_item_source", "item_sources", ["item_id", "source_type", "source_name"], schema="guild_identity")
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'guild_identity'
+               AND table_name   = 'item_sources'
+               AND column_name  = 'instance_name'
+        ) THEN
+            ALTER TABLE guild_identity.item_sources
+                RENAME COLUMN instance_name TO source_instance;
+        END IF;
+
+        UPDATE guild_identity.item_sources
+           SET source_type = 'raid_boss'
+         WHERE source_type IN ('raid', 'world_boss');
+
+        ALTER TABLE guild_identity.item_sources
+            ADD CONSTRAINT item_sources_source_type_check
+            CHECK (source_type IN ('raid_boss', 'dungeon'));
+
+        ALTER TABLE guild_identity.item_sources
+            ADD CONSTRAINT uq_item_source
+            UNIQUE (item_id, source_type, source_name);
+    END $$;
+    """)
