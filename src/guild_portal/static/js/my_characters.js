@@ -1541,11 +1541,21 @@ function _gpRenderGearTable(slots, tc) {
 
     // ── Source cell ────────────────────────────────────────────────────────
     let sourceHtml;
-    if (sources.length) {
-      const src   = sources[0];
+    if (sources.length === 1) {
+      const src = sources[0];
       const parts = [_gpEsc(src.source_name)];
       if (src.source_instance) parts.push(_gpEsc(src.source_instance));
       sourceHtml = `<span class="mcn-gt__source-text">${parts.join(' &bull; ')}</span>`;
+    } else if (sources.length > 1) {
+      // Group by instance, list boss names per instance.
+      const byInst = {};
+      for (const src of sources) {
+        const inst = src.source_instance || '';
+        (byInst[inst] = byInst[inst] || []).push(src.source_name);
+      }
+      sourceHtml = Object.entries(byInst).map(([inst, bosses]) =>
+        `<div class="mcn-gt__source-group">${inst ? `<span class="mcn-gt__source-inst">${_gpEsc(inst)}:</span> ` : ''}${bosses.map(_gpEsc).join(', ')}</div>`
+      ).join('');
     } else {
       sourceHtml = '<span class="mcn-gt__empty">&mdash;</span>';
     }
@@ -1984,12 +1994,14 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   // 4 — Drop source
   let dropHtml;
   if (sources.length) {
-    const loc = sources[0];
     const tPills = tracks.map(t => _gpPill(t, tc)).join(' ');
     const uPills = upgrades.map(t => _gpPill(t, tc)).join(' ');
-    dropHtml = `<div class="mcn-drawer-item__meta">${_gpEsc(loc.source_name)}${loc.source_instance ? ` \u2014 ${_gpEsc(loc.source_instance)}` : ''}</div>
-      ${tPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Available:</span> ${tPills}</div>` : ''}
-      ${uPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Upgrade to:</span> ${uPills}</div>` : ''}`;
+    const srcLines = sources.map(loc =>
+      `<div class="mcn-drawer-item__meta">${_gpEsc(loc.source_name)}${loc.source_instance ? ` \u2014 ${_gpEsc(loc.source_instance)}` : ''}</div>`
+    ).join('');
+    dropHtml = srcLines +
+      (tPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Available:</span> ${tPills}</div>` : '') +
+      (uPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Upgrade to:</span> ${uPills}</div>` : '');
   } else {
     dropHtml = '<div class="mcn-drawer-empty">No drop source data</div>';
   }

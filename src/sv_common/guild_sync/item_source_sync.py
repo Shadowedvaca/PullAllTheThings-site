@@ -310,67 +310,103 @@ async def enrich_catalyst_tier_items(
     pool: asyncpg.Pool,
     expansion_name: str,
 ) -> tuple[int, list[str]]:
-    """Add Revival Catalyst source rows for tier set BIS items missing from item_sources.
+    """Add per-boss source rows for tier set BIS items obtained via Revival Catalyst.
 
     Tier set pieces (e.g. "Blind Oath's Leggings") don't appear in the Blizzard
-    Journal encounter item lists — they're obtained by converting a boss drop via
-    the Revival Catalyst.  The Blizzard Item API also doesn't reliably expose
-    item_set data for in-development expansions.
+    Journal encounter item lists.  They're obtained by converting any eligible
+    boss drop via the Revival Catalyst.
 
-    Detection: we use the Wowhead tooltip HTML already stored in wow_items — tier
-    set pieces always contain an /item-set=N/ link in the tooltip (e.g.
-    href="/item-set=1986/blind-oaths-burden").  No extra API calls needed.
+    Detection: items in tier slots whose Wowhead tooltip HTML contains an
+    /item-set=N/ link.  For each such item, we mirror the source rows of all
+    raid bosses that drop gear in the same slot — those are the bosses a player
+    would farm to get a Catalyst-convertible piece.
 
     Returns (rows_added, errors).
     """
     errors: list[str] = []
 
     async with pool.acquire() as conn:
-        # Single query: find BIS items in tier slots with no item_sources AND
-        # whose Wowhead tooltip HTML contains an /item-set= link.
-        rows = await conn.fetch(
+        # Remove stale "Revival Catalyst" generic rows (replaced by per-boss rows).
+        await conn.execute(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name
+            DELETE FROM guild_identity.item_sources
+             WHERE source_name = 'Revival Catalyst'
+               AND item_id IN (
+                   SELECT wi.id FROM guild_identity.wow_items wi
+                    WHERE wi.wowhead_tooltip_html LIKE '%/item-set=%'
+               )
+            """
+        )
+
+        # Find all tier set items in BIS data (identified by item-set tooltip link).
+        tier_items = await conn.fetch(
+            """
+            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
+                   COALESCE(NULLIF(wi.slot_type, 'other'), ble.slot) AS eff_slot
               FROM guild_identity.bis_list_entries ble
               JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-              LEFT JOIN guild_identity.item_sources isr ON isr.item_id = wi.id
              WHERE ble.slot = ANY($1::text[])
-               AND isr.id IS NULL
                AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
             """,
             list(_TIER_SLOTS),
         )
 
-        if not rows:
+        if not tier_items:
             return 0, []
 
+        # Build slot → [(boss_name, instance)] mapping from existing raid sources.
+        boss_rows = await conn.fetch(
+            """
+            SELECT DISTINCT is2.source_name, is2.source_instance, wi.slot_type
+              FROM guild_identity.item_sources is2
+              JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
+             WHERE is2.source_type = 'raid_boss'
+               AND wi.slot_type = ANY($1::text[])
+            """,
+            list(_TIER_SLOTS),
+        )
+        slot_to_bosses: dict[str, list[tuple[str, str]]] = {}
+        for r in boss_rows:
+            st = r["slot_type"]
+            if st:
+                slot_to_bosses.setdefault(st, []).append(
+                    (r["source_name"], r["source_instance"])
+                )
+
         logger.info(
-            "Adding Catalyst source rows for %d tier set items", len(rows)
+            "Adding Catalyst boss-level source rows for %d tier set items", len(tier_items)
         )
 
         added = 0
-        for row in rows:
-            try:
-                await conn.execute(
-                    """
-                    INSERT INTO guild_identity.item_sources
-                           (item_id, source_type, source_name, source_instance, quality_tracks)
-                    VALUES ($1, 'raid_boss', 'Revival Catalyst', $2, $3)
-                    ON CONFLICT (item_id, source_type, source_name)
-                    DO UPDATE SET
-                        source_instance = EXCLUDED.source_instance,
-                        quality_tracks  = EXCLUDED.quality_tracks
-                    """,
-                    row["wow_item_id"],
-                    expansion_name,
-                    _RAID_TRACKS,
-                )
-                added += 1
-            except Exception as exc:
-                errors.append(
-                    f"DB error adding Catalyst source for {row['blizzard_item_id']} "
-                    f"({row['name']}): {exc}"
-                )
+        for tier in tier_items:
+            bosses = slot_to_bosses.get(tier["eff_slot"], [])
+            if not bosses:
+                # No boss data for this slot yet — use generic fallback.
+                bosses = [("Revival Catalyst", expansion_name)]
+
+            for boss_name, boss_instance in bosses:
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO guild_identity.item_sources
+                               (item_id, source_type, source_name, source_instance, quality_tracks)
+                        VALUES ($1, 'raid_boss', $2, $3, $4)
+                        ON CONFLICT (item_id, source_type, source_name)
+                        DO UPDATE SET
+                            source_instance = EXCLUDED.source_instance,
+                            quality_tracks  = EXCLUDED.quality_tracks
+                        """,
+                        tier["wow_item_id"],
+                        boss_name,
+                        boss_instance,
+                        _RAID_TRACKS,
+                    )
+                    added += 1
+                except Exception as exc:
+                    errors.append(
+                        f"DB error for {tier['blizzard_item_id']} ({tier['name']}) "
+                        f"boss {boss_name!r}: {exc}"
+                    )
 
     return added, errors
 
