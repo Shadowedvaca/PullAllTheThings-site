@@ -237,13 +237,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 ### Current Phase
 - **Phase 1E in progress** — `feature/gear-plan-phase-1e` branch, not yet merged.
   - **1E.1 complete** — Roster Needs section on public `/roster` page (below Full Roster table). Two public API endpoints: `GET /api/v1/gear-needs/raid` and `GET /api/v1/gear-needs/dungeon`. Hierarchical raid table (instance→boss, collapsible) + flat M+ table. Track columns auto-hide when empty. Include Initiates / Include Offspec filters. Color-coded chips (green/gold/red). Migrations 0089 (no-op) + 0090 (removes erroneous nav entry).
-  - **1E.2 next** — Drill panel (slide-in from right, By Item / By Player views, Wowhead tooltips). No new backend endpoints needed — uses existing 1E.1 response data.
+  - **1E.2 complete** — Drill panel (slide-in from right). Click any chip to open; By Item / By Player toggle; active chip gold outline; Wowhead tooltips; re-renders on filter change, closes if no data. `class_name` added to gear-needs API player entries.
   - **1E.3 next** — Auto-setup default Wowhead BIS plan for newly-discovered in-guild characters during equipment sync.
 - **Branch:** `feature/gear-plan-phase-1e`
 - **Last migration:** 0090
 - **Last prod tag:** `prod-v0.12.18`
 - **Active branch:** `feature/gear-plan-phase-1e`
-- **Next:** Phase 1E.2 (drill panel) then 1E.3 (auto-setup), then merge + tag.
+- **Next:** Phase 1E.3 (auto-setup new members), then merge + tag.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
