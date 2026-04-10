@@ -73,7 +73,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://wow.zamimg.com; "
                 "font-src 'self' https://fonts.gstatic.com; "
                 "img-src 'self' https://drive.google.com https://lh3.googleusercontent.com "
-                "https://wow.zamimg.com data:; "
+                "https://wow.zamimg.com https://render.worldofwarcraft.com data:; "
                 "connect-src 'self' https://nether.wowhead.com https://wow.zamimg.com; "
                 "frame-ancestors 'none';"
             ),
