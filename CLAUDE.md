@@ -235,18 +235,15 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan controls revisited complete** — PR #21, prod-v0.12.17/0.12.18, merged to main.
-  - **Controls row redesigned** (`my_characters.js`): Single row — BIS List dropdown + conditional Hero Talent dropdown + Fill BIS button. Sync Gear and Reset Plan buttons removed. SimC buttons hidden (backend intact; see `reference/gear-plan-4-simc.md`).
-  - **BIS List source dropdown** (`my_characters.js`): `<optgroup>` grouping by provider (u.gg / Wowhead / Icy Veins), content type labels (All ★ / Raid / M+) ordered All-first within each group. `origin` field added to `gear_plan_service` source query.
-  - **Hero Talent dropdown conditional** (`gear_plan_service.py`, `my_characters.js`): `has_hero_talent_variants` flag added per source (checks `bis_list_entries` for non-null `hero_talent_id`). HT dropdown only rendered when selected source has HT data; re-evaluates on source change via existing `_gpReload` path.
-  - **BIS grid two-row header** (`my_characters.js`, `my_characters.css`): Provider row (u.gg / Wowhead / Icy Veins) with `colspan`; content type row (All / Raid / M+) below. Single-source providers use `rowspan=2`. `origin` + `content_type` added to BIS slot query in `gear_plan_service.py`. Columns ordered All-first within each provider.
-  - **Item lookup UX** (`gear_plan_routes.py`, `my_characters.js`, `my_characters.css`): Input changed from `type=number` to `type=text`; placeholder "Name, ID, or Wowhead link". `mcnGpFetchAndSet` detects Wowhead URL (regex `/[?&/]item[=/](\d+)/i`), plain integer, or name. New `GET /api/v1/items/search?q=` endpoint (registered before `/{blizzard_item_id}` to avoid route collision) returns up to 10 `wow_items` name matches. Inline dropdown (`mcn-item-results`) shows on live input; clicking a result sets the item directly.
-  - **Cache busters**: `my_characters.js?v=1.5.1`, `my_characters.css?v=1.2.0`
-- **Branch:** `main` (all feature work merged)
-- **Last migration:** 0088
+- **Phase 1E in progress** — `feature/gear-plan-phase-1e` branch, not yet merged.
+  - **1E.1 complete** — Roster Needs section on public `/roster` page (below Full Roster table). Two public API endpoints: `GET /api/v1/gear-needs/raid` and `GET /api/v1/gear-needs/dungeon`. Hierarchical raid table (instance→boss, collapsible) + flat M+ table. Track columns auto-hide when empty. Include Initiates / Include Offspec filters. Color-coded chips (green/gold/red). Migrations 0089 (no-op) + 0090 (removes erroneous nav entry).
+  - **1E.2 next** — Drill panel (slide-in from right, By Item / By Player views, Wowhead tooltips). No new backend endpoints needed — uses existing 1E.1 response data.
+  - **1E.3 next** — Auto-setup default Wowhead BIS plan for newly-discovered in-guild characters during equipment sync.
+- **Branch:** `feature/gear-plan-phase-1e`
+- **Last migration:** 0090
 - **Last prod tag:** `prod-v0.12.18`
-- **Active branch:** `main`
-- **Next:** Phase 1E (Roster Aggregation — Raid/M+ gear needs grid).
+- **Active branch:** `feature/gear-plan-phase-1e`
+- **Next:** Phase 1E.2 (drill panel) then 1E.3 (auto-setup), then merge + tag.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
