@@ -402,13 +402,14 @@ class TestFlagJunkSources:
 
     @pytest.mark.asyncio
     async def test_world_boss_criteria_in_sql(self):
-        """World boss UPDATE must filter on instance_type and null IDs."""
+        """World boss UPDATE must filter on instance_type, null IDs, AND null encounter_name."""
         pool, conn = self._make_flag_pool()
         await flag_junk_sources(pool)
         wb_sql = conn.execute.call_args_list[1].args[0]
         assert "world_boss" in wb_sql
         assert "blizzard_encounter_id IS NULL" in wb_sql
         assert "blizzard_instance_id IS NULL" in wb_sql
+        assert "encounter_name" in wb_sql
 
     @pytest.mark.asyncio
     async def test_tier_piece_not_flagged_by_default(self):

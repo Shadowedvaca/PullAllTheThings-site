@@ -413,6 +413,10 @@ async def flag_junk_sources(
         )
 
         # ── 2. Flag null-ID world boss rows ───────────────────────────────
+        # Only rows with no encounter name AND no IDs — completely empty stubs
+        # with no useful display data.  Rows that have an encounter_name but
+        # null IDs are incomplete syncs (re-running Sync Loot Tables fixes
+        # them) and should NOT be suppressed — they still have display value.
         wb_result = await conn.execute(
             """
             UPDATE guild_identity.item_sources
@@ -420,6 +424,7 @@ async def flag_junk_sources(
              WHERE instance_type = 'world_boss'
                AND blizzard_encounter_id IS NULL
                AND blizzard_instance_id IS NULL
+               AND (encounter_name IS NULL OR encounter_name = '')
             """
         )
         flagged_wb = int(wb_result.split()[-1])
