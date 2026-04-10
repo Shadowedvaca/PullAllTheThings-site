@@ -1644,7 +1644,6 @@ function _gpRenderCenterPanel(data) {
         <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>
         <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
         <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
-        <button id="mcn-gp-btn-reset"  class="btn btn-danger btn-sm"    type="button">Reset Plan</button>
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
@@ -1666,7 +1665,6 @@ function _gpRenderCenterPanel(data) {
   document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
   document.getElementById('mcn-gp-btn-import')?.addEventListener('click', _gpShowSimcModal);
   document.getElementById('mcn-gp-btn-export')?.addEventListener('click', _gpOnExportSimc);
-  document.getElementById('mcn-gp-btn-reset') ?.addEventListener('click', _gpOnDeletePlan);
 
   // Wire SimC modal once
   const modal = document.getElementById('mcn-simc-modal');
