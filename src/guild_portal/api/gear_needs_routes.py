@@ -89,6 +89,7 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
             wc.character_name                       AS character_name,
             sp.name                                 AS spec_name,
             cl.id                                   AS class_id,
+            cl.name                                 AS class_name,
             gps.slot,
             wi_d.blizzard_item_id                   AS desired_bid,
             wi_d.name                               AS desired_item_name,
@@ -123,6 +124,7 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
                 wc.character_name                       AS character_name,
                 sp.name                                 AS spec_name,
                 cl.id                                   AS class_id,
+                cl.name                                 AS class_name,
                 gps.slot,
                 wi_d.blizzard_item_id                   AS desired_bid,
                 wi_d.name                               AS desired_item_name,
@@ -249,6 +251,7 @@ def _player_entry(row) -> dict:
         "player_name": row["player_name"],
         "character_name": row["character_name"],
         "class_id": row["class_id"],
+        "class_name": row["class_name"],
         "spec_name": row["spec_name"],
         "is_offspec": bool(row["is_offspec"]),
     }

@@ -123,6 +123,156 @@
     vertical-align: -0.1em;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Drill panel ─────────────────────────────────────────────────────────── */
+.rn-cell--drillable {
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.rn-cell--drillable:hover { background: rgba(212,168,75,0.07); }
+.rn-cell--active { outline: 2px solid var(--color-gold); outline-offset: -2px; }
+
+.rn-panel {
+    position: fixed;
+    top: 0;
+    right: -440px;
+    width: 420px;
+    height: 100%;
+    background: #0d0d0f;
+    border-left: 1px solid var(--color-border);
+    z-index: 200;
+    transition: right 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: -6px 0 28px rgba(0,0,0,0.55);
+}
+.rn-panel.is-open { right: 0; }
+
+.rn-panel__header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--color-border);
+    background: #1a1a1f;
+    flex-shrink: 0;
+}
+.rn-panel__title {
+    flex: 1;
+    font-family: 'Cinzel', serif;
+    font-size: 0.78rem;
+    color: var(--color-gold);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rn-view-toggle {
+    display: flex;
+    gap: 2px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    padding: 2px;
+    flex-shrink: 0;
+}
+.rn-view-btn {
+    padding: 3px 10px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+.rn-view-btn.active { background: var(--color-gold); color: #0a0a0b; font-weight: 700; }
+.rn-panel__close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.15s;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.rn-panel__close:hover { color: var(--color-text); }
+
+.rn-panel__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+.rn-panel-empty {
+    font-size: 0.83rem;
+    color: var(--color-text-muted);
+    padding: 1.25rem 0;
+    text-align: center;
+}
+
+/* Hub cards (item or player) */
+.rn-hub {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.rn-hub__header {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.7rem;
+    background: #1a1a1f;
+    border-bottom: 1px solid var(--color-border);
+}
+.rn-hub__icon { flex-shrink: 0; display: flex; }
+.rn-hub__meta { flex: 1; min-width: 0; }
+.rn-hub__name {
+    font-size: 0.83rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rn-hub__sub { font-size: 0.7rem; color: var(--color-text-muted); margin-top: 1px; }
+
+/* Spoke rows */
+.rn-spoke {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.78rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.rn-spoke:last-child { border-bottom: none; }
+.rn-spoke__player { font-weight: 500; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn-spoke__spec { color: var(--color-text-muted); font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; }
+.rn-spoke__item { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rn-spoke__slot { color: var(--color-text-muted); font-size: 0.7rem; white-space: nowrap; flex-shrink: 0; }
+
+.rn-wh-link { color: var(--color-gold); text-decoration: none; }
+.rn-wh-link:hover { text-decoration: underline; }
+
+.rn-os-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    background: rgba(251,191,36,0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 3px;
+    padding: 0 3px;
+    margin-left: 4px;
+    font-weight: 700;
+    vertical-align: middle;
+}
 </style>
 {% endblock %}
 
@@ -239,6 +389,19 @@
 
     </div>
 
+</div>
+
+{# ── Gear needs drill panel (slide-in from right) ──────────────────────── #}
+<div id="rn-drill-panel" class="rn-panel" role="complementary" aria-label="Gear needs detail">
+    <div class="rn-panel__header">
+        <div class="rn-panel__title" id="rn-panel-title"></div>
+        <div class="rn-view-toggle">
+            <button id="rn-view-item"   class="rn-view-btn active">By Item</button>
+            <button id="rn-view-player" class="rn-view-btn">By Player</button>
+        </div>
+        <button id="rn-panel-close" class="rn-panel__close" title="Close panel">&#x2715;</button>
+    </div>
+    <div class="rn-panel__body" id="rn-panel-body"></div>
 </div>
 {% endblock %}
 
@@ -708,5 +871,7 @@ function esc(str) {
 // ---------------------------------------------------------------------------
 loadRoster();
 </script>
-<script src="/static/js/roster_needs.js?v=1.0.1"></script>
+<script>const whTooltips = { colorLinks: true, iconizeLinks: false };</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
+<script src="/static/js/roster_needs.js?v=1.1.0"></script>
 {% endblock %}
