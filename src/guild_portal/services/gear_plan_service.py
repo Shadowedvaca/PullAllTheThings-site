@@ -616,9 +616,11 @@ async def export_simc(
         plan_id = plan_row["id"]
         slots_rows = await conn.fetch(
             """
-            SELECT gps.slot, gps.blizzard_item_id, gps.item_name,
+            SELECT gps.slot, gps.blizzard_item_id,
+                   COALESCE(wi.name, gps.item_name) AS item_name,
                    ce.bonus_ids, ce.enchant_id, ce.gem_ids
               FROM guild_identity.gear_plan_slots gps
+              LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
               LEFT JOIN guild_identity.character_equipment ce
                      ON ce.character_id = $2 AND ce.slot = gps.slot
              WHERE gps.plan_id = $1
@@ -716,7 +718,9 @@ async def get_plan_detail(
         # Desired items (plan slots)
         desired_rows = await conn.fetch(
             """
-            SELECT gps.slot, gps.blizzard_item_id, gps.item_name, gps.is_locked,
+            SELECT gps.slot, gps.blizzard_item_id,
+                   COALESCE(wi.name, gps.item_name) AS item_name,
+                   gps.is_locked,
                    wi.icon_url, wi.wowhead_tooltip_html
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
