@@ -412,6 +412,26 @@ class GuildSyncScheduler:
                 except Exception as equip_exc:
                     logger.error("Equipment sync failed: %s", equip_exc, exc_info=True)
 
+                # Surface gear plan auto-setup failures to Discord if any occurred
+                plan_errs = equipment_stats.get("gear_plan_setup_errors", 0)
+                if plan_errs > 0:
+                    from sv_common.errors import report_error
+                    from guild_portal.services.error_routing import maybe_notify_discord
+                    _plan_err_result = await report_error(
+                        self.db_pool,
+                        "gear_plan_auto_setup_failed",
+                        "warning",
+                        f"Gear plan auto-setup failed for {plan_errs} character(s) during equipment sync.",
+                        "equipment_sync",
+                        details={"failed_count": plan_errs},
+                    )
+                    await maybe_notify_discord(
+                        self.db_pool, self.discord_bot, self.audit_channel_id,
+                        "gear_plan_auto_setup_failed", "warning",
+                        f"Gear plan auto-setup failed for {plan_errs} character(s) during equipment sync. Check Admin → Error Log for details.",
+                        _plan_err_result["is_first_occurrence"],
+                    )
+
                 # Step 9: Retry onboarding verifications (was step 8)
                 await self.run_onboarding_check()
 
