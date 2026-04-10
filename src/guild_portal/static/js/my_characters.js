@@ -1660,9 +1660,7 @@ function _gpRenderCenterPanel(data) {
         ${showHtDropdown ? `
         <label class="mcn-gear-label">Hero Talent</label>
         <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>` : ''}
-      </div>
-      <div class="mcn-gear-actions">
-        <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>
+        <button id="mcn-gp-btn-fill" class="btn btn-primary btn-sm" type="button">Fill BIS</button>
         <!-- SimC hidden pending full testing — see reference/gear-plan-4-simc.md -->
         <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button" style="display:none">Import SimC</button>
         <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button" style="display:none">Export SimC</button>
