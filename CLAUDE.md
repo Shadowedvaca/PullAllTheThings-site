@@ -235,16 +235,16 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan polish complete** — All My Characters gear plan display bugs fixed (prod-v0.12.x series, merged to main).
-  - **Icon enrichment pipeline** (`item_service.py`, `bis_routes.py`): 4-phase background job — Wowhead, then Blizzard Item Media API (icons + names for Midnight items), then Blizzard item metadata (armor_type for tier slots), then recipe link rebuild. 5 concurrent workers, 0.2s stagger, 429 retry with backoff. CSP updated to allow `render.worldofwarcraft.com`.
-  - **Tier piece sourcing** (migration 0088): `v_tier_piece_sources` view no longer requires `wowhead_tooltip_html LIKE '%/item-set=%'`. New filter: `armor_type IS NOT NULL AND (tooltip marker OR NOT EXISTS non-junk sources)`. Midnight tier pieces (no Wowhead data) now correctly resolve through the token → boss chain.
-  - **DB-backed craftable/tier detection** (`gear_plan_service.py`): Augments tooltip-based detection with DB queries — craftable via `item_recipe_links` presence, tier pieces via "tier-slot with no non-junk direct sources". Fixes sourcing display for all Midnight expansion items.
-  - **Stale item names** (`gear_plan_service.py`): Plan detail and SimC export queries now use `COALESCE(wi.name, gps.item_name)` — `wow_items` is authoritative; `gear_plan_slots.item_name` is only a fallback for unenriched items.
-  - **Removed character filter** (`gear_plan_service.py`, `crafting_service.py`): Added `AND wc.removed_at IS NULL` to gear plan crafter query. Fixed `COUNT(cr.id)` → `COUNT(wc.id)` in both `get_recipes_for_filter` and `search_recipes` so renamed/removed characters don't appear in crafter lists or inflate counts.
-  - **Role icons** (`my_characters.js`): `ui-lfg-icon-*` slugs all 404 on Wowhead CDN. Replaced with: `ability_defend` (tank), `spell_holy_flashheal` (healer), `ability_meleedamage` (dps/ranged/melee).
+- **Gear Plan controls revisited complete** — PR #21, prod-v0.12.17/0.12.18, merged to main.
+  - **Controls row redesigned** (`my_characters.js`): Single row — BIS List dropdown + conditional Hero Talent dropdown + Fill BIS button. Sync Gear and Reset Plan buttons removed. SimC buttons hidden (backend intact; see `reference/gear-plan-4-simc.md`).
+  - **BIS List source dropdown** (`my_characters.js`): `<optgroup>` grouping by provider (u.gg / Wowhead / Icy Veins), content type labels (All ★ / Raid / M+) ordered All-first within each group. `origin` field added to `gear_plan_service` source query.
+  - **Hero Talent dropdown conditional** (`gear_plan_service.py`, `my_characters.js`): `has_hero_talent_variants` flag added per source (checks `bis_list_entries` for non-null `hero_talent_id`). HT dropdown only rendered when selected source has HT data; re-evaluates on source change via existing `_gpReload` path.
+  - **BIS grid two-row header** (`my_characters.js`, `my_characters.css`): Provider row (u.gg / Wowhead / Icy Veins) with `colspan`; content type row (All / Raid / M+) below. Single-source providers use `rowspan=2`. `origin` + `content_type` added to BIS slot query in `gear_plan_service.py`. Columns ordered All-first within each provider.
+  - **Item lookup UX** (`gear_plan_routes.py`, `my_characters.js`, `my_characters.css`): Input changed from `type=number` to `type=text`; placeholder "Name, ID, or Wowhead link". `mcnGpFetchAndSet` detects Wowhead URL (regex `/[?&/]item[=/](\d+)/i`), plain integer, or name. New `GET /api/v1/items/search?q=` endpoint (registered before `/{blizzard_item_id}` to avoid route collision) returns up to 10 `wow_items` name matches. Inline dropdown (`mcn-item-results`) shows on live input; clicking a result sets the item directly.
+  - **Cache busters**: `my_characters.js?v=1.5.1`, `my_characters.css?v=1.2.0`
 - **Branch:** `main` (all feature work merged)
 - **Last migration:** 0088
-- **Last prod tag:** `prod-v0.12.14`
+- **Last prod tag:** `prod-v0.12.18`
 - **Active branch:** `main`
 - **Next:** Phase 1E (Roster Aggregation — Raid/M+ gear needs grid).
 
