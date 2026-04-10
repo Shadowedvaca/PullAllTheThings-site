@@ -251,10 +251,10 @@ async def enrich_null_icons(
                             progress_cb(updated, len(errors))
 
             except Exception as exc:
+                msg = f"Blizzard icon fetch failed for item {blizzard_item_id}: {type(exc).__name__}: {exc}"
+                logger.warning(msg)
                 async with lock:
-                    errors.append(
-                        f"Blizzard icon fetch failed for item {blizzard_item_id}: {exc}"
-                    )
+                    errors.append(msg)
                     if progress_cb:
                         progress_cb(updated, len(errors))
 
