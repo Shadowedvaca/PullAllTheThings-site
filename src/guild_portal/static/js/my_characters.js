@@ -116,11 +116,11 @@ function specIcon(className, specName) {
 // ── Role icons ───────────────────────────────────────────────────────────
 
 const ROLE_ICONS = {
-  tank:   "ui-lfg-icon-tank",
-  healer: "ui-lfg-icon-healer",
-  dps:    "ui-lfg-icon-dps",
-  ranged: "ui-lfg-icon-dps",
-  melee:  "ui-lfg-icon-dps",
+  tank:   "ability_defend",
+  healer: "spell_holy_flashheal",
+  dps:    "ability_meleedamage",
+  ranged: "ability_meleedamage",
+  melee:  "ability_meleedamage",
 };
 
 const ROLE_DISPLAY = {
