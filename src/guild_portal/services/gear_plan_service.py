@@ -755,7 +755,7 @@ async def get_plan_detail(
                 SELECT ble.slot, ble.item_id, ble.source_id, ble.hero_talent_id,
                        ble.priority,
                        wi.blizzard_item_id, wi.name AS item_name, wi.icon_url,
-                       bls.name AS source_name, bls.short_label
+                       bls.name AS source_name, bls.short_label, bls.origin, bls.content_type
                   FROM guild_identity.bis_list_entries ble
                   JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
                   JOIN guild_identity.bis_list_sources bls ON bls.id = ble.source_id

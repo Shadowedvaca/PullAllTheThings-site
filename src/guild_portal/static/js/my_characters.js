@@ -2068,11 +2068,52 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   dbSlot = dbSlot || slotKey;
   if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
 
+  const ORIGIN_LABEL_G       = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const CONTENT_TYPE_LABEL_G = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
+
   const srcMap = new Map();
   for (const r of bis) {
-    if (!srcMap.has(r.source_id)) srcMap.set(r.source_id, r.short_label || r.source_name || `Source ${r.source_id}`);
+    if (!srcMap.has(r.source_id)) srcMap.set(r.source_id, {
+      id: r.source_id,
+      label: r.short_label || r.source_name || `Source ${r.source_id}`,
+      origin: r.origin || '',
+      content_type: r.content_type || '',
+    });
   }
-  const sources = [...srcMap.entries()].map(([id, label]) => ({ id, label }));
+  const sources = [...srcMap.values()];
+
+  // Group sources by origin for two-row header
+  const originGroups = [];
+  const seenOrigins  = [];
+  for (const s of sources) {
+    if (!seenOrigins.includes(s.origin)) { seenOrigins.push(s.origin); originGroups.push({ origin: s.origin, cols: [] }); }
+    originGroups.find(g => g.origin === s.origin).cols.push(s);
+  }
+  const hasMultiColGroup = originGroups.some(g => g.cols.length > 1);
+
+  // Row 1: "Item" + provider cells + action
+  const providerCells = originGroups.map(g => {
+    const label   = _gpEsc(ORIGIN_LABEL_G[g.origin] || g.origin);
+    const colspan = g.cols.length;
+    // Single-column group: span both rows so row 2 stays clean
+    return colspan === 1
+      ? `<th class="mcn-bis-grid__provider mcn-bis-grid__provider--solo"${hasMultiColGroup ? ' rowspan="2"' : ''}>${label}</th>`
+      : `<th class="mcn-bis-grid__provider" colspan="${colspan}">${label}</th>`;
+  }).join('');
+
+  // Row 2: content-type label for each column in multi-col groups only
+  const contentCells = hasMultiColGroup
+    ? originGroups.flatMap(g => g.cols.length === 1 ? [] : g.cols.map(s =>
+        `<th class="mcn-bis-grid__src">${_gpEsc(CONTENT_TYPE_LABEL_G[s.content_type] || s.label)}</th>`
+      )).join('')
+    : '';
+
+  const thead = hasMultiColGroup
+    ? `<thead>
+        <tr><th class="mcn-bis-grid__name-col" rowspan="2">Item</th>${providerCells}<th rowspan="2"></th></tr>
+        <tr>${contentCells}</tr>
+       </thead>`
+    : `<thead><tr><th class="mcn-bis-grid__name-col">Item</th>${providerCells}<th></th></tr></thead>`;
 
   const itemMap = new Map();
   for (const r of bis) {
@@ -2088,8 +2129,6 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     const d2 = b.srcIds.size - a.srcIds.size;
     return d2 !== 0 ? d2 : a.name.localeCompare(b.name);
   });
-
-  const hdrCells = sources.map(s => `<th class="mcn-bis-grid__src" title="${_gpEsc(s.label)}">${_gpEsc(s.label)}</th>`).join('');
 
   const rows = items.map(item => {
     const cells = sources.map(s =>
@@ -2107,10 +2146,7 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     </tr>`;
   }).join('');
 
-  return `<table class="mcn-bis-grid">
-    <thead><tr><th class="mcn-bis-grid__name-col">Item</th>${hdrCells}<th></th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+  return `<table class="mcn-bis-grid">${thead}<tbody>${rows}</tbody></table>`;
 }
 
 // ── Slot action globals (called from onclick attrs in drawer) ──────────────────
