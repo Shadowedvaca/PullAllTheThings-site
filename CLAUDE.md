@@ -235,17 +235,17 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1D.6 complete** — BIS admin page restructure.
-  - `gear_plan.html`: Flat controls bar replaced with 5 labelled workflow step cards (Step 1 Sync Loot Tables / Step 2 Enrich Items / Step 3 Process Tier Tokens / Step 4 Sync BIS Lists / Step 5 Manual Import). Refresh Matrix button moved to page header.
-  - `bis_routes.py`: New `POST /api/v1/admin/bis/enrich-items` endpoint (standalone Wowhead enrichment for slot_type='other' items, safe to re-run). `GET /api/v1/admin/bis/item-sources` now returns `junk_hidden_count` so the UI shows "N junk hidden" count line.
-  - `admin_routes.py`: New `PATCH /api/v1/admin/tier-token-attrs/{token_item_id}` — editable fields: target_slot, armor_type, override_notes; saving any field sets is_manual_override=TRUE.
-  - `admin_pages.py`: Loads `tier_token_attrs` (with item relationship) + `class_id_to_name` map into reference_tables context.
-  - `reference_tables.html`: New **Tier Tokens** section — inline-editable table (slot, armor type, notes), auto-detected/override badges, last-processed timestamp, empty-state hint when no tokens processed.
-  - `gear_plan_admin.js`: `enrichItems()` and `processTierTokens()` handlers with spinners + last-run status line. `renderItemSources()` shows "N junk hidden / N junk shown" count; junk rows use CSS strikethrough class.
-- **Branch:** `feature/gear-plan-phase-1d`
-- **Last migration:** 0087
-- **Last prod tag:** `prod-v0.11.2`
-- **Active branch:** `feature/gear-plan-phase-1d`
+- **Gear Plan polish complete** — All My Characters gear plan display bugs fixed (prod-v0.12.x series, merged to main).
+  - **Icon enrichment pipeline** (`item_service.py`, `bis_routes.py`): 4-phase background job — Wowhead, then Blizzard Item Media API (icons + names for Midnight items), then Blizzard item metadata (armor_type for tier slots), then recipe link rebuild. 5 concurrent workers, 0.2s stagger, 429 retry with backoff. CSP updated to allow `render.worldofwarcraft.com`.
+  - **Tier piece sourcing** (migration 0088): `v_tier_piece_sources` view no longer requires `wowhead_tooltip_html LIKE '%/item-set=%'`. New filter: `armor_type IS NOT NULL AND (tooltip marker OR NOT EXISTS non-junk sources)`. Midnight tier pieces (no Wowhead data) now correctly resolve through the token → boss chain.
+  - **DB-backed craftable/tier detection** (`gear_plan_service.py`): Augments tooltip-based detection with DB queries — craftable via `item_recipe_links` presence, tier pieces via "tier-slot with no non-junk direct sources". Fixes sourcing display for all Midnight expansion items.
+  - **Stale item names** (`gear_plan_service.py`): Plan detail and SimC export queries now use `COALESCE(wi.name, gps.item_name)` — `wow_items` is authoritative; `gear_plan_slots.item_name` is only a fallback for unenriched items.
+  - **Removed character filter** (`gear_plan_service.py`, `crafting_service.py`): Added `AND wc.removed_at IS NULL` to gear plan crafter query. Fixed `COUNT(cr.id)` → `COUNT(wc.id)` in both `get_recipes_for_filter` and `search_recipes` so renamed/removed characters don't appear in crafter lists or inflate counts.
+  - **Role icons** (`my_characters.js`): `ui-lfg-icon-*` slugs all 404 on Wowhead CDN. Replaced with: `ability_defend` (tank), `spell_holy_flashheal` (healer), `ability_meleedamage` (dps/ranged/melee).
+- **Branch:** `main` (all feature work merged)
+- **Last migration:** 0088
+- **Last prod tag:** `prod-v0.12.14`
+- **Active branch:** `main`
 - **Next:** Phase 1E (Roster Aggregation — Raid/M+ gear needs grid).
 
 ### What Exists
@@ -268,9 +268,8 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Liberation of Undermine** (encounters 3212–3214) returns 0 WCL rankings — WCL has not yet published rankings for that tier. Will populate automatically once WCL processes it.
 - **`compute_attendance` in `wcl_sync.py`** — JSONB `json.loads()` bug fixed in prod-v0.8.3. WCL Attendance admin tab should now work.
 - **Signup snapshot** — scheduler job runs at event start, not end. On test/dev `Guild sync scheduler skipped` (missing credentials) is expected; Re-snapshot button works manually.
-- **256 `wow_items` with `slot_type='other'`** — items stubbed before the Wowhead `slotbak` regression was fixed. Re-run "Sync Loot Tables" on `/admin/gear-plan` to trigger `enrich_unenriched_items()` which picks up all `slot_type='other'` rows. Also re-populates `item_recipe_links` for newly enriched items.
 - **u.gg BIS scan rate limiting** — ~69 healer/tank targets returned 403 on prod (Hillsboro OR IP) during the bulk fresh re-sync at prod-v0.11.0. Use "Re-sync Errors" button on `/admin/gear-plan` (after rate limit clears) to retry only failed targets without a full re-scan.
-- **`item_recipe_links` requires Sync Loot Tables** — table is empty until "Sync Loot Tables" is run on `/admin/gear-plan`. Crafted item slots in the gear plan will show "No guild crafter has this pattern" until populated. Run once after deploying migration 0085.
 - **Legacy M+ dungeons require "Sync Legacy Dungeons"** — prior-expansion dungeons in the current M+ rotation (e.g. Algeth'ar Academy) are not covered by "Sync Loot Tables". Run "Sync Legacy Dungeons" once after first deploy; it runs as a background task and takes several minutes. Refresh Item Sources when done.
-- **Process Tier Tokens must re-run after each Sync Loot Tables** — `enrich_catalyst_tier_items()` adds broad per-boss source rows for tier pieces after every "Sync Loot Tables". Those rows are unflagged until "Process Tier Tokens" runs again and calls `flag_junk_sources(flag_tier_pieces=True)`. Correct workflow: Sync Loot Tables → Enrich Items → Process Tier Tokens (all three buttons now labeled as Steps 1–3 in the admin UI).
-- **`wow_items.armor_type` only populated by Process Tier Tokens** — Wowhead's `jsonequip.subclass` does not reliably populate this field during item enrichment. `process_tier_tokens` backfills it from tooltip HTML for tier piece items only. Non-tier items (trinkets, weapons, etc.) will still have `armor_type=NULL`.
+- **Process Tier Tokens must re-run after each Sync Loot Tables** — `enrich_catalyst_tier_items()` adds broad per-boss source rows for tier pieces after every "Sync Loot Tables". Those rows are unflagged until "Process Tier Tokens" runs again and calls `flag_junk_sources(flag_tier_pieces=True)`. Correct workflow: Sync Loot Tables → Enrich Items → Process Tier Tokens → Sync BIS Lists (Steps 1–4 in the admin UI).
+- **`wow_items.armor_type` for Midnight tier pieces** — `process_tier_tokens` backfills armor_type from tooltip HTML (old expansion) or Blizzard API enrichment (Midnight, Phase 3 of Enrich Items). Non-tier items (trinkets, weapons, etc.) will still have `armor_type=NULL`. The `v_tier_piece_sources` view (migration 0088) requires `armor_type IS NOT NULL` for the join to work — run Enrich Items after Sync Loot Tables to populate it for Midnight items.
+- **Enrich Items is a prerequisite for Midnight tier piece sourcing** — Phase 3 of the Enrich Items background job calls `enrich_blizzard_metadata()` which fetches `armor_type` from Blizzard API for BIS items in tier slots with no Wowhead tooltip. Without this, Midnight tier pieces have `armor_type=NULL` and won't match `tier_token_attrs` in the view. Run Enrich Items (Step 2) before checking gear plan sourcing on a fresh install.
