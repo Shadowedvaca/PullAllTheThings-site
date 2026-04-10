@@ -1569,31 +1569,25 @@ async function syncItemSources() {
 async function syncLegacyDungeons() {
     const btn = document.getElementById('sync-legacy-dungeons-btn');
     if (btn) btn.disabled = true;
-    setStatusHtml('<span class="spinner"></span> Syncing legacy M+ dungeons from all prior expansions…', 'running');
+    setStatusHtml('<span class="spinner"></span> Starting legacy dungeon sync…', 'running');
 
     try {
         const r = await fetch('/api/v1/admin/bis/sync-legacy-dungeons', { method: 'POST' });
         const ct = r.headers.get('content-type') || '';
         if (!ct.includes('application/json')) {
             const text = await r.text();
-            throw new Error(`HTTP ${r.status}: server returned non-JSON response. Check app logs.\n${text.slice(0, 200)}`);
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
         }
         const d = await r.json();
-        if (!d.ok) throw new Error(d.error || d.detail || 'Sync failed');
+        if (!d.ok) throw new Error(d.error || d.detail || 'Failed to start');
 
-        const errCount = (d.errors || []).length;
-        const enriched = d.items_enriched != null ? `, ${d.items_enriched} enriched` : '';
-        const msg = `Legacy dungeon sync complete — ${d.expansions_checked} expansion(s): ` +
-            `${d.instances_synced} dungeons, ${d.encounters_synced} encounters, ` +
-            `${d.items_upserted} items${enriched}` +
-            (errCount ? ` (${errCount} errors)` : '');
-        setStatus(msg, errCount ? 'partial' : 'success');
-
-        if (errCount) {
-            console.warn('Legacy dungeon sync errors:', d.errors);
-        }
-
-        await loadItemSources();
+        // Sync runs in background — show a manual refresh prompt.
+        setStatusHtml(
+            'Legacy dungeon sync running in background (several minutes). ' +
+            '<a href="#" onclick="loadItemSources();return false;" ' +
+            'style="color:var(--color-accent);">Refresh Item Sources</a> when done.',
+            'info'
+        );
     } catch (err) {
         setStatus('Legacy dungeon sync failed: ' + err.message, 'error');
     } finally {

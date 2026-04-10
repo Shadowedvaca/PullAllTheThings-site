@@ -529,29 +529,50 @@ async def sync_legacy_dungeons(
     request: Request,
     player: Player = Depends(require_rank(5)),
 ):
-    """Sync dungeon instances from all prior expansions (GL only).
+    """Fire-and-forget sync of dungeon instances from all prior expansions (GL only).
 
-    The main Sync Loot Tables only covers the current expansion.  This syncs
-    dungeons from every prior expansion so that legacy M+ dungeons (e.g.
-    Algeth'ar Academy from Dragonflight) are included in item_sources.
+    Returns immediately — the sync runs in the background (takes several
+    minutes).  Progress is logged server-side; refresh Item Sources when done.
 
     Raids and world bosses from prior expansions are intentionally skipped —
     they don't drop current-season loot.
     """
-    pool = _pool(request)
-    client = await _get_blizzard_client(request)
+    import asyncio
     from sv_common.guild_sync.item_source_sync import sync_legacy_expansion_dungeons
     from guild_portal.services.item_service import enrich_unenriched_items
     from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
 
-    result = await sync_legacy_expansion_dungeons(pool, client)
-    enriched, enrich_errors = await enrich_unenriched_items(pool)
-    result["items_enriched"] = enriched
-    result.setdefault("errors", []).extend(enrich_errors)
-    link_stats = await build_item_recipe_links(pool)
-    result["recipe_links_linked"] = link_stats["linked"]
-    result["recipe_links_updated"] = link_stats["updated"]
-    return {"ok": True, **result}
+    pool = _pool(request)
+    client = await _get_blizzard_client(request)
+
+    async def _run_in_background():
+        try:
+            result = await sync_legacy_expansion_dungeons(pool, client)
+            enriched, enrich_errors = await enrich_unenriched_items(pool)
+            link_stats = await build_item_recipe_links(pool)
+            logger.info(
+                "Legacy dungeon sync complete — %d expansions, %d dungeons, "
+                "%d encounters, %d items, %d enriched, %d links. Errors: %s",
+                result.get("expansions_checked", 0),
+                result.get("instances_synced", 0),
+                result.get("encounters_synced", 0),
+                result.get("items_upserted", 0),
+                enriched,
+                link_stats.get("linked", 0),
+                result.get("errors", []) + enrich_errors,
+            )
+        except Exception as exc:
+            logger.error("Legacy dungeon sync background task failed: %s", exc, exc_info=True)
+
+    asyncio.create_task(_run_in_background())
+    return {
+        "ok": True,
+        "message": (
+            "Legacy dungeon sync started in background. "
+            "This takes several minutes — watch server logs for progress. "
+            "Refresh Item Sources when done."
+        ),
+    }
 
 
 @router.get("/item-sources")
