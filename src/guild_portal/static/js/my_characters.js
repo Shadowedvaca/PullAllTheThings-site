@@ -1642,8 +1642,9 @@ function _gpRenderCenterPanel(data) {
       </div>
       <div class="mcn-gear-actions">
         <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>
-        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
-        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
+        <!-- SimC hidden pending full testing — see reference/gear-plan-4-simc.md -->
+        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button" hidden>Import SimC</button>
+        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button" hidden>Export SimC</button>
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
@@ -1663,19 +1664,6 @@ function _gpRenderCenterPanel(data) {
   document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-src-sel') ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
-  document.getElementById('mcn-gp-btn-import')?.addEventListener('click', _gpShowSimcModal);
-  document.getElementById('mcn-gp-btn-export')?.addEventListener('click', _gpOnExportSimc);
-
-  // Wire SimC modal once
-  const modal = document.getElementById('mcn-simc-modal');
-  if (modal && !modal._gpWired) {
-    modal._gpWired = true;
-    document.getElementById('mcn-simc-close') ?.addEventListener('click', _gpHideSimcModal);
-    document.getElementById('mcn-simc-cancel')?.addEventListener('click', _gpHideSimcModal);
-    document.getElementById('mcn-simc-submit')?.addEventListener('click', _gpOnSimcImport);
-    modal.querySelector('.mcn-modal__backdrop')?.addEventListener('click', _gpHideSimcModal);
-  }
-
   // Wire drawer close
   const drawerClose = document.getElementById('mcn-gp-drawer-close');
   if (drawerClose && !drawerClose._gpWired) {
