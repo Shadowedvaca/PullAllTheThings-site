@@ -1566,9 +1566,9 @@ function _gpRenderGearTable(slots, tc) {
     const craftedSrc = sd.crafted_source || null;
     let sourceHtml;
     if (craftedSrc) {
-      const profName = craftedSrc.profession ? ` · ${_gpEsc(craftedSrc.profession)}` : '';
+      const profLabel = craftedSrc.profession ? _gpEsc(craftedSrc.profession) : 'Crafted Item';
       sourceHtml = `<div class="mcn-gt__crafted-source">
-        <span class="mcn-gt__crafted-label">Crafted Item</span><span class="mcn-gt__crafted-prof">${profName}</span>
+        <span class="mcn-gt__crafted-label">${profLabel}</span>
       </div>`;
     } else if (sources.length) {
       sourceHtml = _gpSourceHtml(sources, 'mcn-gt__source-group', 'mcn-gt__source-inst', 'mcn-gt__source-boss');
@@ -2012,7 +2012,6 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   let dropHtml;
   if (craftedSource) {
     const ccUrl = _gpEsc(craftedSource.crafting_corner_url || '/crafting-corner');
-    const uPills = upgrades.map(t => _gpPill(t, tc)).join(' ');
 
     let craftersHtml;
     if (craftedSource.no_recipe_found || craftedSource.total_crafters === 0) {
@@ -2029,12 +2028,9 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
 
     const profBlock = craftedSource.profession
       ? `<div class="mcn-crafted-section__prof">${_gpEsc(craftedSource.profession)}</div>`
-      : '';
+      : `<div class="mcn-crafted-section__prof">Crafted Item</div>`;
 
     dropHtml = `<div class="mcn-crafted-section">
-      <div class="mcn-crafted-section__header">
-        <span class="mcn-crafted-section__label">Crafted Item</span>
-      </div>
       <div class="mcn-crafted-section__crafters">
         ${profBlock}
         ${craftersHtml}
@@ -2042,7 +2038,6 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
       <a href="${ccUrl}" class="mcn-crafted-section__link" target="_self">
         Order in Crafting Corner &rarr;
       </a>
-      ${uPills ? `<div class="mcn-drawer-item__meta" style="margin-top:4px"><span style="font-size:0.68rem;color:var(--color-text-muted)">Upgrade to:</span> ${uPills}</div>` : ''}
     </div>`;
   } else if (sources.length) {
     const tPills = tracks.map(t => _gpPill(t, tc)).join(' ');
