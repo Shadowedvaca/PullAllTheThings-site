@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from guild_portal.deps import get_db, require_rank
@@ -811,3 +812,59 @@ async def delete_item_source(
     if deleted == "0":
         raise HTTPException(status_code=404, detail="Source entry not found")
     return {"ok": True}
+
+
+@router.post("/bulk-populate-plans")
+async def bulk_populate_plans(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Populate unlocked BIS slots for all in-guild characters (GL only).
+
+    For every in-guild character linked to any player, creates a gear plan if one
+    doesn't exist (using the character's active spec) then fills all unlocked slots
+    from the Wowhead Overall BIS source.  Returns counts of characters processed
+    and total slots populated.
+    """
+    from guild_portal.services import gear_plan_service as svc
+
+    pool = _pool(request)
+
+    async with pool.acquire() as conn:
+        wowhead_src = await conn.fetchrow(
+            "SELECT id FROM guild_identity.bis_list_sources WHERE name = 'Wowhead Overall' LIMIT 1"
+        )
+        wowhead_source_id = wowhead_src["id"] if wowhead_src else None
+
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT p.id AS player_id, wc.id AS character_id
+              FROM guild_identity.players p
+              JOIN guild_identity.player_characters pc ON pc.player_id = p.id
+              JOIN guild_identity.wow_characters wc ON wc.id = pc.character_id
+             WHERE wc.in_guild = TRUE
+               AND wc.removed_at IS NULL
+             ORDER BY p.id, wc.id
+            """
+        )
+
+    characters_processed = 0
+    slots_populated = 0
+
+    for row in rows:
+        player_id = row["player_id"]
+        character_id = row["character_id"]
+
+        await svc.get_or_create_plan(pool, player_id, character_id)
+        populated = await svc.populate_from_bis(
+            pool, player_id, character_id, source_id=wowhead_source_id
+        )
+        slots_populated += populated
+        characters_processed += 1
+
+    return JSONResponse({
+        "ok": True,
+        "data": {
+            "characters_processed": characters_processed,
+            "slots_populated": slots_populated,
+        },
+    })
