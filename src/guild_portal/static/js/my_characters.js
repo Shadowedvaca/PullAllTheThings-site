@@ -1621,6 +1621,9 @@ function _gpRenderCenterPanel(data) {
   const bisSources  = data.bis_sources  || [];
   const heroTalents = data.hero_talents || [];
 
+  const selectedSource = bisSources.find(s => s.id === plan?.bis_source_id) || bisSources[0];
+  const showHtDropdown = !!(selectedSource?.has_hero_talent_variants && heroTalents.length > 0);
+
   const htOpts = ['<option value="">\u2014 Any \u2014</option>']
     .concat((heroTalents || []).map(ht =>
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
@@ -1649,10 +1652,11 @@ function _gpRenderCenterPanel(data) {
     <div class="mcn-detail-area__heading">Gear Plan</div>
     <div class="mcn-gear-controls">
       <div class="mcn-gear-ctrl-row">
-        <label class="mcn-gear-label">Hero Talent</label>
-        <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>
         <label class="mcn-gear-label">BIS List</label>
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
+        ${showHtDropdown ? `
+        <label class="mcn-gear-label">Hero Talent</label>
+        <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>` : ''}
       </div>
       <div class="mcn-gear-actions">
         <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>

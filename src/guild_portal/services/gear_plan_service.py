@@ -905,6 +905,15 @@ async def get_plan_detail(
             """
         )
 
+        # Which sources have hero-talent-specific BIS entries
+        ht_source_ids = await conn.fetchval(
+            """
+            SELECT array_agg(DISTINCT source_id)
+              FROM guild_identity.bis_list_entries
+             WHERE hero_talent_id IS NOT NULL
+            """
+        ) or []
+
         # Hero talents for the plan's spec (for UI dropdown)
         ht_list = []
         if spec_id:
@@ -1084,7 +1093,7 @@ async def get_plan_detail(
     return {
         "plan": dict(plan_row),
         "slots": slots_data,
-        "bis_sources": [dict(r) for r in source_list],
+        "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
     }
