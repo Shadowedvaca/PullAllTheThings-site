@@ -87,9 +87,9 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
     rows = list(await conn.fetch("""
         SELECT
             p.id                                    AS player_id,
-            COALESCE(p.display_name, wc.name)       AS player_name,
+            COALESCE(p.display_name, wc.character_name) AS player_name,
             gr.level                                AS rank_level,
-            wc.name                                 AS character_name,
+            wc.character_name                       AS character_name,
             sp.name                                 AS spec_name,
             cl.id                                   AS class_id,
             gps.slot,
@@ -121,9 +121,9 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
         offspec_rows = await conn.fetch("""
             SELECT
                 p.id                                    AS player_id,
-                COALESCE(p.display_name, wc.name)       AS player_name,
+                COALESCE(p.display_name, wc.character_name) AS player_name,
                 gr.level                                AS rank_level,
-                wc.name                                 AS character_name,
+                wc.character_name                       AS character_name,
                 sp.name                                 AS spec_name,
                 cl.id                                   AS class_id,
                 gps.slot,
