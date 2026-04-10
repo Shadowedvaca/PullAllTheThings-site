@@ -942,6 +942,7 @@ async def get_plan_detail(
                     JOIN common.guild_ranks gr ON gr.id = pl.guild_rank_id
                     WHERE wi.blizzard_item_id = ANY($1::int[])
                       AND wc.in_guild = TRUE
+                      AND wc.removed_at IS NULL
                 )
                 SELECT
                     blizzard_item_id,

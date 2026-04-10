@@ -58,7 +58,7 @@ async def get_recipes_for_filter(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT r.id, r.name, r.blizzard_recipe_id, r.wowhead_url,
-                      COUNT(cr.id) AS crafter_count
+                      COUNT(wc.id) AS crafter_count
                FROM guild_identity.recipes r
                LEFT JOIN guild_identity.character_recipes cr ON cr.recipe_id = r.id
                LEFT JOIN guild_identity.wow_characters wc
