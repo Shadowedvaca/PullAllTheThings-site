@@ -949,9 +949,15 @@ async def get_plan_detail(
         crafted_source: Optional[dict] = None
         if desired_bid and desired_bid in craftable_desired_bids:
             info = crafted_info_by_bid.get(desired_bid)
+            desired_name = desired["item_name"] if desired else None
+            cc_url = (
+                f"/crafting-corner?q={desired_name}"
+                if desired_name
+                else "/crafting-corner"
+            )
             if info:
                 crafted_source = {
-                    "crafting_corner_url": "/crafting-corner",
+                    "crafting_corner_url": cc_url,
                     "profession": info["profession"],
                     "crafters": info["crafters"],
                     "total_crafters": info["total_crafters"],
@@ -959,7 +965,7 @@ async def get_plan_detail(
                 }
             else:
                 crafted_source = {
-                    "crafting_corner_url": "/crafting-corner",
+                    "crafting_corner_url": cc_url,
                     "profession": None,
                     "crafters": [],
                     "total_crafters": 0,
