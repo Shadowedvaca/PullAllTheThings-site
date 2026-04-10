@@ -1292,6 +1292,35 @@
   font-style: italic;
 }
 
+.mcn-crafted-section__crafters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.2rem;
+}
+
+.mcn-crafted-section__prof {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.mcn-crafted-section__crafter {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  padding-left: 0.6rem;
+}
+
+.mcn-crafted-section__crafter--none {
+  font-style: italic;
+  padding-left: 0;
+}
+
+.mcn-crafted-section__crafter--more {
+  font-style: italic;
+  color: var(--color-text-faint, var(--color-text-muted));
+}
+
 .mcn-crafted-section__link {
   font-size: 0.82rem;
   color: var(--color-gold);
@@ -1301,6 +1330,11 @@
 .mcn-crafted-section__link:hover {
   opacity: 0.8;
   text-decoration: underline;
+}
+
+.mcn-gt__crafted-prof {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
 }
 
 /* ── BIS status indicators ──────────────────────────────────── */

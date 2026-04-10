@@ -509,10 +509,15 @@ async def sync_item_sources(
     client = await _get_blizzard_client(request)
     from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync
     from guild_portal.services.item_service import enrich_unenriched_items
+    from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
     result = await _sync(pool, client, expansion_id=expansion_id)
     enriched, enrich_errors = await enrich_unenriched_items(pool)
     result["items_enriched"] = enriched
     result.setdefault("errors", []).extend(enrich_errors)
+    link_stats = await build_item_recipe_links(pool)
+    result["recipe_links_linked"] = link_stats["linked"]
+    result["recipe_links_updated"] = link_stats["updated"]
+    result["recipe_links_skipped"] = link_stats["skipped"]
     return {"ok": True, **result}
 
 

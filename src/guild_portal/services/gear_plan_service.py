@@ -822,6 +822,56 @@ async def get_plan_detail(
             )
             ht_list = [dict(r) for r in ht_rows]
 
+        # Crafter lookup for craftable desired items.
+        # Joins item_recipe_links → recipes → professions → character_recipes →
+        # wow_characters → player_characters → players → guild_ranks.
+        # DISTINCT on (item, character) so a character with multiple recipes for
+        # the same item isn't double-counted.
+        # Sorted by rank level DESC (Guild Leader first), then character name ASC.
+        crafted_info_by_bid: dict[int, dict] = {}
+        if craftable_desired_bids:
+            crafter_rows = await conn.fetch(
+                """
+                WITH crafters AS (
+                    SELECT DISTINCT
+                        wi.blizzard_item_id,
+                        pr.name AS profession_name,
+                        wc.id AS character_id,
+                        wc.character_name,
+                        gr.level AS rank_level
+                    FROM guild_identity.item_recipe_links irl
+                    JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
+                    JOIN guild_identity.recipes r ON r.id = irl.recipe_id
+                    JOIN guild_identity.professions pr ON pr.id = r.profession_id
+                    JOIN guild_identity.character_recipes cr ON cr.recipe_id = r.id
+                    JOIN guild_identity.wow_characters wc ON wc.id = cr.character_id
+                    JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
+                    JOIN guild_identity.players pl ON pl.id = pc.player_id
+                    JOIN common.guild_ranks gr ON gr.id = pl.guild_rank_id
+                    WHERE wi.blizzard_item_id = ANY($1::int[])
+                      AND wc.in_guild = TRUE
+                )
+                SELECT
+                    blizzard_item_id,
+                    profession_name,
+                    character_name,
+                    rank_level,
+                    COUNT(*) OVER (PARTITION BY blizzard_item_id) AS total_crafters
+                FROM crafters
+                ORDER BY blizzard_item_id, rank_level DESC, character_name ASC
+                """,
+                list(craftable_desired_bids),
+            )
+            bid_rows_map: dict[int, list] = {}
+            for r in crafter_rows:
+                bid_rows_map.setdefault(r["blizzard_item_id"], []).append(dict(r))
+            for bid, rows in bid_rows_map.items():
+                crafted_info_by_bid[bid] = {
+                    "profession": rows[0]["profession_name"],
+                    "crafters": [r["character_name"] for r in rows[:5]],
+                    "total_crafters": rows[0]["total_crafters"],
+                }
+
     # Normalize ring and trinket pairs: swap equipped items to maximise BIS matches
     # and ensure consistent alphabetical ordering when no match exists.
     # slot_remapping tracks any visual→DB slot swaps so the frontend can write
@@ -893,19 +943,27 @@ async def get_plan_detail(
         # No border = no goal set for this slot (no data to compare).
         needs_upgrade = bool(desired_bid and not is_bis)
 
-        # Crafted item detection: look up the desired blizzard_item_id in
-        # equipped_data_by_bid (keyed by item ID, not slot — slot-order-independent
-        # so ring/trinket normalization swaps don't break detection).
+        # Crafted source block: fires for all desired items detected as craftable
+        # (those in craftable_desired_bids via "Random Stat" Wowhead tooltip).
+        # Includes profession + top-5 crafters from item_recipe_links lookup.
         crafted_source: Optional[dict] = None
-        if desired_bid:
-            eq_data = equipped_data_by_bid.get(desired_bid)
-            if eq_data and eq_data["is_crafted"]:
-                crafted_track = detect_crafted_track(
-                    bonus_ids=eq_data["bonus_ids"],
-                )
+        if desired_bid and desired_bid in craftable_desired_bids:
+            info = crafted_info_by_bid.get(desired_bid)
+            if info:
                 crafted_source = {
-                    "track": crafted_track or "H",
                     "crafting_corner_url": "/crafting-corner",
+                    "profession": info["profession"],
+                    "crafters": info["crafters"],
+                    "total_crafters": info["total_crafters"],
+                    "no_recipe_found": False,
+                }
+            else:
+                crafted_source = {
+                    "crafting_corner_url": "/crafting-corner",
+                    "profession": None,
+                    "crafters": [],
+                    "total_crafters": 0,
+                    "no_recipe_found": True,
                 }
 
         slots_data[slot] = {
