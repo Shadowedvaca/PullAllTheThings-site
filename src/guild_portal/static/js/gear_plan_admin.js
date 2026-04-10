@@ -1617,7 +1617,7 @@ async function loadItemSources() {
         // Populate instance filter dropdown on first load
         _populateInstanceFilter(d.instances || []);
 
-        renderItemSources(d.sources || [], showJunk);
+        renderItemSources(d.sources || [], showJunk, d.junk_hidden_count || 0);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:#f87171;">Error: ${err.message}</td></tr>`;
     }
@@ -1642,14 +1642,18 @@ function _populateInstanceFilter(instances) {
 
 const _TRACK_COLORS = { C: '#0070dd', H: '#a335ee', M: '#ff8000', V: '#1eff00' };
 
-function renderItemSources(rows, showJunk = false) {
+function renderItemSources(rows, showJunk = false, junkHiddenCount = 0) {
     const tbody = document.getElementById('gp-item-sources-body');
     const countEl = document.getElementById('item-sources-count');
     tbody.innerHTML = '';
 
     const junkCount = rows.filter(r => r.is_suspected_junk).length;
-    let countText = `${rows.length} item${rows.length !== 1 ? 's' : ''}`;
-    if (showJunk && junkCount > 0) countText += ` (${junkCount} junk)`;
+    let countText = `${rows.length} source${rows.length !== 1 ? 's' : ''}`;
+    if (!showJunk && junkHiddenCount > 0) {
+        countText += ` — ${junkHiddenCount} junk hidden`;
+    } else if (showJunk && junkCount > 0) {
+        countText += ` — ${junkCount} junk shown`;
+    }
     if (countEl) countEl.textContent = countText;
 
     // Base colspan: 6 columns + optional GL delete + optional junk badge
@@ -1663,7 +1667,7 @@ function renderItemSources(rows, showJunk = false) {
     for (const row of rows) {
         const tr = document.createElement('tr');
         if (row.is_suspected_junk) {
-            tr.style.opacity = '0.5';
+            tr.classList.add('gp-junk-row');
         }
 
         const TYPE_LABELS = { raid: 'Raid', world_boss: 'World Boss', dungeon: 'Dungeon' };
@@ -1709,6 +1713,65 @@ async function deleteItemSource(sourceId) {
         await loadItemSources();
     } catch (err) {
         setStatus('Delete failed: ' + err.message, 'error');
+    }
+}
+
+async function enrichItems() {
+    const btn = document.getElementById('enrich-items-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Enriching items from Wowhead…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/enrich-items', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const errCount = (d.errors || []).length;
+        setStatus(
+            `Enrich complete — ${d.items_enriched} items enriched` + (errCount ? `, ${errCount} errors` : '') + '.',
+            errCount ? 'partial' : 'success'
+        );
+        if (errCount) console.warn('Enrich errors:', d.errors);
+    } catch (err) {
+        setStatus('Enrich items failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function processTierTokens() {
+    const btn = document.getElementById('process-tier-tokens-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Processing tier tokens…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/process-tier-tokens', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        const msg = `Tier tokens complete — ${d.tokens_processed} tokens detected, ` +
+            `${d.junk_flagged} junk rows flagged, ${d.tokens_skipped_override} overrides skipped.`;
+        setStatus(msg, 'success');
+
+        const lastRunEl = document.getElementById('tier-tokens-last-run');
+        if (lastRunEl) {
+            const now = new Date().toLocaleTimeString();
+            lastRunEl.textContent =
+                `Last run: ${now} — ${d.tokens_processed} tokens detected, ` +
+                `${d.junk_flagged} junk rows flagged, ${d.tokens_skipped_override} overrides skipped.`;
+        }
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Process tier tokens failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
 

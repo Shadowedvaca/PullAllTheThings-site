@@ -554,6 +554,103 @@
     </table>
 </div>
 
+{# ── Tier Tokens ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Tier Tokens</h2>
+        <span style="font-size:0.8rem;color:var(--color-text-muted);">Populated by "Process Tier Tokens" on the Gear Plan page — edit inline to override auto-detected values</span>
+    </div>
+    {% if tier_tokens %}
+    <table class="rt-table">
+        <thead>
+            <tr>
+                <th>Token</th>
+                <th>Slot</th>
+                <th>Armor Type</th>
+                <th>Eligible Classes</th>
+                <th style="width:100px">Auto-detected</th>
+                <th style="width:80px">Override</th>
+                <th>Notes</th>
+                <th style="width:130px">Last Processed</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for tok in tier_tokens %}
+        <tr class="rt-row" data-id="{{ tok.token_item_id }}" data-type="tier-token-attrs">
+            <td>
+                {% if tok.item %}
+                <a href="https://www.wowhead.com/item={{ tok.item.blizzard_item_id }}"
+                   target="_blank" rel="noopener"
+                   style="color:var(--color-gold);text-decoration:none;font-size:0.88rem;">
+                    {{ tok.item.name }}
+                </a>
+                <span style="color:var(--color-text-muted);font-size:0.75rem;"> #{{ tok.item.blizzard_item_id }}</span>
+                {% else %}
+                <span style="color:var(--color-text-muted);">Item #{{ tok.token_item_id }}</span>
+                {% endif %}
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="target_slot"
+                       value="{{ tok.target_slot }}" data-orig="{{ tok.target_slot }}"
+                       style="max-width:100px;">
+            </td>
+            <td>
+                <select class="rt-editable rt-field" name="armor_type"
+                        data-orig="{{ tok.armor_type }}" style="max-width:110px;">
+                    {% for at in ['cloth', 'leather', 'mail', 'plate', 'any'] %}
+                    <option value="{{ at }}" {% if tok.armor_type == at %}selected{% endif %}>{{ at | capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td style="font-size:0.82rem;color:var(--color-text-muted);">
+                {% if tok.eligible_class_ids %}
+                {% for cid in tok.eligible_class_ids %}{{ class_id_to_name.get(cid, cid) }}{% if not loop.last %}, {% endif %}{% endfor %}
+                {% else %}
+                <span style="color:#444;">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if tok.is_auto_detected %}
+                <span class="badge-active" style="font-size:0.75rem;">Auto</span>
+                {% else %}
+                <span class="badge-inactive" style="font-size:0.75rem;">Manual</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if tok.is_manual_override %}
+                <span style="font-size:0.75rem;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);padding:0.1rem 0.4rem;border-radius:4px;">Override</span>
+                {% else %}
+                <span style="color:#444;font-size:0.75rem;">—</span>
+                {% endif %}
+            </td>
+            <td>
+                <input class="rt-editable rt-field" name="override_notes"
+                       value="{{ tok.override_notes or '' }}" data-orig="{{ tok.override_notes or '' }}"
+                       placeholder="Optional notes…" style="max-width:200px;">
+            </td>
+            <td style="font-size:0.78rem;color:var(--color-text-muted);">
+                {% if tok.last_processed %}
+                {{ tok.last_processed.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}
+                <span style="color:#444;">Never</span>
+                {% endif %}
+            </td>
+            <td>
+                <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
+                <span class="rt-status"></span>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding:1rem 1.25rem;color:var(--color-text-muted);font-size:0.88rem;">
+        No tier tokens detected yet. Run <strong>Sync Loot Tables → Enrich Items → Process Tier Tokens</strong> from the Gear Plan admin page to populate this table.
+    </div>
+    {% endif %}
+</div>
+
 {# ── WoW Classes & Specs (read-only, collapsible) ── #}
 <div class="rt-section">
     <details class="rt-collapsible">

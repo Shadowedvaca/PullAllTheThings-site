@@ -588,6 +588,7 @@ async def list_item_sources(
     """List item→source mappings, optionally filtered by instance or type.
 
     Junk rows are hidden by default; pass show_junk=true to reveal them.
+    Always returns junk_hidden_count so the UI can display "N junk hidden".
     """
     pool = _pool(request)
     from sv_common.guild_sync.item_source_sync import get_item_sources, get_instance_names
@@ -600,7 +601,41 @@ async def list_item_sources(
         limit=limit,
     )
     instances = await get_instance_names(pool, show_junk=show_junk)
-    return {"ok": True, "sources": sources, "instances": instances}
+
+    # Always surface junk count so the frontend can show "N junk hidden"
+    junk_hidden_count = 0
+    if not show_junk:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT COUNT(*) AS cnt FROM guild_identity.item_sources WHERE is_suspected_junk = TRUE"
+            )
+            junk_hidden_count = int(row["cnt"])
+
+    return {
+        "ok": True,
+        "sources": sources,
+        "instances": instances,
+        "junk_hidden_count": junk_hidden_count,
+    }
+
+
+@router.post("/enrich-items")
+async def enrich_items(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Fetch Wowhead tooltips for unenriched wow_items rows (GL only).
+
+    Processes all rows where slot_type='other' (stubbed without full data).
+    Safe to re-run — already-enriched rows are skipped.
+    """
+    pool = _pool(request)
+    from guild_portal.services.item_service import enrich_unenriched_items
+    enriched, errors = await enrich_unenriched_items(pool)
+    return {
+        "ok": True,
+        "items_enriched": enriched,
+        "errors": errors[:20] if errors else [],
+    }
 
 
 @router.post("/flag-junk-sources")
