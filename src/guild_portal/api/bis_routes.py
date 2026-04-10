@@ -524,6 +524,36 @@ async def sync_item_sources(
     return {"ok": True, **result}
 
 
+@router.post("/sync-legacy-dungeons")
+async def sync_legacy_dungeons(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Sync dungeon instances from all prior expansions (GL only).
+
+    The main Sync Loot Tables only covers the current expansion.  This syncs
+    dungeons from every prior expansion so that legacy M+ dungeons (e.g.
+    Algeth'ar Academy from Dragonflight) are included in item_sources.
+
+    Raids and world bosses from prior expansions are intentionally skipped —
+    they don't drop current-season loot.
+    """
+    pool = _pool(request)
+    client = await _get_blizzard_client(request)
+    from sv_common.guild_sync.item_source_sync import sync_legacy_expansion_dungeons
+    from guild_portal.services.item_service import enrich_unenriched_items
+    from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
+
+    result = await sync_legacy_expansion_dungeons(pool, client)
+    enriched, enrich_errors = await enrich_unenriched_items(pool)
+    result["items_enriched"] = enriched
+    result.setdefault("errors", []).extend(enrich_errors)
+    link_stats = await build_item_recipe_links(pool)
+    result["recipe_links_linked"] = link_stats["linked"]
+    result["recipe_links_updated"] = link_stats["updated"]
+    return {"ok": True, **result}
+
+
 @router.get("/item-sources")
 async def list_item_sources(
     request: Request,

@@ -384,6 +384,102 @@ async def enrich_catalyst_tier_items(
     return added, errors
 
 
+async def sync_legacy_expansion_dungeons(
+    pool: asyncpg.Pool,
+    client: BlizzardClient,
+) -> dict:
+    """Sync dungeon instances from all expansions except the current one.
+
+    The main sync_item_sources() only covers the latest expansion.  Mythic+
+    seasons often include dungeons from prior expansions, so this fills that
+    gap.  Raids and world bosses are intentionally skipped — they don't drop
+    current-season gear.
+
+    Returns a summary dict with expansions_checked, instances_synced,
+    encounters_synced, items_upserted, errors.
+    """
+    errors: list[str] = []
+
+    tiers = await client.get_journal_expansion_index()
+    if not tiers:
+        return {
+            "expansions_checked": 0,
+            "instances_synced": 0,
+            "encounters_synced": 0,
+            "items_upserted": 0,
+            "errors": ["Could not fetch expansion index from Blizzard API"],
+        }
+
+    # Sort ascending; the last entry is the current expansion — skip it.
+    sorted_tiers = sorted(tiers, key=lambda t: t.get("id", 0))
+    if not sorted_tiers:
+        return {
+            "expansions_checked": 0,
+            "instances_synced": 0,
+            "encounters_synced": 0,
+            "items_upserted": 0,
+            "errors": ["No expansions returned by API"],
+        }
+
+    current_id = sorted_tiers[-1]["id"]
+    legacy_tiers = sorted_tiers[:-1]
+
+    logger.info(
+        "Syncing legacy dungeons from %d prior expansion(s) (current: %d)",
+        len(legacy_tiers), current_id,
+    )
+
+    total_encounters = 0
+    total_items = 0
+    instances_synced = 0
+    expansions_checked = 0
+
+    for tier in legacy_tiers:
+        exp_id = tier["id"]
+        exp_name = tier.get("name", f"Expansion {exp_id}")
+
+        exp_data = await client.get_journal_expansion(exp_id)
+        if not exp_data:
+            errors.append(f"Could not fetch expansion {exp_id} ({exp_name})")
+            continue
+
+        expansions_checked += 1
+        dungeons = exp_data.get("dungeons", [])
+        if not dungeons:
+            logger.debug("No dungeons in expansion %s (%d)", exp_name, exp_id)
+            continue
+
+        for inst in dungeons:
+            inst_id = inst.get("id")
+            inst_name = inst.get("name", "")
+            if not inst_id:
+                continue
+            try:
+                enc_count, item_count, inst_errors = await _sync_instance(
+                    pool, client, inst_id, inst_name, "dungeon"
+                )
+                total_encounters += enc_count
+                total_items += item_count
+                errors.extend(inst_errors)
+                instances_synced += 1
+                logger.info(
+                    "Legacy dungeon %s (%d): %d encounters, %d items",
+                    inst_name, inst_id, enc_count, item_count,
+                )
+            except Exception as exc:
+                msg = f"Failed to sync legacy dungeon {inst_name!r} (id={inst_id}): {exc}"
+                logger.error(msg)
+                errors.append(msg)
+
+    return {
+        "expansions_checked": expansions_checked,
+        "instances_synced": instances_synced,
+        "encounters_synced": total_encounters,
+        "items_upserted": total_items,
+        "errors": errors,
+    }
+
+
 async def flag_junk_sources(
     pool: asyncpg.Pool,
     flag_tier_pieces: bool = False,

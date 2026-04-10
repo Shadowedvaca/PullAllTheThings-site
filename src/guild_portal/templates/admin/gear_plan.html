@@ -414,6 +414,12 @@ select.gp-select {
                 {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}>
             Sync Loot Tables
         </button>
+        <button id="sync-legacy-dungeons-btn" class="btn-sm btn-secondary"
+                onclick="syncLegacyDungeons()"
+                {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}
+                title="Sync dungeon instances from all prior expansions (legacy M+ dungeons not included in Sync Loot Tables)">
+            Sync Legacy Dungeons
+        </button>
 
         <div class="gp-controls__divider"></div>
 

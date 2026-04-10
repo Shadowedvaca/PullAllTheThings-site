@@ -1566,6 +1566,41 @@ async function syncItemSources() {
     }
 }
 
+async function syncLegacyDungeons() {
+    const btn = document.getElementById('sync-legacy-dungeons-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Syncing legacy M+ dungeons from all prior expansions…', 'running');
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/sync-legacy-dungeons', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: server returned non-JSON response. Check app logs.\n${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || d.detail || 'Sync failed');
+
+        const errCount = (d.errors || []).length;
+        const enriched = d.items_enriched != null ? `, ${d.items_enriched} enriched` : '';
+        const msg = `Legacy dungeon sync complete — ${d.expansions_checked} expansion(s): ` +
+            `${d.instances_synced} dungeons, ${d.encounters_synced} encounters, ` +
+            `${d.items_upserted} items${enriched}` +
+            (errCount ? ` (${errCount} errors)` : '');
+        setStatus(msg, errCount ? 'partial' : 'success');
+
+        if (errCount) {
+            console.warn('Legacy dungeon sync errors:', d.errors);
+        }
+
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Legacy dungeon sync failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 async function loadItemSources() {
     const tbody = document.getElementById('gp-item-sources-body');
     tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);">Loading…</td></tr>';
