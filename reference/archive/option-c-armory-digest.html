@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Option C — Armory Digest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0b;
+    color: #c8c0b0;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  .page {
+    max-width: 1100px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* ── Character header ── */
+  .char-header {
+    text-align: center;
+    padding: 1.5rem 1rem 0.75rem;
+    border-bottom: 1px solid #2a2820;
+  }
+  .char-name {
+    font-family: 'Cinzel', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #d4a84b;
+    line-height: 1;
+  }
+  .char-sub {
+    font-size: 0.88rem;
+    color: #888;
+    margin-top: 0.3rem;
+  }
+  .char-sub strong { color: #aaa; font-weight: 600; }
+  .guide-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+  .guide-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.65rem;
+    border-radius: 3px;
+    border: 1px solid;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+  }
+  .guide-badge--wh  { background: #1a1000; color: #e8b400; border-color: #6b4e0060; }
+  .guide-badge--iv  { background: #001828; color: #60c0f0; border-color: #1a6090; }
+  .guide-badge--ugg { background: #100020; color: #c090ff; border-color: #6030a0; }
+
+  /* ── Three-column body ── */
+  .body {
+    display: grid;
+    grid-template-columns: 160px 1fr 160px;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  /* ── Paperdoll ── */
+  .paperdoll {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .slot-ph {
+    height: 48px;
+    background: #141416;
+    border: 1px dashed #2a2820;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    font-size: 0.65rem;
+    color: #444;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .paperdoll--right .slot-ph {
+    justify-content: flex-start;
+    padding-right: 0;
+    padding-left: 0.5rem;
+  }
+
+  /* ── Center panel ── */
+  .center {
+    background: #111113;
+    border: 1px solid #2a2820;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── OPTION C: Armory Digest ── */
+  /*
+     Full-width rows — no card boxes, no grid.
+     Each row is a clickable band with a colored left-accent.
+     Left side: label in muted small-caps.
+     Right side: large prominent value.
+     Rows alternate very subtly. Clicking a row expands it inline.
+     Feels like the old WoW Armory or a modern stat sheet.
+  */
+
+  .digest {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .digest-row {
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    height: 56px;
+    border-bottom: 1px solid #1a1a1c;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    transition: background 0.1s, border-left-color 0.1s;
+    position: relative;
+    gap: 0.75rem;
+  }
+  .digest-row:last-child { border-bottom: none; }
+  .digest-row:hover {
+    background: #161618;
+  }
+
+  /* Active / expanded row */
+  .digest-row.is-active {
+    background: #13120f;
+    border-left-color: #d4a84b;
+  }
+
+  /* Color accents by row type */
+  .digest-row--gear:hover,   .digest-row--gear.is-active   { border-left-color: #d4a84b; }
+  .digest-row--mplus:hover,  .digest-row--mplus.is-active  { border-left-color: #a335ee; }
+  .digest-row--raid:hover,   .digest-row--raid.is-active   { border-left-color: #4ade80; }
+  .digest-row--parse:hover,  .digest-row--parse.is-active  { border-left-color: #f87171; }
+  .digest-row--prof:hover,   .digest-row--prof.is-active   { border-left-color: #fbbf24; }
+  .digest-row--market:hover, .digest-row--market.is-active { border-left-color: #60a5fa; }
+
+  .digest-row__icon {
+    width: 22px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    opacity: 0.55;
+  }
+  .digest-row.is-active .digest-row__icon { opacity: 0.9; }
+
+  .digest-row__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #555;
+    width: 90px;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .digest-row.is-active .digest-row__label { color: #888; }
+
+  .digest-row__value {
+    flex: 1;
+    font-family: 'Cinzel', serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #c8c0b0;
+    line-height: 1;
+  }
+  .digest-row__sub {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.75rem;
+    color: #555;
+    font-weight: 400;
+    margin-left: 0.5rem;
+    position: relative;
+    top: 0.1rem;
+  }
+
+  /* Value colors */
+  .val--gold   { color: #d4a84b; }
+  .val--green  { color: #4ade80; }
+  .val--purple { color: #a335ee; }
+  .val--red    { color: #f87171; }
+  .val--yellow { color: #fbbf24; }
+  .val--blue   { color: #60a5fa; }
+  .val--muted  {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.85rem;
+    color: #444;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .digest-row__chevron {
+    color: #333;
+    font-size: 0.75rem;
+    transition: transform 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  .digest-row.is-active .digest-row__chevron {
+    transform: rotate(90deg);
+    color: #d4a84b;
+  }
+
+  /* ── Expanded detail panel (inline below the active row) ── */
+  .digest-detail {
+    background: #0d0d0f;
+    border-bottom: 1px solid #2a2820;
+    border-left: 3px solid #d4a84b;
+    padding: 0.85rem 1rem 0.85rem 2.5rem;
+    display: none;
+  }
+  .digest-detail.is-visible { display: block; }
+
+  .digest-detail__inner {
+    font-size: 0.82rem;
+    color: #888;
+    line-height: 1.7;
+  }
+  .digest-detail__inner strong { color: #c8c0b0; }
+  .digest-detail__link {
+    color: #60a5fa;
+    text-decoration: none;
+    font-size: 0.78rem;
+    margin-left: 0.35rem;
+  }
+
+  /* Gear sub-table in detail */
+  .mini-gear-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+  }
+  .mini-gear-table td {
+    padding: 0.2rem 0.5rem 0.2rem 0;
+    border-bottom: 1px solid #1a1a1c;
+    color: #888;
+    vertical-align: middle;
+  }
+  .mini-gear-table tr:last-child td { border-bottom: none; }
+  .mini-gear-table .td-slot {
+    color: #555;
+    width: 70px;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .mini-gear-table .td-name { color: #c8c0b0; }
+  .mini-gear-table .td-ilvl { color: #a335ee; font-weight: 600; width: 36px; text-align: right; }
+  .mini-gear-table .td-track {
+    width: 28px;
+    text-align: right;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .track-H { color: #a335ee; }
+  .track-M { color: #ff8000; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Character header -->
+  <div class="char-header">
+    <div class="char-name">Trogmoon</div>
+    <div class="char-sub"><strong>Balance Druid</strong> &nbsp;&middot;&nbsp; Night Elf &nbsp;&middot;&nbsp; Sen'jin &nbsp;&middot;&nbsp; <span style="color:#fbbf24">Ranged</span></div>
+    <div class="guide-bar">
+      <span style="font-size:0.75rem;color:#555;">Guides:</span>
+      <a href="#" class="guide-badge guide-badge--wh">Wowhead</a>
+      <a href="#" class="guide-badge guide-badge--iv">Icy Veins</a>
+      <a href="#" class="guide-badge guide-badge--ugg">u.gg</a>
+    </div>
+  </div>
+
+  <!-- Three-column body -->
+  <div class="body">
+
+    <!-- Left paperdoll -->
+    <div class="paperdoll paperdoll--left">
+      <div class="slot-ph">Head</div>
+      <div class="slot-ph">Neck</div>
+      <div class="slot-ph">Shoulder</div>
+      <div class="slot-ph">Back</div>
+      <div class="slot-ph">Chest</div>
+      <div class="slot-ph">Shirt</div>
+      <div class="slot-ph">Tabard</div>
+      <div class="slot-ph">Wrist</div>
+      <div class="slot-ph">Main Hand</div>
+    </div>
+
+    <!-- Center: Armory Digest -->
+    <div class="center">
+      <div class="digest">
+
+        <!-- Gear row (active/expanded) -->
+        <div class="digest-row digest-row--gear is-active">
+          <span class="digest-row__icon">⚔</span>
+          <span class="digest-row__label">Gear</span>
+          <span class="digest-row__value val--gold">489<span class="digest-row__sub">avg ilvl</span></span>
+          <span class="digest-row__chevron">&#9658;</span>
+        </div>
+        <div class="digest-detail is-visible" style="border-left-color:#d4a84b;">
+          <div class="digest-detail__inner">
+            <table class="mini-gear-table">
+              <tr><td class="td-slot">Head</td><td class="td-name">Verdant Sanctum Headpiece</td><td class="td-ilvl">496</td><td class="td-track track-M">M</td></tr>
+              <tr><td class="td-slot">Neck</td><td class="td-name">Amethyst Band of the Harvest</td><td class="td-ilvl">483</td><td class="td-track track-H">H</td></tr>
+              <tr><td class="td-slot">Shoulder</td><td class="td-name">Mantle of Verdant Boughs</td><td class="td-ilvl">489</td><td class="td-track track-H">H</td></tr>
+              <tr><td class="td-slot">Chest</td><td class="td-name">Robe of the Verdant Sanctum</td><td class="td-ilvl">496</td><td class="td-track track-M">M</td></tr>
+            </table>
+            <div style="margin-top:0.5rem; color:#444; font-style:italic; font-size:0.72rem;">+ 10 more slots &nbsp;&middot;&nbsp; <a href="#" class="digest-detail__link">Open Gear Plan →</a></div>
+          </div>
+        </div>
+
+        <!-- M+ row -->
+        <div class="digest-row digest-row--mplus">
+          <span class="digest-row__icon">🔑</span>
+          <span class="digest-row__label">Mythic+</span>
+          <span class="digest-row__value" style="color:#a335ee;">2,450<span class="digest-row__sub">score</span></span>
+          <span class="digest-row__chevron">&#9658;</span>
+        </div>
+
+        <!-- Raid row -->
+        <div class="digest-row digest-row--raid">
+          <span class="digest-row__icon">🏰</span>
+          <span class="digest-row__label">Raid</span>
+          <span class="digest-row__value val--green">8/8 H<span class="digest-row__sub">heroic clear</span></span>
+          <span class="digest-row__chevron">&#9658;</span>
+        </div>
+
+        <!-- Parses row -->
+        <div class="digest-row digest-row--parse">
+          <span class="digest-row__icon">📊</span>
+          <span class="digest-row__label">Parses</span>
+          <span class="digest-row__value val--purple">72%<span class="digest-row__sub">avg parse</span></span>
+          <span class="digest-row__chevron">&#9658;</span>
+        </div>
+
+        <!-- Professions row -->
+        <div class="digest-row digest-row--prof">
+          <span class="digest-row__icon">⚗</span>
+          <span class="digest-row__label">Professions</span>
+          <span class="digest-row__value val--yellow">Alchemy &middot; Herbalism</span>
+          <span class="digest-row__chevron">&#9658;</span>
+        </div>
+
+        <!-- Market row -->
+        <div class="digest-row digest-row--market">
+          <span class="digest-row__icon">💰</span>
+          <span class="digest-row__label">Market</span>
+          <span class="digest-row__value val--muted">No data</span>
+          <span class="digest-row__chevron">&#9658;</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Right paperdoll -->
+    <div class="paperdoll paperdoll--right">
+      <div class="slot-ph">Hands</div>
+      <div class="slot-ph">Waist</div>
+      <div class="slot-ph">Legs</div>
+      <div class="slot-ph">Feet</div>
+      <div class="slot-ph">Ring 1</div>
+      <div class="slot-ph">Ring 2</div>
+      <div class="slot-ph">Trinket 1</div>
+      <div class="slot-ph">Trinket 2</div>
+      <div class="slot-ph">Off Hand</div>
+    </div>
+
+  </div><!-- end .body -->
+</div>
+
+</body>
+</html>

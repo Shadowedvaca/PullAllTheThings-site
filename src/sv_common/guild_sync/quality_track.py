@@ -172,17 +172,15 @@ def is_crafted_item(bonus_ids: list[int]) -> bool:
 
 def detect_crafted_track(
     bonus_ids: Optional[list[int]],
-    item_level: Optional[int] = None,
-    m_ilvl_threshold: Optional[int] = None,
     custom_bonus_map: Optional[dict[str, list[int]]] = None,
 ) -> Optional[str]:
     """Detect H or M quality track for a crafted item.
 
     Priority:
-    1. Bonus ID detection — H/M crest bonus IDs overlap with the standard
-       track mapping (_DEFAULT_SIMC_BONUS_IDS) so ``track_from_bonus_ids``
-       already covers them.
-    2. Admin-configured ilvl threshold — if item_level >= m_ilvl_threshold → M.
+    1. Admin-provided custom_bonus_map (site_config override for unusual items).
+    2. Built-in _CRAFTED_TRACK_IDS — empirically discovered bonus IDs per expansion.
+       New IDs are identified via get_item_preview() during equipment sync and added
+       to _CRAFTED_TRACK_IDS once confirmed from real character data.
     3. Default fallback — crafted items default to Hero (H) track.
 
     Returns None if bonus_ids do not indicate a crafted item at all.
@@ -191,19 +189,15 @@ def detect_crafted_track(
         return None
 
     if bonus_ids:
-        # 1. Admin-provided custom map (e.g. from site_config) takes highest priority.
+        # 1. Admin-provided override.
         if custom_bonus_map:
             track = track_from_bonus_ids(bonus_ids, custom_bonus_map)
             if track in ("H", "M"):
                 return track
-        # 2. Built-in discovered crafted-crest IDs (_CRAFTED_TRACK_IDS).
+        # 2. Built-in discovered crafted-crest IDs.
         track = track_from_bonus_ids(bonus_ids, _CRAFTED_TRACK_IDS)
         if track in ("H", "M"):
             return track
 
-    # 3. Admin-configured ilvl threshold fallback.
-    if m_ilvl_threshold and item_level and item_level >= m_ilvl_threshold:
-        return "M"
-
-    # 4. Default: crafted gear is Hero-track equivalent.
+    # 3. Default: crafted gear is Hero-track equivalent.
     return "H"

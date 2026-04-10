@@ -211,29 +211,6 @@ input:checked + .sc-slider::before {
     </div>
 </div>
 
-{# Gear Plan Card #}
-<div class="sc-card">
-    <h2 class="sc-card__title">Gear Plan</h2>
-    <p class="sc-card__subtitle">Settings for the per-character gear plan feature.</p>
-
-    <div class="sc-field">
-        <label>Crafted M-Track Minimum ilvl</label>
-        <input type="number" id="sc-crafted-m-ilvl"
-               value="{{ config.crafted_m_ilvl_threshold or '' }}"
-               min="1" max="9999" placeholder="Leave blank to use bonus ID detection only"
-               style="width:100%;background:var(--color-bg-dark);border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.5rem 0.75rem;font-size:0.9rem;box-sizing:border-box;">
-        <p style="font-size:0.8rem;color:var(--color-text-muted);margin:0.35rem 0 0">
-            If set, crafted items at or above this item level are treated as Mythic-track (M).
-            Items below the threshold default to Hero-track (H). Leave blank to rely on bonus ID detection alone.
-        </p>
-    </div>
-
-    <div class="sc-actions">
-        <button class="btn btn--primary" onclick="saveGearPlan()">Save Gear Plan</button>
-        <span class="sc-status" id="gearplan-status"></span>
-    </div>
-</div>
-
 {# Feature Flags Card #}
 <div class="sc-card">
     <h2 class="sc-card__title">Feature Flags</h2>
@@ -328,18 +305,6 @@ function saveFeatures() {
         enable_guild_quotes: document.getElementById('sc-guild-quotes').checked,
         enable_contests: document.getElementById('sc-contests').checked,
     }, 'features-status');
-}
-
-function saveGearPlan() {
-    const raw = document.getElementById('sc-crafted-m-ilvl').value.trim();
-    const threshold = raw ? parseInt(raw, 10) : null;
-    if (raw && (isNaN(threshold) || threshold < 1)) {
-        const s = document.getElementById('gearplan-status');
-        s.style.color = '#f87171';
-        s.textContent = 'Enter a valid item level (e.g. 662)';
-        return;
-    }
-    patchConfig({ crafted_m_ilvl_threshold: threshold }, 'gearplan-status');
 }
 </script>
 {% endblock %}

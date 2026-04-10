@@ -738,14 +738,6 @@ async def get_plan_detail(
             row_dict = {k: v for k, v in dict(r).items() if k != "wowhead_tooltip_html"}
             desired_by_slot[r["slot"]] = row_dict
 
-        # Admin-configured ilvl threshold for crafted M-track detection
-        cfg_row = await conn.fetchrow(
-            "SELECT crafted_m_ilvl_threshold FROM common.site_config LIMIT 1"
-        )
-        crafted_m_ilvl_threshold: Optional[int] = (
-            cfg_row["crafted_m_ilvl_threshold"] if cfg_row else None
-        )
-
         # BIS recommendations for this spec + hero_talent
         bis_by_slot: dict[str, list[dict]] = {}
         if spec_id:
@@ -877,8 +869,6 @@ async def get_plan_detail(
         if equipped and equipped_track is None and equipped.get("is_crafted"):
             equipped_track = detect_crafted_track(
                 bonus_ids=equipped.get("bonus_ids") or [],
-                item_level=equipped.get("item_level"),
-                m_ilvl_threshold=crafted_m_ilvl_threshold,
             )
             if equipped_track:
                 equipped["quality_track"] = equipped_track
@@ -912,8 +902,6 @@ async def get_plan_detail(
             if eq_data and eq_data["is_crafted"]:
                 crafted_track = detect_crafted_track(
                     bonus_ids=eq_data["bonus_ids"],
-                    item_level=eq_data["item_level"],
-                    m_ilvl_threshold=crafted_m_ilvl_threshold,
                 )
                 crafted_source = {
                     "track": crafted_track or "H",

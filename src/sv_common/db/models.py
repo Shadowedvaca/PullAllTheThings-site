@@ -207,7 +207,6 @@ class SiteConfig(Base):
     active_connected_realm_ids: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, server_default="{}"
     )
-    crafted_m_ilvl_threshold: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

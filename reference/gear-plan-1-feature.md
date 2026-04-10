@@ -25,6 +25,9 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1D.1** Small fixes | ✅ COMPLETE | Fix 1 (tier source via `enrich_catalyst_tier_items`), Fix 2 (M-track dungeon), Fix 3 (table row click) all done |
 | **1D.2** Enhanced source display | ⬜ TODO | Instance / Boss / Minimum level in gear table; key thresholds |
 | **1D.3** Crafted items | ✅ COMPLETE | H/M detection via bonus IDs + admin ilvl threshold fallback; crafted_source block in get_plan_detail; gear table shows Crafted+track pill; drawer shows track + Crafting Corner link. Crafter names deferred (need result_item_id on recipes table). |
+| **1D.4** Loot table junk flagging | ⬜ TODO | `is_suspected_junk` column on `item_sources`; flags null-ID world boss rows + tier piece direct-source rows; Show Junk toggle in admin Item Sources. Migration 0084. |
+| **1D.5** Tier token pipeline | ⬜ TODO | `tier_token_attrs` table; `process_tier_tokens()` post-processor; `v_tier_piece_sources` view; gear plan service uses view for tier pieces. Migration 0085. |
+| **1D.6** BIS admin page restructure | ⬜ TODO | 5-step workflow layout replacing flat control bar; Process Tier Tokens button; Tier Tokens section in Reference Tables; junk toggle in Item Sources. |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
 **Active branch:** `feature/gear-plan-phase-1d`
@@ -499,6 +502,234 @@ If fallback ilvl threshold is implemented:
 - Admin Site Config template (if fallback approach used)
 
 **Done when:** A crafted desired item shows H or M track, upgrade pills work, crafter count shows in the table, crafter popup opens from slot detail with guild member names, Crafting Corner link present.
+
+---
+
+## Phase 1D.4: Loot Table Data Quality — Junk Source Flagging
+
+**Purpose:** The Blizzard Journal API includes item source rows that are incorrect or stale alpha/beta data. Specifically: tier gear pieces are listed as dropping directly from raid bosses and world bosses, when in reality no boss drops tier gear directly — they drop tier tokens. Additionally, some world boss entries have null encounter/instance IDs, indicating placeholder data that was never cleaned up. This phase adds a flag to mark suspected junk rows so they are stored (ELT — raw data stays) but silently excluded from gear plan display.
+
+### What gets flagged
+
+Two categories of junk, applied by a post-processing step:
+
+1. **Null-ID world boss rows** — `item_sources` rows where `source_type = 'world_boss'` AND both `blizzard_encounter_id IS NULL` AND `blizzard_instance_id IS NULL`. These have no valid Blizzard encounter reference and are likely alpha/beta artifacts.
+
+2. **Tier gear piece direct-source rows** — `item_sources` rows where the linked `wow_items` entry has set bonus data in its `wowhead_tooltip_html` (i.e., it is a tier gear piece, not a token). Tier pieces do not drop directly from bosses — they are obtained by exchanging tier tokens. These rows are wrong by definition and should not drive gear plan source display.
+
+### Schema change
+
+**Migration 0084** — add column to `item_sources`:
+
+```sql
+ALTER TABLE guild_identity.item_sources
+    ADD COLUMN is_suspected_junk BOOLEAN NOT NULL DEFAULT FALSE;
+```
+
+No data changes in the migration itself — flagging runs via the post-processor (Phase 1D.5).
+
+### Behavior
+
+- All gear plan display queries (`v_tier_piece_sources`, `get_plan_detail`, `item_source_sync` reads) filter `WHERE NOT is_suspected_junk`.
+- Junk rows are never deleted. If a flag is wrong, an admin can clear it manually in the Item Sources table on the BIS admin page.
+- The BIS admin Item Sources collapsible gains a **Show Junk** toggle (default off) to make flagged rows visible for inspection.
+
+### Files changed
+
+- `alembic/versions/0084_item_sources_junk_flag.py`
+- `src/sv_common/guild_sync/item_source_sync.py` — add junk filter to any reads that feed display logic
+- `src/guild_portal/templates/admin/gear_plan.html` — Show Junk toggle in Item Sources collapsible
+- `src/guild_portal/api/bis_routes.py` — respect junk filter in item sources API endpoint
+
+**Done when:** Junk rows exist in `item_sources` with `is_suspected_junk = TRUE` (populated by Phase 1D.5 processor), gear plan display never shows them, and the BIS admin Show Junk toggle reveals them for manual review.
+
+---
+
+## Phase 1D.5: Tier Token Pipeline
+
+**Purpose:** Bosses don't drop tier gear — they drop tier tokens. Players exchange tokens for the tier piece appropriate to their class and spec. The current gear plan has no model for this two-hop chain. This phase introduces a `tier_token_attrs` table (auto-populated from tooltip HTML), a view that resolves tier piece → token → boss, and wires the gear plan service to use it. It also runs the junk flagging defined in Phase 1D.4.
+
+### How tier tokens work in Midnight Season 1
+
+| Token name | Armor type | Boss | Instance | Slot granted |
+|---|---|---|---|---|
+| Aln**woven** Riftbloom | Cloth | Chimaerus the Undreamt God | The Dreamrift | Chest |
+| Aln**cured** Riftbloom | Leather | Chimaerus the Undreamt God | The Dreamrift | Chest |
+| Aln**cast** Riftbloom | Mail | Chimaerus the Undreamt God | The Dreamrift | Chest |
+| Aln**forged** Riftbloom | Plate | Chimaerus the Undreamt God | The Dreamrift | Chest |
+| Void[type] **Hungering** Nullcore | Per type | Vorasius | The Voidspire | Hands |
+| Void[type] **Unraveled** Nullcore | Per type | Fallen-King Salhadaar | The Voidspire | Shoulder |
+| Void[type] **Corrupted** Nullcore | Per type | Vaelgor & Ezzorak | The Voidspire | Legs |
+| Void[type] **Fanatical** Nullcore | Per type | Lightblinded Vanguard | The Voidspire | Helm |
+| Chiming Void Curio | Any | Midnight Falls (L'ura) | March on Quel'Danas | Any |
+
+All token items already exist in `wow_items` with `slot_type = 'other'` and correct `item_sources` entries. Their `wowhead_tooltip_html` contains the data needed for auto-detection (see below).
+
+### Auto-detection from tooltip HTML
+
+Two patterns cover all cases:
+
+**Slot** — the Use effect text contains the slot directly:
+```
+Use: Synthesize a soulbound set hand item appropriate for your class.
+Use: Synthesize a soulbound set chest item appropriate for your class.
+```
+Regex: `r"soulbound set (\w+) item"` → normalize result (`hand` → `hands`).
+
+**Eligible class IDs** — standard Wowhead Classes div:
+```html
+<div class="wowhead-tooltip-item-classes">
+  Classes: <a href="/class=5/priest">Priest</a>, <a href="/class=8/mage">Mage</a> ...
+</div>
+```
+Parse href class IDs → derive armor type from class (Priest/Mage/Warlock = cloth, etc.).
+
+**"Any" wildcard (Chiming Void Curio)** — no Classes div, no slot word in Use text. Detected by absence of both patterns.
+
+### New table: `guild_identity.tier_token_attrs`
+
+**Migration 0085**
+
+| Column | Type | Notes |
+|---|---|---|
+| `token_item_id` | INTEGER PK FK → wow_items | One row per token |
+| `target_slot` | VARCHAR(20) | `chest / head / shoulder / hands / legs / any` |
+| `armor_type` | VARCHAR(20) | `cloth / leather / mail / plate / any` |
+| `eligible_class_ids` | INTEGER[] | Parsed from tooltip Classes div |
+| `is_auto_detected` | BOOLEAN DEFAULT TRUE | False if row was manually created |
+| `is_manual_override` | BOOLEAN DEFAULT FALSE | Set to TRUE when an admin edits the row; processor skips these |
+| `override_notes` | TEXT | Admin free-text — why this was corrected |
+| `last_processed` | TIMESTAMPTZ | When the processor last touched this row |
+
+### Post-processor: `process_tier_tokens()`
+
+New function in `item_source_sync.py` (or a new `tier_token_processor.py`):
+
+1. Find all `wow_items` where `slot_type = 'other'` AND `wowhead_tooltip_html` contains `"Synthesize a soulbound set"` OR `"trade this for powerful class set armor"` — these are tier tokens.
+2. For each token:
+   - Parse `target_slot` from Use effect text (or `'any'` if absent).
+   - Parse `eligible_class_ids` from Classes div (or empty = all classes if absent).
+   - Derive `armor_type` from class IDs via the `guild_identity.classes` table (each class has a known armor type); use `'any'` if no class restriction.
+   - Upsert into `tier_token_attrs`. **Skip rows where `is_manual_override = TRUE`** — never clobber manual edits.
+3. Run junk flagging (Phase 1D.4 criteria) — update `item_sources.is_suspected_junk`.
+4. Return a summary dict: `{tokens_processed, tokens_skipped_override, junk_flagged}`.
+
+### New view: `v_tier_piece_sources`
+
+```sql
+CREATE OR REPLACE VIEW guild_identity.v_tier_piece_sources AS
+SELECT
+    tp.id           AS tier_piece_id,
+    tp.name         AS tier_piece_name,
+    tp.slot_type,
+    tk.id           AS token_item_id,
+    tk.name         AS token_name,
+    tk.blizzard_item_id AS token_blizzard_id,
+    is2.source_name     AS boss_name,
+    is2.source_instance AS instance_name,
+    is2.blizzard_encounter_id,
+    is2.blizzard_instance_id,
+    is2.quality_tracks
+FROM guild_identity.wow_items tp
+JOIN guild_identity.tier_token_attrs tta
+    ON (tta.target_slot = tp.slot_type OR tta.target_slot = 'any')
+   AND (tp.armor_type = tta.armor_type   OR tta.armor_type = 'any')
+JOIN guild_identity.wow_items tk
+    ON tk.id = tta.token_item_id
+JOIN guild_identity.item_sources is2
+    ON is2.item_id = tk.id
+   AND NOT is2.is_suspected_junk
+WHERE tp.slot_type IN ('head', 'shoulder', 'chest', 'hands', 'legs');
+```
+
+### Gear plan service changes
+
+`get_plan_detail()` in `gear_plan_service.py`:
+- Detect if the desired item for a slot is a tier piece (tooltip contains set bonus markup, OR a future `is_tier_piece BOOLEAN` flag on `wow_items` if we want to make it explicit).
+- If tier piece: query `v_tier_piece_sources` filtered by `tier_piece_id` to get boss/instance/tracks.
+- If not tier piece: existing `item_sources` lookup unchanged.
+- The source block returned to the UI is the same shape either way — boss name, instance name, quality tracks — so no UI changes are needed beyond the data being correct.
+
+### Files changed
+
+- `alembic/versions/0084_item_sources_junk_flag.py` (Phase 1D.4)
+- `alembic/versions/0085_tier_token_attrs.py`
+- `src/sv_common/guild_sync/item_source_sync.py` (or new `tier_token_processor.py`) — `process_tier_tokens()`
+- `src/sv_common/db/models.py` — `TierTokenAttrs` ORM model
+- `src/guild_portal/services/gear_plan_service.py` — tier piece source lookup via view
+- `src/guild_portal/api/bis_routes.py` — new endpoint `POST /api/v1/admin/bis/process-tier-tokens`
+- `src/guild_portal/templates/admin/gear_plan.html` — Process Tier Tokens button (Phase 1D.6)
+- `src/guild_portal/templates/admin/reference_tables.html` — Tier Tokens section (Phase 1D.6)
+- `tests/unit/test_tier_token_processor.py` — unit tests for tooltip parsing + junk detection
+
+**Done when:** A tier piece in the gear plan shows the correct boss and instance (via its token's source), not a stale direct-source row. The processor can be triggered from the BIS admin page. `tier_token_attrs` rows are visible and editable in Reference Tables.
+
+---
+
+## Phase 1D.6: BIS Admin Page Restructure
+
+**Purpose:** The current BIS admin controls bar is a single flat row of 8+ mixed buttons with no logical order. This phase reorganises the top of the page into clearly labelled workflow steps (top-to-bottom execution order) and surfaces the new Tier Token processor from Phase 1D.5. The Item Sources collapsible gains a junk data toggle.
+
+### New controls layout — five workflow steps
+
+Replace the single `.gp-controls` bar with five labelled step groups. Each group has a heading, one-line instruction, and its action controls.
+
+---
+
+**Step 1 — Sync Loot Tables**
+> *Pull boss/item data from the Blizzard Journal API. Run once per season after new content launches, or after a content patch adds new encounters.*
+
+→ `Sync Loot Tables` button (GL only)
+
+---
+
+**Step 2 — Enrich Items**
+> *Fetch Wowhead tooltips for any items that were stubbed without slot or tooltip data (slot_type = 'other'). Required before Step 3.*
+
+→ `Enrich Items` button (already exists — surfaced here explicitly)
+
+---
+
+**Step 3 — Process Tier Tokens**
+> *Parse enriched token tooltips to detect slot and eligible classes. Populates the tier token translation table and flags suspected junk sources. Safe to re-run.*
+
+→ `Process Tier Tokens` button (new — calls `POST /api/v1/admin/bis/process-tier-tokens`)
+→ Last-run line: "Last run: [timestamp] — [N] tokens detected, [N] junk rows flagged, [N] overrides skipped"
+
+---
+
+**Step 4 — Sync BIS Lists**
+> *Scrape u.gg and Wowhead BIS recommendations for all specs. Discover URLs first if this is a fresh season. Re-sync Errors retries only failed targets.*
+
+→ Website dropdown + Plan Type dropdown
+→ `Discover URLs` · `Sync Source` · `Sync All` · `Re-sync Errors`
+
+---
+
+**Step 5 — Manual Import**
+> *Paste a SimulationCraft profile to set BIS entries for a specific spec manually.*
+
+→ `Import SimC` button
+
+---
+
+### Item Sources collapsible changes
+
+- Add **Show Junk** toggle (checkbox, default off). When on, junk-flagged rows appear with a muted strikethrough style and a "Junk" badge. When off, they are hidden.
+- Add a count line above the table: "N sources — N junk hidden" (or "N junk shown") so the admin always knows how many are filtered.
+
+### Files changed
+
+- `src/guild_portal/templates/admin/gear_plan.html` — full controls section rewrite + Show Junk toggle
+- `src/guild_portal/templates/admin/reference_tables.html` — new **Tier Tokens** section:
+  - Table: Token Name · Slot · Armor Type · Eligible Classes · Auto-detected · Override · Notes
+  - Inline-editable rows for `target_slot`, `armor_type`, `override_notes` (same pattern as Guide Sites section)
+  - Saving a row sets `is_manual_override = TRUE` automatically
+  - Read-only "Last processed" timestamp badge per row
+- `src/guild_portal/static/js/gear_plan.js` — Step 3 button handler + last-run status display; Show Junk toggle filter
+- `src/guild_portal/static/css/gear_plan.css` — step-group card styles; junk row styles
+
+**Done when:** The BIS admin page top section reads as a clear 5-step workflow. Tier Tokens table is visible and editable in Reference Tables. Item Sources shows/hides junk rows via toggle with a count indicator.
 
 ---
 
