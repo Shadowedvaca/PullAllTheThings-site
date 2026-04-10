@@ -31,6 +31,10 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1E.1** Roster aggregation — backend + main table | ⬜ TODO | Two admin endpoints; hierarchical raid table (instance→boss) + flat M+ table; expand/collapse; auto-hide empty track columns; Initiates/Offspec filters; color scale |
 | **1E.2** Roster aggregation — drill panel | ⬜ TODO | Slide-in panel; By Item + By Player spoke-list views; Wowhead tooltips; active chip highlight |
 | **1E.3** Roster aggregation — auto-setup new members | ⬜ TODO | Hook in `equipment_sync.py`: create default Wowhead BIS plan for newly-discovered in-guild characters |
+| **1E.4** Class-eligible items in slot table | ⬜ TODO | Populate each slot drawer with all scanned raid/M+ items eligible for the character's class (armor type filter + trinket stat filter via tooltip HTML); unselected, clickable to set as target |
+| **1E.5** Item exclusion | ⬜ TODO | `excluded_item_ids INTEGER[]` on `gear_plan_slots` (migration); Fill BIS + BIS recommendations skip excluded items; ✕ button per item row in slot drawer |
+| **1E.6** SimC as gear source + freshness indicator | ⬜ TODO | Parse stored `simc_profile` for item IDs + bonus IDs; `simc_imported_at` timestamp (migration); source toggle (Blizzard API / SimC Import) on paperdoll with timestamps; staleness warning if SimC >7 days; guild roster metrics always use Blizzard API |
+| **1E.7** Help system — guided tour + FAQ | ⬜ TODO | Shepherd.js overlay tour triggered by ? button (auto-fires on first visit via localStorage); collapsible FAQ accordion at bottom of gear plan tab including SimC addon tutorial and "Where did this plan come from?" |
 
 **Active branch:** `feature/gear-plan-phase-1d`
 **Last migration:** 0087
@@ -858,6 +862,134 @@ New endpoints (admin-only, Officer+):
 **Existing art:** The admin "Fill BIS" button at `bis_routes.py:823` already does this for all characters in bulk. 1E.3 adds the same call inline during the per-character sync loop so new members don't need a manual admin trigger.
 
 **Done when:** A newly-linked in-guild character gets a default Wowhead Overall BIS plan created automatically on the next equipment sync run.
+
+---
+
+## Phase 1E.4: Class-Eligible Items in Slot Table
+
+**Scope:** Enrich each slot's drawer in the member-facing gear plan with all scanned loot from raids and M+ that the character's class can actually use — shown unselected, so advanced users can pick targets without ever leaving the page.
+
+**Class eligibility rules:**
+- **Armor slots** (Head → Feet): filter `wow_items.armor_type` to match the character's class armor category (cloth / leather / mail / plate)
+- **Weapon / Off-hand slots**: filter `wow_items.weapon_type` to the eligible weapon families for the class; additionally require that the item's `wowhead_tooltip_html` does not indicate Strength or Agility as primary stat (simple substring check: presence of `"str"` / `"agi"` stat line in the tooltip JSON)
+- **Trinkets**: exclude any item whose `wowhead_tooltip_html` contains only Strength, Agility, or healing-specific procs (substring checks on tooltip stat block for `agi`, `str`, and common healer-only proc strings); when uncertain, include — the user can exclude manually via 1E.5
+- **Rings / Neck / Cloak**: no armor-type restriction; include all scanned items for those slots
+
+**New endpoint:**
+```
+GET /api/v1/me/gear-plan/{plan_id}/available-items?slot=HEAD
+```
+Returns all eligible items for that slot from `wow_items` joined to `item_sources`, filtered by class eligibility rules above. Excludes items already in `gear_plan_slots.excluded_item_ids` (1E.5). Response includes `blizzard_item_id`, `name`, `icon_url`, `slot_type`, `source_name`, `source_instance`, `quality_tracks`.
+
+**No schema changes required.**
+
+**Frontend:**
+- Slot drawer (already opens on slot row click) gains a second section below BIS recommendations: **"Available from Content"**
+- Items rendered as rows: icon + name + source instance + boss name + available tracks
+- Clicking a row sets it as the `desired_item_id` for that slot (same action as clicking a BIS row)
+- Section is collapsible; collapsed by default if BIS recommendations exist; expanded by default if slot has no BIS data
+
+**Done when:** For any gear slot, the drawer lists all scanned class-eligible loot from current content, selectable as a plan target without external lookups.
+
+---
+
+## Phase 1E.5: Item Exclusion
+
+**Scope:** Let users permanently exclude specific items from a slot so Fill BIS skips them, BIS recommendations omit them, and the available-items list (1E.4) hides them.
+
+**Schema change:**
+```sql
+ALTER TABLE guild_identity.gear_plan_slots
+  ADD COLUMN excluded_item_ids INTEGER[] NOT NULL DEFAULT '{}';
+```
+Migration number: TBD (next after current last).
+
+**Backend changes:**
+- `gear_plan_service.py` — `fill_bis()`: skip slots where `desired_item_id` is in `excluded_item_ids` for that slot
+- BIS recommendations query: filter `bis_list_entries.item_id NOT IN excluded_item_ids` per slot
+- `GET /api/v1/me/gear-plan/{plan_id}/available-items`: filter out excluded items
+- New endpoint: `PATCH /api/v1/me/gear-plan/{plan_id}/slots/{slot}/exclude` — body `{"item_id": N}` appends to array; `DELETE` variant removes from array
+
+**Frontend:**
+- Each item row in the slot drawer (both BIS recommendations and available-items sections) gets a small ✕ button on the right
+- Clicking ✕ calls the exclude endpoint, removes the row from view, shows a brief undo toast (3s)
+- A collapsed "Excluded items" section at the bottom of the drawer lists excluded items with an undo (↩) button per row
+
+**Done when:** Excluded items never reappear as suggestions or available items for that slot until explicitly un-excluded.
+
+---
+
+## Phase 1E.6: SimC as Gear Source + Freshness Indicator
+
+**Scope:** Let users import their SimC addon string to override stale Blizzard API equipped gear data, with transparent source labeling and timestamps for both data sources.
+
+**Background:** The Blizzard profile API can lag 24–72 hours behind actual equipped gear. Advanced players who swap gear frequently (or use multiple gear sets) will see outdated data. The SimC addon (`/simc` in WoW chat) exports a current snapshot instantly. We already store `gear_plans.simc_profile` from the existing (currently hidden) import flow.
+
+**Schema change:**
+```sql
+ALTER TABLE guild_identity.gear_plans
+  ADD COLUMN simc_imported_at TIMESTAMPTZ,
+  ADD COLUMN equipped_source VARCHAR(10) NOT NULL DEFAULT 'blizzard'
+    CHECK (equipped_source IN ('blizzard', 'simc'));
+```
+Migration number: TBD.
+
+**SimC parsing:**
+- Parse `simc_profile` text for equipped item lines: `{slot}=,id={blizzard_item_id},bonus_id={...}`
+- Extract `blizzard_item_id` and `bonus_ids` per slot
+- Map to `wow_items` rows; store as the character's SimC-sourced equipped state (in-memory at request time, not a new table — reparse on each request or cache per `simc_imported_at`)
+- SimC slot names map to our internal slot identifiers (HEAD, NECK, etc.) via a static lookup dict
+
+**Source toggle UI:**
+- Shown near the paperdoll equipped ilvl display: **`Blizzard API`** · **`SimC Import`** — two pill buttons, active one highlighted
+- Below the active source, show timestamp: "synced 2 days ago" (Blizzard) or "imported 3 hours ago" (SimC)
+- If SimC is selected but `simc_imported_at` is NULL, show "No SimC import yet" with a prompt to import
+- If SimC data is >7 days old, show a yellow staleness warning badge: "SimC data is 9 days old — consider re-importing"
+- Import button (currently hidden) becomes visible and labeled: "Import SimC String"
+
+**Guild roster metrics (ilvl, comparisons):**
+- Always sourced from Blizzard API `character_equipment` data — SimC source is personal planning only
+- If a character's `equipped_source = 'simc'` and `simc_imported_at` is >7 days ago, the roster page falls back to Blizzard API data and does not display a warning (silent fallback)
+
+**Done when:** User can switch between Blizzard and SimC as their paperdoll source; both timestamps are visible; SimC import flow is unhidden and clearly labeled; stale SimC triggers a warning; guild roster is unaffected.
+
+---
+
+## Phase 1E.7: Help System — Guided Tour + FAQ
+
+**Scope:** A ? button that launches a Shepherd.js guided overlay tour of the gear plan UI, plus a collapsible FAQ accordion at the bottom of the gear plan tab addressing the most common points of confusion.
+
+**Shepherd.js integration:**
+- Self-host Shepherd (`shepherd.js` + `shepherd.css`) in `src/guild_portal/static/js/vendor/` and `static/css/vendor/`
+- Override Shepherd theme variables in `my_characters.css` to match dark fantasy palette (background `#1a1a1e`, border `#d4a84b` accent, text `#e8e0d0`)
+- Shepherd instance created in `my_characters.js`, initialized lazily on first ? click or page load for first-time visitors
+
+**Tour stops (in order):**
+
+| Stop | Target element | Text |
+|------|---------------|------|
+| 1 | BIS source dropdown | "Pick which guide you want to follow — u.gg, Wowhead, or Icy Veins. Your plan is pre-filled with Wowhead Overall as a starting point." |
+| 2 | Hero Talent dropdown (if visible) | "If your spec has hero talent variants, pick the tree you're playing here." |
+| 3 | Fill BIS button | "Fills every empty slot with the top-ranked item from your chosen guide. Safe to run anytime — locked slots are never changed." |
+| 4 | Paperdoll (left box) | "Left side shows your equipped gear. Right side shows what your plan says you should be working toward." |
+| 5 | Slot table | "Click any row to open the details — see why an item is recommended, pick a different one, or exclude items you don't want." |
+| 6 | Lock icon on a slot | "Lock a slot to protect it from Fill BIS. Use this when you've chosen something intentionally different from the guide." |
+| 7 | Source toggle (1E.6) | "If your equipped gear looks outdated, you can import a SimC string to update it instantly. See the FAQ below for how." |
+
+**First-visit behavior:** On first page load for a user who has never seen the tour (localStorage key `patt_gear_tour_v1`), auto-launch after a 1s delay. On subsequent visits, the ? button is the only trigger. Tour can be dismissed at any point; dismissed state is saved to localStorage.
+
+**FAQ accordion:**
+Located at the bottom of the gear plan tab, above the page footer. Each entry is a collapsible `<details>` / `<summary>` pair styled to match the dark theme.
+
+| Entry | Answer summary |
+|-------|---------------|
+| "Where did this gear plan come from?" | Automatically pre-filled with the Wowhead Overall BIS list for your spec when your character was first synced. You can change any slot or swap to a different guide source at any time. |
+| "My equipped gear looks wrong or outdated" | Full SimC addon tutorial: what SimC is, how to install it (Curseforge/Wago link), `/simc` in WoW chat, copy output, click Import SimC String. Includes note that Blizzard's API can lag 24–72 hours. |
+| "Why does this plan differ from what I'd sim on RaidBots?" | BIS lists are generalized for your spec. A sim runs against your specific stats and current gear combination. Use this plan to track targets; once you're mostly geared, RaidBots can fine-tune the last few choices. |
+| "How do I lock or exclude an item?" | Lock (padlock icon) protects a slot from Fill BIS. Exclude (✕ in the slot drawer) hides an item from all recommendations permanently. |
+| "What are the quality tracks (V / C / H / M)?" | Veteran / Champion / Hero / Myth — the upgrade track system. Your plan shows which tracks you still need for each slot. Vault drops are always at the highest track you've cleared that boss on. |
+
+**Done when:** Tour launches automatically on first visit and manually via ? button; all 7 stops render with correct positioning; FAQ accordion renders with all 5 entries; SimC tutorial in FAQ is accurate and complete; localStorage flag prevents auto-re-launch after first dismissal.
 
 ---
 
