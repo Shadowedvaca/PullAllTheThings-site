@@ -359,16 +359,16 @@ class TestSyncEncounter:
 
 class TestFlagJunkSources:
     def _make_flag_pool(self, wb_count: int = 0, tp_count: int = 0):
-        """Pool mock where execute returns row counts for the two UPDATE calls."""
+        """Pool mock where execute returns row counts for UPDATE calls."""
         conn = AsyncMock()
-        # Three execute calls in order:
-        #   1. Clear all flags (UPDATE ... SET is_suspected_junk = FALSE)
+        # Default (no flag_tier_pieces): 2 execute calls
+        #   1. Clear all flags
         #   2. World boss UPDATE → wb_count rows
-        #   3. Tier piece UPDATE → tp_count rows
+        # With flag_tier_pieces=True: 3 execute calls (adds tier piece UPDATE)
         conn.execute = AsyncMock(side_effect=[
             "UPDATE 0",                    # clear all
             f"UPDATE {wb_count}",          # world boss
-            f"UPDATE {tp_count}",          # tier piece
+            f"UPDATE {tp_count}",          # tier piece (only if flag_tier_pieces=True)
         ])
         pool = MagicMock()
         pool.acquire = MagicMock()
@@ -377,9 +377,17 @@ class TestFlagJunkSources:
         return pool, conn
 
     @pytest.mark.asyncio
-    async def test_returns_correct_counts(self):
-        pool, _ = self._make_flag_pool(wb_count=3, tp_count=12)
+    async def test_returns_correct_world_boss_count(self):
+        pool, _ = self._make_flag_pool(wb_count=3)
         result = await flag_junk_sources(pool)
+        assert result["flagged_world_boss"] == 3
+        assert result["flagged_tier_piece"] == 0
+        assert result["total_flagged"] == 3
+
+    @pytest.mark.asyncio
+    async def test_returns_correct_counts_with_tier_pieces(self):
+        pool, _ = self._make_flag_pool(wb_count=3, tp_count=12)
+        result = await flag_junk_sources(pool, flag_tier_pieces=True)
         assert result["flagged_world_boss"] == 3
         assert result["flagged_tier_piece"] == 12
         assert result["total_flagged"] == 15
@@ -387,7 +395,7 @@ class TestFlagJunkSources:
     @pytest.mark.asyncio
     async def test_clears_flags_before_re_flagging(self):
         """First execute call must unconditionally clear all junk flags."""
-        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+        pool, conn = self._make_flag_pool()
         await flag_junk_sources(pool)
         first_call_sql = conn.execute.call_args_list[0].args[0]
         assert "is_suspected_junk = FALSE" in first_call_sql
@@ -395,7 +403,7 @@ class TestFlagJunkSources:
     @pytest.mark.asyncio
     async def test_world_boss_criteria_in_sql(self):
         """World boss UPDATE must filter on instance_type and null IDs."""
-        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+        pool, conn = self._make_flag_pool()
         await flag_junk_sources(pool)
         wb_sql = conn.execute.call_args_list[1].args[0]
         assert "world_boss" in wb_sql
@@ -403,17 +411,26 @@ class TestFlagJunkSources:
         assert "blizzard_instance_id IS NULL" in wb_sql
 
     @pytest.mark.asyncio
-    async def test_tier_piece_criteria_uses_item_set_link(self):
-        """Tier piece UPDATE must join wow_items and match /item-set= in tooltip."""
-        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+    async def test_tier_piece_not_flagged_by_default(self):
+        """Without flag_tier_pieces=True, only 2 execute calls (no tier piece UPDATE)."""
+        pool, conn = self._make_flag_pool()
         await flag_junk_sources(pool)
+        # Only: clear + world_boss = 2 calls
+        assert conn.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_tier_piece_criteria_uses_item_set_link_and_tier_slots(self):
+        """Tier piece UPDATE must filter /item-set= and restrict to tier slot types."""
+        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+        await flag_junk_sources(pool, flag_tier_pieces=True)
         tp_sql = conn.execute.call_args_list[2].args[0]
         assert "wow_items" in tp_sql
         assert "/item-set=" in tp_sql
+        assert "slot_type" in tp_sql
 
     @pytest.mark.asyncio
     async def test_returns_zero_counts_when_nothing_flagged(self):
-        pool, _ = self._make_flag_pool(wb_count=0, tp_count=0)
+        pool, _ = self._make_flag_pool()
         result = await flag_junk_sources(pool)
         assert result["total_flagged"] == 0
         assert result["flagged_world_boss"] == 0

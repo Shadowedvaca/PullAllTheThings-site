@@ -384,16 +384,25 @@ async def enrich_catalyst_tier_items(
     return added, errors
 
 
-async def flag_junk_sources(pool: asyncpg.Pool) -> dict:
+async def flag_junk_sources(
+    pool: asyncpg.Pool,
+    flag_tier_pieces: bool = False,
+) -> dict:
     """Mark suspected-junk rows in item_sources with is_suspected_junk = TRUE.
 
-    Two categories are flagged:
-    1. Null-ID world boss rows — instance_type = 'world_boss' with no valid
-       Blizzard encounter/instance IDs.  These are alpha/beta artifacts.
-    2. Tier piece direct-source rows — the linked wow_items entry has a set
-       bonus (tooltip contains /item-set=), meaning it is a tier piece that
-       cannot actually drop directly from bosses.  Tier pieces are obtained via
-       tokens; Phase 1D.5 will provide the correct view-based source path.
+    Safe to re-run — clears all flags first, then re-applies.
+
+    Category 1 (always): Null-ID world boss rows — instance_type = 'world_boss'
+    with no valid Blizzard encounter/instance IDs.  These are alpha/beta
+    artifacts with no usable location data.
+
+    Category 2 (flag_tier_pieces=True only): Tier piece direct-source rows —
+    the linked wow_items has a set bonus (tooltip contains /item-set=) in a
+    tier slot (head/shoulder/chest/hands/legs).  Tier pieces are obtained via
+    tier tokens, not direct drops.  This flag is only safe to set after
+    v_tier_piece_sources (Phase 1D.5) is in place as the replacement display
+    path; calling with flag_tier_pieces=True before that view exists will
+    cause tier piece slots to show "No drop source data".
 
     Returns {flagged_world_boss, flagged_tier_piece, total_flagged}.
     """
@@ -415,20 +424,22 @@ async def flag_junk_sources(pool: asyncpg.Pool) -> dict:
         )
         flagged_wb = int(wb_result.split()[-1])
 
-        # ── 3. Flag tier piece direct-source rows ─────────────────────────
-        # Tier pieces have an /item-set=N/ link in their Wowhead tooltip HTML.
-        # They cannot drop directly from bosses — players obtain them via tier
-        # tokens + the appropriate exchange mechanism (e.g. Revival Catalyst).
-        tp_result = await conn.execute(
-            """
-            UPDATE guild_identity.item_sources s
-               SET is_suspected_junk = TRUE
-              FROM guild_identity.wow_items wi
-             WHERE wi.id = s.item_id
-               AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
-            """
-        )
-        flagged_tp = int(tp_result.split()[-1])
+        # ── 3. Flag tier piece direct-source rows (Phase 1D.5 only) ───────
+        # Only applied when the caller (process_tier_tokens) has already
+        # created v_tier_piece_sources as the replacement display path.
+        flagged_tp = 0
+        if flag_tier_pieces:
+            tp_result = await conn.execute(
+                """
+                UPDATE guild_identity.item_sources s
+                   SET is_suspected_junk = TRUE
+                  FROM guild_identity.wow_items wi
+                 WHERE wi.id = s.item_id
+                   AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                   AND wi.slot_type IN ('head', 'shoulder', 'chest', 'hands', 'legs')
+                """
+            )
+            flagged_tp = int(tp_result.split()[-1])
 
     total = flagged_wb + flagged_tp
     logger.info(
