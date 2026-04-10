@@ -15,6 +15,8 @@ Display/track rule changes only require a code deploy — no re-sync.
 
 import asyncio
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Optional
 
 import asyncpg
@@ -551,6 +553,196 @@ async def flag_junk_sources(
         "flagged_world_boss": flagged_wb,
         "flagged_tier_piece": flagged_tp,
         "total_flagged": total,
+    }
+
+
+# WoW class ID → armor type mapping
+# Cloth: Priest(5), Mage(8), Warlock(9)
+# Leather: Rogue(4), Druid(11), Monk(10), Demon Hunter(12)
+# Mail: Hunter(3), Shaman(7), Evoker(13)
+# Plate: Warrior(1), Paladin(2), Death Knight(6)
+_CLASS_ARMOR_TYPE: dict[int, str] = {
+    1: "plate",   # Warrior
+    2: "plate",   # Paladin
+    3: "mail",    # Hunter
+    4: "leather", # Rogue
+    5: "cloth",   # Priest
+    6: "plate",   # Death Knight
+    7: "mail",    # Shaman
+    8: "cloth",   # Mage
+    9: "cloth",   # Warlock
+    10: "leather", # Monk
+    11: "leather", # Druid
+    12: "leather", # Demon Hunter
+    13: "mail",   # Evoker
+}
+
+# Regex patterns for tier token tooltip parsing
+_SLOT_RE = re.compile(r"Synthesize a soulbound set (\w+) item", re.IGNORECASE)
+_CLASS_HREF_RE = re.compile(r'href="/class=(\d+)/', re.IGNORECASE)
+
+# Normalise slot words from tooltip text to the canonical slot names used in
+# the gear plan.  The Use text says "hand" not "hands", etc.
+_SLOT_NORMALISE: dict[str, str] = {
+    "hand": "hands",
+    "hands": "hands",
+    "head": "head",
+    "helm": "head",
+    "shoulder": "shoulder",
+    "shoulders": "shoulder",
+    "chest": "chest",
+    "legs": "legs",
+    "leg": "legs",
+}
+
+
+def _parse_token_slot(tooltip_html: str) -> str:
+    """Extract target_slot from a tier token's Wowhead tooltip HTML.
+
+    Returns a canonical slot name ('head', 'shoulder', 'chest', 'hands',
+    'legs') or 'any' when no slot word is found in the Use effect text.
+    """
+    m = _SLOT_RE.search(tooltip_html)
+    if m:
+        word = m.group(1).lower()
+        return _SLOT_NORMALISE.get(word, word)
+    return "any"
+
+
+def _parse_token_class_ids(tooltip_html: str) -> list[int]:
+    """Extract eligible class IDs from the Wowhead Classes div in tooltip HTML.
+
+    Returns a list of integer class IDs, or [] if no Classes div is present
+    (meaning the token is usable by all classes — e.g. Chiming Void Curio).
+    """
+    if 'wowhead-tooltip-item-classes' not in tooltip_html:
+        return []
+    return [int(cid) for cid in _CLASS_HREF_RE.findall(tooltip_html)]
+
+
+def _armor_type_from_class_ids(class_ids: list[int]) -> str:
+    """Derive armor type from a list of eligible class IDs.
+
+    Returns 'any' if the list is empty or covers multiple armor types.
+    When all eligible classes share one armor type, returns that type.
+    """
+    if not class_ids:
+        return "any"
+    types = {_CLASS_ARMOR_TYPE.get(cid) for cid in class_ids if cid in _CLASS_ARMOR_TYPE}
+    types.discard(None)
+    if len(types) == 1:
+        return types.pop()
+    return "any"
+
+
+def _is_tier_token(tooltip_html: str) -> bool:
+    """Return True if this item's tooltip marks it as a tier set token."""
+    if not tooltip_html:
+        return False
+    return (
+        "Synthesize a soulbound set" in tooltip_html
+        or "trade this for powerful class set armor" in tooltip_html.lower()
+    )
+
+
+async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
+    """Detect tier token items, populate tier_token_attrs, then flag junk sources.
+
+    Steps:
+    1. Find wow_items with slot_type='other' whose tooltip HTML indicates a
+       tier token (contains 'Synthesize a soulbound set' or equivalent).
+    2. For each token, parse target_slot, eligible_class_ids, armor_type
+       from the Wowhead tooltip HTML.
+    3. Upsert into tier_token_attrs — skips rows where is_manual_override=TRUE.
+    4. Call flag_junk_sources(flag_tier_pieces=True) to suppress stale
+       direct-drop rows for tier pieces now that v_tier_piece_sources exists.
+    5. Return a summary dict.
+    """
+    now = datetime.now(tz=timezone.utc)
+
+    async with pool.acquire() as conn:
+        # ── 1. Find candidate tier token items ────────────────────────────
+        candidates = await conn.fetch(
+            """
+            SELECT id, blizzard_item_id, name, wowhead_tooltip_html
+              FROM guild_identity.wow_items
+             WHERE slot_type = 'other'
+               AND wowhead_tooltip_html IS NOT NULL
+               AND wowhead_tooltip_html != ''
+            """
+        )
+
+    tokens_processed = 0
+    tokens_skipped_override = 0
+    token_ids_found: list[int] = []
+
+    async with pool.acquire() as conn:
+        for row in candidates:
+            html = row["wowhead_tooltip_html"] or ""
+            if not _is_tier_token(html):
+                continue
+
+            item_id = row["id"]
+            token_ids_found.append(item_id)
+
+            # Check for manual override — never clobber admin edits
+            existing = await conn.fetchrow(
+                "SELECT is_manual_override FROM guild_identity.tier_token_attrs WHERE token_item_id = $1",
+                item_id,
+            )
+            if existing and existing["is_manual_override"]:
+                tokens_skipped_override += 1
+                logger.info(
+                    "process_tier_tokens: skipping item %d (%s) — manual override set",
+                    row["blizzard_item_id"], row["name"],
+                )
+                # Still update last_processed timestamp so the admin can see it was checked
+                await conn.execute(
+                    "UPDATE guild_identity.tier_token_attrs SET last_processed = $1 WHERE token_item_id = $2",
+                    now, item_id,
+                )
+                continue
+
+            target_slot = _parse_token_slot(html)
+            class_ids = _parse_token_class_ids(html)
+            armor_type = _armor_type_from_class_ids(class_ids)
+
+            await conn.execute(
+                """
+                INSERT INTO guild_identity.tier_token_attrs
+                       (token_item_id, target_slot, armor_type, eligible_class_ids,
+                        is_auto_detected, is_manual_override, last_processed)
+                VALUES ($1, $2, $3, $4, TRUE, FALSE, $5)
+                ON CONFLICT (token_item_id) DO UPDATE SET
+                    target_slot        = EXCLUDED.target_slot,
+                    armor_type         = EXCLUDED.armor_type,
+                    eligible_class_ids = EXCLUDED.eligible_class_ids,
+                    is_auto_detected   = TRUE,
+                    last_processed     = EXCLUDED.last_processed
+                """,
+                item_id, target_slot, armor_type, class_ids, now,
+            )
+            tokens_processed += 1
+            logger.info(
+                "process_tier_tokens: upserted item %d (%s) slot=%s armor=%s classes=%s",
+                row["blizzard_item_id"], row["name"], target_slot, armor_type, class_ids,
+            )
+
+    logger.info(
+        "process_tier_tokens: %d tokens processed, %d skipped (override), %d total found",
+        tokens_processed, tokens_skipped_override, len(token_ids_found),
+    )
+
+    # ── 4. Flag junk sources now that view is in place ────────────────────
+    junk_result = await flag_junk_sources(pool, flag_tier_pieces=True)
+
+    return {
+        "tokens_found": len(token_ids_found),
+        "tokens_processed": tokens_processed,
+        "tokens_skipped_override": tokens_skipped_override,
+        "junk_flagged": junk_result["total_flagged"],
+        "junk_world_boss": junk_result["flagged_world_boss"],
+        "junk_tier_piece": junk_result["flagged_tier_piece"],
     }
 
 

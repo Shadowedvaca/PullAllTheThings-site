@@ -22,6 +22,7 @@ Endpoints:
   POST /api/v1/admin/bis/import-simc
   GET  /api/v1/admin/bis/item-sources
   POST /api/v1/admin/bis/flag-junk-sources
+  POST /api/v1/admin/bis/process-tier-tokens
   DELETE /api/v1/admin/bis/item-sources/{id}
 """
 
@@ -615,6 +616,25 @@ async def flag_junk_sources(
     pool = _pool(request)
     from sv_common.guild_sync.item_source_sync import flag_junk_sources as _flag
     result = await _flag(pool)
+    return {"ok": True, **result}
+
+
+@router.post("/process-tier-tokens")
+async def process_tier_tokens(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Parse tier token tooltips, populate tier_token_attrs, and flag junk sources (GL only).
+
+    Detects tier tokens from wow_items tooltips (slot_type='other' + 'Synthesize
+    a soulbound set' text), upserts their parsed slot/armor type into
+    tier_token_attrs, then runs flag_junk_sources(flag_tier_pieces=True) so
+    stale direct-drop rows for tier pieces are suppressed in the gear plan.
+
+    Safe to re-run — rows with is_manual_override=TRUE are never overwritten.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.item_source_sync import process_tier_tokens as _process
+    result = await _process(pool)
     return {"ok": True, **result}
 
 

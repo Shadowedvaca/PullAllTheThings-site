@@ -1835,3 +1835,37 @@ class BisScrapeLog(Base):
     )
 
     target: Mapped["BisScrapeTarget"] = relationship(back_populates="log_entries")
+
+
+class TierTokenAttrs(Base):
+    """Parsed attributes for tier token items.
+
+    Each row records the slot and armor type a token grants, derived from
+    its Wowhead tooltip HTML.  process_tier_tokens() auto-populates this table;
+    rows with is_manual_override=TRUE are skipped by the processor so admin
+    corrections are never clobbered.
+    """
+
+    __tablename__ = "tier_token_attrs"
+    __table_args__ = {"schema": "guild_identity"}
+
+    token_item_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    target_slot: Mapped[str] = mapped_column(String(20), nullable=False)
+    armor_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    eligible_class_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default="{}"
+    )
+    is_auto_detected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    is_manual_override: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    override_notes: Mapped[Optional[str]] = mapped_column(Text)
+    last_processed: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+    item: Mapped["WowItem"] = relationship()

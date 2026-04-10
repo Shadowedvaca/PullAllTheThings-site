@@ -726,15 +726,20 @@ async def get_plan_detail(
         )
         # Track which desired blizzard_item_ids are craftable (Wowhead tooltip has
         # "Random Stat" — crafted items have random secondary stats, drops do not).
+        # Also track tier piece desired bids (tooltip has /item-set=) — these use
+        # v_tier_piece_sources for source display instead of item_sources directly.
         # Strip wowhead_tooltip_html from the row before storing in desired_by_slot
         # to keep it out of the API response payload.
         craftable_desired_bids: set[int] = set()
+        tier_piece_desired_bids: set[int] = set()
         desired_by_slot: dict[str, dict] = {}
         for r in desired_rows:
             bid = r["blizzard_item_id"]
             tooltip = r["wowhead_tooltip_html"] or ""
             if bid and "Random Stat" in tooltip:
                 craftable_desired_bids.add(bid)
+            if bid and "/item-set=" in tooltip:
+                tier_piece_desired_bids.add(bid)
             row_dict = {k: v for k, v in dict(r).items() if k != "wowhead_tooltip_html"}
             desired_by_slot[r["slot"]] = row_dict
 
@@ -803,6 +808,51 @@ async def get_plan_detail(
                     "display_name": _get_display_name(r["instance_name"] or "", inst_type),
                     "track_label": _get_track_label(inst_type),
                 })
+
+        # Tier piece source lookup via v_tier_piece_sources.
+        # Only runs when the player has tier piece items as their desired goal.
+        # The view resolves: tier piece → matching token → token's boss source.
+        # If the view doesn't exist yet (pre-migration or process_tier_tokens not
+        # yet run), the query returns no rows — tier piece slots will fall through
+        # to the existing item_sources data (which may be junk-flagged empty).
+        if tier_piece_desired_bids:
+            try:
+                tier_src_rows = await conn.fetch(
+                    """
+                    SELECT v.tier_piece_blizzard_id AS blizzard_item_id,
+                           v.instance_type,
+                           v.boss_name AS encounter_name,
+                           v.instance_name
+                      FROM guild_identity.v_tier_piece_sources v
+                     WHERE v.tier_piece_blizzard_id = ANY($1::int[])
+                    """,
+                    list(tier_piece_desired_bids),
+                )
+                for r in tier_src_rows:
+                    bid = r["blizzard_item_id"]
+                    inst_type = r["instance_type"]
+                    tracks = _get_tracks(inst_type)
+                    existing_tracks = tracks_by_item.get(bid, [])
+                    merged = sorted(
+                        set(existing_tracks) | set(tracks),
+                        key=lambda t: TRACK_ORDER.get(t, 99),
+                    )
+                    tracks_by_item[bid] = merged
+                    # Avoid duplicate source entries (same boss may appear via multiple
+                    # token paths for 'any' slot/armor tokens like Chiming Void Curio).
+                    existing_sources = sources_by_item.get(bid, [])
+                    src_entry = {
+                        "instance_type": inst_type,
+                        "encounter_name": r["encounter_name"],
+                        "instance_name": r["instance_name"],
+                        "display_name": _get_display_name(r["instance_name"] or "", inst_type),
+                        "track_label": _get_track_label(inst_type),
+                    }
+                    if src_entry not in existing_sources:
+                        sources_by_item.setdefault(bid, []).append(src_entry)
+            except Exception as exc:
+                # View may not exist if migration hasn't run yet — degrade gracefully.
+                logger.warning("v_tier_piece_sources lookup failed: %s", exc)
 
         # Available BIS sources (for UI dropdowns)
         source_list = await conn.fetch(
