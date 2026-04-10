@@ -229,7 +229,7 @@ async def enrich_null_icons(
                         await conn.execute(
                             """
                             UPDATE guild_identity.wow_items
-                               SET icon_url = CASE WHEN $2 IS NOT NULL THEN $2 ELSE icon_url END,
+                               SET icon_url = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE icon_url END,
                                    name     = CASE WHEN (name IS NULL OR name = '') AND $3 != ''
                                                    THEN $3 ELSE name END
                              WHERE blizzard_item_id = $1
