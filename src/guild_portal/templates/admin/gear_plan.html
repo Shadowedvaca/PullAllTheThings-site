@@ -544,6 +544,19 @@ select.gp-select {
             </div>
         </div>
 
+        {# Step 6 — Bulk Populate Player Plans #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 6</span>
+                <span class="gp-step__title">Bulk Populate Player Plans</span>
+            </div>
+            <p class="gp-step__desc">Create gear plans for all in-guild characters that don't have one, then fill every unlocked slot from <strong>Wowhead Overall</strong>. Skips locked slots. Safe to re-run.</p>
+            <div class="gp-step__controls">
+                <button id="bulk-populate-btn" class="btn-sm btn-primary" onclick="bulkPopulatePlans()">Populate All Plans</button>
+            </div>
+            <div class="gp-step__lastrun" id="bulk-populate-result"></div>
+        </div>
+
     </div>
     {% else %}
     {# Read-only: just show the matrix refresh #}

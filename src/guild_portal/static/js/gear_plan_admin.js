@@ -1823,3 +1823,24 @@ async function flagJunkSources() {
         if (btn) btn.disabled = false;
     }
 }
+
+async function bulkPopulatePlans() {
+    const btn = document.getElementById('bulk-populate-btn');
+    const result = document.getElementById('bulk-populate-result');
+    if (btn) btn.disabled = true;
+    if (result) result.textContent = '';
+    setStatus('Populating all plans from Wowhead Overall…', 'info');
+    try {
+        const r = await fetch('/api/v1/admin/bis/bulk-populate-plans', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const msg = `Done — ${d.data.characters_processed} characters processed, ${d.data.slots_populated} slots populated.`;
+        setStatus(msg, 'success');
+        if (result) result.textContent = msg;
+    } catch (err) {
+        setStatus('Bulk populate failed: ' + err.message, 'error');
+        if (result) result.textContent = 'Error: ' + err.message;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
