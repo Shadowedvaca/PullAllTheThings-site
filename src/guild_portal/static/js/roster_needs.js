@@ -2,8 +2,8 @@
  * roster_needs.js — Roster Needs admin page.
  *
  * Fetches aggregated gear needs from:
- *   GET /api/v1/admin/gear-needs/raid
- *   GET /api/v1/admin/gear-needs/dungeon
+ *   GET /api/v1/gear-needs/raid
+ *   GET /api/v1/gear-needs/dungeon
  *
  * Renders two tables: hierarchical raid (instance→boss) and flat M+ dungeon.
  * Expand/collapse for raid instances; track columns auto-hide when empty.
@@ -186,8 +186,8 @@ async function loadRosterNeeds() {
 
     try {
         const [raidResp, dungResp] = await Promise.all([
-            fetch(`/api/v1/admin/gear-needs/raid${params}`),
-            fetch(`/api/v1/admin/gear-needs/dungeon${params}`),
+            fetch(`/api/v1/gear-needs/raid${params}`),
+            fetch(`/api/v1/gear-needs/dungeon${params}`),
         ]);
 
         if (!raidResp.ok) {

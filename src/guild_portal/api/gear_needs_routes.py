@@ -1,10 +1,10 @@
 """Roster gear needs API — aggregated gear plan needs across the roster.
 
-Two admin-only endpoints (Officer+) answering:
+Public endpoints answering:
   "Which bosses/dungeons should we prioritize for loot this week?"
 
-GET /api/v1/admin/gear-needs/raid    — needs by instance → boss → track
-GET /api/v1/admin/gear-needs/dungeon — needs by dungeon → track (C/H only)
+GET /api/v1/gear-needs/raid    — needs by instance → boss → track
+GET /api/v1/gear-needs/dungeon — needs by dungeon → track (C/H only)
 
 Query parameters (both endpoints):
   include_initiates: bool (default True)  — include rank_level=1 players
@@ -15,16 +15,13 @@ import logging
 import re
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-
-from guild_portal.deps import require_rank
+from fastapi import APIRouter, HTTPException, Query, Request
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/api/v1/admin/gear-needs",
-    tags=["admin-gear-needs"],
-    dependencies=[Depends(require_rank(4))],
+    prefix="/api/v1/gear-needs",
+    tags=["gear-needs"],
 )
 
 # Quality track ranking — same order as gear_plan_service

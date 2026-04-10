@@ -13,15 +13,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("""
-        INSERT INTO common.screen_permissions
-            (screen_key, display_name, url_path, category, category_label,
-             category_order, nav_order, min_rank_level)
-        VALUES
-            ('roster_needs', 'Roster Needs', '/admin/roster-needs',
-             'guild_tools', 'Guild Tools', 2, 11, 4)
-        ON CONFLICT (screen_key) DO NOTHING
-    """)
+    # Roster Needs moved to public /roster page — no admin nav entry needed.
+    pass
 
 
 def downgrade() -> None:
