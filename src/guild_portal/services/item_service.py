@@ -20,6 +20,11 @@ logger = logging.getLogger(__name__)
 _WOWHEAD_ENRICH_DELAY = 0.05        # seconds between requests per concurrent worker
 _WOWHEAD_ENRICH_CONCURRENCY = 20   # concurrent Wowhead connections during batch enrichment
 
+# Blizzard Game Data API has a tighter burst limit than Wowhead — use lower
+# concurrency and stagger the initial requests to avoid 429s.
+_BLIZZARD_ICON_CONCURRENCY = 5     # concurrent Blizzard media API connections
+_BLIZZARD_ICON_STAGGER = 0.2       # seconds to wait before each worker's first request
+
 WOWHEAD_TOOLTIP_URL = "https://nether.wowhead.com/tooltip/item/{item_id}"
 
 # Wowhead's nether tooltip API no longer returns the numeric `slotbak` field.
@@ -198,10 +203,16 @@ async def enrich_null_icons(
     updated = 0
     errors: list[str] = []
     lock = asyncio.Lock()
-    sem = asyncio.Semaphore(_WOWHEAD_ENRICH_CONCURRENCY)
+    sem = asyncio.Semaphore(_BLIZZARD_ICON_CONCURRENCY)
 
-    async def _process_one(blizzard_item_id: int, existing_name: str) -> None:
+    async def _process_one(
+        blizzard_item_id: int, existing_name: str, stagger_idx: int
+    ) -> None:
         nonlocal updated
+        # Stagger only the first CONCURRENCY workers so they don't all fire
+        # simultaneously; the rest are blocked by the semaphore anyway.
+        if stagger_idx < _BLIZZARD_ICON_CONCURRENCY:
+            await asyncio.sleep(stagger_idx * _BLIZZARD_ICON_STAGGER)
         async with sem:
             try:
                 icon_url = await blizzard_client.get_item_media(blizzard_item_id)
@@ -250,8 +261,8 @@ async def enrich_null_icons(
             await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
 
     await asyncio.gather(*[
-        _process_one(r["blizzard_item_id"], r["name"] or "")
-        for r in rows
+        _process_one(r["blizzard_item_id"], r["name"] or "", idx)
+        for idx, r in enumerate(rows)
     ])
 
     logger.info(

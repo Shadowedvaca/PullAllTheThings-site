@@ -17,6 +17,7 @@ Usage:
 
 import asyncio
 import logging
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -213,8 +214,15 @@ class BlizzardClient:
         if time.time() >= self._token_expires_at:
             await self._refresh_token()
 
-    async def _api_get(self, path: str, params: dict = None) -> dict:
-        """Make an authenticated GET request to the Blizzard API."""
+    async def _api_get(
+        self, path: str, params: dict = None, _retries: int = 3
+    ) -> dict:
+        """Make an authenticated GET request to the Blizzard API.
+
+        Retries up to _retries times on HTTP 429 (rate limit), backing off
+        using the Retry-After header value plus random jitter to spread
+        concurrent callers.
+        """
         await self._ensure_token()
 
         if params is None:
@@ -228,6 +236,19 @@ class BlizzardClient:
         response = await self._http_client.get(url, headers=headers, params=params)
 
         self._request_count += 1
+
+        if response.status_code == 429:
+            if _retries > 0:
+                retry_after = float(response.headers.get("Retry-After", "1"))
+                wait = retry_after + random.uniform(0.1, 1.0)
+                logger.warning(
+                    "Blizzard API 429 on %s — retrying in %.1fs (%d retries left)",
+                    path, wait, _retries - 1,
+                )
+                await asyncio.sleep(wait)
+                return await self._api_get(path, params, _retries - 1)
+            logger.warning("Blizzard API 429 on %s — no retries left", path)
+            return None
 
         if response.status_code == 404:
             logger.warning("Blizzard API 404: %s", path)
