@@ -144,6 +144,24 @@ def normalize_slot(blizzard_slot: str) -> Optional[str]:
 # TWW: 1808 = "Crafted by"; Midnight: 12214 appears on all Radiance Crafted items.
 _CRAFTED_BONUS_IDS: frozenset[int] = frozenset({1808, 12214})
 
+# Crafted crest-quality track bonus IDs.
+# These are SEPARATE from _DEFAULT_SIMC_BONUS_IDS (which maps regular upgrade-track
+# gear).  Crafted items are not on the V/C/H/M upgrade track — their quality comes
+# from the type of crest used during crafting, encoded as a distinct bonus ID.
+#
+# IDs are discovered by calling get_item_preview(item_id, bonus_ids) during equipment
+# sync: Blizzard returns "Heroic"/"Mythic" in preview_item.name_description.display_string
+# when these IDs are present, letting us identify the discriminating ID empirically.
+# Add new entries here as they are confirmed from real character data.
+#
+# Midnight expansion (confirmed from Trogmoon's gear, April 2026):
+#   13621 → H  discovered from wrist (Aetherlume Bands, ilvl 272) and back (ilvl 272)
+#   13622 → M  discovered from ring_2 (Loa Worshiper's Band, ilvl 285)
+_CRAFTED_TRACK_IDS: dict[str, list[int]] = {
+    "H": [13621],
+    "M": [13622],
+}
+
 
 def is_crafted_item(bonus_ids: list[int]) -> bool:
     """Return True if the item is crafted gear (not on V/C/H/M upgrade track)."""
@@ -172,15 +190,20 @@ def detect_crafted_track(
     if not is_crafted_item(bonus_ids or []):
         return None
 
-    # Try bonus ID map for H or M
     if bonus_ids:
-        track = track_from_bonus_ids(bonus_ids, custom_bonus_map)
+        # 1. Admin-provided custom map (e.g. from site_config) takes highest priority.
+        if custom_bonus_map:
+            track = track_from_bonus_ids(bonus_ids, custom_bonus_map)
+            if track in ("H", "M"):
+                return track
+        # 2. Built-in discovered crafted-crest IDs (_CRAFTED_TRACK_IDS).
+        track = track_from_bonus_ids(bonus_ids, _CRAFTED_TRACK_IDS)
         if track in ("H", "M"):
             return track
 
-    # Fallback: admin-configured ilvl threshold
+    # 3. Admin-configured ilvl threshold fallback.
     if m_ilvl_threshold and item_level and item_level >= m_ilvl_threshold:
         return "M"
 
-    # Default: crafted gear is Hero-track equivalent
+    # 4. Default: crafted gear is Hero-track equivalent.
     return "H"
