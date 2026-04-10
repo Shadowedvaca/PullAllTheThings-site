@@ -425,6 +425,129 @@ select.gp-select {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ── Roster Needs ─────────────────────────────────────────────────────────── */
+.gp-needs-wrap {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.gp-needs__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    flex-wrap: wrap;
+}
+.gp-needs__title {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    color: var(--color-gold);
+    margin: 0;
+    flex: 1;
+}
+.gp-needs__filters {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.83rem;
+    color: var(--color-text-muted);
+    flex-wrap: wrap;
+}
+.gp-needs__filters label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+    user-select: none;
+}
+.gp-needs__body {
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.gp-needs__section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    margin: 0 0 0.5rem;
+}
+.gp-needs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+}
+.gp-needs-table th {
+    text-align: center;
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+.gp-needs-table th.gp-needs-th--name {
+    text-align: left;
+    min-width: 180px;
+}
+.gp-needs-table td {
+    text-align: center;
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    white-space: nowrap;
+}
+.gp-needs-table td.gp-needs-td--name {
+    text-align: left;
+    color: var(--color-text);
+}
+/* Instance rows */
+.gp-needs-table tr.gp-needs-instance {
+    background: rgba(212,168,75,0.06);
+    cursor: pointer;
+}
+.gp-needs-table tr.gp-needs-instance td.gp-needs-td--name {
+    font-weight: 600;
+    color: var(--color-gold);
+}
+.gp-needs-table tr.gp-needs-instance:hover { background: rgba(212,168,75,0.12); }
+/* Boss rows */
+.gp-needs-table tr.gp-needs-boss td.gp-needs-td--name {
+    padding-left: 1.6rem;
+    color: var(--color-text-muted);
+    font-size: 0.81rem;
+}
+/* Track column header colors */
+.gp-needs-th--V { color: #1eff00 !important; }
+.gp-needs-th--C { color: #0070dd !important; }
+.gp-needs-th--H { color: #a335ee !important; }
+.gp-needs-th--M { color: #ff8000 !important; }
+/* Cell color scale: by player count */
+.gp-needs-cell {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    min-width: 3.5rem;
+    cursor: default;
+}
+.gp-needs-cell--green { background: rgba(74,222,128,0.15); color: #4ade80; }
+.gp-needs-cell--gold  { background: rgba(212,168,75,0.18); color: var(--color-gold); }
+.gp-needs-cell--red   { background: rgba(248,113,113,0.18); color: #f87171; }
+.gp-needs-empty { color: rgba(255,255,255,0.12); }
+.gp-needs-loading {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    padding: 1.5rem;
+}
 </style>
 {# Wowhead item tooltips — renames item links to their display name and adds
    hover tooltips.  renameLinks rewrites <a href="...wowhead.com/item=N"> text
@@ -565,6 +688,40 @@ select.gp-select {
     {# ── Status bar ───────────────────────────────────────────────────────── #}
     <div class="gp-status-bar" id="gp-status">
         <span class="gp-status-bar__msg">Loading…</span>
+    </div>
+
+    {# ── Roster Needs ─────────────────────────────────────────────────────── #}
+    <div class="gp-needs-wrap">
+        <div class="gp-needs__header">
+            <h2 class="gp-needs__title">Roster Needs</h2>
+            <div class="gp-needs__filters">
+                <label>
+                    <input type="checkbox" id="needs-initiates" checked onchange="loadRosterNeeds()">
+                    Include Initiates
+                </label>
+                <label>
+                    <input type="checkbox" id="needs-offspec" onchange="loadRosterNeeds()">
+                    Include Offspec
+                </label>
+                <button class="btn-sm btn-secondary" onclick="loadRosterNeeds()">Refresh</button>
+            </div>
+        </div>
+        <div class="gp-needs__body">
+            {# Raid sub-section #}
+            <div>
+                <p class="gp-needs__section-title">Raid</p>
+                <div id="gp-needs-raid-container">
+                    <div class="gp-needs-loading">Loading…</div>
+                </div>
+            </div>
+            {# M+ sub-section #}
+            <div>
+                <p class="gp-needs__section-title">Mythic+</p>
+                <div id="gp-needs-dungeon-container">
+                    <div class="gp-needs-loading">Loading…</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {# ── Spec / source matrix ─────────────────────────────────────────────── #}
@@ -763,7 +920,7 @@ select.gp-select {
     </div>
 </div>
 
-<script src="/static/js/gear_plan_admin.js?v=0.12.15"></script>
+<script src="/static/js/gear_plan_admin.js?v=1.1.0"></script>
 <script>
     // Expose GL flag to JS
     window._isGl = {{ 'true' if is_gl else 'false' }};
@@ -773,6 +930,7 @@ select.gp-select {
         loadMatrix();
         loadSources();
         loadLog();
+        loadRosterNeeds();
     });
 </script>
 {% endblock %}
