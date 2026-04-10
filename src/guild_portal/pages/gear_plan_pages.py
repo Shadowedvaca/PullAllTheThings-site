@@ -106,3 +106,5 @@ async def my_characters_page(
 async def gear_plan_redirect(request: Request):
     """Gear Plan has moved — redirect to /my-characters."""
     return RedirectResponse(url="/my-characters", status_code=302)
+
+

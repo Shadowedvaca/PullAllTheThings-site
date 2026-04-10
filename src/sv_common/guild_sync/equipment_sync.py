@@ -17,6 +17,7 @@ from typing import Optional
 import asyncpg
 
 from .blizzard_client import BlizzardClient, should_sync_character
+from .gear_plan_auto_setup import auto_setup_gear_plan
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ async def sync_equipment(
     synced = 0
     skipped = 0
     errors = 0
+    gear_plan_errors = 0
     now = datetime.now(timezone.utc)
 
     # Build batches
@@ -98,6 +100,16 @@ async def sync_equipment(
                 errors += 1
             elif result:
                 synced += 1
+                # Auto-setup a default gear plan for this character if one doesn't exist.
+                # Runs after each successful equipment sync; no-op for existing plans.
+                try:
+                    await auto_setup_gear_plan(pool, char["id"])
+                except Exception as plan_exc:
+                    gear_plan_errors += 1
+                    logger.error(
+                        "Gear plan auto-setup failed for %s (id=%d): %s",
+                        char["character_name"], char["id"], plan_exc, exc_info=plan_exc,
+                    )
             else:
                 skipped += 1
 
@@ -105,10 +117,15 @@ async def sync_equipment(
             await asyncio.sleep(_BATCH_DELAY)
 
     logger.info(
-        "Equipment sync complete — synced: %d, skipped: %d, errors: %d",
-        synced, skipped, errors,
+        "Equipment sync complete — synced: %d, skipped: %d, errors: %d, plan_setup_errors: %d",
+        synced, skipped, errors, gear_plan_errors,
     )
-    return {"equipment_synced": synced, "equipment_skipped": skipped, "equipment_errors": errors}
+    return {
+        "equipment_synced": synced,
+        "equipment_skipped": skipped,
+        "equipment_errors": errors,
+        "gear_plan_setup_errors": gear_plan_errors,
+    }
 
 
 async def _sync_one_character(

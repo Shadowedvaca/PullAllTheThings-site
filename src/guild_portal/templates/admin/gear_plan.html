@@ -425,6 +425,7 @@ select.gp-select {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
 </style>
 {# Wowhead item tooltips — renames item links to their display name and adds
    hover tooltips.  renameLinks rewrites <a href="...wowhead.com/item=N"> text
@@ -566,6 +567,7 @@ select.gp-select {
     <div class="gp-status-bar" id="gp-status">
         <span class="gp-status-bar__msg">Loading…</span>
     </div>
+
 
     {# ── Spec / source matrix ─────────────────────────────────────────────── #}
     <div class="gp-matrix-wrap">
@@ -763,7 +765,7 @@ select.gp-select {
     </div>
 </div>
 
-<script src="/static/js/gear_plan_admin.js?v=0.12.15"></script>
+<script src="/static/js/gear_plan_admin.js?v=1.1.0"></script>
 <script>
     // Expose GL flag to JS
     window._isGl = {{ 'true' if is_gl else 'false' }};

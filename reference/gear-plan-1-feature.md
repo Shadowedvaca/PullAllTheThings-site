@@ -28,9 +28,9 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1D.4** Loot table junk flagging | ✅ COMPLETE | Migration 0086: `is_suspected_junk` on `item_sources`; `flag_junk_sources(flag_tier_pieces=False)` — default flags only truly empty world boss stubs; tier piece flagging gated behind `flag_tier_pieces=True` (1D.5 only); `get_item_sources()`/`get_instance_names()` exclude junk by default; gear_plan_service filters junk; Show Junk toggle + Flag Junk Sources button in admin. Also: `sync_legacy_expansion_dungeons()` + `POST /sync-legacy-dungeons` background task + "Sync Legacy Dungeons" button for prior-expansion M+ dungeons. |
 | **1D.5** Tier token pipeline | ✅ COMPLETE | Migration 0087: `tier_token_attrs` + `v_tier_piece_sources` view. `process_tier_tokens()`: 3 steps — (1) parse tokens + upsert tier_token_attrs, (2) backfill `wow_items.armor_type` for tier pieces from tooltip HTML via `_armor_type_from_tooltip()` (Wowhead jsonequip.subclass unreliable), (3) flag_junk_sources(flag_tier_pieces=True). Each tier piece now shows 2 bosses: slot-specific + Midnight Falls. gear_plan_service detects tier_piece_desired_bids and queries view. POST /process-tier-tokens endpoint (GL). TierTokenAttrs ORM model. 38 unit tests. |
 | **1D.6** BIS admin page restructure | ⬜ TODO | 5-step workflow layout replacing flat control bar; Process Tier Tokens button; Tier Tokens section in Reference Tables. |
-| **1E.1** Roster aggregation — backend + main table | ⬜ TODO | Two admin endpoints; hierarchical raid table (instance→boss) + flat M+ table; expand/collapse; auto-hide empty track columns; Initiates/Offspec filters; color scale |
-| **1E.2** Roster aggregation — drill panel | ⬜ TODO | Slide-in panel; By Item + By Player spoke-list views; Wowhead tooltips; active chip highlight |
-| **1E.3** Roster aggregation — auto-setup new members | ⬜ TODO | Hook in `equipment_sync.py`: create default Wowhead BIS plan for newly-discovered in-guild characters |
+| **1E.1** Roster aggregation — backend + main table | ✅ DONE | Public endpoints `/api/v1/gear-needs/raid` + `/dungeon`; section on public `/roster` page; hierarchical raid table (instance→boss, collapsible) + flat M+ table; expand/collapse; auto-hide empty track columns; Initiates/Offspec filters; color scale |
+| **1E.2** Roster aggregation — drill panel | ✅ DONE | Slide-in panel; By Item + By Player spoke-list views; Wowhead tooltips; active chip highlight |
+| **1E.3** Roster aggregation — auto-setup new members | ✅ DONE | `gear_plan_auto_setup.py` in sv_common/guild_sync; called from `_sync_one_character` after equipment commit; no-op if plan exists or no player link |
 | **1E.4** Class-eligible items in slot table | ⬜ TODO | Populate each slot drawer with all scanned raid/M+ items eligible for the character's class (armor type filter + trinket stat filter via tooltip HTML); unselected, clickable to set as target |
 | **1E.5** Item exclusion | ⬜ TODO | `excluded_item_ids INTEGER[]` on `gear_plan_slots` (migration); Fill BIS + BIS recommendations skip excluded items; ✕ button per item row in slot drawer |
 | **1E.6** SimC as gear source + freshness indicator | ⬜ TODO | Parse stored `simc_profile` for item IDs + bonus IDs; `simc_imported_at` timestamp (migration); source toggle (Blizzard API / SimC Import) on paperdoll with timestamps; staleness warning if SimC >7 days; guild roster metrics always use Blizzard API |
@@ -775,13 +775,13 @@ Click any cell → side panel slides in from the right showing who needs what.
 
 ---
 
-## Phase 1E.1: Backend + Main Table
+## Phase 1E.1: Backend + Main Table ✅ DONE
 
-**Scope:** New admin-only endpoints + the hierarchical table with expand/collapse and filters. No drill panel yet.
+**Scope:** Public API endpoints + Roster Needs section on the public `/roster` page (below Full Roster table). No drill panel yet.
 
-New endpoints (admin-only, Officer+):
-- `GET /api/v1/admin/gear-needs/raid` — returns needs aggregated by instance → boss → track
-- `GET /api/v1/admin/gear-needs/dungeon` — returns needs aggregated by dungeon → track
+New endpoints (public, no auth required):
+- `GET /api/v1/gear-needs/raid` — returns needs aggregated by instance → boss → track
+- `GET /api/v1/gear-needs/dungeon` — returns needs aggregated by dungeon → track
 
 **Response shape (raid):**
 ```json

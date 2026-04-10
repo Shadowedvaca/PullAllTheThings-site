@@ -444,6 +444,7 @@ def create_app() -> FastAPI:
     from guild_portal.api.bis_routes import router as bis_router
     from guild_portal.api.gear_plan_routes import router as gear_plan_router
     from guild_portal.api.gear_plan_routes import items_router as items_router
+    from guild_portal.api.gear_needs_routes import router as gear_needs_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
@@ -459,6 +460,7 @@ def create_app() -> FastAPI:
     app.include_router(identity_router)
     app.include_router(crafting_router)
     app.include_router(bis_router)
+    app.include_router(gear_needs_router)
     app.include_router(gear_plan_router)
     app.include_router(items_router)
 
