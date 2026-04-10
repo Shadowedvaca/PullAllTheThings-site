@@ -172,7 +172,7 @@ async def search_recipes(pool: asyncpg.Pool, query: str) -> list[dict]:
                       p.name AS profession_name,
                       pt.name AS tier_name,
                       pt.expansion_name,
-                      COUNT(cr.id) AS crafter_count
+                      COUNT(wc.id) AS crafter_count
                FROM guild_identity.recipes r
                JOIN guild_identity.professions p ON p.id = r.profession_id
                JOIN guild_identity.profession_tiers pt ON pt.id = r.tier_id
