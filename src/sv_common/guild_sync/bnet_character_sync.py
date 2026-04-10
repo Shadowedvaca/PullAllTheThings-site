@@ -226,6 +226,7 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                     )
 
                 class_name = char_data.get("playable_class", {}).get("name", "")
+                race = char_data.get("playable_race", {}).get("name") or None
 
                 # Resolve class_id from reference table
                 class_id = None
@@ -244,19 +245,20 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                 # blizzard_character_id stored for stable rename/transfer tracking.
                 char_row = await conn.fetchrow(
                     """INSERT INTO guild_identity.wow_characters
-                       (character_name, realm_slug, level, class_id, blizzard_character_id, in_guild)
-                       VALUES ($1, $2, $3, $4, $5, FALSE)
+                       (character_name, realm_slug, level, class_id, blizzard_character_id, in_guild, race)
+                       VALUES ($1, $2, $3, $4, $5, FALSE, $6)
                        ON CONFLICT (character_name, realm_slug) DO UPDATE SET
                            level = EXCLUDED.level,
                            class_id = COALESCE(EXCLUDED.class_id,
                                                guild_identity.wow_characters.class_id),
                            blizzard_character_id = COALESCE(EXCLUDED.blizzard_character_id,
                                                             guild_identity.wow_characters.blizzard_character_id),
+                           race = COALESCE(EXCLUDED.race, guild_identity.wow_characters.race),
                            removed_at = NULL
                            -- in_guild is intentionally NOT updated on conflict:
                            -- if the char is already in the guild roster (TRUE), keep it TRUE
                        RETURNING id""",
-                    char_name, realm_slug, level, class_id, blizzard_character_id,
+                    char_name, realm_slug, level, class_id, blizzard_character_id, race,
                 )
                 char_id = char_row["id"]
 

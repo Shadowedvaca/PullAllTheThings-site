@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Option A — Inspect Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0b;
+    color: #c8c0b0;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  /* ── Page shell ── */
+  .page {
+    max-width: 1100px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* ── Character header ── */
+  .char-header {
+    text-align: center;
+    padding: 1.5rem 1rem 0.75rem;
+    border-bottom: 1px solid #2a2820;
+  }
+  .char-name {
+    font-family: 'Cinzel', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #d4a84b;
+    line-height: 1;
+  }
+  .char-sub {
+    font-size: 0.88rem;
+    color: #888;
+    margin-top: 0.3rem;
+  }
+  .char-sub strong { color: #aaa; font-weight: 600; }
+  .guide-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .guide-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.65rem;
+    border-radius: 3px;
+    border: 1px solid;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+  }
+  .guide-badge--wh  { background: #1a1000; color: #e8b400; border-color: #6b4e0060; }
+  .guide-badge--iv  { background: #001828; color: #60c0f0; border-color: #1a6090; }
+  .guide-badge--ugg { background: #100020; color: #c090ff; border-color: #6030a0; }
+
+  /* ── Three-column body ── */
+  .body {
+    display: grid;
+    grid-template-columns: 160px 1fr 160px;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  /* ── Paperdoll placeholder ── */
+  .paperdoll {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .slot-ph {
+    height: 48px;
+    background: #141416;
+    border: 1px dashed #2a2820;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    font-size: 0.65rem;
+    color: #444;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .paperdoll--right .slot-ph {
+    justify-content: flex-start;
+    padding-right: 0;
+    padding-left: 0.5rem;
+  }
+
+  /* ── Center panel ── */
+  .center {
+    background: #111113;
+    border: 1px solid #2a2820;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── OPTION A: Inspect Panel ── */
+  /*
+     Mimics WoW's in-game inspect / character stats window.
+     Stats grouped by section. Each row: icon + label on left, value right-aligned.
+     Gold section headers. No boxes — just rows with subtle separators.
+  */
+
+  .inspect-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0;
+  }
+
+  .inspect-section {
+    padding: 0;
+  }
+
+  .inspect-section__heading {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #d4a84b;
+    padding: 0.6rem 1rem 0.35rem;
+    border-bottom: 1px solid #2a2820;
+    background: #0e0e10;
+  }
+
+  .inspect-row {
+    display: flex;
+    align-items: center;
+    padding: 0.45rem 1rem;
+    gap: 0.6rem;
+    border-bottom: 1px solid #1a1a1c;
+    transition: background 0.1s;
+    cursor: default;
+  }
+  .inspect-row:last-child { border-bottom: none; }
+  .inspect-row:hover { background: #161618; }
+
+  .inspect-row__icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    font-size: 13px;
+  }
+
+  .inspect-row__label {
+    flex: 1;
+    font-size: 0.82rem;
+    color: #888;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+
+  .inspect-row__value {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #c8c0b0;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  /* Value color variants */
+  .val--gold   { color: #d4a84b; }
+  .val--green  { color: #4ade80; }
+  .val--blue   { color: #60a5fa; }
+  .val--purple { color: #c084fc; }
+  .val--red    { color: #f87171; }
+  .val--orange { color: #fb923c; }
+  .val--muted  { color: #555; font-style: italic; font-weight: 400; }
+
+  /* Parse color — like WCL */
+  .val--parse-legendary { color: #ff8000; }
+  .val--parse-epic      { color: #a335ee; }
+  .val--parse-rare      { color: #0070dd; }
+  .val--parse-uncommon  { color: #1eff00; }
+
+  /* ── Detail placeholder (shown when a row is clicked) ── */
+  .detail-hint {
+    border-top: 1px solid #2a2820;
+    padding: 0.6rem 1rem;
+    font-size: 0.75rem;
+    color: #444;
+    text-align: center;
+    font-style: italic;
+    background: #0a0a0c;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Character header -->
+  <div class="char-header">
+    <div class="char-name">Trogmoon</div>
+    <div class="char-sub"><strong>Balance Druid</strong> &nbsp;&middot;&nbsp; Night Elf &nbsp;&middot;&nbsp; Sen'jin &nbsp;&middot;&nbsp; <span style="color:#fbbf24">Ranged</span></div>
+    <div class="guide-bar">
+      <span style="font-size:0.75rem;color:#555;">Guides:</span>
+      <a href="#" class="guide-badge guide-badge--wh">Wowhead</a>
+      <a href="#" class="guide-badge guide-badge--iv">Icy Veins</a>
+      <a href="#" class="guide-badge guide-badge--ugg">u.gg</a>
+    </div>
+  </div>
+
+  <!-- Three-column body -->
+  <div class="body">
+
+    <!-- Left paperdoll -->
+    <div class="paperdoll paperdoll--left">
+      <div class="slot-ph">Head</div>
+      <div class="slot-ph">Neck</div>
+      <div class="slot-ph">Shoulder</div>
+      <div class="slot-ph">Back</div>
+      <div class="slot-ph">Chest</div>
+      <div class="slot-ph">Shirt</div>
+      <div class="slot-ph">Tabard</div>
+      <div class="slot-ph">Wrist</div>
+      <div class="slot-ph">Main Hand</div>
+    </div>
+
+    <!-- Center: Inspect Panel -->
+    <div class="center">
+      <div class="inspect-panel">
+
+        <!-- Section: Character -->
+        <div class="inspect-section">
+          <div class="inspect-section__heading">Character</div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">⚔</span>
+            <span class="inspect-row__label">Avg Item Level</span>
+            <span class="inspect-row__value val--gold">489</span>
+          </div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">🏹</span>
+            <span class="inspect-row__label">Specialization</span>
+            <span class="inspect-row__value">Balance</span>
+          </div>
+        </div>
+
+        <!-- Section: Performance -->
+        <div class="inspect-section">
+          <div class="inspect-section__heading">Performance</div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">🔑</span>
+            <span class="inspect-row__label">Mythic+ Score</span>
+            <span class="inspect-row__value" style="color:#a335ee;">2,450</span>
+          </div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">🏰</span>
+            <span class="inspect-row__label">Raid Progression</span>
+            <span class="inspect-row__value val--green">8/8 Heroic</span>
+          </div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">📊</span>
+            <span class="inspect-row__label">Avg Parse</span>
+            <span class="inspect-row__value val--parse-epic">72%</span>
+          </div>
+        </div>
+
+        <!-- Section: Professions -->
+        <div class="inspect-section">
+          <div class="inspect-section__heading">Professions</div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">⚗</span>
+            <span class="inspect-row__label">Alchemy</span>
+            <span class="inspect-row__value val--gold">Grandmaster</span>
+          </div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">🌿</span>
+            <span class="inspect-row__label">Herbalism</span>
+            <span class="inspect-row__value val--gold">Grandmaster</span>
+          </div>
+        </div>
+
+        <!-- Section: Links -->
+        <div class="inspect-section">
+          <div class="inspect-section__heading">Profiles</div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">⚡</span>
+            <span class="inspect-row__label">Raider.IO</span>
+            <span class="inspect-row__value"><a href="#" style="color:#60a5fa;text-decoration:none;font-size:0.82rem;">View Profile →</a></span>
+          </div>
+
+          <div class="inspect-row">
+            <span class="inspect-row__icon">📜</span>
+            <span class="inspect-row__label">Warcraft Logs</span>
+            <span class="inspect-row__value"><a href="#" style="color:#60a5fa;text-decoration:none;font-size:0.82rem;">View Logs →</a></span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="detail-hint">Click any row to expand detail &rarr;</div>
+    </div>
+
+    <!-- Right paperdoll -->
+    <div class="paperdoll paperdoll--right">
+      <div class="slot-ph">Hands</div>
+      <div class="slot-ph">Waist</div>
+      <div class="slot-ph">Legs</div>
+      <div class="slot-ph">Feet</div>
+      <div class="slot-ph">Ring 1</div>
+      <div class="slot-ph">Ring 2</div>
+      <div class="slot-ph">Trinket 1</div>
+      <div class="slot-ph">Trinket 2</div>
+      <div class="slot-ph">Off Hand</div>
+    </div>
+
+  </div><!-- end .body -->
+</div>
+
+</body>
+</html>

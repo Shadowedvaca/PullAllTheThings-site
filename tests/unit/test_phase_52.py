@@ -379,14 +379,15 @@ class TestParsesTemplate:
     )
 
     def test_parses_div_present(self):
+        # Parses are rendered dynamically into mcn-detail-area by JS
         content = self._tpl.read_text(encoding="utf-8")
-        assert "mc-parses" in content
+        assert "mcn-detail-area" in content
 
     def test_parses_div_hidden_by_default(self):
+        # mcn-body starts hidden; detail area content injected by JS after data loads
         content = self._tpl.read_text(encoding="utf-8")
-        assert 'id="mc-parses"' in content
-        # Should start hidden
-        idx = content.find('id="mc-parses"')
+        assert 'id="mcn-body"' in content
+        idx = content.find('id="mcn-body"')
         surrounding = content[max(0, idx-20):idx+80]
         assert "hidden" in surrounding
 
@@ -403,17 +404,17 @@ class TestParsesCSS:
     )
 
     def test_parse_tier_classes_present(self):
+        # Redesigned page uses mcn-parses-* classes
         content = self._css.read_text(encoding="utf-8")
-        for tier in ("gray", "green", "blue", "purple", "orange", "gold", "pink"):
-            assert f"mc-parse--{tier}" in content, f"Missing parse tier class: {tier}"
+        assert "mcn-parses-table" in content
 
     def test_parse_bar_classes_present(self):
         content = self._css.read_text(encoding="utf-8")
-        assert "mc-parse-bar-fill" in content
+        assert "mcn-parses-td" in content
 
     def test_parse_tab_classes_present(self):
         content = self._css.read_text(encoding="utf-8")
-        assert "mc-parse-tab" in content
+        assert "mcn-parses-th" in content
 
 
 # ---------------------------------------------------------------------------
@@ -428,18 +429,23 @@ class TestParsesJS:
     )
 
     def test_parse_percentile_tier_function(self):
+        # Redesigned page uses _parseTierColor for inline colour computation
         content = self._js.read_text(encoding="utf-8")
-        assert "parsePercentileTier" in content
+        assert "_parseTierColor" in content
 
     def test_render_parses_panel_function(self):
+        # Redesigned page uses _renderParsesDetail
         content = self._js.read_text(encoding="utf-8")
-        assert "renderParsesPanel" in content
+        assert "_renderParsesDetail" in content
 
     def test_fetches_parses_endpoint(self):
         content = self._js.read_text(encoding="utf-8")
         assert "/parses" in content
 
     def test_wcl_tier_colors_present(self):
+        # Tier colours are inline hex values in _parseTierColor; verify at least
+        # the function and pink/gold boundaries are present
         content = self._js.read_text(encoding="utf-8")
-        for tier in ("gray", "green", "blue", "purple", "orange", "gold", "pink"):
-            assert tier in content, f"Missing WCL tier: {tier}"
+        assert "_parseTierColor" in content
+        assert "#e268a8" in content  # pink (100)
+        assert "#e5cc80" in content  # gold (99)

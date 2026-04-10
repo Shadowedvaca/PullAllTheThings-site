@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Option B — Stat Strip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0a0a0b;
+    color: #c8c0b0;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  .page {
+    max-width: 1100px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* ── Character header ── */
+  .char-header {
+    text-align: center;
+    padding: 1.5rem 1rem 0.75rem;
+    border-bottom: 1px solid #2a2820;
+  }
+  .char-name {
+    font-family: 'Cinzel', serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #d4a84b;
+    line-height: 1;
+  }
+  .char-sub {
+    font-size: 0.88rem;
+    color: #888;
+    margin-top: 0.3rem;
+  }
+  .char-sub strong { color: #aaa; font-weight: 600; }
+  .guide-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+  .guide-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.65rem;
+    border-radius: 3px;
+    border: 1px solid;
+    text-decoration: none;
+    letter-spacing: 0.04em;
+  }
+  .guide-badge--wh  { background: #1a1000; color: #e8b400; border-color: #6b4e0060; }
+  .guide-badge--iv  { background: #001828; color: #60c0f0; border-color: #1a6090; }
+  .guide-badge--ugg { background: #100020; color: #c090ff; border-color: #6030a0; }
+
+  /* ── Three-column body ── */
+  .body {
+    display: grid;
+    grid-template-columns: 160px 1fr 160px;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  /* ── Paperdoll ── */
+  .paperdoll {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .slot-ph {
+    height: 48px;
+    background: #141416;
+    border: 1px dashed #2a2820;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+    font-size: 0.65rem;
+    color: #444;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .paperdoll--right .slot-ph {
+    justify-content: flex-start;
+    padding-right: 0;
+    padding-left: 0.5rem;
+  }
+
+  /* ── Center panel ── */
+  .center {
+    background: #111113;
+    border: 1px solid #2a2820;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── OPTION B: Horizontal Stat Strip ── */
+  /*
+     A single slim HUD-like bar at the top of the center panel.
+     6 stats side-by-side, separated by vertical dividers.
+     No boxes. Just numbers. The rest of the center is open for detail.
+     Clicking a stat label activates it and shows detail below.
+  */
+
+  .stat-strip {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid #2a2820;
+    background: #0d0d0f;
+  }
+
+  .stat-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 0.25rem;
+    gap: 0.15rem;
+    border-right: 1px solid #1e1e22;
+    cursor: pointer;
+    transition: background 0.12s;
+    position: relative;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-item:hover { background: #141416; }
+
+  /* Active state */
+  .stat-item.is-active {
+    background: #161410;
+  }
+  .stat-item.is-active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: #d4a84b;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .stat-item__value {
+    font-family: 'Cinzel', serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #c8c0b0;
+  }
+  .stat-item__value--muted {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.78rem;
+    color: #444;
+    font-style: italic;
+    font-weight: 400;
+  }
+  .stat-item__label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #555;
+  }
+
+  /* Color variants */
+  .val--gold   { color: #d4a84b; }
+  .val--green  { color: #4ade80; }
+  .val--purple { color: #a335ee; }
+  .val--epic   { color: #a335ee; }
+  .val--red    { color: #f87171; }
+  .val--yellow { color: #fbbf24; }
+  .val--blue   { color: #60a5fa; }
+
+  /* ── Detail area below strip ── */
+  .detail-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem 1.25rem;
+  }
+
+  .detail-heading {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #d4a84b;
+    border-bottom: 1px solid #2a2820;
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.85rem;
+  }
+
+  /* Detail content: Gear sample (shown for the active "Gear" tab) */
+  .gear-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid #181818;
+  }
+  .gear-detail-row:last-child { border-bottom: none; }
+
+  .slot-label {
+    width: 70px;
+    font-size: 0.72rem;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+  .item-icon-ph {
+    width: 28px;
+    height: 28px;
+    background: #1a1820;
+    border: 1px solid #3a2a4a;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .item-name {
+    flex: 1;
+    font-size: 0.82rem;
+    color: #c8c0b0;
+  }
+  .item-ilvl {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #a335ee;
+    flex-shrink: 0;
+    width: 36px;
+    text-align: right;
+  }
+  .item-track {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #555;
+    background: #1a1820;
+    border: 1px solid #2a2030;
+    border-radius: 2px;
+    padding: 0.1rem 0.3rem;
+    flex-shrink: 0;
+  }
+  .item-track--H { color: #a335ee; border-color: #4a2a70; background: #1a0f2a; }
+  .item-track--M { color: #ff8000; border-color: #5a3000; background: #1a1000; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Character header -->
+  <div class="char-header">
+    <div class="char-name">Trogmoon</div>
+    <div class="char-sub"><strong>Balance Druid</strong> &nbsp;&middot;&nbsp; Night Elf &nbsp;&middot;&nbsp; Sen'jin &nbsp;&middot;&nbsp; <span style="color:#fbbf24">Ranged</span></div>
+    <div class="guide-bar">
+      <span style="font-size:0.75rem;color:#555;">Guides:</span>
+      <a href="#" class="guide-badge guide-badge--wh">Wowhead</a>
+      <a href="#" class="guide-badge guide-badge--iv">Icy Veins</a>
+      <a href="#" class="guide-badge guide-badge--ugg">u.gg</a>
+    </div>
+  </div>
+
+  <!-- Three-column body -->
+  <div class="body">
+
+    <!-- Left paperdoll -->
+    <div class="paperdoll paperdoll--left">
+      <div class="slot-ph">Head</div>
+      <div class="slot-ph">Neck</div>
+      <div class="slot-ph">Shoulder</div>
+      <div class="slot-ph">Back</div>
+      <div class="slot-ph">Chest</div>
+      <div class="slot-ph">Shirt</div>
+      <div class="slot-ph">Tabard</div>
+      <div class="slot-ph">Wrist</div>
+      <div class="slot-ph">Main Hand</div>
+    </div>
+
+    <!-- Center: Stat Strip -->
+    <div class="center">
+
+      <!-- The HUD strip across the top -->
+      <div class="stat-strip">
+        <div class="stat-item is-active">
+          <span class="stat-item__value val--gold">489</span>
+          <span class="stat-item__label">Gear</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item__value val--purple">2,450</span>
+          <span class="stat-item__label">M+</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item__value val--green">8/8 H</span>
+          <span class="stat-item__label">Raid</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item__value val--epic">72%</span>
+          <span class="stat-item__label">Parses</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item__value val--yellow">2</span>
+          <span class="stat-item__label">Profs</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-item__value stat-item__value--muted">—</span>
+          <span class="stat-item__label">Market</span>
+        </div>
+      </div>
+
+      <!-- Detail area — changes based on which stat is active.
+           Showing Gear detail as the example active state. -->
+      <div class="detail-area">
+        <div class="detail-heading">Gear &mdash; Avg 489</div>
+
+        <div class="gear-detail-row">
+          <span class="slot-label">Head</span>
+          <span class="item-icon-ph"></span>
+          <span class="item-name">Dreambinder, Loom of the Great Cycle</span>
+          <span class="item-ilvl">496</span>
+          <span class="item-track item-track--M">M</span>
+        </div>
+        <div class="gear-detail-row">
+          <span class="slot-label">Neck</span>
+          <span class="item-icon-ph"></span>
+          <span class="item-name">Amethyst Band of the Harvester</span>
+          <span class="item-ilvl">483</span>
+          <span class="item-track item-track--H">H</span>
+        </div>
+        <div class="gear-detail-row">
+          <span class="slot-label">Shoulder</span>
+          <span class="item-icon-ph"></span>
+          <span class="item-name">Mantle of Verdant Boughs</span>
+          <span class="item-ilvl">489</span>
+          <span class="item-track item-track--H">H</span>
+        </div>
+        <div class="gear-detail-row">
+          <span class="slot-label">Chest</span>
+          <span class="item-icon-ph"></span>
+          <span class="item-name">Robe of the Verdant Sanctum</span>
+          <span class="item-ilvl">496</span>
+          <span class="item-track item-track--M">M</span>
+        </div>
+        <div class="gear-detail-row">
+          <span class="slot-label">Hands</span>
+          <span class="item-icon-ph"></span>
+          <span class="item-name">Handwraps of the Verdant Sanctum</span>
+          <span class="item-ilvl">483</span>
+          <span class="item-track item-track--H">H</span>
+        </div>
+
+        <div style="padding-top:0.75rem; font-size:0.75rem; color:#444; font-style:italic; text-align:center;">
+          + 9 more slots
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right paperdoll -->
+    <div class="paperdoll paperdoll--right">
+      <div class="slot-ph">Hands</div>
+      <div class="slot-ph">Waist</div>
+      <div class="slot-ph">Legs</div>
+      <div class="slot-ph">Feet</div>
+      <div class="slot-ph">Ring 1</div>
+      <div class="slot-ph">Ring 2</div>
+      <div class="slot-ph">Trinket 1</div>
+      <div class="slot-ph">Trinket 2</div>
+      <div class="slot-ph">Off Hand</div>
+    </div>
+
+  </div><!-- end .body -->
+</div>
+
+</body>
+</html>

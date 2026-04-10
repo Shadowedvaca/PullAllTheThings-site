@@ -6,15 +6,53 @@
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 .gp-page { display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem; max-width: 1400px; }
 
-.gp-controls {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-    flex-wrap: wrap;
+/* ── Workflow steps ──────────────────────────────────────────────────────── */
+.gp-workflow { display: flex; flex-direction: column; gap: 0.75rem; }
+.gp-step {
     background: var(--color-card);
     border: 1px solid var(--color-border);
     border-radius: 8px;
     padding: 1rem 1.25rem;
+}
+.gp-step__header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.4rem;
+}
+.gp-step__num {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-gold);
+    background: rgba(212, 168, 75, 0.1);
+    border: 1px solid rgba(212, 168, 75, 0.3);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    white-space: nowrap;
+}
+.gp-step__title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+.gp-step__desc {
+    color: var(--color-text-muted);
+    font-size: 0.82rem;
+    margin: 0 0 0.75rem;
+    line-height: 1.4;
+}
+.gp-step__controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.gp-step__lastrun {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-top: 0.4rem;
 }
 .gp-controls__label { color: var(--color-text-muted); font-size: 0.85rem; margin-right: 0.25rem; }
 
@@ -364,6 +402,10 @@ select.gp-select {
 .spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -0.1em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Junk item source rows ────────────────────────────────────────────────── */
+.gp-junk-row { opacity: 0.5; }
+.gp-junk-row td { text-decoration: line-through; }
+
 /* ── Inline target-row edit selects ─────────────────────────────────────── */
 .gp-target-inline-select {
     background: #0a0a0b;
@@ -395,42 +437,117 @@ select.gp-select {
 <div class="gp-page">
 
     {# ── Page header ──────────────────────────────────────────────────────── #}
-    <h1 style="font-family:'Cinzel',serif; color:var(--color-gold); margin:0; font-size:1.4rem;">
-        Gear Plan — BIS Sync
-    </h1>
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+        <h1 style="font-family:'Cinzel',serif; color:var(--color-gold); margin:0; font-size:1.4rem; flex:1;">
+            Gear Plan — BIS Sync
+        </h1>
+        <button class="btn-sm btn-secondary" onclick="loadMatrix()">
+            Refresh Matrix
+        </button>
+    </div>
     <p style="color:var(--color-text-muted); margin:0; font-size:0.88rem;">
-        Manage BIS (Best-in-Slot) lists for all specs. Discover targets, run extractions, review and override.
+        Manage BIS (Best-in-Slot) lists for all specs. Run steps in order after new content launches.
         {% if not is_gl %}
         <strong style="color:#f87171;">(Read-only — GL access required for sync/import)</strong>
         {% endif %}
     </p>
 
-    {# ── Controls bar ─────────────────────────────────────────────────────── #}
-    <div class="gp-controls">
-        {% if is_gl %}
-        <button id="discover-btn" class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
+    {# ── 5-step workflow ───────────────────────────────────────────────────── #}
+    {% if is_gl %}
+    <div class="gp-workflow">
 
-        <span class="gp-controls__label">Website:</span>
-        <select class="gp-select" id="sync-origin-select">
-            <option value="">— select —</option>
-        </select>
-        <span class="gp-controls__label">Plan Type:</span>
-        <select class="gp-select" id="sync-plan-type-select">
-            <option value="raid">Raid Only</option>
-            <option value="mythic_plus">M+ Only</option>
-            <option value="overall">Overall</option>
-        </select>
-        <button id="sync-source-btn" class="btn-sm btn-secondary" onclick="syncSource()">Sync Source</button>
-        <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
-        <button id="resync-errors-btn" class="btn-sm btn-secondary" onclick="resyncErrors()">Re-sync Errors</button>
+        {# Step 1 — Sync Loot Tables #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 1</span>
+                <span class="gp-step__title">Sync Loot Tables</span>
+            </div>
+            <p class="gp-step__desc">Pull boss/item data from the Blizzard Journal API. Run once per season after new content launches, or after a content patch adds new encounters.</p>
+            <div class="gp-step__controls">
+                <button id="sync-item-sources-btn" class="btn-sm btn-primary"
+                        onclick="syncItemSources()"
+                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}>
+                    Sync Loot Tables
+                </button>
+                <button id="sync-legacy-dungeons-btn" class="btn-sm btn-secondary"
+                        onclick="syncLegacyDungeons()"
+                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}
+                        title="Sync dungeon instances from all prior expansions (legacy M+ dungeons not in Sync Loot Tables)">
+                    Sync Legacy Dungeons
+                </button>
+            </div>
+        </div>
 
-        <button id="import-simc-btn" class="btn-sm btn-secondary" onclick="openSimcModal()">Import SimC</button>
-        {% endif %}
+        {# Step 2 — Enrich Items #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 2</span>
+                <span class="gp-step__title">Enrich Items</span>
+            </div>
+            <p class="gp-step__desc">Fetch Wowhead tooltips for any items that were stubbed without slot or tooltip data (slot_type = 'other'). Required before Step 3.</p>
+            <div class="gp-step__controls">
+                <button id="enrich-items-btn" class="btn-sm btn-secondary" onclick="enrichItems()">
+                    Enrich Items
+                </button>
+            </div>
+        </div>
 
-        <button class="btn-sm btn-secondary" onclick="loadMatrix()" style="margin-left:auto;">
-            Refresh Matrix
-        </button>
+        {# Step 3 — Process Tier Tokens #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 3</span>
+                <span class="gp-step__title">Process Tier Tokens</span>
+            </div>
+            <p class="gp-step__desc">Parse enriched token tooltips to detect slot and eligible classes. Populates the tier token translation table and flags suspected junk sources. Safe to re-run.</p>
+            <div class="gp-step__controls">
+                <button id="process-tier-tokens-btn" class="btn-sm btn-secondary" onclick="processTierTokens()">
+                    Process Tier Tokens
+                </button>
+            </div>
+            <div class="gp-step__lastrun" id="tier-tokens-last-run"></div>
+        </div>
+
+        {# Step 4 — Sync BIS Lists #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 4</span>
+                <span class="gp-step__title">Sync BIS Lists</span>
+            </div>
+            <p class="gp-step__desc">Scrape u.gg and Wowhead BIS recommendations for all specs. Discover URLs first if this is a fresh season. Re-sync Errors retries only failed targets.</p>
+            <div class="gp-step__controls">
+                <span class="gp-controls__label">Website:</span>
+                <select class="gp-select" id="sync-origin-select">
+                    <option value="">— select —</option>
+                </select>
+                <span class="gp-controls__label">Plan Type:</span>
+                <select class="gp-select" id="sync-plan-type-select">
+                    <option value="raid">Raid Only</option>
+                    <option value="mythic_plus">M+ Only</option>
+                    <option value="overall">Overall</option>
+                </select>
+                <button id="discover-btn" class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
+                <button id="sync-source-btn" class="btn-sm btn-secondary" onclick="syncSource()">Sync Source</button>
+                <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
+                <button id="resync-errors-btn" class="btn-sm btn-secondary" onclick="resyncErrors()">Re-sync Errors</button>
+            </div>
+        </div>
+
+        {# Step 5 — Manual Import #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 5</span>
+                <span class="gp-step__title">Manual Import</span>
+            </div>
+            <p class="gp-step__desc">Paste a SimulationCraft profile to set BIS entries for a specific spec manually.</p>
+            <div class="gp-step__controls">
+                <button id="import-simc-btn" class="btn-sm btn-secondary" onclick="openSimcModal()">Import SimC</button>
+            </div>
+        </div>
+
     </div>
+    {% else %}
+    {# Read-only: just show the matrix refresh #}
+    {% endif %}
 
     {# ── Status bar ───────────────────────────────────────────────────────── #}
     <div class="gp-status-bar" id="gp-status">
@@ -550,10 +667,6 @@ select.gp-select {
                 Sync once per season after new content launches.
             </p>
             <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
-                {% if is_gl %}
-                <button class="btn-sm btn-primary" id="sync-item-sources-btn"
-                        onclick="syncItemSources()">Sync Loot Tables</button>
-                {% endif %}
                 <select class="gp-select" id="item-sources-filter-instance"
                         onchange="loadItemSources()">
                     <option value="">All instances</option>
@@ -561,10 +674,21 @@ select.gp-select {
                 <select class="gp-select" id="item-sources-filter-type"
                         onchange="loadItemSources()">
                     <option value="">All types</option>
-                    <option value="raid_boss">Raid</option>
+                    <option value="raid">Raid</option>
+                    <option value="world_boss">World Boss</option>
                     <option value="dungeon">Dungeon</option>
                 </select>
+                <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:var(--color-text-muted); cursor:pointer;">
+                    <input type="checkbox" id="item-sources-show-junk"
+                           onchange="loadItemSources()" style="cursor:pointer;">
+                    Show Junk
+                </label>
                 <button class="btn-sm btn-secondary" onclick="loadItemSources()">Refresh</button>
+                {% if is_gl %}
+                <button id="flag-junk-btn" class="btn-sm btn-secondary" onclick="flagJunkSources()">
+                    Flag Junk Sources
+                </button>
+                {% endif %}
                 <span id="item-sources-count"
                       style="color:var(--color-text-muted); font-size:0.82rem;"></span>
             </div>
@@ -574,10 +698,10 @@ select.gp-select {
                         <tr>
                             <th>Item</th>
                             <th>Slot</th>
-                            <th>Boss / Dungeon</th>
+                            <th>Encounter</th>
                             <th>Instance</th>
                             <th>Type</th>
-                            <th>Tracks</th>
+                            <th>Category</th>
                             {% if is_gl %}<th></th>{% endif %}
                         </tr>
                     </thead>

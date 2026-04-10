@@ -1537,14 +1537,20 @@ async function syncItemSources() {
 
     try {
         const r = await fetch('/api/v1/admin/bis/sync-item-sources', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: server returned non-JSON response. Check app logs.\n${text.slice(0, 200)}`);
+        }
         const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Sync failed');
+        if (!d.ok) throw new Error(d.error || d.detail || 'Sync failed');
 
         const errCount = (d.errors || []).length;
         const enriched = d.items_enriched != null ? `, ${d.items_enriched} enriched` : '';
+        const catalyst = d.catalyst_tier_items ? `, ${d.catalyst_tier_items} tier (Catalyst)` : '';
         const msg = `Loot table sync complete — ${d.expansion_name || 'expansion'}: ` +
             `${d.instances_synced} instances, ${d.encounters_synced} encounters, ` +
-            `${d.items_upserted} items${enriched}` +
+            `${d.items_upserted} items${enriched}${catalyst}` +
             (errCount ? ` (${errCount} errors)` : '');
         setStatus(msg, errCount ? 'partial' : 'success');
 
@@ -1560,16 +1566,47 @@ async function syncItemSources() {
     }
 }
 
+async function syncLegacyDungeons() {
+    const btn = document.getElementById('sync-legacy-dungeons-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Starting legacy dungeon sync…', 'running');
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/sync-legacy-dungeons', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || d.detail || 'Failed to start');
+
+        // Sync runs in background — show a manual refresh prompt.
+        setStatusHtml(
+            'Legacy dungeon sync running in background (several minutes). ' +
+            '<a href="#" onclick="loadItemSources();return false;" ' +
+            'style="color:var(--color-accent);">Refresh Item Sources</a> when done.',
+            'info'
+        );
+    } catch (err) {
+        setStatus('Legacy dungeon sync failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 async function loadItemSources() {
     const tbody = document.getElementById('gp-item-sources-body');
     tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);">Loading…</td></tr>';
 
-    const instance = document.getElementById('item-sources-filter-instance').value;
-    const type     = document.getElementById('item-sources-filter-type').value;
+    const instance  = document.getElementById('item-sources-filter-instance').value;
+    const type      = document.getElementById('item-sources-filter-type').value;
+    const showJunk  = document.getElementById('item-sources-show-junk')?.checked || false;
 
     const params = new URLSearchParams();
-    if (instance) params.set('instance_name', instance);
-    if (type)     params.set('source_type', type);
+    if (instance)  params.set('instance_name', instance);
+    if (type)      params.set('instance_type', type);
+    if (showJunk)  params.set('show_junk', 'true');
     params.set('limit', '500');
 
     try {
@@ -1580,7 +1617,7 @@ async function loadItemSources() {
         // Populate instance filter dropdown on first load
         _populateInstanceFilter(d.instances || []);
 
-        renderItemSources(d.sources || []);
+        renderItemSources(d.sources || [], showJunk, d.junk_hidden_count || 0);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:#f87171;">Error: ${err.message}</td></tr>`;
     }
@@ -1605,33 +1642,46 @@ function _populateInstanceFilter(instances) {
 
 const _TRACK_COLORS = { C: '#0070dd', H: '#a335ee', M: '#ff8000', V: '#1eff00' };
 
-function renderItemSources(rows) {
+function renderItemSources(rows, showJunk = false, junkHiddenCount = 0) {
     const tbody = document.getElementById('gp-item-sources-body');
     const countEl = document.getElementById('item-sources-count');
     tbody.innerHTML = '';
 
-    if (countEl) countEl.textContent = `${rows.length} item${rows.length !== 1 ? 's' : ''}`;
+    const junkCount = rows.filter(r => r.is_suspected_junk).length;
+    let countText = `${rows.length} source${rows.length !== 1 ? 's' : ''}`;
+    if (!showJunk && junkHiddenCount > 0) {
+        countText += ` — ${junkHiddenCount} junk hidden`;
+    } else if (showJunk && junkCount > 0) {
+        countText += ` — ${junkCount} junk shown`;
+    }
+    if (countEl) countEl.textContent = countText;
+
+    // Base colspan: 6 columns + optional GL delete + optional junk badge
+    const colspan = window._isGl ? 7 : 6;
 
     if (rows.length === 0) {
-        const colspan = window._isGl ? 7 : 6;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="color:var(--color-text-muted); padding:1rem;">No item sources found. Run "Sync Loot Tables" to populate.</td></tr>`;
         return;
     }
 
     for (const row of rows) {
         const tr = document.createElement('tr');
+        if (row.is_suspected_junk) {
+            tr.classList.add('gp-junk-row');
+        }
 
-        const tracks = (row.quality_tracks || [])
-            .map(t => `<span style="font-weight:700; color:${_TRACK_COLORS[t] || '#888'};">${t}</span>`)
-            .join(' ');
-
-        const typeLabel = row.source_type === 'raid_boss' ? 'Raid' : 'Dungeon';
+        const TYPE_LABELS = { raid: 'Raid', world_boss: 'World Boss', dungeon: 'Dungeon' };
+        const typeLabel = TYPE_LABELS[row.instance_type] || row.instance_type || '—';
         const slotLabel = row.slot_type && row.slot_type !== 'other'
             ? row.slot_type.replace(/_/g, ' ')
             : '—';
 
         const icon = row.icon_url
             ? `<img src="${row.icon_url}" style="width:18px;height:18px;border-radius:2px;vertical-align:middle;margin-right:4px;" loading="lazy">`
+            : '';
+
+        const junkBadge = row.is_suspected_junk
+            ? ` <span style="font-size:0.7rem; color:#f87171; border:1px solid #f87171; border-radius:3px; padding:0 3px;">junk</span>`
             : '';
 
         let deleteCell = '';
@@ -1642,12 +1692,12 @@ function renderItemSources(rows) {
         }
 
         tr.innerHTML = `
-            <td>${icon}<a href="https://www.wowhead.com/item=${row.blizzard_item_id}" target="_blank" rel="noopener" style="color:inherit;">${row.item_name || `Item #${row.blizzard_item_id}`}</a> <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span></td>
+            <td>${icon}<a href="https://www.wowhead.com/item=${row.blizzard_item_id}" target="_blank" rel="noopener" style="color:inherit;">${row.item_name || `Item #${row.blizzard_item_id}`}</a> <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span>${junkBadge}</td>
             <td>${slotLabel}</td>
-            <td>${row.source_name || '—'}</td>
-            <td>${row.source_instance || '—'}</td>
+            <td>${row.encounter_name || '—'}</td>
+            <td>${row.instance_name || '—'}</td>
             <td style="color:var(--color-text-muted);">${typeLabel}</td>
-            <td>${tracks}</td>
+            <td style="color:var(--color-text-muted); font-size:0.8rem;">${row.instance_type || '—'}</td>
             ${deleteCell}
         `;
         tbody.appendChild(tr);
@@ -1663,5 +1713,84 @@ async function deleteItemSource(sourceId) {
         await loadItemSources();
     } catch (err) {
         setStatus('Delete failed: ' + err.message, 'error');
+    }
+}
+
+async function enrichItems() {
+    const btn = document.getElementById('enrich-items-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Enriching items from Wowhead…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/enrich-items', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const errCount = (d.errors || []).length;
+        setStatus(
+            `Enrich complete — ${d.items_enriched} items enriched` + (errCount ? `, ${errCount} errors` : '') + '.',
+            errCount ? 'partial' : 'success'
+        );
+        if (errCount) console.warn('Enrich errors:', d.errors);
+    } catch (err) {
+        setStatus('Enrich items failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function processTierTokens() {
+    const btn = document.getElementById('process-tier-tokens-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Processing tier tokens…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/process-tier-tokens', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        const msg = `Tier tokens complete — ${d.tokens_processed} tokens detected, ` +
+            `${d.junk_flagged} junk rows flagged, ${d.tokens_skipped_override} overrides skipped.`;
+        setStatus(msg, 'success');
+
+        const lastRunEl = document.getElementById('tier-tokens-last-run');
+        if (lastRunEl) {
+            const now = new Date().toLocaleTimeString();
+            lastRunEl.textContent =
+                `Last run: ${now} — ${d.tokens_processed} tokens detected, ` +
+                `${d.junk_flagged} junk rows flagged, ${d.tokens_skipped_override} overrides skipped.`;
+        }
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Process tier tokens failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+async function flagJunkSources() {
+    const btn = document.getElementById('flag-junk-btn');
+    if (btn) btn.disabled = true;
+    setStatus('Flagging junk sources…', 'info');
+    try {
+        const r = await fetch('/api/v1/admin/bis/flag-junk-sources', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        setStatus(
+            `Junk flagging complete — ${d.flagged_world_boss} world boss + ${d.flagged_tier_piece} tier piece = ${d.total_flagged} total flagged.`,
+            'success'
+        );
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Flag junk failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }

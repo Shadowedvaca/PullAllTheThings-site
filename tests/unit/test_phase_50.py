@@ -248,15 +248,16 @@ class TestPickDefaultCharacterId:
 
 class TestMyCharactersPageRoute:
     def test_my_characters_page_function_exists(self):
-        from guild_portal.pages.profile_pages import my_characters_page
+        # Route moved to gear_plan_pages in UI-1H (unified character sheet)
+        from guild_portal.pages.gear_plan_pages import my_characters_page
         assert callable(my_characters_page)
 
     def test_my_characters_page_is_async(self):
-        from guild_portal.pages.profile_pages import my_characters_page
+        from guild_portal.pages.gear_plan_pages import my_characters_page
         assert inspect.iscoroutinefunction(my_characters_page)
 
     def test_profile_router_has_my_characters_route(self):
-        from guild_portal.pages.profile_pages import router
+        from guild_portal.pages.gear_plan_pages import router
         routes = [r.path for r in router.routes]
         assert "/my-characters" in routes
 

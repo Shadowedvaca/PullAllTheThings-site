@@ -1276,6 +1276,53 @@ async def update_guide_site(
 # ---------------------------------------------------------------------------
 
 
+class TierTokenAttrsUpdate(BaseModel):
+    target_slot: Optional[str] = None
+    armor_type: Optional[str] = None
+    override_notes: Optional[str] = None
+
+
+@router.patch("/tier-token-attrs/{token_item_id}")
+async def update_tier_token_attrs(
+    token_item_id: int,
+    body: TierTokenAttrsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update editable fields on a tier token attrs row.
+
+    Saving any field automatically sets is_manual_override=TRUE so the
+    process_tier_tokens pipeline won't overwrite the admin's corrections.
+    """
+    from sv_common.db.models import TierTokenAttrs
+
+    result = await db.execute(
+        select(TierTokenAttrs).where(TierTokenAttrs.token_item_id == token_item_id)
+    )
+    attrs = result.scalar_one_or_none()
+    if not attrs:
+        return {"ok": False, "error": "Tier token not found"}
+
+    updates = body.model_dump(exclude_none=True)
+    for field, value in updates.items():
+        setattr(attrs, field, value)
+
+    if updates:
+        attrs.is_manual_override = True
+
+    await db.flush()
+
+    return {
+        "ok": True,
+        "data": {
+            "token_item_id": attrs.token_item_id,
+            "target_slot": attrs.target_slot,
+            "armor_type": attrs.armor_type,
+            "override_notes": attrs.override_notes,
+            "is_manual_override": attrs.is_manual_override,
+        },
+    }
+
+
 class ScreenPermUpdate(BaseModel):
     min_rank_level: Optional[int] = None
 

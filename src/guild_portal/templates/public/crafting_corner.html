@@ -542,6 +542,13 @@
     async function init() {
         await loadSyncStatus();
         await loadProfessions();
+        // Pre-fill search from ?q= URL param (e.g. linked from gear plan page)
+        const qParam = new URLSearchParams(window.location.search).get('q');
+        if (qParam) {
+            searchInput.value = qParam;
+            searchClear.style.display = 'block';
+            await doSearch(qParam);
+        }
     }
 
     async function loadSyncStatus() {

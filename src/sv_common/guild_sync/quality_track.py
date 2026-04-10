@@ -12,7 +12,7 @@ SimC bonus IDs.  The track letter maps to WoW's upgrade track system:
 import re
 from typing import Optional
 
-# Blizzard display_string → track letter
+# Blizzard display_string → track letter (TWW legacy format: "Hero 4/8")
 _DISPLAY_PATTERN = re.compile(
     r"^(Veteran|Champion|Hero|Mythic)\s+\d+/\d+$", re.IGNORECASE
 )
@@ -23,13 +23,23 @@ _DISPLAY_MAP = {
     "mythic": "M",
 }
 
-# SimC bonus ID → quality track for The War Within Season 2.
-# These IDs are season-specific.  The admin can update them via site_config
-# key "simc_track_bonus_ids" (JSON: {"C": [ids], "H": [ids], "M": [ids]}).
+# Midnight expansion bare-word display_string format (no upgrade counter).
+# "Heroic" and "Mythic+" are both Hero-tier quality; "Mythic" alone = Mythic raid.
+_DISPLAY_MAP_BARE = {
+    "veteran": "V",
+    "champion": "C",
+    "heroic": "H",
+    "mythic+": "H",   # M+ drops — Hero-tier equivalent
+    "mythic": "M",
+}
+
+# SimC bonus ID → quality track.
+# TWW Season 2 IDs kept for backward compat; Midnight IDs appended.
+# Admin can override via site_config key "simc_track_bonus_ids".
 _DEFAULT_SIMC_BONUS_IDS: dict[str, list[int]] = {
     "V": [1498, 1499],
-    "C": [1516, 1517, 1518],
-    "H": [1520, 1521, 1522],
+    "C": [1516, 1517, 1518, 12790, 12795],  # TWW S2 + Midnight base/normal
+    "H": [1520, 1521, 1522, 12798, 12801],  # TWW S2 + Midnight heroic/M+
     "M": [1524, 1525, 1526],
 }
 
@@ -37,15 +47,20 @@ _DEFAULT_SIMC_BONUS_IDS: dict[str, list[int]] = {
 def track_from_display_string(display_string: Optional[str]) -> Optional[str]:
     """Parse V/C/H/M from Blizzard name_description.display_string.
 
-    e.g. "Champion 4/8" → "C", "Hero 2/8" → "H", "Veteran 1/8" → "V"
+    Handles two formats:
+    - TWW legacy: "Champion 4/8" → "C", "Hero 2/8" → "H"
+    - Midnight bare: "Heroic" → "H", "Mythic+" → "H", "Champion" → "C"
     Returns None if not an upgrade-track item.
     """
     if not display_string:
         return None
-    m = _DISPLAY_PATTERN.match(display_string.strip())
-    if not m:
-        return None
-    return _DISPLAY_MAP.get(m.group(1).lower())
+    s = display_string.strip()
+    # TWW legacy format: "Hero 4/8", "Champion 3/8", etc.
+    m = _DISPLAY_PATTERN.match(s)
+    if m:
+        return _DISPLAY_MAP.get(m.group(1).lower())
+    # Midnight bare-word format: "Heroic", "Mythic+", "Champion", etc.
+    return _DISPLAY_MAP_BARE.get(s.lower())
 
 
 def track_from_bonus_ids(
@@ -123,3 +138,66 @@ def normalize_slot(blizzard_slot: str) -> Optional[str]:
     Returns None for slots we don't track (TABARD, SHIRT, etc.).
     """
     return BLIZZARD_SLOT_MAP.get(blizzard_slot.upper())
+
+
+# Crafted item bonus IDs.
+# TWW: 1808 = "Crafted by"; Midnight: 12214 appears on all Radiance Crafted items.
+_CRAFTED_BONUS_IDS: frozenset[int] = frozenset({1808, 12214})
+
+# Crafted crest-quality track bonus IDs.
+# These are SEPARATE from _DEFAULT_SIMC_BONUS_IDS (which maps regular upgrade-track
+# gear).  Crafted items are not on the V/C/H/M upgrade track — their quality comes
+# from the type of crest used during crafting, encoded as a distinct bonus ID.
+#
+# IDs are discovered by calling get_item_preview(item_id, bonus_ids) during equipment
+# sync: Blizzard returns "Heroic"/"Mythic" in preview_item.name_description.display_string
+# when these IDs are present, letting us identify the discriminating ID empirically.
+# Add new entries here as they are confirmed from real character data.
+#
+# Midnight expansion (confirmed from Trogmoon's gear, April 2026):
+#   13621 → H  discovered from wrist (Aetherlume Bands, ilvl 272) and back (ilvl 272)
+#   13622 → M  discovered from ring_2 (Loa Worshiper's Band, ilvl 285)
+_CRAFTED_TRACK_IDS: dict[str, list[int]] = {
+    "H": [13621],
+    "M": [13622],
+}
+
+
+def is_crafted_item(bonus_ids: list[int]) -> bool:
+    """Return True if the item is crafted gear (not on V/C/H/M upgrade track)."""
+    if not bonus_ids:
+        return False
+    return bool(frozenset(bonus_ids) & _CRAFTED_BONUS_IDS)
+
+
+def detect_crafted_track(
+    bonus_ids: Optional[list[int]],
+    custom_bonus_map: Optional[dict[str, list[int]]] = None,
+) -> Optional[str]:
+    """Detect H or M quality track for a crafted item.
+
+    Priority:
+    1. Admin-provided custom_bonus_map (site_config override for unusual items).
+    2. Built-in _CRAFTED_TRACK_IDS — empirically discovered bonus IDs per expansion.
+       New IDs are identified via get_item_preview() during equipment sync and added
+       to _CRAFTED_TRACK_IDS once confirmed from real character data.
+    3. Default fallback — crafted items default to Hero (H) track.
+
+    Returns None if bonus_ids do not indicate a crafted item at all.
+    """
+    if not is_crafted_item(bonus_ids or []):
+        return None
+
+    if bonus_ids:
+        # 1. Admin-provided override.
+        if custom_bonus_map:
+            track = track_from_bonus_ids(bonus_ids, custom_bonus_map)
+            if track in ("H", "M"):
+                return track
+        # 2. Built-in discovered crafted-crest IDs.
+        track = track_from_bonus_ids(bonus_ids, _CRAFTED_TRACK_IDS)
+        if track in ("H", "M"):
+            return track
+
+    # 3. Default: crafted gear is Hero-track equivalent.
+    return "H"

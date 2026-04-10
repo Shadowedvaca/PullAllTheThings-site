@@ -20,6 +20,10 @@ Endpoints:
   GET  /api/v1/admin/bis/scrape-log
   GET  /api/v1/admin/bis/cross-reference
   POST /api/v1/admin/bis/import-simc
+  GET  /api/v1/admin/bis/item-sources
+  POST /api/v1/admin/bis/flag-junk-sources
+  POST /api/v1/admin/bis/process-tier-tokens
+  DELETE /api/v1/admin/bis/item-sources/{id}
 """
 
 import logging
@@ -477,7 +481,7 @@ async def _get_blizzard_client(request: Request):
 
     if not client_id or not client_secret:
         raise HTTPException(
-            status_code=503,
+            status_code=400,
             detail="Blizzard API credentials not configured — set them in Admin → Site Config",
         )
 
@@ -503,17 +507,73 @@ async def sync_item_sources(
     """Trigger Journal API item source sync for the current (or given) expansion (GL only).
 
     Populates guild_identity.item_sources with boss/dungeon loot tables.
-    Quality tracks: raid boss → C/H/M, dungeon → C/H.
+    Quality tracks: raid boss → V/C/H/M, dungeon → C/H/M (Midnight S1).
     """
     pool = _pool(request)
     client = await _get_blizzard_client(request)
     from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync
     from guild_portal.services.item_service import enrich_unenriched_items
+    from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
     result = await _sync(pool, client, expansion_id=expansion_id)
     enriched, enrich_errors = await enrich_unenriched_items(pool)
     result["items_enriched"] = enriched
     result.setdefault("errors", []).extend(enrich_errors)
+    link_stats = await build_item_recipe_links(pool)
+    result["recipe_links_linked"] = link_stats["linked"]
+    result["recipe_links_updated"] = link_stats["updated"]
+    result["recipe_links_skipped"] = link_stats["skipped"]
     return {"ok": True, **result}
+
+
+@router.post("/sync-legacy-dungeons")
+async def sync_legacy_dungeons(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Fire-and-forget sync of dungeon instances from all prior expansions (GL only).
+
+    Returns immediately — the sync runs in the background (takes several
+    minutes).  Progress is logged server-side; refresh Item Sources when done.
+
+    Raids and world bosses from prior expansions are intentionally skipped —
+    they don't drop current-season loot.
+    """
+    import asyncio
+    from sv_common.guild_sync.item_source_sync import sync_legacy_expansion_dungeons
+    from guild_portal.services.item_service import enrich_unenriched_items
+    from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
+
+    pool = _pool(request)
+    client = await _get_blizzard_client(request)
+
+    async def _run_in_background():
+        try:
+            result = await sync_legacy_expansion_dungeons(pool, client)
+            enriched, enrich_errors = await enrich_unenriched_items(pool)
+            link_stats = await build_item_recipe_links(pool)
+            logger.info(
+                "Legacy dungeon sync complete — %d expansions, %d dungeons, "
+                "%d encounters, %d items, %d enriched, %d links. Errors: %s",
+                result.get("expansions_checked", 0),
+                result.get("instances_synced", 0),
+                result.get("encounters_synced", 0),
+                result.get("items_upserted", 0),
+                enriched,
+                link_stats.get("linked", 0),
+                result.get("errors", []) + enrich_errors,
+            )
+        except Exception as exc:
+            logger.error("Legacy dungeon sync background task failed: %s", exc, exc_info=True)
+
+    asyncio.create_task(_run_in_background())
+    return {
+        "ok": True,
+        "message": (
+            "Legacy dungeon sync started in background. "
+            "This takes several minutes — watch server logs for progress. "
+            "Refresh Item Sources when done."
+        ),
+    }
 
 
 @router.get("/item-sources")
@@ -521,21 +581,96 @@ async def list_item_sources(
     request: Request,
     instance_name: Optional[str] = None,
     instance_id: Optional[int] = None,
-    source_type: Optional[str] = None,
+    instance_type: Optional[str] = None,
+    show_junk: bool = False,
     limit: int = 500,
 ):
-    """List item→source mappings, optionally filtered by instance or type."""
+    """List item→source mappings, optionally filtered by instance or type.
+
+    Junk rows are hidden by default; pass show_junk=true to reveal them.
+    Always returns junk_hidden_count so the UI can display "N junk hidden".
+    """
     pool = _pool(request)
     from sv_common.guild_sync.item_source_sync import get_item_sources, get_instance_names
     sources = await get_item_sources(
         pool,
         instance_name=instance_name,
         instance_id=instance_id,
-        source_type=source_type,
+        instance_type=instance_type,
+        show_junk=show_junk,
         limit=limit,
     )
-    instances = await get_instance_names(pool)
-    return {"ok": True, "sources": sources, "instances": instances}
+    instances = await get_instance_names(pool, show_junk=show_junk)
+
+    # Always surface junk count so the frontend can show "N junk hidden"
+    junk_hidden_count = 0
+    if not show_junk:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT COUNT(*) AS cnt FROM guild_identity.item_sources WHERE is_suspected_junk = TRUE"
+            )
+            junk_hidden_count = int(row["cnt"])
+
+    return {
+        "ok": True,
+        "sources": sources,
+        "instances": instances,
+        "junk_hidden_count": junk_hidden_count,
+    }
+
+
+@router.post("/enrich-items")
+async def enrich_items(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Fetch Wowhead tooltips for unenriched wow_items rows (GL only).
+
+    Processes all rows where slot_type='other' (stubbed without full data).
+    Safe to re-run — already-enriched rows are skipped.
+    """
+    pool = _pool(request)
+    from guild_portal.services.item_service import enrich_unenriched_items
+    enriched, errors = await enrich_unenriched_items(pool)
+    return {
+        "ok": True,
+        "items_enriched": enriched,
+        "errors": errors[:20] if errors else [],
+    }
+
+
+@router.post("/flag-junk-sources")
+async def flag_junk_sources(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Flag suspected-junk rows in item_sources (GL only).
+
+    Marks null-ID world boss rows and tier piece direct-source rows as
+    is_suspected_junk = TRUE.  Safe to re-run — clears and re-applies all
+    flags each time.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.item_source_sync import flag_junk_sources as _flag
+    result = await _flag(pool)
+    return {"ok": True, **result}
+
+
+@router.post("/process-tier-tokens")
+async def process_tier_tokens(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Parse tier token tooltips, populate tier_token_attrs, and flag junk sources (GL only).
+
+    Detects tier tokens from wow_items tooltips (slot_type='other' + 'Synthesize
+    a soulbound set' text), upserts their parsed slot/armor type into
+    tier_token_attrs, then runs flag_junk_sources(flag_tier_pieces=True) so
+    stale direct-drop rows for tier pieces are suppressed in the gear plan.
+
+    Safe to re-run — rows with is_manual_override=TRUE are never overwritten.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.item_source_sync import process_tier_tokens as _process
+    result = await _process(pool)
+    return {"ok": True, **result}
 
 
 @router.delete("/item-sources/{source_id}")

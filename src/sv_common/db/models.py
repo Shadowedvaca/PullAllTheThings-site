@@ -836,6 +836,7 @@ class WowCharacter(Base):
     )
     removed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     in_guild: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    race: Mapped[Optional[str]] = mapped_column(String(40))
 
     wow_class: Mapped[Optional[WowClass]] = relationship(back_populates="wow_characters")
     active_spec: Mapped[Optional[Specialization]] = relationship()
@@ -1591,11 +1592,11 @@ class WowItem(Base):
 
 
 class ItemSource(Base):
-    """Boss / dungeon / world source for a WoW item."""
+    """Boss / dungeon / world boss source for a WoW item."""
 
     __tablename__ = "item_sources"
     __table_args__ = (
-        UniqueConstraint("item_id", "source_type", "source_name", name="uq_item_source"),
+        UniqueConstraint("item_id", "instance_type", "encounter_name", name="uq_item_source"),
         {"schema": "guild_identity"},
     )
 
@@ -1603,14 +1604,11 @@ class ItemSource(Base):
     item_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"), nullable=False
     )
-    source_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    source_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    source_instance: Mapped[Optional[str]] = mapped_column(String(100))
+    instance_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    encounter_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    instance_name: Mapped[Optional[str]] = mapped_column(String(100))
     blizzard_encounter_id: Mapped[Optional[int]] = mapped_column(Integer)
     blizzard_instance_id: Mapped[Optional[int]] = mapped_column(Integer)
-    quality_tracks: Mapped[list] = mapped_column(
-        ARRAY(String), nullable=False, server_default="{}"
-    )
 
     item: Mapped["WowItem"] = relationship()
 
@@ -1837,3 +1835,37 @@ class BisScrapeLog(Base):
     )
 
     target: Mapped["BisScrapeTarget"] = relationship(back_populates="log_entries")
+
+
+class TierTokenAttrs(Base):
+    """Parsed attributes for tier token items.
+
+    Each row records the slot and armor type a token grants, derived from
+    its Wowhead tooltip HTML.  process_tier_tokens() auto-populates this table;
+    rows with is_manual_override=TRUE are skipped by the processor so admin
+    corrections are never clobbered.
+    """
+
+    __tablename__ = "tier_token_attrs"
+    __table_args__ = {"schema": "guild_identity"}
+
+    token_item_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    target_slot: Mapped[str] = mapped_column(String(20), nullable=False)
+    armor_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    eligible_class_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default="{}"
+    )
+    is_auto_detected: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    is_manual_override: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    override_notes: Mapped[Optional[str]] = mapped_column(Text)
+    last_processed: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+    item: Mapped["WowItem"] = relationship()

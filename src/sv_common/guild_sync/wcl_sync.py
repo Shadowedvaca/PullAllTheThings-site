@@ -319,15 +319,16 @@ def _parse_report_rankings(rankings_blob) -> list[dict]:
     WCL returns this as a raw JSON string (not a parsed dict), so we json.loads()
     it first if needed.
 
-    WCL actual shape (flat list):
-      {"data": [{"name": "...", "spec": "...", "rankPercent": 94.0, "amount": 12345}, ...]}
+    WCL actual shape: list of fight objects, each with difficulty and roles:
+      {"data": [{"difficulty": 4, "fightID": N,
+                 "roles": {"tanks":   {"characters": [...]},
+                           "healers": {"characters": [...]},
+                           "dps":     {"characters": [...]}}}]}
 
-    Older/spec assumed shape (roles-nested):
-      {"data": {"roles": {"tanks":   {"characters": [...]},
-                          "healers": {"characters": [...]},
-                          "dps":     {"characters": [...]}}}}
+    Legacy/spec assumed shape (no per-fight difficulty):
+      {"data": {"roles": {"tanks": {"characters": [...]}, ...}}}
 
-    Returns list of dicts with: name, spec, percentile, amount.
+    Returns list of dicts with: name, spec, percentile, amount, difficulty.
     """
     entries = []
     if not rankings_blob:
@@ -342,37 +343,50 @@ def _parse_report_rankings(rankings_blob) -> list[dict]:
 
     data = rankings_blob.get("data") or []
 
-    char_list = []
     if isinstance(data, list):
-        # Actual WCL format: list of fight objects, each with roles.X.characters
+        # Actual WCL format: list of fight objects, each with roles.X.characters.
+        # difficulty is at the fight level — carry it through to each character entry.
         for fight in data:
             if not isinstance(fight, dict):
                 continue
+            fight_difficulty = fight.get("difficulty") or 4  # default Heroic if absent
             roles = fight.get("roles") or {}
             for role_data in roles.values():
-                if isinstance(role_data, dict):
-                    char_list.extend(role_data.get("characters") or [])
+                if not isinstance(role_data, dict):
+                    continue
+                for char_entry in (role_data.get("characters") or []):
+                    if not isinstance(char_entry, dict):
+                        continue
+                    name = char_entry.get("name") or ""
+                    percentile = char_entry.get("rankPercent")
+                    if name and percentile is not None:
+                        entries.append({
+                            "name": name,
+                            "spec": char_entry.get("spec") or None,
+                            "percentile": float(percentile),
+                            "amount": float(char_entry["amount"]) if char_entry.get("amount") is not None else None,
+                            "difficulty": fight_difficulty,
+                        })
     elif isinstance(data, dict):
-        # Legacy/spec format: {"roles": {"tanks": {"characters": [...]}, ...}}
+        # Legacy format: no per-fight difficulty available — default to Heroic (4).
         roles = data.get("roles") or {}
         for role_data in roles.values():
-            if isinstance(role_data, dict):
-                char_list.extend(role_data.get("characters") or [])
+            if not isinstance(role_data, dict):
+                continue
+            for char_entry in (role_data.get("characters") or []):
+                if not isinstance(char_entry, dict):
+                    continue
+                name = char_entry.get("name") or ""
+                percentile = char_entry.get("rankPercent")
+                if name and percentile is not None:
+                    entries.append({
+                        "name": name,
+                        "spec": char_entry.get("spec") or None,
+                        "percentile": float(percentile),
+                        "amount": float(char_entry["amount"]) if char_entry.get("amount") is not None else None,
+                        "difficulty": 4,
+                    })
 
-    for char_entry in char_list:
-        if not isinstance(char_entry, dict):
-            continue
-        name = char_entry.get("name") or ""
-        spec = char_entry.get("spec") or None
-        percentile = char_entry.get("rankPercent")
-        amount = char_entry.get("amount")
-        if name and percentile is not None:
-            entries.append({
-                "name": name,
-                "spec": spec,
-                "percentile": float(percentile),
-                "amount": float(amount) if amount is not None else None,
-            })
     return entries
 
 
@@ -488,6 +502,7 @@ async def sync_report_parses(
                                DO UPDATE SET
                                    percentile     = GREATEST(EXCLUDED.percentile,
                                                              character_report_parses.percentile),
+                                   difficulty     = EXCLUDED.difficulty,
                                    spec           = EXCLUDED.spec,
                                    amount         = EXCLUDED.amount,
                                    last_synced    = NOW()""",
@@ -497,7 +512,7 @@ async def sync_report_parses(
                             encounter_name,
                             zone_id,
                             zone_name,
-                            3,  # WCL difficulty: 3=normal (guild raids normal)
+                            entry.get("difficulty", 4),
                             entry["spec"],
                             entry["percentile"],
                             entry["amount"],

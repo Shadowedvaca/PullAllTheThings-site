@@ -1,14 +1,16 @@
-"""Gear Plan admin page routes."""
+"""Gear Plan page routes — admin BIS dashboard + member gear plan."""
 
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from guild_portal.deps import get_db
+from guild_portal.deps import get_db, get_page_member
 from guild_portal.nav import load_nav_items
+from guild_portal.services import campaign_service
 from guild_portal.templating import templates
+from sv_common.db.models import Player
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,9 @@ async def _require_gear_plan(request: Request, db: AsyncSession):
 @router.get("/admin/gear-plan", response_class=HTMLResponse)
 async def gear_plan_admin_page(request: Request):
     """Admin BIS Sync Dashboard."""
+    import os
+    from sv_common.config_cache import get_site_config
+
     from guild_portal.deps import get_db as _get_db
     async for db in _get_db():
         player = await _require_gear_plan(request, db)
@@ -45,6 +50,15 @@ async def gear_plan_admin_page(request: Request):
         rank_level = player.guild_rank.level if player.guild_rank else 0
         is_gl = rank_level >= 5
 
+        # Check whether Blizzard API credentials are configured so the template
+        # can grey out the Sync Loot Tables button when they're missing.
+        cfg = get_site_config() or {}
+        has_blizzard = bool(
+            os.environ.get("BLIZZARD_CLIENT_ID") or cfg.get("blizzard_client_id")
+        ) and bool(
+            os.environ.get("BLIZZARD_CLIENT_SECRET") or cfg.get("blizzard_client_secret_encrypted")
+        )
+
         return templates.TemplateResponse(
             "admin/gear_plan.html",
             {
@@ -53,5 +67,42 @@ async def gear_plan_admin_page(request: Request):
                 "nav_items": nav_items,
                 "current_screen": "gear_plan",
                 "is_gl": is_gl,
+                "has_blizzard": has_blizzard,
             },
         )
+
+
+# ---------------------------------------------------------------------------
+# GET /gear-plan  — member personal gear plan
+# ---------------------------------------------------------------------------
+
+
+@router.get("/my-characters", response_class=HTMLResponse)
+async def my_characters_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_member: Player | None = Depends(get_page_member),
+):
+    """Unified character sheet."""
+    if current_member is None:
+        return RedirectResponse(url="/login?next=/my-characters", status_code=302)
+
+    active = await campaign_service.list_campaigns(db, status="live")
+    nav_items = await load_nav_items(db, current_member)
+
+    return templates.TemplateResponse(
+        "member/my_characters.html",
+        {
+            "request": request,
+            "current_member": current_member,
+            "active_campaigns": active,
+            "nav_items": nav_items,
+            "current_screen": "my_characters",
+        },
+    )
+
+
+@router.get("/gear-plan", response_class=HTMLResponse)
+async def gear_plan_redirect(request: Request):
+    """Gear Plan has moved — redirect to /my-characters."""
+    return RedirectResponse(url="/my-characters", status_code=302)

@@ -168,24 +168,6 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# GET /my-characters
-# ---------------------------------------------------------------------------
-
-
-@router.get("/my-characters", response_class=HTMLResponse)
-async def my_characters_page(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_member: Player | None = Depends(get_page_member),
-):
-    if current_member is None:
-        return RedirectResponse(url="/login?next=/my-characters", status_code=302)
-    ctx = await _base_ctx(request, current_member, db)
-    ctx["current_screen"] = "my_characters"
-    return templates.TemplateResponse("member/my_characters.html", ctx)
-
-
-# ---------------------------------------------------------------------------
 # GET /profile
 # ---------------------------------------------------------------------------
 

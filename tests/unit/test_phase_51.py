@@ -329,13 +329,14 @@ class TestProgressionTemplate:
     )
 
     def test_progression_div_present(self):
+        # Progression rendered dynamically into mcn-detail-area by JS
         content = self._tpl.read_text(encoding="utf-8")
-        assert "mc-progression" in content
+        assert "mcn-detail-area" in content
 
     def test_progression_div_hidden_by_default(self):
+        # mcn-body (containing detail area) starts hidden
         content = self._tpl.read_text(encoding="utf-8")
-        # The div should start hidden (populated by JS)
-        assert 'id="mc-progression"' in content
+        assert 'id="mcn-body"' in content
         assert "hidden" in content
 
 
@@ -351,21 +352,22 @@ class TestProgressionCSS:
     )
 
     def test_mc_progression_class(self):
+        # Redesigned page uses mcn-prog-panel
         content = self._css.read_text(encoding="utf-8")
-        assert ".mc-progression" in content
+        assert "mcn-prog-panel" in content
 
     def test_mc_prog_card_class(self):
         content = self._css.read_text(encoding="utf-8")
-        assert ".mc-prog-card" in content
+        assert "mcn-boss-row" in content
 
     def test_mc_raid_row_class(self):
         content = self._css.read_text(encoding="utf-8")
-        assert ".mc-raid-row" in content
+        assert "mcn-boss-list" in content
 
     def test_mplus_score_tier_classes(self):
+        # M+ score colouring uses inline hex via _mplusScoreTier in JS
         content = self._css.read_text(encoding="utf-8")
-        for tier in ("gray", "green", "blue", "purple", "orange", "pink"):
-            assert f"mc-mplus-score--{tier}" in content, f"Missing tier class: {tier}"
+        assert "mcn-mplus-score-value" in content
 
 
 # ---------------------------------------------------------------------------
@@ -380,12 +382,15 @@ class TestProgressionJS:
     )
 
     def test_mplus_score_tier_function(self):
+        # Redesigned page uses _mplusScoreTier
         content = self._js.read_text(encoding="utf-8")
-        assert "mplusScoreTier" in content
+        assert "_mplusScoreTier" in content
 
     def test_render_progression_panel_function(self):
+        # Redesigned page uses _renderRaidDetail and _renderMplusDetail
         content = self._js.read_text(encoding="utf-8")
-        assert "renderProgressionPanel" in content
+        assert "_renderRaidDetail" in content
+        assert "_renderMplusDetail" in content
 
     def test_fetches_progression_endpoint(self):
         content = self._js.read_text(encoding="utf-8")

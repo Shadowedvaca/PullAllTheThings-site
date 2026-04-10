@@ -102,6 +102,10 @@ def _build_char_dict(
                 ),
             })
 
+    role_name = None
+    if char.active_spec and char.active_spec.default_role:
+        role_name = char.active_spec.default_role.name
+
     return {
         "id": char.id,
         "character_name": char_name,
@@ -111,6 +115,8 @@ def _build_char_dict(
         "class_color": class_color,
         "class_emoji": class_emoji,
         "spec_name": spec_name,
+        "race": char.race,
+        "role": role_name,
         "avg_item_level": char.item_level,
         "last_login_ms": char.last_login_timestamp,
         "last_synced_at": last_synced_at,
@@ -389,6 +395,40 @@ async def get_character_progression(
         for name, diffs in raid_by_name.items()
     ]
 
+    # Per-boss detail query (for the Raid detail panel in UI-1E)
+    if current_raid_ids:
+        boss_rows_result = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty, crp.boss_name,
+                       crp.boss_id, crp.kill_count
+                FROM guild_identity.character_raid_progress crp
+                WHERE crp.character_id = :char_id
+                  AND crp.raid_id = ANY(:raid_ids)
+                ORDER BY crp.difficulty, crp.boss_id
+            """).bindparams(char_id=character_id, raid_ids=current_raid_ids)
+        )
+    else:
+        boss_rows_result = await db.execute(
+            text("""
+                SELECT crp.raid_name, crp.difficulty, crp.boss_name,
+                       crp.boss_id, crp.kill_count
+                FROM guild_identity.character_raid_progress crp
+                WHERE crp.character_id = :char_id
+                ORDER BY crp.difficulty, crp.boss_id
+            """).bindparams(char_id=character_id)
+        )
+
+    raid_bosses = [
+        {
+            "raid_name": row.raid_name,
+            "difficulty": row.difficulty.lower(),
+            "boss_name": row.boss_name,
+            "boss_id": row.boss_id,
+            "killed": (row.kill_count or 0) > 0,
+        }
+        for row in boss_rows_result
+    ]
+
     # ── Mythic+ score ────────────────────────────────────────────────────────
     # raid_seasons is the single source of truth for the current M+ season ID.
     active_mplus_season_result = await db.execute(
@@ -425,6 +465,18 @@ async def get_character_progression(
                 "overall_score": round(overall_score, 1),
                 "best_run_level": best_row.best_level,
                 "best_run_dungeon": best_row.dungeon_name,
+                "dungeons": sorted(
+                    [
+                        {
+                            "dungeon_name": r.dungeon_name,
+                            "best_level": r.best_level or 0,
+                            "best_timed": r.best_timed,
+                            "best_score": round(float(r.best_score or 0), 1),
+                        }
+                        for r in mplus_rows
+                    ],
+                    key=lambda d: d["dungeon_name"],
+                ),
             }
 
     return {
@@ -432,6 +484,7 @@ async def get_character_progression(
         "data": {
             "character_id": character_id,
             "raid_progress": raid_progress,
+            "raid_bosses": raid_bosses,
             "mythic_plus": mythic_plus,
         },
     }
@@ -583,12 +636,20 @@ async def get_character_market(
         prices = await get_prices_for_realm(pool, realm_id)
         prices_filtered = [p for p in prices if p.get("min_buyout") is not None]
 
+        # Derive the most recent snapshot timestamp across all returned rows
+        last_updated = None
+        for p in prices_filtered:
+            snap = p.get("snapshot_at")
+            if snap and (last_updated is None or snap > last_updated):
+                last_updated = snap
+
         return {
             "ok": True,
             "data": {
                 "prices": prices_filtered,
                 "realm_id": realm_id,
                 "available": bool(prices_filtered),
+                "last_updated": last_updated.isoformat() if last_updated else None,
             },
         }
     except Exception:
@@ -682,5 +743,174 @@ async def get_character_crafting(
             "character_id": character_id,
             "craftable": craftable,
             "consumables": consumables,
+        },
+    }
+
+
+@router.get("/character/{character_id}/summary")
+async def get_character_summary(
+    character_id: int,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return summary stats for a character: avg ilvl, M+, raid, parses, professions."""
+    # Verify ownership
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    # ── avg ilvl from character_equipment (shirt/tabard excluded at sync time) ──
+    ilvl_result = await db.execute(
+        text("""
+            SELECT ROUND(AVG(item_level)::numeric, 0)::int AS avg_ilvl
+            FROM guild_identity.character_equipment
+            WHERE character_id = :char_id
+        """),
+        {"char_id": character_id},
+    )
+    ilvl_row = ilvl_result.fetchone()
+    avg_ilvl = int(ilvl_row.avg_ilvl) if ilvl_row and ilvl_row.avg_ilvl else None
+
+    # ── M+ score + color + raid summary from raiderio_profiles ──────────────
+    rio_result = await db.execute(
+        text("""
+            SELECT overall_score, score_color, raid_progression
+            FROM guild_identity.raiderio_profiles
+            WHERE character_id = :char_id AND season = 'current'
+            LIMIT 1
+        """),
+        {"char_id": character_id},
+    )
+    rio_row = rio_result.fetchone()
+    mplus_score: float | None = None
+    mplus_color: str | None = None
+    raid_summary: str | None = None
+    if rio_row:
+        mplus_score = float(rio_row.overall_score) if rio_row.overall_score else None
+        mplus_color = rio_row.score_color
+        raid_summary = rio_row.raid_progression  # already "8/8 H" style string
+
+    # ── avg parse from character_report_parses (current zone) ───────────────
+    zone_result = await db.execute(
+        text("""
+            SELECT DISTINCT zone_id
+            FROM guild_identity.character_report_parses
+            WHERE zone_id IS NOT NULL AND zone_id > 0
+        """)
+    )
+    zone_ids = [r.zone_id for r in zone_result]
+    avg_parse: int | None = None
+    if zone_ids:
+        parse_result = await db.execute(
+            text("""
+                SELECT AVG(percentile)::numeric(5,1) AS avg_pct
+                FROM guild_identity.character_report_parses
+                WHERE character_id = :char_id
+                  AND zone_id = ANY(:zone_ids)
+                  AND percentile > 0
+            """).bindparams(char_id=character_id, zone_ids=zone_ids)
+        )
+        parse_row = parse_result.fetchone()
+        if parse_row and parse_row.avg_pct is not None:
+            avg_parse = round(float(parse_row.avg_pct))
+
+    # ── profession names + count from character_recipes ──────────────────────
+    prof_result = await db.execute(
+        text("""
+            SELECT DISTINCT p.name AS profession_name
+            FROM guild_identity.character_recipes cr
+            JOIN guild_identity.recipes r ON r.id = cr.recipe_id
+            JOIN guild_identity.professions p ON p.id = r.profession_id
+            WHERE cr.character_id = :char_id
+            ORDER BY p.name
+        """),
+        {"char_id": character_id},
+    )
+    profession_names = [row.profession_name for row in prof_result]
+    profession_count = len(profession_names)
+
+    return {
+        "ok": True,
+        "data": {
+            "avg_ilvl": avg_ilvl,
+            "mplus_score": mplus_score,
+            "mplus_color": mplus_color,
+            "raid_summary": raid_summary,
+            "avg_parse": avg_parse,
+            "profession_count": profession_count,
+            "profession_names": profession_names,
+        },
+    }
+
+
+@router.get("/character/{character_id}/parses-detail")
+async def get_character_parses_detail(
+    character_id: int,
+    player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-encounter WCL parse breakdown for the Parses detail panel."""
+    pc_result = await db.execute(
+        select(PlayerCharacter).where(
+            PlayerCharacter.player_id == player.id,
+            PlayerCharacter.character_id == character_id,
+        )
+    )
+    if not pc_result.scalar_one_or_none():
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    rows_result = await db.execute(
+        text("""
+            SELECT encounter_name, zone_id, zone_name, difficulty,
+                   MAX(percentile)::numeric(5,1)  AS best_pct,
+                   COUNT(*)                        AS total_kills,
+                   AVG(percentile)::numeric(5,1)   AS avg_pct,
+                   MAX(amount)::numeric(14,1)       AS best_dps
+            FROM guild_identity.character_report_parses
+            WHERE character_id = :char_id
+            GROUP BY encounter_name, zone_id, zone_name, difficulty
+            ORDER BY zone_id, difficulty DESC, encounter_name
+        """),
+        {"char_id": character_id},
+    )
+    rows = rows_result.fetchall()
+
+    _DIFF_LABEL = {3: "Normal", 4: "Heroic", 5: "Mythic"}
+
+    raid_rows: list[dict] = []
+    overall_map: dict[str, dict] = {}  # encounter_name -> highest-difficulty row
+
+    for r in rows:
+        entry = {
+            "encounter_name": r.encounter_name,
+            "zone_id": r.zone_id,
+            "zone_name": r.zone_name,
+            "difficulty": r.difficulty,
+            "difficulty_label": _DIFF_LABEL.get(r.difficulty, str(r.difficulty)),
+            "best_pct": float(r.best_pct) if r.best_pct is not None else None,
+            "total_kills": int(r.total_kills),
+            "avg_pct": float(r.avg_pct) if r.avg_pct is not None else None,
+            "best_dps": float(r.best_dps) if r.best_dps is not None else None,
+        }
+        raid_rows.append(entry)
+
+        # Overall: keep highest difficulty row per encounter name
+        enc_key = r.encounter_name
+        if enc_key not in overall_map or r.difficulty > overall_map[enc_key]["difficulty"]:
+            overall_map[enc_key] = entry
+
+    overall_rows = sorted(overall_map.values(), key=lambda x: x["encounter_name"])
+
+    return {
+        "ok": True,
+        "data": {
+            "raid": raid_rows,
+            "mythic_plus": [],  # WCL does not currently return M+ parses
+            "overall": overall_rows,
         },
     }
