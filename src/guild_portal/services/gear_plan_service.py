@@ -774,6 +774,43 @@ async def get_plan_detail(
             if d.get("blizzard_item_id"):
                 all_bids.add(d["blizzard_item_id"])
 
+        # Augment craftable/tier detection via DB for items where Wowhead has no
+        # tooltip data (new expansion items).  These run only when desired_by_slot
+        # has entries to avoid unnecessary queries on empty plans.
+        desired_bids_list = [
+            d["blizzard_item_id"] for d in desired_by_slot.values()
+            if d.get("blizzard_item_id")
+        ]
+        if desired_bids_list:
+            # Craftable: any desired item that has a row in item_recipe_links
+            link_rows = await conn.fetch(
+                """
+                SELECT DISTINCT wi.blizzard_item_id
+                  FROM guild_identity.item_recipe_links irl
+                  JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
+                 WHERE wi.blizzard_item_id = ANY($1::int[])
+                """,
+                desired_bids_list,
+            )
+            craftable_desired_bids |= {r["blizzard_item_id"] for r in link_rows}
+
+            # Tier piece: desired item is in a tier slot AND has no direct
+            # non-junk sources (meaning it's only obtainable via tier token).
+            tier_candidate_rows = await conn.fetch(
+                """
+                SELECT wi.blizzard_item_id
+                  FROM guild_identity.wow_items wi
+                 WHERE wi.blizzard_item_id = ANY($1::int[])
+                   AND wi.slot_type IN ('head','shoulder','chest','hands','legs')
+                   AND NOT EXISTS (
+                       SELECT 1 FROM guild_identity.item_sources s
+                        WHERE s.item_id = wi.id AND NOT s.is_suspected_junk
+                   )
+                """,
+                desired_bids_list,
+            )
+            tier_piece_desired_bids |= {r["blizzard_item_id"] for r in tier_candidate_rows}
+
         # Available quality tracks per blizzard_item_id (derived from source_config)
         tracks_by_item: dict[int, list[str]] = {}
         # Source location info for display
