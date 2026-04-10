@@ -28,7 +28,9 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1D.4** Loot table junk flagging | ✅ COMPLETE | Migration 0086: `is_suspected_junk` on `item_sources`; `flag_junk_sources(flag_tier_pieces=False)` — default flags only truly empty world boss stubs; tier piece flagging gated behind `flag_tier_pieces=True` (1D.5 only); `get_item_sources()`/`get_instance_names()` exclude junk by default; gear_plan_service filters junk; Show Junk toggle + Flag Junk Sources button in admin. Also: `sync_legacy_expansion_dungeons()` + `POST /sync-legacy-dungeons` background task + "Sync Legacy Dungeons" button for prior-expansion M+ dungeons. |
 | **1D.5** Tier token pipeline | ✅ COMPLETE | Migration 0087: `tier_token_attrs` + `v_tier_piece_sources` view. `process_tier_tokens()`: 3 steps — (1) parse tokens + upsert tier_token_attrs, (2) backfill `wow_items.armor_type` for tier pieces from tooltip HTML via `_armor_type_from_tooltip()` (Wowhead jsonequip.subclass unreliable), (3) flag_junk_sources(flag_tier_pieces=True). Each tier piece now shows 2 bosses: slot-specific + Midnight Falls. gear_plan_service detects tier_piece_desired_bids and queries view. POST /process-tier-tokens endpoint (GL). TierTokenAttrs ORM model. 38 unit tests. |
 | **1D.6** BIS admin page restructure | ⬜ TODO | 5-step workflow layout replacing flat control bar; Process Tier Tokens button; Tier Tokens section in Reference Tables. |
-| **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
+| **1E.1** Roster aggregation — backend + main table | ⬜ TODO | Two admin endpoints; hierarchical raid table (instance→boss) + flat M+ table; expand/collapse; auto-hide empty track columns; Initiates/Offspec filters; color scale |
+| **1E.2** Roster aggregation — drill panel | ⬜ TODO | Slide-in panel; By Item + By Player spoke-list views; Wowhead tooltips; active chip highlight |
+| **1E.3** Roster aggregation — auto-setup new members | ⬜ TODO | Hook in `equipment_sync.py`: create default Wowhead BIS plan for newly-discovered in-guild characters |
 
 **Active branch:** `feature/gear-plan-phase-1d`
 **Last migration:** 0087
@@ -735,15 +737,127 @@ Replace the single `.gp-controls` bar with five labelled step groups. Each group
 
 ## Phase 1E: Roster Aggregation (TODO after 1D)
 
-Admin gear plan page gains "Roster Needs" section:
-- **Raid grid:** Instance header, boss rows, quality track columns (C/H/M). Cell = count of players needing a drop. Click → popup with player names.
-- **M+ grid:** Dungeon rows, quality track columns (C/H). Same cell pattern.
-- Color scale: 0=grey, 1–2=green, 3–5=gold, 6+=red
-- Filter: active raid season, include/exclude specific ranks
+Admin gear plan page gains a **Roster Needs** section answering: *"Which bosses/dungeons should we prioritize for loot this week?"*
 
-New endpoints:
-- `GET /api/v1/guild/gear-needs/raid`
-- `GET /api/v1/guild/gear-needs/dungeon`
+**Design reference:** `prototypes/roster_needs.html` — fully interactive mockup with hardcoded data. Review this before building.
+
+### How "needs" is defined
+Same logic as My Characters (`gear_plan_service.py:1046`):
+- A slot **needs** an item if `desired_item_id` is set AND the player is not wearing that exact item (`not is_bis`)
+- Which quality tracks are needed comes from `upgrade_tracks` — tracks strictly above what they're currently wearing for that item
+- If a player needs an item from a boss at Hero but already has it at Champion, they appear in the H column only
+
+### Filters
+- **Include Initiates** — default ON; maps to `rank_level === 1` (same as roster page)
+- **Include Offspec Characters** — default OFF; uses each player's `secondary_character`; counted as "Playername — Charname" distinct from their main
+
+### Table format
+- **Rows (Raid):** Instance (collapsible) → Bosses under each instance
+- **Rows (M+):** Flat dungeon list, no boss breakdown
+- **Columns (Raid):** V / C / H / M quality tracks — auto-hide any column where no player has needs
+- **Columns (M+):** C / H only — no Myth column (M+ Myth track = vault only, reserved for Phase 3)
+- **Cell value:** `players | items` — e.g. `3 | 4` = 3 unique players, 4 total slot needs
+- **Color scale:** 1–2 = green · 3–5 = gold · 6+ = red (applied to player count)
+- Empty cells render blank (no zero)
+- Instance rows show rollup aggregates across all their bosses
+
+### Detail drill panel
+Click any cell → side panel slides in from the right showing who needs what.
+- **By Item view (default):** Each item is a hub card (icon + Wowhead tooltip link + slot label). Player names branch off as spoke rows with class-colored `Playername — Charname` + spec.
+- **By Player view:** Each player is a hub card (class-color left border + `Playername — Charname` + spec). Items branch off as spoke rows with icon + Wowhead tooltip link + slot label.
+- Toggle between views without closing the panel
+- Wowhead tooltip JS fires on item links in the panel
+- Panel is drillable at any level: individual boss, entire instance, or dungeon
+
+---
+
+## Phase 1E.1: Backend + Main Table
+
+**Scope:** New admin-only endpoints + the hierarchical table with expand/collapse and filters. No drill panel yet.
+
+New endpoints (admin-only, Officer+):
+- `GET /api/v1/admin/gear-needs/raid` — returns needs aggregated by instance → boss → track
+- `GET /api/v1/admin/gear-needs/dungeon` — returns needs aggregated by dungeon → track
+
+**Response shape (raid):**
+```json
+{
+  "instances": [
+    {
+      "key": "lou",
+      "name": "Liberation of Undermine",
+      "bosses": [
+        {
+          "key": "vexie",
+          "name": "Vexie and the Geargrinders",
+          "tracks": {
+            "H": { "players": ["shadowtrog", "zulvash", "rocket"], "items": 4 },
+            "M": { "players": ["mikenator"], "items": 1 }
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Backend logic:**
+1. Load all active players with a `main_character_id` set
+2. For each player's active gear plan, find slots where `desired_item_id IS NOT NULL`
+3. Compare desired vs equipped (same `is_bis` / `upgrade_tracks` logic as `gear_plan_service.py`) to determine if the slot is still needed and at which tracks
+4. Join desired item → `item_sources` to find boss/dungeon source
+5. Group by (source, track) → sets of player keys + item counts
+6. Apply filters: initiates (`rank_level`), offspec (secondary char plans)
+
+**Frontend:**
+- Table rendered client-side from endpoint data
+- Expand/collapse instances (state in memory, no persistence needed)
+- Auto-hide track columns with 0 needs across the entire table
+- Filter checkboxes re-fetch or re-filter client-side (TBD based on response size)
+- Active chip outline when panel is open on that cell
+
+**Done when:** Both tables render correctly, expand/collapse works, column auto-hide works, filters work, color scale correct.
+
+---
+
+## Phase 1E.2: Detail Drill Panel
+
+**Scope:** The slide-in panel with By Item / By Player toggle and Wowhead tooltips. No new backend endpoints — uses data already returned by 1E.1 endpoints (extended to include player display names and item details).
+
+**Panel behaviour:**
+- Slides in from right (CSS transition), main table remains visible
+- Click any cell at any level (boss, instance, dungeon) to open
+- Clicked cell gets a gold outline (`active-chip` class)
+- Close button (✕) clears the outline and closes panel
+- Panel re-renders on filter changes if already open
+
+**By Item view:**
+- Group needs by `item_id`, render one hub card per item
+- Hub card: item icon (Wowhead CDN) + item name as Wowhead link + slot label
+- Spoke rows: `Playername — Charname` (class-colored) + spec + class
+
+**By Player view:**
+- Group needs by player, render one hub card per player
+- Hub card: `Playername — Charname` (class-colored) + spec, left border tinted to class color
+- Spoke rows: item icon + item name as Wowhead link + slot label
+
+**Wowhead tooltip integration:**
+- Include `<script>const whTooltips={colorLinks:true,iconizeLinks:false};</script>` before `wow.zamimg.com/widgets/power.js`
+- Call `$WowheadPower.refreshLinks()` after each panel render
+
+**Done when:** Panel opens/closes correctly, both views render, Wowhead tooltips fire on item links, filter changes update an open panel.
+
+---
+
+## Phase 1E.3: Auto-Setup for New Guild Members
+
+**Scope:** When a new character is first discovered as `in_guild=TRUE` during Blizzard/equipment sync, automatically create a default gear plan for them so they appear in Roster Needs immediately.
+
+**Hook location:** `src/sv_common/guild_sync/equipment_sync.py` — after a new character row is upserted with `in_guild=TRUE` and `player_characters` link exists, call `get_or_create_plan(pool, player_id, character_id)` then `populate_from_bis(pool, player_id, character_id, source_id=wowhead_source_id)`.
+
+**Existing art:** The admin "Fill BIS" button at `bis_routes.py:823` already does this for all characters in bulk. 1E.3 adds the same call inline during the per-character sync loop so new members don't need a manual admin trigger.
+
+**Done when:** A newly-linked in-guild character gets a default Wowhead Overall BIS plan created automatically on the next equipment sync run.
 
 ---
 

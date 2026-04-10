@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roster Needs — PATT Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:          #0a0a0b;
+  --card:        #141416;
+  --card-raised: #1a1a1f;
+  --border:      #2a2a2e;
+  --text:        #e8e0d0;
+  --muted:       #6b6b7a;
+  --gold:        #d4a84b;
+  --gold-bg:     rgba(212,168,75,0.08);
+  --gold-border: rgba(212,168,75,0.25);
+
+  --track-v: #94a3b8;
+  --track-c: #60a5fa;
+  --track-h: #a78bfa;
+  --track-m: #fb923c;
+
+  --cls-deathknight: #C41E3A;
+  --cls-druid:       #FF7C0A;
+  --cls-hunter:      #AAD372;
+  --cls-mage:        #3FC7EB;
+  --cls-paladin:     #F48CBA;
+  --cls-priest:      #c8bfb0;
+  --cls-rogue:       #d4cc60;
+  --cls-shaman:      #0070DD;
+  --cls-warlock:     #8788EE;
+  --cls-warrior:     #C69B3A;
+  --cls-monk:        #00FF98;
+  --cls-demonhunter: #A330C9;
+  --cls-evoker:      #33937F;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 1.5rem;
+  min-height: 100vh;
+}
+
+/* ── Page header ─────────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.page-title {
+  font-family: 'Cinzel', serif;
+  color: var(--gold);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+}
+
+.page-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* ── Filter bar ──────────────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+}
+
+.filter-bar label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  user-select: none;
+}
+
+.filter-bar input[type=checkbox] { accent-color: var(--gold); width: 14px; height: 14px; }
+.filter-sep { width: 1px; height: 18px; background: var(--border); }
+
+/* ── Section heading ─────────────────────────────────────── */
+.section-heading {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  color: var(--gold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin: 1.75rem 0 0.6rem;
+}
+
+.section-heading:first-of-type { margin-top: 0; }
+
+/* ── Table wrap ──────────────────────────────────────────── */
+.needs-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* ── Needs table ─────────────────────────────────────────── */
+.needs-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.needs-table th {
+  background: var(--card-raised);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.needs-table th.col-name { text-align: left; width: 100%; }
+
+.needs-table th[data-t="V"] { color: var(--track-v); width: 90px; }
+.needs-table th[data-t="C"] { color: var(--track-c); width: 90px; }
+.needs-table th[data-t="H"] { color: var(--track-h); width: 90px; }
+.needs-table th[data-t="M"] { color: var(--track-m); width: 90px; }
+
+.needs-table td {
+  padding: 0 0.75rem;
+  height: 36px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  text-align: center;
+}
+
+.needs-table td.col-name { text-align: left; }
+
+.needs-table tr:last-child td { border-bottom: none; }
+
+/* Instance row */
+.row-inst td {
+  background: var(--card-raised);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.row-inst:hover td { background: #1f1f26; }
+
+.row-inst td.col-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.expand-btn {
+  width: 16px;
+  height: 16px;
+  font-size: 0.6rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.row-inst.is-open .expand-btn { transform: rotate(90deg); }
+
+/* Boss row */
+.row-boss td { background: var(--card); font-size: 0.875rem; }
+.row-boss td.col-name { padding-left: 1.75rem; }
+.row-boss.hidden { display: none; }
+.row-boss:hover td { background: #191920; }
+
+/* Dungeon row */
+.row-dung td { background: var(--card); font-size: 0.875rem; }
+.row-dung:hover td { background: #191920; }
+
+/* ── Cell count chip ─────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.1s;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.chip:hover { filter: brightness(1.2); }
+
+.chip .p { }
+.chip .sep { color: var(--muted); font-weight: 400; margin: 0 1px; }
+.chip .i { color: var(--muted); font-size: 0.72rem; font-weight: 400; }
+
+.chip.l1 { background: rgba(74,222,128,0.10); border-color: rgba(74,222,128,0.2); }
+.chip.l2 { background: rgba(251,191,36,0.10); border-color: rgba(251,191,36,0.2); }
+.chip.l3 { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.2); }
+
+/* Active chip (currently open panel) */
+.chip.active-chip { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+/* ── Drill panel ─────────────────────────────────────────── */
+#panel {
+  position: fixed;
+  top: 0; right: -440px;
+  width: 440px;
+  height: 100vh;
+  background: #111115;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transition: right 0.2s ease;
+  z-index: 200;
+  box-shadow: -12px 0 40px rgba(0,0,0,0.6);
+}
+
+#panel.open { right: 0; }
+
+.panel-hd {
+  padding: 1rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.panel-hd-title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.875rem;
+  color: var(--gold);
+  margin-bottom: 0.15rem;
+  padding-right: 2rem;
+}
+
+.panel-hd-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.panel-close {
+  position: absolute;
+  top: 0.9rem; right: 0.9rem;
+  width: 26px; height: 26px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-close:hover { color: var(--text); border-color: var(--muted); }
+
+/* View toggle */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.view-toggle button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.view-toggle button + button { border-left: 1px solid var(--border); }
+
+.view-toggle button.on {
+  background: var(--gold-bg);
+  color: var(--gold);
+}
+
+.view-toggle button:not(.on):hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+}
+
+/* Panel body */
+.panel-bd {
+  overflow-y: auto;
+  flex: 1;
+  padding: 0.75rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* ── Spoke list ──────────────────────────────────────────── */
+.spoke {
+  margin-bottom: 0.75rem;
+}
+
+.spoke-hub {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--card-raised);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+
+.hub-icon img {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  display: block;
+}
+
+.hub-icon .icon-placeholder {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.hub-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.875rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hub-name a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hub-name a:hover { color: var(--gold); }
+
+.hub-slot {
+  font-size: 0.73rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.spoke-lines {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+
+.spoke-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.32rem 0.75rem 0.32rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+  position: relative;
+}
+
+.spoke-row:last-child { border-bottom: none; }
+
+/* Vertical rail + tick */
+.spoke-row::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.spoke-row:last-child::before {
+  bottom: 50%;
+}
+
+.spoke-row::after {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  width: 0.45rem;
+  height: 1px;
+  background: var(--border);
+}
+
+.spoke-row .row-icon img {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  display: block;
+  flex-shrink: 0;
+}
+
+.spoke-row .row-icon .icon-placeholder {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--border);
+}
+
+.spoke-row .row-name { flex: 1; min-width: 0; }
+.spoke-row .row-meta { font-size: 0.72rem; color: var(--muted); flex-shrink: 0; }
+
+/* Player card hub (by-player view) */
+.spoke-hub.player-hub {
+  border-left: 3px solid var(--border);
+}
+
+/* ── Track pill ──────────────────────────────────────────── */
+.tpill {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.tpill.V { color: var(--track-v); border-color: var(--track-v); }
+.tpill.C { color: var(--track-c); border-color: var(--track-c); }
+.tpill.H { color: var(--track-h); border-color: var(--track-h); }
+.tpill.M { color: var(--track-m); border-color: var(--track-m); }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.empty-msg {
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-title">Roster Needs</div>
+  <div class="page-note">prototype · hardcoded data · Liberation of Undermine</div>
+</div>
+
+<div class="filter-bar">
+  <label><input type="checkbox" id="cb-init" checked> Include Initiates</label>
+  <div class="filter-sep"></div>
+  <label><input type="checkbox" id="cb-os"> Include Offspec Characters</label>
+</div>
+
+<div class="section-heading">Raid — Liberation of Undermine</div>
+<div class="needs-table-wrap">
+  <table class="needs-table" id="raid-table"></table>
+</div>
+
+<div class="section-heading">M+ Dungeons</div>
+<div class="needs-table-wrap">
+  <table class="needs-table" id="dung-table"></table>
+</div>
+
+<!-- Detail panel -->
+<div id="panel">
+  <div class="panel-hd">
+    <div class="panel-hd-title" id="panel-title">—</div>
+    <div class="panel-hd-sub" id="panel-sub">—</div>
+    <div class="view-toggle">
+      <button id="btn-item" class="on" onclick="setView('item')">By Item</button>
+      <button id="btn-player" onclick="setView('player')">By Player</button>
+    </div>
+    <button class="panel-close" onclick="closePanel()" title="Close">✕</button>
+  </div>
+  <div class="panel-bd" id="panel-body"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════════════
+
+const TRACK_LABEL = { V:'Veteran', C:'Champion', H:'Hero', M:'Myth' };
+const TRACK_ORDER = { V:0, C:1, H:2, M:3 };
+const TRACKS_ALL  = ['V','C','H','M'];
+
+// Players (rank 1 = initiate)
+const PLAYERS = [
+  { key:'shadowtrog', pname:'Shadowtrog', cname:'Trogmoon',     spec:'Balance',      cls:'druid',       rank:2 },
+  { key:'rocket',     pname:'Rocket',     cname:'Rocketjock',   spec:'Havoc',        cls:'demonhunter', rank:2 },
+  { key:'zulvash',    pname:'Zulvash',    cname:'Zulvy',        spec:'Shadow',       cls:'priest',      rank:2 },
+  { key:'mikenator',  pname:'Mikenator',  cname:'Mikemain',     spec:'Holy',         cls:'paladin',     rank:2 },
+  { key:'tanky',      pname:'Tanky',      cname:'Tankster',     spec:'Protection',   cls:'warrior',     rank:2 },
+  { key:'petey',      pname:'Petey',      cname:'Petemage',     spec:'Fire',         cls:'mage',        rank:2 },
+  { key:'stabbz',     pname:'Stabbz',     cname:'Stabbington',  spec:'Subtlety',     cls:'rogue',       rank:2 },
+  { key:'lockout',    pname:'Lockout',    cname:'Warlockz',     spec:'Destruction',  cls:'warlock',     rank:2 },
+  { key:'newbie1',    pname:'Newbie1',    cname:'Freshchar',    spec:'Affliction',   cls:'warlock',     rank:1 },
+  { key:'newbie2',    pname:'Newbie2',    cname:'Freshmage',    spec:'Arcane',       cls:'mage',        rank:1 },
+];
+
+// Offspec characters (tied to a main player by base key)
+const OFFSPECS = [
+  { key:'shadowtrog_os', base:'shadowtrog', pname:'Shadowtrog', cname:'Mooncat',    spec:'Feral',       cls:'druid',   rank:2 },
+  { key:'mikenator_os',  base:'mikenator',  pname:'Mikenator',  cname:'Holyback',   spec:'Retribution', cls:'paladin', rank:2 },
+];
+
+const INSTANCES = [{
+  key: 'lou',
+  name: 'Liberation of Undermine',
+  bosses: [
+    { key:'vexie',    name:'Vexie and the Geargrinders' },
+    { key:'cauldron', name:'Cauldron of Carnage' },
+    { key:'rik',      name:'Rik Reverb' },
+    { key:'stix',     name:'Stix Bunkjunker' },
+    { key:'bandit',   name:'One-Armed Bandit' },
+    { key:'mugzee',   name:"Mug'Zee, Heads of Security" },
+    { key:'gallywix', name:'Chrome King Gallywix' },
+  ]
+}];
+
+const DUNGEONS = [
+  { key:'darkflame',  name:'Darkflame Cleft' },
+  { key:'cinderbrew', name:'Cinderbrew Meadery' },
+  { key:'floodgate',  name:'Operation: Floodgate' },
+  { key:'priory',     name:'Priory of the Sacred Flame' },
+  { key:'rookery',    name:'The Rookery' },
+  { key:'motherlode', name:'The MOTHERLODE!!' },
+  { key:'stonevault', name:'The Stonevault' },
+];
+
+// item_id → { name, slot, icon, boss?, dungeon? }
+// Icons: using Wowhead's icon CDN. boss/dungeon is the source key.
+const ITEMS = {
+  232420: { name:"Vexie's Overclocked Amulet",    slot:'Neck',     icon:'inv_jewelry_necklace_52',          boss:'vexie'    },
+  232421: { name:"Gear-Etched Signet",             slot:'Ring',     icon:'inv_jewelry_ring_84',              boss:'vexie'    },
+  232430: { name:"Cauldron-Tempered Bracers",      slot:'Wrist',    icon:'inv_bracer_leather_raiddruid_s_01',boss:'cauldron' },
+  232431: { name:"Smelter's Scorched Gauntlets",   slot:'Hands',    icon:'inv_glove_plate_raidwarrior_s_01', boss:'cauldron' },
+  232440: { name:"Reverb-Tuned Resonator",         slot:'Trinket',  icon:'trinket_pvp_2h_c_01',              boss:'rik'      },
+  232441: { name:"Sound-Dampening Cloak",          slot:'Back',     icon:'inv_cape_raidhunter_s_01',         boss:'rik'      },
+  232450: { name:"Bunkjunker's Rusted Legguards",  slot:'Legs',     icon:'inv_pant_leather_raiddruid_s_01',  boss:'stix'     },
+  232451: { name:"Salvaged Scrap Helm",            slot:'Head',     icon:'inv_helm_plate_raidwarrior_s_01',  boss:'stix'     },
+  232460: { name:"High-Roller's Ring",             slot:'Ring',     icon:'inv_jewelry_ring_112',             boss:'bandit'   },
+  232461: { name:"Casino Chip Choker",             slot:'Neck',     icon:'inv_misc_coin_02',                 boss:'bandit'   },
+  232470: { name:"Security Override Token",        slot:'Trinket',  icon:'inv_misc_key_04',                  boss:'mugzee'   },
+  232471: { name:"Enforcer's Heavy Pauldrons",     slot:'Shoulder', icon:'inv_shoulder_plate_raidwarrior_s_01',boss:'mugzee' },
+  232480: { name:"Gallywix's Grand Gauntlets",     slot:'Hands',    icon:'inv_glove_plate_raidwarrior_s_01', boss:'gallywix' },
+  232481: { name:"King's Commission Axe",          slot:'Weapon',   icon:'inv_axe_2h_raidwarrior_s_01',     boss:'gallywix' },
+  232482: { name:"Chrome-Plated Chestguard",       slot:'Chest',    icon:'inv_chest_plate_raidwarrior_s_01',boss:'gallywix' },
+  // M+ items
+  219890: { name:"Darkflame Brand",               slot:'Trinket',  icon:'inv_misc_enchantedvial_02',         dungeon:'darkflame'  },
+  219891: { name:"Ashen Drape",                   slot:'Back',     icon:'inv_cape_raiddemonhunter_s_01',     dungeon:'darkflame'  },
+  219900: { name:"Honeyed Amberweave Gloves",     slot:'Hands',    icon:'inv_glove_cloth_raidpriest_s_01',   dungeon:'cinderbrew' },
+  219901: { name:"Floodgate Override Seal",       slot:'Ring',     icon:'inv_jewelry_ring_96',               dungeon:'floodgate'  },
+  219902: { name:"Priory Commander's Girdle",     slot:'Waist',    icon:'inv_belt_plate_raidwarrior_s_01',   dungeon:'priory'     },
+  219903: { name:"Rookery Warden's Legguards",    slot:'Legs',     icon:'inv_pant_mail_raidshaman_s_01',     dungeon:'rookery'    },
+  219904: { name:"Overstuffed Coinbag",           slot:'Trinket',  icon:'inv_misc_bag_22',                   dungeon:'motherlode' },
+  219905: { name:"Voidsplinter Fragment",         slot:'Trinket',  icon:'inv_misc_gem_variety_03',           dungeon:'stonevault' },
+};
+
+// player key → [{ item_id, track }]
+// NOTE: No V-track needs, so that column will auto-hide.
+const NEEDS_MAP = {
+  shadowtrog: [
+    { item:232420, track:'H' },
+    { item:232440, track:'H' },
+    { item:232460, track:'H' },
+    { item:232481, track:'M' },
+    { item:219891, track:'H' },
+  ],
+  rocket: [
+    { item:232421, track:'H' },
+    { item:232441, track:'H' },
+    { item:232460, track:'M' },
+    { item:232480, track:'H' },
+    { item:219890, track:'C' },
+  ],
+  zulvash: [
+    { item:232420, track:'H' },
+    { item:232421, track:'H' },
+    { item:232470, track:'H' },
+    { item:232482, track:'M' },
+    { item:219901, track:'H' },
+  ],
+  mikenator: [
+    { item:232431, track:'H' },
+    { item:232450, track:'H' },
+    { item:232471, track:'H' },
+    { item:232481, track:'M' },
+    { item:219900, track:'H' },
+  ],
+  tanky: [
+    { item:232430, track:'H' },
+    { item:232451, track:'H' },
+    { item:232461, track:'H' },
+    { item:232480, track:'M' },
+    { item:219903, track:'H' },
+  ],
+  petey: [
+    { item:232440, track:'M' },
+    { item:232441, track:'H' },
+    { item:232460, track:'H' },
+    { item:232482, track:'M' },
+    { item:219901, track:'C' },
+  ],
+  stabbz: [
+    { item:232421, track:'H' },
+    { item:232431, track:'H' },
+    { item:232470, track:'H' },
+    { item:232481, track:'H' },
+    { item:219904, track:'H' },
+  ],
+  lockout: [
+    { item:232420, track:'H' },
+    { item:232450, track:'H' },
+    { item:232471, track:'H' },
+    { item:232482, track:'H' },
+    { item:219905, track:'H' },
+  ],
+  newbie1: [
+    { item:232430, track:'C' },
+    { item:232431, track:'C' },
+    { item:232440, track:'H' },
+    { item:219900, track:'C' },
+  ],
+  newbie2: [
+    { item:232450, track:'C' },
+    { item:232460, track:'H' },
+    { item:219905, track:'C' },
+  ],
+  // Offspec
+  shadowtrog_os: [
+    { item:232451, track:'H' },
+    { item:232461, track:'H' },
+    { item:219903, track:'C' },
+  ],
+  mikenator_os: [
+    { item:232421, track:'H' },
+    { item:232480, track:'H' },
+  ],
+};
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+
+const openInstances = new Set(INSTANCES.map(i => i.key)); // all expanded by default
+let panelCtx  = null;   // { type:'boss'|'instance'|'dungeon', key, track }
+let panelView = 'item'; // 'item' | 'player'
+
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function getActiveKeys() {
+  const inclInit  = document.getElementById('cb-init').checked;
+  const inclOs    = document.getElementById('cb-os').checked;
+  const keys = new Set();
+  for (const p of PLAYERS) {
+    if (!inclInit && p.rank === 1) continue;
+    keys.add(p.key);
+  }
+  if (inclOs) {
+    for (const os of OFFSPECS) {
+      const base = PLAYERS.find(p => p.key === os.base);
+      if (!base) continue;
+      if (!inclInit && base.rank === 1) continue;
+      keys.add(os.key);
+    }
+  }
+  return keys;
+}
+
+function getActiveNeeds() {
+  const activeKeys = getActiveKeys();
+  const out = [];
+  for (const [pkey, needs] of Object.entries(NEEDS_MAP)) {
+    if (!activeKeys.has(pkey)) continue;
+    for (const n of needs) {
+      out.push({ player: pkey, item: n.item, track: n.track });
+    }
+  }
+  return out;
+}
+
+function playerInfo(key) {
+  return PLAYERS.find(p => p.key === key) || OFFSPECS.find(p => p.key === key) || null;
+}
+
+function chipLevel(n) {
+  if (n <= 2) return 'l1';
+  if (n <= 5) return 'l2';
+  return 'l3';
+}
+
+function pill(t) {
+  return `<span class="tpill ${t}">${t}</span>`;
+}
+
+function iconUrl(iconName) {
+  return `https://wow.zamimg.com/images/wow/icons/medium/${iconName}.jpg`;
+}
+
+function wowLink(itemId, name) {
+  return `<a href="https://www.wowhead.com/item=${itemId}" target="_blank" rel="noopener">${esc(name)}</a>`;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Aggregate needs by a source key (boss or dungeon).
+// Returns: { source_key: { V:{players:Set,items:n}, C:..., H:..., M:... } }
+function buildCells(needs) {
+  const out = {};
+  for (const n of needs) {
+    const item = ITEMS[n.item];
+    if (!item) continue;
+    const src = item.boss || item.dungeon;
+    if (!src) continue;
+    if (!out[src]) out[src] = { V:{players:new Set(),items:0}, C:{players:new Set(),items:0}, H:{players:new Set(),items:0}, M:{players:new Set(),items:0} };
+    out[src][n.track].players.add(n.player);
+    out[src][n.track].items++;
+  }
+  return out;
+}
+
+// Which tracks have ≥1 player needing something across the given cells object?
+function visibleTracks(cells, exclude=[]) {
+  const has = new Set();
+  for (const src of Object.values(cells)) {
+    for (const t of TRACKS_ALL) {
+      if (!exclude.includes(t) && src[t].players.size > 0) has.add(t);
+    }
+  }
+  return TRACKS_ALL.filter(t => has.has(t));
+}
+
+// Aggregate a set of boss keys into instance-level cells
+function rollupInstance(instKey, bossKeys, cells) {
+  const out = { V:{players:new Set(),items:0}, C:{players:new Set(),items:0}, H:{players:new Set(),items:0}, M:{players:new Set(),items:0} };
+  for (const bk of bossKeys) {
+    for (const t of TRACKS_ALL) {
+      const c = cells[bk]?.[t];
+      if (!c) continue;
+      for (const p of c.players) out[t].players.add(p);
+      out[t].items += c.items;
+    }
+  }
+  return out;
+}
+
+function renderChip(ctx_type, src_key, track, players, items, isActiveChip) {
+  if (!players || players.size === 0) return '<td></td>';
+  const p = players.size, i = items;
+  const lvl = chipLevel(p);
+  const active = isActiveChip ? ' active-chip' : '';
+  return `<td><span class="chip ${lvl}${active}" onclick="openPanel('${ctx_type}','${src_key}','${track}',event)">
+    <span class="p">${p}</span><span class="sep">|</span><span class="i">${i}</span>
+  </span></td>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER RAID TABLE
+// ═══════════════════════════════════════════════════════════════
+
+function renderRaid() {
+  const needs = getActiveNeeds().filter(n => ITEMS[n.item]?.boss);
+  const cells  = buildCells(needs);
+  const tracks = visibleTracks(cells);
+
+  let thead = `<thead><tr><th class="col-name">Boss</th>`;
+  for (const t of tracks) {
+    thead += `<th data-t="${t}">${t}<div style="font-size:0.62rem;font-weight:400;text-transform:none;letter-spacing:0">${TRACK_LABEL[t]}</div></th>`;
+  }
+  thead += `</tr></thead>`;
+
+  let tbody = '<tbody>';
+  for (const inst of INSTANCES) {
+    const bossKeys  = inst.bosses.map(b => b.key);
+    const instCells = rollupInstance(inst.key, bossKeys, cells);
+    const isOpen    = openInstances.has(inst.key);
+
+    // Instance summary row
+    let instTds = '';
+    for (const t of tracks) {
+      const c = instCells[t];
+      const isActive = panelCtx?.type === 'instance' && panelCtx.key === inst.key && panelCtx.track === t;
+      instTds += renderChip('instance', inst.key, t, c.players, c.items, isActive);
+    }
+    tbody += `<tr class="row-inst${isOpen ? ' is-open' : ''}" onclick="toggleInst('${inst.key}')">
+      <td class="col-name"><span class="expand-btn">▶</span>${esc(inst.name)}</td>
+      ${instTds}
+    </tr>`;
+
+    // Boss rows
+    for (const boss of inst.bosses) {
+      let bossTds = '';
+      for (const t of tracks) {
+        const c = cells[boss.key]?.[t] || { players: new Set(), items: 0 };
+        const isActive = panelCtx?.type === 'boss' && panelCtx.key === boss.key && panelCtx.track === t;
+        bossTds += renderChip('boss', boss.key, t, c.players, c.items, isActive);
+      }
+      tbody += `<tr class="row-boss${isOpen ? '' : ' hidden'}" data-inst="${inst.key}">
+        <td class="col-name">${esc(boss.name)}</td>
+        ${bossTds}
+      </tr>`;
+    }
+  }
+  tbody += '</tbody>';
+
+  document.getElementById('raid-table').innerHTML = thead + tbody;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER DUNGEON TABLE
+// ═══════════════════════════════════════════════════════════════
+
+function renderDungeon() {
+  const needs  = getActiveNeeds().filter(n => ITEMS[n.item]?.dungeon);
+  const cells  = buildCells(needs);
+  const tracks = visibleTracks(cells, ['M']); // no Myth for M+
+
+  let thead = `<thead><tr><th class="col-name">Dungeon</th>`;
+  for (const t of tracks) {
+    thead += `<th data-t="${t}">${t}<div style="font-size:0.62rem;font-weight:400;text-transform:none;letter-spacing:0">${TRACK_LABEL[t]}</div></th>`;
+  }
+  thead += `</tr></thead>`;
+
+  let tbody = '<tbody>';
+  for (const dung of DUNGEONS) {
+    let tds = '';
+    for (const t of tracks) {
+      const c = cells[dung.key]?.[t] || { players: new Set(), items: 0 };
+      const isActive = panelCtx?.type === 'dungeon' && panelCtx.key === dung.key && panelCtx.track === t;
+      tds += renderChip('dungeon', dung.key, t, c.players, c.items, isActive);
+    }
+    tbody += `<tr class="row-dung">
+      <td class="col-name">${esc(dung.name)}</td>
+      ${tds}
+    </tr>`;
+  }
+  tbody += '</tbody>';
+
+  document.getElementById('dung-table').innerHTML = thead + tbody;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  EXPAND / COLLAPSE
+// ═══════════════════════════════════════════════════════════════
+
+function toggleInst(key) {
+  if (openInstances.has(key)) openInstances.delete(key);
+  else openInstances.add(key);
+  renderRaid();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PANEL
+// ═══════════════════════════════════════════════════════════════
+
+function openPanel(type, key, track, event) {
+  event.stopPropagation();
+  panelCtx = { type, key, track };
+  document.getElementById('panel').classList.add('open');
+  renderPanel();
+  // Re-render tables to show active chip highlight
+  renderRaid();
+  renderDungeon();
+}
+
+function closePanel() {
+  panelCtx = null;
+  document.getElementById('panel').classList.remove('open');
+  renderRaid();
+  renderDungeon();
+}
+
+function setView(v) {
+  panelView = v;
+  document.getElementById('btn-item').classList.toggle('on', v === 'item');
+  document.getElementById('btn-player').classList.toggle('on', v === 'player');
+  renderPanel();
+}
+
+function sourceName(ctx) {
+  if (ctx.type === 'boss') {
+    for (const inst of INSTANCES) {
+      const b = inst.bosses.find(b => b.key === ctx.key);
+      if (b) return b.name;
+    }
+  }
+  if (ctx.type === 'instance') return INSTANCES.find(i => i.key === ctx.key)?.name || ctx.key;
+  if (ctx.type === 'dungeon')  return DUNGEONS.find(d => d.key === ctx.key)?.name || ctx.key;
+  return ctx.key;
+}
+
+function panelNeeds(ctx) {
+  const activeKeys = getActiveKeys();
+  return getActiveNeeds().filter(n => {
+    if (!activeKeys.has(n.player)) return false;
+    if (n.track !== ctx.track) return false;
+    const item = ITEMS[n.item];
+    if (!item) return false;
+    if (ctx.type === 'boss')     return item.boss    === ctx.key;
+    if (ctx.type === 'dungeon')  return item.dungeon === ctx.key;
+    if (ctx.type === 'instance') {
+      const inst = INSTANCES.find(i => i.key === ctx.key);
+      return inst && inst.bosses.some(b => b.key === item.boss);
+    }
+    return false;
+  });
+}
+
+function renderPanel() {
+  if (!panelCtx) return;
+  const needs = panelNeeds(panelCtx);
+  const uniq  = new Set(needs.map(n => n.player)).size;
+
+  document.getElementById('panel-title').textContent = sourceName(panelCtx);
+  document.getElementById('panel-sub').innerHTML =
+    `${uniq} character${uniq !== 1 ? 's' : ''} &nbsp;·&nbsp; ${needs.length} item${needs.length !== 1 ? 's' : ''} needed &nbsp;${pill(panelCtx.track)}`;
+
+  const body = document.getElementById('panel-body');
+
+  if (needs.length === 0) {
+    body.innerHTML = '<div class="empty-msg">No needs match these filters.</div>';
+    return;
+  }
+
+  body.innerHTML = panelView === 'item'
+    ? buildByItem(needs)
+    : buildByPlayer(needs);
+
+  // Re-init Wowhead tooltips
+  if (window.$WowheadPower?.refreshLinks) $WowheadPower.refreshLinks();
+}
+
+// ── By Item view ──────────────────────────────────────────────
+
+function buildByItem(needs) {
+  // Group needs by item_id, preserving insertion order
+  const byItem = new Map();
+  for (const n of needs) {
+    if (!byItem.has(n.item)) byItem.set(n.item, []);
+    byItem.get(n.item).push(n.player);
+  }
+
+  let html = '';
+  for (const [item_id, playerKeys] of byItem) {
+    const item = ITEMS[item_id];
+    if (!item) continue;
+
+    html += `<div class="spoke">
+      <div class="spoke-hub">
+        <div class="hub-icon">
+          <img src="${iconUrl(item.icon)}" alt=""
+               onerror="this.parentNode.innerHTML='<div class=icon-placeholder>${esc(item.slot[0])}</div>'">
+        </div>
+        <div class="hub-name">${wowLink(item_id, item.name)}</div>
+        <div class="hub-slot">${esc(item.slot)}</div>
+      </div>
+      <div class="spoke-lines">`;
+
+    for (const pkey of playerKeys) {
+      const p = playerInfo(pkey);
+      if (!p) continue;
+      const label = p.pname !== p.cname
+        ? `<span class="cls-${p.cls}">${esc(p.pname)}</span><span style="color:var(--muted)"> — </span><span class="cls-${p.cls}">${esc(p.cname)}</span>`
+        : `<span class="cls-${p.cls}">${esc(p.cname)}</span>`;
+      html += `<div class="spoke-row">
+        <div class="row-name">${label}</div>
+        <div class="row-meta">${esc(p.spec)} ${esc(p.cls.charAt(0).toUpperCase() + p.cls.slice(1))}</div>
+      </div>`;
+    }
+
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+// ── By Player view ────────────────────────────────────────────
+
+function buildByPlayer(needs) {
+  // Group by player, preserving first-seen order
+  const byPlayer = new Map();
+  for (const n of needs) {
+    if (!byPlayer.has(n.player)) byPlayer.set(n.player, []);
+    byPlayer.get(n.player).push(n.item);
+  }
+
+  let html = '';
+  for (const [pkey, itemIds] of byPlayer) {
+    const p = playerInfo(pkey);
+    if (!p) continue;
+    const clsColor = `var(--cls-${p.cls})`;
+    const label = p.pname !== p.cname
+      ? `<span class="cls-${p.cls}">${esc(p.pname)} — ${esc(p.cname)}</span>`
+      : `<span class="cls-${p.cls}">${esc(p.cname)}</span>`;
+
+    html += `<div class="spoke">
+      <div class="spoke-hub player-hub" style="border-left-color:${clsColor}">
+        <div class="hub-name">${label}</div>
+        <div class="hub-slot">${esc(p.spec)} ${esc(p.cls.charAt(0).toUpperCase() + p.cls.slice(1))}</div>
+      </div>
+      <div class="spoke-lines">`;
+
+    for (const item_id of itemIds) {
+      const item = ITEMS[item_id];
+      if (!item) continue;
+      html += `<div class="spoke-row">
+        <div class="row-icon">
+          <img src="${iconUrl(item.icon)}" alt=""
+               onerror="this.parentNode.innerHTML='<div class=icon-placeholder></div>'">
+        </div>
+        <div class="row-name">${wowLink(item_id, item.name)}</div>
+        <div class="row-meta">${esc(item.slot)}</div>
+      </div>`;
+    }
+
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+
+function renderAll() {
+  renderRaid();
+  renderDungeon();
+  if (panelCtx) renderPanel();
+}
+
+document.getElementById('cb-init').addEventListener('change', renderAll);
+document.getElementById('cb-os').addEventListener('change', renderAll);
+
+renderAll();
+</script>
+
+<!-- Wowhead tooltip integration -->
+<script>const whTooltips = { colorLinks: true, iconizeLinks: false, renameLinks: false };</script>
+<script src="https://wow.zamimg.com/widgets/power.js"></script>
+
+</body>
+</html>
