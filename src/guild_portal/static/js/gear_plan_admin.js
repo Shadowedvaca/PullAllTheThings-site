@@ -1719,7 +1719,7 @@ async function deleteItemSource(sourceId) {
 async function enrichItems() {
     const btn = document.getElementById('enrich-items-btn');
     if (btn) btn.disabled = true;
-    setStatusHtml('<span class="spinner"></span> Enriching items from Wowhead…', 'running');
+    setStatusHtml('<span class="spinner"></span> Starting item enrichment…', 'running');
     try {
         const r = await fetch('/api/v1/admin/bis/enrich-items', { method: 'POST' });
         const ct = r.headers.get('content-type') || '';
@@ -1729,12 +1729,11 @@ async function enrichItems() {
         }
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
-        const errCount = (d.errors || []).length;
-        setStatus(
-            `Enrich complete — ${d.items_enriched} items enriched` + (errCount ? `, ${errCount} errors` : '') + '.',
-            errCount ? 'partial' : 'success'
+        setStatusHtml(
+            'Item enrichment running in background (may take a few minutes). ' +
+            '<a href="#" onclick="loadItemSources();return false;" style="color:var(--color-accent);">Refresh Item Sources</a> when done.',
+            'info'
         );
-        if (errCount) console.warn('Enrich errors:', d.errors);
     } catch (err) {
         setStatus('Enrich items failed: ' + err.message, 'error');
     } finally {

@@ -626,15 +626,33 @@ async def enrich_items(
     """Fetch Wowhead tooltips for unenriched wow_items rows (GL only).
 
     Processes all rows where slot_type='other' (stubbed without full data).
+    Runs as a background task — returns immediately to avoid 504 timeouts.
     Safe to re-run — already-enriched rows are skipped.
     """
+    import asyncio
     pool = _pool(request)
     from guild_portal.services.item_service import enrich_unenriched_items
-    enriched, errors = await enrich_unenriched_items(pool)
+
+    async def _run_in_background():
+        try:
+            enriched, errors = await enrich_unenriched_items(pool)
+            logger.info(
+                "Enrich items background task complete — %d enriched, %d errors",
+                enriched, len(errors),
+            )
+            if errors:
+                logger.warning("Enrich errors: %s", errors[:10])
+        except Exception as exc:
+            logger.error("Enrich items background task failed: %s", exc, exc_info=True)
+
+    asyncio.create_task(_run_in_background())
     return {
         "ok": True,
-        "items_enriched": enriched,
-        "errors": errors[:20] if errors else [],
+        "background": True,
+        "message": (
+            "Item enrichment started in background. "
+            "This may take a few minutes — refresh Item Sources when done."
+        ),
     }
 
 
