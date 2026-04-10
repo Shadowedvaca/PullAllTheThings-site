@@ -688,40 +688,67 @@ async def enrich_items(
         _enrich_status["error_count"] = error_count
 
     async def _run():
-        from guild_portal.services.item_service import enrich_null_icons
+        from guild_portal.services.item_service import enrich_null_icons, enrich_blizzard_metadata
+        from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
         try:
+            blizzard_client = await _get_blizzard_client(request)
+
             # --- Phase 1: Wowhead tooltip enrichment ---
             wh_enriched, wh_errors = await enrich_unenriched_items(pool, progress_cb=_progress)
 
             # --- Phase 2: Blizzard icon fallback for items still missing icons ---
-            blizzard_client = await _get_blizzard_client(request)
             async with pool.acquire() as conn:
                 p2_total = await conn.fetchval(
                     "SELECT COUNT(*) FROM guild_identity.wow_items WHERE icon_url IS NULL"
                 )
-
             _enrich_status.update({
-                "phase": 2,
-                "phase_label": "Blizzard",
-                "total": p2_total,
-                "enriched": 0,
-                "error_count": 0,
+                "phase": 2, "phase_label": "Icons",
+                "total": p2_total, "enriched": 0, "error_count": 0,
             })
-
             bl_enriched, bl_errors = await enrich_null_icons(
                 pool, blizzard_client, progress_cb=_progress
             )
 
+            # --- Phase 3: Blizzard item metadata for tier-slot BIS items ---
+            async with pool.acquire() as conn:
+                p3_total = await conn.fetchval(
+                    """
+                    SELECT COUNT(DISTINCT wi.blizzard_item_id)
+                      FROM guild_identity.wow_items wi
+                      JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+                     WHERE wi.wowhead_tooltip_html IS NULL
+                       AND (wi.slot_type IN ('head','shoulder','chest','hands','legs')
+                            OR wi.slot_type = 'other' OR wi.armor_type IS NULL)
+                    """
+                )
+            _enrich_status.update({
+                "phase": 3, "phase_label": "Metadata",
+                "total": p3_total, "enriched": 0, "error_count": 0,
+            })
+            meta_enriched, meta_errors = await enrich_blizzard_metadata(
+                pool, blizzard_client, progress_cb=_progress
+            )
+
+            # --- Phase 4: Rebuild item → recipe links for crafted items ---
+            _enrich_status.update({
+                "phase": 4, "phase_label": "Recipes",
+                "total": 0, "enriched": 0, "error_count": 0,
+            })
+            recipe_stats = await build_item_recipe_links(pool)
+
+            all_errors = len(wh_errors) + len(bl_errors) + len(meta_errors)
             _enrich_status.update({
                 "running": False,
-                "enriched": bl_enriched,
-                "error_count": len(wh_errors) + len(bl_errors),
+                "enriched": recipe_stats.get("linked", 0),
+                "error_count": all_errors,
                 "finished_at": datetime.now(timezone.utc),
             })
             logger.info(
-                "Enrich items complete — Wowhead: %d enriched, %d errors; "
-                "Blizzard icons: %d updated, %d errors",
-                wh_enriched, len(wh_errors), bl_enriched, len(bl_errors),
+                "Enrich items complete — Wowhead: %d; Icons: %d; Metadata: %d; "
+                "Recipe links: %d linked, %d updated; Errors: %d",
+                wh_enriched, bl_enriched, meta_enriched,
+                recipe_stats.get("linked", 0), recipe_stats.get("updated", 0),
+                all_errors,
             )
         except Exception as exc:
             logger.error("Enrich items background task failed: %s", exc, exc_info=True)

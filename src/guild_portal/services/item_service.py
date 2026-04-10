@@ -166,6 +166,161 @@ async def _fetch_wowhead_tooltip(
             await http_client.aclose()
 
 
+_BLIZZARD_ARMOR_SUBCLASS: dict[str, str] = {
+    "cloth": "cloth",
+    "leather": "leather",
+    "mail": "mail",
+    "plate": "plate",
+}
+
+# Blizzard inventory_type.type → our slot_type key
+_BLIZZARD_SLOT_MAP: dict[str, str] = {
+    "HEAD": "head",
+    "NECK": "neck",
+    "SHOULDER": "shoulder",
+    "BACK": "back",
+    "CHEST": "chest",
+    "WAIST": "waist",
+    "LEGS": "legs",
+    "FEET": "feet",
+    "WRIST": "wrist",
+    "HAND": "hands",
+    "FINGER": "ring_1",
+    "TRINKET": "trinket_1",
+    "WEAPON": "main_hand",
+    "TWOHWEAPON": "main_hand",
+    "RANGED": "main_hand",
+    "OFFHAND": "off_hand",
+    "HOLDABLE": "off_hand",
+    "SHIELD": "off_hand",
+}
+
+
+async def enrich_blizzard_metadata(
+    pool: asyncpg.Pool,
+    blizzard_client,
+    progress_cb=None,
+) -> tuple[int, list[str]]:
+    """Fetch armor_type + set-piece marker for tier-slot BIS items from Blizzard.
+
+    Targets wow_items that appear in BIS lists with a tier slot
+    (head/shoulder/chest/hands/legs) and have no wowhead_tooltip_html.
+    Calls GET /data/wow/item/{id} and:
+      - Sets armor_type from item_subclass (cloth/leather/mail/plate)
+      - Sets wowhead_tooltip_html to '/item-set=ID' marker if item_set present
+        (the view and gear_plan_service detect tier pieces via this pattern)
+      - Also fixes slot_type if still 'other'
+
+    Safe to re-run — uses COALESCE so existing data is never overwritten.
+    Returns (updated_count, errors).
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT wi.blizzard_item_id, wi.slot_type, wi.armor_type
+              FROM guild_identity.wow_items wi
+              JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+             WHERE wi.wowhead_tooltip_html IS NULL
+               AND (
+                     wi.slot_type IN ('head','shoulder','chest','hands','legs')
+                     OR wi.slot_type = 'other'
+                     OR wi.armor_type IS NULL
+               )
+             ORDER BY wi.blizzard_item_id
+            """
+        )
+
+    if not rows:
+        return 0, []
+
+    logger.info(
+        "Enriching %d tier-slot BIS items with Blizzard item metadata", len(rows)
+    )
+
+    updated = 0
+    errors: list[str] = []
+    lock = asyncio.Lock()
+    sem = asyncio.Semaphore(_BLIZZARD_ICON_CONCURRENCY)
+
+    async def _process_one(blizzard_item_id: int, stagger_idx: int) -> None:
+        nonlocal updated
+        if stagger_idx < _BLIZZARD_ICON_CONCURRENCY:
+            await asyncio.sleep(stagger_idx * _BLIZZARD_ICON_STAGGER)
+        async with sem:
+            try:
+                data = await blizzard_client.get_item(blizzard_item_id)
+                if not data:
+                    async with lock:
+                        if progress_cb:
+                            progress_cb(updated, len(errors))
+                    await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
+                    return
+
+                # armor_type: from item_subclass name if item_class is Armor (id=4)
+                armor_type = None
+                item_class = data.get("item_class", {}) or {}
+                if item_class.get("id") == 4:
+                    subclass_name = (data.get("item_subclass", {}) or {}).get("name", "")
+                    armor_type = _BLIZZARD_ARMOR_SUBCLASS.get(subclass_name.lower())
+
+                # slot_type: from inventory_type if we need to fix 'other'
+                slot_type = None
+                inv_type = (data.get("inventory_type", {}) or {}).get("type", "")
+                if inv_type:
+                    slot_type = _BLIZZARD_SLOT_MAP.get(inv_type)
+
+                # Synthetic tooltip marker if item is part of a set
+                tooltip_marker = None
+                item_set = data.get("item_set")
+                if item_set:
+                    set_id = item_set.get("id", 0)
+                    tooltip_marker = f"/item-set={set_id}"
+
+                if armor_type or slot_type or tooltip_marker:
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            """
+                            UPDATE guild_identity.wow_items
+                               SET armor_type           = COALESCE(armor_type, $2),
+                                   slot_type            = CASE
+                                       WHEN slot_type = 'other' AND $3::text IS NOT NULL
+                                       THEN $3::text ELSE slot_type END,
+                                   wowhead_tooltip_html = COALESCE(wowhead_tooltip_html, $4)
+                             WHERE blizzard_item_id = $1
+                            """,
+                            blizzard_item_id, armor_type, slot_type, tooltip_marker,
+                        )
+                    async with lock:
+                        updated += 1
+                        if progress_cb:
+                            progress_cb(updated, len(errors))
+                else:
+                    async with lock:
+                        if progress_cb:
+                            progress_cb(updated, len(errors))
+
+            except Exception as exc:
+                msg = f"Blizzard metadata fetch failed for item {blizzard_item_id}: {type(exc).__name__}: {exc}"
+                logger.warning(msg)
+                async with lock:
+                    errors.append(msg)
+                    if progress_cb:
+                        progress_cb(updated, len(errors))
+
+            await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
+
+    await asyncio.gather(*[
+        _process_one(r["blizzard_item_id"], idx)
+        for idx, r in enumerate(rows)
+    ])
+
+    logger.info(
+        "Blizzard metadata enrichment complete — %d updated, %d errors",
+        updated, len(errors),
+    )
+    return updated, errors
+
+
 async def enrich_null_icons(
     pool: asyncpg.Pool,
     blizzard_client,

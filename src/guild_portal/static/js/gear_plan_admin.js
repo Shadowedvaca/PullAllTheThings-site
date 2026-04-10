@@ -1763,7 +1763,7 @@ function _startEnrichPoll(btn, total) {
                 if (btn) btn.disabled = false;
                 const errPart = d.error_count > 0 ? `, ${d.error_count} errors` : '';
                 setStatus(
-                    `Enrich complete — ${d.enriched} icons resolved${errPart}.`,
+                    `Enrich complete — ${d.enriched} recipe links built${errPart}.`,
                     d.error_count > 0 ? 'partial' : 'success'
                 );
             }

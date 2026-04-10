@@ -44,18 +44,20 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
     Returns a stats dict: {scanned, linked, updated, skipped}.
     """
     async with pool.acquire() as conn:
-        # All craftable items: wow_items with "Random Stat" in tooltip.
+        # Scan all items with a name — the name match against recipes is
+        # specific enough to avoid false positives, and we can't rely on
+        # the Wowhead "Random Stat" tooltip marker for new expansion items
+        # where Wowhead has not yet indexed the tooltip HTML.
         craftable_rows = await conn.fetch(
             """
             SELECT id, name
               FROM guild_identity.wow_items
-             WHERE wowhead_tooltip_html IS NOT NULL
-               AND wowhead_tooltip_html LIKE '%Random Stat%'
+             WHERE name IS NOT NULL AND name != ''
             """
         )
 
         if not craftable_rows:
-            logger.info("item_recipe_link_sync: no craftable items found")
+            logger.info("item_recipe_link_sync: no items with names found")
             return {"scanned": 0, "linked": 0, "updated": 0, "skipped": 0}
 
         # Load all recipes with their normalised names for matching.
