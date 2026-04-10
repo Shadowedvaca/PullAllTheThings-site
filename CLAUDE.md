@@ -235,19 +235,18 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1E in progress** — `feature/gear-plan-phase-1e` branch, not yet merged.
-  - **1E.1 complete** — Roster Needs section on public `/roster` page (below Full Roster table). Two public API endpoints: `GET /api/v1/gear-needs/raid` and `GET /api/v1/gear-needs/dungeon`. Hierarchical raid table (instance→boss, collapsible) + flat M+ table. Track columns auto-hide when empty. Include Initiates / Include Offspec filters. Color-coded chips (green/gold/red). Migrations 0089 (no-op) + 0090 (removes erroneous nav entry).
-  - **1E.2 complete** — Drill panel (slide-in from right). Click any chip to open; By Item / By Player toggle; active chip gold outline; Wowhead tooltips; re-renders on filter change, closes if no data. `class_name` added to gear-needs API player entries.
-  - **1E.3 complete** — Auto-setup default Wowhead BIS plan for newly-discovered in-guild characters during equipment sync. New `gear_plan_auto_setup.py` in `sv_common/guild_sync/`; called from `_sync_one_character` after equipment commit. No-op if plan exists or no player link yet.
-- **Branch:** `feature/gear-plan-phase-1e`
-- **Last migration:** 0090
-- **Last prod tag:** `prod-v0.12.18`
-- **Active branch:** `feature/gear-plan-phase-1e`
-- **Next:** Phase 1E.4 (class-eligible items in slot table), then merge + tag.
+- **Phase 1E complete** — merged PR #22, tagged `prod-v0.13.0`.
+  - **1E.1** — Roster Needs section on public `/roster` page. Public API endpoints `GET /api/v1/gear-needs/raid` + `/dungeon`. Hierarchical raid table (instance→boss, collapsible) + flat M+ table. Track columns auto-hide. Include Initiates / Include Offspec filters. Color-coded chips. Migrations 0089 + 0090.
+  - **1E.2** — Drill panel (slide-in from right). By Item / By Player toggle; active chip gold outline; Wowhead tooltips; re-renders on filter change.
+  - **1E.3** — Auto-setup default Wowhead BIS plan for newly-discovered in-guild characters during equipment sync (`gear_plan_auto_setup.py`). Failures surfaced to Discord via `report_error` + `maybe_notify_discord`. Migration 0091 seeds error routing row.
+- **Last migration:** 0091
+- **Last prod tag:** `prod-v0.13.0`
+- **Active branch:** `main`
+- **Next:** Phase 1E.4 — class-eligible items in slot table (new feature branch).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
-- **Public pages:** `/` (index), `/roster` (**Avg Raid Parse column** — sourced from `character_report_parses`, color-coded, links to WCL profile), `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
+- **Public pages:** `/` (index), `/roster` (**Avg Raid Parse column** — sourced from `character_report_parses`, color-coded, links to WCL profile; **Roster Needs section** below Full Roster — Phase 1E.1/1E.2: hierarchical raid table + flat M+ table, color-coded chips, drill panel, Wowhead tooltips), `/crafting-corner`, `/guide`, `/feedback` (score + free-text form, auth-aware) — no login required
 - **Member pages** (logged-in required): **`/my-characters`** — Unified character sheet (UI-1A–1H) — centered header + guide badges + **RIO/WCL/Armory links in guides bar**; HUD stat strip; two-box paperdoll (left: Head→Wrist + weapon separator + Main/Off Hand; right: Hands→Trinket 2); **Gear tab** — plan controls, BIS drawer, SimC import/export, Option C slot table; **Raid tab** — difficulty tabs + per-boss kill list (current season only); **M+ tab** — overall score + per-dungeon table (current season only); **Parses tab** — three stacked sections (per-boss detail / By Difficulty / By Boss); **Profs tab** — profession grid with Wowhead icons + filterable recipe table; **Market tab** — AH price table with gold formatting + category badges; `/gear-plan` → 302 redirect to `/my-characters`; `/profile` — Battle.net section: Refresh Characters + Unlink + 24-hour note when linked, Link Battle.net with `?next=/profile` when unlinked (H.4)
 - **Admin pages** (Officer+ required): `/admin/campaigns`, `/admin/players` (Player Manager), `/admin/users` (expired-token indicator — H.4), `/admin/availability`, `/admin/raid-tools`, `/admin/data-quality`, `/admin/crafting-sync`, `/admin/bot-settings`, `/admin/reference-tables` (**Guide Sites section** — Phase G), `/admin/audit-log`, `/admin/site-config` (GL only), `/admin/progression`, `/admin/warcraft-logs`, `/admin/ah-pricing`, `/admin/attendance`, `/admin/quotes`, `/admin/error-routing`, `/admin/gear-plan` (GL only — BIS sync dashboard)
 - **Settings pages** (rank-gated): Availability, Character Claims, Guide
