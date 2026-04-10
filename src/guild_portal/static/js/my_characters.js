@@ -2008,7 +2008,13 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   }
 
   const manualHtml = `<div class="mcn-manual-row">
-    <input type="number" class="mcn-manual-input" id="mcn-mid-${_gpEsc(dbSlot)}" placeholder="Item ID" min="1">
+    <div class="mcn-manual-search-wrap">
+      <input type="text" class="mcn-manual-input" id="mcn-mid-${_gpEsc(dbSlot)}"
+             placeholder="Name, ID, or Wowhead link"
+             oninput="mcnGpSearchItems('${_gpEsc(dbSlot)}', this.value)"
+             autocomplete="off">
+      <div class="mcn-item-results" id="mcn-mir-${_gpEsc(dbSlot)}" hidden></div>
+    </div>
     <button class="btn btn-sm btn-secondary" type="button" onclick="mcnGpFetchAndSet('${_gpEsc(dbSlot)}')">Fetch</button>
   </div>`;
 
@@ -2195,11 +2201,67 @@ window.mcnGpToggleLock = async function(slot, currentlyLocked) {
 };
 
 window.mcnGpFetchAndSet = async function(slot) {
-  const input  = document.getElementById(`mcn-mid-${slot}`);
-  const itemId = parseInt(input?.value, 10);
-  if (!itemId) return;
-  _gpShowStatus('Fetching item\u2026', 'info');
-  const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
-  if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
-  await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+  const input = document.getElementById(`mcn-mid-${slot}`);
+  const raw   = input?.value?.trim() || '';
+  if (!raw) return;
+
+  // Format 2 — Wowhead URL: extract item ID from /item=NNNNN or /item/NNNNN
+  const urlMatch = raw.match(/[?&/]item[=/](\d+)/i);
+  if (urlMatch) {
+    const itemId = parseInt(urlMatch[1], 10);
+    _gpShowStatus('Fetching item\u2026', 'info');
+    const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
+    if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
+    await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+    return;
+  }
+
+  // Format 1 — Plain integer
+  const itemId = parseInt(raw, 10);
+  if (!isNaN(itemId) && itemId > 0 && String(itemId) === raw) {
+    _gpShowStatus('Fetching item\u2026', 'info');
+    const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
+    if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
+    await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+    return;
+  }
+
+  // Format 3 — Name: trigger inline search
+  await window.mcnGpSearchItems(slot, raw);
+};
+
+window.mcnGpSearchItems = async function(slot, value) {
+  const val       = (value || '').trim();
+  const resultsEl = document.getElementById(`mcn-mir-${slot}`);
+  if (!resultsEl) return;
+
+  // Don't search for plain numbers or URLs — those go through Fetch
+  if (val.length < 2 || /^\d+$/.test(val) || /[?&/]item[=/]/i.test(val)) {
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  const resp = await _gpFetch(`/api/v1/items/search?q=${encodeURIComponent(val)}`);
+  if (!resp.ok || !resp.data?.length) {
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  resultsEl.innerHTML = resp.data.map(item => {
+    const icon = item.icon_url
+      ? `<img src="${_gpEsc(item.icon_url)}" alt="" class="mcn-item-result__icon">`
+      : `<span class="mcn-item-result__icon-ph"></span>`;
+    return `<div class="mcn-item-result" onclick="mcnGpPickSearchResult('${_gpEsc(slot)}',${item.blizzard_item_id},'${_gpEsc(item.name)}')">${icon}<span>${_gpEsc(item.name)}</span></div>`;
+  }).join('');
+  resultsEl.hidden = false;
+};
+
+window.mcnGpPickSearchResult = async function(slot, blizzardItemId, name) {
+  const resultsEl = document.getElementById(`mcn-mir-${slot}`);
+  if (resultsEl) { resultsEl.hidden = true; resultsEl.innerHTML = ''; }
+  const input = document.getElementById(`mcn-mid-${slot}`);
+  if (input) input.value = '';
+  await window.mcnGpSetDesiredItem(slot, blizzardItemId);
 };
