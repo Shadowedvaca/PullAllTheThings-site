@@ -26,12 +26,12 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1D.2** Enhanced source display | ⬜ TODO | Instance / Boss / Minimum level in gear table; key thresholds |
 | **1D.3** Crafted items | ✅ COMPLETE | H/M detection via bonus IDs + admin ilvl threshold fallback; crafted_source block in get_plan_detail; gear table shows Crafted+track pill; drawer shows track + Crafting Corner link. Crafter names deferred (need result_item_id on recipes table). |
 | **1D.4** Loot table junk flagging | ✅ COMPLETE | Migration 0086: `is_suspected_junk` on `item_sources`; `flag_junk_sources(flag_tier_pieces=False)` — default flags only truly empty world boss stubs; tier piece flagging gated behind `flag_tier_pieces=True` (1D.5 only); `get_item_sources()`/`get_instance_names()` exclude junk by default; gear_plan_service filters junk; Show Junk toggle + Flag Junk Sources button in admin. Also: `sync_legacy_expansion_dungeons()` + `POST /sync-legacy-dungeons` background task + "Sync Legacy Dungeons" button for prior-expansion M+ dungeons. |
-| **1D.5** Tier token pipeline | ⬜ TODO | `tier_token_attrs` table; `process_tier_tokens()` post-processor (calls `flag_junk_sources(flag_tier_pieces=True)` after view is in place); `v_tier_piece_sources` view; gear plan service uses view for tier pieces. Migration 0087. |
+| **1D.5** Tier token pipeline | ✅ COMPLETE | Migration 0087: `tier_token_attrs` + `v_tier_piece_sources` view. `process_tier_tokens()`: tooltip parsing helpers (_parse_token_slot, _parse_token_class_ids, _armor_type_from_class_ids), upsert with override protection, calls flag_junk_sources(flag_tier_pieces=True). gear_plan_service detects tier_piece_desired_bids and queries view. POST /process-tier-tokens endpoint (GL). TierTokenAttrs ORM model. 29 unit tests. |
 | **1D.6** BIS admin page restructure | ⬜ TODO | 5-step workflow layout replacing flat control bar; Process Tier Tokens button; Tier Tokens section in Reference Tables. |
 | **1E** Roster aggregation | ⬜ TODO | Roster needs computation, admin grids |
 
 **Active branch:** `feature/gear-plan-phase-1d`
-**Last migration:** 0086
+**Last migration:** 0087
 **Last prod tag:** `prod-v0.11.2`
 
 ---

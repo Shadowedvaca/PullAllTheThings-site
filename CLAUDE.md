@@ -235,21 +235,18 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1D.4 complete** — Junk source flagging + legacy M+ dungeon sync.
-  - Migration 0086: `is_suspected_junk BOOLEAN NOT NULL DEFAULT FALSE` on `guild_identity.item_sources`.
-  - `flag_junk_sources(pool, flag_tier_pieces=False)`: idempotent — clears all flags, re-applies. Default: flags only world boss rows with null IDs AND null encounter_name (true empty stubs). `flag_tier_pieces=True` (Phase 1D.5 only) additionally flags tier piece direct-source rows (slot_type in tier slots + `/item-set=` in tooltip). Tier piece flagging deferred to 1D.5 when `v_tier_piece_sources` is in place as the replacement.
-  - `get_item_sources()` / `get_instance_names()`: exclude junk by default; `show_junk=True` param reveals them.
-  - `gear_plan_service.py`: `AND NOT is2.is_suspected_junk` in item_sources lookup.
-  - `bis_routes.py`: `show_junk` param on `GET /item-sources`; `POST /flag-junk-sources` (GL); `POST /sync-legacy-dungeons` (GL, fire-and-forget background task).
-  - `sync_legacy_expansion_dungeons()`: fetches all expansions from Journal index, syncs dungeon instances from every expansion except the current one — covers legacy M+ dungeons (e.g. Algeth'ar Academy/Vexamus from Dragonflight) missing from the main expansion sync. Raids + world bosses from prior expansions skipped. Runs as `asyncio.create_task()` to avoid nginx 60s timeout.
-  - Admin controls bar: **Sync Legacy Dungeons** button (fires background task, shows manual Refresh link).
-  - Admin Item Sources: **Show Junk** checkbox + **Flag Junk Sources** button. Junk rows dimmed with red badge.
-  - 7 new unit tests (31 total in test_item_source_sync.py); 1282 pass.
+- **Phase 1D.5 complete** — Tier token pipeline.
+  - Migration 0087: `guild_identity.tier_token_attrs` table (PK=token_item_id FK→wow_items; target_slot, armor_type, eligible_class_ids INTEGER[], is_auto_detected, is_manual_override, override_notes, last_processed) + `v_tier_piece_sources` view (tier piece → tier_token_attrs → token → item_sources boss row; includes tier_piece_blizzard_id for keyed lookups).
+  - `process_tier_tokens(pool)` in `item_source_sync.py`: detects tier tokens from wowhead_tooltip_html ('Synthesize a soulbound set'); parses slot (hand→hands normalised), eligible_class_ids from Wowhead Classes div, armor_type from class IDs; upserts into tier_token_attrs (skips is_manual_override=TRUE rows); calls flag_junk_sources(flag_tier_pieces=True) now that view is live.
+  - `gear_plan_service.py`: tracks `tier_piece_desired_bids` (/item-set= in tooltip); after item_sources lookup, also queries `v_tier_piece_sources` for tier piece desired items; degrades gracefully if view not yet populated. Deduplicates source entries for 'any' slot/armor tokens.
+  - `POST /api/v1/admin/bis/process-tier-tokens` (GL only): trigger from admin UI.
+  - `TierTokenAttrs` ORM model added to `models.py`.
+  - 29 unit tests in `test_tier_token_processor.py`; 1311 total pass.
 - **Branch:** `feature/gear-plan-phase-1d`
-- **Last migration:** 0086
+- **Last migration:** 0087
 - **Last prod tag:** `prod-v0.11.2`
 - **Active branch:** `feature/gear-plan-phase-1d`
-- **Next:** Phase 1D.5 (tier token pipeline).
+- **Next:** Phase 1D.6 (BIS admin page restructure with 5-step workflow + Process Tier Tokens button + Tier Tokens section in Reference Tables).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
@@ -275,4 +272,5 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **u.gg BIS scan rate limiting** — ~69 healer/tank targets returned 403 on prod (Hillsboro OR IP) during the bulk fresh re-sync at prod-v0.11.0. Use "Re-sync Errors" button on `/admin/gear-plan` (after rate limit clears) to retry only failed targets without a full re-scan.
 - **`item_recipe_links` requires Sync Loot Tables** — table is empty until "Sync Loot Tables" is run on `/admin/gear-plan`. Crafted item slots in the gear plan will show "No guild crafter has this pattern" until populated. Run once after deploying migration 0085.
 - **Legacy M+ dungeons require "Sync Legacy Dungeons"** — prior-expansion dungeons in the current M+ rotation (e.g. Algeth'ar Academy) are not covered by "Sync Loot Tables". Run "Sync Legacy Dungeons" once after first deploy; it runs as a background task and takes several minutes. Refresh Item Sources when done.
-- **Tier pieces show all slot-matching bosses** — `enrich_catalyst_tier_items()` mirrors every boss that drops gear in the same slot, including world bosses. This is intentionally broad; Phase 1D.5's tier token pipeline will narrow it to the correct token-dropping boss(es) and suppress the stale rows via `is_suspected_junk`.
+- **Tier pieces require "Process Tier Tokens" after first deploy** — migration 0087 creates the table/view but doesn't populate it. Run **Process Tier Tokens** from `/admin/gear-plan` once after deploy; this parses token tooltips, upserts `tier_token_attrs`, and runs `flag_junk_sources(flag_tier_pieces=True)`. Until then, tier piece slots may show stale direct-source rows or no source data.
+- **tier_token_attrs auto-detection requires enriched tooltips** — tokens must have `wowhead_tooltip_html` populated (slot_type='other' items). Run "Sync Loot Tables" + "Enrich Items" before running "Process Tier Tokens" if token rows are missing tooltips.
