@@ -92,7 +92,7 @@ function _renderRaidTable(instances) {
         const isOpen = _openInst.has(inst.name);
 
         // Instance summary row
-        html += `<tr class="row-inst${isOpen ? ' is-open' : ''}" onclick="_toggleInst(${JSON.stringify(inst.name)})">`;
+        html += `<tr class="row-inst${isOpen ? ' is-open' : ''}" data-inst="${_esc(inst.name)}" onclick="_toggleInst(this.dataset.inst)">`;
         html += `<td class="col-name"><span class="expand-btn">▶</span>${_esc(inst.name)}</td>`;
         for (const t of activeTracks) {
             const roll = inst.rollup[t];
