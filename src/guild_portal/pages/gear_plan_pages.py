@@ -106,3 +106,36 @@ async def my_characters_page(
 async def gear_plan_redirect(request: Request):
     """Gear Plan has moved — redirect to /my-characters."""
     return RedirectResponse(url="/my-characters", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# GET /admin/roster-needs — Roster aggregation page (Officer+)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/admin/roster-needs", response_class=HTMLResponse)
+async def roster_needs_page(request: Request):
+    """Roster Needs — gear needs aggregated by boss/dungeon across the roster."""
+    from guild_portal.deps import get_db as _get_db
+    from guild_portal.nav import get_min_rank_for_screen
+
+    async for db in _get_db():
+        player = await get_page_member(request, db)
+        if player is None:
+            return RedirectResponse("/login?next=/admin/roster-needs", status_code=302)
+        min_level = await get_min_rank_for_screen(db, "roster_needs")
+        rank_level = player.guild_rank.level if player.guild_rank else 0
+        if rank_level < min_level:
+            return RedirectResponse("/admin/players", status_code=302)
+
+        nav_items = await load_nav_items(db, player)
+
+        return templates.TemplateResponse(
+            "admin/roster_needs.html",
+            {
+                "request": request,
+                "current_member": player,
+                "nav_items": nav_items,
+                "current_screen": "roster_needs",
+            },
+        )
