@@ -1626,9 +1626,23 @@ function _gpRenderCenterPanel(data) {
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
     )).join('');
 
-  const srcOpts = (bisSources || []).map(s =>
-    `<option value="${s.id}"${plan?.bis_source_id === s.id ? ' selected' : ''}>${_gpEsc(s.name)}</option>`
-  ).join('');
+  const ORIGIN_LABEL      = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
+  // Group sources by origin, preserving sort_order within each group
+  const srcByOrigin = [];
+  const seenOrigins = [];
+  for (const s of (bisSources || [])) {
+    if (!seenOrigins.includes(s.origin)) { seenOrigins.push(s.origin); srcByOrigin.push({ origin: s.origin, sources: [] }); }
+    srcByOrigin.find(g => g.origin === s.origin).sources.push(s);
+  }
+  const srcOpts = srcByOrigin.map(({ origin, sources }) => {
+    const groupLabel = ORIGIN_LABEL[origin] || origin;
+    const options = sources.map(s => {
+      const label = (CONTENT_TYPE_LABEL[s.content_type] || s.short_label) + (s.is_default ? ' \u2605' : '');
+      return `<option value="${s.id}"${plan?.bis_source_id === s.id ? ' selected' : ''}>${_gpEsc(label)}</option>`;
+    }).join('');
+    return `<optgroup label="${_gpEsc(groupLabel)}">${options}</optgroup>`;
+  }).join('');
 
   area.innerHTML = `
     <div id="mcn-gp-slot-detail" hidden></div>
@@ -1637,7 +1651,7 @@ function _gpRenderCenterPanel(data) {
       <div class="mcn-gear-ctrl-row">
         <label class="mcn-gear-label">Hero Talent</label>
         <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>
-        <label class="mcn-gear-label">Source</label>
+        <label class="mcn-gear-label">BIS List</label>
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
       </div>
       <div class="mcn-gear-actions">

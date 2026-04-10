@@ -898,7 +898,7 @@ async def get_plan_detail(
         # Available BIS sources (for UI dropdowns)
         source_list = await conn.fetch(
             """
-            SELECT id, name, short_label, content_type, is_default, sort_order
+            SELECT id, name, short_label, content_type, origin, is_default, sort_order
               FROM guild_identity.bis_list_sources
              WHERE is_active = TRUE
              ORDER BY sort_order
