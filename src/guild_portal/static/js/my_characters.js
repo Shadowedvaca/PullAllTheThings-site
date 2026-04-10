@@ -1631,13 +1631,16 @@ function _gpRenderCenterPanel(data) {
 
   const ORIGIN_LABEL      = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
   const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
-  // Group sources by origin, preserving sort_order within each group
+  const CONTENT_TYPE_ORDER = { overall: 0, raid: 1, mythic_plus: 2 };
+  // Group sources by origin; within each group put All first
   const srcByOrigin = [];
   const seenOrigins = [];
   for (const s of (bisSources || [])) {
     if (!seenOrigins.includes(s.origin)) { seenOrigins.push(s.origin); srcByOrigin.push({ origin: s.origin, sources: [] }); }
     srcByOrigin.find(g => g.origin === s.origin).sources.push(s);
   }
+  srcByOrigin.forEach(g => g.sources.sort((a, b) =>
+    (CONTENT_TYPE_ORDER[a.content_type] ?? 9) - (CONTENT_TYPE_ORDER[b.content_type] ?? 9)));
   const srcOpts = srcByOrigin.map(({ origin, sources }) => {
     const groupLabel = ORIGIN_LABEL[origin] || origin;
     const options = sources.map(s => {
@@ -2068,8 +2071,9 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   dbSlot = dbSlot || slotKey;
   if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
 
-  const ORIGIN_LABEL_G       = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
-  const CONTENT_TYPE_LABEL_G = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
+  const ORIGIN_LABEL_G        = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const CONTENT_TYPE_LABEL_G  = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
+  const CONTENT_TYPE_ORDER_G  = { overall: 0, raid: 1, mythic_plus: 2 };
 
   const srcMap = new Map();
   for (const r of bis) {
@@ -2089,6 +2093,8 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     if (!seenOrigins.includes(s.origin)) { seenOrigins.push(s.origin); originGroups.push({ origin: s.origin, cols: [] }); }
     originGroups.find(g => g.origin === s.origin).cols.push(s);
   }
+  originGroups.forEach(g => g.cols.sort((a, b) =>
+    (CONTENT_TYPE_ORDER_G[a.content_type] ?? 9) - (CONTENT_TYPE_ORDER_G[b.content_type] ?? 9)));
   const hasMultiColGroup = originGroups.some(g => g.cols.length > 1);
 
   // Row 1: "Item" + provider cells + action
