@@ -1750,10 +1750,11 @@ function _startEnrichPoll(btn, total) {
             const r = await fetch('/api/v1/admin/bis/enrich-items');
             const d = await r.json();
             const t = d.total || total || '?';
+            const phaseLabel = d.phase_label ? ` (${d.phase_label})` : '';
 
             if (d.running) {
                 setStatusHtml(
-                    `<span class="spinner"></span> Enriching items — ${d.enriched} / ${t} done…`,
+                    `<span class="spinner"></span> Enriching items${phaseLabel} — ${d.enriched} / ${t} done…`,
                     'running'
                 );
             } else if (d.finished_at) {
@@ -1762,7 +1763,7 @@ function _startEnrichPoll(btn, total) {
                 if (btn) btn.disabled = false;
                 const errPart = d.error_count > 0 ? `, ${d.error_count} errors` : '';
                 setStatus(
-                    `Enrich complete — ${d.enriched} items enriched${errPart}.`,
+                    `Enrich complete — ${d.enriched} icons resolved${errPart}.`,
                     d.error_count > 0 ? 'partial' : 'success'
                 );
             }

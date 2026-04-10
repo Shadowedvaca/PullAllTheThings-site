@@ -576,6 +576,24 @@ class BlizzardClient:
             params={"namespace": "static-us", "locale": self.locale},
         )
 
+    async def get_item_media(self, item_id: int) -> Optional[str]:
+        """GET /data/wow/media/item/{id} — returns the CDN icon URL, or None.
+
+        The Blizzard static API has icon data for brand-new expansion items
+        before Wowhead has indexed them, making this a reliable fallback when
+        enrich_unenriched_items() gets no icon from the Wowhead tooltip API.
+        """
+        data = await self._api_get(
+            f"/data/wow/media/item/{item_id}",
+            params={"namespace": "static-us"},
+        )
+        if not data:
+            return None
+        for asset in data.get("assets", []):
+            if asset.get("key") == "icon":
+                return asset.get("value")
+        return None
+
     async def get_item_preview(
         self, item_id: int, bonus_ids: list[int]
     ) -> Optional[str]:

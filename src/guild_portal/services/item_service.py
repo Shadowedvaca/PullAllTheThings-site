@@ -161,6 +161,106 @@ async def _fetch_wowhead_tooltip(
             await http_client.aclose()
 
 
+async def enrich_null_icons(
+    pool: asyncpg.Pool,
+    blizzard_client,
+    progress_cb=None,
+) -> tuple[int, list[str]]:
+    """Fetch icon URLs (and names) from Blizzard Item APIs for items where
+    Wowhead returned no icon data.
+
+    Targets rows where icon_url IS NULL — these are items too new for Wowhead
+    to have indexed (common at the start of a new expansion).  Calls:
+      - GET /data/wow/media/item/{id}  → icon_url
+      - GET /data/wow/item/{id}        → name (if name is empty)
+
+    Uses the same concurrency limit as enrich_unenriched_items.
+    progress_cb(updated, error_count) is called after each item if provided.
+    Returns (updated_count, errors).
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT blizzard_item_id, name
+              FROM guild_identity.wow_items
+             WHERE icon_url IS NULL
+             ORDER BY blizzard_item_id
+            """
+        )
+
+    if not rows:
+        return 0, []
+
+    logger.info(
+        "Enriching %d wow_items with null icon_url from Blizzard APIs", len(rows)
+    )
+
+    updated = 0
+    errors: list[str] = []
+    lock = asyncio.Lock()
+    sem = asyncio.Semaphore(_WOWHEAD_ENRICH_CONCURRENCY)
+
+    async def _process_one(blizzard_item_id: int, existing_name: str) -> None:
+        nonlocal updated
+        async with sem:
+            try:
+                icon_url = await blizzard_client.get_item_media(blizzard_item_id)
+
+                # Also fetch name from Blizzard if Wowhead left it empty
+                name = existing_name or ""
+                if not name:
+                    item_data = await blizzard_client.get_item(blizzard_item_id)
+                    if item_data:
+                        name = item_data.get("name") or ""
+
+                if icon_url is not None or name:
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            """
+                            UPDATE guild_identity.wow_items
+                               SET icon_url = CASE WHEN $2 IS NOT NULL THEN $2 ELSE icon_url END,
+                                   name     = CASE WHEN (name IS NULL OR name = '') AND $3 != ''
+                                                   THEN $3 ELSE name END
+                             WHERE blizzard_item_id = $1
+                            """,
+                            blizzard_item_id, icon_url, name,
+                        )
+                    if icon_url is not None:
+                        async with lock:
+                            updated += 1
+                            if progress_cb:
+                                progress_cb(updated, len(errors))
+                    else:
+                        async with lock:
+                            if progress_cb:
+                                progress_cb(updated, len(errors))
+                else:
+                    async with lock:
+                        if progress_cb:
+                            progress_cb(updated, len(errors))
+
+            except Exception as exc:
+                async with lock:
+                    errors.append(
+                        f"Blizzard icon fetch failed for item {blizzard_item_id}: {exc}"
+                    )
+                    if progress_cb:
+                        progress_cb(updated, len(errors))
+
+            await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
+
+    await asyncio.gather(*[
+        _process_one(r["blizzard_item_id"], r["name"] or "")
+        for r in rows
+    ])
+
+    logger.info(
+        "Blizzard icon enrichment complete — %d updated, %d errors",
+        updated, len(errors),
+    )
+    return updated, errors
+
+
 async def enrich_unenriched_items(
     pool: asyncpg.Pool,
     progress_cb=None,

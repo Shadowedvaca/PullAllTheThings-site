@@ -60,6 +60,8 @@ def _pool(request: Request):
 
 _enrich_status: dict = {
     "running": False,
+    "phase": 0,          # 1 = Wowhead pass, 2 = Blizzard icon pass
+    "phase_label": "",
     "total": 0,
     "enriched": 0,
     "error_count": 0,
@@ -664,15 +666,17 @@ async def enrich_items(
     pool = _pool(request)
     from guild_portal.services.item_service import enrich_unenriched_items
 
-    # Count pending items so the UI can show a denominator immediately
+    # Count pending items for Phase 1 so the UI can show a denominator immediately
     async with pool.acquire() as conn:
-        total = await conn.fetchval(
+        p1_total = await conn.fetchval(
             "SELECT COUNT(*) FROM guild_identity.wow_items WHERE slot_type = 'other'"
         )
 
     _enrich_status = {
         "running": True,
-        "total": total,
+        "phase": 1,
+        "phase_label": "Wowhead",
+        "total": p1_total,
         "enriched": 0,
         "error_count": 0,
         "started_at": datetime.now(timezone.utc),
@@ -684,15 +688,41 @@ async def enrich_items(
         _enrich_status["error_count"] = error_count
 
     async def _run():
+        from guild_portal.services.item_service import enrich_null_icons
         try:
-            enriched, errors = await enrich_unenriched_items(pool, progress_cb=_progress)
+            # --- Phase 1: Wowhead tooltip enrichment ---
+            wh_enriched, wh_errors = await enrich_unenriched_items(pool, progress_cb=_progress)
+
+            # --- Phase 2: Blizzard icon fallback for items still missing icons ---
+            blizzard_client = await _get_blizzard_client(request)
+            async with pool.acquire() as conn:
+                p2_total = await conn.fetchval(
+                    "SELECT COUNT(*) FROM guild_identity.wow_items WHERE icon_url IS NULL"
+                )
+
+            _enrich_status.update({
+                "phase": 2,
+                "phase_label": "Blizzard",
+                "total": p2_total,
+                "enriched": 0,
+                "error_count": 0,
+            })
+
+            bl_enriched, bl_errors = await enrich_null_icons(
+                pool, blizzard_client, progress_cb=_progress
+            )
+
             _enrich_status.update({
                 "running": False,
-                "enriched": enriched,
-                "error_count": len(errors),
+                "enriched": bl_enriched,
+                "error_count": len(wh_errors) + len(bl_errors),
                 "finished_at": datetime.now(timezone.utc),
             })
-            logger.info("Enrich items complete — %d enriched, %d errors", enriched, len(errors))
+            logger.info(
+                "Enrich items complete — Wowhead: %d enriched, %d errors; "
+                "Blizzard icons: %d updated, %d errors",
+                wh_enriched, len(wh_errors), bl_enriched, len(bl_errors),
+            )
         except Exception as exc:
             logger.error("Enrich items background task failed: %s", exc, exc_info=True)
             _enrich_status.update({
@@ -701,7 +731,7 @@ async def enrich_items(
             })
 
     asyncio.create_task(_run())
-    return {"ok": True, "running": True, "total": total}
+    return {"ok": True, "running": True, "total": p1_total}
 
 
 @router.post("/flag-junk-sources")
