@@ -1716,10 +1716,17 @@ async function deleteItemSource(sourceId) {
     }
 }
 
+let _enrichPollInterval = null;
+
 async function enrichItems() {
     const btn = document.getElementById('enrich-items-btn');
+
+    // If already polling, don't start a second job
+    if (_enrichPollInterval) return;
+
     if (btn) btn.disabled = true;
     setStatusHtml('<span class="spinner"></span> Starting item enrichment…', 'running');
+
     try {
         const r = await fetch('/api/v1/admin/bis/enrich-items', { method: 'POST' });
         const ct = r.headers.get('content-type') || '';
@@ -1729,16 +1736,38 @@ async function enrichItems() {
         }
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatusHtml(
-            'Item enrichment running in background (may take a few minutes). ' +
-            '<a href="#" onclick="loadItemSources();return false;" style="color:var(--color-accent);">Refresh Item Sources</a> when done.',
-            'info'
-        );
+
+        _startEnrichPoll(btn, d.total || 0);
     } catch (err) {
         setStatus('Enrich items failed: ' + err.message, 'error');
-    } finally {
         if (btn) btn.disabled = false;
     }
+}
+
+function _startEnrichPoll(btn, total) {
+    _enrichPollInterval = setInterval(async () => {
+        try {
+            const r = await fetch('/api/v1/admin/bis/enrich-items');
+            const d = await r.json();
+            const t = d.total || total || '?';
+
+            if (d.running) {
+                setStatusHtml(
+                    `<span class="spinner"></span> Enriching items — ${d.enriched} / ${t} done…`,
+                    'running'
+                );
+            } else if (d.finished_at) {
+                clearInterval(_enrichPollInterval);
+                _enrichPollInterval = null;
+                if (btn) btn.disabled = false;
+                const errPart = d.error_count > 0 ? `, ${d.error_count} errors` : '';
+                setStatus(
+                    `Enrich complete — ${d.enriched} items enriched${errPart}.`,
+                    d.error_count > 0 ? 'partial' : 'success'
+                );
+            }
+        } catch (_) { /* ignore transient poll errors */ }
+    }, 2000);
 }
 
 async function processTierTokens() {

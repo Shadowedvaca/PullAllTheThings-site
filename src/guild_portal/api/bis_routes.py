@@ -24,9 +24,12 @@ Endpoints:
   POST /api/v1/admin/bis/flag-junk-sources
   POST /api/v1/admin/bis/process-tier-tokens
   DELETE /api/v1/admin/bis/item-sources/{id}
+  GET  /api/v1/admin/bis/enrich-items        (poll status)
+  POST /api/v1/admin/bis/enrich-items        (start job)
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -49,6 +52,20 @@ def _pool(request: Request):
     if pool is None:
         raise HTTPException(status_code=503, detail="Database pool unavailable")
     return pool
+
+
+# ---------------------------------------------------------------------------
+# Enrich-items job state (module-level, one job at a time)
+# ---------------------------------------------------------------------------
+
+_enrich_status: dict = {
+    "running": False,
+    "total": 0,
+    "enriched": 0,
+    "error_count": 0,
+    "started_at": None,
+    "finished_at": None,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -619,41 +636,72 @@ async def list_item_sources(
     }
 
 
+@router.get("/enrich-items")
+async def enrich_items_status():
+    """Poll the current enrich-items job state."""
+    s = _enrich_status.copy()
+    s["started_at"] = s["started_at"].isoformat() if s["started_at"] else None
+    s["finished_at"] = s["finished_at"].isoformat() if s["finished_at"] else None
+    return {"ok": True, **s}
+
+
 @router.post("/enrich-items")
 async def enrich_items(
     request: Request, player: Player = Depends(require_rank(5))
 ):
     """Fetch Wowhead tooltips for unenriched wow_items rows (GL only).
 
-    Processes all rows where slot_type='other' (stubbed without full data).
-    Runs as a background task — returns immediately to avoid 504 timeouts.
+    Processes all rows where slot_type='other' using concurrent workers.
+    Returns immediately; poll GET /enrich-items for live progress.
     Safe to re-run — already-enriched rows are skipped.
     """
     import asyncio
+    global _enrich_status
+
+    if _enrich_status["running"]:
+        return {"ok": False, "error": "Enrichment already in progress — check status."}
+
     pool = _pool(request)
     from guild_portal.services.item_service import enrich_unenriched_items
 
-    async def _run_in_background():
+    # Count pending items so the UI can show a denominator immediately
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM guild_identity.wow_items WHERE slot_type = 'other'"
+        )
+
+    _enrich_status = {
+        "running": True,
+        "total": total,
+        "enriched": 0,
+        "error_count": 0,
+        "started_at": datetime.now(timezone.utc),
+        "finished_at": None,
+    }
+
+    def _progress(enriched: int, error_count: int) -> None:
+        _enrich_status["enriched"] = enriched
+        _enrich_status["error_count"] = error_count
+
+    async def _run():
         try:
-            enriched, errors = await enrich_unenriched_items(pool)
-            logger.info(
-                "Enrich items background task complete — %d enriched, %d errors",
-                enriched, len(errors),
-            )
-            if errors:
-                logger.warning("Enrich errors: %s", errors[:10])
+            enriched, errors = await enrich_unenriched_items(pool, progress_cb=_progress)
+            _enrich_status.update({
+                "running": False,
+                "enriched": enriched,
+                "error_count": len(errors),
+                "finished_at": datetime.now(timezone.utc),
+            })
+            logger.info("Enrich items complete — %d enriched, %d errors", enriched, len(errors))
         except Exception as exc:
             logger.error("Enrich items background task failed: %s", exc, exc_info=True)
+            _enrich_status.update({
+                "running": False,
+                "finished_at": datetime.now(timezone.utc),
+            })
 
-    asyncio.create_task(_run_in_background())
-    return {
-        "ok": True,
-        "background": True,
-        "message": (
-            "Item enrichment started in background. "
-            "This may take a few minutes — refresh Item Sources when done."
-        ),
-    }
+    asyncio.create_task(_run())
+    return {"ok": True, "running": True, "total": total}
 
 
 @router.post("/flag-junk-sources")

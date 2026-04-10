@@ -17,7 +17,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-_WOWHEAD_ENRICH_DELAY = 0.05  # seconds between requests during batch enrichment
+_WOWHEAD_ENRICH_DELAY = 0.05        # seconds between requests per concurrent worker
+_WOWHEAD_ENRICH_CONCURRENCY = 20   # concurrent Wowhead connections during batch enrichment
 
 WOWHEAD_TOOLTIP_URL = "https://nether.wowhead.com/tooltip/item/{item_id}"
 
@@ -162,11 +163,15 @@ async def _fetch_wowhead_tooltip(
 
 async def enrich_unenriched_items(
     pool: asyncpg.Pool,
+    progress_cb=None,
 ) -> tuple[int, list[str]]:
     """Fetch Wowhead data for all wow_items rows that still have slot_type='other'.
 
-    Called after a Journal API sync to populate slot_type, icon_url, and
-    tooltip for stub rows.  Returns (enriched_count, errors).
+    Uses up to _WOWHEAD_ENRICH_CONCURRENCY concurrent connections so 4k+ items
+    complete in ~45 seconds instead of 15 minutes.
+
+    progress_cb(enriched, error_count) is called after each item if provided.
+    Returns (enriched_count, errors).
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -182,14 +187,20 @@ async def enrich_unenriched_items(
 
     enriched = 0
     errors: list[str] = []
+    lock = asyncio.Lock()
+    sem = asyncio.Semaphore(_WOWHEAD_ENRICH_CONCURRENCY)
 
-    async with httpx.AsyncClient(timeout=10) as http_client:
-        for blizzard_item_id in item_ids:
+    async def _process_one(blizzard_item_id: int, http_client: httpx.AsyncClient) -> None:
+        nonlocal enriched
+        async with sem:
             data = await _fetch_wowhead_tooltip(blizzard_item_id, http_client)
             if not data:
-                errors.append(f"Wowhead fetch failed for item {blizzard_item_id}")
+                async with lock:
+                    errors.append(f"Wowhead fetch failed for item {blizzard_item_id}")
+                    if progress_cb:
+                        progress_cb(enriched, len(errors))
                 await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
-                continue
+                return
 
             name = data.get("name", "")
             icon_name = data.get("icon", "")
@@ -222,11 +233,20 @@ async def enrich_unenriched_items(
                         str(armor_type) if armor_type is not None else None,
                         weapon_type, tooltip_html,
                     )
-                enriched += 1
+                async with lock:
+                    enriched += 1
+                    if progress_cb:
+                        progress_cb(enriched, len(errors))
             except Exception as exc:
-                errors.append(f"DB error enriching item {blizzard_item_id}: {exc}")
+                async with lock:
+                    errors.append(f"DB error enriching item {blizzard_item_id}: {exc}")
+                    if progress_cb:
+                        progress_cb(enriched, len(errors))
 
             await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
+
+    async with httpx.AsyncClient(timeout=10) as http_client:
+        await asyncio.gather(*[_process_one(iid, http_client) for iid in item_ids])
 
     logger.info("Enriched %d items (%d errors)", enriched, len(errors))
     return enriched, errors
