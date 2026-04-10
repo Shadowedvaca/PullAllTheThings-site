@@ -577,9 +577,12 @@ _CLASS_ARMOR_TYPE: dict[int, str] = {
     13: "mail",   # Evoker
 }
 
-# Regex patterns for tier token tooltip parsing
+# Regex patterns for tier token and armor type tooltip parsing
 _SLOT_RE = re.compile(r"Synthesize a soulbound set (\w+) item", re.IGNORECASE)
 _CLASS_HREF_RE = re.compile(r'href="/class=(\d+)/', re.IGNORECASE)
+# Matches the armor type word that appears immediately before "Armor</span>" in Wowhead tooltips.
+# e.g. "...Plate<br />\n<span class=\"...">Armor</span>..." → 'plate'
+_ARMOR_WORD_RE = re.compile(r'>(Cloth|Leather|Mail|Plate)<', re.IGNORECASE)
 
 # Normalise slot words from tooltip text to the canonical slot names used in
 # the gear plan.  The Use text says "hand" not "hands", etc.
@@ -633,6 +636,18 @@ def _armor_type_from_class_ids(class_ids: list[int]) -> str:
     if len(types) == 1:
         return types.pop()
     return "any"
+
+
+def _armor_type_from_tooltip(tooltip_html: str) -> Optional[str]:
+    """Parse armor type (cloth/leather/mail/plate) from Wowhead tooltip HTML.
+
+    Wowhead renders armor type as e.g. '>Leather<' in the tooltip.  Returns
+    None if no recognisable armor type word is found (e.g. weapons, trinkets).
+    """
+    if not tooltip_html:
+        return None
+    m = _ARMOR_WORD_RE.search(tooltip_html)
+    return m.group(1).lower() if m else None
 
 
 def _is_tier_token(tooltip_html: str) -> bool:
@@ -733,13 +748,50 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
         tokens_processed, tokens_skipped_override, len(token_ids_found),
     )
 
-    # ── 4. Flag junk sources now that view is in place ────────────────────
+    # ── Step 2: Backfill armor_type on tier piece wow_items ───────────────
+    # The Wowhead tooltip HTML contains the armor type as ">Cloth<", ">Leather<",
+    # etc.  Parse and write back to wow_items.armor_type so that the view join
+    # (tp.armor_type = tta.armor_type) resolves correctly.
+    # Only updates rows where armor_type is currently NULL — already-correct rows
+    # are left untouched.
+    tier_pieces_updated = 0
+    async with pool.acquire() as conn:
+        tier_piece_rows = await conn.fetch(
+            """
+            SELECT id, blizzard_item_id, name, wowhead_tooltip_html
+              FROM guild_identity.wow_items
+             WHERE slot_type = ANY($1::text[])
+               AND wowhead_tooltip_html LIKE '%/item-set=%'
+               AND (armor_type IS NULL OR armor_type = '')
+            """,
+            list(_TIER_SLOTS),
+        )
+        for tp_row in tier_piece_rows:
+            at = _armor_type_from_tooltip(tp_row["wowhead_tooltip_html"] or "")
+            if at:
+                await conn.execute(
+                    "UPDATE guild_identity.wow_items SET armor_type = $1 WHERE id = $2",
+                    at, tp_row["id"],
+                )
+                tier_pieces_updated += 1
+                logger.debug(
+                    "process_tier_tokens: set armor_type=%s on item %d (%s)",
+                    at, tp_row["blizzard_item_id"], tp_row["name"],
+                )
+
+    logger.info(
+        "process_tier_tokens: backfilled armor_type on %d tier piece items",
+        tier_pieces_updated,
+    )
+
+    # ── Step 3: Flag junk sources now that view is in place ───────────────
     junk_result = await flag_junk_sources(pool, flag_tier_pieces=True)
 
     return {
         "tokens_found": len(token_ids_found),
         "tokens_processed": tokens_processed,
         "tokens_skipped_override": tokens_skipped_override,
+        "tier_pieces_armor_type_updated": tier_pieces_updated,
         "junk_flagged": junk_result["total_flagged"],
         "junk_world_boss": junk_result["flagged_world_boss"],
         "junk_tier_piece": junk_result["flagged_tier_piece"],

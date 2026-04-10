@@ -9,6 +9,7 @@ import pytest
 
 from sv_common.guild_sync.item_source_sync import (
     _armor_type_from_class_ids,
+    _armor_type_from_tooltip,
     _is_tier_token,
     _parse_token_class_ids,
     _parse_token_slot,
@@ -21,16 +22,18 @@ from sv_common.guild_sync.item_source_sync import (
 # ---------------------------------------------------------------------------
 
 
-def _make_pool(fetch_returns=None, fetchrow_returns=None, execute_return="UPDATE 0"):
+def _make_pool(fetch_side_effect=None, fetchrow_returns=None, execute_return="UPDATE 0"):
     """Build a minimal asyncpg pool mock.
 
-    fetch_returns: list returned by conn.fetch
+    fetch_side_effect: list of return values for successive conn.fetch calls.
+                       First call = token candidates, second call = tier piece rows.
+                       Defaults to returning [] for all calls.
     fetchrow_returns: list of side-effect values for conn.fetchrow calls
     execute_return: string returned by conn.execute (mimics asyncpg 'UPDATE N' etc.)
     """
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=execute_return)
-    conn.fetch = AsyncMock(return_value=fetch_returns or [])
+    conn.fetch = AsyncMock(side_effect=fetch_side_effect or [[], []])
     if fetchrow_returns is not None:
         conn.fetchrow = AsyncMock(side_effect=fetchrow_returns)
     else:
@@ -148,6 +151,43 @@ class TestParseTokenClassIds:
 
 
 # ---------------------------------------------------------------------------
+# _armor_type_from_tooltip
+# ---------------------------------------------------------------------------
+
+
+class TestArmorTypeFromTooltip:
+    def test_plate_armor(self):
+        html = '<span>Plate</span><span>Armor</span>'
+        assert _armor_type_from_tooltip(html) == "plate"
+
+    def test_leather_armor(self):
+        html = 'some stuff >Leather< more stuff'
+        assert _armor_type_from_tooltip(html) == "leather"
+
+    def test_cloth_armor(self):
+        html = '>Cloth< Armor</span>'
+        assert _armor_type_from_tooltip(html) == "cloth"
+
+    def test_mail_armor(self):
+        html = '>Mail< Armor</span>'
+        assert _armor_type_from_tooltip(html) == "mail"
+
+    def test_case_insensitive(self):
+        html = '>LEATHER< Armor</span>'
+        assert _armor_type_from_tooltip(html) == "leather"
+
+    def test_no_armor_type_returns_none(self):
+        html = '<div>Some random item text without armor type</div>'
+        assert _armor_type_from_tooltip(html) is None
+
+    def test_empty_returns_none(self):
+        assert _armor_type_from_tooltip("") is None
+
+    def test_none_returns_none(self):
+        assert _armor_type_from_tooltip(None) is None  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
 # _armor_type_from_class_ids
 # ---------------------------------------------------------------------------
 
@@ -215,8 +255,9 @@ class TestProcessTierTokens:
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": self._TOKEN_HTML,
         }
+        # fetch call 1: token candidates; fetch call 2: tier piece armor_type backfill (empty)
         pool, conn = _make_pool(
-            fetch_returns=[token_row],
+            fetch_side_effect=[[token_row], []],
             fetchrow_returns=[None],  # no existing tier_token_attrs row
             execute_return="UPDATE 0",
         )
@@ -247,7 +288,7 @@ class TestProcessTierTokens:
         }
         override_row = {"is_manual_override": True}
         pool, conn = _make_pool(
-            fetch_returns=[token_row],
+            fetch_side_effect=[[token_row], []],
             fetchrow_returns=[override_row],
             execute_return="UPDATE 1",
         )
@@ -276,7 +317,7 @@ class TestProcessTierTokens:
             "wowhead_tooltip_html": self._NON_TOKEN_HTML,
         }
         pool, conn = _make_pool(
-            fetch_returns=[non_token_row],
+            fetch_side_effect=[[non_token_row], []],
             fetchrow_returns=[None],
             execute_return="UPDATE 0",
         )
@@ -297,7 +338,7 @@ class TestProcessTierTokens:
     @pytest.mark.asyncio
     async def test_empty_wow_items_returns_zero_counts(self):
         """When no wow_items with slot_type='other' exist, returns all zeros."""
-        pool, conn = _make_pool(fetch_returns=[], execute_return="UPDATE 0")
+        pool, conn = _make_pool(fetch_side_effect=[[], []], execute_return="UPDATE 0")
 
         with patch(
             "sv_common.guild_sync.item_source_sync.flag_junk_sources",
@@ -312,6 +353,40 @@ class TestProcessTierTokens:
         assert result["tokens_found"] == 0
         assert result["tokens_processed"] == 0
         assert result["junk_flagged"] == 0
+
+    @pytest.mark.asyncio
+    async def test_backfills_armor_type_on_tier_pieces(self):
+        """Tier pieces with NULL armor_type get it populated from tooltip HTML."""
+        tier_piece_row = {
+            "id": 500,
+            "blizzard_item_id": 249952,
+            "name": "Night Ender's Tusks",
+            "wowhead_tooltip_html": ">Plate< Armor</span>",
+        }
+        # fetch call 1: no token candidates; fetch call 2: tier piece needing armor_type
+        pool, conn = _make_pool(
+            fetch_side_effect=[[], [tier_piece_row]],
+            execute_return="UPDATE 1",
+        )
+
+        with patch(
+            "sv_common.guild_sync.item_source_sync.flag_junk_sources",
+            new=AsyncMock(return_value={
+                "flagged_world_boss": 0,
+                "flagged_tier_piece": 0,
+                "total_flagged": 0,
+            }),
+        ):
+            result = await process_tier_tokens(pool)
+
+        assert result["tier_pieces_armor_type_updated"] == 1
+        # Verify the UPDATE was called with the correct armor_type
+        update_calls = [
+            call for call in conn.execute.call_args_list
+            if "armor_type" in str(call) and "wow_items" in str(call)
+        ]
+        assert len(update_calls) == 1
+        assert update_calls[0].args[1] == "plate"
 
     @pytest.mark.asyncio
     async def test_slot_and_armor_type_parsed_correctly(self):
@@ -332,7 +407,7 @@ class TestProcessTierTokens:
             "wowhead_tooltip_html": plate_chest_html,
         }
         pool, conn = _make_pool(
-            fetch_returns=[token_row],
+            fetch_side_effect=[[token_row], []],
             fetchrow_returns=[None],
             execute_return="UPDATE 0",
         )
