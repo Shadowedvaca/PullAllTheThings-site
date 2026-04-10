@@ -1641,7 +1641,6 @@ function _gpRenderCenterPanel(data) {
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
       </div>
       <div class="mcn-gear-actions">
-        <button id="mcn-gp-btn-sync"   class="btn btn-secondary btn-sm" type="button">Sync Gear</button>
         <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>
         <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
         <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
@@ -1664,7 +1663,6 @@ function _gpRenderCenterPanel(data) {
   // Wire selects + buttons
   document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-src-sel') ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-btn-sync')  ?.addEventListener('click', _gpOnSyncGear);
   document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
   document.getElementById('mcn-gp-btn-import')?.addEventListener('click', _gpShowSimcModal);
   document.getElementById('mcn-gp-btn-export')?.addEventListener('click', _gpOnExportSimc);
