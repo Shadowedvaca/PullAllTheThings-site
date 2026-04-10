@@ -235,19 +235,21 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1D.4 complete** — Junk source flagging for `item_sources`.
+- **Phase 1D.4 complete** — Junk source flagging + legacy M+ dungeon sync.
   - Migration 0086: `is_suspected_junk BOOLEAN NOT NULL DEFAULT FALSE` on `guild_identity.item_sources`.
-  - `flag_junk_sources()` in `item_source_sync.py`: idempotent — clears all flags then re-applies. Flags null-ID world boss rows (`instance_type='world_boss'` + both IDs null) and tier piece direct-source rows (linked `wow_items.wowhead_tooltip_html LIKE '%/item-set=%'`).
+  - `flag_junk_sources(pool, flag_tier_pieces=False)`: idempotent — clears all flags, re-applies. Default: flags only world boss rows with null IDs AND null encounter_name (true empty stubs). `flag_tier_pieces=True` (Phase 1D.5 only) additionally flags tier piece direct-source rows (slot_type in tier slots + `/item-set=` in tooltip). Tier piece flagging deferred to 1D.5 when `v_tier_piece_sources` is in place as the replacement.
   - `get_item_sources()` / `get_instance_names()`: exclude junk by default; `show_junk=True` param reveals them.
-  - `gear_plan_service.py`: `AND NOT is2.is_suspected_junk` added to item_sources lookup — junk rows never surface in gear plan display.
-  - `bis_routes.py`: `show_junk` query param on `GET /item-sources`; new `POST /flag-junk-sources` (GL only).
-  - Admin Item Sources collapsible: **Show Junk** checkbox + **Flag Junk Sources** button (GL only). Junk rows render dimmed (opacity 0.5) with a red `junk` badge. Count line shows "(N junk)" when visible.
-  - 5 new unit tests; 1280 pass (2 pre-existing bnet failures unchanged).
+  - `gear_plan_service.py`: `AND NOT is2.is_suspected_junk` in item_sources lookup.
+  - `bis_routes.py`: `show_junk` param on `GET /item-sources`; `POST /flag-junk-sources` (GL); `POST /sync-legacy-dungeons` (GL, fire-and-forget background task).
+  - `sync_legacy_expansion_dungeons()`: fetches all expansions from Journal index, syncs dungeon instances from every expansion except the current one — covers legacy M+ dungeons (e.g. Algeth'ar Academy/Vexamus from Dragonflight) missing from the main expansion sync. Raids + world bosses from prior expansions skipped. Runs as `asyncio.create_task()` to avoid nginx 60s timeout.
+  - Admin controls bar: **Sync Legacy Dungeons** button (fires background task, shows manual Refresh link).
+  - Admin Item Sources: **Show Junk** checkbox + **Flag Junk Sources** button. Junk rows dimmed with red badge.
+  - 7 new unit tests (31 total in test_item_source_sync.py); 1282 pass.
 - **Branch:** `feature/gear-plan-phase-1d`
 - **Last migration:** 0086
 - **Last prod tag:** `prod-v0.11.2`
 - **Active branch:** `feature/gear-plan-phase-1d`
-- **Next:** Phase 1D.5 (tier token pipeline) or merge to main / prod tag.
+- **Next:** Phase 1D.5 (tier token pipeline).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
@@ -272,3 +274,5 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **256 `wow_items` with `slot_type='other'`** — items stubbed before the Wowhead `slotbak` regression was fixed. Re-run "Sync Loot Tables" on `/admin/gear-plan` to trigger `enrich_unenriched_items()` which picks up all `slot_type='other'` rows. Also re-populates `item_recipe_links` for newly enriched items.
 - **u.gg BIS scan rate limiting** — ~69 healer/tank targets returned 403 on prod (Hillsboro OR IP) during the bulk fresh re-sync at prod-v0.11.0. Use "Re-sync Errors" button on `/admin/gear-plan` (after rate limit clears) to retry only failed targets without a full re-scan.
 - **`item_recipe_links` requires Sync Loot Tables** — table is empty until "Sync Loot Tables" is run on `/admin/gear-plan`. Crafted item slots in the gear plan will show "No guild crafter has this pattern" until populated. Run once after deploying migration 0085.
+- **Legacy M+ dungeons require "Sync Legacy Dungeons"** — prior-expansion dungeons in the current M+ rotation (e.g. Algeth'ar Academy) are not covered by "Sync Loot Tables". Run "Sync Legacy Dungeons" once after first deploy; it runs as a background task and takes several minutes. Refresh Item Sources when done.
+- **Tier pieces show all slot-matching bosses** — `enrich_catalyst_tier_items()` mirrors every boss that drops gear in the same slot, including world bosses. This is intentionally broad; Phase 1D.5's tier token pipeline will narrow it to the correct token-dropping boss(es) and suppress the stale rows via `is_suspected_junk`.
