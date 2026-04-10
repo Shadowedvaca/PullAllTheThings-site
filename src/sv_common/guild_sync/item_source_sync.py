@@ -384,19 +384,83 @@ async def enrich_catalyst_tier_items(
     return added, errors
 
 
+async def flag_junk_sources(pool: asyncpg.Pool) -> dict:
+    """Mark suspected-junk rows in item_sources with is_suspected_junk = TRUE.
+
+    Two categories are flagged:
+    1. Null-ID world boss rows — instance_type = 'world_boss' with no valid
+       Blizzard encounter/instance IDs.  These are alpha/beta artifacts.
+    2. Tier piece direct-source rows — the linked wow_items entry has a set
+       bonus (tooltip contains /item-set=), meaning it is a tier piece that
+       cannot actually drop directly from bosses.  Tier pieces are obtained via
+       tokens; Phase 1D.5 will provide the correct view-based source path.
+
+    Returns {flagged_world_boss, flagged_tier_piece, total_flagged}.
+    """
+    async with pool.acquire() as conn:
+        # ── 1. Clear all existing flags so re-runs are idempotent ─────────
+        await conn.execute(
+            "UPDATE guild_identity.item_sources SET is_suspected_junk = FALSE"
+        )
+
+        # ── 2. Flag null-ID world boss rows ───────────────────────────────
+        wb_result = await conn.execute(
+            """
+            UPDATE guild_identity.item_sources
+               SET is_suspected_junk = TRUE
+             WHERE instance_type = 'world_boss'
+               AND blizzard_encounter_id IS NULL
+               AND blizzard_instance_id IS NULL
+            """
+        )
+        flagged_wb = int(wb_result.split()[-1])
+
+        # ── 3. Flag tier piece direct-source rows ─────────────────────────
+        # Tier pieces have an /item-set=N/ link in their Wowhead tooltip HTML.
+        # They cannot drop directly from bosses — players obtain them via tier
+        # tokens + the appropriate exchange mechanism (e.g. Revival Catalyst).
+        tp_result = await conn.execute(
+            """
+            UPDATE guild_identity.item_sources s
+               SET is_suspected_junk = TRUE
+              FROM guild_identity.wow_items wi
+             WHERE wi.id = s.item_id
+               AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+            """
+        )
+        flagged_tp = int(tp_result.split()[-1])
+
+    total = flagged_wb + flagged_tp
+    logger.info(
+        "flag_junk_sources: %d world_boss + %d tier_piece = %d total flagged",
+        flagged_wb, flagged_tp, total,
+    )
+    return {
+        "flagged_world_boss": flagged_wb,
+        "flagged_tier_piece": flagged_tp,
+        "total_flagged": total,
+    }
+
+
 async def get_item_sources(
     pool: asyncpg.Pool,
     instance_name: Optional[str] = None,
     instance_id: Optional[int] = None,
     instance_type: Optional[str] = None,
+    show_junk: bool = False,
     limit: int = 500,
 ) -> list[dict]:
     """Query item sources, optionally filtered.
 
     Returns rows with item metadata joined from wow_items.
+    Junk rows (is_suspected_junk = TRUE) are excluded by default;
+    pass show_junk=True to include them.
     """
     conditions = ["1=1"]
     args: list = []
+
+    if not show_junk:
+        conditions.append("NOT s.is_suspected_junk")
 
     if instance_id is not None:
         args.append(instance_id)
@@ -416,6 +480,7 @@ async def get_item_sources(
             f"""
             SELECT s.id, s.instance_type, s.encounter_name, s.instance_name,
                    s.blizzard_encounter_id, s.blizzard_instance_id,
+                   s.is_suspected_junk,
                    wi.blizzard_item_id, wi.name AS item_name,
                    wi.slot_type, wi.icon_url
               FROM guild_identity.item_sources s
@@ -429,14 +494,22 @@ async def get_item_sources(
     return [dict(r) for r in rows]
 
 
-async def get_instance_names(pool: asyncpg.Pool) -> list[str]:
-    """Return distinct instance_name values for filter dropdowns."""
+async def get_instance_names(
+    pool: asyncpg.Pool,
+    show_junk: bool = False,
+) -> list[str]:
+    """Return distinct instance_name values for filter dropdowns.
+
+    Excludes junk rows by default so the dropdown only shows real instances.
+    """
+    junk_filter = "" if show_junk else "AND NOT is_suspected_junk"
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
+            f"""
             SELECT DISTINCT instance_name
               FROM guild_identity.item_sources
              WHERE instance_name IS NOT NULL
+               {junk_filter}
              ORDER BY instance_name
             """
         )

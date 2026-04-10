@@ -781,6 +781,7 @@ async def get_plan_detail(
                   FROM guild_identity.item_sources is2
                   JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
                  WHERE wi.blizzard_item_id = ANY($1::int[])
+                   AND NOT is2.is_suspected_junk
                 """,
                 list(all_bids),
             )

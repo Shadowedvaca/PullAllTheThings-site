@@ -570,7 +570,17 @@ select.gp-select {
                     <option value="world_boss">World Boss</option>
                     <option value="dungeon">Dungeon</option>
                 </select>
+                <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:var(--color-text-muted); cursor:pointer;">
+                    <input type="checkbox" id="item-sources-show-junk"
+                           onchange="loadItemSources()" style="cursor:pointer;">
+                    Show Junk
+                </label>
                 <button class="btn-sm btn-secondary" onclick="loadItemSources()">Refresh</button>
+                {% if is_gl %}
+                <button id="flag-junk-btn" class="btn-sm btn-secondary" onclick="flagJunkSources()">
+                    Flag Junk Sources
+                </button>
+                {% endif %}
                 <span id="item-sources-count"
                       style="color:var(--color-text-muted); font-size:0.82rem;"></span>
             </div>

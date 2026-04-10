@@ -12,6 +12,7 @@ import pytest
 from sv_common.guild_sync.item_source_sync import (
     _sync_encounter,
     _sync_instance,
+    flag_junk_sources,
     sync_item_sources,
 )
 from sv_common.guild_sync.source_config import (
@@ -349,3 +350,71 @@ class TestSyncEncounter:
         assert count == 0 and errors == []
         src_calls = [c for c in conn.execute.call_args_list if "item_sources" in str(c)]
         assert len(src_calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# flag_junk_sources
+# ---------------------------------------------------------------------------
+
+
+class TestFlagJunkSources:
+    def _make_flag_pool(self, wb_count: int = 0, tp_count: int = 0):
+        """Pool mock where execute returns row counts for the two UPDATE calls."""
+        conn = AsyncMock()
+        # Three execute calls in order:
+        #   1. Clear all flags (UPDATE ... SET is_suspected_junk = FALSE)
+        #   2. World boss UPDATE → wb_count rows
+        #   3. Tier piece UPDATE → tp_count rows
+        conn.execute = AsyncMock(side_effect=[
+            "UPDATE 0",                    # clear all
+            f"UPDATE {wb_count}",          # world boss
+            f"UPDATE {tp_count}",          # tier piece
+        ])
+        pool = MagicMock()
+        pool.acquire = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
+        return pool, conn
+
+    @pytest.mark.asyncio
+    async def test_returns_correct_counts(self):
+        pool, _ = self._make_flag_pool(wb_count=3, tp_count=12)
+        result = await flag_junk_sources(pool)
+        assert result["flagged_world_boss"] == 3
+        assert result["flagged_tier_piece"] == 12
+        assert result["total_flagged"] == 15
+
+    @pytest.mark.asyncio
+    async def test_clears_flags_before_re_flagging(self):
+        """First execute call must unconditionally clear all junk flags."""
+        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+        await flag_junk_sources(pool)
+        first_call_sql = conn.execute.call_args_list[0].args[0]
+        assert "is_suspected_junk = FALSE" in first_call_sql
+
+    @pytest.mark.asyncio
+    async def test_world_boss_criteria_in_sql(self):
+        """World boss UPDATE must filter on instance_type and null IDs."""
+        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+        await flag_junk_sources(pool)
+        wb_sql = conn.execute.call_args_list[1].args[0]
+        assert "world_boss" in wb_sql
+        assert "blizzard_encounter_id IS NULL" in wb_sql
+        assert "blizzard_instance_id IS NULL" in wb_sql
+
+    @pytest.mark.asyncio
+    async def test_tier_piece_criteria_uses_item_set_link(self):
+        """Tier piece UPDATE must join wow_items and match /item-set= in tooltip."""
+        pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
+        await flag_junk_sources(pool)
+        tp_sql = conn.execute.call_args_list[2].args[0]
+        assert "wow_items" in tp_sql
+        assert "/item-set=" in tp_sql
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_counts_when_nothing_flagged(self):
+        pool, _ = self._make_flag_pool(wb_count=0, tp_count=0)
+        result = await flag_junk_sources(pool)
+        assert result["total_flagged"] == 0
+        assert result["flagged_world_boss"] == 0
+        assert result["flagged_tier_piece"] == 0

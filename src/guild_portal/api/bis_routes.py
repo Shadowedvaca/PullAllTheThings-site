@@ -20,6 +20,9 @@ Endpoints:
   GET  /api/v1/admin/bis/scrape-log
   GET  /api/v1/admin/bis/cross-reference
   POST /api/v1/admin/bis/import-simc
+  GET  /api/v1/admin/bis/item-sources
+  POST /api/v1/admin/bis/flag-junk-sources
+  DELETE /api/v1/admin/bis/item-sources/{id}
 """
 
 import logging
@@ -527,9 +530,13 @@ async def list_item_sources(
     instance_name: Optional[str] = None,
     instance_id: Optional[int] = None,
     instance_type: Optional[str] = None,
+    show_junk: bool = False,
     limit: int = 500,
 ):
-    """List item→source mappings, optionally filtered by instance or type."""
+    """List item→source mappings, optionally filtered by instance or type.
+
+    Junk rows are hidden by default; pass show_junk=true to reveal them.
+    """
     pool = _pool(request)
     from sv_common.guild_sync.item_source_sync import get_item_sources, get_instance_names
     sources = await get_item_sources(
@@ -537,10 +544,27 @@ async def list_item_sources(
         instance_name=instance_name,
         instance_id=instance_id,
         instance_type=instance_type,
+        show_junk=show_junk,
         limit=limit,
     )
-    instances = await get_instance_names(pool)
+    instances = await get_instance_names(pool, show_junk=show_junk)
     return {"ok": True, "sources": sources, "instances": instances}
+
+
+@router.post("/flag-junk-sources")
+async def flag_junk_sources(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Flag suspected-junk rows in item_sources (GL only).
+
+    Marks null-ID world boss rows and tier piece direct-source rows as
+    is_suspected_junk = TRUE.  Safe to re-run — clears and re-applies all
+    flags each time.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.item_source_sync import flag_junk_sources as _flag
+    result = await _flag(pool)
+    return {"ok": True, **result}
 
 
 @router.delete("/item-sources/{source_id}")

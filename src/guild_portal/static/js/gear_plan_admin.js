@@ -1570,12 +1570,14 @@ async function loadItemSources() {
     const tbody = document.getElementById('gp-item-sources-body');
     tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);">Loading…</td></tr>';
 
-    const instance = document.getElementById('item-sources-filter-instance').value;
-    const type     = document.getElementById('item-sources-filter-type').value;
+    const instance  = document.getElementById('item-sources-filter-instance').value;
+    const type      = document.getElementById('item-sources-filter-type').value;
+    const showJunk  = document.getElementById('item-sources-show-junk')?.checked || false;
 
     const params = new URLSearchParams();
-    if (instance) params.set('instance_name', instance);
-    if (type)     params.set('instance_type', type);
+    if (instance)  params.set('instance_name', instance);
+    if (type)      params.set('instance_type', type);
+    if (showJunk)  params.set('show_junk', 'true');
     params.set('limit', '500');
 
     try {
@@ -1586,7 +1588,7 @@ async function loadItemSources() {
         // Populate instance filter dropdown on first load
         _populateInstanceFilter(d.instances || []);
 
-        renderItemSources(d.sources || []);
+        renderItemSources(d.sources || [], showJunk);
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" style="color:#f87171;">Error: ${err.message}</td></tr>`;
     }
@@ -1611,21 +1613,29 @@ function _populateInstanceFilter(instances) {
 
 const _TRACK_COLORS = { C: '#0070dd', H: '#a335ee', M: '#ff8000', V: '#1eff00' };
 
-function renderItemSources(rows) {
+function renderItemSources(rows, showJunk = false) {
     const tbody = document.getElementById('gp-item-sources-body');
     const countEl = document.getElementById('item-sources-count');
     tbody.innerHTML = '';
 
-    if (countEl) countEl.textContent = `${rows.length} item${rows.length !== 1 ? 's' : ''}`;
+    const junkCount = rows.filter(r => r.is_suspected_junk).length;
+    let countText = `${rows.length} item${rows.length !== 1 ? 's' : ''}`;
+    if (showJunk && junkCount > 0) countText += ` (${junkCount} junk)`;
+    if (countEl) countEl.textContent = countText;
+
+    // Base colspan: 6 columns + optional GL delete + optional junk badge
+    const colspan = window._isGl ? 7 : 6;
 
     if (rows.length === 0) {
-        const colspan = window._isGl ? 7 : 6;
         tbody.innerHTML = `<tr><td colspan="${colspan}" style="color:var(--color-text-muted); padding:1rem;">No item sources found. Run "Sync Loot Tables" to populate.</td></tr>`;
         return;
     }
 
     for (const row of rows) {
         const tr = document.createElement('tr');
+        if (row.is_suspected_junk) {
+            tr.style.opacity = '0.5';
+        }
 
         const TYPE_LABELS = { raid: 'Raid', world_boss: 'World Boss', dungeon: 'Dungeon' };
         const typeLabel = TYPE_LABELS[row.instance_type] || row.instance_type || '—';
@@ -1637,6 +1647,10 @@ function renderItemSources(rows) {
             ? `<img src="${row.icon_url}" style="width:18px;height:18px;border-radius:2px;vertical-align:middle;margin-right:4px;" loading="lazy">`
             : '';
 
+        const junkBadge = row.is_suspected_junk
+            ? ` <span style="font-size:0.7rem; color:#f87171; border:1px solid #f87171; border-radius:3px; padding:0 3px;">junk</span>`
+            : '';
+
         let deleteCell = '';
         if (window._isGl) {
             deleteCell = `<td><button class="btn-sm btn-danger"
@@ -1645,7 +1659,7 @@ function renderItemSources(rows) {
         }
 
         tr.innerHTML = `
-            <td>${icon}<a href="https://www.wowhead.com/item=${row.blizzard_item_id}" target="_blank" rel="noopener" style="color:inherit;">${row.item_name || `Item #${row.blizzard_item_id}`}</a> <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span></td>
+            <td>${icon}<a href="https://www.wowhead.com/item=${row.blizzard_item_id}" target="_blank" rel="noopener" style="color:inherit;">${row.item_name || `Item #${row.blizzard_item_id}`}</a> <span style="color:var(--color-text-muted);font-size:0.75rem;">#${row.blizzard_item_id}</span>${junkBadge}</td>
             <td>${slotLabel}</td>
             <td>${row.encounter_name || '—'}</td>
             <td>${row.instance_name || '—'}</td>
@@ -1666,5 +1680,25 @@ async function deleteItemSource(sourceId) {
         await loadItemSources();
     } catch (err) {
         setStatus('Delete failed: ' + err.message, 'error');
+    }
+}
+
+async function flagJunkSources() {
+    const btn = document.getElementById('flag-junk-btn');
+    if (btn) btn.disabled = true;
+    setStatus('Flagging junk sources…', 'info');
+    try {
+        const r = await fetch('/api/v1/admin/bis/flag-junk-sources', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        setStatus(
+            `Junk flagging complete — ${d.flagged_world_boss} world boss + ${d.flagged_tier_piece} tier piece = ${d.total_flagged} total flagged.`,
+            'success'
+        );
+        await loadItemSources();
+    } catch (err) {
+        setStatus('Flag junk failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
     }
 }
