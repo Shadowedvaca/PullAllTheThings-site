@@ -235,19 +235,19 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1D complete** — Full crafted item support (1D.1 + 1D.3 + crafter source display).
-  - `quality_track.py`: `_CRAFTED_TRACK_IDS` dict (empirically discovered bonus IDs per expansion, e.g. 13621→H, 13622→M for Midnight); `detect_crafted_track()` uses bonus IDs → default H; `get_item_preview()` on `BlizzardClient` calls Blizzard item API with `bl=` param to discover new crest IDs dynamically during equipment sync.
-  - `gear_plan_service.py`: Detects craftable desired items via `"Random Stat"` in Wowhead tooltip; sets `available_tracks=["H","M"]` for those slots; crafter query joins `item_recipe_links→recipes→professions→character_recipes→wow_characters→players→guild_ranks`, sorted rank DESC + name ASC, top 5 + total count; `crafted_source` block fires for all craftable desired items with `{profession, crafters, total_crafters, no_recipe_found, crafting_corner_url}`.
-  - `item_recipe_link_sync.py` + migration 0085 (`item_recipe_links` table): name-matches craftable `wow_items` to `recipes` with confidence 100 (exact) / 90 (prefix-stripped). Runs as post-processing step after Sync Loot Tables.
-  - UI: Table source column shows profession name; drawer Drop Location shows profession as instance + character names as crafters + "+X others" + "No guild crafter has this pattern" fallback + Crafting Corner link with `?q=<item name>` for auto-search.
-  - Admin ilvl threshold approach removed (migrations 0083 adds, 0084 drops `crafted_m_ilvl_threshold`).
-  - `/crafting-corner?q=<name>` — page reads `?q=` param on init and auto-fires search.
+- **Phase 1D.4 complete** — Junk source flagging for `item_sources`.
+  - Migration 0086: `is_suspected_junk BOOLEAN NOT NULL DEFAULT FALSE` on `guild_identity.item_sources`.
+  - `flag_junk_sources()` in `item_source_sync.py`: idempotent — clears all flags then re-applies. Flags null-ID world boss rows (`instance_type='world_boss'` + both IDs null) and tier piece direct-source rows (linked `wow_items.wowhead_tooltip_html LIKE '%/item-set=%'`).
+  - `get_item_sources()` / `get_instance_names()`: exclude junk by default; `show_junk=True` param reveals them.
+  - `gear_plan_service.py`: `AND NOT is2.is_suspected_junk` added to item_sources lookup — junk rows never surface in gear plan display.
+  - `bis_routes.py`: `show_junk` query param on `GET /item-sources`; new `POST /flag-junk-sources` (GL only).
+  - Admin Item Sources collapsible: **Show Junk** checkbox + **Flag Junk Sources** button (GL only). Junk rows render dimmed (opacity 0.5) with a red `junk` badge. Count line shows "(N junk)" when visible.
+  - 5 new unit tests; 1280 pass (2 pre-existing bnet failures unchanged).
 - **Branch:** `feature/gear-plan-phase-1d`
-- **Tests:** 1247 pass (1 pre-existing bnet failure unchanged)
-- **Last migration:** 0085
+- **Last migration:** 0086
 - **Last prod tag:** `prod-v0.11.2`
 - **Active branch:** `feature/gear-plan-phase-1d`
-- **Next:** Merge to main / prod tag. Then Phase 1E (roster aggregation) or further gear plan enhancements.
+- **Next:** Phase 1D.5 (tier token pipeline) or merge to main / prod tag.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
