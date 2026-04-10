@@ -17,6 +17,7 @@ from typing import Optional
 import asyncpg
 
 from .blizzard_client import BlizzardClient, should_sync_character
+from .gear_plan_auto_setup import auto_setup_gear_plan
 
 logger = logging.getLogger(__name__)
 
@@ -189,5 +190,9 @@ async def _sync_one_character(
                 """,
                 now, char_id,
             )
+
+    # After equipment is committed, ensure this character has a default gear plan.
+    # No-op if the plan already exists or if the character has no player link yet.
+    await auto_setup_gear_plan(pool, char_id)
 
     return True
