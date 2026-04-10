@@ -1621,31 +1621,51 @@ function _gpRenderCenterPanel(data) {
   const bisSources  = data.bis_sources  || [];
   const heroTalents = data.hero_talents || [];
 
+  const selectedSource = bisSources.find(s => s.id === plan?.bis_source_id) || bisSources[0];
+  const showHtDropdown = !!(selectedSource?.has_hero_talent_variants && heroTalents.length > 0);
+
   const htOpts = ['<option value="">\u2014 Any \u2014</option>']
     .concat((heroTalents || []).map(ht =>
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
     )).join('');
 
-  const srcOpts = (bisSources || []).map(s =>
-    `<option value="${s.id}"${plan?.bis_source_id === s.id ? ' selected' : ''}>${_gpEsc(s.name)}</option>`
-  ).join('');
+  const ORIGIN_LABEL      = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
+  const CONTENT_TYPE_ORDER = { overall: 0, raid: 1, mythic_plus: 2 };
+  // Group sources by origin; within each group put All first
+  const srcByOrigin = [];
+  const seenOrigins = [];
+  for (const s of (bisSources || [])) {
+    if (!seenOrigins.includes(s.origin)) { seenOrigins.push(s.origin); srcByOrigin.push({ origin: s.origin, sources: [] }); }
+    srcByOrigin.find(g => g.origin === s.origin).sources.push(s);
+  }
+  srcByOrigin.forEach(g => g.sources.sort((a, b) =>
+    (CONTENT_TYPE_ORDER[a.content_type] ?? 9) - (CONTENT_TYPE_ORDER[b.content_type] ?? 9)));
+  const srcOpts = srcByOrigin.map(({ origin, sources }) => {
+    const groupLabel = ORIGIN_LABEL[origin] || origin;
+    const options = sources.map(s => {
+      const label = (CONTENT_TYPE_LABEL[s.content_type] || s.short_label) + (s.is_default ? ' \u2605' : '');
+      return `<option value="${s.id}"${plan?.bis_source_id === s.id ? ' selected' : ''}>${_gpEsc(label)}</option>`;
+    }).join('');
+    return `<optgroup label="${_gpEsc(groupLabel)}">${options}</optgroup>`;
+  }).join('');
 
   area.innerHTML = `
     <div id="mcn-gp-slot-detail" hidden></div>
     <div class="mcn-detail-area__heading">Gear Plan</div>
     <div class="mcn-gear-controls">
       <div class="mcn-gear-ctrl-row">
-        <label class="mcn-gear-label">Hero Talent</label>
-        <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>
-        <label class="mcn-gear-label">Source</label>
+        <label class="mcn-gear-label">BIS List</label>
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
+        ${showHtDropdown ? `
+        <label class="mcn-gear-label">Hero Talent</label>
+        <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>` : ''}
       </div>
       <div class="mcn-gear-actions">
-        <button id="mcn-gp-btn-sync"   class="btn btn-secondary btn-sm" type="button">Sync Gear</button>
         <button id="mcn-gp-btn-fill"   class="btn btn-primary btn-sm"   type="button">Fill BIS</button>
-        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
-        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
-        <button id="mcn-gp-btn-reset"  class="btn btn-danger btn-sm"    type="button">Reset Plan</button>
+        <!-- SimC hidden pending full testing — see reference/gear-plan-4-simc.md -->
+        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button" style="display:none">Import SimC</button>
+        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button" style="display:none">Export SimC</button>
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
@@ -1664,22 +1684,7 @@ function _gpRenderCenterPanel(data) {
   // Wire selects + buttons
   document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-src-sel') ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-btn-sync')  ?.addEventListener('click', _gpOnSyncGear);
   document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
-  document.getElementById('mcn-gp-btn-import')?.addEventListener('click', _gpShowSimcModal);
-  document.getElementById('mcn-gp-btn-export')?.addEventListener('click', _gpOnExportSimc);
-  document.getElementById('mcn-gp-btn-reset') ?.addEventListener('click', _gpOnDeletePlan);
-
-  // Wire SimC modal once
-  const modal = document.getElementById('mcn-simc-modal');
-  if (modal && !modal._gpWired) {
-    modal._gpWired = true;
-    document.getElementById('mcn-simc-close') ?.addEventListener('click', _gpHideSimcModal);
-    document.getElementById('mcn-simc-cancel')?.addEventListener('click', _gpHideSimcModal);
-    document.getElementById('mcn-simc-submit')?.addEventListener('click', _gpOnSimcImport);
-    modal.querySelector('.mcn-modal__backdrop')?.addEventListener('click', _gpHideSimcModal);
-  }
-
   // Wire drawer close
   const drawerClose = document.getElementById('mcn-gp-drawer-close');
   if (drawerClose && !drawerClose._gpWired) {
@@ -2003,7 +2008,13 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   }
 
   const manualHtml = `<div class="mcn-manual-row">
-    <input type="number" class="mcn-manual-input" id="mcn-mid-${_gpEsc(dbSlot)}" placeholder="Item ID" min="1">
+    <div class="mcn-manual-search-wrap">
+      <input type="text" class="mcn-manual-input" id="mcn-mid-${_gpEsc(dbSlot)}"
+             placeholder="Name, ID, or Wowhead link"
+             oninput="mcnGpSearchItems('${_gpEsc(dbSlot)}', this.value)"
+             autocomplete="off">
+      <div class="mcn-item-results" id="mcn-mir-${_gpEsc(dbSlot)}" hidden></div>
+    </div>
     <button class="btn btn-sm btn-secondary" type="button" onclick="mcnGpFetchAndSet('${_gpEsc(dbSlot)}')">Fetch</button>
   </div>`;
 
@@ -2066,11 +2077,55 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   dbSlot = dbSlot || slotKey;
   if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
 
+  const ORIGIN_LABEL_G        = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const CONTENT_TYPE_LABEL_G  = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
+  const CONTENT_TYPE_ORDER_G  = { overall: 0, raid: 1, mythic_plus: 2 };
+
   const srcMap = new Map();
   for (const r of bis) {
-    if (!srcMap.has(r.source_id)) srcMap.set(r.source_id, r.short_label || r.source_name || `Source ${r.source_id}`);
+    if (!srcMap.has(r.source_id)) srcMap.set(r.source_id, {
+      id: r.source_id,
+      label: r.short_label || r.source_name || `Source ${r.source_id}`,
+      origin: r.origin || '',
+      content_type: r.content_type || '',
+    });
   }
-  const sources = [...srcMap.entries()].map(([id, label]) => ({ id, label }));
+  const sources = [...srcMap.values()];
+
+  // Group sources by origin for two-row header
+  const originGroups = [];
+  const seenOrigins  = [];
+  for (const s of sources) {
+    if (!seenOrigins.includes(s.origin)) { seenOrigins.push(s.origin); originGroups.push({ origin: s.origin, cols: [] }); }
+    originGroups.find(g => g.origin === s.origin).cols.push(s);
+  }
+  originGroups.forEach(g => g.cols.sort((a, b) =>
+    (CONTENT_TYPE_ORDER_G[a.content_type] ?? 9) - (CONTENT_TYPE_ORDER_G[b.content_type] ?? 9)));
+  const hasMultiColGroup = originGroups.some(g => g.cols.length > 1);
+
+  // Row 1: "Item" + provider cells + action
+  const providerCells = originGroups.map(g => {
+    const label   = _gpEsc(ORIGIN_LABEL_G[g.origin] || g.origin);
+    const colspan = g.cols.length;
+    // Single-column group: span both rows so row 2 stays clean
+    return colspan === 1
+      ? `<th class="mcn-bis-grid__provider mcn-bis-grid__provider--solo"${hasMultiColGroup ? ' rowspan="2"' : ''}>${label}</th>`
+      : `<th class="mcn-bis-grid__provider" colspan="${colspan}">${label}</th>`;
+  }).join('');
+
+  // Row 2: content-type label for each column in multi-col groups only
+  const contentCells = hasMultiColGroup
+    ? originGroups.flatMap(g => g.cols.length === 1 ? [] : g.cols.map(s =>
+        `<th class="mcn-bis-grid__src">${_gpEsc(CONTENT_TYPE_LABEL_G[s.content_type] || s.label)}</th>`
+      )).join('')
+    : '';
+
+  const thead = hasMultiColGroup
+    ? `<thead>
+        <tr><th class="mcn-bis-grid__name-col" rowspan="2">Item</th>${providerCells}<th rowspan="2"></th></tr>
+        <tr>${contentCells}</tr>
+       </thead>`
+    : `<thead><tr><th class="mcn-bis-grid__name-col">Item</th>${providerCells}<th></th></tr></thead>`;
 
   const itemMap = new Map();
   for (const r of bis) {
@@ -2086,8 +2141,6 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     const d2 = b.srcIds.size - a.srcIds.size;
     return d2 !== 0 ? d2 : a.name.localeCompare(b.name);
   });
-
-  const hdrCells = sources.map(s => `<th class="mcn-bis-grid__src" title="${_gpEsc(s.label)}">${_gpEsc(s.label)}</th>`).join('');
 
   const rows = items.map(item => {
     const cells = sources.map(s =>
@@ -2105,10 +2158,7 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     </tr>`;
   }).join('');
 
-  return `<table class="mcn-bis-grid">
-    <thead><tr><th class="mcn-bis-grid__name-col">Item</th>${hdrCells}<th></th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+  return `<table class="mcn-bis-grid">${thead}<tbody>${rows}</tbody></table>`;
 }
 
 // ── Slot action globals (called from onclick attrs in drawer) ──────────────────
@@ -2151,11 +2201,67 @@ window.mcnGpToggleLock = async function(slot, currentlyLocked) {
 };
 
 window.mcnGpFetchAndSet = async function(slot) {
-  const input  = document.getElementById(`mcn-mid-${slot}`);
-  const itemId = parseInt(input?.value, 10);
-  if (!itemId) return;
-  _gpShowStatus('Fetching item\u2026', 'info');
-  const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
-  if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
-  await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+  const input = document.getElementById(`mcn-mid-${slot}`);
+  const raw   = input?.value?.trim() || '';
+  if (!raw) return;
+
+  // Format 2 — Wowhead URL: extract item ID from /item=NNNNN or /item/NNNNN
+  const urlMatch = raw.match(/[?&/]item[=/](\d+)/i);
+  if (urlMatch) {
+    const itemId = parseInt(urlMatch[1], 10);
+    _gpShowStatus('Fetching item\u2026', 'info');
+    const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
+    if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
+    await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+    return;
+  }
+
+  // Format 1 — Plain integer
+  const itemId = parseInt(raw, 10);
+  if (!isNaN(itemId) && itemId > 0 && String(itemId) === raw) {
+    _gpShowStatus('Fetching item\u2026', 'info');
+    const itemResp = await _gpFetch(`/api/v1/items/${itemId}`);
+    if (!itemResp.ok) { _gpShowStatus(itemResp.error || 'Item not found', 'err'); return; }
+    await window.mcnGpSetDesiredItem(slot, itemResp.data.blizzard_item_id);
+    return;
+  }
+
+  // Format 3 — Name: trigger inline search
+  await window.mcnGpSearchItems(slot, raw);
+};
+
+window.mcnGpSearchItems = async function(slot, value) {
+  const val       = (value || '').trim();
+  const resultsEl = document.getElementById(`mcn-mir-${slot}`);
+  if (!resultsEl) return;
+
+  // Don't search for plain numbers or URLs — those go through Fetch
+  if (val.length < 2 || /^\d+$/.test(val) || /[?&/]item[=/]/i.test(val)) {
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  const resp = await _gpFetch(`/api/v1/items/search?q=${encodeURIComponent(val)}`);
+  if (!resp.ok || !resp.data?.length) {
+    resultsEl.hidden = true;
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  resultsEl.innerHTML = resp.data.map(item => {
+    const icon = item.icon_url
+      ? `<img src="${_gpEsc(item.icon_url)}" alt="" class="mcn-item-result__icon">`
+      : `<span class="mcn-item-result__icon-ph"></span>`;
+    return `<div class="mcn-item-result" onclick="mcnGpPickSearchResult('${_gpEsc(slot)}',${item.blizzard_item_id},'${_gpEsc(item.name)}')">${icon}<span>${_gpEsc(item.name)}</span></div>`;
+  }).join('');
+  resultsEl.hidden = false;
+};
+
+window.mcnGpPickSearchResult = async function(slot, blizzardItemId, name) {
+  const resultsEl = document.getElementById(`mcn-mir-${slot}`);
+  if (resultsEl) { resultsEl.hidden = true; resultsEl.innerHTML = ''; }
+  const input = document.getElementById(`mcn-mid-${slot}`);
+  if (input) input.value = '';
+  await window.mcnGpSetDesiredItem(slot, blizzardItemId);
 };

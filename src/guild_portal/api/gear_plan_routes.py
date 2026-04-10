@@ -447,6 +447,41 @@ async def sync_character_equipment(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/items/search?q=
+# Must be registered before /{blizzard_item_id} to avoid "search" matching as an int
+# ---------------------------------------------------------------------------
+
+
+@items_router.get("/search")
+async def search_items(
+    q: str,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+):
+    """Search cached wow_items by name (ILIKE). Returns up to 10 matches."""
+    if len(q.strip()) < 2:
+        return JSONResponse({"ok": True, "data": []})
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT blizzard_item_id, name, icon_url, slot_type
+              FROM guild_identity.wow_items
+             WHERE name ILIKE $1
+             ORDER BY name
+             LIMIT 10
+            """,
+            f"%{q.strip()}%",
+        )
+
+    return JSONResponse({"ok": True, "data": [dict(r) for r in rows]})
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/items/{blizzard_item_id}
 # ---------------------------------------------------------------------------
 

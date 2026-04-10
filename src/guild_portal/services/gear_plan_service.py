@@ -755,7 +755,7 @@ async def get_plan_detail(
                 SELECT ble.slot, ble.item_id, ble.source_id, ble.hero_talent_id,
                        ble.priority,
                        wi.blizzard_item_id, wi.name AS item_name, wi.icon_url,
-                       bls.name AS source_name, bls.short_label
+                       bls.name AS source_name, bls.short_label, bls.origin, bls.content_type
                   FROM guild_identity.bis_list_entries ble
                   JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
                   JOIN guild_identity.bis_list_sources bls ON bls.id = ble.source_id
@@ -898,12 +898,21 @@ async def get_plan_detail(
         # Available BIS sources (for UI dropdowns)
         source_list = await conn.fetch(
             """
-            SELECT id, name, short_label, content_type, is_default, sort_order
+            SELECT id, name, short_label, content_type, origin, is_default, sort_order
               FROM guild_identity.bis_list_sources
              WHERE is_active = TRUE
              ORDER BY sort_order
             """
         )
+
+        # Which sources have hero-talent-specific BIS entries
+        ht_source_ids = await conn.fetchval(
+            """
+            SELECT array_agg(DISTINCT source_id)
+              FROM guild_identity.bis_list_entries
+             WHERE hero_talent_id IS NOT NULL
+            """
+        ) or []
 
         # Hero talents for the plan's spec (for UI dropdown)
         ht_list = []
@@ -1084,7 +1093,7 @@ async def get_plan_detail(
     return {
         "plan": dict(plan_row),
         "slots": slots_data,
-        "bis_sources": [dict(r) for r in source_list],
+        "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
     }
