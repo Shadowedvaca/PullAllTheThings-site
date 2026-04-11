@@ -1234,13 +1234,13 @@ async def get_available_items(
             f"""
             SELECT wi.blizzard_item_id, wi.name, wi.icon_url,
                    {tooltip_col}
-                   is2.source_name, is2.source_instance, is2.instance_type
+                   is2.encounter_name, is2.instance_name, is2.instance_type
               FROM guild_identity.wow_items wi
               JOIN guild_identity.item_sources is2
                    ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
              WHERE wi.slot_type = $1
                {armor_clause}
-             ORDER BY wi.name, is2.source_instance, is2.source_name
+             ORDER BY wi.name, is2.instance_name, is2.encounter_name
             """,
             *params,
         )
@@ -1261,8 +1261,8 @@ async def get_available_items(
             item_map[bid] = entry
         tracks = _get_tracks(r["instance_type"])
         src = {
-            "source_name":     r["source_name"],
-            "source_instance": r["source_instance"],
+            "source_name":     r["encounter_name"],
+            "source_instance": r["instance_name"],
             "instance_type":   r["instance_type"],
             "quality_tracks":  tracks,
         }
