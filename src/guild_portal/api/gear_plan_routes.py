@@ -401,6 +401,52 @@ async def remove_item_exclusion(
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/v1/me/gear-plan/{character_id}/source
+# Phase 1E.6 — switch equipped gear source between 'blizzard' and 'simc'
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{character_id}/source")
+async def set_equipped_source(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Switch the equipped gear source for the paperdoll display.
+
+    Body:
+        source (str) — 'blizzard' or 'simc'
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    source: str = body.get("source", "")
+    if source not in ("blizzard", "simc"):
+        return JSONResponse({"ok": False, "error": "source must be 'blizzard' or 'simc'"}, status_code=400)
+
+    ok, err = await svc.set_equipped_source(pool, current_player.id, character_id, source)
+    if not ok:
+        if err == "no_simc":
+            return JSONResponse(
+                {"ok": False, "error": "No SimC profile imported yet — paste one first"},
+                status_code=409,
+            )
+        return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
+
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/me/gear-plan/{character_id}/import-simc
 # ---------------------------------------------------------------------------
 

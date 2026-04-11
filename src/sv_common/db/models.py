@@ -1741,6 +1741,12 @@ class GearPlan(Base):
         Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="SET NULL")
     )
     simc_profile: Mapped[Optional[str]] = mapped_column(Text)
+    simc_imported_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    equipped_source: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="blizzard"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()

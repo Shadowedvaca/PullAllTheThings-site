@@ -1119,6 +1119,18 @@ function _selectChar(charId) {
 // Refresh button (delegates to existing /api/v1/me/bnet-sync)
 // ---------------------------------------------------------------------------
 
+function _initSimcModal() {
+  document.getElementById('mcn-simc-close')  ?.addEventListener('click', _gpHideSimcModal);
+  document.getElementById('mcn-simc-cancel') ?.addEventListener('click', _gpHideSimcModal);
+  document.getElementById('mcn-simc-submit') ?.addEventListener('click', _gpOnSimcImport);
+  // Close on backdrop click
+  document.getElementById('mcn-simc-modal')?.addEventListener('click', e => {
+    if (e.target === e.currentTarget || e.target.classList.contains('mcn-modal__backdrop')) {
+      _gpHideSimcModal();
+    }
+  });
+}
+
 function _initRefreshButton() {
   const btn = document.getElementById("mcn-btn-refresh");
   if (!btn) return;
@@ -1182,6 +1194,7 @@ async function _init() {
     }
 
     _initRefreshButton();
+    _initSimcModal();
 
   } catch (err) {
     _hide("mcn-loading");
@@ -1238,6 +1251,18 @@ function _gpEsc(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _gpTimeAgo(dateVal) {
+  if (!dateVal) return null;
+  const diff = Date.now() - new Date(dateVal).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
 
 async function _gpFetch(url, opts) {
@@ -1651,9 +1676,41 @@ function _gpRenderCenterPanel(data) {
     return `<optgroup label="${_gpEsc(groupLabel)}">${options}</optgroup>`;
   }).join('');
 
+  // ── Source toggle (Phase 1E.6) ──────────────────────────────────────────
+  const equippedSrc   = plan?.equipped_source || 'blizzard';
+  const isBlizzard    = equippedSrc === 'blizzard';
+  const isSimC        = equippedSrc === 'simc';
+  const simcAt        = plan?.simc_imported_at   ? new Date(plan.simc_imported_at)   : null;
+  const blizzardAt    = plan?.blizzard_synced_at ? new Date(plan.blizzard_synced_at) : null;
+  const simcAgeDays   = simcAt ? (Date.now() - simcAt.getTime()) / 86400000 : null;
+  const simcStale     = simcAgeDays !== null && simcAgeDays > 7;
+
+  const blizzTs = blizzardAt ? `<span class="mcn-gp-src-ts">Synced ${_gpTimeAgo(blizzardAt)}</span>` : '';
+  const simcTs  = simcAt     ? `<span class="mcn-gp-src-ts">Imported ${_gpTimeAgo(simcAt)}</span>`   :
+                               `<span class="mcn-gp-src-ts mcn-gp-src-ts--none">No SimC import yet</span>`;
+  const staleWarn = (isSimC && simcStale)
+    ? `<div class="mcn-gp-src-stale">&#9888; SimC data is ${Math.floor(simcAgeDays)} days old \u2014 consider re-importing</div>`
+    : '';
+
+  const sourceBar = `
+    <div class="mcn-gp-source-bar">
+      <div class="mcn-gp-source-pills">
+        <button class="mcn-gp-source-pill${isBlizzard ? ' is-active' : ''}"
+                onclick="_gpOnToggleSource('blizzard')" type="button">Blizzard API</button>
+        <button class="mcn-gp-source-pill${isSimC ? ' is-active' : ''}"
+                onclick="_gpOnToggleSource('simc')" type="button">SimC Import</button>
+      </div>
+      <div class="mcn-gp-source-meta">
+        ${isBlizzard ? blizzTs : simcTs}
+      </div>
+    </div>
+    ${staleWarn}
+  `;
+
   area.innerHTML = `
     <div id="mcn-gp-slot-detail" hidden></div>
     <div class="mcn-detail-area__heading">Gear Plan</div>
+    ${sourceBar}
     <div class="mcn-gear-controls">
       <div class="mcn-gear-ctrl-row">
         <label class="mcn-gear-label">BIS List</label>
@@ -1662,9 +1719,8 @@ function _gpRenderCenterPanel(data) {
         <label class="mcn-gear-label">Hero Talent</label>
         <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>` : ''}
         <button id="mcn-gp-btn-fill" class="btn btn-primary btn-sm" type="button">Fill BIS</button>
-        <!-- SimC hidden pending full testing — see reference/gear-plan-4-simc.md -->
-        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button" style="display:none">Import SimC</button>
-        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button" style="display:none">Export SimC</button>
+        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
+        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
       </div>
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
@@ -1681,9 +1737,11 @@ function _gpRenderCenterPanel(data) {
   }
 
   // Wire selects + buttons
-  document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-src-sel') ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
+  document.getElementById('mcn-gp-ht-sel')    ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-src-sel')   ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click',  _gpOnPopulate);
+  document.getElementById('mcn-gp-btn-import')?.addEventListener('click',  _gpShowSimcModal);
+  document.getElementById('mcn-gp-btn-export')?.addEventListener('click',  _gpOnExportSimc);
   // Wire drawer close
   const drawerClose = document.getElementById('mcn-gp-drawer-close');
   if (drawerClose && !drawerClose._gpWired) {
@@ -1881,6 +1939,33 @@ async function _gpOnExportSimc() {
     _gpClearStatus();
   } catch (err) {
     _gpShowStatus(err.message, 'err');
+  }
+}
+
+// ── Source toggle (Phase 1E.6) ─────────────────────────────────────────────────
+
+async function _gpOnToggleSource(source) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  // Optimistically switch; if no simc profile, show import modal instead
+  if (source === 'simc') {
+    const cached = _gpCache[charId];
+    const hasSimc = !!(cached?.plan?.simc_imported_at || cached?.plan?.simc_profile);
+    if (!hasSimc) {
+      _gpShowSimcModal();
+      return;
+    }
+  }
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/source`, {
+    method: 'PATCH',
+    body: JSON.stringify({ source }),
+  });
+  if (resp.ok) {
+    await _gpReload();
+  } else if (resp.error === 'No SimC profile imported yet \u2014 paste one first') {
+    _gpShowSimcModal();
+  } else {
+    _gpShowStatus(resp.error || 'Source switch failed', 'err');
   }
 }
 

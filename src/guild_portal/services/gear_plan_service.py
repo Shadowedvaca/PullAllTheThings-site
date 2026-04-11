@@ -333,7 +333,8 @@ async def get_or_create_plan(
         row = await conn.fetchrow(
             """
             SELECT id, player_id, character_id, spec_id, hero_talent_id,
-                   bis_source_id, simc_profile, is_active
+                   bis_source_id, simc_profile, is_active,
+                   simc_imported_at, equipped_source
               FROM guild_identity.gear_plans
              WHERE player_id = $1 AND character_id = $2
             """,
@@ -370,7 +371,8 @@ async def get_or_create_plan(
                 (player_id, character_id, spec_id, hero_talent_id, bis_source_id, is_active)
             VALUES ($1, $2, $3, $4, $5, TRUE)
             RETURNING id, player_id, character_id, spec_id, hero_talent_id,
-                      bis_source_id, simc_profile, is_active
+                      bis_source_id, simc_profile, is_active,
+                      simc_imported_at, equipped_source
             """,
             player_id, character_id, spec_id, hero_talent_id, bis_source_id,
         )
@@ -608,10 +610,16 @@ async def import_simc(
             return {"populated": 0, "skipped_locked": 0, "unrecognised": 0}
         plan_id = plan_row["id"]
 
-        # Store raw simc text
+        # Store raw simc text; mark as imported and switch source to simc
         await conn.execute(
-            "UPDATE guild_identity.gear_plans SET simc_profile=$1, updated_at=NOW()"
-            " WHERE id=$2",
+            """
+            UPDATE guild_identity.gear_plans
+               SET simc_profile = $1,
+                   simc_imported_at = NOW(),
+                   equipped_source = 'simc',
+                   updated_at = NOW()
+             WHERE id = $2
+            """,
             simc_text, plan_id,
         )
 
@@ -660,6 +668,46 @@ async def import_simc(
             populated += 1
 
     return {"populated": populated, "skipped_locked": skipped_locked, "unrecognised": unrecognised}
+
+
+async def set_equipped_source(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+    source: str,
+) -> tuple[bool, Optional[str]]:
+    """Switch the plan's equipped_source between 'blizzard' and 'simc'.
+
+    Returns (success, error_message).  Switching to 'simc' requires a stored
+    simc_profile; if none exists, returns (False, 'no_simc').
+    """
+    if source not in ("blizzard", "simc"):
+        return False, "invalid_source"
+
+    async with pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            """
+            SELECT id, simc_profile
+              FROM guild_identity.gear_plans
+             WHERE player_id = $1 AND character_id = $2
+            """,
+            player_id, character_id,
+        )
+        if not plan_row:
+            return False, "not_found"
+
+        if source == "simc" and not plan_row["simc_profile"]:
+            return False, "no_simc"
+
+        await conn.execute(
+            """
+            UPDATE guild_identity.gear_plans
+               SET equipped_source = $1, updated_at = NOW()
+             WHERE id = $2
+            """,
+            source, plan_row["id"],
+        )
+    return True, None
 
 
 async def export_simc(
@@ -737,13 +785,19 @@ async def get_plan_detail(
             """
             SELECT gp.id, gp.player_id, gp.character_id, gp.spec_id,
                    gp.hero_talent_id, gp.bis_source_id, gp.is_active,
+                   gp.simc_profile, gp.simc_imported_at, gp.equipped_source,
                    s.name AS spec_name,
                    ht.name AS hero_talent_name,
-                   bls.name AS bis_source_name
+                   bls.name AS bis_source_name,
+                   wc.last_equipment_sync AS blizzard_synced_at,
+                   c.name AS class_name,
+                   s.name AS spec_name_for_stat
               FROM guild_identity.gear_plans gp
               LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
               LEFT JOIN guild_identity.hero_talents ht ON ht.id = gp.hero_talent_id
               LEFT JOIN guild_identity.bis_list_sources bls ON bls.id = gp.bis_source_id
+              LEFT JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
+              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
              WHERE gp.player_id = $1 AND gp.character_id = $2
             """,
             player_id, character_id,
@@ -774,6 +828,48 @@ async def get_plan_detail(
             d = dict(r)
             d["is_crafted"] = is_crafted_item(d.get("bonus_ids") or [])
             equipped_by_slot[r["slot"]] = d
+
+        # Phase 1E.6: If equipped_source='simc' and a stored simc_profile exists,
+        # parse it and override equipped_by_slot with SimC-sourced gear data.
+        # item_level is not available in SimC profiles so it shows as null in the UI.
+        equipped_source = plan_row["equipped_source"] or "blizzard"
+        simc_profile_text = plan_row["simc_profile"]
+
+        if equipped_source == "simc" and simc_profile_text:
+            simc_slots = parse_gear_slots(simc_profile_text)
+            if simc_slots:
+                simc_bids = [s.blizzard_item_id for s in simc_slots if s.blizzard_item_id]
+                simc_item_cache: dict[int, dict] = {}
+                if simc_bids:
+                    simc_item_rows = await conn.fetch(
+                        """
+                        SELECT blizzard_item_id, name, icon_url
+                          FROM guild_identity.wow_items
+                         WHERE blizzard_item_id = ANY($1::int[])
+                        """,
+                        simc_bids,
+                    )
+                    simc_item_cache = {r["blizzard_item_id"]: dict(r) for r in simc_item_rows}
+
+                simc_equipped: dict[str, dict] = {}
+                for simc_slot in simc_slots:
+                    slot_key = simc_slot.slot
+                    bid = simc_slot.blizzard_item_id
+                    item_info = simc_item_cache.get(bid, {})
+                    is_crafted = is_crafted_item(simc_slot.bonus_ids)
+                    simc_equipped[slot_key] = {
+                        "slot": slot_key,
+                        "blizzard_item_id": bid,
+                        "item_name": item_info.get("name") or f"Item {bid}",
+                        "item_level": None,
+                        "quality_track": simc_slot.quality_track,
+                        "enchant_id": simc_slot.enchant_id,
+                        "gem_ids": simc_slot.gem_ids,
+                        "bonus_ids": simc_slot.bonus_ids,
+                        "icon_url": item_info.get("icon_url"),
+                        "is_crafted": is_crafted,
+                    }
+                equipped_by_slot = simc_equipped
 
         # Build bid → equipment data lookup BEFORE _normalize_paired_slot swaps
         # ring/trinket slot assignments.  Crafted detection must be slot-order-
@@ -1199,8 +1295,15 @@ async def get_plan_detail(
             "excluded_items": excluded_items,
         }
 
+    plan_dict = dict(plan_row)
+    # Serialize timestamps to ISO strings for JSON
+    for ts_field in ("simc_imported_at", "blizzard_synced_at"):
+        val = plan_dict.get(ts_field)
+        if val is not None:
+            plan_dict[ts_field] = val.isoformat()
+
     return {
-        "plan": dict(plan_row),
+        "plan": plan_dict,
         "slots": slots_data,
         "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
         "hero_talents": ht_list,
