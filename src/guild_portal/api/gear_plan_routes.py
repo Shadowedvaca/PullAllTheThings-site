@@ -283,6 +283,39 @@ async def delete_gear_plan(
 
 
 # ---------------------------------------------------------------------------
+# GET /api/v1/me/gear-plan/{character_id}/available-items
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{character_id}/available-items")
+async def get_available_items(
+    character_id: int,
+    slot: str,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all class-eligible scanned items for a gear plan slot.
+
+    Used to populate the 'Available from Content' section in the slot drawer.
+    Query params:
+        slot — one of the 16 WOW_SLOTS keys (e.g. 'head', 'ring_1', 'main_hand')
+    """
+    if slot not in svc.WOW_SLOTS:
+        return JSONResponse({"ok": False, "error": f"Unknown slot: {slot}"}, status_code=400)
+
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    items = await svc.get_available_items(pool, current_player.id, character_id, slot)
+    return JSONResponse({"ok": True, "data": items})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/me/gear-plan/{character_id}/import-simc
 # ---------------------------------------------------------------------------
 
