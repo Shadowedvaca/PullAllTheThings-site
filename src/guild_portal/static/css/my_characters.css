@@ -957,7 +957,57 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 .mcn-bis-grid__check--yes { color: #4ade80; font-weight: 700; }
 .mcn-bis-grid__check--no  { color: var(--color-text-muted); opacity: 0.4; }
 
-.mcn-bis-grid__action { text-align: center; }
+.mcn-bis-grid__action { text-align: center; white-space: nowrap; }
+
+/* Phase 1E.5 — exclude (✕) button in BIS/available item rows */
+.mcn-exclude-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0.5;
+  vertical-align: middle;
+  margin-left: 0.2rem;
+}
+.mcn-exclude-btn:hover { opacity: 1; color: #f87171; background: rgba(248,113,113,0.1); }
+
+/* Phase 1E.5 — undo toast notification */
+.mcn-exclude-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-surface-2, #1e1e20);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  z-index: 9999;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  animation: mcn-toast-in 0.2s ease;
+}
+.mcn-exclude-toast button {
+  background: var(--color-accent, #d4a84b);
+  color: #0a0a0b;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.mcn-exclude-toast button:hover { opacity: 0.85; }
+@keyframes mcn-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(0.5rem); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
 
 /* Lock button in drawer */
 .mcn-lock-btn {

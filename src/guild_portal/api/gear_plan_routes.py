@@ -316,6 +316,91 @@ async def get_available_items(
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/v1/me/gear-plan/{character_id}/slots/{slot}/exclude
+# DELETE /api/v1/me/gear-plan/{character_id}/slots/{slot}/exclude
+# Phase 1E.5 — item exclusion
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{character_id}/slots/{slot}/exclude")
+async def add_item_exclusion(
+    character_id: int,
+    slot: str,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently exclude an item from a slot's suggestions and Fill BIS.
+
+    Body:
+        blizzard_item_id (int)
+    """
+    if slot not in svc.WOW_SLOTS:
+        return JSONResponse({"ok": False, "error": f"Unknown slot: {slot}"}, status_code=400)
+
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    blizzard_item_id: Optional[int] = body.get("blizzard_item_id")
+    if not blizzard_item_id:
+        return JSONResponse({"ok": False, "error": "blizzard_item_id is required"}, status_code=400)
+
+    ok = await svc.add_exclusion(pool, current_player.id, character_id, slot, blizzard_item_id)
+    if not ok:
+        return JSONResponse({"ok": False, "error": "Plan or item not found"}, status_code=404)
+
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/{character_id}/slots/{slot}/exclude")
+async def remove_item_exclusion(
+    character_id: int,
+    slot: str,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Un-exclude a previously excluded item from a slot.
+
+    Body:
+        blizzard_item_id (int)
+    """
+    if slot not in svc.WOW_SLOTS:
+        return JSONResponse({"ok": False, "error": f"Unknown slot: {slot}"}, status_code=400)
+
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    blizzard_item_id: Optional[int] = body.get("blizzard_item_id")
+    if not blizzard_item_id:
+        return JSONResponse({"ok": False, "error": "blizzard_item_id is required"}, status_code=400)
+
+    ok = await svc.remove_exclusion(pool, current_player.id, character_id, slot, blizzard_item_id)
+    if not ok:
+        return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
+
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/me/gear-plan/{character_id}/import-simc
 # ---------------------------------------------------------------------------
 

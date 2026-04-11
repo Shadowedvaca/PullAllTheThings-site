@@ -505,17 +505,25 @@ async def populate_from_bis(
         if not spec_id or not use_source:
             return 0
 
-        # Find current locked slots
-        locked_slots_rows = await conn.fetch(
-            "SELECT slot FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND is_locked=TRUE",
+        # Load current slot state: locked flags and per-slot exclusions (Phase 1E.5)
+        slot_data_rows = await conn.fetch(
+            """
+            SELECT slot, is_locked, excluded_item_ids
+              FROM guild_identity.gear_plan_slots
+             WHERE plan_id = $1
+            """,
             plan_id,
         )
-        locked_slots = {r["slot"] for r in locked_slots_rows}
+        locked_slots: set[str] = {r["slot"] for r in slot_data_rows if r["is_locked"]}
+        excluded_by_slot: dict[str, set[int]] = {
+            r["slot"]: set(r["excluded_item_ids"] or []) for r in slot_data_rows
+        }
 
-        # Get BIS entries (first priority per slot)
+        # Get ALL BIS entries ordered by priority so we can skip excluded items
+        # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
-            SELECT DISTINCT ON (ble.slot) ble.slot, ble.item_id, ble.priority,
+            SELECT ble.slot, ble.item_id, ble.priority,
                    wi.blizzard_item_id, wi.name AS item_name
               FROM guild_identity.bis_list_entries ble
               JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
@@ -527,12 +535,21 @@ async def populate_from_bis(
             use_source, spec_id, use_ht,
         )
 
-        populated = 0
+        # Group candidates by slot (already ordered by priority)
+        by_slot: dict[str, list] = {}
         for row in bis_rows:
-            slot = row["slot"]
-            if slot not in WOW_SLOTS:
+            by_slot.setdefault(row["slot"], []).append(row)
+
+        populated = 0
+        for slot, candidates in by_slot.items():
+            if slot not in WOW_SLOTS or slot in locked_slots:
                 continue
-            if slot in locked_slots:
+            # Skip excluded items, pick first non-excluded candidate
+            excluded = excluded_by_slot.get(slot, set())
+            chosen = next(
+                (r for r in candidates if r["item_id"] not in excluded), None
+            )
+            if not chosen:
                 continue
 
             await conn.execute(
@@ -546,7 +563,7 @@ async def populate_from_bis(
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
-                plan_id, slot, row["item_id"], row["blizzard_item_id"], row["item_name"],
+                plan_id, slot, chosen["item_id"], chosen["blizzard_item_id"], chosen["item_name"],
             )
             populated += 1
 
@@ -774,12 +791,13 @@ async def get_plan_detail(
                     "is_crafted": is_crafted_item(_bonus_ids),
                 }
 
-        # Desired items (plan slots)
+        # Desired items (plan slots) — include excluded_item_ids for Phase 1E.5
         desired_rows = await conn.fetch(
             """
             SELECT gps.slot, gps.blizzard_item_id,
                    COALESCE(wi.name, gps.item_name) AS item_name,
                    gps.is_locked,
+                   gps.excluded_item_ids,
                    wi.icon_url, wi.wowhead_tooltip_html
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
@@ -796,6 +814,7 @@ async def get_plan_detail(
         craftable_desired_bids: set[int] = set()
         tier_piece_desired_bids: set[int] = set()
         desired_by_slot: dict[str, dict] = {}
+        excluded_ids_by_slot: dict[str, list[int]] = {}
         for r in desired_rows:
             bid = r["blizzard_item_id"]
             tooltip = r["wowhead_tooltip_html"] or ""
@@ -805,6 +824,23 @@ async def get_plan_detail(
                 tier_piece_desired_bids.add(bid)
             row_dict = {k: v for k, v in dict(r).items() if k != "wowhead_tooltip_html"}
             desired_by_slot[r["slot"]] = row_dict
+            excluded_ids_by_slot[r["slot"]] = list(r["excluded_item_ids"] or [])
+
+        # Batch-fetch info for all excluded wow_items so the drawer can show names/icons
+        all_excluded_ids: list[int] = [
+            id_ for ids in excluded_ids_by_slot.values() for id_ in ids
+        ]
+        excluded_item_info: dict[int, dict] = {}
+        if all_excluded_ids:
+            ex_rows = await conn.fetch(
+                """
+                SELECT id, blizzard_item_id, name, icon_url
+                  FROM guild_identity.wow_items
+                 WHERE id = ANY($1::int[])
+                """,
+                all_excluded_ids,
+            )
+            excluded_item_info = {r["id"]: dict(r) for r in ex_rows}
 
         # BIS recommendations for this spec + hero_talent
         bis_by_slot: dict[str, list[dict]] = {}
@@ -1051,7 +1087,19 @@ async def get_plan_detail(
     for slot in WOW_SLOTS:
         equipped = equipped_by_slot.get(slot)
         desired = desired_by_slot.get(slot)
-        bis_recs = bis_by_slot.get(slot, [])
+
+        # Phase 1E.5: per-slot exclusions filter BIS recommendations
+        excluded_ids = excluded_ids_by_slot.get(slot, [])
+        excluded_set = set(excluded_ids)
+        excluded_items = [
+            excluded_item_info[id_]
+            for id_ in excluded_ids
+            if id_ in excluded_item_info
+        ]
+        bis_recs = [
+            r for r in bis_by_slot.get(slot, [])
+            if r["item_id"] not in excluded_set
+        ]
 
         # Effective desired blizzard_item_id — only from explicit gear_plan_slots.
         # We deliberately do NOT fall back to BIS recommendations here: for paired
@@ -1147,6 +1195,8 @@ async def get_plan_detail(
             "is_bis": is_bis,
             "needs_upgrade": needs_upgrade,
             "crafted_source": crafted_source,
+            "excluded_item_ids": excluded_ids,
+            "excluded_items": excluded_items,
         }
 
     return {
@@ -1197,6 +1247,7 @@ async def get_available_items(
     Used to populate the 'Available from Content' section in the slot drawer.
     Filters to instances listed in patt.raid_seasons.current_instance_ids for the
     active season. Falls back to showing all instances if current_instance_ids is empty.
+    Excluded items (Phase 1E.5) are omitted from results.
 
     Eligibility rules:
       - Armor slots: filter by character's class armor type (cloth/leather/mail/plate)
@@ -1238,6 +1289,24 @@ async def get_available_items(
             current_instance_ids = list(season_row["current_instance_ids"] or [])
             current_instance_ids += list(season_row["current_raid_ids"] or [])
 
+        # Phase 1E.5: fetch per-slot exclusions so we can hide excluded items
+        excluded_ids: list[int] = []
+        plan_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
+            player_id, character_id,
+        )
+        if plan_row:
+            slot_row = await conn.fetchrow(
+                """
+                SELECT excluded_item_ids
+                  FROM guild_identity.gear_plan_slots
+                 WHERE plan_id = $1 AND slot = $2
+                """,
+                plan_row["id"], slot,
+            )
+            if slot_row:
+                excluded_ids = list(slot_row["excluded_item_ids"] or [])
+
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
 
@@ -1261,6 +1330,12 @@ async def get_available_items(
             params.append(current_instance_ids)  # $N — INTEGER[]
             season_clause = f"AND is2.blizzard_instance_id = ANY(${len(params)})"
 
+        # Exclusion filter: hide items the player has permanently excluded (Phase 1E.5)
+        exclude_clause = ""
+        if excluded_ids:
+            params.append(excluded_ids)
+            exclude_clause = f"AND wi.id != ALL(${len(params)}::int[])"
+
         # Only fetch tooltip HTML when needed for weapon stat filtering
         need_tooltip = slot in _WEAPON_SLOTS
         tooltip_col  = "wi.wowhead_tooltip_html," if need_tooltip else ""
@@ -1276,6 +1351,7 @@ async def get_available_items(
              WHERE wi.slot_type = $1
                {armor_clause}
                {season_clause}
+               {exclude_clause}
              ORDER BY wi.name, is2.instance_name, is2.encounter_name
             """,
             *params,
@@ -1318,3 +1394,102 @@ async def get_available_items(
         item.pop("wowhead_tooltip_html", None)
 
     return items
+
+
+# ── Item exclusion (Phase 1E.5) ───────────────────────────────────────────────
+
+async def add_exclusion(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+    slot: str,
+    blizzard_item_id: int,
+) -> bool:
+    """Append an item to the excluded_item_ids list for a gear plan slot.
+
+    Resolves blizzard_item_id → wow_items.id (internal FK).
+    Creates the slot row if it doesn't exist (desired_item_id=NULL).
+    No-ops if the item is already excluded.
+    Returns True on success, False if plan not found.
+    """
+    if slot not in WOW_SLOTS:
+        return False
+
+    async with pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
+            player_id, character_id,
+        )
+        if not plan_row:
+            return False
+        plan_id = plan_row["id"]
+
+        # Resolve to internal wow_items.id
+        item_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
+            blizzard_item_id,
+        )
+        if not item_row:
+            return False
+        item_id = item_row["id"]
+
+        # Upsert slot row and append item_id if not already present
+        await conn.execute(
+            """
+            INSERT INTO guild_identity.gear_plan_slots
+                (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked,
+                 excluded_item_ids)
+            VALUES ($1, $2, NULL, NULL, NULL, FALSE, ARRAY[$3::int])
+            ON CONFLICT (plan_id, slot) DO UPDATE
+                SET excluded_item_ids =
+                    CASE WHEN $3 = ANY(gear_plan_slots.excluded_item_ids)
+                         THEN gear_plan_slots.excluded_item_ids
+                         ELSE array_append(gear_plan_slots.excluded_item_ids, $3)
+                    END
+            """,
+            plan_id, slot, item_id,
+        )
+        return True
+
+
+async def remove_exclusion(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+    slot: str,
+    blizzard_item_id: int,
+) -> bool:
+    """Remove an item from the excluded_item_ids list for a gear plan slot.
+
+    No-ops gracefully if the slot row or item doesn't exist.
+    Returns True on success, False if plan not found.
+    """
+    if slot not in WOW_SLOTS:
+        return False
+
+    async with pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
+            player_id, character_id,
+        )
+        if not plan_row:
+            return False
+        plan_id = plan_row["id"]
+
+        item_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
+            blizzard_item_id,
+        )
+        if not item_row:
+            return True  # Nothing to remove
+        item_id = item_row["id"]
+
+        await conn.execute(
+            """
+            UPDATE guild_identity.gear_plan_slots
+               SET excluded_item_ids = array_remove(excluded_item_ids, $3)
+             WHERE plan_id = $1 AND slot = $2
+            """,
+            plan_id, slot, item_id,
+        )
+        return True
