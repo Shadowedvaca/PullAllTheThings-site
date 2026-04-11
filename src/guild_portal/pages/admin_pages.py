@@ -1278,7 +1278,7 @@ async def admin_reference_tables(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from sv_common.db.models import CharacterRaidProgress, GuideSite, Role, TierTokenAttrs, WowClass, WowItem, Specialization
+    from sv_common.db.models import CharacterRaidProgress, GuideSite, ItemSource, Role, TierTokenAttrs, WowClass, WowItem, Specialization
     from sv_common.identity import ranks as rank_service
     from guild_portal.services import season_service
     from sqlalchemy.orm import selectinload
@@ -1324,6 +1324,22 @@ async def admin_reference_tables(
         if s.current_raid_ids:
             all_assigned_raid_ids.update(s.current_raid_ids)
 
+    # Known M+ instances (distinct dungeons in item_sources, sorted by name)
+    known_instances_result = await db.execute(
+        select(ItemSource.blizzard_instance_id, ItemSource.instance_name)
+        .distinct()
+        .where(
+            ItemSource.instance_type == "dungeon",
+            ItemSource.blizzard_instance_id.isnot(None),
+        )
+        .order_by(ItemSource.instance_name)
+    )
+    known_instances = [
+        {"id": row[0], "name": row[1]}
+        for row in known_instances_result.all()
+        if row[0] is not None and row[1]
+    ]
+
     # Tier token attrs (Phase 1D.6)
     tier_tokens_result = await db.execute(
         select(TierTokenAttrs)
@@ -1345,6 +1361,7 @@ async def admin_reference_tables(
         "guide_sites": guide_sites,
         "known_raids": known_raids,
         "all_assigned_raid_ids": all_assigned_raid_ids,
+        "known_instances": known_instances,
         "tier_tokens": tier_tokens,
         "class_id_to_name": class_id_to_name,
     })

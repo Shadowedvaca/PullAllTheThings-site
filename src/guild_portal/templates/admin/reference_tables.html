@@ -332,6 +332,7 @@
                 <th>Active</th>
                 <th title="Blizzard API integer ID for M+ keystone season. Find at: us.api.blizzard.com/data/wow/mythic-keystone/season/index">M+ Season ID</th>
                 <th title="Raid tiers active this season. Check all that apply. Populated from synced character data.">Current Raids</th>
+                <th title="M+ dungeons in this season's pool. Select all that apply.">M+ Dungeons</th>
                 <th></th>
             </tr>
         </thead>
@@ -378,6 +379,19 @@
                             {{ raid.name }}
                         </option>
                         {% endif %}
+                    {% endfor %}
+                </select>
+            </td>
+            <td>
+                {% set season_instance_ids = season.current_instance_ids or [] %}
+                <select multiple name="current_instance_ids" class="rt-field rt-multi-select"
+                        size="5"
+                        data-orig="{{ season_instance_ids | tojson }}">
+                    {% for inst in known_instances %}
+                    <option value="{{ inst.id }}"
+                            {% if inst.id in season_instance_ids %}selected{% endif %}>
+                        {{ inst.name }}
+                    </option>
                     {% endfor %}
                 </select>
             </td>
@@ -818,8 +832,8 @@ document.querySelectorAll('.rt-field').forEach(f => {
     });
 });
 
-// Mark row dirty when the raids multi-select changes
-document.querySelectorAll('select[name="current_raid_ids"]').forEach(sel => {
+// Mark row dirty when the raids or instances multi-select changes
+document.querySelectorAll('select[name="current_raid_ids"], select[name="current_instance_ids"]').forEach(sel => {
     sel.addEventListener('change', () => {
         sel.closest('.rt-row').classList.add('rt-row--dirty');
     });
@@ -854,6 +868,7 @@ document.querySelectorAll('.gs-field').forEach(f => {
 
 const _knownRaids = {{ known_raids | tojson }};
 const _allAssignedRaidIds = {{ all_assigned_raid_ids | list | tojson }};
+const _knownInstances = {{ known_instances | tojson }};
 
 function _buildRaidMultiSelect(selectedIds) {
     const opts = _knownRaids
@@ -863,6 +878,14 @@ function _buildRaidMultiSelect(selectedIds) {
             return `<option value="${r.id}"${sel}>${r.name}</option>`;
         }).join('');
     return `<select multiple name="current_raid_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
+}
+
+function _buildInstanceMultiSelect(selectedIds) {
+    const opts = _knownInstances.map(inst => {
+        const sel = selectedIds.includes(inst.id) ? ' selected' : '';
+        return `<option value="${inst.id}"${sel}>${inst.name}</option>`;
+    }).join('');
+    return `<select multiple name="current_instance_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
 }
 
 async function createSeason() {
@@ -913,6 +936,7 @@ async function createSeason() {
                            value="" data-orig="" placeholder="e.g. 13" style="width:70px;">
                 </td>
                 <td>${_buildRaidMultiSelect([])}</td>
+                <td>${_buildInstanceMultiSelect([])}</td>
                 <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
             `;
             tbody.prepend(tr);
