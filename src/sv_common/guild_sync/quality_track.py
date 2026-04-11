@@ -36,11 +36,16 @@ _DISPLAY_MAP_BARE = {
 # SimC bonus ID → quality track.
 # TWW Season 2 IDs kept for backward compat; Midnight IDs appended.
 # Admin can override via site_config key "simc_track_bonus_ids".
+#
+# Crafted-quality IDs (13621, 13622) are included here because they ARE
+# quality-discriminating bonus IDs, just sourced from crests rather than
+# upgrade tokens.  They're detected empirically via get_item_preview() during
+# equipment sync (see _CRAFTED_TRACK_IDS below for discovery notes).
 _DEFAULT_SIMC_BONUS_IDS: dict[str, list[int]] = {
     "V": [1498, 1499],
-    "C": [1516, 1517, 1518, 12790, 12795],  # TWW S2 + Midnight base/normal
-    "H": [1520, 1521, 1522, 12798, 12801],  # TWW S2 + Midnight heroic/M+
-    "M": [1524, 1525, 1526],
+    "C": [1516, 1517, 1518, 12790, 12795],           # TWW S2 + Midnight base/normal
+    "H": [1520, 1521, 1522, 12798, 12801, 13621],    # TWW S2 + Midnight heroic/M+ + Midnight crafted H
+    "M": [1524, 1525, 1526, 13622],                  # TWW S2 + Midnight crafted M
 }
 
 

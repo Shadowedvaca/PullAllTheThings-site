@@ -170,6 +170,16 @@ class TestParseGearSlots:
         slots = parse_gear_slots("head=helm,id=100,bonus_id=4800:1524")
         assert slots[0].quality_track == "M"
 
+    def test_midnight_crafted_hero_track(self):
+        # 13621 = Midnight crafted H — wrist/back crafted pieces
+        slots = parse_gear_slots("wrists=aetherlume_bands,id=225300,bonus_id=12214:13621:5000")
+        assert slots[0].quality_track == "H"
+
+    def test_midnight_crafted_mythic_track(self):
+        # 13622 = Midnight crafted M — ring crafted pieces
+        slots = parse_gear_slots("finger2=loa_worshipers_band,id=225310,bonus_id=12214:13622:5000")
+        assert slots[0].quality_track == "M"
+
 
 # ---------------------------------------------------------------------------
 # parse_profile

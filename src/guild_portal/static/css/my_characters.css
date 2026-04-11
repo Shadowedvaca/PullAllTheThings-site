@@ -2038,18 +2038,21 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 .mcn-gp-sections {
   display: flex;
   gap: 0.75rem;
-  flex-wrap: wrap;
   margin-bottom: 0.75rem;
 }
 
 .mcn-gp-section {
-  flex: 0 0 auto;
-  min-width: 220px;
+  min-width: 0;   /* prevent flex blowout */
   border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
   background: var(--color-bg-card);
 }
+
+/* Equipped Gear Source — 40% */
+.mcn-gp-section:first-child { flex: 0 0 38%; }
+/* BIS Sourcing — fills remaining ~60% */
+.mcn-gp-section:last-child  { flex: 1 1 0; }
 
 .mcn-gp-section__hdr {
   display: flex;
@@ -2184,6 +2187,8 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   color: var(--color-text-muted);
   margin: 0;
   line-height: 1.5;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .mcn-gp-src-stale {
