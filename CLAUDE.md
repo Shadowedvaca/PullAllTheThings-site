@@ -235,19 +235,17 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1E.4 complete** — merged PR #23, tagged `prod-v0.14.0`.
-  - **Available from Content** collapsible section in every gear slot drawer on `/my-characters`. Shows class-eligible items from Midnight Season 1 content only (M+ dungeons + raid bosses).
-  - Armor slots filtered by class armor type (`CLASS_ARMOR_TYPE` map + Wowhead tooltip HTML fallback `<!--scstart4:N-->` for items where `wow_items.armor_type IS NULL`).
-  - Weapon slots filtered by primary stat (Int/Str/Agi) via `SPEC_PRIMARY_STAT` map + tooltip substring check.
-  - Lazy fetch with `_gpAvailCache` per character+slot; cache cleared on gear reload.
-  - Section collapsed by default when BIS data exists; expanded when no BIS.
-  - **Admin → Reference Tables → Raid Seasons**: new **M+ Dungeons** multi-select column (`current_instance_ids INTEGER[]` on `patt.raid_seasons`). Duplicate-named instances show `(ID: N)` to disambiguate (e.g. Magisters' Terrace ID 249 = old BC vs ID 1300 = new Midnight). `get_available_items()` combines `current_instance_ids` + `current_raid_ids` for the filter.
-  - Midnight Season 1 M+ pool seeded: Pit of Saron (278), Skyreach (476), Seat of the Triumvirate (945), Algeth'ar Academy (1201), Windrunner Spire (1299), Magisters' Terrace new (1300), Maisara Caverns (1315), Nexus-Point Xenas (1316).
-  - Migration 0092: `current_instance_ids INTEGER[] NOT NULL DEFAULT '{}'` on `patt.raid_seasons`.
-- **Last migration:** 0092
-- **Last prod tag:** `prod-v0.14.0`
+- **Phase 1E.5 complete** — merged PR #24, tagged `prod-v0.14.1`.
+  - **Item exclusion** per gear plan slot. Players can permanently hide items from BIS recommendations, Fill BIS, and Available from Content using a ✕ button on each item row in the slot drawer.
+  - Migration 0093: `excluded_item_ids INTEGER[] NOT NULL DEFAULT '{}'` on `guild_identity.gear_plan_slots`.
+  - `populate_from_bis()` loads all priority candidates per slot and skips excluded items, falling through to the next best. `get_plan_detail()` filters BIS recommendations per slot and returns `excluded_items` (name/icon) for each slot. `get_available_items()` adds `AND wi.id != ALL(excluded_ids)` to the SQL.
+  - New service functions `add_exclusion()` / `remove_exclusion()` in `gear_plan_service.py`.
+  - New API endpoints: `PATCH /api/v1/me/gear-plan/{character_id}/slots/{slot}/exclude` and `DELETE` variant.
+  - Frontend (`my_characters.js` v1.7.0, `my_characters.css` v1.4.0): ✕ button on every BIS and available-item row; 3-second gold undo toast; collapsed **"Excluded items (N)"** `<details>` section at bottom of drawer with ↩ per-item restore button.
+- **Last migration:** 0093
+- **Last prod tag:** `prod-v0.14.1`
 - **Active branch:** `main`
-- **Next:** Phase 1E.5 — item exclusion (`excluded_item_ids` on `gear_plan_slots`, ✕ button in slot drawer).
+- **Next:** Phase 1E.6 — SimC as gear source + freshness indicator (`simc_imported_at`, `equipped_source` on `gear_plans`; source toggle UI; stale SimC warning).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
