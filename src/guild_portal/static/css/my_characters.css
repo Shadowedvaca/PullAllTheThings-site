@@ -455,6 +455,9 @@
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 0.4rem;
   margin-bottom: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .mcn-detail-placeholder {
@@ -2196,4 +2199,222 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   border: 1px solid rgba(245, 158, 11, 0.3);
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
+}
+
+/* ── Phase 1E.7: Tour button ─────────────────────────────────────────────── */
+
+.mcn-gp-tour-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mcn-gp-tour-btn:hover {
+  background: var(--color-accent);
+  color: #0a0a0b;
+}
+
+/* ── Phase 1E.7: FAQ accordion ───────────────────────────────────────────── */
+
+.mcn-gp-faq {
+  margin-top: 2rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+}
+
+.mcn-gp-faq__hdr {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.75rem;
+}
+
+.mcn-faq-item {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  background: var(--color-surface-raised, #1a1a1e);
+  overflow: hidden;
+}
+
+.mcn-faq-item[open] {
+  border-color: rgba(212, 168, 75, 0.3);
+}
+
+.mcn-faq-q {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.mcn-faq-q::before {
+  content: '▶';
+  font-size: 0.55rem;
+  color: var(--color-accent);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.mcn-faq-item[open] .mcn-faq-q::before {
+  transform: rotate(90deg);
+}
+
+.mcn-faq-q::-webkit-details-marker { display: none; }
+
+.mcn-faq-a {
+  padding: 0.1rem 0.75rem 0.75rem 1.75rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+.mcn-faq-a a {
+  color: var(--color-accent);
+}
+
+.mcn-faq-a a:hover {
+  text-decoration: underline;
+}
+
+.mcn-faq-a code {
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  font-family: monospace;
+}
+
+.mcn-faq-ol {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.25rem;
+}
+
+.mcn-faq-ol li {
+  margin-bottom: 0.3rem;
+}
+
+/* ── Phase 1E.7: Shepherd.js theme overrides ─────────────────────────────── */
+
+.shepherd-modal-overlay-container {
+  opacity: 1 !important;
+}
+
+.shepherd-modal-overlay-container .shepherd-modal-overlay {
+  fill: rgba(0, 0, 0, 0.65) !important;
+}
+
+.mcn-shepherd-step.shepherd-element {
+  background: #1a1a1e;
+  border: 1px solid #d4a84b;
+  border-radius: 8px;
+  color: #e8e0d0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  max-width: 380px;
+  font-family: var(--font-body, 'Source Sans Pro', sans-serif);
+}
+
+.mcn-shepherd-step .shepherd-header {
+  background: #1a1a1e;
+  border-bottom: 1px solid rgba(212, 168, 75, 0.25);
+  padding: 0.75rem 1rem 0.6rem;
+  border-radius: 8px 8px 0 0;
+}
+
+.mcn-shepherd-step .shepherd-title {
+  font-family: var(--font-display, 'Cinzel', serif);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #d4a84b;
+}
+
+.mcn-shepherd-step .shepherd-cancel-icon {
+  color: #7a7065;
+  font-size: 1.2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.mcn-shepherd-step .shepherd-cancel-icon:hover {
+  color: #e8e0d0;
+}
+
+.mcn-shepherd-step .shepherd-text {
+  padding: 0.75rem 1rem;
+  font-size: 0.83rem;
+  line-height: 1.6;
+  color: #c8bfb0;
+}
+
+.mcn-shepherd-step .shepherd-footer {
+  padding: 0.5rem 1rem 0.75rem;
+  border-top: 1px solid rgba(212, 168, 75, 0.15);
+  background: #1a1a1e;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  border-radius: 0 0 8px 8px;
+}
+
+.mcn-shepherd-btn {
+  padding: 0.3rem 0.85rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.mcn-shepherd-btn--primary {
+  background: #d4a84b;
+  color: #0a0a0b;
+  border-color: #d4a84b;
+}
+
+.mcn-shepherd-btn--primary:hover {
+  background: #e0b85a;
+}
+
+.mcn-shepherd-btn--secondary {
+  background: transparent;
+  color: #c8bfb0;
+  border-color: rgba(255,255,255,0.15);
+}
+
+.mcn-shepherd-btn--secondary:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+/* Arrow pointer on shepherd popups */
+.mcn-shepherd-step .shepherd-arrow::before {
+  background: #1a1a1e;
+  border-color: #d4a84b;
 }
