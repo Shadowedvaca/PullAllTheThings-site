@@ -841,6 +841,49 @@
   grid-column: 1 / -1;
 }
 
+/* Available from Content collapsible section (Phase 1E.4) */
+.mcn-avail-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.4rem;
+}
+
+.mcn-avail-section__toggle {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0 0.35rem;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  user-select: none;
+}
+.mcn-avail-section__toggle::-webkit-details-marker { display: none; }
+.mcn-avail-section__toggle::before {
+  content: '\25B6';
+  font-size: 0.5rem;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
+  transform: rotate(90deg);
+}
+
+.mcn-avail-item__inst {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  padding-left: 24px;
+  margin-top: 1px;
+}
+
+.mcn-avail-item__tracks {
+  text-align: center;
+  white-space: nowrap;
+}
+
 /* BIS recommendation grid */
 .mcn-bis-grid {
   width: 100%;

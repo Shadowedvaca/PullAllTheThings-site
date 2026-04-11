@@ -1227,7 +1227,8 @@ const GP_TRACK_FALLBACK = { V: '#22c55e', C: '#3b82f6', H: '#a855f7', M: '#f9731
 
 // ── Per-character cache ────────────────────────────────────────────────────────
 
-const _gpCache = {};   // charId → API data (plan, slots, bisSources, heroTalents, trackColors)
+const _gpCache = {};       // charId → API data (plan, slots, bisSources, heroTalents, trackColors)
+const _gpAvailCache = {};  // "charId:dbSlot" → { status: 'loading'|'done'|'error', items: [] }
 let _gpOpenSlot = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1735,6 +1736,12 @@ function _gpPopulateSlotDetail(slotKey, sd, tc) {
     </div>
     <div class="mcn-slot-detail__body mcn-drawer__body">${_gpRenderDrawerBody(slotKey, sd, tc)}</div>
   `;
+  // Trigger available items fetch in background (fire-and-forget)
+  const charId = _selectedChar?.id;
+  if (charId) {
+    const dbSlot = sd.canonical_slot || slotKey;
+    _gpLoadAvailableItems(charId, dbSlot);
+  }
 }
 
 window.mcnGpCloseSlotDetail = function() {
@@ -1780,6 +1787,12 @@ async function _gpReload() {
   const charId = _selectedChar?.id;
   if (!charId) return;
   delete _gpCache[charId];
+  // Invalidate available-items cache for this character so re-fetches happen after
+  // gear sync or plan changes that could affect item availability.
+  const prefix = `${charId}:`;
+  for (const key of Object.keys(_gpAvailCache)) {
+    if (key.startsWith(prefix)) delete _gpAvailCache[key];
+  }
   await _gpLoadPlan(charId, true);
 }
 
@@ -2064,11 +2077,25 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     dropHtml = '<div class="mcn-drawer-empty">No drop source data</div>';
   }
 
+  // 5 — Available from Content (lazy-loaded; uses cache if already fetched)
+  const charId5  = _selectedChar?.id;
+  const cacheKey = charId5 ? `${charId5}:${dbSlot}` : null;
+  const avCached = cacheKey ? _gpAvailCache[cacheKey] : null;
+  const hasBis   = bis.length > 0;
+  const availBodyHtml = avCached
+    ? _gpRenderAvailItems(dbSlot, avCached.items, tc, avCached.status)
+    : '<div class="mcn-drawer-empty">Loading\u2026</div>';
+  const availHtml = `<details class="mcn-avail-section"${!hasBis ? ' open' : ''}>
+    <summary class="mcn-avail-section__toggle">Available from Content</summary>
+    <div id="mcn-avail-body-${_gpEsc(dbSlot)}">${availBodyHtml}</div>
+  </details>`;
+
   return `
     <div><div class="mcn-drawer-section__title">Equipped</div>${equippedHtml}</div>
     <div><div class="mcn-drawer-section__title">Your Goal</div>${goalHtml}${manualHtml}</div>
     <div><div class="mcn-drawer-section__title">Drop Location</div>${dropHtml}</div>
-    <div class="mcn-drawer__bis-section"><div class="mcn-drawer-section__title">BIS Recommendations</div>${bisHtml}</div>`;
+    <div class="mcn-drawer__bis-section"><div class="mcn-drawer-section__title">BIS Recommendations</div>${bisHtml}</div>
+    <div class="mcn-drawer__bis-section">${availHtml}</div>`;
 }
 
 function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
@@ -2157,6 +2184,85 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   }).join('');
 
   return `<table class="mcn-bis-grid">${thead}<tbody>${rows}</tbody></table>`;
+}
+
+// ── Available items (Phase 1E.4) ───────────────────────────────────────────────
+
+function _gpRenderAvailItems(dbSlot, items, tc, status) {
+  if (status === 'loading') return '<div class="mcn-drawer-empty">Loading\u2026</div>';
+  if (status === 'error')   return '<div class="mcn-drawer-empty">Could not load items</div>';
+  if (!items || !items.length) return '<div class="mcn-drawer-empty">No eligible items found in scanned content</div>';
+
+  const rows = items.map(item => {
+    const icon = item.icon_url
+      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy">`
+      : `<span class="mcn-bis-grid__icon-ph"></span>`;
+
+    // Aggregate unique tracks across all sources, ordered V < C < H < M
+    const allTracks = new Set(item.sources?.flatMap(s => s.quality_tracks || []) || []);
+    const trackPills = ['V','C','H','M'].filter(t => allTracks.has(t)).map(t => _gpPill(t, tc)).join(' ');
+
+    // Unique raid/dungeon instance names (up to 2)
+    const instances = [...new Set((item.sources || []).map(s => s.source_instance).filter(Boolean))];
+    const instText  = instances.slice(0, 2).join(', ');
+
+    return `<tr>
+      <td class="mcn-bis-grid__name">
+        <div class="mcn-bis-grid__name-inner">
+          ${icon}
+          <a href="https://www.wowhead.com/item=${item.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a>
+        </div>
+        ${instText ? `<div class="mcn-avail-item__inst">${_gpEsc(instText)}</div>` : ''}
+      </td>
+      <td class="mcn-avail-item__tracks">${trackPills}</td>
+      <td class="mcn-bis-grid__action"><button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">Use</button></td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="mcn-bis-grid">
+    <thead><tr>
+      <th class="mcn-bis-grid__name-col">Item</th>
+      <th style="font-size:0.63rem;text-align:center">Tracks</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function _gpLoadAvailableItems(charId, dbSlot) {
+  const key = `${charId}:${dbSlot}`;
+  if (_gpAvailCache[key]) {
+    // Already loaded — update DOM in case it rendered before the fetch completed
+    if (_gpAvailCache[key].status === 'done') {
+      const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
+      if (bodyEl) {
+        const tc = _gpCache[charId]?.track_colors || {};
+        bodyEl.innerHTML = _gpRenderAvailItems(dbSlot, _gpAvailCache[key].items, tc, 'done');
+      }
+    }
+    return;
+  }
+
+  _gpAvailCache[key] = { status: 'loading', items: [] };
+
+  try {
+    const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/available-items?slot=${encodeURIComponent(dbSlot)}`);
+    if (resp.ok) {
+      _gpAvailCache[key] = { status: 'done', items: resp.data || [] };
+    } else {
+      _gpAvailCache[key] = { status: 'error', items: [] };
+    }
+  } catch {
+    _gpAvailCache[key] = { status: 'error', items: [] };
+  }
+
+  // Update the section in-place if still visible
+  const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
+  if (bodyEl) {
+    const tc    = _gpCache[charId]?.track_colors || {};
+    const state = _gpAvailCache[key];
+    bodyEl.innerHTML = _gpRenderAvailItems(dbSlot, state.items, tc, state.status);
+  }
 }
 
 // ── Slot action globals (called from onclick attrs in drawer) ──────────────────

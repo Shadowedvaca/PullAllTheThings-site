@@ -65,6 +65,55 @@ TRACK_COLORS: dict[str, str] = {
     "M": "#ff8000",
 }
 
+# ── Class eligibility constants (Phase 1E.4) ──────────────────────────────────
+
+# Class → armor type worn (for filtering armor slot items)
+CLASS_ARMOR_TYPE: dict[str, str] = {
+    "Death Knight": "plate",
+    "Demon Hunter": "leather",
+    "Druid":        "leather",
+    "Evoker":       "mail",
+    "Hunter":       "mail",
+    "Mage":         "cloth",
+    "Monk":         "leather",
+    "Paladin":      "plate",
+    "Priest":       "cloth",
+    "Rogue":        "leather",
+    "Shaman":       "mail",
+    "Warlock":      "cloth",
+    "Warrior":      "plate",
+}
+
+# (class_name, spec_name) → primary stat for weapon item filtering
+SPEC_PRIMARY_STAT: dict[tuple[str, str], str] = {
+    ("Mage", "Arcane"): "int", ("Mage", "Fire"): "int", ("Mage", "Frost"): "int",
+    ("Warlock", "Affliction"): "int", ("Warlock", "Demonology"): "int", ("Warlock", "Destruction"): "int",
+    ("Priest", "Discipline"): "int", ("Priest", "Holy"): "int", ("Priest", "Shadow"): "int",
+    ("Death Knight", "Blood"): "str", ("Death Knight", "Frost"): "str", ("Death Knight", "Unholy"): "str",
+    ("Warrior", "Arms"): "str", ("Warrior", "Fury"): "str", ("Warrior", "Protection"): "str",
+    ("Paladin", "Holy"): "int", ("Paladin", "Protection"): "str", ("Paladin", "Retribution"): "str",
+    ("Druid", "Balance"): "int", ("Druid", "Feral"): "agi", ("Druid", "Guardian"): "agi",
+    ("Druid", "Restoration"): "int",
+    ("Monk", "Brewmaster"): "agi", ("Monk", "Mistweaver"): "int", ("Monk", "Windwalker"): "agi",
+    ("Rogue", "Assassination"): "agi", ("Rogue", "Outlaw"): "agi", ("Rogue", "Subtlety"): "agi",
+    ("Demon Hunter", "Havoc"): "agi", ("Demon Hunter", "Vengeance"): "agi",
+    ("Hunter", "Beast Mastery"): "agi", ("Hunter", "Marksmanship"): "agi", ("Hunter", "Survival"): "agi",
+    ("Shaman", "Elemental"): "int", ("Shaman", "Enhancement"): "agi", ("Shaman", "Restoration"): "int",
+    ("Evoker", "Devastation"): "int", ("Evoker", "Preservation"): "int", ("Evoker", "Augmentation"): "int",
+}
+
+# Slots that filter by armor_type; weapons use primary-stat check; accessories have no restriction
+_ARMOR_FILTER_SLOTS: frozenset[str] = frozenset(
+    {"head", "shoulder", "chest", "wrist", "hands", "waist", "legs", "feet"}
+)
+_WEAPON_SLOTS: frozenset[str] = frozenset({"main_hand", "off_hand"})
+
+# Map from plan slot → wow_items.slot_type for paired slots
+_SLOT_TYPE_QUERY_MAP: dict[str, str] = {
+    "ring_2":    "ring_1",
+    "trinket_2": "trinket_1",
+}
+
 
 def _upgrade_tracks(
     equipped_track: Optional[str],
@@ -1097,3 +1146,139 @@ async def get_plan_detail(
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
     }
+
+
+# ── Available items (Phase 1E.4) ──────────────────────────────────────────────
+
+def _filter_by_primary_stat(items: list[dict], primary_stat: str) -> list[dict]:
+    """Filter weapon items by primary stat via tooltip HTML substring checks.
+
+    Includes the item when uncertain (no tooltip or no recognisable stat text).
+    Simple substring matching as described in the Phase 1E.4 spec.
+    """
+    result = []
+    for item in items:
+        tooltip = item.get("wowhead_tooltip_html") or ""
+        if not tooltip:
+            # No tooltip data — include (uncertain → include per spec)
+            result.append(item)
+            continue
+        has_str = "Strength" in tooltip
+        has_agi = "Agility" in tooltip
+        has_int = "Intellect" in tooltip
+        if primary_stat == "int" and (has_str or has_agi):
+            continue
+        if primary_stat == "str" and (has_int or has_agi):
+            continue
+        if primary_stat == "agi" and (has_int or has_str):
+            continue
+        result.append(item)
+    return result
+
+
+async def get_available_items(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+    slot: str,
+) -> list[dict]:
+    """Return all class-eligible scanned items for a gear plan slot.
+
+    Used to populate the 'Available from Content' section in the slot drawer.
+    No schema changes required — queries wow_items + item_sources.
+
+    Eligibility rules:
+      - Armor slots: filter by character's class armor type (cloth/leather/mail/plate)
+      - Weapon slots: filter by primary stat derived from (class, spec); tooltip HTML check
+      - Accessories (neck/back/rings/trinkets): no armor restriction
+    """
+    if slot not in WOW_SLOTS:
+        return []
+
+    async with pool.acquire() as conn:
+        char_row = await conn.fetchrow(
+            """
+            SELECT c.name AS class_name, s.name AS spec_name
+              FROM guild_identity.wow_characters wc
+              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN guild_identity.gear_plans gp
+                     ON gp.character_id = wc.id AND gp.player_id = $2
+              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
+             WHERE wc.id = $1
+            """,
+            character_id, player_id,
+        )
+        if not char_row:
+            return []
+
+        class_name = char_row["class_name"] or ""
+        spec_name  = char_row["spec_name"] or ""
+
+        # Normalize paired slots to canonical wow_items.slot_type
+        slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
+
+        # Build WHERE clause fragments
+        params: list = [slot_type]
+        armor_clause = ""
+        if slot in _ARMOR_FILTER_SLOTS:
+            armor_type = CLASS_ARMOR_TYPE.get(class_name)
+            if armor_type:
+                params.append(armor_type)
+                armor_clause = f"AND wi.armor_type = ${len(params)}"
+
+        # Only fetch tooltip HTML when needed for weapon stat filtering
+        need_tooltip = slot in _WEAPON_SLOTS
+        tooltip_col  = "wi.wowhead_tooltip_html," if need_tooltip else ""
+
+        rows = await conn.fetch(
+            f"""
+            SELECT wi.blizzard_item_id, wi.name, wi.icon_url,
+                   {tooltip_col}
+                   is2.source_name, is2.source_instance, is2.instance_type
+              FROM guild_identity.wow_items wi
+              JOIN guild_identity.item_sources is2
+                   ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
+             WHERE wi.slot_type = $1
+               {armor_clause}
+             ORDER BY wi.name, is2.source_instance, is2.source_name
+            """,
+            *params,
+        )
+
+    # Group by blizzard_item_id, collecting sources
+    item_map: dict[int, dict] = {}
+    for r in rows:
+        bid = r["blizzard_item_id"]
+        if bid not in item_map:
+            entry: dict = {
+                "blizzard_item_id": bid,
+                "name": r["name"],
+                "icon_url": r["icon_url"],
+                "sources": [],
+            }
+            if need_tooltip:
+                entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
+            item_map[bid] = entry
+        tracks = _get_tracks(r["instance_type"])
+        src = {
+            "source_name":     r["source_name"],
+            "source_instance": r["source_instance"],
+            "instance_type":   r["instance_type"],
+            "quality_tracks":  tracks,
+        }
+        if src not in item_map[bid]["sources"]:
+            item_map[bid]["sources"].append(src)
+
+    items = list(item_map.values())
+
+    # Apply primary-stat filter for weapon slots (in Python to keep SQL simple)
+    if slot in _WEAPON_SLOTS and items:
+        primary_stat = SPEC_PRIMARY_STAT.get((class_name, spec_name))
+        if primary_stat:
+            items = _filter_by_primary_stat(items, primary_stat)
+
+    # Strip tooltip HTML before returning (only needed for in-process filtering)
+    for item in items:
+        item.pop("wowhead_tooltip_html", None)
+
+    return items
