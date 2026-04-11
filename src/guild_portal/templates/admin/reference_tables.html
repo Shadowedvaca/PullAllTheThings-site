@@ -384,13 +384,15 @@
             </td>
             <td>
                 {% set season_instance_ids = season.current_instance_ids or [] %}
+                {% set instance_name_counts = {} %}
+                {% for inst in known_instances %}{% if inst.name in instance_name_counts %}{% set _ = instance_name_counts.update({inst.name: instance_name_counts[inst.name] + 1}) %}{% else %}{% set _ = instance_name_counts.update({inst.name: 1}) %}{% endif %}{% endfor %}
                 <select multiple name="current_instance_ids" class="rt-field rt-multi-select"
                         size="5"
                         data-orig="{{ season_instance_ids | tojson }}">
                     {% for inst in known_instances %}
                     <option value="{{ inst.id }}"
                             {% if inst.id in season_instance_ids %}selected{% endif %}>
-                        {{ inst.name }}
+                        {{ inst.name }}{% if instance_name_counts[inst.name] > 1 %} (ID: {{ inst.id }}){% endif %}
                     </option>
                     {% endfor %}
                 </select>
@@ -880,10 +882,14 @@ function _buildRaidMultiSelect(selectedIds) {
     return `<select multiple name="current_raid_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
 }
 
+const _instanceNameCounts = {};
+_knownInstances.forEach(inst => { _instanceNameCounts[inst.name] = (_instanceNameCounts[inst.name] || 0) + 1; });
+
 function _buildInstanceMultiSelect(selectedIds) {
     const opts = _knownInstances.map(inst => {
         const sel = selectedIds.includes(inst.id) ? ' selected' : '';
-        return `<option value="${inst.id}"${sel}>${inst.name}</option>`;
+        const label = _instanceNameCounts[inst.name] > 1 ? `${inst.name} (ID: ${inst.id})` : inst.name;
+        return `<option value="${inst.id}"${sel}>${label}</option>`;
     }).join('');
     return `<select multiple name="current_instance_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
 }

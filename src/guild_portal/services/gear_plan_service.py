@@ -1225,11 +1225,18 @@ async def get_available_items(
         class_name = char_row["class_name"] or ""
         spec_name  = char_row["spec_name"] or ""
 
-        # Load current season instance filter (empty array = no filter)
+        # Load current season filters — combine M+ dungeons + raid instances.
+        # current_instance_ids = M+ dungeon pool (admin-managed).
+        # current_raid_ids = raid tiers (already tracked for other features).
+        # Falls back to no filter if both are empty.
         season_row = await conn.fetchrow(
-            "SELECT current_instance_ids FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"
+            """SELECT current_instance_ids, current_raid_ids
+                 FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"""
         )
-        current_instance_ids: list[int] = list(season_row["current_instance_ids"]) if season_row else []
+        current_instance_ids: list[int] = []
+        if season_row:
+            current_instance_ids = list(season_row["current_instance_ids"] or [])
+            current_instance_ids += list(season_row["current_raid_ids"] or [])
 
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
