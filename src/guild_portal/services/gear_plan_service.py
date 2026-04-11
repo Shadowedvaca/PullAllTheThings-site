@@ -114,6 +114,16 @@ _SLOT_TYPE_QUERY_MAP: dict[str, str] = {
     "trinket_2": "trinket_1",
 }
 
+# Wowhead tooltip HTML armor-type marker: <!--scstart4:{subclass_id}-->
+# Used when wow_items.armor_type is NULL (items seeded via Journal API don't
+# have armor_type populated; the type is embedded in the tooltip HTML instead).
+_ARMOR_TYPE_MARKER: dict[str, str] = {
+    "cloth":   "%<!--scstart4:1-->%",
+    "leather": "%<!--scstart4:2-->%",
+    "mail":    "%<!--scstart4:3-->%",
+    "plate":   "%<!--scstart4:4-->%",
+}
+
 
 def _upgrade_tracks(
     equipped_track: Optional[str],
@@ -1223,8 +1233,13 @@ async def get_available_items(
         if slot in _ARMOR_FILTER_SLOTS:
             armor_type = CLASS_ARMOR_TYPE.get(class_name)
             if armor_type:
-                params.append(armor_type)
-                armor_clause = f"AND wi.armor_type = ${len(params)}"
+                tooltip_marker = _ARMOR_TYPE_MARKER.get(armor_type, "")
+                params.append(armor_type)        # $2 — direct column match
+                params.append(tooltip_marker)    # $3 — tooltip HTML fallback
+                armor_clause = (
+                    f"AND (wi.armor_type = ${len(params) - 1} "
+                    f"OR (wi.armor_type IS NULL AND wi.wowhead_tooltip_html LIKE ${len(params)}))"
+                )
 
         # Only fetch tooltip HTML when needed for weapon stat filtering
         need_tooltip = slot in _WEAPON_SLOTS
