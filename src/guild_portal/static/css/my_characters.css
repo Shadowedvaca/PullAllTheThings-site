@@ -1335,17 +1335,15 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 .mcn-gt__name {
   font-size: 0.77rem;
   color: var(--color-text);
-  text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
   display: block;
 }
-.mcn-gt__name:hover {
-  text-decoration: underline;
-  color: var(--color-accent);
-}
+
+/* Wowhead icon links — popup on hover, no layout disruption */
+.mcn-wh-link { display: inline-block; line-height: 0; flex-shrink: 0; }
+.mcn-wh-link:hover { opacity: 0.8; }
 
 .mcn-gt__meta {
   display: flex;

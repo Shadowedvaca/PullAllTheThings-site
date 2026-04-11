@@ -1534,7 +1534,7 @@ function _gpRenderGearTable(slots, tc) {
         ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>`
         : '';
       const icon = eq.icon_url
-        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer">
+        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
              <img class="mcn-gt__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${iconBs}>
            </a>`
         : '';
@@ -1542,8 +1542,7 @@ function _gpRenderGearTable(slots, tc) {
       equippedHtml = `<div class="mcn-gt__item">
         ${icon}
         <div class="mcn-gt__item-info">
-          <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer"
-             class="mcn-gt__name"${nameColor}>${_gpEsc(eq.item_name || 'Unknown')}</a>
+          <span class="mcn-gt__name"${nameColor}>${_gpEsc(eq.item_name || 'Unknown')}</span>
           <div class="mcn-gt__meta">
             ${eq.item_level ? `<span class="mcn-gt__ilvl">${eq.item_level}</span>` : ''}
             ${badge}
@@ -1570,14 +1569,13 @@ function _gpRenderGearTable(slots, tc) {
       const goalItem = desired || (bisRecs.length ? bisRecs[0] : null);
       if (goalItem && goalItem.blizzard_item_id) {
         const icon = goalItem.icon_url
-          ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer">
+          ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
                <img class="mcn-gt__icon" src="${_gpEsc(goalItem.icon_url)}" alt="" loading="lazy">
              </a>`
           : '';
         goalHtml = `<div class="mcn-gt__item">
           ${icon}
-          <a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer"
-             class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}</a>
+          <span class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}</span>
         </div>`;
       } else {
         goalHtml = '<span class="mcn-gt__empty">&mdash;</span>';
@@ -2211,10 +2209,10 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 6px ${qc}80"` : '';
     const badge = eq.quality_track ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>` : '';
     equippedHtml = `<div class="mcn-drawer-item">
-      ${eq.icon_url ? `<img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}>` : ''}
+      ${eq.icon_url ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name"${ns}>
-          <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(eq.item_name || 'Unknown')}</a>
+          ${_gpEsc(eq.item_name || 'Unknown')}
         </div>
         <div class="mcn-drawer-item__meta">${eq.item_level ? eq.item_level + '\u00a0' : ''}${badge}</div>
       </div>
@@ -2232,10 +2230,10 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   if (desired && desired.blizzard_item_id) {
     const locked = desired.is_locked;
     goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
-      ${desired.icon_url ? `<img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy">` : ''}
+      ${desired.icon_url ? `<a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name">
-          <a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(desired.item_name || 'Unknown')}</a>
+          ${_gpEsc(desired.item_name || 'Unknown')}
         </div>
       </div>
     </div>
@@ -2417,11 +2415,11 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
         : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no">&mdash;</td>`
     ).join('');
     const icon = item.icon
-      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy">`
+      ? `<a href="https://www.wowhead.com/item=${item.bid}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
-      <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}<a href="https://www.wowhead.com/item=${item.bid}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a></div></td>
+      <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(item.name)}</div></td>
       ${cells}
       <td class="mcn-bis-grid__action">
         <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.bid})">Use</button>
@@ -2442,7 +2440,7 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
 
   const rows = items.map(item => {
     const icon = item.icon_url
-      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy">`
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
     // Aggregate unique tracks across all sources, ordered V < C < H < M
@@ -2458,7 +2456,7 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
           ${icon}
-          <a href="https://www.wowhead.com/item=${item.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a>
+          ${_gpEsc(item.name)}
         </div>
         ${instText ? `<div class="mcn-avail-item__inst">${_gpEsc(instText)}</div>` : ''}
       </td>
@@ -2484,13 +2482,13 @@ function _gpRenderExcludedItems(dbSlot, items) {
   if (!items || !items.length) return '';
   const rows = items.map(item => {
     const icon = item.icon_url
-      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy" style="opacity:0.5">`
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer" style="opacity:0.5"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     return `<tr>
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
           ${icon}
-          <a href="https://www.wowhead.com/item=${item.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;opacity:0.5">${_gpEsc(item.name)}</a>
+          <span style="opacity:0.5">${_gpEsc(item.name)}</span>
         </div>
       </td>
       <td class="mcn-bis-grid__action">
