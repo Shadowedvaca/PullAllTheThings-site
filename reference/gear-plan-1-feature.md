@@ -33,12 +33,12 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1E.3** Roster aggregation — auto-setup new members | ✅ DONE | `gear_plan_auto_setup.py` in sv_common/guild_sync; called from `_sync_one_character` after equipment commit; no-op if plan exists or no player link |
 | **1E.4** Class-eligible items in slot table | ✅ DONE | `get_available_items()` in gear_plan_service + `GET /api/v1/me/gear-plan/{character_id}/available-items?slot=`. CLASS_ARMOR_TYPE + SPEC_PRIMARY_STAT static maps; armor slots filter by class armor_type; weapon slots filter by primary stat via tooltip substring check; accessories unrestricted. Frontend: collapsible `<details>` section in slot drawer with lazy fetch + in-place update; _gpAvailCache per-char/slot; cache cleared on _gpReload(). |
 | **1E.5** Item exclusion | ✅ DONE | `excluded_item_ids INTEGER[]` on `gear_plan_slots` (migration 0093); Fill BIS skips excluded items (tries next priority candidate); BIS recommendations filter per-slot; Available from Content hides excluded items; ✕ button on every BIS/available row; 3-second undo toast; collapsed "Excluded items" ↩ section at bottom of drawer. PATCH/DELETE `/api/v1/me/gear-plan/{character_id}/slots/{slot}/exclude`. |
-| **1E.6** SimC as gear source + freshness indicator | ⬜ TODO | Parse stored `simc_profile` for item IDs + bonus IDs; `simc_imported_at` timestamp (migration); source toggle (Blizzard API / SimC Import) on paperdoll with timestamps; staleness warning if SimC >7 days; guild roster metrics always use Blizzard API |
+| **1E.6** SimC as gear source + freshness indicator | ✅ DONE | Migration 0094: `simc_imported_at TIMESTAMPTZ` + `equipped_source VARCHAR(10) CHECK('blizzard'/'simc')` on `gear_plans`. `import_simc()` sets both on import. `get_plan_detail()` overlays SimC-parsed equipped gear when `equipped_source='simc'`. `set_equipped_source()` + `PATCH /source` endpoint. Frontend (JS v1.8.0, CSS v1.5.0): source toggle bar (Blizzard API / SimC Import pill buttons), timestamps, >7-day staleness warning (yellow). SimC import modal uncommented; Import/Export SimC buttons visible. |
 | **1E.7** Help system — guided tour + FAQ | ⬜ TODO | Shepherd.js overlay tour triggered by ? button (auto-fires on first visit via localStorage); collapsible FAQ accordion at bottom of gear plan tab including SimC addon tutorial and "Where did this plan come from?" |
 
-**Active branch:** `main`
-**Last migration:** 0093
-**Last prod tag:** `prod-v0.14.0`
+**Active branch:** `feature/gear-plan-phase-1e6`
+**Last migration:** 0094
+**Last prod tag:** `prod-v0.14.1`
 
 ---
 
