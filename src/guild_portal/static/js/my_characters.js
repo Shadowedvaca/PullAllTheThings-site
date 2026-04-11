@@ -2090,12 +2090,22 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     <div id="mcn-avail-body-${_gpEsc(dbSlot)}">${availBodyHtml}</div>
   </details>`;
 
+  // Phase 1E.5: excluded items section
+  const excludedItems = sd.excluded_items || [];
+  const excludedHtml = excludedItems.length > 0
+    ? `<details class="mcn-avail-section">
+        <summary class="mcn-avail-section__toggle">Excluded items (${excludedItems.length})</summary>
+        <div>${_gpRenderExcludedItems(dbSlot, excludedItems)}</div>
+       </details>`
+    : '';
+
   return `
     <div><div class="mcn-drawer-section__title">Equipped</div>${equippedHtml}</div>
     <div><div class="mcn-drawer-section__title">Your Goal</div>${goalHtml}${manualHtml}</div>
     <div><div class="mcn-drawer-section__title">Drop Location</div>${dropHtml}</div>
     <div class="mcn-drawer__bis-section"><div class="mcn-drawer-section__title">BIS Recommendations</div>${bisHtml}</div>
-    <div class="mcn-drawer__bis-section">${availHtml}</div>`;
+    <div class="mcn-drawer__bis-section">${availHtml}</div>
+    ${excludedItems.length > 0 ? `<div class="mcn-drawer__bis-section">${excludedHtml}</div>` : ''}`;
 }
 
 function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
@@ -2176,10 +2186,14 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     const icon = item.icon
       ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy">`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
+    const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
       <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}<a href="https://www.wowhead.com/item=${item.bid}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a></div></td>
       ${cells}
-      <td class="mcn-bis-grid__action"><button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.bid})">Use</button></td>
+      <td class="mcn-bis-grid__action">
+        <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.bid})">Use</button>
+        <button class="mcn-exclude-btn" type="button" title="Exclude this item" onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${item.bid},'${nameEsc}')">&times;</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -2206,6 +2220,7 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
     const instances = [...new Set((item.sources || []).map(s => s.source_instance).filter(Boolean))];
     const instText  = instances.slice(0, 2).join(', ');
 
+    const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
@@ -2215,7 +2230,10 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
         ${instText ? `<div class="mcn-avail-item__inst">${_gpEsc(instText)}</div>` : ''}
       </td>
       <td class="mcn-avail-item__tracks">${trackPills}</td>
-      <td class="mcn-bis-grid__action"><button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">Use</button></td>
+      <td class="mcn-bis-grid__action">
+        <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">Use</button>
+        <button class="mcn-exclude-btn" type="button" title="Exclude this item" onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id},'${nameEsc}')">&times;</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -2225,6 +2243,30 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
       <th style="font-size:0.63rem;text-align:center">Tracks</th>
       <th></th>
     </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function _gpRenderExcludedItems(dbSlot, items) {
+  if (!items || !items.length) return '';
+  const rows = items.map(item => {
+    const icon = item.icon_url
+      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy" style="opacity:0.5">`
+      : `<span class="mcn-bis-grid__icon-ph"></span>`;
+    return `<tr>
+      <td class="mcn-bis-grid__name">
+        <div class="mcn-bis-grid__name-inner">
+          ${icon}
+          <a href="https://www.wowhead.com/item=${item.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;opacity:0.5">${_gpEsc(item.name)}</a>
+        </div>
+      </td>
+      <td class="mcn-bis-grid__action">
+        <button class="btn btn-sm btn-secondary" type="button" title="Un-exclude" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpUnexcludeItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">&#8617;</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<table class="mcn-bis-grid" style="opacity:0.8">
+    <thead><tr><th class="mcn-bis-grid__name-col">Item</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }
@@ -2369,3 +2411,67 @@ window.mcnGpPickSearchResult = async function(slot, blizzardItemId, name) {
   if (input) input.value = '';
   await window.mcnGpSetDesiredItem(slot, blizzardItemId);
 };
+
+// ── Item exclusion (Phase 1E.5) ───────────────────────────────────────────────
+
+window.mcnGpExcludeItem = async function(slot, blizzardItemId, itemName) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/slots/${slot}/exclude`, {
+    method: 'PATCH',
+    body: JSON.stringify({ blizzard_item_id: blizzardItemId }),
+  });
+
+  if (!resp.ok) {
+    _gpShowStatus(resp.error || 'Failed to exclude item', 'err');
+    return;
+  }
+
+  // Invalidate available-items cache so the excluded item disappears
+  const cacheKey = `${charId}:${slot}`;
+  delete _gpAvailCache[cacheKey];
+
+  // Reload plan (gets updated excluded_items list), then re-open drawer
+  await _gpReload();
+
+  // Show undo toast
+  _gpShowExcludeToast(slot, blizzardItemId, itemName);
+};
+
+window.mcnGpUnexcludeItem = async function(slot, blizzardItemId) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+
+  // Dismiss toast if still showing
+  const toast = document.getElementById('mcn-exclude-toast');
+  if (toast) { clearTimeout(toast._gpTimer); toast.remove(); }
+
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/slots/${slot}/exclude`, {
+    method: 'DELETE',
+    body: JSON.stringify({ blizzard_item_id: blizzardItemId }),
+  });
+
+  if (resp.ok) {
+    // Invalidate available-items cache for this slot
+    delete _gpAvailCache[`${charId}:${slot}`];
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Failed to un-exclude item', 'err');
+  }
+};
+
+function _gpShowExcludeToast(slot, blizzardItemId, itemName) {
+  // Remove any existing toast
+  const existing = document.getElementById('mcn-exclude-toast');
+  if (existing) { clearTimeout(existing._gpTimer); existing.remove(); }
+
+  const toast = document.createElement('div');
+  toast.id = 'mcn-exclude-toast';
+  toast.className = 'mcn-exclude-toast';
+  toast.innerHTML = `<span>Excluded <strong>${_gpEsc(itemName)}</strong></span>
+    <button type="button" onclick="mcnGpUnexcludeItem('${_gpEsc(slot)}',${blizzardItemId})">Undo</button>`;
+  document.body.appendChild(toast);
+
+  toast._gpTimer = setTimeout(() => toast.remove(), 3000);
+}
