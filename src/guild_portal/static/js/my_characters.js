@@ -1654,7 +1654,21 @@ function _gpRenderCenterPanel(data) {
   const simcAgeDays = simcAt ? (Date.now() - simcAt.getTime()) / 86400000 : null;
   const simcStale   = simcAgeDays !== null && simcAgeDays > 7;
 
-  // Blizzard panel content
+  // ── Status dots for equipped tabs ──────────────────────────────────────
+  // Most recently updated tab = green; within 7d of the other = amber;
+  // >7d older than the other = red; no data = off/blank.
+  function _eqDot(thisAt, otherAt) {
+    if (!thisAt) return '<span class="mcn-gp-dot mcn-gp-dot--off"></span>';
+    if (!otherAt) return '<span class="mcn-gp-dot mcn-gp-dot--green"></span>';
+    const diffDays = (thisAt.getTime() - otherAt.getTime()) / 86400000;
+    if (diffDays >= 0) return '<span class="mcn-gp-dot mcn-gp-dot--green"></span>';
+    if (Math.abs(diffDays) <= 7) return '<span class="mcn-gp-dot mcn-gp-dot--amber"></span>';
+    return '<span class="mcn-gp-dot mcn-gp-dot--red"></span>';
+  }
+  const blizzDot = _eqDot(blizzardAt, simcAt);
+  const simcDot  = _eqDot(simcAt, blizzardAt);
+
+  // Blizzard panel — sync timestamp + Sync Now button
   const blizzardPanel = `
     <div class="mcn-gp-panel" id="mcn-gp-panel-blizzard"${isEqBlizzard ? '' : ' hidden'}>
       <div class="mcn-gp-sync-row">
@@ -1665,7 +1679,8 @@ function _gpRenderCenterPanel(data) {
       </div>
     </div>`;
 
-  // SimC equipped panel content — shows textarea if no import yet OR user clicked Re-import
+  // SimC equipped panel — shows textarea if no import yet OR user clicked Re-import
+  // Profile is persisted in DB; switching tabs does not lose it.
   const showSimcInput = isEqSimC && (_gpEquippedShowInput || !simcAt);
   const simcPanel = `
     <div class="mcn-gp-panel mcn-gp-panel--simc" id="mcn-gp-panel-simc"${isEqSimC ? '' : ' hidden'}>
@@ -1680,7 +1695,7 @@ function _gpRenderCenterPanel(data) {
           <span class="mcn-gp-src-ts">Snapshot from ${_gpTimeAgo(simcAt)}</span>
           <button id="mcn-gp-btn-reimport-eq" class="btn btn-secondary btn-sm" type="button">Re-import</button>
         </div>
-        ${simcStale ? `<div class="mcn-gp-src-stale">&#9888; SimC data is ${Math.floor(simcAgeDays)} days old \u2014 consider re-importing</div>` : ''}`}
+        ${simcStale ? `<div class="mcn-gp-src-stale">&#9888; ${Math.floor(simcAgeDays)} days old \u2014 consider re-importing</div>` : ''}`}
     </div>`;
 
   const equippedSection = `
@@ -1691,9 +1706,9 @@ function _gpRenderCenterPanel(data) {
       </div>
       <div class="mcn-gp-section__tabs">
         <button class="mcn-gp-stab${isEqBlizzard ? ' is-active' : ''}"
-                onclick="_gpOnEquippedTab('blizzard')" type="button">Blizzard API</button>
+                onclick="_gpOnEquippedTab('blizzard')" type="button">${blizzDot} Blizzard API</button>
         <button class="mcn-gp-stab${isEqSimC ? ' is-active' : ''}"
-                onclick="_gpOnEquippedTab('simc')" type="button">SimC Import</button>
+                onclick="_gpOnEquippedTab('simc')" type="button">${simcDot} SimC Import</button>
       </div>
       ${blizzardPanel}
       ${simcPanel}

@@ -957,21 +957,46 @@ async def get_plan_detail(
                         "is_crafted": is_crafted,
                     }
 
-                # Cross-reference quality_track from Blizzard API data.
-                # For items where track_from_bonus_ids() returned None (bonus_id
-                # map doesn't yet cover Midnight Season IDs), check if the same
-                # blizzard_item_id is in the character's Blizzard-synced equipment
-                # and borrow its quality_track from there.
-                blizzard_track_by_bid: dict[int, str] = {
-                    r["blizzard_item_id"]: r["quality_track"]
-                    for r in equip_rows
-                    if r["blizzard_item_id"] and r["quality_track"]
-                }
+                # Cross-reference quality_track from Blizzard API data using
+                # two complementary strategies:
+                #
+                # Strategy A — exact item match: if the same blizzard_item_id
+                #   exists in character_equipment with quality_track set (from
+                #   Blizzard display_string detection), borrow it directly.
+                #
+                # Strategy B — bonus_id pattern learning: build a map of
+                #   bonus_id → quality_track from all character_equipment rows
+                #   that DO have quality_track.  Midnight Season uses new bonus
+                #   IDs not yet in _DEFAULT_SIMC_BONUS_IDS; this discovers them
+                #   empirically from the items we already know the quality of.
+                #   For each SimC item, scan its bonus_ids against this map.
+                #   First match wins (quality tier IDs are globally unique in WoW).
+                blizzard_track_by_bid: dict[int, str] = {}
+                bonus_id_to_track: dict[int, str] = {}
+                for r in equip_rows:
+                    qt = r["quality_track"]
+                    if not qt:
+                        continue
+                    bid = r["blizzard_item_id"]
+                    if bid:
+                        blizzard_track_by_bid[bid] = qt
+                    for bonus_id in (r.get("bonus_ids") or []):
+                        if bonus_id not in bonus_id_to_track:
+                            bonus_id_to_track[bonus_id] = qt
+
                 for item_data in simc_equipped.values():
-                    if item_data.get("quality_track") is None:
-                        bid = item_data.get("blizzard_item_id")
-                        if bid and bid in blizzard_track_by_bid:
-                            item_data["quality_track"] = blizzard_track_by_bid[bid]
+                    if item_data.get("quality_track") is not None:
+                        continue
+                    bid = item_data.get("blizzard_item_id")
+                    # Strategy A: exact item match
+                    if bid and bid in blizzard_track_by_bid:
+                        item_data["quality_track"] = blizzard_track_by_bid[bid]
+                        continue
+                    # Strategy B: scan SimC bonus_ids for known quality markers
+                    for bonus_id in (item_data.get("bonus_ids") or []):
+                        if bonus_id in bonus_id_to_track:
+                            item_data["quality_track"] = bonus_id_to_track[bonus_id]
+                            break
 
                 equipped_by_slot = simc_equipped
 

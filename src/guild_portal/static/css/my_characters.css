@@ -2043,7 +2043,7 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 }
 
 .mcn-gp-section {
-  flex: 1 1 260px;
+  flex: 0 0 auto;
   min-width: 220px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
@@ -2091,6 +2091,10 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 
 .mcn-gp-stab {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   background: transparent;
   border: none;
   border-right: 1px solid var(--color-border);
@@ -2110,6 +2114,20 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   font-weight: 700;
   cursor: default;
 }
+/* Status indicator dot on tab */
+.mcn-gp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid currentColor;
+  opacity: 0.5;
+}
+.mcn-gp-dot--green  { background: #4ade80; border-color: #4ade80; opacity: 1; box-shadow: 0 0 4px #4ade80; }
+.mcn-gp-dot--amber  { background: #f59e0b; border-color: #f59e0b; opacity: 1; }
+.mcn-gp-dot--red    { background: #f87171; border-color: #f87171; opacity: 1; }
+.mcn-gp-dot--off    { background: transparent; border-color: var(--color-border); opacity: 0.4; }
 
 .mcn-gp-panel {
   padding: 0.65rem 0.75rem;
@@ -2120,6 +2138,8 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   flex-direction: column;
   gap: 0.5rem;
 }
+/* Must come AFTER display rules — overrides flex/block to hide panels */
+.mcn-gp-panel[hidden] { display: none !important; }
 
 .mcn-gp-sync-row {
   display: flex;
