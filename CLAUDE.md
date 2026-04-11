@@ -235,14 +235,19 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1E complete** — merged PR #22, tagged `prod-v0.13.0`.
-  - **1E.1** — Roster Needs section on public `/roster` page. Public API endpoints `GET /api/v1/gear-needs/raid` + `/dungeon`. Hierarchical raid table (instance→boss, collapsible) + flat M+ table. Track columns auto-hide. Include Initiates / Include Offspec filters. Color-coded chips. Migrations 0089 + 0090.
-  - **1E.2** — Drill panel (slide-in from right). By Item / By Player toggle; active chip gold outline; Wowhead tooltips; re-renders on filter change.
-  - **1E.3** — Auto-setup default Wowhead BIS plan for newly-discovered in-guild characters during equipment sync (`gear_plan_auto_setup.py`). Failures surfaced to Discord via `report_error` + `maybe_notify_discord`. Migration 0091 seeds error routing row.
-- **Last migration:** 0091
-- **Last prod tag:** `prod-v0.13.0`
+- **Phase 1E.4 complete** — merged PR #23, tagged `prod-v0.14.0`.
+  - **Available from Content** collapsible section in every gear slot drawer on `/my-characters`. Shows class-eligible items from Midnight Season 1 content only (M+ dungeons + raid bosses).
+  - Armor slots filtered by class armor type (`CLASS_ARMOR_TYPE` map + Wowhead tooltip HTML fallback `<!--scstart4:N-->` for items where `wow_items.armor_type IS NULL`).
+  - Weapon slots filtered by primary stat (Int/Str/Agi) via `SPEC_PRIMARY_STAT` map + tooltip substring check.
+  - Lazy fetch with `_gpAvailCache` per character+slot; cache cleared on gear reload.
+  - Section collapsed by default when BIS data exists; expanded when no BIS.
+  - **Admin → Reference Tables → Raid Seasons**: new **M+ Dungeons** multi-select column (`current_instance_ids INTEGER[]` on `patt.raid_seasons`). Duplicate-named instances show `(ID: N)` to disambiguate (e.g. Magisters' Terrace ID 249 = old BC vs ID 1300 = new Midnight). `get_available_items()` combines `current_instance_ids` + `current_raid_ids` for the filter.
+  - Midnight Season 1 M+ pool seeded: Pit of Saron (278), Skyreach (476), Seat of the Triumvirate (945), Algeth'ar Academy (1201), Windrunner Spire (1299), Magisters' Terrace new (1300), Maisara Caverns (1315), Nexus-Point Xenas (1316).
+  - Migration 0092: `current_instance_ids INTEGER[] NOT NULL DEFAULT '{}'` on `patt.raid_seasons`.
+- **Last migration:** 0092
+- **Last prod tag:** `prod-v0.14.0`
 - **Active branch:** `main`
-- **Next:** Phase 1E.4 — class-eligible items in slot table (new feature branch).
+- **Next:** Phase 1E.5 — item exclusion (`excluded_item_ids` on `gear_plan_slots`, ✕ button in slot drawer).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

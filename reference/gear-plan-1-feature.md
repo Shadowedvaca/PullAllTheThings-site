@@ -36,9 +36,9 @@ The guild needs to answer "what should we run this week?" from a loot perspectiv
 | **1E.6** SimC as gear source + freshness indicator | ⬜ TODO | Parse stored `simc_profile` for item IDs + bonus IDs; `simc_imported_at` timestamp (migration); source toggle (Blizzard API / SimC Import) on paperdoll with timestamps; staleness warning if SimC >7 days; guild roster metrics always use Blizzard API |
 | **1E.7** Help system — guided tour + FAQ | ⬜ TODO | Shepherd.js overlay tour triggered by ? button (auto-fires on first visit via localStorage); collapsible FAQ accordion at bottom of gear plan tab including SimC addon tutorial and "Where did this plan come from?" |
 
-**Active branch:** `feature/gear-plan-phase-1d`
-**Last migration:** 0087
-**Last prod tag:** `prod-v0.11.2`
+**Active branch:** `main`
+**Last migration:** 0092
+**Last prod tag:** `prod-v0.14.0`
 
 ---
 
