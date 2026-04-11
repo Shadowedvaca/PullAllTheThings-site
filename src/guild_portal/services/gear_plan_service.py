@@ -1192,10 +1192,11 @@ async def get_available_items(
     character_id: int,
     slot: str,
 ) -> list[dict]:
-    """Return all class-eligible scanned items for a gear plan slot.
+    """Return class-eligible scanned items for a gear plan slot (current season only).
 
     Used to populate the 'Available from Content' section in the slot drawer.
-    No schema changes required — queries wow_items + item_sources.
+    Filters to instances listed in patt.raid_seasons.current_instance_ids for the
+    active season. Falls back to showing all instances if current_instance_ids is empty.
 
     Eligibility rules:
       - Armor slots: filter by character's class armor type (cloth/leather/mail/plate)
@@ -1224,6 +1225,12 @@ async def get_available_items(
         class_name = char_row["class_name"] or ""
         spec_name  = char_row["spec_name"] or ""
 
+        # Load current season instance filter (empty array = no filter)
+        season_row = await conn.fetchrow(
+            "SELECT current_instance_ids FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"
+        )
+        current_instance_ids: list[int] = list(season_row["current_instance_ids"]) if season_row else []
+
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
 
@@ -1241,6 +1248,12 @@ async def get_available_items(
                     f"OR (wi.armor_type IS NULL AND wi.wowhead_tooltip_html LIKE ${len(params)}))"
                 )
 
+        # Season filter: restrict to current_instance_ids when populated
+        season_clause = ""
+        if current_instance_ids:
+            params.append(current_instance_ids)  # $N — INTEGER[]
+            season_clause = f"AND is2.blizzard_instance_id = ANY(${len(params)})"
+
         # Only fetch tooltip HTML when needed for weapon stat filtering
         need_tooltip = slot in _WEAPON_SLOTS
         tooltip_col  = "wi.wowhead_tooltip_html," if need_tooltip else ""
@@ -1255,6 +1268,7 @@ async def get_available_items(
                    ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
              WHERE wi.slot_type = $1
                {armor_clause}
+               {season_clause}
              ORDER BY wi.name, is2.instance_name, is2.encounter_name
             """,
             *params,
