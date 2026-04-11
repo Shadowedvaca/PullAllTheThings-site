@@ -586,15 +586,52 @@ async def delete_plan(
         return result != "DELETE 0"
 
 
-async def import_simc(
+async def store_equipped_simc(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+    simc_text: str,
+) -> tuple[bool, str]:
+    """Store SimC profile as the equipped gear source.
+
+    Saves raw simc_text, stamps simc_imported_at, sets equipped_source='simc'.
+    Does NOT touch gear_plan_slots — BIS goals are managed separately via
+    import_simc_goals().
+    Returns (success, error_code).
+    """
+    async with pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
+            player_id, character_id,
+        )
+        if not plan_row:
+            return False, "not_found"
+
+        await conn.execute(
+            """
+            UPDATE guild_identity.gear_plans
+               SET simc_profile     = $1,
+                   simc_imported_at = NOW(),
+                   equipped_source  = 'simc',
+                   updated_at       = NOW()
+             WHERE id = $2
+            """,
+            simc_text, plan_row["id"],
+        )
+    return True, ""
+
+
+async def import_simc_goals(
     pool: asyncpg.Pool,
     player_id: int,
     character_id: int,
     simc_text: str,
 ) -> dict:
-    """Parse SimC text and populate gear_plan_slots.
+    """Parse SimC text and populate gear_plan_slots as BIS goals.
 
-    Overwrites all non-locked slots.  Stores the raw simc_text on the plan.
+    Overwrites all non-locked slots with items from the SimC string.
+    Does NOT change equipped_source or simc_profile — those are managed
+    separately by store_equipped_simc().
     Returns {"populated": N, "skipped_locked": M, "unrecognised": K}.
     """
     slots = parse_gear_slots(simc_text)
@@ -609,19 +646,6 @@ async def import_simc(
         if not plan_row:
             return {"populated": 0, "skipped_locked": 0, "unrecognised": 0}
         plan_id = plan_row["id"]
-
-        # Store raw simc text; mark as imported and switch source to simc
-        await conn.execute(
-            """
-            UPDATE guild_identity.gear_plans
-               SET simc_profile = $1,
-                   simc_imported_at = NOW(),
-                   equipped_source = 'simc',
-                   updated_at = NOW()
-             WHERE id = $2
-            """,
-            simc_text, plan_id,
-        )
 
         locked_rows = await conn.fetch(
             "SELECT slot FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND is_locked=TRUE",
@@ -771,6 +795,69 @@ async def export_simc(
     )
 
 
+async def export_equipped_simc(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+) -> Optional[str]:
+    """Generate SimC profile text from the current equipped gear source.
+
+    If equipped_source='simc', returns the stored simc_profile directly.
+    If equipped_source='blizzard', builds a SimC string from character_equipment.
+    Returns None if no data is available.
+    """
+    async with pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            """
+            SELECT gp.id, gp.equipped_source, gp.simc_profile,
+                   wc.character_name, wc.realm_slug,
+                   s.name AS spec_name,
+                   c.name AS class_name
+              FROM guild_identity.gear_plans gp
+              JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
+              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
+              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+             WHERE gp.player_id=$1 AND gp.character_id=$2
+            """,
+            player_id, character_id,
+        )
+        if not plan_row:
+            return None
+
+        # If SimC is the equipped source, return the stored profile verbatim
+        if plan_row["equipped_source"] == "simc" and plan_row["simc_profile"]:
+            return plan_row["simc_profile"]
+
+        # Otherwise build from character_equipment (Blizzard API data)
+        equip_rows = await conn.fetch(
+            """
+            SELECT ce.slot, ce.blizzard_item_id,
+                   COALESCE(wi.name, ce.item_name) AS item_name,
+                   ce.bonus_ids, ce.enchant_id, ce.gem_ids
+              FROM guild_identity.character_equipment ce
+              LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ce.blizzard_item_id
+             WHERE ce.character_id = $1
+            """,
+            character_id,
+        )
+
+    if not equip_rows:
+        return None
+
+    char_name = plan_row["character_name"] or "Unknown"
+    spec_name = (plan_row["spec_name"] or "").lower()
+    class_name = (plan_row["class_name"] or "").lower().replace(" ", "_")
+    realm = plan_row["realm_slug"] or "unknown"
+
+    return export_gear_plan(
+        plan_slots=[dict(r) for r in equip_rows],
+        char_name=char_name,
+        spec=spec_name,
+        wow_class=class_name,
+        realm=realm,
+    )
+
+
 async def get_plan_detail(
     pool: asyncpg.Pool,
     player_id: int,
@@ -869,6 +956,23 @@ async def get_plan_detail(
                         "icon_url": item_info.get("icon_url"),
                         "is_crafted": is_crafted,
                     }
+
+                # Cross-reference quality_track from Blizzard API data.
+                # For items where track_from_bonus_ids() returned None (bonus_id
+                # map doesn't yet cover Midnight Season IDs), check if the same
+                # blizzard_item_id is in the character's Blizzard-synced equipment
+                # and borrow its quality_track from there.
+                blizzard_track_by_bid: dict[int, str] = {
+                    r["blizzard_item_id"]: r["quality_track"]
+                    for r in equip_rows
+                    if r["blizzard_item_id"] and r["quality_track"]
+                }
+                for item_data in simc_equipped.values():
+                    if item_data.get("quality_track") is None:
+                        bid = item_data.get("blizzard_item_id")
+                        if bid and bid in blizzard_track_by_bid:
+                            item_data["quality_track"] = blizzard_track_by_bid[bid]
+
                 equipped_by_slot = simc_equipped
 
         # Build bid → equipment data lookup BEFORE _normalize_paired_slot swaps

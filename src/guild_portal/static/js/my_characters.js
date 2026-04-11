@@ -1108,6 +1108,10 @@ function _selectChar(charId) {
   const char = _chars.find(c => c.id === charId);
   if (!char) return;
   _selectedChar = char;
+  // Reset gear plan local state for new character
+  _gpEquippedTab = null;
+  _gpEquippedShowInput = false;
+  _gpBisTab = 'guide';
   _renderHeader(char);
   _renderGuides(char);
   _gpResetPaperdolls();   // reset to placeholder; gear loads on gear-tab activation
@@ -1119,17 +1123,7 @@ function _selectChar(charId) {
 // Refresh button (delegates to existing /api/v1/me/bnet-sync)
 // ---------------------------------------------------------------------------
 
-function _initSimcModal() {
-  document.getElementById('mcn-simc-close')  ?.addEventListener('click', _gpHideSimcModal);
-  document.getElementById('mcn-simc-cancel') ?.addEventListener('click', _gpHideSimcModal);
-  document.getElementById('mcn-simc-submit') ?.addEventListener('click', _gpOnSimcImport);
-  // Close on backdrop click
-  document.getElementById('mcn-simc-modal')?.addEventListener('click', e => {
-    if (e.target === e.currentTarget || e.target.classList.contains('mcn-modal__backdrop')) {
-      _gpHideSimcModal();
-    }
-  });
-}
+// _initSimcModal removed — SimC import is now inline in the gear plan sections
 
 function _initRefreshButton() {
   const btn = document.getElementById("mcn-btn-refresh");
@@ -1194,7 +1188,6 @@ async function _init() {
     }
 
     _initRefreshButton();
-    _initSimcModal();
 
   } catch (err) {
     _hide("mcn-loading");
@@ -1243,6 +1236,9 @@ const GP_TRACK_FALLBACK = { V: '#22c55e', C: '#3b82f6', H: '#a855f7', M: '#f9731
 const _gpCache = {};       // charId → API data (plan, slots, bisSources, heroTalents, trackColors)
 const _gpAvailCache = {};  // "charId:dbSlot" → { status: 'loading'|'done'|'error', items: [] }
 let _gpOpenSlot = null;
+let _gpEquippedTab = null;        // null = use plan.equipped_source; 'blizzard'|'simc' for local override
+let _gpEquippedShowInput = false; // show the SimC paste area in the equipped section
+let _gpBisTab = 'guide';          // 'current'|'guide'|'simc_bis'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1647,6 +1643,65 @@ function _gpRenderCenterPanel(data) {
   const bisSources  = data.bis_sources  || [];
   const heroTalents = data.hero_talents || [];
 
+  // ── Equipped Gear Source section ────────────────────────────────────────
+  const serverSrc      = plan?.equipped_source || 'blizzard';
+  const effectiveEqTab = _gpEquippedTab ?? serverSrc;
+  const isEqBlizzard   = effectiveEqTab === 'blizzard';
+  const isEqSimC       = effectiveEqTab === 'simc';
+
+  const simcAt      = plan?.simc_imported_at   ? new Date(plan.simc_imported_at)   : null;
+  const blizzardAt  = plan?.blizzard_synced_at ? new Date(plan.blizzard_synced_at) : null;
+  const simcAgeDays = simcAt ? (Date.now() - simcAt.getTime()) / 86400000 : null;
+  const simcStale   = simcAgeDays !== null && simcAgeDays > 7;
+
+  // Blizzard panel content
+  const blizzardPanel = `
+    <div class="mcn-gp-panel" id="mcn-gp-panel-blizzard"${isEqBlizzard ? '' : ' hidden'}>
+      <div class="mcn-gp-sync-row">
+        ${blizzardAt
+          ? `<span class="mcn-gp-src-ts">Last synced ${_gpTimeAgo(blizzardAt)}</span>`
+          : `<span class="mcn-gp-src-ts mcn-gp-src-ts--none">Not yet synced</span>`}
+        <button id="mcn-gp-btn-sync" class="btn btn-secondary btn-sm" type="button">Sync Now</button>
+      </div>
+    </div>`;
+
+  // SimC equipped panel content — shows textarea if no import yet OR user clicked Re-import
+  const showSimcInput = isEqSimC && (_gpEquippedShowInput || !simcAt);
+  const simcPanel = `
+    <div class="mcn-gp-panel mcn-gp-panel--simc" id="mcn-gp-panel-simc"${isEqSimC ? '' : ' hidden'}>
+      ${showSimcInput ? `
+        <textarea id="mcn-gp-eq-simc-text" class="mcn-gp-textarea"
+                  placeholder="Paste SimC profile here\u2026" rows="6"></textarea>
+        <div class="mcn-gp-panel-actions">
+          <button id="mcn-gp-btn-import-eq" class="btn btn-primary btn-sm" type="button">Set as Equipped</button>
+          ${simcAt ? `<button id="mcn-gp-btn-cancel-eq" class="btn btn-secondary btn-sm" type="button">Cancel</button>` : ''}
+        </div>` : `
+        <div class="mcn-gp-sync-row">
+          <span class="mcn-gp-src-ts">Snapshot from ${_gpTimeAgo(simcAt)}</span>
+          <button id="mcn-gp-btn-reimport-eq" class="btn btn-secondary btn-sm" type="button">Re-import</button>
+        </div>
+        ${simcStale ? `<div class="mcn-gp-src-stale">&#9888; SimC data is ${Math.floor(simcAgeDays)} days old \u2014 consider re-importing</div>` : ''}`}
+    </div>`;
+
+  const equippedSection = `
+    <div class="mcn-gp-section">
+      <div class="mcn-gp-section__hdr">
+        <span class="mcn-gp-section__title">Equipped Gear Source</span>
+        <button id="mcn-gp-btn-export-eq" class="mcn-gp-section__export" title="Export equipped gear as SimC" type="button">&#11015;</button>
+      </div>
+      <div class="mcn-gp-section__tabs">
+        <button class="mcn-gp-stab${isEqBlizzard ? ' is-active' : ''}"
+                onclick="_gpOnEquippedTab('blizzard')" type="button">Blizzard API</button>
+        <button class="mcn-gp-stab${isEqSimC ? ' is-active' : ''}"
+                onclick="_gpOnEquippedTab('simc')" type="button">SimC Import</button>
+      </div>
+      ${blizzardPanel}
+      ${simcPanel}
+    </div>`;
+
+  // ── BIS Sourcing section ────────────────────────────────────────────────
+  const bisTab = _gpBisTab;
+
   const selectedSource = bisSources.find(s => s.id === plan?.bis_source_id) || bisSources[0];
   const showHtDropdown = !!(selectedSource?.has_hero_talent_variants && heroTalents.length > 0);
 
@@ -1655,10 +1710,9 @@ function _gpRenderCenterPanel(data) {
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
     )).join('');
 
-  const ORIGIN_LABEL      = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const ORIGIN_LABEL       = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
   const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
   const CONTENT_TYPE_ORDER = { overall: 0, raid: 1, mythic_plus: 2 };
-  // Group sources by origin; within each group put All first
   const srcByOrigin = [];
   const seenOrigins = [];
   for (const s of (bisSources || [])) {
@@ -1676,42 +1730,13 @@ function _gpRenderCenterPanel(data) {
     return `<optgroup label="${_gpEsc(groupLabel)}">${options}</optgroup>`;
   }).join('');
 
-  // ── Source toggle (Phase 1E.6) ──────────────────────────────────────────
-  const equippedSrc   = plan?.equipped_source || 'blizzard';
-  const isBlizzard    = equippedSrc === 'blizzard';
-  const isSimC        = equippedSrc === 'simc';
-  const simcAt        = plan?.simc_imported_at   ? new Date(plan.simc_imported_at)   : null;
-  const blizzardAt    = plan?.blizzard_synced_at ? new Date(plan.blizzard_synced_at) : null;
-  const simcAgeDays   = simcAt ? (Date.now() - simcAt.getTime()) / 86400000 : null;
-  const simcStale     = simcAgeDays !== null && simcAgeDays > 7;
+  const bisCurrentPanel = `
+    <div class="mcn-gp-panel" id="mcn-gp-panel-bis-current"${bisTab === 'current' ? '' : ' hidden'}>
+      <p class="mcn-gp-blurb">Your BIS goals reflect your current equipped gear. Switch to <strong>Use a Guide</strong> to get upgrade recommendations, or <strong>Import SimC</strong> to paste a theorycrafter&#39;s profile.</p>
+    </div>`;
 
-  const blizzTs = blizzardAt ? `<span class="mcn-gp-src-ts">Synced ${_gpTimeAgo(blizzardAt)}</span>` : '';
-  const simcTs  = simcAt     ? `<span class="mcn-gp-src-ts">Imported ${_gpTimeAgo(simcAt)}</span>`   :
-                               `<span class="mcn-gp-src-ts mcn-gp-src-ts--none">No SimC import yet</span>`;
-  const staleWarn = (isSimC && simcStale)
-    ? `<div class="mcn-gp-src-stale">&#9888; SimC data is ${Math.floor(simcAgeDays)} days old \u2014 consider re-importing</div>`
-    : '';
-
-  const sourceBar = `
-    <div class="mcn-gp-source-bar">
-      <div class="mcn-gp-source-pills">
-        <button class="mcn-gp-source-pill${isBlizzard ? ' is-active' : ''}"
-                onclick="_gpOnToggleSource('blizzard')" type="button">Blizzard API</button>
-        <button class="mcn-gp-source-pill${isSimC ? ' is-active' : ''}"
-                onclick="_gpOnToggleSource('simc')" type="button">SimC Import</button>
-      </div>
-      <div class="mcn-gp-source-meta">
-        ${isBlizzard ? blizzTs : simcTs}
-      </div>
-    </div>
-    ${staleWarn}
-  `;
-
-  area.innerHTML = `
-    <div id="mcn-gp-slot-detail" hidden></div>
-    <div class="mcn-detail-area__heading">Gear Plan</div>
-    ${sourceBar}
-    <div class="mcn-gear-controls">
+  const bisGuidePanel = `
+    <div class="mcn-gp-panel" id="mcn-gp-panel-bis-guide"${bisTab === 'guide' ? '' : ' hidden'}>
       <div class="mcn-gear-ctrl-row">
         <label class="mcn-gear-label">BIS List</label>
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
@@ -1719,9 +1744,43 @@ function _gpRenderCenterPanel(data) {
         <label class="mcn-gear-label">Hero Talent</label>
         <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>` : ''}
         <button id="mcn-gp-btn-fill" class="btn btn-primary btn-sm" type="button">Fill BIS</button>
-        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button">Import SimC</button>
-        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button">Export SimC</button>
       </div>
+    </div>`;
+
+  const bisSimcPanel = `
+    <div class="mcn-gp-panel mcn-gp-panel--simc" id="mcn-gp-panel-bis-simc"${bisTab === 'simc_bis' ? '' : ' hidden'}>
+      <textarea id="mcn-gp-bis-simc-text" class="mcn-gp-textarea"
+                placeholder="Paste SimC profile here\u2026 Your BIS goals will be set to the items in the profile." rows="6"></textarea>
+      <div class="mcn-gp-panel-actions">
+        <button id="mcn-gp-btn-import-bis" class="btn btn-primary btn-sm" type="button">Set as BIS Goals</button>
+      </div>
+    </div>`;
+
+  const bisSection = `
+    <div class="mcn-gp-section">
+      <div class="mcn-gp-section__hdr">
+        <span class="mcn-gp-section__title">BIS Sourcing</span>
+        <button id="mcn-gp-btn-export-bis" class="mcn-gp-section__export" title="Export BIS goals as SimC" type="button">&#11015;</button>
+      </div>
+      <div class="mcn-gp-section__tabs">
+        <button class="mcn-gp-stab${bisTab === 'current'  ? ' is-active' : ''}"
+                onclick="_gpOnBisTab('current')"  type="button">My Current Gear</button>
+        <button class="mcn-gp-stab${bisTab === 'guide'    ? ' is-active' : ''}"
+                onclick="_gpOnBisTab('guide')"    type="button">Use a Guide</button>
+        <button class="mcn-gp-stab${bisTab === 'simc_bis' ? ' is-active' : ''}"
+                onclick="_gpOnBisTab('simc_bis')" type="button">Import SimC</button>
+      </div>
+      ${bisCurrentPanel}
+      ${bisGuidePanel}
+      ${bisSimcPanel}
+    </div>`;
+
+  area.innerHTML = `
+    <div id="mcn-gp-slot-detail" hidden></div>
+    <div class="mcn-detail-area__heading">Gear Plan</div>
+    <div class="mcn-gp-sections">
+      ${equippedSection}
+      ${bisSection}
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
     ${_gpRenderGearTable(data.slots, data.track_colors)}
@@ -1736,12 +1795,20 @@ function _gpRenderCenterPanel(data) {
     });
   }
 
-  // Wire selects + buttons
-  document.getElementById('mcn-gp-ht-sel')    ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-src-sel')   ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click',  _gpOnPopulate);
-  document.getElementById('mcn-gp-btn-import')?.addEventListener('click',  _gpShowSimcModal);
-  document.getElementById('mcn-gp-btn-export')?.addEventListener('click',  _gpOnExportSimc);
+  // Wire Equipped section
+  document.getElementById('mcn-gp-btn-sync')       ?.addEventListener('click', _gpOnSyncGear);
+  document.getElementById('mcn-gp-btn-import-eq')  ?.addEventListener('click', _gpOnImportEquipped);
+  document.getElementById('mcn-gp-btn-cancel-eq')  ?.addEventListener('click', _gpCancelSimcInput);
+  document.getElementById('mcn-gp-btn-reimport-eq')?.addEventListener('click', _gpStartSimcReimport);
+  document.getElementById('mcn-gp-btn-export-eq')  ?.addEventListener('click', _gpOnExportEquipped);
+
+  // Wire BIS section
+  document.getElementById('mcn-gp-ht-sel')          ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-src-sel')          ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-btn-fill')         ?.addEventListener('click',  _gpOnPopulate);
+  document.getElementById('mcn-gp-btn-import-bis')   ?.addEventListener('click',  _gpOnImportBisSimc);
+  document.getElementById('mcn-gp-btn-export-bis')   ?.addEventListener('click',  _gpOnExportSimc);
+
   // Wire drawer close
   const drawerClose = document.getElementById('mcn-gp-drawer-close');
   if (drawerClose && !drawerClose._gpWired) {
@@ -1918,6 +1985,15 @@ async function _gpOnDeletePlan() {
   }
 }
 
+function _gpDownloadText(text, filename) {
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })),
+    download: filename,
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function _gpOnExportSimc() {
   const charId = _selectedChar?.id;
   if (!charId) return;
@@ -1929,65 +2005,92 @@ async function _gpOnExportSimc() {
       _gpShowStatus(d.error || 'Export failed', 'err');
       return;
     }
-    const text = await resp.text();
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })),
-      download: 'gear_plan.simc',
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
+    _gpDownloadText(await resp.text(), 'gear_plan.simc');
     _gpClearStatus();
   } catch (err) {
     _gpShowStatus(err.message, 'err');
   }
 }
 
-// ── Source toggle (Phase 1E.6) ─────────────────────────────────────────────────
+// ── Equipped section handlers (Phase 1E.6 redesign) ───────────────────────────
 
-async function _gpOnToggleSource(source) {
+function _gpOnEquippedTab(tab) {
   const charId = _selectedChar?.id;
   if (!charId) return;
-  // Optimistically switch; if no simc profile, show import modal instead
-  if (source === 'simc') {
-    const cached = _gpCache[charId];
-    const hasSimc = !!(cached?.plan?.simc_imported_at || cached?.plan?.simc_profile);
-    if (!hasSimc) {
-      _gpShowSimcModal();
-      return;
+  const cached = _gpCache[charId];
+  const serverSrc = cached?.plan?.equipped_source || 'blizzard';
+
+  if (tab === 'simc') {
+    // Show SimC panel locally; no server call until user submits
+    _gpEquippedTab = 'simc';
+    const hasImport = !!(cached?.plan?.simc_imported_at);
+    _gpEquippedShowInput = !hasImport;
+    if (cached) _gpRenderCenterPanel(cached);
+  } else {
+    // Switching to Blizzard: if server is already on blizzard, just local redraw
+    _gpEquippedTab = 'blizzard';
+    _gpEquippedShowInput = false;
+    if (serverSrc === 'simc') {
+      // Need to commit the switch to server
+      _gpFetch(`/api/v1/me/gear-plan/${charId}/source`, {
+        method: 'PATCH',
+        body: JSON.stringify({ source: 'blizzard' }),
+      }).then(resp => {
+        if (resp.ok) { _gpReload(); }
+        else _gpShowStatus(resp.error || 'Source switch failed', 'err');
+      });
+    } else if (cached) {
+      _gpRenderCenterPanel(cached);
     }
   }
-  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/source`, {
-    method: 'PATCH',
-    body: JSON.stringify({ source }),
+}
+
+function _gpOnBisTab(tab) {
+  _gpBisTab = tab;
+  const charId = _selectedChar?.id;
+  const cached = charId ? _gpCache[charId] : null;
+  if (cached) _gpRenderCenterPanel(cached);
+}
+
+function _gpStartSimcReimport() {
+  _gpEquippedShowInput = true;
+  const charId = _selectedChar?.id;
+  const cached = charId ? _gpCache[charId] : null;
+  if (cached) _gpRenderCenterPanel(cached);
+}
+
+function _gpCancelSimcInput() {
+  _gpEquippedShowInput = false;
+  const charId = _selectedChar?.id;
+  const cached = charId ? _gpCache[charId] : null;
+  if (cached) _gpRenderCenterPanel(cached);
+}
+
+async function _gpOnImportEquipped() {
+  const textarea = document.getElementById('mcn-gp-eq-simc-text');
+  const text = textarea?.value?.trim();
+  if (!text) { _gpShowStatus('Paste a SimC profile first', 'err'); return; }
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Importing\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/import-equipped-simc`, {
+    method: 'POST',
+    body: JSON.stringify({ simc_text: text }),
   });
   if (resp.ok) {
+    _gpEquippedTab = 'simc';
+    _gpEquippedShowInput = false;
+    _gpShowStatus('Equipped gear updated from SimC', 'ok');
     await _gpReload();
-  } else if (resp.error === 'No SimC profile imported yet \u2014 paste one first') {
-    _gpShowSimcModal();
   } else {
-    _gpShowStatus(resp.error || 'Source switch failed', 'err');
+    _gpShowStatus(resp.error || 'Import failed', 'err');
   }
 }
 
-// ── SimC modal ─────────────────────────────────────────────────────────────────
-
-function _gpShowSimcModal() {
-  const modal    = document.getElementById('mcn-simc-modal');
-  const textarea = document.getElementById('mcn-simc-text');
-  if (modal)    modal.hidden = false;
-  if (textarea) { textarea.value = ''; textarea.focus(); }
-}
-
-function _gpHideSimcModal() {
-  const modal = document.getElementById('mcn-simc-modal');
-  if (modal) modal.hidden = true;
-}
-
-async function _gpOnSimcImport() {
-  const textarea = document.getElementById('mcn-simc-text');
+async function _gpOnImportBisSimc() {
+  const textarea = document.getElementById('mcn-gp-bis-simc-text');
   const text = textarea?.value?.trim();
-  if (!text) return;
-  _gpHideSimcModal();
+  if (!text) { _gpShowStatus('Paste a SimC profile first', 'err'); return; }
   const charId = _selectedChar?.id;
   if (!charId) return;
   _gpShowStatus('Importing\u2026', 'info');
@@ -1997,11 +2100,21 @@ async function _gpOnSimcImport() {
   });
   if (resp.ok) {
     const d = resp.data || {};
-    _gpShowStatus(`Imported: ${d.populated || 0} slots set${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`, 'ok');
+    _gpShowStatus(`BIS goals set: ${d.populated || 0} slots${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`, 'ok');
+    _gpBisTab = 'guide';  // Switch to guide view to see the results
     await _gpReload();
   } else {
     _gpShowStatus(resp.error || 'Import failed', 'err');
   }
+}
+
+async function _gpOnExportEquipped() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const resp = await fetch(`/api/v1/me/gear-plan/${charId}/export-equipped-simc`);
+  if (!resp.ok) { _gpShowStatus('No equipped gear data to export', 'err'); return; }
+  const text = await resp.text();
+  _gpDownloadText(text, 'equipped_gear.simc');
 }
 
 // ── Slot drawer ────────────────────────────────────────────────────────────────

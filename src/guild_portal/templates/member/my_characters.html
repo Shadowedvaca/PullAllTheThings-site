@@ -2,7 +2,7 @@
 {% block title %}My Characters — {{ site().guild_name }}{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/css/my_characters.css?v=1.5.0">
+<link rel="stylesheet" href="/static/css/my_characters.css?v=1.6.0">
 {% endblock %}
 
 {% block content %}
@@ -125,35 +125,10 @@
 
 </div>{# end .mcn-page #}
 
-{# ── SimC Import Modal — Phase 1E.6 ──────────────────────────────────────── #}
-<div id="mcn-simc-modal" class="mcn-modal" hidden>
-  <div class="mcn-modal__backdrop"></div>
-  <div class="mcn-modal__box">
-    <div class="mcn-modal__header">
-      <h3 class="mcn-modal__title">Import SimC Profile</h3>
-      <button id="mcn-simc-close" class="mcn-modal__close" type="button">&times;</button>
-    </div>
-    <div class="mcn-modal__body">
-      <p class="mcn-modal__hint">
-        Paste your SimC string from the in-game <strong>SimulationCraft</strong> addon
-        (<code>/simc</code> in WoW chat), or from
-        <a href="https://archon.gg" target="_blank" rel="noopener">Archon</a> /
-        <a href="https://www.wowhead.com" target="_blank" rel="noopener">Wowhead</a>.
-        Your paperdoll will switch to show SimC gear. Locked slots are not overwritten.
-      </p>
-      <textarea id="mcn-simc-text" class="mcn-simc-textarea"
-                placeholder="Paste SimC profile here&hellip;" rows="12"></textarea>
-    </div>
-    <div class="mcn-modal__footer">
-      <button id="mcn-simc-submit" class="btn btn-primary" type="button">Import &amp; Switch to SimC</button>
-      <button id="mcn-simc-cancel" class="btn btn-secondary" type="button">Cancel</button>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script>var whTooltips = {colorLinks: true, iconizeLinks: false, renameLinks: false, hide: {sellprice: true, ilvl: false, reqlevel: false, power: false}};</script>
 <script src="https://wow.zamimg.com/widgets/power.js"></script>
-<script src="/static/js/my_characters.js?v=1.8.0"></script>
+<script src="/static/js/my_characters.js?v=1.9.0"></script>
 {% endblock %}
