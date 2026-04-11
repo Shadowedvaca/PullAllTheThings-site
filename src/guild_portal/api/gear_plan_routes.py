@@ -401,7 +401,99 @@ async def remove_item_exclusion(
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/v1/me/gear-plan/{character_id}/source
+# Phase 1E.6 — switch equipped gear source between 'blizzard' and 'simc'
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{character_id}/source")
+async def set_equipped_source(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Switch the equipped gear source for the paperdoll display.
+
+    Body:
+        source (str) — 'blizzard' or 'simc'
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    source: str = body.get("source", "")
+    if source not in ("blizzard", "simc"):
+        return JSONResponse({"ok": False, "error": "source must be 'blizzard' or 'simc'"}, status_code=400)
+
+    ok, err = await svc.set_equipped_source(pool, current_player.id, character_id, source)
+    if not ok:
+        if err == "no_simc":
+            return JSONResponse(
+                {"ok": False, "error": "No SimC profile imported yet — paste one first"},
+                status_code=409,
+            )
+        return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
+
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/me/gear-plan/{character_id}/import-equipped-simc
+# Phase 1E.6 — store SimC profile as the equipped gear source
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{character_id}/import-equipped-simc")
+async def import_equipped_simc(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Store SimC text as the equipped gear source for the paperdoll.
+
+    Saves simc_profile, stamps simc_imported_at, sets equipped_source='simc'.
+    Does NOT touch gear_plan_slots.
+    Body:
+        simc_text (string)
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+
+    simc_text: str = body.get("simc_text", "").strip()
+    if not simc_text:
+        return JSONResponse({"ok": False, "error": "simc_text is required"}, status_code=400)
+
+    await svc.get_or_create_plan(pool, current_player.id, character_id)
+
+    ok, err = await svc.store_equipped_simc(pool, current_player.id, character_id, simc_text)
+    if not ok:
+        return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
+
+    return JSONResponse({"ok": True})
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/me/gear-plan/{character_id}/import-simc
+# Phase 1E.6 — import SimC as BIS goals (slot population only)
 # ---------------------------------------------------------------------------
 
 
@@ -412,8 +504,10 @@ async def import_simc(
     current_player: Player = Depends(get_current_player),
     db: AsyncSession = Depends(get_db),
 ):
-    """Paste SimC text to populate gear_plan_slots.
+    """Paste SimC text to set gear_plan_slots as BIS goals.
 
+    Overwrites all non-locked slots from the SimC string.
+    Does NOT change equipped_source or simc_profile.
     Body:
         simc_text (string)
     """
@@ -436,7 +530,35 @@ async def import_simc(
     # Ensure plan exists first
     await svc.get_or_create_plan(pool, current_player.id, character_id)
 
-    result = await svc.import_simc(pool, current_player.id, character_id, simc_text)
+    result = await svc.import_simc_goals(pool, current_player.id, character_id, simc_text)
+    return JSONResponse({"ok": True, "data": result})
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/me/gear-plan/{character_id}/set-goals-from-equipped
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{character_id}/set-goals-from-equipped")
+async def set_goals_from_equipped(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Populate gear_plan_slots from the character's Blizzard-synced equipment.
+
+    Overwrites all non-locked slots with the items currently in
+    guild_identity.character_equipment for this character.
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    result = await svc.set_goals_from_equipped(pool, current_player.id, character_id)
     return JSONResponse({"ok": True, "data": result})
 
 
@@ -467,6 +589,41 @@ async def export_simc(
     return PlainTextResponse(
         simc_text,
         headers={"Content-Disposition": "attachment; filename=gear_plan.simc"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/me/gear-plan/{character_id}/export-equipped-simc
+# Phase 1E.6 — export the currently displayed equipped gear as SimC
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{character_id}/export-equipped-simc")
+async def export_equipped_simc(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return SimC profile text for the current equipped gear source.
+
+    If equipped_source='simc', returns the stored profile.
+    If equipped_source='blizzard', generates one from character_equipment.
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    simc_text = await svc.export_equipped_simc(pool, current_player.id, character_id)
+    if not simc_text:
+        return JSONResponse({"ok": False, "error": "No equipped gear data found"}, status_code=404)
+
+    return PlainTextResponse(
+        simc_text,
+        headers={"Content-Disposition": "attachment; filename=equipped_gear.simc"},
     )
 
 

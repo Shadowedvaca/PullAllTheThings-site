@@ -1108,6 +1108,10 @@ function _selectChar(charId) {
   const char = _chars.find(c => c.id === charId);
   if (!char) return;
   _selectedChar = char;
+  // Reset gear plan local state for new character
+  _gpEquippedTab = null;
+  _gpEquippedShowInput = false;
+  _gpBisTab = 'guide';
   _renderHeader(char);
   _renderGuides(char);
   _gpResetPaperdolls();   // reset to placeholder; gear loads on gear-tab activation
@@ -1118,6 +1122,8 @@ function _selectChar(charId) {
 // ---------------------------------------------------------------------------
 // Refresh button (delegates to existing /api/v1/me/bnet-sync)
 // ---------------------------------------------------------------------------
+
+// _initSimcModal removed — SimC import is now inline in the gear plan sections
 
 function _initRefreshButton() {
   const btn = document.getElementById("mcn-btn-refresh");
@@ -1230,6 +1236,9 @@ const GP_TRACK_FALLBACK = { V: '#22c55e', C: '#3b82f6', H: '#a855f7', M: '#f9731
 const _gpCache = {};       // charId → API data (plan, slots, bisSources, heroTalents, trackColors)
 const _gpAvailCache = {};  // "charId:dbSlot" → { status: 'loading'|'done'|'error', items: [] }
 let _gpOpenSlot = null;
+let _gpEquippedTab = null;        // null = use plan.equipped_source; 'blizzard'|'simc' for local override
+let _gpEquippedShowInput = false; // show the SimC paste area in the equipped section
+let _gpBisTab = 'guide';          // 'current'|'guide'|'simc_bis'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1238,6 +1247,18 @@ function _gpEsc(s) {
   return String(s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _gpTimeAgo(dateVal) {
+  if (!dateVal) return null;
+  const diff = Date.now() - new Date(dateVal).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min${mins !== 1 ? 's' : ''} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs !== 1 ? 's' : ''} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days !== 1 ? 's' : ''} ago`;
 }
 
 async function _gpFetch(url, opts) {
@@ -1513,7 +1534,7 @@ function _gpRenderGearTable(slots, tc) {
         ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>`
         : '';
       const icon = eq.icon_url
-        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer">
+        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
              <img class="mcn-gt__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${iconBs}>
            </a>`
         : '';
@@ -1521,8 +1542,7 @@ function _gpRenderGearTable(slots, tc) {
       equippedHtml = `<div class="mcn-gt__item">
         ${icon}
         <div class="mcn-gt__item-info">
-          <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer"
-             class="mcn-gt__name"${nameColor}>${_gpEsc(eq.item_name || 'Unknown')}</a>
+          <span class="mcn-gt__name"${nameColor}>${_gpEsc(eq.item_name || 'Unknown')}</span>
           <div class="mcn-gt__meta">
             ${eq.item_level ? `<span class="mcn-gt__ilvl">${eq.item_level}</span>` : ''}
             ${badge}
@@ -1549,14 +1569,13 @@ function _gpRenderGearTable(slots, tc) {
       const goalItem = desired || (bisRecs.length ? bisRecs[0] : null);
       if (goalItem && goalItem.blizzard_item_id) {
         const icon = goalItem.icon_url
-          ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer">
+          ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
                <img class="mcn-gt__icon" src="${_gpEsc(goalItem.icon_url)}" alt="" loading="lazy">
              </a>`
           : '';
         goalHtml = `<div class="mcn-gt__item">
           ${icon}
-          <a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer"
-             class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}</a>
+          <span class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}</span>
         </div>`;
       } else {
         goalHtml = '<span class="mcn-gt__empty">&mdash;</span>';
@@ -1622,6 +1641,80 @@ function _gpRenderCenterPanel(data) {
   const bisSources  = data.bis_sources  || [];
   const heroTalents = data.hero_talents || [];
 
+  // ── Equipped Gear Source section ────────────────────────────────────────
+  const serverSrc      = plan?.equipped_source || 'blizzard';
+  const effectiveEqTab = _gpEquippedTab ?? serverSrc;
+  const isEqBlizzard   = effectiveEqTab === 'blizzard';
+  const isEqSimC       = effectiveEqTab === 'simc';
+
+  const simcAt      = plan?.simc_imported_at   ? new Date(plan.simc_imported_at)   : null;
+  const blizzardAt  = plan?.blizzard_synced_at ? new Date(plan.blizzard_synced_at) : null;
+  const simcAgeDays = simcAt ? (Date.now() - simcAt.getTime()) / 86400000 : null;
+  const simcStale   = simcAgeDays !== null && simcAgeDays > 7;
+
+  // ── Status dots for equipped tabs ──────────────────────────────────────
+  // Most recently updated tab = green; within 7d of the other = amber;
+  // >7d older than the other = red; no data = off/blank.
+  function _eqDot(thisAt, otherAt) {
+    if (!thisAt) return '<span class="mcn-gp-dot mcn-gp-dot--off"></span>';
+    if (!otherAt) return '<span class="mcn-gp-dot mcn-gp-dot--green"></span>';
+    const diffDays = (thisAt.getTime() - otherAt.getTime()) / 86400000;
+    if (diffDays >= 0) return '<span class="mcn-gp-dot mcn-gp-dot--green"></span>';
+    if (Math.abs(diffDays) <= 7) return '<span class="mcn-gp-dot mcn-gp-dot--amber"></span>';
+    return '<span class="mcn-gp-dot mcn-gp-dot--red"></span>';
+  }
+  const blizzDot = _eqDot(blizzardAt, simcAt);
+  const simcDot  = _eqDot(simcAt, blizzardAt);
+
+  // Blizzard panel — sync timestamp + Sync Now button
+  const blizzardPanel = `
+    <div class="mcn-gp-panel" id="mcn-gp-panel-blizzard"${isEqBlizzard ? '' : ' hidden'}>
+      <div class="mcn-gp-sync-row">
+        ${blizzardAt
+          ? `<span class="mcn-gp-src-ts">Last synced ${_gpTimeAgo(blizzardAt)}</span>`
+          : `<span class="mcn-gp-src-ts mcn-gp-src-ts--none">Not yet synced</span>`}
+        <button id="mcn-gp-btn-sync" class="btn btn-secondary btn-sm" type="button">Sync Now</button>
+      </div>
+    </div>`;
+
+  // SimC equipped panel — shows textarea if no import yet OR user clicked Re-import
+  // Profile is persisted in DB; switching tabs does not lose it.
+  const showSimcInput = isEqSimC && (_gpEquippedShowInput || !simcAt);
+  const simcPanel = `
+    <div class="mcn-gp-panel mcn-gp-panel--simc" id="mcn-gp-panel-simc"${isEqSimC ? '' : ' hidden'}>
+      ${showSimcInput ? `
+        <textarea id="mcn-gp-eq-simc-text" class="mcn-gp-textarea"
+                  placeholder="Paste SimC profile here\u2026" rows="6"></textarea>
+        <div class="mcn-gp-panel-actions">
+          <button id="mcn-gp-btn-import-eq" class="btn btn-primary btn-sm" type="button">Set as Equipped</button>
+          ${simcAt ? `<button id="mcn-gp-btn-cancel-eq" class="btn btn-secondary btn-sm" type="button">Cancel</button>` : ''}
+        </div>` : `
+        <div class="mcn-gp-sync-row">
+          <span class="mcn-gp-src-ts">Snapshot from ${_gpTimeAgo(simcAt)}</span>
+          <button id="mcn-gp-btn-reimport-eq" class="btn btn-secondary btn-sm" type="button">Re-import</button>
+        </div>
+        ${simcStale ? `<div class="mcn-gp-src-stale">&#9888; ${Math.floor(simcAgeDays)} days old \u2014 consider re-importing</div>` : ''}`}
+    </div>`;
+
+  const equippedSection = `
+    <div class="mcn-gp-section">
+      <div class="mcn-gp-section__hdr">
+        <span class="mcn-gp-section__title">Equipped Gear Source</span>
+        <button id="mcn-gp-btn-export-eq" class="mcn-gp-section__export" title="Export equipped gear as SimC" type="button">&#11015;</button>
+      </div>
+      <div class="mcn-gp-section__tabs">
+        <button class="mcn-gp-stab${isEqBlizzard ? ' is-active' : ''}"
+                onclick="_gpOnEquippedTab('blizzard')" type="button">${blizzDot} Blizzard API</button>
+        <button class="mcn-gp-stab${isEqSimC ? ' is-active' : ''}"
+                onclick="_gpOnEquippedTab('simc')" type="button">${simcDot} Import SimC</button>
+      </div>
+      ${blizzardPanel}
+      ${simcPanel}
+    </div>`;
+
+  // ── BIS Sourcing section ────────────────────────────────────────────────
+  const bisTab = _gpBisTab;
+
   const selectedSource = bisSources.find(s => s.id === plan?.bis_source_id) || bisSources[0];
   const showHtDropdown = !!(selectedSource?.has_hero_talent_variants && heroTalents.length > 0);
 
@@ -1630,10 +1723,9 @@ function _gpRenderCenterPanel(data) {
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
     )).join('');
 
-  const ORIGIN_LABEL      = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const ORIGIN_LABEL       = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
   const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
   const CONTENT_TYPE_ORDER = { overall: 0, raid: 1, mythic_plus: 2 };
-  // Group sources by origin; within each group put All first
   const srcByOrigin = [];
   const seenOrigins = [];
   for (const s of (bisSources || [])) {
@@ -1651,10 +1743,16 @@ function _gpRenderCenterPanel(data) {
     return `<optgroup label="${_gpEsc(groupLabel)}">${options}</optgroup>`;
   }).join('');
 
-  area.innerHTML = `
-    <div id="mcn-gp-slot-detail" hidden></div>
-    <div class="mcn-detail-area__heading">Gear Plan</div>
-    <div class="mcn-gear-controls">
+  const bisCurrentPanel = `
+    <div class="mcn-gp-panel" id="mcn-gp-panel-bis-current"${bisTab === 'current' ? '' : ' hidden'}>
+      <p class="mcn-gp-blurb">Set your BIS goals to match your currently equipped gear. Unlocked slots will be updated to what you have on right now.</p>
+      <div class="mcn-gp-panel-actions">
+        <button id="mcn-gp-btn-set-from-eq" class="btn btn-primary btn-sm" type="button">Set Goals to Current Gear</button>
+      </div>
+    </div>`;
+
+  const bisGuidePanel = `
+    <div class="mcn-gp-panel" id="mcn-gp-panel-bis-guide"${bisTab === 'guide' ? '' : ' hidden'}>
       <div class="mcn-gear-ctrl-row">
         <label class="mcn-gear-label">BIS List</label>
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
@@ -1662,10 +1760,43 @@ function _gpRenderCenterPanel(data) {
         <label class="mcn-gear-label">Hero Talent</label>
         <select id="mcn-gp-ht-sel" class="mcn-gear-select">${htOpts}</select>` : ''}
         <button id="mcn-gp-btn-fill" class="btn btn-primary btn-sm" type="button">Fill BIS</button>
-        <!-- SimC hidden pending full testing — see reference/gear-plan-4-simc.md -->
-        <button id="mcn-gp-btn-import" class="btn btn-secondary btn-sm" type="button" style="display:none">Import SimC</button>
-        <button id="mcn-gp-btn-export" class="btn btn-secondary btn-sm" type="button" style="display:none">Export SimC</button>
       </div>
+    </div>`;
+
+  const bisSimcPanel = `
+    <div class="mcn-gp-panel mcn-gp-panel--simc" id="mcn-gp-panel-bis-simc"${bisTab === 'simc_bis' ? '' : ' hidden'}>
+      <textarea id="mcn-gp-bis-simc-text" class="mcn-gp-textarea"
+                placeholder="Paste SimC profile here\u2026 Your BIS goals will be set to the items in the profile." rows="6"></textarea>
+      <div class="mcn-gp-panel-actions">
+        <button id="mcn-gp-btn-import-bis" class="btn btn-primary btn-sm" type="button">Set as BIS Goals</button>
+      </div>
+    </div>`;
+
+  const bisSection = `
+    <div class="mcn-gp-section">
+      <div class="mcn-gp-section__hdr">
+        <span class="mcn-gp-section__title">BIS Sourcing</span>
+        <button id="mcn-gp-btn-export-bis" class="mcn-gp-section__export" title="Export BIS goals as SimC" type="button">&#11015;</button>
+      </div>
+      <div class="mcn-gp-section__tabs">
+        <button class="mcn-gp-stab${bisTab === 'current'  ? ' is-active' : ''}"
+                onclick="_gpOnBisTab('current')"  type="button">My Current Gear</button>
+        <button class="mcn-gp-stab${bisTab === 'guide'    ? ' is-active' : ''}"
+                onclick="_gpOnBisTab('guide')"    type="button">Use a Guide</button>
+        <button class="mcn-gp-stab${bisTab === 'simc_bis' ? ' is-active' : ''}"
+                onclick="_gpOnBisTab('simc_bis')" type="button">Import SimC</button>
+      </div>
+      ${bisCurrentPanel}
+      ${bisGuidePanel}
+      ${bisSimcPanel}
+    </div>`;
+
+  area.innerHTML = `
+    <div id="mcn-gp-slot-detail" hidden></div>
+    <div class="mcn-detail-area__heading">Gear Plan</div>
+    <div class="mcn-gp-sections">
+      ${equippedSection}
+      ${bisSection}
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
     ${_gpRenderGearTable(data.slots, data.track_colors)}
@@ -1680,10 +1811,21 @@ function _gpRenderCenterPanel(data) {
     });
   }
 
-  // Wire selects + buttons
-  document.getElementById('mcn-gp-ht-sel')  ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-src-sel') ?.addEventListener('change', _gpOnConfigChange);
-  document.getElementById('mcn-gp-btn-fill')  ?.addEventListener('click', _gpOnPopulate);
+  // Wire Equipped section
+  document.getElementById('mcn-gp-btn-sync')       ?.addEventListener('click', _gpOnSyncGear);
+  document.getElementById('mcn-gp-btn-import-eq')  ?.addEventListener('click', _gpOnImportEquipped);
+  document.getElementById('mcn-gp-btn-cancel-eq')  ?.addEventListener('click', _gpCancelSimcInput);
+  document.getElementById('mcn-gp-btn-reimport-eq')?.addEventListener('click', _gpStartSimcReimport);
+  document.getElementById('mcn-gp-btn-export-eq')  ?.addEventListener('click', _gpOnExportEquipped);
+
+  // Wire BIS section
+  document.getElementById('mcn-gp-btn-set-from-eq') ?.addEventListener('click',  _gpOnSetGoalsFromEquipped);
+  document.getElementById('mcn-gp-ht-sel')          ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-src-sel')          ?.addEventListener('change', _gpOnConfigChange);
+  document.getElementById('mcn-gp-btn-fill')         ?.addEventListener('click',  _gpOnPopulate);
+  document.getElementById('mcn-gp-btn-import-bis')   ?.addEventListener('click',  _gpOnImportBisSimc);
+  document.getElementById('mcn-gp-btn-export-bis')   ?.addEventListener('click',  _gpOnExportSimc);
+
   // Wire drawer close
   const drawerClose = document.getElementById('mcn-gp-drawer-close');
   if (drawerClose && !drawerClose._gpWired) {
@@ -1860,6 +2002,15 @@ async function _gpOnDeletePlan() {
   }
 }
 
+function _gpDownloadText(text, filename) {
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })),
+    download: filename,
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function _gpOnExportSimc() {
   const charId = _selectedChar?.id;
   if (!charId) return;
@@ -1871,38 +2022,108 @@ async function _gpOnExportSimc() {
       _gpShowStatus(d.error || 'Export failed', 'err');
       return;
     }
-    const text = await resp.text();
-    const a = Object.assign(document.createElement('a'), {
-      href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })),
-      download: 'gear_plan.simc',
-    });
-    a.click();
-    URL.revokeObjectURL(a.href);
+    _gpDownloadText(await resp.text(), 'gear_plan.simc');
     _gpClearStatus();
   } catch (err) {
     _gpShowStatus(err.message, 'err');
   }
 }
 
-// ── SimC modal ─────────────────────────────────────────────────────────────────
+// ── Equipped section handlers (Phase 1E.6 redesign) ───────────────────────────
 
-function _gpShowSimcModal() {
-  const modal    = document.getElementById('mcn-simc-modal');
-  const textarea = document.getElementById('mcn-simc-text');
-  if (modal)    modal.hidden = false;
-  if (textarea) { textarea.value = ''; textarea.focus(); }
+function _gpOnEquippedTab(tab) {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const cached = _gpCache[charId];
+  const serverSrc = cached?.plan?.equipped_source || 'blizzard';
+
+  if (tab === 'simc') {
+    // Show SimC panel locally; no server call until user submits
+    _gpEquippedTab = 'simc';
+    const hasImport = !!(cached?.plan?.simc_imported_at);
+    _gpEquippedShowInput = !hasImport;
+    if (cached) _gpRenderCenterPanel(cached);
+  } else {
+    // Switching to Blizzard: if server is already on blizzard, just local redraw
+    _gpEquippedTab = 'blizzard';
+    _gpEquippedShowInput = false;
+    if (serverSrc === 'simc') {
+      // Need to commit the switch to server
+      _gpFetch(`/api/v1/me/gear-plan/${charId}/source`, {
+        method: 'PATCH',
+        body: JSON.stringify({ source: 'blizzard' }),
+      }).then(resp => {
+        if (resp.ok) { _gpReload(); }
+        else _gpShowStatus(resp.error || 'Source switch failed', 'err');
+      });
+    } else if (cached) {
+      _gpRenderCenterPanel(cached);
+    }
+  }
 }
 
-function _gpHideSimcModal() {
-  const modal = document.getElementById('mcn-simc-modal');
-  if (modal) modal.hidden = true;
+function _gpOnBisTab(tab) {
+  _gpBisTab = tab;
+  const charId = _selectedChar?.id;
+  const cached = charId ? _gpCache[charId] : null;
+  if (cached) _gpRenderCenterPanel(cached);
 }
 
-async function _gpOnSimcImport() {
-  const textarea = document.getElementById('mcn-simc-text');
+function _gpStartSimcReimport() {
+  _gpEquippedShowInput = true;
+  const charId = _selectedChar?.id;
+  const cached = charId ? _gpCache[charId] : null;
+  if (cached) _gpRenderCenterPanel(cached);
+}
+
+function _gpCancelSimcInput() {
+  _gpEquippedShowInput = false;
+  const charId = _selectedChar?.id;
+  const cached = charId ? _gpCache[charId] : null;
+  if (cached) _gpRenderCenterPanel(cached);
+}
+
+async function _gpOnImportEquipped() {
+  const textarea = document.getElementById('mcn-gp-eq-simc-text');
   const text = textarea?.value?.trim();
-  if (!text) return;
-  _gpHideSimcModal();
+  if (!text) { _gpShowStatus('Paste a SimC profile first', 'err'); return; }
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Importing\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/import-equipped-simc`, {
+    method: 'POST',
+    body: JSON.stringify({ simc_text: text }),
+  });
+  if (resp.ok) {
+    _gpEquippedTab = 'simc';
+    _gpEquippedShowInput = false;
+    _gpShowStatus('Equipped gear updated from SimC', 'ok');
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Import failed', 'err');
+  }
+}
+
+async function _gpOnSetGoalsFromEquipped() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Copying equipped gear to goals\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/set-goals-from-equipped`, { method: 'POST' });
+  if (resp.ok) {
+    const d = resp.data || {};
+    const msg = `Goals set: ${d.populated || 0} slot${d.populated !== 1 ? 's' : ''}${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`;
+    _gpBisTab = 'guide';
+    _gpShowStatus(msg, 'ok');
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Failed to set goals', 'err');
+  }
+}
+
+async function _gpOnImportBisSimc() {
+  const textarea = document.getElementById('mcn-gp-bis-simc-text');
+  const text = textarea?.value?.trim();
+  if (!text) { _gpShowStatus('Paste a SimC profile first', 'err'); return; }
   const charId = _selectedChar?.id;
   if (!charId) return;
   _gpShowStatus('Importing\u2026', 'info');
@@ -1912,11 +2133,21 @@ async function _gpOnSimcImport() {
   });
   if (resp.ok) {
     const d = resp.data || {};
-    _gpShowStatus(`Imported: ${d.populated || 0} slots set${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`, 'ok');
+    _gpShowStatus(`BIS goals set: ${d.populated || 0} slots${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`, 'ok');
+    _gpBisTab = 'guide';  // Switch to guide view to see the results
     await _gpReload();
   } else {
     _gpShowStatus(resp.error || 'Import failed', 'err');
   }
+}
+
+async function _gpOnExportEquipped() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const resp = await fetch(`/api/v1/me/gear-plan/${charId}/export-equipped-simc`);
+  if (!resp.ok) { _gpShowStatus('No equipped gear data to export', 'err'); return; }
+  const text = await resp.text();
+  _gpDownloadText(text, 'equipped_gear.simc');
 }
 
 // ── Slot drawer ────────────────────────────────────────────────────────────────
@@ -1978,10 +2209,10 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 6px ${qc}80"` : '';
     const badge = eq.quality_track ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>` : '';
     equippedHtml = `<div class="mcn-drawer-item">
-      ${eq.icon_url ? `<img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}>` : ''}
+      ${eq.icon_url ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name"${ns}>
-          <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(eq.item_name || 'Unknown')}</a>
+          ${_gpEsc(eq.item_name || 'Unknown')}
         </div>
         <div class="mcn-drawer-item__meta">${eq.item_level ? eq.item_level + '\u00a0' : ''}${badge}</div>
       </div>
@@ -1999,10 +2230,10 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   if (desired && desired.blizzard_item_id) {
     const locked = desired.is_locked;
     goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
-      ${desired.icon_url ? `<img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy">` : ''}
+      ${desired.icon_url ? `<a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name">
-          <a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(desired.item_name || 'Unknown')}</a>
+          ${_gpEsc(desired.item_name || 'Unknown')}
         </div>
       </div>
     </div>
@@ -2184,11 +2415,11 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
         : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no">&mdash;</td>`
     ).join('');
     const icon = item.icon
-      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy">`
+      ? `<a href="https://www.wowhead.com/item=${item.bid}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
-      <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}<a href="https://www.wowhead.com/item=${item.bid}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a></div></td>
+      <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(item.name)}</div></td>
       ${cells}
       <td class="mcn-bis-grid__action">
         <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.bid})">Use</button>
@@ -2209,7 +2440,7 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
 
   const rows = items.map(item => {
     const icon = item.icon_url
-      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy">`
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
     // Aggregate unique tracks across all sources, ordered V < C < H < M
@@ -2225,7 +2456,7 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
           ${icon}
-          <a href="https://www.wowhead.com/item=${item.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${_gpEsc(item.name)}</a>
+          ${_gpEsc(item.name)}
         </div>
         ${instText ? `<div class="mcn-avail-item__inst">${_gpEsc(instText)}</div>` : ''}
       </td>
@@ -2251,13 +2482,13 @@ function _gpRenderExcludedItems(dbSlot, items) {
   if (!items || !items.length) return '';
   const rows = items.map(item => {
     const icon = item.icon_url
-      ? `<img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy" style="opacity:0.5">`
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer" style="opacity:0.5"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     return `<tr>
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
           ${icon}
-          <a href="https://www.wowhead.com/item=${item.blizzard_item_id}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;opacity:0.5">${_gpEsc(item.name)}</a>
+          <span style="opacity:0.5">${_gpEsc(item.name)}</span>
         </div>
       </td>
       <td class="mcn-bis-grid__action">

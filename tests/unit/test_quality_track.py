@@ -72,6 +72,18 @@ class TestTrackFromBonusIds:
         assert track_from_bonus_ids([9001], custom_map=custom) == "C"
         assert track_from_bonus_ids([1517], custom_map=custom) is None
 
+    def test_midnight_crafted_hero_track(self):
+        # 13621 = Midnight crafted H quality (discovered from Aetherlume Bands + back)
+        assert track_from_bonus_ids([13621]) == "H"
+
+    def test_midnight_crafted_mythic_track(self):
+        # 13622 = Midnight crafted M quality (discovered from Loa Worshiper's Band)
+        assert track_from_bonus_ids([13622]) == "M"
+
+    def test_midnight_crafted_mixed_bonus_ids(self):
+        # Crafted items have additional bonus IDs alongside the quality marker
+        assert track_from_bonus_ids([12214, 13621, 5000]) == "H"
+
 
 class TestDetectQualityTrack:
     def test_prefers_display_string(self):

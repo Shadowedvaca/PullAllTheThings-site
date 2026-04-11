@@ -1335,17 +1335,15 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 .mcn-gt__name {
   font-size: 0.77rem;
   color: var(--color-text);
-  text-decoration: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 160px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
   display: block;
 }
-.mcn-gt__name:hover {
-  text-decoration: underline;
-  color: var(--color-accent);
-}
+
+/* Wowhead icon links — popup on hover, no layout disruption */
+.mcn-wh-link { display: inline-block; line-height: 0; flex-shrink: 0; }
+.mcn-wh-link:hover { opacity: 0.8; }
 
 .mcn-gt__meta {
   display: flex;
@@ -2031,4 +2029,171 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   font-size: 0.72rem;
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+/* ── Gear plan two-section layout (Phase 1E.6 redesign) ────────────────────── */
+
+.mcn-gp-sections {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.mcn-gp-section {
+  min-width: 0;   /* prevent flex blowout */
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-bg-card);
+}
+
+/* Equipped Gear Source — 40% */
+.mcn-gp-section:first-child { flex: 0 0 38%; }
+/* BIS Sourcing — fills remaining ~60% */
+.mcn-gp-section:last-child  { flex: 1 1 0; }
+
+.mcn-gp-section__hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(255,255,255,0.03);
+}
+
+.mcn-gp-section__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.mcn-gp-section__export {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.1rem 0.25rem;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.mcn-gp-section__export:hover {
+  color: var(--color-accent);
+  background: rgba(212,168,75,0.1);
+}
+
+.mcn-gp-section__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mcn-gp-stab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.mcn-gp-stab:last-child { border-right: none; }
+.mcn-gp-stab:hover { background: rgba(255,255,255,0.05); color: var(--color-text); }
+.mcn-gp-stab.is-active {
+  background: var(--color-accent);
+  color: #000;
+  font-weight: 700;
+  cursor: default;
+}
+/* Status indicator dot on tab */
+.mcn-gp-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid currentColor;
+  opacity: 0.5;
+}
+.mcn-gp-dot--green  { background: #4ade80; border-color: #4ade80; opacity: 1; box-shadow: 0 0 4px #4ade80; }
+.mcn-gp-dot--amber  { background: #f59e0b; border-color: #f59e0b; opacity: 1; }
+.mcn-gp-dot--red    { background: #f87171; border-color: #f87171; opacity: 1; }
+.mcn-gp-dot--off    { background: transparent; border-color: var(--color-border); opacity: 0.4; }
+
+.mcn-gp-panel {
+  padding: 0.65rem 0.75rem;
+}
+
+.mcn-gp-panel--simc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+/* Must come AFTER display rules — overrides flex/block to hide panels */
+.mcn-gp-panel[hidden] { display: none !important; }
+
+.mcn-gp-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.mcn-gp-src-ts {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  flex: 1;
+  min-width: 0;
+}
+
+.mcn-gp-src-ts--none {
+  font-style: italic;
+}
+
+.mcn-gp-textarea {
+  width: 100%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-family: monospace;
+  padding: 0.4rem 0.5rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+.mcn-gp-textarea:focus { border-color: var(--color-accent-dim); outline: none; }
+
+.mcn-gp-panel-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mcn-gp-blurb {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.mcn-gp-src-stale {
+  font-size: 0.73rem;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
 }
