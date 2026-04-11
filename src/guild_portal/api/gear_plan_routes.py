@@ -535,6 +535,34 @@ async def import_simc(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/me/gear-plan/{character_id}/set-goals-from-equipped
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{character_id}/set-goals-from-equipped")
+async def set_goals_from_equipped(
+    character_id: int,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Populate gear_plan_slots from the character's Blizzard-synced equipment.
+
+    Overwrites all non-locked slots with the items currently in
+    guild_identity.character_equipment for this character.
+    """
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    result = await svc.set_goals_from_equipped(pool, current_player.id, character_id)
+    return JSONResponse({"ok": True, "data": result})
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/me/gear-plan/{character_id}/export-simc
 # ---------------------------------------------------------------------------
 

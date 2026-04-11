@@ -694,6 +694,80 @@ async def import_simc_goals(
     return {"populated": populated, "skipped_locked": skipped_locked, "unrecognised": unrecognised}
 
 
+async def set_goals_from_equipped(
+    pool: asyncpg.Pool,
+    player_id: int,
+    character_id: int,
+) -> dict:
+    """Copy character_equipment rows into gear_plan_slots as BIS goals.
+
+    Uses the Blizzard API-synced equipment (character_equipment table) as the
+    source of truth.  Overwrites all non-locked slots.
+    Returns {"populated": N, "skipped_locked": M}.
+    """
+    async with pool.acquire() as conn:
+        plan_row = await conn.fetchrow(
+            "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
+            player_id, character_id,
+        )
+        if not plan_row:
+            return {"populated": 0, "skipped_locked": 0}
+        plan_id = plan_row["id"]
+
+        locked_rows = await conn.fetch(
+            "SELECT slot FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND is_locked=TRUE",
+            plan_id,
+        )
+        locked_slots = {r["slot"] for r in locked_rows}
+
+        equip_rows = await conn.fetch(
+            """
+            SELECT ce.slot, ce.blizzard_item_id, ce.item_name,
+                   wi.id AS wow_item_id
+              FROM guild_identity.character_equipment ce
+              LEFT JOIN guild_identity.wow_items wi
+                     ON wi.blizzard_item_id = ce.blizzard_item_id
+             WHERE ce.character_id = $1
+            """,
+            character_id,
+        )
+
+        populated = 0
+        skipped_locked = 0
+
+        for row in equip_rows:
+            slot = row["slot"]
+            if slot not in WOW_SLOTS:
+                continue
+            if slot in locked_slots:
+                skipped_locked += 1
+                continue
+
+            bid = row["blizzard_item_id"]
+            if not bid:
+                continue
+
+            item_name = row["item_name"] or f"Item {bid}"
+            desired_item_id = row["wow_item_id"]  # may be None if not yet in wow_items
+
+            await conn.execute(
+                """
+                INSERT INTO guild_identity.gear_plan_slots
+                    (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
+                VALUES ($1, $2, $3, $4, $5, FALSE)
+                ON CONFLICT (plan_id, slot) DO UPDATE
+                    SET desired_item_id = EXCLUDED.desired_item_id,
+                        blizzard_item_id = EXCLUDED.blizzard_item_id,
+                        item_name        = EXCLUDED.item_name
+                    WHERE gear_plan_slots.is_locked = FALSE
+                """,
+                plan_id, slot, desired_item_id, bid, item_name,
+            )
+            populated += 1
+
+    return {"populated": populated, "skipped_locked": skipped_locked}
+
+
 async def set_equipped_source(
     pool: asyncpg.Pool,
     player_id: int,

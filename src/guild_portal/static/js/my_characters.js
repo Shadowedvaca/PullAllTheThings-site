@@ -1708,7 +1708,7 @@ function _gpRenderCenterPanel(data) {
         <button class="mcn-gp-stab${isEqBlizzard ? ' is-active' : ''}"
                 onclick="_gpOnEquippedTab('blizzard')" type="button">${blizzDot} Blizzard API</button>
         <button class="mcn-gp-stab${isEqSimC ? ' is-active' : ''}"
-                onclick="_gpOnEquippedTab('simc')" type="button">${simcDot} SimC Import</button>
+                onclick="_gpOnEquippedTab('simc')" type="button">${simcDot} Import SimC</button>
       </div>
       ${blizzardPanel}
       ${simcPanel}
@@ -1747,7 +1747,10 @@ function _gpRenderCenterPanel(data) {
 
   const bisCurrentPanel = `
     <div class="mcn-gp-panel" id="mcn-gp-panel-bis-current"${bisTab === 'current' ? '' : ' hidden'}>
-      <p class="mcn-gp-blurb">Your BIS goals reflect your current equipped gear. Switch to <strong>Use a Guide</strong> to get upgrade recommendations, or <strong>Import SimC</strong> to paste a theorycrafter&#39;s profile.</p>
+      <p class="mcn-gp-blurb">Set your BIS goals to match your currently equipped gear. Unlocked slots will be updated to what you have on right now.</p>
+      <div class="mcn-gp-panel-actions">
+        <button id="mcn-gp-btn-set-from-eq" class="btn btn-primary btn-sm" type="button">Set Goals to Current Gear</button>
+      </div>
     </div>`;
 
   const bisGuidePanel = `
@@ -1818,6 +1821,7 @@ function _gpRenderCenterPanel(data) {
   document.getElementById('mcn-gp-btn-export-eq')  ?.addEventListener('click', _gpOnExportEquipped);
 
   // Wire BIS section
+  document.getElementById('mcn-gp-btn-set-from-eq') ?.addEventListener('click',  _gpOnSetGoalsFromEquipped);
   document.getElementById('mcn-gp-ht-sel')          ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-src-sel')          ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-btn-fill')         ?.addEventListener('click',  _gpOnPopulate);
@@ -2099,6 +2103,22 @@ async function _gpOnImportEquipped() {
     await _gpReload();
   } else {
     _gpShowStatus(resp.error || 'Import failed', 'err');
+  }
+}
+
+async function _gpOnSetGoalsFromEquipped() {
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  _gpShowStatus('Copying equipped gear to goals\u2026', 'info');
+  const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/set-goals-from-equipped`, { method: 'POST' });
+  if (resp.ok) {
+    const d = resp.data || {};
+    const msg = `Goals set: ${d.populated || 0} slot${d.populated !== 1 ? 's' : ''}${d.skipped_locked ? `, ${d.skipped_locked} locked skipped` : ''}`;
+    _gpBisTab = 'guide';
+    _gpShowStatus(msg, 'ok');
+    await _gpReload();
+  } else {
+    _gpShowStatus(resp.error || 'Failed to set goals', 'err');
   }
 }
 
