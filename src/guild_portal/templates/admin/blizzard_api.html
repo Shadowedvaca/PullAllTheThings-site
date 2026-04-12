@@ -1,0 +1,391 @@
+{% extends "base_admin.html" %}
+{% block title %}Blizzard API Explorer{% endblock %}
+
+{% block head %}
+<style>
+.bapi-page { padding: 1.5rem; max-width: 1100px; }
+.bapi-page h1 { font-family: var(--font-display); color: var(--color-gold); margin-bottom: 0.25rem; }
+.bapi-page .bapi-subtitle { color: var(--color-text-muted); margin-bottom: 1.5rem; font-size: 0.9rem; }
+
+.bapi-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.bapi-controls label { display: block; font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 0.3rem; }
+.bapi-controls select,
+.bapi-controls input[type="text"] {
+    width: 100%;
+    background: #1a1a1e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.45rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.bapi-params { margin-bottom: 1rem; }
+.bapi-params label { font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 0.3rem; display: block; }
+.bapi-param-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.5rem;
+}
+.bapi-param-row { display: flex; gap: 0.4rem; align-items: center; }
+.bapi-param-row .param-key {
+    width: 130px;
+    flex-shrink: 0;
+    background: #1a1a1e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+.bapi-param-row .param-val {
+    flex: 1;
+    background: #1a1a1e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.bapi-btn-row { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+.bapi-btn {
+    padding: 0.45rem 1.1rem;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.bapi-btn-primary { background: var(--color-gold); color: #0a0a0b; }
+.bapi-btn-primary:hover { opacity: 0.85; }
+.bapi-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.bapi-btn-secondary { background: #2a2a2e; color: var(--color-text); border: 1px solid var(--color-border); }
+.bapi-btn-secondary:hover { opacity: 0.85; }
+.bapi-status { font-size: 0.85rem; color: var(--color-text-muted); }
+.bapi-status.err { color: #f87171; }
+.bapi-status.ok { color: #4ade80; }
+
+.bapi-output-wrap {
+    background: #0d0d10;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1rem;
+    min-height: 200px;
+    max-height: 70vh;
+    overflow: auto;
+    position: relative;
+}
+.bapi-output-wrap pre {
+    margin: 0;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: #c9d1d9;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.bapi-output-wrap .bapi-placeholder {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+.bapi-copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: #2a2a2e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+.bapi-copy-btn:hover { color: var(--color-text); }
+
+/* JSON syntax colouring */
+.j-key   { color: #79c0ff; }
+.j-str   { color: #a5d6ff; }
+.j-num   { color: #ffa657; }
+.j-bool  { color: #ff7b72; }
+.j-null  { color: #8b949e; }
+
+.bapi-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    margin: 1.25rem 0 0.4rem;
+}
+
+.bapi-no-creds {
+    background: #2d1a1a;
+    border: 1px solid #7f1d1d;
+    color: #fca5a5;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set current_screen = "blizzard_api" %}
+<div class="bapi-page">
+    <h1>Blizzard API Explorer</h1>
+    <p class="bapi-subtitle">Calls the Blizzard Game Data API using the credentials configured in Site Config. GL only.</p>
+
+    {% if not has_blizzard %}
+    <div class="bapi-no-creds">
+        Blizzard API credentials are not configured. Go to <a href="/admin/site-config" style="color:#fca5a5">Site Config</a> to add them.
+    </div>
+    {% endif %}
+
+    {# ── Endpoint picker ───────────────────────────────────────────────── #}
+    <div class="bapi-controls">
+        <div>
+            <label for="bapi-preset">Preset Endpoint</label>
+            <select id="bapi-preset" onchange="applyPreset()">
+                <option value="">— pick a preset —</option>
+
+                <optgroup label="Journal">
+                    <option value="/data/wow/journal-expansion/index|">Expansion Index</option>
+                    <option value="/data/wow/journal-expansion/{id}|id=">Journal Expansion (by ID)</option>
+                    <option value="/data/wow/journal-instance/{id}|id=">Journal Instance (by ID)</option>
+                    <option value="/data/wow/journal-encounter/{id}|id=">Journal Encounter (by ID)</option>
+                </optgroup>
+
+                <optgroup label="Item">
+                    <option value="/data/wow/item/{id}|id=">Item Detail (by ID)</option>
+                    <option value="/data/wow/item-set/{id}|id=">Item Set (by ID)</option>
+                    <option value="/data/wow/media/item/{id}|id=">Item Media / Icon (by ID)</option>
+                </optgroup>
+
+                <optgroup label="Character">
+                    <option value="/profile/wow/character/{realm}/{name}/equipment|realm=&name=&namespace=profile-us">Character Equipment</option>
+                    <option value="/profile/wow/character/{realm}/{name}|realm=&name=&namespace=profile-us">Character Profile</option>
+                </optgroup>
+
+                <optgroup label="Guild">
+                    <option value="/data/wow/guild/{realm}/{guild}/roster|realm=&guild=&namespace=profile-us">Guild Roster</option>
+                </optgroup>
+
+                <optgroup label="Auction House">
+                    <option value="/data/wow/connected-realm/{id}/auctions|id=&namespace=dynamic-us">Auctions (by Connected Realm ID)</option>
+                </optgroup>
+            </select>
+        </div>
+        <div>
+            <label for="bapi-path">API Path (editable)</label>
+            <input type="text" id="bapi-path" placeholder="/data/wow/journal-expansion/index" />
+        </div>
+    </div>
+
+    {# ── Param rows ────────────────────────────────────────────────────── #}
+    <div class="bapi-params">
+        <label>Query Parameters <span style="color:var(--color-text-muted);font-weight:400">(namespace and locale pre-filled; override as needed)</span></label>
+        <div class="bapi-param-grid" id="bapi-param-grid">
+            {# populated by JS #}
+        </div>
+        <div style="margin-top:0.4rem">
+            <button class="bapi-btn bapi-btn-secondary" style="font-size:0.8rem;padding:0.25rem 0.7rem" onclick="addParamRow('','')">+ Add param</button>
+        </div>
+    </div>
+
+    {# ── Actions ───────────────────────────────────────────────────────── #}
+    <div class="bapi-btn-row">
+        <button class="bapi-btn bapi-btn-primary" id="bapi-call-btn"
+                onclick="callApi()" {% if not has_blizzard %}disabled{% endif %}>
+            Call API
+        </button>
+        <button class="bapi-btn bapi-btn-secondary" onclick="clearOutput()">Clear</button>
+        <span class="bapi-status" id="bapi-status"></span>
+    </div>
+
+    {# ── Output ────────────────────────────────────────────────────────── #}
+    <div class="bapi-output-wrap" id="bapi-output-wrap">
+        <button class="bapi-copy-btn" onclick="copyOutput()">Copy</button>
+        <pre id="bapi-output"><span class="bapi-placeholder">Response will appear here…</span></pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Preset definitions ───────────────────────────────────────────────────────
+// Format: "path_template|key=default&key2=default2"
+// {id}, {realm}, {name}, {guild} are placeholder tokens shown as editable params.
+
+function applyPreset() {
+    const sel = document.getElementById('bapi-preset');
+    const val = sel.value;
+    if (!val) return;
+
+    const [pathTpl, paramStr] = val.split('|');
+    document.getElementById('bapi-path').value = pathTpl;
+
+    // Parse preset param defaults
+    const presetParams = {};
+    if (paramStr) {
+        paramStr.split('&').forEach(p => {
+            const [k, v] = p.split('=');
+            if (k) presetParams[k] = v || '';
+        });
+    }
+
+    // Extract path tokens like {id}, {realm}, etc. and add as params too
+    const tokens = [...pathTpl.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+    tokens.forEach(t => { if (!(t in presetParams)) presetParams[t] = ''; });
+
+    // Always include namespace + locale as first rows
+    const grid = document.getElementById('bapi-param-grid');
+    grid.innerHTML = '';
+    addParamRow('namespace', presetParams['namespace'] || 'static-us');
+    addParamRow('locale', 'en_US');
+    Object.entries(presetParams).forEach(([k, v]) => {
+        if (k !== 'namespace' && k !== 'locale') addParamRow(k, v);
+    });
+}
+
+function addParamRow(key, val) {
+    const grid = document.getElementById('bapi-param-grid');
+    const row = document.createElement('div');
+    row.className = 'bapi-param-row';
+    row.innerHTML = `
+        <input class="param-key" type="text" placeholder="key" value="${escHtml(key)}" />
+        <input class="param-val" type="text" placeholder="value" value="${escHtml(val)}" />
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem;line-height:1">×</button>
+    `;
+    grid.appendChild(row);
+    // Focus the value field if key is pre-filled but value is empty
+    if (key && !val) {
+        row.querySelector('.param-val').focus();
+    }
+}
+
+function collectParams() {
+    const rows = document.querySelectorAll('.bapi-param-row');
+    const params = {};
+    rows.forEach(row => {
+        const k = row.querySelector('.param-key').value.trim();
+        const v = row.querySelector('.param-val').value.trim();
+        if (k) params[k] = v;
+    });
+    return params;
+}
+
+// ── API call ─────────────────────────────────────────────────────────────────
+async function callApi() {
+    const pathTpl = document.getElementById('bapi-path').value.trim();
+    if (!pathTpl) { setStatus('Path is required', 'err'); return; }
+
+    const params = collectParams();
+
+    // Substitute path tokens {key} with param values
+    let path = pathTpl;
+    Object.entries(params).forEach(([k, v]) => {
+        path = path.replaceAll(`{${k}}`, v);
+    });
+    // Remove params used as path tokens from query params
+    const pathTokens = new Set([...pathTpl.matchAll(/\{(\w+)\}/g)].map(m => m[1]));
+    const queryParams = Object.fromEntries(
+        Object.entries(params).filter(([k]) => !pathTokens.has(k))
+    );
+
+    const btn = document.getElementById('bapi-call-btn');
+    btn.disabled = true;
+    setStatus('Calling…', '');
+
+    try {
+        const resp = await fetch('/admin/blizzard-api/probe', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path, params: queryParams}),
+        });
+        const json = await resp.json();
+        if (json.ok) {
+            renderJson(json.data);
+            setStatus(`200 OK — ${countKeys(json.data)} top-level keys`, 'ok');
+        } else {
+            renderError(json.error || 'Unknown error');
+            setStatus(json.error || 'Error', 'err');
+        }
+    } catch (e) {
+        renderError(String(e));
+        setStatus(String(e), 'err');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ── JSON rendering ────────────────────────────────────────────────────────────
+function renderJson(data) {
+    const raw = JSON.stringify(data, null, 2);
+    document.getElementById('bapi-output').innerHTML = syntaxHighlight(raw);
+}
+function renderError(msg) {
+    document.getElementById('bapi-output').innerHTML =
+        `<span style="color:#f87171">Error: ${escHtml(msg)}</span>`;
+}
+function clearOutput() {
+    document.getElementById('bapi-output').innerHTML =
+        '<span class="bapi-placeholder">Response will appear here…</span>';
+    setStatus('', '');
+    document.getElementById('bapi-preset').value = '';
+    document.getElementById('bapi-path').value = '';
+    document.getElementById('bapi-param-grid').innerHTML = '';
+}
+
+function copyOutput() {
+    const text = document.getElementById('bapi-output').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.bapi-copy-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+    });
+}
+
+function setStatus(msg, cls) {
+    const el = document.getElementById('bapi-status');
+    el.textContent = msg;
+    el.className = 'bapi-status' + (cls ? ' ' + cls : '');
+}
+
+function countKeys(obj) {
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) return Object.keys(obj).length;
+    if (Array.isArray(obj)) return obj.length + ' items';
+    return '—';
+}
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function syntaxHighlight(json) {
+    return json
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(
+            /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+            match => {
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) return `<span class="j-key">${match}</span>`;
+                    return `<span class="j-str">${match}</span>`;
+                }
+                if (/true|false/.test(match)) return `<span class="j-bool">${match}</span>`;
+                if (/null/.test(match)) return `<span class="j-null">${match}</span>`;
+                return `<span class="j-num">${match}</span>`;
+            }
+        );
+}
+
+// Init with default namespace/locale rows
+addParamRow('namespace', 'static-us');
+addParamRow('locale', 'en_US');
+</script>
+{% endblock %}

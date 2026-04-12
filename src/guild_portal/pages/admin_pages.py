@@ -3646,3 +3646,63 @@ async def admin_error_routing_page(
     ctx["errors"] = errors
     ctx["routing_rules"] = routing_rules
     return templates.TemplateResponse("admin/error_routing.html", ctx)
+
+
+# ── Blizzard API Explorer ─────────────────────────────────────────────────────
+
+@router.get("/blizzard-api", response_class=HTMLResponse)
+async def admin_blizzard_api_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Blizzard API Explorer — GL only."""
+    player = await _require_screen("blizzard_api", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/blizzard-api")
+
+    ctx = await _base_ctx(request, player, db)
+    blizzard_client, owned = await _get_blizzard_client(request)
+    ctx["has_blizzard"] = blizzard_client is not None
+    if owned and blizzard_client:
+        await blizzard_client.close()
+    return templates.TemplateResponse("admin/blizzard_api.html", ctx)
+
+
+@router.post("/blizzard-api/probe")
+async def admin_blizzard_probe(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Proxy a Blizzard API call using site credentials. GL only."""
+    from fastapi.responses import JSONResponse
+
+    player = await _require_screen("blizzard_api", request, db)
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    body = await request.json()
+    path: str = (body.get("path") or "").strip()
+    params: dict = body.get("params") or {}
+
+    if not path:
+        return JSONResponse({"ok": False, "error": "path is required"}, status_code=400)
+    if not path.startswith("/"):
+        path = "/" + path
+
+    blizzard_client, owned = await _get_blizzard_client(request)
+    if not blizzard_client:
+        return JSONResponse({"ok": False, "error": "Blizzard credentials not configured"}, status_code=503)
+
+    try:
+        # Merge user-supplied params with namespace/locale defaults
+        merged = {"namespace": "static-us", "locale": "en_US"}
+        merged.update({k: v for k, v in params.items() if v != ""})
+        data = await blizzard_client._api_get(path, params=merged)
+        if data is None:
+            return JSONResponse({"ok": False, "error": f"Blizzard returned null/404 for {path}"})
+        return JSONResponse({"ok": True, "data": data})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+    finally:
+        if owned:
+            await blizzard_client.close()
