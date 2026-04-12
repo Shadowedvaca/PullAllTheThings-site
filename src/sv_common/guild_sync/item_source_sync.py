@@ -128,12 +128,12 @@ async def sync_item_sources(
             logger.error(msg)
             errors.append(msg)
 
-    # ── 3. Tier set completion — stub catalyst-slot pieces via Blizzard API ──
-    # Ensures back/wrist/waist/feet tier pieces are in wow_items even when
-    # they never appear in BIS recommendations.  Uses the item-set ID extracted
-    # from existing main-5 tier piece tooltips to call the Blizzard item-set
-    # API, then stubs any missing items so Enrich Items can fetch their data.
-    set_stubbed, set_errors = await sync_tier_set_completions(pool, client)
+    # ── 3. Catalyst-slot discovery via Appearance API ─────────────────────────
+    # Stubs back/wrist/waist/feet tier pieces that never appear in the Journal
+    # loot tables.  Uses the Appearance API to crawl all 9 slots + all quality
+    # variants from known tier set items.  Falls back to sync_tier_set_completions
+    # (item-set API path) if the Appearance API yields no matches.
+    set_stubbed, set_errors = await sync_catalyst_items_via_appearance(pool, client)
     errors.extend(set_errors)
 
     # ── 4. Tier set / Catalyst enrichment ─────────────────────────────────
@@ -443,6 +443,201 @@ async def sync_tier_set_completions(
     logger.info(
         "sync_tier_set_completions: stubbed %d new items across %d sets",
         stubbed, len(set_ids),
+    )
+    return stubbed, errors
+
+
+async def sync_catalyst_items_via_appearance(
+    pool: asyncpg.Pool,
+    client: BlizzardClient,
+) -> tuple[int, list[str]]:
+    """Discover catalyst-slot tier pieces via the Blizzard Item Appearance API.
+
+    Catalyst-slot tier pieces (back/wrist/waist/feet) are not in the Blizzard
+    Journal loot tables and cannot be found via the item-set API (which only
+    returns the 5 main tier pieces: head/shoulder/chest/hands/legs).
+
+    This function uses the Appearance API to crawl from known tier set items to
+    ALL 9 appearance slots across ALL quality variants (LFR/Normal/Heroic/Mythic):
+
+    1. Derive "of the X" suffixes from existing tier items in wow_items
+       (head/shoulder/chest/hands/legs, in BIS lists, no direct boss sources).
+       If names are missing, fetches them from the Blizzard item API.
+    2. Fetch the appearance set index and find all sets matching each suffix
+       (covers all quality-tier variants of each tier set).
+    3. For each matching appearance set, resolve each appearance to item IDs
+       and stub any missing items into wow_items.
+
+    Falls back to sync_tier_set_completions if the appearance API yields no
+    results (handles old expansions where the item-set API works fine).
+
+    Returns (rows_stubbed, errors).
+    """
+    errors: list[str] = []
+    stubbed = 0
+
+    # Step 1: Find known tier items and collect (blizzard_item_id, name) pairs.
+    async with pool.acquire() as conn:
+        tier_rows = await conn.fetch(
+            """
+            SELECT DISTINCT wi.blizzard_item_id, wi.name
+              FROM guild_identity.wow_items wi
+             WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
+               AND wi.armor_type IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM guild_identity.item_sources s
+                    WHERE s.item_id = wi.id
+               )
+               AND EXISTS (
+                   SELECT 1 FROM guild_identity.bis_list_entries ble
+                    WHERE ble.item_id = wi.id
+               )
+             LIMIT 30
+            """
+        )
+
+    if not tier_rows:
+        logger.info(
+            "sync_catalyst_items: no known tier items found; skipping appearance crawl"
+        )
+        return 0, []
+
+    # Fetch names from Blizzard API for any items that are missing them.
+    known_items: list[tuple[int, str]] = []
+    for row in tier_rows:
+        name = row["name"] or ""
+        bid = row["blizzard_item_id"]
+        if not name or " of " not in name:
+            item_data = await client.get_item(bid)
+            if item_data:
+                name = item_data.get("name", "") or ""
+        if name and " of " in name:
+            known_items.append((bid, name))
+
+    if not known_items:
+        logger.info(
+            "sync_catalyst_items: no tier items with 'of the X' suffix found; "
+            "falling back to sync_tier_set_completions"
+        )
+        return await sync_tier_set_completions(pool, client)
+
+    # Extract suffixes: "Midnight Vanguard's Chestguard of the Luminous Bloom"
+    #                   → " of the Luminous Bloom"
+    suffixes: set[str] = set()
+    for _bid, name in known_items:
+        idx = name.find(" of ")
+        if idx >= 0:
+            suffixes.add(name[idx:])
+
+    logger.info(
+        "sync_catalyst_items: found %d suffix(es): %s",
+        len(suffixes), sorted(suffixes),
+    )
+
+    # Step 2: Search appearance set index for all sets matching each suffix.
+    all_app_sets = await client.get_item_appearance_set_index()
+    if not all_app_sets:
+        logger.warning(
+            "sync_catalyst_items: appearance set index unavailable; falling back"
+        )
+        return await sync_tier_set_completions(pool, client)
+
+    matching_set_ids: list[int] = []
+    for app_set in all_app_sets:
+        set_name = app_set.get("name", "")
+        set_id = app_set.get("id")
+        if not set_id:
+            continue
+        for suffix in suffixes:
+            # Strip leading space for the name comparison.
+            if suffix.strip().lower() in set_name.lower():
+                matching_set_ids.append(set_id)
+                logger.info(
+                    "sync_catalyst_items: matched appearance set %d (%r)",
+                    set_id, set_name,
+                )
+                break  # Don't match the same set twice
+
+    if not matching_set_ids:
+        logger.info(
+            "sync_catalyst_items: no appearance sets matched suffixes %s; falling back",
+            sorted(suffixes),
+        )
+        return await sync_tier_set_completions(pool, client)
+
+    logger.info(
+        "sync_catalyst_items: crawling %d appearance set(s)", len(matching_set_ids)
+    )
+
+    # Step 3: For each matched set, resolve appearances → item IDs → stub.
+    async with pool.acquire() as conn:
+        for set_id in matching_set_ids:
+            set_data = await client.get_item_appearance_set(set_id)
+            if not set_data:
+                msg = f"sync_catalyst_items: could not fetch appearance set {set_id}"
+                logger.warning(msg)
+                errors.append(msg)
+                continue
+
+            appearances = set_data.get("appearances", [])
+            logger.info(
+                "sync_catalyst_items: set %d has %d appearance(s)",
+                set_id, len(appearances),
+            )
+
+            for app_entry in appearances:
+                app_id = app_entry.get("id")
+                if not app_id:
+                    continue
+
+                app_data = await client.get_item_appearance(app_id)
+                if not app_data:
+                    continue
+
+                item_ids = [
+                    item.get("id")
+                    for item in app_data.get("items", [])
+                    if item.get("id")
+                ]
+
+                for blizzard_item_id in item_ids:
+                    existing = await conn.fetchval(
+                        "SELECT id FROM guild_identity.wow_items "
+                        "WHERE blizzard_item_id = $1",
+                        blizzard_item_id,
+                    )
+                    if existing:
+                        continue
+
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO guild_identity.wow_items
+                                   (blizzard_item_id, slot_type)
+                            VALUES ($1, 'other')
+                            ON CONFLICT (blizzard_item_id) DO NOTHING
+                            """,
+                            blizzard_item_id,
+                        )
+                        stubbed += 1
+                        logger.info(
+                            "sync_catalyst_items: stubbed item %d "
+                            "from appearance %d (set %d)",
+                            blizzard_item_id, app_id, set_id,
+                        )
+                    except Exception as exc:
+                        msg = (
+                            f"sync_catalyst_items: DB error stubbing item "
+                            f"{blizzard_item_id}: {exc}"
+                        )
+                        logger.error(msg)
+                        errors.append(msg)
+
+                await asyncio.sleep(0.1)  # Stay polite to the API
+
+    logger.info(
+        "sync_catalyst_items: stubbed %d new item(s) across %d appearance set(s)",
+        stubbed, len(matching_set_ids),
     )
     return stubbed, errors
 
