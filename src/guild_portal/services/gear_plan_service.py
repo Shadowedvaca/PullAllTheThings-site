@@ -1686,9 +1686,9 @@ async def get_available_items(
 
         # ── Query 2: crafted items via item_recipe_links ──────────────────────
         # Scoped to the active raid season's expansion (via profession_tiers) so
-        # prior-expansion crafted gear doesn't appear.  Items with no Wowhead
-        # tooltip yet (unenriched Midnight items) are allowed through; items with
-        # a tooltip that is NOT epic (class="q4") are excluded.
+        # prior-expansion crafted gear doesn't appear.  Only confirmed-epic items
+        # (class="q4" in Wowhead tooltip) are shown — blue/green crafted gear is
+        # never BIS and must never appear regardless of tooltip state.
         craft_select = f"wi.blizzard_item_id, wi.name, wi.icon_url{', wi.wowhead_tooltip_html' if need_tooltip else ''}"
         craft_rows = await conn.fetch(
             f"""
@@ -1702,8 +1702,7 @@ async def get_available_items(
                        SELECT expansion_name FROM patt.raid_seasons
                         WHERE is_active = TRUE LIMIT 1
                    )
-               AND (wi.wowhead_tooltip_html IS NULL
-                    OR wi.wowhead_tooltip_html LIKE '%class="q4"%')
+               AND wi.wowhead_tooltip_html LIKE '%class="q4"%'
                {armor_clause}
                {exclude_clause}
              ORDER BY wi.name
