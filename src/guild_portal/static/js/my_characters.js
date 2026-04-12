@@ -2751,8 +2751,8 @@ function _gpRenderFaq() {
       a: '<strong>Lock</strong> (padlock icon in the slot drawer) protects a slot from Fill BIS — useful when you\'ve chosen something intentionally different from the guide. <strong>Exclude</strong> (✕ button on any BIS or available-item row) hides that specific item from all recommendations for this slot permanently. Both can be undone.',
     },
     {
-      q: 'What are the quality tracks (V / C / H / M)?',
-      a: '<strong>Veteran / Champion / Hero / Myth</strong> — the upgrade track system. Your plan shows which tracks you still need for each slot. Vault drops are always at the highest track you\'ve cleared that boss/key level on.',
+      q: 'What are the quality tracks — Veteran, Champion, Hero, Mythic?',
+      a: '<strong>V</strong>eteran / <strong>C</strong>hampion / <strong>H</strong>ero / <strong>M</strong>ythic — the upgrade track system. Your plan shows which tracks you still need for each slot. Vault drops are always at the highest track you\'ve cleared that boss/key level on.',
     },
   ];
 
@@ -2897,7 +2897,7 @@ function _gpLaunchTour() {
   t.addStep({
     id: 'paperdoll',
     title: 'Gear Slots',
-    text: 'The columns on either side show all your gear slots. Your <strong>equipped item</strong> is on the inner side (closer to center); your <strong>BIS goal</strong> is on the outer edge. A <span style="color:#4ade80;font-weight:600;">green</span> left border means you already have that BIS item — a <span style="color:#f87171;font-weight:600;">red</span> border means there\'s still an upgrade to go after. The colored border on each icon shows its quality track (V / C / H / M).',
+    text: 'The columns on either side show all your gear slots. Your <strong>equipped item</strong> is on the inner side (closer to center); your <strong>BIS goal</strong> is on the outer edge. A <span style="color:#4ade80;font-weight:600;">green</span> left border means you already have that BIS item — a <span style="color:#f87171;font-weight:600;">red</span> border means there\'s still an upgrade to go after. The colored border on each icon shows its quality track: <strong>V</strong>eteran / <strong>C</strong>hampion / <strong>H</strong>ero / <strong>M</strong>ythic.',
     attachTo: at('#mcn-left-paperdoll', 'right'),
     when: {
       show() {
@@ -2932,7 +2932,7 @@ function _gpLaunchTour() {
   t.addStep({
     id: 'gear-table',
     title: 'Gear Summary Table',
-    text: 'Scroll down for the full table — every slot at a glance. You\'ll see your equipped item, your goal, the drop source, and which quality tracks (V / C / H / M) you still have available. Click any row to open the detail panel.',
+    text: 'Scroll down for the full table — every slot at a glance. You\'ll see your equipped item, your goal, the drop source, and which quality tracks (<strong>V</strong>eteran / <strong>C</strong>hampion / <strong>H</strong>ero / <strong>M</strong>ythic) you still have available. Click any row to open the detail panel.',
     attachTo: at('.mcn-gear-table-wrap', 'top'),
     highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnBack(t), btnDone(t)],
