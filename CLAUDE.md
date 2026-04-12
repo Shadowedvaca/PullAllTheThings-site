@@ -235,16 +235,12 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1E.6 complete** — merged PR #25, tagged `prod-v0.15.0`.
-  - **SimC as equipped gear source.** Players can paste a SimC profile to use as the paperdoll source instead of Blizzard API. Profile is persisted (`gear_plans.simc_profile` + `simc_imported_at`); switching back to Blizzard and returning restores it without re-pasting.
-  - Migration 0094: `simc_imported_at TIMESTAMPTZ` + `equipped_source VARCHAR(10) DEFAULT 'blizzard'` on `gear_plans`.
-  - **Two-section gear plan UI redesign** — "Equipped Gear Source" (Blizzard API / Import SimC) + "BIS Sourcing" (My Current Gear / Use a Guide / Import SimC). Status indicator dots (green/amber/red) on source tabs. Download buttons on each section header. 40/60 flex split, auto-sizing.
-  - **Set Goals to Current Gear** — new button on My Current Gear BIS tab. `set_goals_from_equipped()` in `gear_plan_service.py`, `POST /api/v1/me/gear-plan/{character_id}/set-goals-from-equipped`. Copies `character_equipment` into unlocked `gear_plan_slots` as a BIS baseline, then switches to guide view.
-  - **Crafted quality track fix** — added Midnight crafted bonus IDs `13621→H` and `13622→M` to `_DEFAULT_SIMC_BONUS_IDS` in `quality_track.py`. Fixes wrist/back/ring crafted pieces showing no quality track from SimC profiles.
-  - **Item icon / name redesign** — icons are now Wowhead links (popup on hover); names are flat text throughout gear plan (table, drawer, BIS grid, available items, excluded items). Equipped column names wrap instead of truncating.
-  - Frontend: `my_characters.js` v2.2.0, `my_characters.css` v1.9.0.
+- **Phase 1E.7 complete** — merged PR #26, tagged `prod-v0.16.0`. No migrations — frontend only.
+  - **Guided tour.** Self-hosted Shepherd.js v11.2.0 (`static/js/vendor/shepherd.min.js` + `static/css/vendor/shepherd.css`). `?` button next to "GEAR PLAN" heading launches a 10-stop overlay tour. Auto-fires once on first visit via `localStorage` key `patt_gear_tour_v1`; `?` button re-launches anytime. Tour order: Equipped Source → Sync Now → Import SimC → BIS Sourcing intro → BIS dropdown → Hero Talent (conditional) → Fill BIS → Paperdoll (both columns highlighted) → Slot Detail (head slot auto-opens) → Gear Table. Each stop highlights the relevant whole section with a gold outline. Sync Now and Fill BIS are blocked during the tour to prevent DOM teardown.
+  - **FAQ accordion.** 5 collapsible `<details>` entries at the bottom of the Gear tab: where the plan came from, SimC addon step-by-step tutorial, RaidBots vs BIS, lock/exclude how-to, quality track explainer (**V**eteran / **C**hampion / **H**ero / **M**ythic with bold first letter).
+  - Frontend: `my_characters.js` v2.3.0, `my_characters.css` v2.0.0.
 - **Last migration:** 0094
-- **Last prod tag:** `prod-v0.15.0`
+- **Last prod tag:** `prod-v0.16.0`
 - **Active branch:** `main`
 - **Next:** Phase 1F — TBD.
 
