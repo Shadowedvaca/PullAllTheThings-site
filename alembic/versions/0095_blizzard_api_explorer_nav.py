@@ -15,8 +15,8 @@ depends_on = None
 def upgrade():
     op.execute("""
         INSERT INTO common.screen_permissions
-               (screen_key, display_name, url_path, category_order, nav_order, min_rank_level)
-        VALUES ('blizzard_api', 'Blizzard API Explorer', '/admin/blizzard-api', 10, 96, 5)
+               (screen_key, display_name, url_path, category, category_order, nav_order, min_rank_level)
+        VALUES ('blizzard_api', 'Blizzard API Explorer', '/admin/blizzard-api', 'admin', 10, 96, 5)
         ON CONFLICT (screen_key) DO NOTHING
     """)
 
