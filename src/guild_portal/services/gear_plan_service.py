@@ -1791,6 +1791,7 @@ async def get_available_items(
                     SELECT wi.name
                       FROM guild_identity.wow_items wi
                      WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
+                       AND wi.name LIKE '% of %'
                        AND (
                            (    wi.wowhead_tooltip_html LIKE $1
                             AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
