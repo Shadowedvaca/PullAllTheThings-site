@@ -144,10 +144,16 @@ For each slot in the gear plan:
 | Has BIS item at 6/6 | Next quality tier, 1/6 |
 | Has BIS item at Mythic 6/6 | Mythic 6/6 (nothing higher) |
 
-**Hard constraint:** Displayed ilvl must never be lower than the player's currently
-equipped ilvl for that slot. If the target quality's 6/6 ilvl is below the equipped ilvl
-(e.g., player has Hero gear but BIS only exists at Champion), bump to the lowest
-rank of the next quality tier that clears the equipped ilvl.
+**Hard constraint:** The displayed quality tier must never be lower than the player's
+currently equipped quality tier for that slot. Quality tier order: V < C < H < M.
+
+If a player has a Hero item equipped, we never show a Champion recommendation — even if
+the BIS item only exists at Champion quality. In that case, show the BIS item at Hero 1/6
+minimum (the lowest Hero rank, which is still an upgrade over their current Hero rank if
+they are below 6/6, or show Hero 6/6 if they are already at Hero 6/6 and the item doesn't
+come at Mythic).
+
+Formally: `display_tier = max(target_tier, equipped_tier)` where V=1, C=2, H=3, M=4.
 
 For **equipped gear display**: show the item at its actual ilvl from `character_equipment.item_level`. This data is already synced from the Blizzard equipment API.
 
