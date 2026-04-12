@@ -183,12 +183,18 @@ def _parse_slot_and_armor(item_data: dict) -> tuple[Optional[str], Optional[str]
     slot_type = _EQUIP_SLOT_MAP.get(inv_type)
 
     subclass = item_data.get("item_subclass") or {}
+    subclass_name = ""
     if isinstance(subclass, dict):
-        # get_item() format: {"name": "Leather", "id": 2}
-        # search format:     {"en_US": "Leather", "en_GB": "Leather", ...}
-        subclass_name = subclass.get("name") or subclass.get("en_US") or ""
-    else:
-        subclass_name = ""
+        name_val = subclass.get("name")
+        if isinstance(name_val, str):
+            # get_item() format: {"name": "Leather", "id": 2}
+            subclass_name = name_val
+        elif isinstance(name_val, dict):
+            # search API nested format: {"name": {"en_US": "Leather"}, "id": 2}
+            subclass_name = name_val.get("en_US", "")
+        else:
+            # flat locale dict: {"en_US": "Leather", "en_GB": "Leather", ...}
+            subclass_name = subclass.get("en_US", "")
     armor_type = _ARMOR_SUBCLASS_MAP.get(subclass_name)
 
     return slot_type, armor_type

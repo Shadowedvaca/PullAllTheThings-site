@@ -73,6 +73,26 @@ function _updateButtonStates() {
 }
 
 // ---------------------------------------------------------------------------
+// Button running-state helpers
+// ---------------------------------------------------------------------------
+
+function _setBtnRunning(btn) {
+    if (!btn) return;
+    btn._originalHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Running\u2026';
+    btn.disabled = true;
+}
+
+function _setBtnDone(btn) {
+    if (!btn) return;
+    if (btn._originalHtml != null) {
+        btn.innerHTML = btn._originalHtml;
+        btn._originalHtml = null;
+    }
+    btn.disabled = false;
+}
+
+// ---------------------------------------------------------------------------
 // Status bar helpers
 // ---------------------------------------------------------------------------
 
@@ -93,6 +113,8 @@ function setStatusHtml(html, type = '') {
 // ---------------------------------------------------------------------------
 
 async function loadMatrix() {
+    const btn = document.getElementById('refresh-matrix-btn');
+    _setBtnRunning(btn);
     setStatus('Loading matrix…');
     try {
         const r = await fetch('/api/v1/admin/bis/matrix');
@@ -116,6 +138,8 @@ async function loadMatrix() {
         setStatus(`Matrix loaded — ${_specs.length} specs × ${_sources.length} sources.`);
     } catch (err) {
         setStatus('Error loading matrix: ' + err.message, 'error');
+    } finally {
+        _setBtnDone(btn);
     }
 }
 
@@ -604,6 +628,8 @@ async function loadSources() {
 
 async function discoverTargets() {
     if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
+    const btn = document.getElementById('discover-btn');
+    _setBtnRunning(btn);
     _discoveryInProgress = true;
     _updateButtonStates();
     setStatusHtml('<span class="spinner"></span> Discovering targets…', 'running');
@@ -619,6 +645,7 @@ async function discoverTargets() {
     } finally {
         _discoveryInProgress = false;
         _updateButtonStates();
+        _setBtnDone(btn);
     }
 }
 
@@ -640,6 +667,8 @@ async function syncSource() {
         return;
     }
 
+    const btn = document.getElementById('sync-source-btn');
+    _setBtnRunning(btn);
     _syncInProgress = true;
     _updateButtonStates();
 
@@ -667,6 +696,7 @@ async function syncSource() {
     } finally {
         _syncInProgress = false;
         _updateButtonStates();
+        _setBtnDone(btn);
     }
 
     await loadMatrix();
@@ -683,6 +713,8 @@ async function syncAll() {
     const specs = _specs;
     if (!specs.length) { setStatus('Load matrix first.', 'error'); return; }
 
+    const btn = document.getElementById('sync-all-btn');
+    _setBtnRunning(btn);
     _syncInProgress = true;
     _updateButtonStates();
 
@@ -708,6 +740,7 @@ async function syncAll() {
     } finally {
         _syncInProgress = false;
         _updateButtonStates();
+        _setBtnDone(btn);
     }
 
     await loadMatrix();
@@ -718,6 +751,8 @@ async function syncAll() {
 
 async function resyncErrors() {
     if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
+
+    const btn = document.getElementById('resync-errors-btn');
 
     // Fetch all targets, filter to failed ones
     let failedTargets;
@@ -734,6 +769,7 @@ async function resyncErrors() {
     if (!failedTargets.length) { setStatus('No failed targets to re-sync.', 'success'); return; }
     if (!confirm(`Re-sync ${failedTargets.length} failed targets?`)) return;
 
+    _setBtnRunning(btn);
     _syncInProgress = true;
     _updateButtonStates();
 
@@ -759,6 +795,7 @@ async function resyncErrors() {
     } finally {
         _syncInProgress = false;
         _updateButtonStates();
+        _setBtnDone(btn);
     }
 
     await loadMatrix();
@@ -1532,7 +1569,7 @@ function toggleItemSources() {
 
 async function syncItemSources() {
     const btn = document.getElementById('sync-item-sources-btn');
-    if (btn) btn.disabled = true;
+    _setBtnRunning(btn);
     setStatusHtml('<span class="spinner"></span> Syncing loot tables from Blizzard Journal API…', 'running');
 
     try {
@@ -1562,13 +1599,13 @@ async function syncItemSources() {
     } catch (err) {
         setStatus('Loot table sync failed: ' + err.message, 'error');
     } finally {
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
 
 async function syncLegacyDungeons() {
     const btn = document.getElementById('sync-legacy-dungeons-btn');
-    if (btn) btn.disabled = true;
+    _setBtnRunning(btn);
     setStatusHtml('<span class="spinner"></span> Starting legacy dungeon sync…', 'running');
 
     try {
@@ -1591,13 +1628,13 @@ async function syncLegacyDungeons() {
     } catch (err) {
         setStatus('Legacy dungeon sync failed: ' + err.message, 'error');
     } finally {
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
 
 async function syncCraftedItems() {
     const btn = document.getElementById('sync-crafted-items-btn');
-    if (btn) btn.disabled = true;
+    _setBtnRunning(btn);
     setStatusHtml('<span class="spinner"></span> Starting crafted item discovery…', 'running');
 
     try {
@@ -1618,7 +1655,7 @@ async function syncCraftedItems() {
     } catch (err) {
         setStatus('Crafted item sync failed: ' + err.message, 'error');
     } finally {
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
 
@@ -1751,7 +1788,7 @@ async function enrichItems() {
     // If already polling, don't start a second job
     if (_enrichPollInterval) return;
 
-    if (btn) btn.disabled = true;
+    _setBtnRunning(btn);
     setStatusHtml('<span class="spinner"></span> Starting item enrichment…', 'running');
 
     try {
@@ -1767,7 +1804,7 @@ async function enrichItems() {
         _startEnrichPoll(btn, d.total || 0);
     } catch (err) {
         setStatus('Enrich items failed: ' + err.message, 'error');
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
 
@@ -1787,7 +1824,7 @@ function _startEnrichPoll(btn, total) {
             } else if (d.finished_at) {
                 clearInterval(_enrichPollInterval);
                 _enrichPollInterval = null;
-                if (btn) btn.disabled = false;
+                _setBtnDone(btn);
                 const errPart = d.error_count > 0 ? `, ${d.error_count} errors` : '';
                 setStatus(
                     `Enrich complete — ${d.enriched} recipe links built${errPart}.`,
@@ -1800,7 +1837,7 @@ function _startEnrichPoll(btn, total) {
 
 async function processTierTokens() {
     const btn = document.getElementById('process-tier-tokens-btn');
-    if (btn) btn.disabled = true;
+    _setBtnRunning(btn);
     setStatusHtml('<span class="spinner"></span> Processing tier tokens…', 'running');
     try {
         const r = await fetch('/api/v1/admin/bis/process-tier-tokens', { method: 'POST' });
@@ -1827,14 +1864,14 @@ async function processTierTokens() {
     } catch (err) {
         setStatus('Process tier tokens failed: ' + err.message, 'error');
     } finally {
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
 
 async function flagJunkSources() {
     const btn = document.getElementById('flag-junk-btn');
-    if (btn) btn.disabled = true;
-    setStatus('Flagging junk sources…', 'info');
+    _setBtnRunning(btn);
+    setStatusHtml('<span class="spinner"></span> Flagging junk sources…', 'running');
     try {
         const r = await fetch('/api/v1/admin/bis/flag-junk-sources', { method: 'POST' });
         const d = await r.json();
@@ -1847,16 +1884,16 @@ async function flagJunkSources() {
     } catch (err) {
         setStatus('Flag junk failed: ' + err.message, 'error');
     } finally {
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
 
 async function bulkPopulatePlans() {
     const btn = document.getElementById('bulk-populate-btn');
     const result = document.getElementById('bulk-populate-result');
-    if (btn) btn.disabled = true;
+    _setBtnRunning(btn);
     if (result) result.textContent = '';
-    setStatus('Populating all plans from Wowhead Overall…', 'info');
+    setStatusHtml('<span class="spinner"></span> Populating all plans from Wowhead Overall…', 'running');
     try {
         const r = await fetch('/api/v1/admin/bis/bulk-populate-plans', { method: 'POST' });
         const d = await r.json();
@@ -1868,6 +1905,6 @@ async function bulkPopulatePlans() {
         setStatus('Bulk populate failed: ' + err.message, 'error');
         if (result) result.textContent = 'Error: ' + err.message;
     } finally {
-        if (btn) btn.disabled = false;
+        _setBtnDone(btn);
     }
 }
