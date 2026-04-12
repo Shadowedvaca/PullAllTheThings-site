@@ -463,12 +463,18 @@ select.gp-select {
                 <span class="gp-step__num">Step 1</span>
                 <span class="gp-step__title">Sync Loot Tables</span>
             </div>
-            <p class="gp-step__desc">Pull boss/item data from the Blizzard Journal API. Stubs all raid and dungeon drop items into the item table and records their encounter sources. Run once per season after new content launches, or after a content patch adds new encounters.</p>
+            <p class="gp-step__desc">Pull item data from the Blizzard API. Stubs all raid/dungeon drop items via the Journal API and all craftable gear via the Recipe API. Run once per season after new content launches, or after a content patch adds new encounters or recipes.</p>
             <div class="gp-step__controls">
                 <button id="sync-item-sources-btn" class="btn-sm btn-primary"
                         onclick="syncItemSources()"
                         {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}>
                     Sync Loot Tables
+                </button>
+                <button id="sync-crafted-items-btn" class="btn-sm btn-secondary"
+                        onclick="syncCraftedItems()"
+                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}
+                        title="Discover craftable gear items for the current expansion via the Blizzard Recipe API. Runs in background (~1–3 min). Run Enrich Items after.">
+                    Sync Crafted Items
                 </button>
                 <button id="sync-legacy-dungeons-btn" class="btn-sm btn-secondary"
                         onclick="syncLegacyDungeons()"

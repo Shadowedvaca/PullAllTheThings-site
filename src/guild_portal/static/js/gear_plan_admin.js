@@ -1595,6 +1595,33 @@ async function syncLegacyDungeons() {
     }
 }
 
+async function syncCraftedItems() {
+    const btn = document.getElementById('sync-crafted-items-btn');
+    if (btn) btn.disabled = true;
+    setStatusHtml('<span class="spinner"></span> Starting crafted item discovery…', 'running');
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/sync-crafted-items', { method: 'POST' });
+        const ct = r.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const text = await r.text();
+            throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+        }
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || d.detail || 'Failed to start');
+
+        // Runs in background — prompt user to run Enrich Items when done.
+        setStatus(
+            'Crafted item discovery running in background (~1–3 min). Run Enrich Items (Step 2) when complete.',
+            'info'
+        );
+    } catch (err) {
+        setStatus('Crafted item sync failed: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 async function loadItemSources() {
     const tbody = document.getElementById('gp-item-sources-body');
     tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);">Loading…</td></tr>';

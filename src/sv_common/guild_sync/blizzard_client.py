@@ -590,6 +590,13 @@ class BlizzardClient:
             params={"namespace": "static-us", "locale": self.locale},
         )
 
+    async def get_recipe_detail(self, recipe_id: int) -> Optional[dict]:
+        """GET /data/wow/recipe/{id} — crafted_item.id/name and reagents."""
+        return await self._api_get(
+            f"/data/wow/recipe/{recipe_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def get_item(self, item_id: int) -> Optional[dict]:
         """GET /data/wow/item/{id} — static item metadata (name, item_set, etc.)."""
         return await self._api_get(

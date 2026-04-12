@@ -545,6 +545,46 @@ async def sync_item_sources(
     return {"ok": True, **result}
 
 
+@router.post("/sync-crafted-items")
+async def sync_crafted_items(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Fire-and-forget discovery of craftable gear items via the Blizzard Recipe API.
+
+    For each recipe in the active expansion with no item_recipe_links entry,
+    calls GET /data/wow/recipe/{id} + GET /data/wow/item/{id} to identify the
+    crafted item, stubs it into wow_items, and creates the link.  Non-equippable
+    items (consumables, enchant scrolls, etc.) are skipped automatically.
+
+    Returns immediately — the sync runs in the background (~1–3 min for a full
+    expansion).  Run Enrich Items (Step 2) afterwards to populate Wowhead
+    tooltips for newly stubbed items.
+    """
+    import asyncio
+    from sv_common.guild_sync.item_recipe_link_sync import discover_and_link_crafted_items
+
+    pool   = _pool(request)
+    client = await _get_blizzard_client(request)
+
+    async def _run():
+        try:
+            stats = await discover_and_link_crafted_items(pool, client)
+            logger.info("Crafted item discovery complete: %s", stats)
+        except Exception as exc:
+            logger.error("Crafted item discovery background task failed: %s", exc, exc_info=True)
+
+    asyncio.create_task(_run())
+    return {
+        "ok": True,
+        "message": (
+            "Crafted item discovery started in background. "
+            "This takes 1–3 minutes — watch server logs for progress. "
+            "Run Enrich Items when done."
+        ),
+    }
+
+
 @router.post("/sync-legacy-dungeons")
 async def sync_legacy_dungeons(
     request: Request,

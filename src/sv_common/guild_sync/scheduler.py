@@ -587,7 +587,7 @@ class GuildSyncScheduler:
         await checker.check_pending()
 
     async def run_crafting_sync(self, force: bool = False):
-        """Run the crafting professions sync."""
+        """Run the crafting professions sync, then discover and enrich crafted items."""
         from .crafting_sync import run_crafting_sync
         try:
             stats = await run_crafting_sync(self.db_pool, self.blizzard_client, force=force)
@@ -610,6 +610,29 @@ class GuildSyncScheduler:
                 str(exc),
                 result["is_first_occurrence"],
             )
+            return  # don't run follow-on steps if recipe sync itself failed
+
+        # Phase 2: discover crafted items not yet in wow_items and link them.
+        # Runs after every crafting sync so newly-learned patterns surface promptly.
+        try:
+            from .item_recipe_link_sync import discover_and_link_crafted_items
+            link_stats = await discover_and_link_crafted_items(
+                self.db_pool, self.blizzard_client
+            )
+            logger.info("Crafted item discovery complete: %s", link_stats)
+        except Exception as exc:
+            logger.error("Crafted item discovery failed: %s", exc, exc_info=True)
+
+        # Enrich any newly-stubbed items (Wowhead tooltips + icons).
+        try:
+            from guild_portal.services.item_service import enrich_unenriched_items
+            enriched, enrich_errors = await enrich_unenriched_items(self.db_pool)
+            logger.info(
+                "Post-crafting enrichment: %d items enriched, %d errors",
+                enriched, len(enrich_errors),
+            )
+        except Exception as exc:
+            logger.error("Post-crafting enrichment failed: %s", exc, exc_info=True)
 
     async def run_roleless_prune(self):
         """Prune Discord members with no guild role for 30+ days and no linked characters."""
