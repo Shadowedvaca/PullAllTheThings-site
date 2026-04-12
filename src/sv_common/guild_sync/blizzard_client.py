@@ -597,6 +597,17 @@ class BlizzardClient:
             params={"namespace": "static-us", "locale": self.locale},
         )
 
+    async def get_item_set(self, set_id: int) -> Optional[dict]:
+        """GET /data/wow/item-set/{id} — all items in a tier set.
+
+        Returns a dict with an 'items' list, each entry having 'id' (blizzard_item_id)
+        and optionally 'name'.  Returns None on 404 or error.
+        """
+        return await self._api_get(
+            f"/data/wow/item-set/{set_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def get_item_media(self, item_id: int) -> Optional[str]:
         """GET /data/wow/media/item/{id} — returns the CDN icon URL, or None.
 

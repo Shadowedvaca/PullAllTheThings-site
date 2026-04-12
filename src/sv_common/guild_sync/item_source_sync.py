@@ -128,7 +128,15 @@ async def sync_item_sources(
             logger.error(msg)
             errors.append(msg)
 
-    # ── 3. Tier set / Catalyst enrichment ─────────────────────────────────
+    # ── 3. Tier set completion — stub catalyst-slot pieces via Blizzard API ──
+    # Ensures back/wrist/waist/feet tier pieces are in wow_items even when
+    # they never appear in BIS recommendations.  Uses the item-set ID extracted
+    # from existing main-5 tier piece tooltips to call the Blizzard item-set
+    # API, then stubs any missing items so Enrich Items can fetch their data.
+    set_stubbed, set_errors = await sync_tier_set_completions(pool, client)
+    errors.extend(set_errors)
+
+    # ── 4. Tier set / Catalyst enrichment ─────────────────────────────────
     catalyst_added, catalyst_errors = await enrich_catalyst_tier_items(pool)
     errors.extend(catalyst_errors)
 
@@ -137,6 +145,7 @@ async def sync_item_sources(
         "instances_synced": instances_synced,
         "encounters_synced": total_encounters,
         "items_upserted": total_items,
+        "tier_set_items_stubbed": set_stubbed,
         "catalyst_tier_items": catalyst_added,
         "errors": errors,
     }
@@ -283,6 +292,114 @@ async def _sync_encounter(
                 )
 
     return upserted, errors
+
+
+async def sync_tier_set_completions(
+    pool: asyncpg.Pool,
+    client: BlizzardClient,
+) -> tuple[int, list[str]]:
+    """Ensure all items in each tier set are present in wow_items.
+
+    Catalyst-slot tier pieces (back/wrist/waist/feet) are NOT in the Blizzard
+    Journal encounter loot tables — they are obtained by converting any eligible
+    slot item using the Revival Catalyst.  They will never be added by
+    sync_item_sources' encounter walk.
+
+    This function:
+    1. Finds all distinct item-set IDs referenced in existing tier piece tooltips
+       (``wowhead_tooltip_html LIKE '%/item-set=N/%'``).
+    2. For each set ID calls the Blizzard item-set API to list every item in that
+       set (including catalyst-slot pieces).
+    3. For any item ID returned by the API that is not yet in ``wow_items``,
+       inserts a minimal stub row with ``slot_type='other'``.
+       Enrich Items (Phase 2) will then fetch the Wowhead tooltip + slot_type.
+
+    Returns (rows_stubbed, errors).
+    """
+    errors: list[str] = []
+    stubbed = 0
+
+    async with pool.acquire() as conn:
+        # Find all distinct item-set IDs referenced in existing tooltips.
+        rows = await conn.fetch(
+            """
+            SELECT DISTINCT
+                   (regexp_match(wowhead_tooltip_html, '/item-set=([0-9]+)/'))[1]::int AS set_id
+              FROM guild_identity.wow_items
+             WHERE wowhead_tooltip_html LIKE '%/item-set=%'
+            """
+        )
+
+    set_ids: list[int] = [r["set_id"] for r in rows if r["set_id"]]
+    if not set_ids:
+        logger.info("sync_tier_set_completions: no item-set IDs found in wow_items tooltips")
+        return 0, []
+
+    logger.info(
+        "sync_tier_set_completions: found %d tier set IDs: %s",
+        len(set_ids), set_ids,
+    )
+
+    async with pool.acquire() as conn:
+        for set_id in set_ids:
+            set_data = await client.get_item_set(set_id)
+            if not set_data:
+                msg = f"sync_tier_set_completions: could not fetch item set {set_id}"
+                logger.warning(msg)
+                errors.append(msg)
+                continue
+
+            items_in_set = set_data.get("items", [])
+            set_name = set_data.get("name", f"Set {set_id}")
+            logger.info(
+                "sync_tier_set_completions: set %d (%s) has %d items",
+                set_id, set_name, len(items_in_set),
+            )
+
+            for item_entry in items_in_set:
+                blizzard_item_id = item_entry.get("id")
+                if not blizzard_item_id:
+                    continue
+
+                # Check if already in wow_items
+                existing = await conn.fetchval(
+                    "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
+                    blizzard_item_id,
+                )
+                if existing:
+                    continue  # Already present — nothing to do
+
+                # Stub the row; Enrich Items will fill name/slot_type/tooltip
+                item_name = item_entry.get("name", "")
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO guild_identity.wow_items
+                               (blizzard_item_id, name, slot_type)
+                        VALUES ($1, $2, 'other')
+                        ON CONFLICT (blizzard_item_id) DO NOTHING
+                        """,
+                        blizzard_item_id,
+                        item_name,
+                    )
+                    stubbed += 1
+                    logger.info(
+                        "sync_tier_set_completions: stubbed item %d (%s) from set %d",
+                        blizzard_item_id, item_name, set_id,
+                    )
+                except Exception as exc:
+                    msg = (
+                        f"sync_tier_set_completions: DB error stubbing item "
+                        f"{blizzard_item_id}: {exc}"
+                    )
+                    logger.error(msg)
+                    errors.append(msg)
+
+    logger.info(
+        "sync_tier_set_completions: stubbed %d new items across %d sets",
+        stubbed, len(set_ids),
+    )
+    return stubbed, errors
 
 
 async def enrich_catalyst_tier_items(
