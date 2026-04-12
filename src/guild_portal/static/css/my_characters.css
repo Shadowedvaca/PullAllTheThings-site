@@ -2201,7 +2201,23 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   padding: 0.25rem 0.5rem;
 }
 
-/* ── Phase 1E.7: Tour button ─────────────────────────────────────────────── */
+/* ── Phase 1E.7: Tour button + FAQ link ──────────────────────────────────── */
+
+.mcn-gp-faq-link {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-accent);
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+
+.mcn-gp-faq-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
 
 .mcn-gp-tour-btn {
   display: inline-flex;
