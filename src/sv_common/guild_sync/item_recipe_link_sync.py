@@ -219,17 +219,16 @@ async def _stub_and_link(
             INSERT INTO guild_identity.wow_items
                 (blizzard_item_id, name, slot_type, armor_type)
             VALUES ($1, $2, $3, $4)
-            ON CONFLICT (blizzard_item_id) DO NOTHING
-            RETURNING id
+            ON CONFLICT (blizzard_item_id) DO UPDATE
+                SET armor_type = COALESCE(
+                    guild_identity.wow_items.armor_type,
+                    EXCLUDED.armor_type
+                )
+            RETURNING id, (xmax = 0) AS inserted
             """,
             blizzard_item_id, item_name, slot_type, armor_type,
         )
-        stubbed = row is not None
-        if not row:
-            row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                blizzard_item_id,
-            )
+        stubbed = bool(row["inserted"])
         item_db_id = row["id"]
 
         result = await conn.execute(
@@ -249,6 +248,15 @@ async def _stub_and_link(
 async def _get_unlinked_recipes(
     pool: asyncpg.Pool, expansion_name: str
 ) -> list[asyncpg.Record]:
+    """Return recipes that need phase 2b processing.
+
+    Two cases:
+    1. No item_recipe_links entry at all.
+    2. Linked, but the linked item is an armor slot with armor_type=NULL — meaning
+       it was stubbed by phase 2a (equipment match) without armor type, which causes
+       the item to be filtered out of gear plan slot drawers.  We re-process these
+       so the search result can fill in the missing armor_type.
+    """
     async with pool.acquire() as conn:
         return await conn.fetch(
             """
@@ -256,9 +264,23 @@ async def _get_unlinked_recipes(
               FROM guild_identity.recipes rec
               JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
              WHERE pt.expansion_name = $1
-               AND NOT EXISTS (
-                   SELECT 1 FROM guild_identity.item_recipe_links irl
-                    WHERE irl.recipe_id = rec.id
+               AND (
+                   -- No link at all
+                   NOT EXISTS (
+                       SELECT 1 FROM guild_identity.item_recipe_links irl
+                        WHERE irl.recipe_id = rec.id
+                   )
+                   -- OR linked but item is missing armor_type on an armor slot
+                   OR EXISTS (
+                       SELECT 1
+                         FROM guild_identity.item_recipe_links irl
+                         JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
+                        WHERE irl.recipe_id = rec.id
+                          AND wi.armor_type IS NULL
+                          AND wi.slot_type NOT IN (
+                              'neck', 'ring_1', 'trinket_1', 'main_hand', 'off_hand', 'back'
+                          )
+                   )
                )
              ORDER BY rec.id
             """,
