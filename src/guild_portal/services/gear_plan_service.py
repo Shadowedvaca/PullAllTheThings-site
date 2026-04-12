@@ -109,10 +109,15 @@ _ARMOR_FILTER_SLOTS: frozenset[str] = frozenset(
 _WEAPON_SLOTS: frozenset[str] = frozenset({"main_hand", "off_hand"})
 
 # Slots that can have a tier/catalyst class set piece.
-# back (cloak) is included but requires class-name filtering instead of armor_type.
 _TIER_CATALYST_SLOTS: frozenset[str] = frozenset(
     {"head", "shoulder", "chest", "hands", "legs", "back", "wrist", "waist", "feet"}
 )
+# The 5 main tier slots have Blizzard Journal source rows and a Wowhead
+# /item-set= link in their tooltip HTML — used as the reliable tier anchor.
+_MAIN_TIER_SLOTS: frozenset[str] = frozenset({"head", "shoulder", "chest", "hands", "legs"})
+# The 4 catalyst slots (back/wrist/waist/feet) have no Journal encounter and
+# therefore no item_sources rows.  They are found via name-suffix matching
+# against the current season's main tier anchor.
 
 # Map from plan slot → wow_items.slot_type for paired slots
 _SLOT_TYPE_QUERY_MAP: dict[str, str] = {
@@ -1695,71 +1700,110 @@ async def get_available_items(
         )
 
         # ── Query 3: tier / catalyst class set piece ──────────────────────────
-        # All 9 tier slots are identified by class name in the Wowhead tooltip HTML
-        # (e.g. "Classes: Druid") — this is more specific than armor_type, which
-        # would match all leather classes instead of just Druid.
+        # Two distinct paths:
         #
-        # The 5 main tier slots (head/shoulder/chest/hands/legs) have item_sources
-        # rows from the Blizzard Journal and are scoped to the current season via
-        # instance_name matching against current raid_ids.
+        # MAIN TIER SLOTS (head/shoulder/chest/hands/legs):
+        #   These have Blizzard Journal source rows AND a Wowhead /item-set= link
+        #   in their tooltip HTML.  We require both to avoid matching old expansion
+        #   tier pieces (which have item-set links but no current-raid source rows)
+        #   or non-tier items from the current raid (which have source rows but no
+        #   item-set link).  Class is discriminated by class name in the tooltip.
         #
-        # The 4 catalyst slots (back/wrist/waist/feet) have NO item_sources rows
-        # because catalyst conversion has no Journal encounter.  They are captured
-        # by the OR NOT EXISTS (source rows) branch, which correctly selects items
-        # that exist in wow_items but have never been linked to any source.
-        # Old expansion tier pieces, if present, would have source rows from their
-        # respective Journal encounters and therefore NOT match the OR NOT EXISTS
-        # branch — preventing false positives from old content.
+        # CATALYST SLOTS (back/wrist/waist/feet):
+        #   Catalyst items have NO Journal source rows and NO item-set link.
+        #   We find them by name-suffix matching against any main tier anchor for
+        #   this class+season (e.g., anchor "Branches of the Luminous Bloom" →
+        #   suffix " of the Luminous Bloom" → find "Leafdrape of the Luminous Bloom").
+        #   If no anchor is found (e.g., tooltips not yet enriched), we return
+        #   nothing rather than guessing — prevents junk from appearing.
         #
         # Returns None for non-tier slots so the frontend hides the section.
         tier_rows: list = []
-        if slot in _TIER_CATALYST_SLOTS and class_name:
-            # $1 = slot_type, $2 = '%ClassName%'
-            tier_params: list = [slot_type, f"%{class_name}%"]
-            tier_extra_clauses: list[str] = []
+        if slot in _TIER_CATALYST_SLOTS and class_name and raid_ids:
+            # Shared raid-scope subquery text (reused in both paths)
+            _raid_scope_sql = """
+                SELECT DISTINCT is3.instance_name
+                  FROM guild_identity.item_sources is3
+                 WHERE is3.blizzard_instance_id = ANY($RAIDPARAM$)
+            """
 
+            excl_clause = ""
+            excl_params: list = []
             if excluded_ids:
-                tier_params.append(excluded_ids)
-                tier_extra_clauses.append(f"wi.id != ALL(${len(tier_params)}::int[])")
+                excl_params = [excluded_ids]
 
-            extra_sql = (" AND " + " AND ".join(tier_extra_clauses)) if tier_extra_clauses else ""
+            if slot in _MAIN_TIER_SLOTS:
+                # $1=slot_type, $2='%ClassName%', $3=raid_ids, [$4=excluded_ids]
+                params: list = [slot_type, f"%{class_name}%", raid_ids] + excl_params
+                excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
+                tier_rows = await conn.fetch(
+                    f"""
+                    SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
+                      FROM guild_identity.wow_items wi
+                     WHERE wi.slot_type = $1
+                       AND wi.wowhead_tooltip_html LIKE $2
+                       AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                       AND EXISTS (
+                               SELECT 1 FROM guild_identity.item_sources is2
+                                WHERE is2.item_id = wi.id
+                                  AND is2.instance_name IN (
+                                      SELECT DISTINCT is3.instance_name
+                                        FROM guild_identity.item_sources is3
+                                       WHERE is3.blizzard_instance_id = ANY($3)
+                                  )
+                           )
+                       {excl_sql}
+                     ORDER BY wi.name
+                    """,
+                    *params,
+                )
 
-            # Build the source filter.
-            # Main tier pieces (has source rows): must be from the current season's raid.
-            # Catalyst pieces (no source rows): matched by OR NOT EXISTS.
-            if raid_ids:
-                tier_params.append(raid_ids)
-                raid_scope_p = len(tier_params)
-                source_filter = f"""AND (
-               EXISTS (
-                   SELECT 1 FROM guild_identity.item_sources is2
-                    WHERE is2.item_id = wi.id
-                      AND is2.instance_name IN (
-                          SELECT DISTINCT is3.instance_name
-                            FROM guild_identity.item_sources is3
-                           WHERE is3.blizzard_instance_id = ANY(${raid_scope_p})
-                      )
-               )
-               OR NOT EXISTS (
-                   SELECT 1 FROM guild_identity.item_sources isnone
-                    WHERE isnone.item_id = wi.id
-               )
-           )"""
             else:
-                source_filter = ""  # no active season configured
+                # Catalyst slot — derive set-name suffix from the main tier anchor.
+                # If the anchor query returns nothing (e.g., tooltips not yet enriched
+                # on this environment), we return nothing rather than showing junk.
+                anchor = await conn.fetchrow(
+                    """
+                    SELECT wi.name
+                      FROM guild_identity.wow_items wi
+                     WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
+                       AND wi.wowhead_tooltip_html LIKE $1
+                       AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                       AND EXISTS (
+                               SELECT 1 FROM guild_identity.item_sources is2
+                                WHERE is2.item_id = wi.id
+                                  AND is2.instance_name IN (
+                                      SELECT DISTINCT is3.instance_name
+                                        FROM guild_identity.item_sources is3
+                                       WHERE is3.blizzard_instance_id = ANY($2)
+                                  )
+                           )
+                     LIMIT 1
+                    """,
+                    f"%{class_name}%", raid_ids,
+                )
 
-            tier_rows = await conn.fetch(
-                f"""
-                SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
-                  FROM guild_identity.wow_items wi
-                 WHERE wi.slot_type = $1
-                   AND wi.wowhead_tooltip_html LIKE $2
-                   {source_filter}
-                   {extra_sql}
-                 ORDER BY wi.name
-                """,
-                *tier_params,
-            ) if raid_ids else []
+                if anchor:
+                    anchor_name: str = anchor["name"]
+                    of_idx = anchor_name.find(" of ")
+                    if of_idx >= 0:
+                        set_suffix = anchor_name[of_idx:]  # e.g. " of the Luminous Bloom"
+                        # $1=slot_type, $2='%ClassName%', $3='%% of the Luminous Bloom',
+                        # [$4=excluded_ids]
+                        params = [slot_type, f"%{class_name}%", f"%{set_suffix}"] + excl_params
+                        excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
+                        tier_rows = await conn.fetch(
+                            f"""
+                            SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
+                              FROM guild_identity.wow_items wi
+                             WHERE wi.slot_type = $1
+                               AND wi.wowhead_tooltip_html LIKE $2
+                               AND wi.name LIKE $3
+                               {excl_sql}
+                             ORDER BY wi.name
+                            """,
+                            *params,
+                        )
 
     # ── Split drop rows by instance_type ──────────────────────────────────────
     raid_map:    dict[int, dict] = {}
