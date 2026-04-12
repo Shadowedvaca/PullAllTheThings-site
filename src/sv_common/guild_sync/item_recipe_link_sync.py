@@ -138,8 +138,8 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
 
 
 # Blizzard inventory_type.type → our slot_type (equippable gear only).
-# Non-equippable types (NON_EQUIP, NON_EQUIP_IGNORE, BAG, QUIVER, etc.) are
-# intentionally absent so we skip consumables, enchant scrolls, and materials.
+# PROFESSION_GEAR and all non-equip types are intentionally absent —
+# profession hats (engineering goggles, alchemy hats, etc.) are excluded.
 _EQUIP_SLOT_MAP: dict[str, str] = {
     "HEAD": "head",
     "NECK": "neck",
@@ -161,7 +161,9 @@ _EQUIP_SLOT_MAP: dict[str, str] = {
     "SHIELD": "off_hand",
 }
 
-# Blizzard item_subclass.name → our armor_type value (armor slots only).
+# Blizzard item_subclass → our armor_type.
+# From get_item(): subclass["name"] e.g. "Leather".
+# From search_items_by_name(): subclass is a locale dict; use ["en_US"].
 _ARMOR_SUBCLASS_MAP: dict[str, str] = {
     "Cloth": "cloth",
     "Leather": "leather",
@@ -170,37 +172,81 @@ _ARMOR_SUBCLASS_MAP: dict[str, str] = {
 }
 
 
-async def discover_and_link_crafted_items(
+def _parse_slot_and_armor(item_data: dict) -> tuple[Optional[str], Optional[str]]:
+    """Extract slot_type and armor_type from a Blizzard item data dict.
+
+    Works for both get_item() and search_items_by_name() result dicts:
+    - get_item()            → item_subclass["name"] = "Leather"
+    - search_items_by_name() → item_subclass is a locale dict {"en_US": "Leather"}
+    """
+    inv_type  = (item_data.get("inventory_type") or {}).get("type", "")
+    slot_type = _EQUIP_SLOT_MAP.get(inv_type)
+
+    subclass = item_data.get("item_subclass") or {}
+    if isinstance(subclass, dict):
+        # get_item() format: {"name": "Leather", "id": 2}
+        # search format:     {"en_US": "Leather", "en_GB": "Leather", ...}
+        subclass_name = subclass.get("name") or subclass.get("en_US") or ""
+    else:
+        subclass_name = ""
+    armor_type = _ARMOR_SUBCLASS_MAP.get(subclass_name)
+
+    return slot_type, armor_type
+
+
+async def _stub_and_link(
     pool: asyncpg.Pool,
-    client: Any,
-) -> dict:
-    """Phase 2 discovery: call Blizzard Recipe + Item APIs for unlinked recipes.
+    blizzard_item_id: int,
+    item_name: str,
+    slot_type: str,
+    armor_type: Optional[str],
+    recipe_db_id: int,
+    match_type: str,
+) -> tuple[bool, bool]:
+    """Stub wow_items (if new) and insert item_recipe_links (if new).
 
-    For each recipe in the active expansion that has no item_recipe_links entry:
-      1. GET /data/wow/recipe/{id} → crafted_item.id + crafted_item.name
-      2. GET /data/wow/item/{id}   → inventory_type (slot) + item_subclass (armor)
-      3. Skip non-equippable items (consumables, enchant scrolls, materials, etc.)
-      4. Stub equippable items into wow_items (ON CONFLICT DO NOTHING)
-      5. GET /data/wow/media/item/{id} → icon_url
-      6. Insert item_recipe_links with confidence=100, match_type='blizzard_recipe_api'
-
-    Safe to re-run — existing wow_items rows and links are never overwritten.
-    Returns {recipes_checked, discovered, stubbed, linked, skipped, errors}.
+    Returns (stubbed: bool, linked: bool).
     """
     async with pool.acquire() as conn:
-        season_row = await conn.fetchrow(
-            "SELECT expansion_name FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"
-        )
-        if not season_row:
-            logger.warning("discover_and_link_crafted_items: no active season found")
-            return {"recipes_checked": 0, "discovered": 0, "stubbed": 0,
-                    "linked": 0, "skipped": 0, "errors": 0}
-
-        expansion_name = season_row["expansion_name"]
-
-        unlinked = await conn.fetch(
+        row = await conn.fetchrow(
             """
-            SELECT rec.id AS recipe_db_id, rec.blizzard_recipe_id, rec.name AS recipe_name
+            INSERT INTO guild_identity.wow_items
+                (blizzard_item_id, name, slot_type, armor_type)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (blizzard_item_id) DO NOTHING
+            RETURNING id
+            """,
+            blizzard_item_id, item_name, slot_type, armor_type,
+        )
+        stubbed = row is not None
+        if not row:
+            row = await conn.fetchrow(
+                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
+                blizzard_item_id,
+            )
+        item_db_id = row["id"]
+
+        result = await conn.execute(
+            """
+            INSERT INTO guild_identity.item_recipe_links
+                (item_id, recipe_id, confidence, match_type)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (item_id, recipe_id) DO NOTHING
+            """,
+            item_db_id, recipe_db_id, 100, match_type,
+        )
+        linked = result == "INSERT 0 1"
+
+    return stubbed, linked
+
+
+async def _get_unlinked_recipes(
+    pool: asyncpg.Pool, expansion_name: str
+) -> list[asyncpg.Record]:
+    async with pool.acquire() as conn:
+        return await conn.fetch(
+            """
+            SELECT rec.id AS recipe_db_id, rec.name AS recipe_name
               FROM guild_identity.recipes rec
               JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
              WHERE pt.expansion_name = $1
@@ -213,113 +259,155 @@ async def discover_and_link_crafted_items(
             expansion_name,
         )
 
-    if not unlinked:
-        logger.info("discover_and_link_crafted_items: no unlinked %s recipes", expansion_name)
-        return {"recipes_checked": 0, "discovered": 0, "stubbed": 0,
-                "linked": 0, "skipped": 0, "errors": 0}
+
+async def discover_and_link_crafted_items(
+    pool: asyncpg.Pool,
+    client: Any,
+) -> dict:
+    """Discover craftable gear items and create item_recipe_links entries.
+
+    Runs two phases in sequence:
+
+    Phase 2a — character_equipment name match (pure DB, instant):
+      For unlinked recipes whose name matches an item currently equipped by any
+      guild member, stub wow_items using the equipped item's blizzard_item_id and
+      create the link.  Covers items guild members have already crafted and worn.
+
+    Phase 2b — Blizzard Item Search (API, ~1–3 min):
+      For recipes still unlinked after Phase 2a, search the Blizzard Item API by
+      recipe name.  On an exact en_US name match that maps to an equippable slot
+      (PROFESSION_GEAR items are excluded), stub wow_items and create the link.
+      This covers items that haven't been crafted/worn yet.
+
+    Both phases are safe to re-run (ON CONFLICT DO NOTHING throughout).
+    Run Enrich Items after to populate Wowhead tooltips + icons for new stubs.
+    Returns combined stats dict.
+    """
+    async with pool.acquire() as conn:
+        season_row = await conn.fetchrow(
+            "SELECT expansion_name FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"
+        )
+        if not season_row:
+            logger.warning("discover_and_link_crafted_items: no active season found")
+            return {"phase_2a_stubbed": 0, "phase_2a_linked": 0,
+                    "phase_2b_checked": 0, "phase_2b_stubbed": 0,
+                    "phase_2b_linked": 0, "phase_2b_skipped": 0, "phase_2b_errors": 0}
+        expansion_name = season_row["expansion_name"]
+
+    # ── Phase 2a: character_equipment name match ───────────────────────────────
+    logger.info("discover_and_link_crafted_items: phase 2a — equipment match (%s)", expansion_name)
+    async with pool.acquire() as conn:
+        # Stub any wow_items not yet in the table
+        stub_result = await conn.execute(
+            """
+            INSERT INTO guild_identity.wow_items (blizzard_item_id, name, slot_type)
+            SELECT DISTINCT ON (ce.blizzard_item_id) ce.blizzard_item_id, ce.item_name, ce.slot
+              FROM guild_identity.character_equipment ce
+              JOIN guild_identity.recipes rec ON LOWER(rec.name) = LOWER(ce.item_name)
+              JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
+             WHERE pt.expansion_name = $1
+               AND ce.blizzard_item_id IS NOT NULL
+               AND NOT EXISTS (
+                   SELECT 1 FROM guild_identity.item_recipe_links irl
+                    WHERE irl.recipe_id = rec.id
+               )
+            ON CONFLICT (blizzard_item_id) DO NOTHING
+            """,
+            expansion_name,
+        )
+        phase_2a_stubbed = int(stub_result.split()[-1])
+
+        # Create links for all matching recipe↔item pairs
+        link_result = await conn.execute(
+            """
+            INSERT INTO guild_identity.item_recipe_links (item_id, recipe_id, confidence, match_type)
+            SELECT DISTINCT wi.id, rec.id, 100, 'equipment_name_match'
+              FROM guild_identity.character_equipment ce
+              JOIN guild_identity.recipes rec ON LOWER(rec.name) = LOWER(ce.item_name)
+              JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ce.blizzard_item_id
+             WHERE pt.expansion_name = $1
+               AND ce.blizzard_item_id IS NOT NULL
+            ON CONFLICT (item_id, recipe_id) DO NOTHING
+            """,
+            expansion_name,
+        )
+        phase_2a_linked = int(link_result.split()[-1])
 
     logger.info(
-        "discover_and_link_crafted_items: processing %d unlinked %s recipes",
-        len(unlinked), expansion_name,
+        "discover_and_link_crafted_items: phase 2a done — stubbed=%d linked=%d",
+        phase_2a_stubbed, phase_2a_linked,
+    )
+
+    # ── Phase 2b: Blizzard Item Search for remaining unlinked recipes ──────────
+    unlinked = await _get_unlinked_recipes(pool, expansion_name)
+    logger.info(
+        "discover_and_link_crafted_items: phase 2b — item search for %d remaining recipes",
+        len(unlinked),
     )
 
     sem = asyncio.Semaphore(3)
-    recipes_checked = discovered = stubbed = linked = skipped = errors = 0
+    phase_2b_checked = phase_2b_stubbed = phase_2b_linked = 0
+    phase_2b_skipped = phase_2b_errors = 0
 
     for recipe_row in unlinked:
-        recipe_db_id      = recipe_row["recipe_db_id"]
-        blizzard_recipe_id = recipe_row["blizzard_recipe_id"]
-        recipes_checked   += 1
+        recipe_db_id  = recipe_row["recipe_db_id"]
+        recipe_name   = recipe_row["recipe_name"]
+        phase_2b_checked += 1
 
         try:
             async with sem:
-                detail = await client.get_recipe_detail(blizzard_recipe_id)
+                results = await client.search_items_by_name(recipe_name)
 
-            if not detail:
-                skipped += 1
+            # Find exact en_US name match
+            match = None
+            recipe_name_lower = recipe_name.lower()
+            for r in results:
+                r_name = (r.get("name") or {}).get("en_US", "")
+                if r_name.lower() == recipe_name_lower:
+                    match = r
+                    break
+
+            if not match:
+                phase_2b_skipped += 1
                 continue
 
-            crafted = detail.get("crafted_item")
-            if not crafted:
-                skipped += 1
-                continue
+            blizzard_item_id = match["id"]
+            item_name        = (match.get("name") or {}).get("en_US", recipe_name)
+            slot_type, armor_type = _parse_slot_and_armor(match)
 
-            blizzard_item_id = crafted["id"]
-            item_name        = crafted.get("name") or ""
-            discovered       += 1
-
-            # Fetch inventory_type and item_subclass to confirm equippable
-            async with sem:
-                item_data = await client.get_item(blizzard_item_id)
-
-            if not item_data:
-                skipped += 1
-                continue
-
-            inv_type  = (item_data.get("inventory_type") or {}).get("type", "")
-            slot_type = _EQUIP_SLOT_MAP.get(inv_type)
             if not slot_type:
-                skipped += 1   # consumable, enchant scroll, material, etc.
+                phase_2b_skipped += 1  # PROFESSION_GEAR or non-equippable
                 continue
 
-            subclass_name = (item_data.get("item_subclass") or {}).get("name", "")
-            armor_type    = _ARMOR_SUBCLASS_MAP.get(subclass_name)
-
-            # Fetch icon
-            async with sem:
-                icon_url = await client.get_item_media(blizzard_item_id)
-
-            # Stub into wow_items, retrieve DB id
-            async with pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    """
-                    INSERT INTO guild_identity.wow_items
-                        (blizzard_item_id, name, icon_url, slot_type, armor_type)
-                    VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (blizzard_item_id) DO NOTHING
-                    RETURNING id
-                    """,
-                    blizzard_item_id, item_name, icon_url, slot_type, armor_type,
-                )
-                if not row:
-                    row = await conn.fetchrow(
-                        "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                        blizzard_item_id,
-                    )
-                else:
-                    stubbed += 1
-
-                item_db_id = row["id"]
-
-                result = await conn.execute(
-                    """
-                    INSERT INTO guild_identity.item_recipe_links
-                        (item_id, recipe_id, confidence, match_type)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (item_id, recipe_id) DO NOTHING
-                    """,
-                    item_db_id, recipe_db_id, 100, "blizzard_recipe_api",
-                )
-                if result == "INSERT 0 1":
-                    linked += 1
+            stubbed, linked = await _stub_and_link(
+                pool, blizzard_item_id, item_name, slot_type, armor_type,
+                recipe_db_id, "item_search",
+            )
+            if stubbed:
+                phase_2b_stubbed += 1
+            if linked:
+                phase_2b_linked += 1
 
         except Exception as exc:
             logger.warning(
-                "discover_and_link_crafted_items: recipe %d failed: %s",
-                blizzard_recipe_id, exc,
+                "discover_and_link_crafted_items: phase 2b recipe %r failed: %s",
+                recipe_name, exc,
             )
-            errors += 1
+            phase_2b_errors += 1
 
     logger.info(
-        "discover_and_link_crafted_items: checked=%d discovered=%d stubbed=%d "
+        "discover_and_link_crafted_items: phase 2b done — checked=%d stubbed=%d "
         "linked=%d skipped=%d errors=%d",
-        recipes_checked, discovered, stubbed, linked, skipped, errors,
+        phase_2b_checked, phase_2b_stubbed, phase_2b_linked,
+        phase_2b_skipped, phase_2b_errors,
     )
     return {
-        "recipes_checked": recipes_checked,
-        "discovered":      discovered,
-        "stubbed":         stubbed,
-        "linked":          linked,
-        "skipped":         skipped,
-        "errors":          errors,
+        "phase_2a_stubbed":  phase_2a_stubbed,
+        "phase_2a_linked":   phase_2a_linked,
+        "phase_2b_checked":  phase_2b_checked,
+        "phase_2b_stubbed":  phase_2b_stubbed,
+        "phase_2b_linked":   phase_2b_linked,
+        "phase_2b_skipped":  phase_2b_skipped,
+        "phase_2b_errors":   phase_2b_errors,
     }

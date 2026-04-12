@@ -591,11 +591,36 @@ class BlizzardClient:
         )
 
     async def get_recipe_detail(self, recipe_id: int) -> Optional[dict]:
-        """GET /data/wow/recipe/{id} — crafted_item.id/name and reagents."""
+        """GET /data/wow/recipe/{id} — crafted_item.id/name and reagents.
+
+        Note: for new expansions (e.g. Midnight) Blizzard may not yet populate
+        the crafted_item field.  Use search_items_by_name as a fallback.
+        """
         return await self._api_get(
             f"/data/wow/recipe/{recipe_id}",
             params={"namespace": "static-us", "locale": self.locale},
         )
+
+    async def search_items_by_name(self, name: str, page_size: int = 10) -> list[dict]:
+        """GET /data/wow/search/item — find items by name.
+
+        Returns a list of result 'data' dicts (empty list on no results/error).
+        Each dict includes: id, name (locale dict), inventory_type, item_subclass.
+        Note: item_subclass is a locale dict here, unlike get_item() which returns
+        {"name": "...", "id": N}.  Use item_subclass.get("en_US") to read it.
+        """
+        data = await self._api_get(
+            "/data/wow/search/item",
+            params={
+                "name.en_US": name,
+                "namespace": "static-us",
+                "_pageSize": str(page_size),
+                "_page": "1",
+            },
+        )
+        if not data:
+            return []
+        return [r["data"] for r in data.get("results", [])]
 
     async def get_item(self, item_id: int) -> Optional[dict]:
         """GET /data/wow/item/{id} — static item metadata (name, item_set, etc.)."""
