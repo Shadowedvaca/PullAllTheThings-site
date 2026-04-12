@@ -1971,6 +1971,7 @@ async function _gpOnConfigChange() {
 }
 
 async function _gpOnSyncGear() {
+  if (_gpTour) { _gpShowStatus('Dismiss the tour first (\u2715 button), then sync.', 'info'); return; }
   const charId = _selectedChar?.id;
   if (!charId) return;
   _gpShowStatus('Syncing equipped gear\u2026', 'info');
@@ -1984,6 +1985,7 @@ async function _gpOnSyncGear() {
 }
 
 async function _gpOnPopulate() {
+  if (_gpTour) { _gpShowStatus('Dismiss the tour first (\u2715 button), then fill.', 'info'); return; }
   const charId = _selectedChar?.id;
   if (!charId) return;
   const htSel  = document.getElementById('mcn-gp-ht-sel');
