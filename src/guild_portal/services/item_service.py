@@ -431,7 +431,13 @@ async def enrich_unenriched_items(
     pool: asyncpg.Pool,
     progress_cb=None,
 ) -> tuple[int, list[str]]:
-    """Fetch Wowhead data for all wow_items rows that still have slot_type='other'.
+    """Fetch Wowhead data for wow_items rows missing tooltip data.
+
+    Targets two categories:
+    1. Rows with slot_type='other' — BIS-sourced stubs not yet enriched.
+    2. Rows in item_recipe_links with no wowhead_tooltip_html — crafted item stubs
+       from Sync Crafted Items.  These have slot_type/armor_type from Blizzard API
+       but need a Wowhead tooltip so the quality filter (class="q4") can pass.
 
     Uses up to _WOWHEAD_ENRICH_CONCURRENCY concurrent connections so 4k+ items
     complete in ~45 seconds instead of 15 minutes.
@@ -441,15 +447,29 @@ async def enrich_unenriched_items(
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT blizzard_item_id FROM guild_identity.wow_items"
-            " WHERE slot_type = 'other' ORDER BY blizzard_item_id"
+            """
+            SELECT DISTINCT wi.blizzard_item_id
+              FROM guild_identity.wow_items wi
+             WHERE wi.slot_type = 'other'
+                OR (
+                    wi.wowhead_tooltip_html IS NULL
+                    AND EXISTS (
+                        SELECT 1 FROM guild_identity.item_recipe_links irl
+                         WHERE irl.item_id = wi.id
+                    )
+                )
+             ORDER BY wi.blizzard_item_id
+            """
         )
 
     if not rows:
         return 0, []
 
     item_ids = [r["blizzard_item_id"] for r in rows]
-    logger.info("Enriching %d stub wow_items (slot_type='other') from Wowhead", len(item_ids))
+    logger.info(
+        "Enriching %d wow_items (slot_type='other' or crafted stubs) from Wowhead",
+        len(item_ids),
+    )
 
     enriched = 0
     errors: list[str] = []
@@ -487,11 +507,15 @@ async def enrich_unenriched_items(
                         UPDATE guild_identity.wow_items
                            SET name                 = CASE WHEN name = '' OR name IS NULL
                                                           THEN $2 ELSE name END,
-                               icon_url             = $3,
-                               slot_type            = $4,
-                               armor_type           = $5,
-                               weapon_type          = $6,
-                               wowhead_tooltip_html = $7,
+                               icon_url             = COALESCE(icon_url, $3),
+                               slot_type            = CASE
+                                                          WHEN slot_type = 'other' OR slot_type IS NULL
+                                                          THEN COALESCE($4, slot_type)
+                                                          ELSE slot_type
+                                                      END,
+                               armor_type           = COALESCE(armor_type, $5),
+                               weapon_type          = COALESCE(weapon_type, $6),
+                               wowhead_tooltip_html = COALESCE(wowhead_tooltip_html, $7),
                                fetched_at           = NOW()
                          WHERE blizzard_item_id = $1
                         """,
