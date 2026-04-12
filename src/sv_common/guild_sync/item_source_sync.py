@@ -319,8 +319,10 @@ async def sync_tier_set_completions(
     errors: list[str] = []
     stubbed = 0
 
+    set_ids: list[int] = []
+
     async with pool.acquire() as conn:
-        # Find all distinct item-set IDs referenced in existing tooltips.
+        # Path 1: item-set IDs already embedded in enriched Wowhead tooltip HTML.
         rows = await conn.fetch(
             """
             SELECT DISTINCT
@@ -329,10 +331,53 @@ async def sync_tier_set_completions(
              WHERE wowhead_tooltip_html LIKE '%/item-set=%'
             """
         )
+        set_ids = [r["set_id"] for r in rows if r["set_id"]]
 
-    set_ids: list[int] = [r["set_id"] for r in rows if r["set_id"]]
+        # Path 2: Blizzard item API for tier-candidate items whose tooltips are
+        # still NULL.  Candidates are items in a tier slot with armor_type set,
+        # no source rows (not a direct boss drop), and at least one BIS entry.
+        if not set_ids:
+            candidates = await conn.fetch(
+                """
+                SELECT DISTINCT wi.blizzard_item_id
+                  FROM guild_identity.wow_items wi
+                 WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
+                   AND wi.armor_type IS NOT NULL
+                   AND wi.wowhead_tooltip_html IS NULL
+                   AND NOT EXISTS (
+                           SELECT 1 FROM guild_identity.item_sources s
+                            WHERE s.item_id = wi.id
+                       )
+                   AND EXISTS (
+                           SELECT 1 FROM guild_identity.bis_list_entries ble
+                            WHERE ble.item_id = wi.id
+                       )
+                 LIMIT 30
+                """
+            )
+            logger.info(
+                "sync_tier_set_completions: tooltip path found no set IDs; "
+                "falling back to Blizzard item API for %d tier candidates",
+                len(candidates),
+            )
+            seen: set[int] = set()
+            for row in candidates:
+                item_data = await client.get_item(row["blizzard_item_id"])
+                if not item_data:
+                    continue
+                item_set = item_data.get("item_set") or item_data.get("set")
+                if isinstance(item_set, dict):
+                    sid = item_set.get("id")
+                    if sid and sid not in seen:
+                        seen.add(sid)
+                        set_ids.append(sid)
+                        logger.info(
+                            "sync_tier_set_completions: found set ID %d from item %d",
+                            sid, row["blizzard_item_id"],
+                        )
+
     if not set_ids:
-        logger.info("sync_tier_set_completions: no item-set IDs found in wow_items tooltips")
+        logger.info("sync_tier_set_completions: no tier set IDs found via any path")
         return 0, []
 
     logger.info(
