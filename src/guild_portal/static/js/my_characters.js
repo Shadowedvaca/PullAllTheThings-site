@@ -2897,7 +2897,7 @@ function _gpLaunchTour() {
   t.addStep({
     id: 'paperdoll',
     title: 'Gear Slots',
-    text: 'The columns on either side of the screen are your paperdoll. Each slot shows both your <strong>equipped item</strong> (inner side, closer to center) and your <strong>BIS goal</strong> (outer edge). Slots that have an achievable upgrade are highlighted in gold.',
+    text: 'The columns on either side show all your gear slots. Your <strong>equipped item</strong> is on the inner side (closer to center); your <strong>BIS goal</strong> is on the outer edge. A <span style="color:#4ade80;font-weight:600;">green</span> left border means you already have that BIS item — a <span style="color:#f87171;font-weight:600;">red</span> border means there\'s still an upgrade to go after. The colored border on each icon shows its quality track (V / C / H / M).',
     attachTo: at('#mcn-left-paperdoll', 'right'),
     when: {
       show() {
