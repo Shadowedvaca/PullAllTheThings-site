@@ -1724,15 +1724,71 @@ async def get_available_items(
 
             excl_params: list = [excluded_ids] if excluded_ids else []
 
+            # Derive the tier set name suffix once, used by both main and catalyst
+            # slot queries.  Looks for any main-tier piece for this class that has
+            # " of " in its name (e.g. "Branches of the Luminous Bloom" →
+            # " of the Luminous Bloom").  Works via PRIMARY (tooltip) or FALLBACK
+            # (armor_type + BIS) so it functions before and after Enrich Items runs.
+            anchor_row = await conn.fetchrow(
+                """
+                SELECT wi.name
+                  FROM guild_identity.wow_items wi
+                 WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
+                   AND wi.name LIKE '% of %'
+                   AND (
+                       (    wi.wowhead_tooltip_html LIKE $1
+                        AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                        AND EXISTS (
+                                SELECT 1 FROM guild_identity.item_sources is2
+                                 WHERE is2.item_id = wi.id
+                                   AND is2.instance_name IN (
+                                       SELECT DISTINCT is3.instance_name
+                                         FROM guild_identity.item_sources is3
+                                        WHERE is3.blizzard_instance_id = ANY($2)
+                                   )
+                            )
+                       )
+                       OR
+                       (    wi.armor_type = $3
+                        AND NOT EXISTS (
+                                SELECT 1 FROM guild_identity.item_sources s
+                                 WHERE s.item_id = wi.id
+                            )
+                        AND EXISTS (
+                                SELECT 1 FROM guild_identity.bis_list_entries ble
+                                  JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
+                                  JOIN guild_identity.classes cl ON cl.id = sp.class_id
+                                 WHERE ble.item_id = wi.id AND cl.name = $4
+                            )
+                       )
+                   )
+                 LIMIT 1
+                """,
+                f"%{class_name}%", raid_ids, t_armor or "leather", class_name,
+            )
+            set_suffix: Optional[str] = None
+            if anchor_row:
+                anchor_name: str = anchor_row["name"]
+                of_idx = anchor_name.find(" of ")
+                if of_idx >= 0:
+                    set_suffix = anchor_name[of_idx:]  # e.g. " of the Luminous Bloom"
+
             if slot in _MAIN_TIER_SLOTS:
                 # $1=slot_type  $2='%ClassName%'  $3=raid_ids  $4=class_name(exact)
-                # [$5=armor_type]  [$N=excluded_ids]
+                # [$5=armor_type]  [$6=set_suffix]  [$N=excluded_ids]
                 params: list = [slot_type, f"%{class_name}%", raid_ids, class_name]
                 if t_armor:
                     params.append(t_armor)
                     fallback_armor_sql = f"AND wi.armor_type = ${len(params)}"
                 else:
                     fallback_armor_sql = ""
+                # If we know the tier set suffix, restrict the fallback to items
+                # whose name matches it.  This prevents non-tier BIS items (e.g. a
+                # raid drop with no sources yet) from appearing in the tier section.
+                fallback_suffix_sql = ""
+                if set_suffix:
+                    params.append(f"%{set_suffix}")
+                    fallback_suffix_sql = f"AND wi.name LIKE ${len(params)}"
                 excl_sql = ""
                 if excl_params:
                     params += excl_params
@@ -1759,10 +1815,9 @@ async def get_available_items(
                                 )
                            )
                            OR
-                           -- FALLBACK: for new-expansion items whose Wowhead pages
-                           --   don't exist yet.  armor_type is set via Blizzard API
-                           --   (Phase 3 of Enrich Items); item must have no Journal
-                           --   source rows and must be in BIS for this class.
+                           -- FALLBACK: items without a Wowhead tooltip yet (e.g. before
+                           --   Enrich Items has run).  Restricted to items matching the
+                           --   tier set name suffix so non-tier BIS items are excluded.
                            (    {fallback_armor_sql.lstrip("AND ") if fallback_armor_sql else "TRUE"}
                             AND NOT EXISTS (
                                     SELECT 1 FROM guild_identity.item_sources s
@@ -1774,6 +1829,7 @@ async def get_available_items(
                                       JOIN guild_identity.classes cl ON cl.id = sp.class_id
                                      WHERE ble.item_id = wi.id AND cl.name = $4
                                 )
+                            {fallback_suffix_sql}
                            )
                        )
                        {excl_sql}
@@ -1783,76 +1839,30 @@ async def get_available_items(
                 )
 
             else:
-                # Catalyst slot — derive set-name suffix from any main tier anchor.
-                # Anchor uses the same primary/fallback logic so it works even when
-                # Wowhead doesn't yet have the item page.
-                anchor = await conn.fetchrow(
-                    """
-                    SELECT wi.name
-                      FROM guild_identity.wow_items wi
-                     WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
-                       AND wi.name LIKE '% of %'
-                       AND (
-                           (    wi.wowhead_tooltip_html LIKE $1
-                            AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
-                            AND EXISTS (
-                                    SELECT 1 FROM guild_identity.item_sources is2
-                                     WHERE is2.item_id = wi.id
-                                       AND is2.instance_name IN (
-                                           SELECT DISTINCT is3.instance_name
-                                             FROM guild_identity.item_sources is3
-                                            WHERE is3.blizzard_instance_id = ANY($2)
-                                       )
-                                )
-                           )
-                           OR
-                           (    wi.armor_type = $3
-                            AND NOT EXISTS (
-                                    SELECT 1 FROM guild_identity.item_sources s
-                                     WHERE s.item_id = wi.id
-                                )
-                            AND EXISTS (
-                                    SELECT 1 FROM guild_identity.bis_list_entries ble
-                                      JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
-                                      JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                     WHERE ble.item_id = wi.id AND cl.name = $4
-                                )
-                           )
-                       )
-                     LIMIT 1
-                    """,
-                    f"%{class_name}%", raid_ids, t_armor or "leather", class_name,
-                )
-
-                if anchor:
-                    anchor_name: str = anchor["name"]
-                    of_idx = anchor_name.find(" of ")
-                    if of_idx >= 0:
-                        set_suffix = anchor_name[of_idx:]  # e.g. " of the Luminous Bloom"
-                        # $1=slot_type  $2='%ClassName%'  $3='% of the Luminous Bloom'
-                        # $4=class_name(exact)  [$5=excluded_ids]
-                        params = [slot_type, f"%{class_name}%", f"%{set_suffix}", class_name] + excl_params
-                        excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
-                        tier_rows = await conn.fetch(
-                            f"""
-                            SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
-                              FROM guild_identity.wow_items wi
-                             WHERE wi.slot_type = $1
-                               AND wi.name LIKE $3
-                               AND (
-                                   wi.wowhead_tooltip_html LIKE $2
-                                   OR EXISTS (
-                                       SELECT 1 FROM guild_identity.bis_list_entries ble
-                                         JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
-                                         JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                        WHERE ble.item_id = wi.id AND cl.name = $4
-                                   )
+                # Catalyst slot — use the suffix we already derived above.
+                if set_suffix:
+                    params = [slot_type, f"%{class_name}%", f"%{set_suffix}", class_name] + excl_params
+                    excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
+                    tier_rows = await conn.fetch(
+                        f"""
+                        SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
+                          FROM guild_identity.wow_items wi
+                         WHERE wi.slot_type = $1
+                           AND wi.name LIKE $3
+                           AND (
+                               wi.wowhead_tooltip_html LIKE $2
+                               OR EXISTS (
+                                   SELECT 1 FROM guild_identity.bis_list_entries ble
+                                     JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
+                                     JOIN guild_identity.classes cl ON cl.id = sp.class_id
+                                    WHERE ble.item_id = wi.id AND cl.name = $4
                                )
-                               {excl_sql}
-                             ORDER BY wi.name
-                            """,
-                            *params,
-                        )
+                           )
+                           {excl_sql}
+                         ORDER BY wi.name
+                        """,
+                        *params,
+                    )
 
     # ── Split drop rows by instance_type ──────────────────────────────────────
     raid_map:    dict[int, dict] = {}
