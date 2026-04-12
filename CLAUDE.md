@@ -239,14 +239,15 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Tier section two-path query** (`prod-v0.16.3/4`): PRIMARY path uses Wowhead tooltip class name + `/item-set=` + Journal source in current raid. FALLBACK path uses `armor_type` (set via Blizzard API in Enrich Items Phase 3) + `NOT EXISTS(item_sources)` + `EXISTS(BIS class entry)` — handles Midnight tier items whose Wowhead pages don't exist yet (item IDs 250022–250027).
   - **Catalyst anchor fix** (`prod-v0.16.5`): anchor query now requires `wi.name LIKE '% of %'` to prevent non-tier items (e.g. "Silvermoon Agent's Handwraps") from being selected as the set-name anchor via `LIMIT 1`.
   - **Admin step order rewritten** (`prod-v0.16.4`): BIS Sync is now Step 1 (must run before Enrich Items), Sync Loot Tables Step 2, Enrich Items Step 3, Process Tier Tokens Step 4. Prior order was wrong — Enrich Items was Step 2 but requires BIS entries to exist.
-  - **Known limitation**: Catalyst slots (back/wrist/waist/feet) will show empty until the 4 catalyst-slot tier pieces (`wow_items` rows) are added via a future BIS Sync. The name-suffix code is correct and ready; the rows simply don't exist in `wow_items` yet.
+  - **`sync_tier_set_completions`** (`prod-v0.16.6`): Sync Loot Tables now calls the Blizzard item-set API (`GET /data/wow/item-set/{id}`) after the encounter walk. Stubs any missing set items (e.g. catalyst-slot pieces) into `wow_items` with `slot_type='other'`. Enrich Items then fetches their Wowhead tooltips. This makes all 9 class set piece slots independent of BIS scraping. `BlizzardClient.get_item_set()` added.
+  - **To activate catalyst slots on prod**: run Sync Loot Tables (Step 2) then Enrich Items (Step 3) from Admin → Gear Plan. The 4 missing catalyst pieces will be stubbed and enriched.
   - **Known benign extra**: Hands slot shows one extra item ("Silvermoon Agent's Handwraps" 244575, Feral Druid BIS, no Wowhead page yet) via the fallback path. It will auto-disappear once Sync Loot Tables adds its source rows.
 - **Phase 1E.7 complete** — merged PR #26, tagged `prod-v0.16.0`. No migrations — frontend only.
   - **Guided tour.** Self-hosted Shepherd.js v11.2.0 (`static/js/vendor/shepherd.min.js` + `static/css/vendor/shepherd.css`). `?` button next to "GEAR PLAN" heading launches a 10-stop overlay tour. Auto-fires once on first visit via `localStorage` key `patt_gear_tour_v1`; `?` button re-launches anytime. Tour order: Equipped Source → Sync Now → Import SimC → BIS Sourcing intro → BIS dropdown → Hero Talent (conditional) → Fill BIS → Paperdoll (both columns highlighted) → Slot Detail (head slot auto-opens) → Gear Table. Each stop highlights the relevant whole section with a gold outline. Sync Now and Fill BIS are blocked during the tour to prevent DOM teardown.
   - **FAQ accordion.** 5 collapsible `<details>` entries at the bottom of the Gear tab: where the plan came from, SimC addon step-by-step tutorial, RaidBots vs BIS, lock/exclude how-to, quality track explainer (**V**eteran / **C**hampion / **H**ero / **M**ythic with bold first letter).
   - Frontend: `my_characters.js` v2.3.0, `my_characters.css` v2.0.0.
 - **Last migration:** 0094
-- **Last prod tag:** `prod-v0.16.5`
+- **Last prod tag:** `prod-v0.16.6`
 - **Active branch:** `main`
 - **Next:** Phase 1F — TBD.
 
