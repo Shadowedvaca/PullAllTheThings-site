@@ -118,3 +118,92 @@ A valid dump starts with:
 | `patt-backup.sh` | `/usr/local/bin/patt-backup.sh` |
 | `patt-restore.sh` | `/usr/local/bin/patt-restore.sh` |
 | Cron job | `/etc/cron.d/patt-backup` |
+
+---
+
+## Recovering from a Bad Delete
+
+### Background: how FKs are configured
+
+Several tables — including `trinket_tier_ratings`, `bis_list_entries`, `gear_plan_slots` — use
+`ON DELETE RESTRICT` on their foreign keys to `bis_list_sources` and `wow_items`. This means
+PostgreSQL will **refuse** to delete a parent row if dependent rows exist, rather than silently
+cascading the delete. You'll get an error like:
+
+```
+ERROR: update or delete on table "bis_list_sources" violates foreign key constraint
+       "trinket_tier_ratings_source_id_fkey"
+DETAIL: Key (id)=(3) is still referenced from table "trinket_tier_ratings".
+```
+
+This is intentional. It forces an explicit cleanup step before any destructive parent-row delete,
+making accidental data wipes loud and obvious rather than quiet and irreversible.
+
+### If you need to delete a parent row intentionally
+
+Before deleting a `bis_list_sources` row (e.g., retiring a source):
+
+```sql
+-- Clear dependent rows first
+DELETE FROM guild_identity.trinket_tier_ratings WHERE source_id = :id;
+DELETE FROM guild_identity.bis_list_entries       WHERE source_id = :id;
+DELETE FROM guild_identity.bis_scrape_targets     WHERE source_id = :id;
+-- then delete the source
+DELETE FROM guild_identity.bis_list_sources WHERE id = :id;
+```
+
+Before deleting a `wow_items` row:
+
+```sql
+-- Check what references it first
+SELECT 'trinket_tier_ratings' AS tbl, COUNT(*) FROM guild_identity.trinket_tier_ratings WHERE item_id = :id
+UNION ALL
+SELECT 'bis_list_entries',             COUNT(*) FROM guild_identity.bis_list_entries       WHERE item_id = :id
+UNION ALL
+SELECT 'gear_plan_slots (desired)',    COUNT(*) FROM guild_identity.gear_plan_slots         WHERE desired_item_id = :id
+UNION ALL
+SELECT 'character_equipment',         COUNT(*) FROM guild_identity.character_equipment      WHERE item_id = :id;
+
+-- Clear each, then delete
+DELETE FROM guild_identity.trinket_tier_ratings WHERE item_id = :id;
+-- etc.
+DELETE FROM guild_identity.wow_items WHERE id = :id;
+```
+
+### If scraped data was accidentally wiped
+
+`trinket_tier_ratings` and `bis_list_entries` are fully re-populatable from the scraper.
+If they're wiped, no restore is needed — just re-run the sync:
+
+1. Log in as GL
+2. Go to **Admin → Gear Plan → BIS Sync**
+3. Run **Step 4: Sync BIS Lists**
+
+The scraper is idempotent (`ON CONFLICT DO UPDATE`). All rows will be re-inserted.
+Full sync time is the same as a normal BIS sync run.
+
+### If a restore is needed (data that can't be recomputed)
+
+Use the standard restore procedure above. Key judgment:
+
+| What was lost | Restore needed? |
+|---------------|----------------|
+| `trinket_tier_ratings` | No — re-run BIS sync |
+| `bis_list_entries` | No — re-run BIS sync |
+| `gear_plan_slots` (player selections) | **Yes** — player data, can't recompute |
+| `character_equipment` | No — re-run equipment sync |
+| `gear_plans` (player plans) | **Yes** — player data, can't recompute |
+| `wow_items` | No — re-run Enrich Items |
+
+When in doubt: take a manual backup of the current state (`patt-backup.sh`) first,
+then restore from the last nightly, then re-run the relevant syncs to repopulate
+computable data from the restored baseline.
+
+### Taking a safety backup before any risky DB operation
+
+```bash
+ssh hetzner
+patt-backup.sh
+```
+
+This should be your first move before any manual SQL that touches more than one row.
