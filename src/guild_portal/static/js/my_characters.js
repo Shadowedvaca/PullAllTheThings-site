@@ -2452,13 +2452,18 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
 
 // ── Available items (Phase 1E.4 / 1F) ─────────────────────────────────────────
 
-// Renders three collapsible sections: Raid Loot, Mythic+ Loot, Crafted.
-// `groups` is { raid: [...], dungeon: [...], crafted: [...] } from the API.
+// Renders up to four collapsible sections: Tier/Catalyst, Raid Loot, Mythic+ Loot, Crafted.
+// `groups` is { tier: [...] | null, raid: [...], dungeon: [...], crafted: [...] } from the API.
+// Tier section is omitted entirely when groups.tier is null (non-tier slot).
 function _gpRenderAvailSections(dbSlot, groups, tc, status) {
   if (status === 'loading') return '<div class="mcn-drawer-empty">Loading\u2026</div>';
   if (status === 'error')   return '<div class="mcn-drawer-empty">Could not load items</div>';
 
   const sections = [
+    // Tier section only rendered when backend signals this is a tier/catalyst slot
+    ...(groups?.tier != null
+      ? [{ key: 'tier', label: 'Tier / Catalyst', showTracks: false, subField: null }]
+      : []),
     { key: 'raid',    label: 'Raid Loot',    showTracks: true,  subField: 'source_name'     },
     { key: 'dungeon', label: 'Mythic+ Loot', showTracks: true,  subField: 'source_instance' },
     { key: 'crafted', label: 'Crafted',      showTracks: false, subField: null              },

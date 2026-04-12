@@ -108,6 +108,12 @@ _ARMOR_FILTER_SLOTS: frozenset[str] = frozenset(
 )
 _WEAPON_SLOTS: frozenset[str] = frozenset({"main_hand", "off_hand"})
 
+# Slots that can have a tier/catalyst class set piece.
+# back (cloak) is included but requires class-name filtering instead of armor_type.
+_TIER_CATALYST_SLOTS: frozenset[str] = frozenset(
+    {"head", "shoulder", "chest", "hands", "legs", "back", "wrist", "waist", "feet"}
+)
+
 # Map from plan slot → wow_items.slot_type for paired slots
 _SLOT_TYPE_QUERY_MAP: dict[str, str] = {
     "ring_2":    "ring_1",
@@ -1566,7 +1572,7 @@ async def get_available_items(
       - Weapon slots: filter by primary stat derived from (class, spec); tooltip HTML check
       - Accessories (neck/back/rings/trinkets): no armor restriction
     """
-    empty: dict = {"raid": [], "dungeon": [], "crafted": []}
+    empty: dict = {"tier": None, "raid": [], "dungeon": [], "crafted": []}
     if slot not in WOW_SLOTS:
         return empty
 
@@ -1688,6 +1694,53 @@ async def get_available_items(
             *params,
         )
 
+        # ── Query 3: tier / catalyst class set piece ──────────────────────────
+        # Identified by Wowhead item-set link in tooltip HTML.
+        # Armor-typed slots use armor_type; back (cloak) uses class name substring.
+        # Returns None for non-tier slots so the frontend can hide the section.
+        tier_rows: list = []
+        if slot in _TIER_CATALYST_SLOTS:
+            tier_params: list = [slot_type]
+            tier_extra_clauses: list[str] = []
+
+            if slot == "back":
+                # Cloaks have no armor_type — filter by class name in tooltip HTML
+                if class_name:
+                    tier_params.append(f"%{class_name}%")
+                    tier_extra_clauses.append(f"wi.wowhead_tooltip_html LIKE ${len(tier_params)}")
+            else:
+                # All other tier slots have an armor_type
+                t_armor = CLASS_ARMOR_TYPE.get(class_name)
+                if t_armor:
+                    t_marker = _ARMOR_TYPE_MARKER.get(t_armor, "")
+                    tier_params.append(t_armor)
+                    tier_params.append(t_marker)
+                    tier_extra_clauses.append(
+                        f"(wi.armor_type = ${len(tier_params) - 1} "
+                        f"OR (wi.armor_type IS NULL AND wi.wowhead_tooltip_html LIKE ${len(tier_params)}))"
+                    )
+
+            if excluded_ids:
+                tier_params.append(excluded_ids)
+                tier_extra_clauses.append(f"wi.id != ALL(${len(tier_params)}::int[])")
+
+            extra_sql = (" AND " + " AND ".join(tier_extra_clauses)) if tier_extra_clauses else ""
+            tier_rows = await conn.fetch(
+                f"""
+                SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
+                  FROM guild_identity.wow_items wi
+                 WHERE wi.slot_type = $1
+                   AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                   AND EXISTS (
+                       SELECT 1 FROM guild_identity.item_sources is2
+                        WHERE is2.item_id = wi.id
+                   )
+                   {extra_sql}
+                 ORDER BY wi.name
+                """,
+                *tier_params,
+            )
+
     # ── Split drop rows by instance_type ──────────────────────────────────────
     raid_map:    dict[int, dict] = {}
     dungeon_map: dict[int, dict] = {}
@@ -1745,7 +1798,21 @@ async def get_available_items(
     for item in raid_items + dungeon_items + crafted_items:
         item.pop("wowhead_tooltip_html", None)
 
+    # ── Tier / Catalyst items ──────────────────────────────────────────────────
+    # None means "this slot has no tier piece" — frontend hides the section.
+    tier_items: Optional[list[dict]] = None
+    if slot in _TIER_CATALYST_SLOTS:
+        tier_items = [
+            {
+                "blizzard_item_id": r["blizzard_item_id"],
+                "name": r["name"],
+                "icon_url": r["icon_url"],
+            }
+            for r in tier_rows
+        ]
+
     return {
+        "tier":    tier_items,
         "raid":    raid_items,
         "dungeon": dungeon_items,
         "crafted": crafted_items,
