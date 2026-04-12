@@ -1801,6 +1801,7 @@ function _gpRenderCenterPanel(data) {
     <div class="mcn-detail-area__heading">
       Gear Plan
       <button id="mcn-gp-tour-btn" class="mcn-gp-tour-btn" type="button" title="Take a guided tour of the gear plan">?</button>
+      <a href="#mcn-gp-faq" class="mcn-gp-faq-link">FAQ &#x2193;</a>
     </div>
     <div class="mcn-gp-sections">
       ${equippedSection}
@@ -2762,7 +2763,7 @@ function _gpRenderFaq() {
       <div class="mcn-faq-a">${a}</div>
     </details>`).join('');
 
-  return `<div class="mcn-gp-faq">
+  return `<div class="mcn-gp-faq" id="mcn-gp-faq">
     <div class="mcn-gp-faq__hdr">Frequently Asked Questions</div>
     ${items}
   </div>`;
