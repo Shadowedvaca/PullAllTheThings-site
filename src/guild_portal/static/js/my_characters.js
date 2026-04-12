@@ -2226,14 +2226,19 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     const ns = qc && qc !== '#888' ? ` style="color:${qc}"` : '';
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 6px ${qc}80"` : '';
     const badge = eq.quality_track ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>` : '';
-    equippedHtml = `<div class="mcn-drawer-item">
+    const equippedIsGoal = eq.blizzard_item_id === sd.desired_blizzard_item_id;
+    const useBtn = !equippedIsGoal
+      ? `<button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem;flex-shrink:0;align-self:center" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${eq.blizzard_item_id})">Use</button>`
+      : '';
+    equippedHtml = `<div class="mcn-drawer-item" style="align-items:center">
       ${eq.icon_url ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
-      <div class="mcn-drawer-item__info">
+      <div class="mcn-drawer-item__info" style="flex:1">
         <div class="mcn-drawer-item__name"${ns}>
           ${_gpEsc(eq.item_name || 'Unknown')}
         </div>
         <div class="mcn-drawer-item__meta">${eq.item_level ? eq.item_level + '\u00a0' : ''}${badge}</div>
       </div>
+      ${useBtn}
     </div>`;
   } else {
     equippedHtml = '<div class="mcn-drawer-empty">Nothing equipped</div>';
@@ -2326,18 +2331,14 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     dropHtml = '<div class="mcn-drawer-empty">No drop source data</div>';
   }
 
-  // 5 — Available from Content (lazy-loaded; uses cache if already fetched)
+  // 5 — Available from Content — raid, M+, crafted (lazy-loaded; uses cache if already fetched)
   const charId5  = _selectedChar?.id;
   const cacheKey = charId5 ? `${charId5}:${dbSlot}` : null;
   const avCached = cacheKey ? _gpAvailCache[cacheKey] : null;
-  const hasBis   = bis.length > 0;
   const availBodyHtml = avCached
-    ? _gpRenderAvailItems(dbSlot, avCached.items, tc, avCached.status)
+    ? _gpRenderAvailSections(dbSlot, avCached.groups, tc, avCached.status)
     : '<div class="mcn-drawer-empty">Loading\u2026</div>';
-  const availHtml = `<details class="mcn-avail-section"${!hasBis ? ' open' : ''}>
-    <summary class="mcn-avail-section__toggle">Available from Content</summary>
-    <div id="mcn-avail-body-${_gpEsc(dbSlot)}">${availBodyHtml}</div>
-  </details>`;
+  const availHtml = `<div id="mcn-avail-body-${_gpEsc(dbSlot)}">${availBodyHtml}</div>`;
 
   // Phase 1E.5: excluded items section
   const excludedItems = sd.excluded_items || [];
@@ -2449,25 +2450,54 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   return `<table class="mcn-bis-grid">${thead}<tbody>${rows}</tbody></table>`;
 }
 
-// ── Available items (Phase 1E.4) ───────────────────────────────────────────────
+// ── Available items (Phase 1E.4 / 1F) ─────────────────────────────────────────
 
-function _gpRenderAvailItems(dbSlot, items, tc, status) {
+// Renders three collapsible sections: Raid Loot, Mythic+ Loot, Crafted.
+// `groups` is { raid: [...], dungeon: [...], crafted: [...] } from the API.
+function _gpRenderAvailSections(dbSlot, groups, tc, status) {
   if (status === 'loading') return '<div class="mcn-drawer-empty">Loading\u2026</div>';
   if (status === 'error')   return '<div class="mcn-drawer-empty">Could not load items</div>';
-  if (!items || !items.length) return '<div class="mcn-drawer-empty">No eligible items found in scanned content</div>';
 
+  const sections = [
+    { key: 'raid',    label: 'Raid Loot',    showTracks: true,  subField: 'source_name'     },
+    { key: 'dungeon', label: 'Mythic+ Loot', showTracks: true,  subField: 'source_instance' },
+    { key: 'crafted', label: 'Crafted',      showTracks: false, subField: null              },
+  ];
+
+  return sections.map(({ key, label, showTracks, subField }) => {
+    const items = groups?.[key] || [];
+    const bodyHtml = items.length
+      ? _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField)
+      : `<div class="mcn-drawer-empty">No eligible ${label.toLowerCase()} items found</div>`;
+    return `<details class="mcn-avail-section">
+      <summary class="mcn-avail-section__toggle">${label}</summary>
+      ${bodyHtml}
+    </details>`;
+  }).join('');
+}
+
+// Renders one item table for a single source section.
+// subField: which source property to show as item subtitle ('source_name' for
+// raid boss, 'source_instance' for M+ dungeon name, null for crafted).
+function _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField) {
   const rows = items.map(item => {
     const icon = item.icon_url
       ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
-    // Aggregate unique tracks across all sources, ordered V < C < H < M
-    const allTracks = new Set(item.sources?.flatMap(s => s.quality_tracks || []) || []);
-    const trackPills = ['V','C','H','M'].filter(t => allTracks.has(t)).map(t => _gpPill(t, tc)).join(' ');
+    let trackCell = '';
+    if (showTracks) {
+      const allTracks = new Set(item.sources?.flatMap(s => s.quality_tracks || []) || []);
+      const trackPills = ['V','C','H','M'].filter(t => allTracks.has(t)).map(t => _gpPill(t, tc)).join(' ');
+      trackCell = `<td class="mcn-avail-item__tracks">${trackPills}</td>`;
+    }
 
-    // Unique raid/dungeon instance names (up to 2)
-    const instances = [...new Set((item.sources || []).map(s => s.source_instance).filter(Boolean))];
-    const instText  = instances.slice(0, 2).join(', ');
+    const subTexts = subField
+      ? [...new Set((item.sources || []).map(s => s[subField]).filter(Boolean))]
+      : [];
+    const subHtml = subTexts.length
+      ? `<div class="mcn-avail-item__inst">${_gpEsc(subTexts.join(', '))}</div>`
+      : '';
 
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
@@ -2476,9 +2506,9 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
           ${icon}
           ${_gpEsc(item.name)}
         </div>
-        ${instText ? `<div class="mcn-avail-item__inst">${_gpEsc(instText)}</div>` : ''}
+        ${subHtml}
       </td>
-      <td class="mcn-avail-item__tracks">${trackPills}</td>
+      ${trackCell}
       <td class="mcn-bis-grid__action">
         <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">Use</button>
         <button class="mcn-exclude-btn" type="button" title="Exclude this item" onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id},'${nameEsc}')">&times;</button>
@@ -2486,10 +2516,11 @@ function _gpRenderAvailItems(dbSlot, items, tc, status) {
     </tr>`;
   }).join('');
 
+  const trackTh = showTracks ? `<th style="font-size:0.63rem;text-align:center">Tracks</th>` : '';
   return `<table class="mcn-bis-grid">
     <thead><tr>
       <th class="mcn-bis-grid__name-col">Item</th>
-      <th style="font-size:0.63rem;text-align:center">Tracks</th>
+      ${trackTh}
       <th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -2528,23 +2559,23 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
       const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
       if (bodyEl) {
         const tc = _gpCache[charId]?.track_colors || {};
-        bodyEl.innerHTML = _gpRenderAvailItems(dbSlot, _gpAvailCache[key].items, tc, 'done');
+        bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, _gpAvailCache[key].groups, tc, 'done');
       }
     }
     return;
   }
 
-  _gpAvailCache[key] = { status: 'loading', items: [] };
+  _gpAvailCache[key] = { status: 'loading', groups: {} };
 
   try {
     const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/available-items?slot=${encodeURIComponent(dbSlot)}`);
     if (resp.ok) {
-      _gpAvailCache[key] = { status: 'done', items: resp.data || [] };
+      _gpAvailCache[key] = { status: 'done', groups: resp.data || {} };
     } else {
-      _gpAvailCache[key] = { status: 'error', items: [] };
+      _gpAvailCache[key] = { status: 'error', groups: {} };
     }
   } catch {
-    _gpAvailCache[key] = { status: 'error', items: [] };
+    _gpAvailCache[key] = { status: 'error', groups: {} };
   }
 
   // Update the section in-place if still visible
@@ -2552,7 +2583,7 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
   if (bodyEl) {
     const tc    = _gpCache[charId]?.track_colors || {};
     const state = _gpAvailCache[key];
-    bodyEl.innerHTML = _gpRenderAvailItems(dbSlot, state.items, tc, state.status);
+    bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, state.groups, tc, state.status);
   }
 }
 

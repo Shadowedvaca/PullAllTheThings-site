@@ -1547,21 +1547,28 @@ async def get_available_items(
     player_id: int,
     character_id: int,
     slot: str,
-) -> list[dict]:
-    """Return class-eligible scanned items for a gear plan slot (current season only).
+) -> dict:
+    """Return class-eligible scanned items grouped by source type.
 
-    Used to populate the 'Available from Content' section in the slot drawer.
-    Filters to instances listed in patt.raid_seasons.current_instance_ids for the
-    active season. Falls back to showing all instances if current_instance_ids is empty.
-    Excluded items (Phase 1E.5) are omitted from results.
+    Returns {"raid": [...], "dungeon": [...], "crafted": [...]}, each list
+    sorted alphabetically. Used to populate the three source sections in the
+    gear plan slot drawer.
+
+    Season filtering:
+      - raid:    items from instances in patt.raid_seasons.current_raid_ids
+      - dungeon: items from instances in patt.raid_seasons.current_instance_ids
+      - crafted: items linked via item_recipe_links (inherently current content)
+
+    Excluded items (Phase 1E.5) are omitted from all groups.
 
     Eligibility rules:
       - Armor slots: filter by character's class armor type (cloth/leather/mail/plate)
       - Weapon slots: filter by primary stat derived from (class, spec); tooltip HTML check
       - Accessories (neck/back/rings/trinkets): no armor restriction
     """
+    empty: dict = {"raid": [], "dungeon": [], "crafted": []}
     if slot not in WOW_SLOTS:
-        return []
+        return empty
 
     async with pool.acquire() as conn:
         char_row = await conn.fetchrow(
@@ -1577,23 +1584,23 @@ async def get_available_items(
             character_id, player_id,
         )
         if not char_row:
-            return []
+            return empty
 
         class_name = char_row["class_name"] or ""
         spec_name  = char_row["spec_name"] or ""
 
-        # Load current season filters — combine M+ dungeons + raid instances.
-        # current_instance_ids = M+ dungeon pool (admin-managed).
-        # current_raid_ids = raid tiers (already tracked for other features).
-        # Falls back to no filter if both are empty.
+        # Load current season filters — kept separate so raid and dungeon lists
+        # are drawn from their respective instance pools.
         season_row = await conn.fetchrow(
             """SELECT current_instance_ids, current_raid_ids
                  FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"""
         )
-        current_instance_ids: list[int] = []
+        raid_ids:    list[int] = []
+        dungeon_ids: list[int] = []
         if season_row:
-            current_instance_ids = list(season_row["current_instance_ids"] or [])
-            current_instance_ids += list(season_row["current_raid_ids"] or [])
+            raid_ids    = list(season_row["current_raid_ids"]    or [])
+            dungeon_ids = list(season_row["current_instance_ids"] or [])
+        all_season_ids = raid_ids + dungeon_ids
 
         # Phase 1E.5: fetch per-slot exclusions so we can hide excluded items
         excluded_ids: list[int] = []
@@ -1616,7 +1623,7 @@ async def get_available_items(
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
 
-        # Build WHERE clause fragments
+        # Build shared WHERE clause fragments (indices relative to base params)
         params: list = [slot_type]
         armor_clause = ""
         if slot in _ARMOR_FILTER_SLOTS:
@@ -1630,12 +1637,6 @@ async def get_available_items(
                     f"OR (wi.armor_type IS NULL AND wi.wowhead_tooltip_html LIKE ${len(params)}))"
                 )
 
-        # Season filter: restrict to current_instance_ids when populated
-        season_clause = ""
-        if current_instance_ids:
-            params.append(current_instance_ids)  # $N — INTEGER[]
-            season_clause = f"AND is2.blizzard_instance_id = ANY(${len(params)})"
-
         # Exclusion filter: hide items the player has permanently excluded (Phase 1E.5)
         exclude_clause = ""
         if excluded_ids:
@@ -1646,28 +1647,57 @@ async def get_available_items(
         need_tooltip = slot in _WEAPON_SLOTS
         tooltip_col  = "wi.wowhead_tooltip_html," if need_tooltip else ""
 
-        rows = await conn.fetch(
+        # ── Query 1: raid + dungeon drops ─────────────────────────────────────
+        # Single query for both; split by instance_type in Python.
+        drop_rows: list = []
+        if all_season_ids:
+            drop_params = list(params)
+            drop_params.append(all_season_ids)
+            season_clause = f"AND is2.blizzard_instance_id = ANY(${len(drop_params)})"
+
+            drop_rows = await conn.fetch(
+                f"""
+                SELECT wi.blizzard_item_id, wi.name, wi.icon_url,
+                       {tooltip_col}
+                       is2.encounter_name, is2.instance_name, is2.instance_type
+                  FROM guild_identity.wow_items wi
+                  JOIN guild_identity.item_sources is2
+                       ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
+                 WHERE wi.slot_type = $1
+                   AND is2.instance_type IN ('raid', 'dungeon')
+                   {armor_clause}
+                   {season_clause}
+                   {exclude_clause}
+                 ORDER BY wi.name, is2.instance_name, is2.encounter_name
+                """,
+                *drop_params,
+            )
+
+        # ── Query 2: crafted items via item_recipe_links ──────────────────────
+        craft_select = f"wi.blizzard_item_id, wi.name, wi.icon_url{', wi.wowhead_tooltip_html' if need_tooltip else ''}"
+        craft_rows = await conn.fetch(
             f"""
-            SELECT wi.blizzard_item_id, wi.name, wi.icon_url,
-                   {tooltip_col}
-                   is2.encounter_name, is2.instance_name, is2.instance_type
+            SELECT DISTINCT {craft_select}
               FROM guild_identity.wow_items wi
-              JOIN guild_identity.item_sources is2
-                   ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
+              JOIN guild_identity.item_recipe_links irl ON irl.item_id = wi.id
              WHERE wi.slot_type = $1
                {armor_clause}
-               {season_clause}
                {exclude_clause}
-             ORDER BY wi.name, is2.instance_name, is2.encounter_name
+             ORDER BY wi.name
             """,
             *params,
         )
 
-    # Group by blizzard_item_id, collecting sources
-    item_map: dict[int, dict] = {}
-    for r in rows:
-        bid = r["blizzard_item_id"]
-        if bid not in item_map:
+    # ── Split drop rows by instance_type ──────────────────────────────────────
+    raid_map:    dict[int, dict] = {}
+    dungeon_map: dict[int, dict] = {}
+
+    for r in drop_rows:
+        bid   = r["blizzard_item_id"]
+        itype = r["instance_type"]
+        target = raid_map if itype == "raid" else dungeon_map
+
+        if bid not in target:
             entry: dict = {
                 "blizzard_item_id": bid,
                 "name": r["name"],
@@ -1676,30 +1706,50 @@ async def get_available_items(
             }
             if need_tooltip:
                 entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
-            item_map[bid] = entry
-        tracks = _get_tracks(r["instance_type"])
+            target[bid] = entry
+
+        tracks = _get_tracks(itype)
         src = {
             "source_name":     r["encounter_name"],
             "source_instance": r["instance_name"],
-            "instance_type":   r["instance_type"],
+            "instance_type":   itype,
             "quality_tracks":  tracks,
         }
-        if src not in item_map[bid]["sources"]:
-            item_map[bid]["sources"].append(src)
+        if src not in target[bid]["sources"]:
+            target[bid]["sources"].append(src)
 
-    items = list(item_map.values())
+    raid_items    = list(raid_map.values())
+    dungeon_items = list(dungeon_map.values())
+
+    # ── Crafted items ──────────────────────────────────────────────────────────
+    crafted_items: list[dict] = []
+    for r in craft_rows:
+        entry = {
+            "blizzard_item_id": r["blizzard_item_id"],
+            "name": r["name"],
+            "icon_url": r["icon_url"],
+        }
+        if need_tooltip:
+            entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
+        crafted_items.append(entry)
 
     # Apply primary-stat filter for weapon slots (in Python to keep SQL simple)
-    if slot in _WEAPON_SLOTS and items:
+    if slot in _WEAPON_SLOTS:
         primary_stat = SPEC_PRIMARY_STAT.get((class_name, spec_name))
         if primary_stat:
-            items = _filter_by_primary_stat(items, primary_stat)
+            raid_items    = _filter_by_primary_stat(raid_items, primary_stat)
+            dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat)
+            crafted_items = _filter_by_primary_stat(crafted_items, primary_stat)
 
     # Strip tooltip HTML before returning (only needed for in-process filtering)
-    for item in items:
+    for item in raid_items + dungeon_items + crafted_items:
         item.pop("wowhead_tooltip_html", None)
 
-    return items
+    return {
+        "raid":    raid_items,
+        "dungeon": dungeon_items,
+        "crafted": crafted_items,
+    }
 
 
 # ── Item exclusion (Phase 1E.5) ───────────────────────────────────────────────
