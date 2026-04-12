@@ -2319,12 +2319,14 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 
 /* ── Phase 1E.7: Shepherd.js theme overrides ─────────────────────────────── */
 
-.shepherd-modal-overlay-container {
-  opacity: 1 !important;
-}
-
-.shepherd-modal-overlay-container .shepherd-modal-overlay {
-  fill: rgba(0, 0, 0, 0.65) !important;
+/* Element highlight — gold glow on tour target */
+.mcn-shepherd-highlight {
+  outline: 2px solid rgba(212, 168, 75, 0.8) !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(212, 168, 75, 0.15), 0 0 18px rgba(212, 168, 75, 0.2) !important;
+  border-radius: 4px;
+  position: relative;
+  z-index: 9990;
 }
 
 .mcn-shepherd-step.shepherd-element {

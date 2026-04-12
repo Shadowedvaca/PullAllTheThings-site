@@ -2774,104 +2774,152 @@ function _gpLaunchTour() {
   // Cancel any existing tour
   if (_gpTour) { try { _gpTour.cancel(); } catch (_) {} }
 
-  const btnNext  = (t) => ({ text: 'Next →',    action: () => t.next(),   classes: 'mcn-shepherd-btn mcn-shepherd-btn--primary' });
-  const btnBack  = (t) => ({ text: '← Back',    action: () => t.back(),   classes: 'mcn-shepherd-btn mcn-shepherd-btn--secondary' });
-  const btnDone  = (t) => ({ text: 'Done',       action: () => t.complete(), classes: 'mcn-shepherd-btn mcn-shepherd-btn--primary' });
+  // Ensure we're on the Guide BIS tab so dropdowns are visible
+  if (_gpBisTab !== 'guide') {
+    _gpBisTab = 'guide';
+    const charId = _selectedChar?.id;
+    if (charId && _gpCache[charId]) _gpRenderCenterPanel(_gpCache[charId]);
+  }
+
+  const btnNext = (t) => ({ text: 'Next →',     action: () => t.next(),     classes: 'mcn-shepherd-btn mcn-shepherd-btn--primary' });
+  const btnBack = (t) => ({ text: '← Back',     action: () => t.back(),     classes: 'mcn-shepherd-btn mcn-shepherd-btn--secondary' });
+  const btnDone = (t) => ({ text: 'Done ✓',     action: () => t.complete(), classes: 'mcn-shepherd-btn mcn-shepherd-btn--primary' });
 
   _gpTour = new Shepherd.Tour({
-    useModalOverlay: true,
+    useModalOverlay: false,
     exitOnEsc: true,
     defaultStepOptions: {
       cancelIcon: { enabled: true },
       classes: 'mcn-shepherd-step',
-      scrollTo: { behavior: 'smooth', block: 'center' },
+      scrollTo: { behavior: 'smooth', block: 'nearest' },
     },
   });
 
-  // Helper: attach to element if it exists, otherwise center the step
-  function attachTo(selector, on) {
-    const el = document.querySelector(selector);
-    return el ? { element: selector, on: on || 'bottom' } : undefined;
+  // Helper: return attachTo options if the element exists, else undefined (centered popup)
+  function at(selector, on) {
+    return document.querySelector(selector)
+      ? { element: selector, on: on || 'bottom' }
+      : undefined;
   }
 
   const t = _gpTour;
 
-  // Stop 1 — BIS List dropdown
+  // ── Stop 1: Equipped Gear Source section ─────────────────────────────────
   t.addStep({
-    id: 'src-sel',
-    title: 'BIS List Guide',
-    text: 'Choose which guide to use for your BIS recommendations — u.gg, Wowhead, or Icy Veins, filtered by Raid or M+ focus. The <strong>★ All</strong> option covers both content types.',
-    attachTo: attachTo('#mcn-gp-src-sel', 'top') || { element: '.mcn-gp-sections', on: 'top' },
+    id: 'equipped-source',
+    title: 'Your Equipped Gear',
+    text: 'This section reflects what you\'re currently wearing in-game. Blizzard\'s API can lag 24–72 hours after you log out, so the snapshot here may be a day or two behind.',
+    attachTo: at('.mcn-gp-section:first-of-type', 'right'),
+    highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnNext(t)],
   });
 
-  // Stop 2 — Hero Talent dropdown (conditional)
-  const htEl = document.getElementById('mcn-gp-ht-sel');
-  if (htEl) {
+  // ── Stop 2: Sync Now ──────────────────────────────────────────────────────
+  t.addStep({
+    id: 'sync-now',
+    title: 'Sync with Blizzard',
+    text: 'Hit <strong>Sync Now</strong> to pull the latest data from Blizzard. Great to do at the start of each week after raid night.',
+    attachTo: at('#mcn-gp-btn-sync', 'bottom'),
+    highlightClass: 'mcn-shepherd-highlight',
+    buttons: [btnBack(t), btnNext(t)],
+  });
+
+  // ── Stop 3: Import SimC tab ───────────────────────────────────────────────
+  t.addStep({
+    id: 'simc-tab',
+    title: 'Import SimC — Instant Update',
+    text: 'If the Blizzard data is still stale, switch to <strong>Import SimC</strong>. Install the Simulationcraft addon, type <code>/simc</code> in WoW, paste the output here, and your gear updates immediately — no waiting. The FAQ at the bottom of this page has step-by-step instructions.',
+    attachTo: at('.mcn-gp-section:first-of-type .mcn-gp-section__tabs', 'bottom'),
+    highlightClass: 'mcn-shepherd-highlight',
+    buttons: [btnBack(t), btnNext(t)],
+  });
+
+  // ── Stop 4: BIS Sourcing section ──────────────────────────────────────────
+  t.addStep({
+    id: 'bis-sourcing',
+    title: 'BIS Goals',
+    text: 'The right section is where you configure your Best-in-Slot goals — what you\'re working toward for each slot. There are a few ways to set this up.',
+    attachTo: at('.mcn-gp-section:last-of-type', 'left'),
+    highlightClass: 'mcn-shepherd-highlight',
+    buttons: [btnBack(t), btnNext(t)],
+  });
+
+  // ── Stop 5: BIS List dropdown ─────────────────────────────────────────────
+  // Ensure guide tab is visible
+  const guideTabEl = document.querySelector('#mcn-gp-panel-bis-guide');
+  if (guideTabEl?.hidden) _gpOnBisTab('guide');
+
+  t.addStep({
+    id: 'bis-source-sel',
+    title: 'Pick Your Guide',
+    text: 'Select your BIS source here. <strong>Wowhead Overall</strong> is a great starting point — it loads the full ranked gear list from Wowhead\'s spec guide for your spec, covering both raid drops and M+ in one list.',
+    attachTo: at('#mcn-gp-src-sel', 'bottom'),
+    highlightClass: 'mcn-shepherd-highlight',
+    buttons: [btnBack(t), btnNext(t)],
+  });
+
+  // ── Stop 6: Hero Talent (conditional) ────────────────────────────────────
+  if (document.getElementById('mcn-gp-ht-sel')) {
     t.addStep({
       id: 'ht-sel',
       title: 'Hero Talent',
-      text: 'If your spec has hero talent variants, pick the tree you\'re playing. BIS choices can differ significantly between builds.',
-      attachTo: { element: '#mcn-gp-ht-sel', on: 'bottom' },
+      text: 'Your spec has hero talent variants with different BIS lists. Pick the tree you\'re playing so the recommendations match your build.',
+      attachTo: at('#mcn-gp-ht-sel', 'bottom'),
+      highlightClass: 'mcn-shepherd-highlight',
       buttons: [btnBack(t), btnNext(t)],
     });
   }
 
-  // Stop 3 — Fill BIS button
+  // ── Stop 7: Fill BIS ──────────────────────────────────────────────────────
   t.addStep({
     id: 'fill-bis',
     title: 'Fill BIS',
-    text: 'Fills every <em>unlocked</em> slot with the top-ranked item from your chosen guide. Safe to run anytime — locked slots are never overwritten.',
-    attachTo: attachTo('#mcn-gp-btn-fill', 'bottom') || { element: '.mcn-gp-sections', on: 'bottom' },
+    text: 'Click <strong>Fill BIS</strong> to populate every unlocked slot with the top-ranked recommendation from your chosen guide. You can run this anytime — locked slots are always preserved.',
+    attachTo: at('#mcn-gp-btn-fill', 'bottom'),
+    highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnBack(t), btnNext(t)],
   });
 
-  // Stop 4 — Paperdoll
+  // ── Stop 8: Paperdoll layout ──────────────────────────────────────────────
   t.addStep({
     id: 'paperdoll',
-    title: 'Paperdoll',
-    text: 'The left and right columns show your equipped gear. Each slot card displays your item, its quality track (V/C/H/M), and highlights slots where an upgrade exists. Click any card to open the slot detail drawer.',
-    attachTo: attachTo('#mcn-left-paperdoll', 'right'),
+    title: 'Gear Slots',
+    text: 'The columns on either side of the screen are your paperdoll. Each slot shows both your <strong>equipped item</strong> (inner side, closer to center) and your <strong>BIS goal</strong> (outer edge). Slots that have an achievable upgrade are highlighted in gold.',
+    attachTo: at('#mcn-left-paperdoll', 'right'),
+    highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnBack(t), btnNext(t)],
   });
 
-  // Stop 5 — Slot table
+  // ── Stop 9: Slot detail — open head slot so the panel is visible ──────────
   t.addStep({
-    id: 'slot-table',
-    title: 'Gear Table',
-    text: 'Every slot in one table: what you\'re wearing, your BIS goal, where it drops, and which quality tracks are still available to you. Click any row to open the full slot details.',
-    attachTo: attachTo('.mcn-gear-table', 'top'),
+    id: 'slot-detail',
+    title: 'Slot Detail',
+    text: 'Click any slot card (or any row in the table below) to open its detail view. Here you\'ll see exactly why an item is recommended, ranked alternatives, where it drops, and controls to <strong>lock</strong> a slot or <strong>exclude</strong> items you don\'t want in your plan.',
+    attachTo: at('#mcn-gp-slot-detail', 'bottom'),
+    highlightClass: 'mcn-shepherd-highlight',
+    beforeShowPromise() {
+      return new Promise(resolve => {
+        // Open the Head slot so the detail panel is visible for this step
+        const firstSlot = GP_LEFT_BODY_SLOTS[0] || 'head';
+        _gpSelectSlotInCenter(firstSlot);
+        setTimeout(resolve, 120);
+      });
+    },
     buttons: [btnBack(t), btnNext(t)],
   });
 
-  // Stop 6 — Lock icon (attach to slot detail if open, otherwise gear table)
-  const lockEl  = document.querySelector('.mcn-lock-btn');
-  const lockSel = lockEl ? '.mcn-lock-btn' : '.mcn-gear-table';
+  // ── Stop 10: Gear table ───────────────────────────────────────────────────
   t.addStep({
-    id: 'lock-btn',
-    title: 'Lock a Slot',
-    text: 'Lock a slot to protect it from Fill BIS. Use this when you\'ve chosen something intentionally different from the guide — for example, a BiS-adjacent item you already have at Mythic track.',
-    attachTo: attachTo(lockSel, lockEl ? 'bottom' : 'top'),
-    buttons: [btnBack(t), btnNext(t)],
-  });
-
-  // Stop 7 — Source toggle (Equipped Gear Source section)
-  t.addStep({
-    id: 'source-toggle',
-    title: 'Equipped Gear Source',
-    text: 'If your equipped gear looks outdated, switch to <strong>Import SimC</strong> and paste a SimC string to update it instantly — no waiting for Blizzard\'s API. See the FAQ below for step-by-step SimC addon instructions.',
-    attachTo: attachTo('.mcn-gp-section:first-of-type .mcn-gp-section__tabs', 'bottom'),
+    id: 'gear-table',
+    title: 'Gear Summary Table',
+    text: 'Scroll down for the full table — every slot at a glance. You\'ll see your equipped item, your goal, the drop source, and which quality tracks (V / C / H / M) you still have available. Click any row to open the detail panel.',
+    attachTo: at('.mcn-gear-table-wrap', 'top'),
+    highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnBack(t), btnDone(t)],
   });
 
-  t.on('complete', () => {
-    localStorage.setItem(GP_TOUR_KEY, '1');
-    _gpTour = null;
-  });
-  t.on('cancel', () => {
-    localStorage.setItem(GP_TOUR_KEY, '1');
-    _gpTour = null;
-  });
+  t.on('complete', () => { localStorage.setItem(GP_TOUR_KEY, '1'); _gpTour = null; });
+  t.on('cancel',   () => { localStorage.setItem(GP_TOUR_KEY, '1'); _gpTour = null; });
 
   t.start();
 }
