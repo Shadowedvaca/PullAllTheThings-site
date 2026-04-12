@@ -2766,6 +2766,10 @@ function _gpShowExcludeToast(slot, blizzardItemId, itemName) {
 function _gpRenderFaq() {
   const entries = [
     {
+      q: 'What does "Best in Slot" actually mean?',
+      a: 'Best in Slot (BIS) refers to the specific item in each gear slot that provides the strongest theoretical stat combination for your spec — based on how your primary stats, secondary stats (crit, haste, mastery, versatility), and set bonuses interact with your abilities. BIS lists are built by theorycraft communities who model these interactions at the highest gear levels. Think of it as the destination: a roadmap of the items worth prioritizing as you progress through content.',
+    },
+    {
       q: 'Where did this gear plan come from?',
       a: 'Automatically pre-filled with the Wowhead Overall BIS list for your spec when your character was first synced. You can change any slot by clicking a row, or swap to a different guide source using the BIS Sourcing selector above.',
     },
