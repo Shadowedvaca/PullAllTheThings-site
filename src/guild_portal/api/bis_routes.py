@@ -26,6 +26,8 @@ Endpoints:
   DELETE /api/v1/admin/bis/item-sources/{id}
   GET  /api/v1/admin/bis/enrich-items        (poll status)
   POST /api/v1/admin/bis/enrich-items        (start job)
+  GET  /api/v1/admin/bis/sync-crafted-items  (poll status)
+  POST /api/v1/admin/bis/sync-crafted-items  (start job)
 """
 
 import logging
@@ -66,6 +68,19 @@ _enrich_status: dict = {
     "total": 0,
     "enriched": 0,
     "error_count": 0,
+    "started_at": None,
+    "finished_at": None,
+}
+
+_crafted_sync_status: dict = {
+    "running": False,
+    "phase_label": "",
+    "phase_2a_stubbed": 0,
+    "phase_2a_linked": 0,
+    "phase_2b_checked": 0,
+    "phase_2b_stubbed": 0,
+    "phase_2b_linked": 0,
+    "phase_2b_errors": 0,
     "started_at": None,
     "finished_at": None,
 }
@@ -545,44 +560,79 @@ async def sync_item_sources(
     return {"ok": True, **result}
 
 
+@router.get("/sync-crafted-items")
+async def sync_crafted_items_status():
+    """Poll the current sync-crafted-items job state."""
+    s = _crafted_sync_status.copy()
+    s["started_at"] = s["started_at"].isoformat() if s["started_at"] else None
+    s["finished_at"] = s["finished_at"].isoformat() if s["finished_at"] else None
+    return {"ok": True, **s}
+
+
 @router.post("/sync-crafted-items")
 async def sync_crafted_items(
     request: Request,
     player: Player = Depends(require_rank(5)),
 ):
-    """Fire-and-forget discovery of craftable gear items via the Blizzard Recipe API.
+    """Discover craftable gear items and populate item_recipe_links.
 
-    For each recipe in the active expansion with no item_recipe_links entry,
-    calls GET /data/wow/recipe/{id} + GET /data/wow/item/{id} to identify the
-    crafted item, stubs it into wow_items, and creates the link.  Non-equippable
-    items (consumables, enchant scrolls, etc.) are skipped automatically.
+    Runs two phases:
+      2a — character_equipment name match (pure DB, instant)
+      2b — Blizzard Item Search API (~1–3 min for a full expansion)
 
-    Returns immediately — the sync runs in the background (~1–3 min for a full
-    expansion).  Run Enrich Items (Step 2) afterwards to populate Wowhead
-    tooltips for newly stubbed items.
+    Returns immediately; poll GET /sync-crafted-items for live progress.
+    Run Enrich Items (Step 2) afterwards.
     """
     import asyncio
+    global _crafted_sync_status
     from sv_common.guild_sync.item_recipe_link_sync import discover_and_link_crafted_items
+
+    if _crafted_sync_status["running"]:
+        return {"ok": False, "error": "Crafted item sync already in progress — check status."}
 
     pool   = _pool(request)
     client = await _get_blizzard_client(request)
 
+    _crafted_sync_status.update({
+        "running": True,
+        "phase_label": "Equipment match",
+        "phase_2a_stubbed": 0,
+        "phase_2a_linked": 0,
+        "phase_2b_checked": 0,
+        "phase_2b_stubbed": 0,
+        "phase_2b_linked": 0,
+        "phase_2b_errors": 0,
+        "started_at": datetime.now(timezone.utc),
+        "finished_at": None,
+    })
+
     async def _run():
+        global _crafted_sync_status
         try:
+            _crafted_sync_status["phase_label"] = "Equipment match"
             stats = await discover_and_link_crafted_items(pool, client)
+            _crafted_sync_status.update({
+                "running": False,
+                "phase_label": "Done",
+                "phase_2a_stubbed": stats.get("phase_2a_stubbed", 0),
+                "phase_2a_linked": stats.get("phase_2a_linked", 0),
+                "phase_2b_checked": stats.get("phase_2b_checked", 0),
+                "phase_2b_stubbed": stats.get("phase_2b_stubbed", 0),
+                "phase_2b_linked": stats.get("phase_2b_linked", 0),
+                "phase_2b_errors": stats.get("phase_2b_errors", 0),
+                "finished_at": datetime.now(timezone.utc),
+            })
             logger.info("Crafted item discovery complete: %s", stats)
         except Exception as exc:
+            _crafted_sync_status.update({
+                "running": False,
+                "phase_label": "Error",
+                "finished_at": datetime.now(timezone.utc),
+            })
             logger.error("Crafted item discovery background task failed: %s", exc, exc_info=True)
 
     asyncio.create_task(_run())
-    return {
-        "ok": True,
-        "message": (
-            "Crafted item discovery started in background. "
-            "This takes 1–3 minutes — watch server logs for progress. "
-            "Run Enrich Items when done."
-        ),
-    }
+    return {"ok": True, "started": True}
 
 
 @router.post("/sync-legacy-dungeons")

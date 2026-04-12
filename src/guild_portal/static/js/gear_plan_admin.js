@@ -1632,8 +1632,11 @@ async function syncLegacyDungeons() {
     }
 }
 
+let _craftedSyncPollInterval = null;
+
 async function syncCraftedItems() {
     const btn = document.getElementById('sync-crafted-items-btn');
+    if (_craftedSyncPollInterval) return;  // already polling
     _setBtnRunning(btn);
     setStatusHtml('<span class="spinner"></span> Starting crafted item discovery…', 'running');
 
@@ -1647,16 +1650,46 @@ async function syncCraftedItems() {
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || d.detail || 'Failed to start');
 
-        // Runs in background — prompt user to run Enrich Items when done.
-        setStatus(
-            'Crafted item discovery running in background (~1–3 min). Run Enrich Items (Step 2) when complete.',
-            'info'
-        );
+        _startCraftedSyncPoll(btn);
     } catch (err) {
         setStatus('Crafted item sync failed: ' + err.message, 'error');
-    } finally {
         _setBtnDone(btn);
     }
+}
+
+function _startCraftedSyncPoll(btn) {
+    _craftedSyncPollInterval = setInterval(async () => {
+        try {
+            const r = await fetch('/api/v1/admin/bis/sync-crafted-items');
+            const d = await r.json();
+
+            if (d.running) {
+                const phase = d.phase_label || 'Running';
+                const checked = d.phase_2b_checked || 0;
+                setStatusHtml(
+                    `<span class="spinner"></span> Crafted item discovery — ${phase}` +
+                    (checked > 0 ? ` (${checked} recipes searched…)` : '') + '…',
+                    'running'
+                );
+            } else if (d.finished_at) {
+                clearInterval(_craftedSyncPollInterval);
+                _craftedSyncPollInterval = null;
+                _setBtnDone(btn);
+                const linked = (d.phase_2a_linked || 0) + (d.phase_2b_linked || 0);
+                const stubbed = (d.phase_2a_stubbed || 0) + (d.phase_2b_stubbed || 0);
+                const errors = d.phase_2b_errors || 0;
+                const errPart = errors > 0 ? `, ${errors} errors` : '';
+                if (d.phase_label === 'Error') {
+                    setStatus('Crafted item sync failed — check server logs.', 'error');
+                } else {
+                    setStatus(
+                        `Crafted item sync complete — ${linked} items linked, ${stubbed} new stubs${errPart}. Run Enrich Items (Step 2) next.`,
+                        errors > 0 ? 'partial' : 'success'
+                    );
+                }
+            }
+        } catch (_) { /* ignore transient poll errors */ }
+    }, 2000);
 }
 
 async function loadItemSources() {
