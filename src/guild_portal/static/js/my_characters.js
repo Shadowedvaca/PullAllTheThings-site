@@ -2832,7 +2832,7 @@ function _gpLaunchTour() {
   t.addStep({
     id: 'sync-now',
     title: 'Sync with Blizzard',
-    text: 'Hit <strong>Sync Now</strong> to pull the latest data from Blizzard. Great to do at the start of each week after raid night.',
+    text: 'Hit <strong>Sync Now</strong> to pull the latest data from Blizzard. Great to do before you check your vault!',
     attachTo: at('#mcn-gp-btn-sync', 'bottom'),
     when: hl(EQUIPPED_SEL),
     buttons: [btnBack(t), btnNext(t)],
