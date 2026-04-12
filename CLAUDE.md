@@ -235,12 +235,19 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **Phase 1E.7+ complete** — hotfixes merged PRs #27 + #28, tagged `prod-v0.16.1` / `prod-v0.16.2`. No migrations — backend only.
+  - **PR #27** (`fix/gear-plan-faq-link`): fixed broken FAQ link (prod-v0.16.1).
+  - **PR #28** (`feature/gear-plan-phase-1e6`): fixed tier/catalyst section in slot drawer — all 9 class set piece slots now work correctly (prod-v0.16.2).
+    - Removed `/item-set=` tooltip requirement (excluded back/wrist/waist/feet catalyst slots).
+    - Replaced armor-type branching with class name substring match — discriminates Druid from all leather classes.
+    - Added `OR NOT EXISTS (source rows)` for catalyst slots (back/wrist/waist/feet have no Blizzard Journal source rows).
 - **Phase 1E.7 complete** — merged PR #26, tagged `prod-v0.16.0`. No migrations — frontend only.
   - **Guided tour.** Self-hosted Shepherd.js v11.2.0 (`static/js/vendor/shepherd.min.js` + `static/css/vendor/shepherd.css`). `?` button next to "GEAR PLAN" heading launches a 10-stop overlay tour. Auto-fires once on first visit via `localStorage` key `patt_gear_tour_v1`; `?` button re-launches anytime. Tour order: Equipped Source → Sync Now → Import SimC → BIS Sourcing intro → BIS dropdown → Hero Talent (conditional) → Fill BIS → Paperdoll (both columns highlighted) → Slot Detail (head slot auto-opens) → Gear Table. Each stop highlights the relevant whole section with a gold outline. Sync Now and Fill BIS are blocked during the tour to prevent DOM teardown.
   - **FAQ accordion.** 5 collapsible `<details>` entries at the bottom of the Gear tab: where the plan came from, SimC addon step-by-step tutorial, RaidBots vs BIS, lock/exclude how-to, quality track explainer (**V**eteran / **C**hampion / **H**ero / **M**ythic with bold first letter).
   - Frontend: `my_characters.js` v2.3.0, `my_characters.css` v2.0.0.
 - **Last migration:** 0094
-- **Last prod tag:** `prod-v0.16.0`
+- **Last migration:** 0094
+- **Last prod tag:** `prod-v0.16.2`
 - **Active branch:** `main`
 - **Next:** Phase 1F — TBD.
 
