@@ -2802,6 +2802,18 @@ function _gpLaunchTour() {
       : undefined;
   }
 
+  // Helper: highlight a whole section panel while popup points at a sub-element
+  function hl(sectionSel) {
+    const HL = 'mcn-shepherd-highlight';
+    return {
+      show() { document.querySelector(sectionSel)?.classList.add(HL); },
+      hide() { document.querySelector(sectionSel)?.classList.remove(HL); },
+    };
+  }
+
+  const EQUIPPED_SEL = '.mcn-gp-section:first-of-type';
+  const BIS_SEL      = '.mcn-gp-sections > .mcn-gp-section:nth-child(2)';
+
   const t = _gpTour;
 
   // ── Stop 1: Equipped Gear Source section ─────────────────────────────────
@@ -2809,7 +2821,7 @@ function _gpLaunchTour() {
     id: 'equipped-source',
     title: 'Your Equipped Gear',
     text: 'This section reflects what you\'re currently wearing in-game. Blizzard\'s API can lag 24–72 hours after you log out, so the snapshot here may be a day or two behind.',
-    attachTo: at('.mcn-gp-section:first-of-type', 'right'),
+    attachTo: at(EQUIPPED_SEL, 'right'),
     highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnNext(t)],
   });
@@ -2820,7 +2832,7 @@ function _gpLaunchTour() {
     title: 'Sync with Blizzard',
     text: 'Hit <strong>Sync Now</strong> to pull the latest data from Blizzard. Great to do at the start of each week after raid night.',
     attachTo: at('#mcn-gp-btn-sync', 'bottom'),
-    highlightClass: 'mcn-shepherd-highlight',
+    when: hl(EQUIPPED_SEL),
     buttons: [btnBack(t), btnNext(t)],
   });
 
@@ -2829,8 +2841,8 @@ function _gpLaunchTour() {
     id: 'simc-tab',
     title: 'Import SimC — Instant Update',
     text: 'If the Blizzard data is still stale, switch to <strong>Import SimC</strong>. Install the Simulationcraft addon, type <code>/simc</code> in WoW, paste the output here, and your gear updates immediately — no waiting. The FAQ at the bottom of this page has step-by-step instructions.',
-    attachTo: at('.mcn-gp-section:first-of-type .mcn-gp-section__tabs', 'bottom'),
-    highlightClass: 'mcn-shepherd-highlight',
+    attachTo: at(`${EQUIPPED_SEL} .mcn-gp-section__tabs`, 'bottom'),
+    when: hl(EQUIPPED_SEL),
     buttons: [btnBack(t), btnNext(t)],
   });
 
@@ -2838,23 +2850,22 @@ function _gpLaunchTour() {
   t.addStep({
     id: 'bis-sourcing',
     title: 'BIS Goals',
-    text: 'The right section is where you configure your Best-in-Slot goals — what you\'re working toward for each slot. There are a few ways to set this up.',
-    attachTo: at('.mcn-gp-section:last-of-type', 'left'),
+    text: 'Now the right section: your Best-in-Slot goals. This is what you\'re working toward for each slot. There are a few ways to set this up — pick a guide, use your current gear as a baseline, or import from SimC.',
+    attachTo: at(BIS_SEL, 'left'),
     highlightClass: 'mcn-shepherd-highlight',
     buttons: [btnBack(t), btnNext(t)],
   });
 
   // ── Stop 5: BIS List dropdown ─────────────────────────────────────────────
   // Ensure guide tab is visible
-  const guideTabEl = document.querySelector('#mcn-gp-panel-bis-guide');
-  if (guideTabEl?.hidden) _gpOnBisTab('guide');
+  if (document.querySelector('#mcn-gp-panel-bis-guide')?.hidden) _gpOnBisTab('guide');
 
   t.addStep({
     id: 'bis-source-sel',
     title: 'Pick Your Guide',
     text: 'Select your BIS source here. <strong>Wowhead Overall</strong> is a great starting point — it loads the full ranked gear list from Wowhead\'s spec guide for your spec, covering both raid drops and M+ in one list.',
     attachTo: at('#mcn-gp-src-sel', 'bottom'),
-    highlightClass: 'mcn-shepherd-highlight',
+    when: hl(BIS_SEL),
     buttons: [btnBack(t), btnNext(t)],
   });
 
@@ -2865,7 +2876,7 @@ function _gpLaunchTour() {
       title: 'Hero Talent',
       text: 'Your spec has hero talent variants with different BIS lists. Pick the tree you\'re playing so the recommendations match your build.',
       attachTo: at('#mcn-gp-ht-sel', 'bottom'),
-      highlightClass: 'mcn-shepherd-highlight',
+      when: hl(BIS_SEL),
       buttons: [btnBack(t), btnNext(t)],
     });
   }
@@ -2876,33 +2887,40 @@ function _gpLaunchTour() {
     title: 'Fill BIS',
     text: 'Click <strong>Fill BIS</strong> to populate every unlocked slot with the top-ranked recommendation from your chosen guide. You can run this anytime — locked slots are always preserved.',
     attachTo: at('#mcn-gp-btn-fill', 'bottom'),
-    highlightClass: 'mcn-shepherd-highlight',
+    when: hl(BIS_SEL),
     buttons: [btnBack(t), btnNext(t)],
   });
 
-  // ── Stop 8: Paperdoll layout ──────────────────────────────────────────────
+  // ── Stop 8: Paperdoll layout — highlight both columns ─────────────────────
   t.addStep({
     id: 'paperdoll',
     title: 'Gear Slots',
     text: 'The columns on either side of the screen are your paperdoll. Each slot shows both your <strong>equipped item</strong> (inner side, closer to center) and your <strong>BIS goal</strong> (outer edge). Slots that have an achievable upgrade are highlighted in gold.',
     attachTo: at('#mcn-left-paperdoll', 'right'),
-    highlightClass: 'mcn-shepherd-highlight',
+    when: {
+      show() {
+        document.getElementById('mcn-left-paperdoll')?.classList.add('mcn-shepherd-highlight');
+        document.getElementById('mcn-right-paperdoll')?.classList.add('mcn-shepherd-highlight');
+      },
+      hide() {
+        document.getElementById('mcn-left-paperdoll')?.classList.remove('mcn-shepherd-highlight');
+        document.getElementById('mcn-right-paperdoll')?.classList.remove('mcn-shepherd-highlight');
+      },
+    },
     buttons: [btnBack(t), btnNext(t)],
   });
 
   // ── Stop 9: Slot detail — open head slot so the panel is visible ──────────
   t.addStep({
     id: 'slot-detail',
-    title: 'Slot Detail',
-    text: 'Click any slot card (or any row in the table below) to open its detail view. Here you\'ll see exactly why an item is recommended, ranked alternatives, where it drops, and controls to <strong>lock</strong> a slot or <strong>exclude</strong> items you don\'t want in your plan.',
+    title: 'Slot Detail Panel',
+    text: 'Click any slot card or table row to open this detail view. Here you can see exactly why an item is recommended, ranked alternatives, where it drops, and controls to <strong>lock</strong> a slot or <strong>exclude</strong> items you don\'t want showing up in recommendations.',
     attachTo: at('#mcn-gp-slot-detail', 'bottom'),
     highlightClass: 'mcn-shepherd-highlight',
     beforeShowPromise() {
       return new Promise(resolve => {
-        // Open the Head slot so the detail panel is visible for this step
-        const firstSlot = GP_LEFT_BODY_SLOTS[0] || 'head';
-        _gpSelectSlotInCenter(firstSlot);
-        setTimeout(resolve, 120);
+        _gpSelectSlotInCenter(GP_LEFT_BODY_SLOTS[0] || 'head');
+        setTimeout(resolve, 150);
       });
     },
     buttons: [btnBack(t), btnNext(t)],
