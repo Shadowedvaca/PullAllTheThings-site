@@ -515,4 +515,57 @@ async def enrich_unenriched_items(
         await asyncio.gather(*[_process_one(iid, http_client) for iid in item_ids])
 
     logger.info("Enriched %d items (%d errors)", enriched, len(errors))
+
+    # Backfill armor_type from Wowhead tooltip HTML for any item that has a
+    # tooltip but still lacks armor_type (e.g. items enriched before this
+    # field was populated, or items stubbed via BIS sync with slot set but
+    # no armor_type).  Safe to run repeatedly — only touches NULL rows.
+    backfilled = await backfill_armor_type_from_tooltip(pool)
+    if backfilled:
+        logger.info("backfill_armor_type_from_tooltip: updated %d rows", backfilled)
+
     return enriched, errors
+
+
+async def backfill_armor_type_from_tooltip(pool: asyncpg.Pool) -> int:
+    """Parse armor_type from existing Wowhead tooltip HTML for items missing it.
+
+    Wowhead tooltips embed the armor subclass as:
+      <!--scstart4:N--><span class="q1">Mail</span><!--scend-->
+    where class 4 = Armor and N is the subclass index.
+
+    Only updates rows in equippable armor slots (head/shoulder/chest/etc.) that
+    have a tooltip but NULL armor_type.  Returns the number of rows updated.
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            UPDATE guild_identity.wow_items
+               SET armor_type = CASE
+                   WHEN wowhead_tooltip_html ~ $1 THEN 'cloth'
+                   WHEN wowhead_tooltip_html ~ $2 THEN 'leather'
+                   WHEN wowhead_tooltip_html ~ $3 THEN 'mail'
+                   WHEN wowhead_tooltip_html ~ $4 THEN 'plate'
+               END
+             WHERE armor_type IS NULL
+               AND wowhead_tooltip_html IS NOT NULL
+               AND slot_type IS NOT NULL
+               AND slot_type != 'other'
+               AND slot_type NOT IN (
+                   'neck', 'ring_1', 'ring_2',
+                   'trinket_1', 'trinket_2',
+                   'main_hand', 'off_hand', 'back'
+               )
+               AND (
+                   wowhead_tooltip_html ~ $1
+                   OR wowhead_tooltip_html ~ $2
+                   OR wowhead_tooltip_html ~ $3
+                   OR wowhead_tooltip_html ~ $4
+               )
+            """,
+            r"<!--scstart4:[0-9]+--><span[^>]*>Cloth</span>",
+            r"<!--scstart4:[0-9]+--><span[^>]*>Leather</span>",
+            r"<!--scstart4:[0-9]+--><span[^>]*>Mail</span>",
+            r"<!--scstart4:[0-9]+--><span[^>]*>Plate</span>",
+        )
+    return int(result.split()[-1])
