@@ -1725,6 +1725,17 @@ async def get_available_items(
                 tier_extra_clauses.append(f"wi.id != ALL(${len(tier_params)}::int[])")
 
             extra_sql = (" AND " + " AND ".join(tier_extra_clauses)) if tier_extra_clauses else ""
+
+            # Only show tier pieces whose sources are tied to the current raid.
+            # Tier pieces have all direct sources flagged as junk after process_tier_tokens,
+            # so we check across ALL sources (junk or not) — we only care that the item
+            # is linked to a current-season raid instance, not which source is canonical.
+            if raid_ids:
+                tier_params.append(raid_ids)
+                raid_scope = f"AND is2.blizzard_instance_id = ANY(${len(tier_params)})"
+            else:
+                raid_scope = ""  # no active season configured — return nothing
+
             tier_rows = await conn.fetch(
                 f"""
                 SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
@@ -1734,12 +1745,13 @@ async def get_available_items(
                    AND EXISTS (
                        SELECT 1 FROM guild_identity.item_sources is2
                         WHERE is2.item_id = wi.id
+                          {raid_scope}
                    )
                    {extra_sql}
                  ORDER BY wi.name
                 """,
                 *tier_params,
-            )
+            ) if raid_ids else []
 
     # ── Split drop rows by instance_type ──────────────────────────────────────
     raid_map:    dict[int, dict] = {}
