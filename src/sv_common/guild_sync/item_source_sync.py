@@ -328,12 +328,12 @@ async def enrich_catalyst_tier_items(
         if not tier_items:
             return 0, []
 
-        # Build slot → [(encounter_name, instance_name, instance_type)] from
-        # existing boss sources (raid + world_boss).
+        # Build slot → [(encounter_name, instance_name, instance_type, blizzard_instance_id)]
+        # from existing boss sources (raid + world_boss).
         boss_rows = await conn.fetch(
             """
             SELECT DISTINCT is2.encounter_name, is2.instance_name,
-                            is2.instance_type, wi.slot_type
+                            is2.instance_type, is2.blizzard_instance_id, wi.slot_type
               FROM guild_identity.item_sources is2
               JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
              WHERE is2.instance_type IN ('raid', 'world_boss')
@@ -342,12 +342,12 @@ async def enrich_catalyst_tier_items(
             list(_TIER_SLOTS),
         )
 
-        slot_to_bosses: dict[str, list[tuple[str, str, str]]] = {}
+        slot_to_bosses: dict[str, list[tuple[str, str, str, Optional[int]]]] = {}
         for r in boss_rows:
             st = r["slot_type"]
             if st:
                 slot_to_bosses.setdefault(st, []).append(
-                    (r["encounter_name"], r["instance_name"], r["instance_type"])
+                    (r["encounter_name"], r["instance_name"], r["instance_type"], r["blizzard_instance_id"])
                 )
 
         logger.info(
@@ -358,23 +358,27 @@ async def enrich_catalyst_tier_items(
         for tier in tier_items:
             bosses = slot_to_bosses.get(tier["eff_slot"], [])
             if not bosses:
-                bosses = [("Revival Catalyst", "Revival Catalyst", "raid")]
+                bosses = [("Revival Catalyst", "Revival Catalyst", "raid", None)]
 
-            for enc_name, inst_name, inst_type in bosses:
+            for enc_name, inst_name, inst_type, blizzard_inst_id in bosses:
                 try:
                     await conn.execute(
                         """
                         INSERT INTO guild_identity.item_sources
-                               (item_id, instance_type, encounter_name, instance_name)
-                        VALUES ($1, $2, $3, $4)
+                               (item_id, instance_type, encounter_name, instance_name,
+                                blizzard_instance_id)
+                        VALUES ($1, $2, $3, $4, $5)
                         ON CONFLICT (item_id, instance_type, encounter_name)
                         DO UPDATE SET
-                            instance_name = EXCLUDED.instance_name
+                            instance_name        = EXCLUDED.instance_name,
+                            blizzard_instance_id = COALESCE(EXCLUDED.blizzard_instance_id,
+                                                            guild_identity.item_sources.blizzard_instance_id)
                         """,
                         tier["wow_item_id"],
                         inst_type,
                         enc_name,
                         inst_name,
+                        blizzard_inst_id,
                     )
                     added += 1
                 except Exception as exc:

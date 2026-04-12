@@ -1726,13 +1726,19 @@ async def get_available_items(
 
             extra_sql = (" AND " + " AND ".join(tier_extra_clauses)) if tier_extra_clauses else ""
 
-            # Only show tier pieces whose sources are tied to the current raid.
-            # Tier pieces have all direct sources flagged as junk after process_tier_tokens,
-            # so we check across ALL sources (junk or not) — we only care that the item
-            # is linked to a current-season raid instance, not which source is canonical.
+            # Scope tier pieces to the current season's raid.
+            # enrich_catalyst_tier_items() mirrors boss instance_name values into tier
+            # piece source rows but does NOT copy blizzard_instance_id (it stays NULL).
+            # So we match by instance_name: subquery the current raid's instance names
+            # from items whose sources DO have blizzard_instance_id set, then check that
+            # the tier piece has a source with one of those names.
             if raid_ids:
                 tier_params.append(raid_ids)
-                raid_scope = f"AND is2.blizzard_instance_id = ANY(${len(tier_params)})"
+                raid_scope = f"""AND is2.instance_name IN (
+                           SELECT DISTINCT is3.instance_name
+                             FROM guild_identity.item_sources is3
+                            WHERE is3.blizzard_instance_id = ANY(${len(tier_params)})
+                       )"""
             else:
                 raid_scope = ""  # no active season configured — return nothing
 
