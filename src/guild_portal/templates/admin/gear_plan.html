@@ -457,64 +457,15 @@ select.gp-select {
     {% if is_gl %}
     <div class="gp-workflow">
 
-        {# Step 1 — Sync Loot Tables #}
+        {# Step 1 — Sync BIS Lists #}
+        {# MUST run first: populates bis_list_entries and stubs wow_items rows that #}
+        {# Enrich Items (Step 2) needs to process.  Run quarterly or after new content. #}
         <div class="gp-step">
             <div class="gp-step__header">
                 <span class="gp-step__num">Step 1</span>
-                <span class="gp-step__title">Sync Loot Tables</span>
-            </div>
-            <p class="gp-step__desc">Pull boss/item data from the Blizzard Journal API. Run once per season after new content launches, or after a content patch adds new encounters.</p>
-            <div class="gp-step__controls">
-                <button id="sync-item-sources-btn" class="btn-sm btn-primary"
-                        onclick="syncItemSources()"
-                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}>
-                    Sync Loot Tables
-                </button>
-                <button id="sync-legacy-dungeons-btn" class="btn-sm btn-secondary"
-                        onclick="syncLegacyDungeons()"
-                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}
-                        title="Sync dungeon instances from all prior expansions (legacy M+ dungeons not in Sync Loot Tables)">
-                    Sync Legacy Dungeons
-                </button>
-            </div>
-        </div>
-
-        {# Step 2 — Enrich Items #}
-        <div class="gp-step">
-            <div class="gp-step__header">
-                <span class="gp-step__num">Step 2</span>
-                <span class="gp-step__title">Enrich Items</span>
-            </div>
-            <p class="gp-step__desc">Fetch Wowhead tooltips for any items that were stubbed without slot or tooltip data (slot_type = 'other'). Required before Step 3.</p>
-            <div class="gp-step__controls">
-                <button id="enrich-items-btn" class="btn-sm btn-secondary" onclick="enrichItems()">
-                    Enrich Items
-                </button>
-            </div>
-        </div>
-
-        {# Step 3 — Process Tier Tokens #}
-        <div class="gp-step">
-            <div class="gp-step__header">
-                <span class="gp-step__num">Step 3</span>
-                <span class="gp-step__title">Process Tier Tokens</span>
-            </div>
-            <p class="gp-step__desc">Parse enriched token tooltips to detect slot and eligible classes. Populates the tier token translation table and flags suspected junk sources. Safe to re-run.</p>
-            <div class="gp-step__controls">
-                <button id="process-tier-tokens-btn" class="btn-sm btn-secondary" onclick="processTierTokens()">
-                    Process Tier Tokens
-                </button>
-            </div>
-            <div class="gp-step__lastrun" id="tier-tokens-last-run"></div>
-        </div>
-
-        {# Step 4 — Sync BIS Lists #}
-        <div class="gp-step">
-            <div class="gp-step__header">
-                <span class="gp-step__num">Step 4</span>
                 <span class="gp-step__title">Sync BIS Lists</span>
             </div>
-            <p class="gp-step__desc">Scrape u.gg and Wowhead BIS recommendations for all specs. Discover URLs first if this is a fresh season. Re-sync Errors retries only failed targets.</p>
+            <p class="gp-step__desc">Scrape u.gg and Wowhead BIS recommendations for all specs. Populates item stubs and BIS entries that Step 2 enriches. Discover URLs first if this is a fresh season. Re-sync Errors retries only failed targets.</p>
             <div class="gp-step__controls">
                 <span class="gp-controls__label">Website:</span>
                 <select class="gp-select" id="sync-origin-select">
@@ -531,6 +482,58 @@ select.gp-select {
                 <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
                 <button id="resync-errors-btn" class="btn-sm btn-secondary" onclick="resyncErrors()">Re-sync Errors</button>
             </div>
+        </div>
+
+        {# Step 2 — Sync Loot Tables #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 2</span>
+                <span class="gp-step__title">Sync Loot Tables</span>
+            </div>
+            <p class="gp-step__desc">Pull boss/item data from the Blizzard Journal API. Adds encounter source rows for raid and dungeon drops. Run once per season after new content launches, or after a content patch adds new encounters.</p>
+            <div class="gp-step__controls">
+                <button id="sync-item-sources-btn" class="btn-sm btn-primary"
+                        onclick="syncItemSources()"
+                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}>
+                    Sync Loot Tables
+                </button>
+                <button id="sync-legacy-dungeons-btn" class="btn-sm btn-secondary"
+                        onclick="syncLegacyDungeons()"
+                        {% if not has_blizzard %}disabled title="Blizzard API credentials not configured — set them in Admin → Site Config"{% endif %}
+                        title="Sync dungeon instances from all prior expansions (legacy M+ dungeons not in Sync Loot Tables)">
+                    Sync Legacy Dungeons
+                </button>
+            </div>
+        </div>
+
+        {# Step 3 — Enrich Items #}
+        {# Must run after Step 1 (BIS Sync) so new BIS entries exist to process. #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 3</span>
+                <span class="gp-step__title">Enrich Items</span>
+            </div>
+            <p class="gp-step__desc">Fetch Wowhead tooltips and Blizzard API metadata for items discovered in Steps 1 &amp; 2. Backfills slot type, armor type, and tooltip HTML. Must run after Step 1. Required before Step 4.</p>
+            <div class="gp-step__controls">
+                <button id="enrich-items-btn" class="btn-sm btn-secondary" onclick="enrichItems()">
+                    Enrich Items
+                </button>
+            </div>
+        </div>
+
+        {# Step 4 — Process Tier Tokens #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 4</span>
+                <span class="gp-step__title">Process Tier Tokens</span>
+            </div>
+            <p class="gp-step__desc">Parse enriched token tooltips to detect slot and eligible classes. Populates the tier token translation table and flags suspected junk sources. Safe to re-run.</p>
+            <div class="gp-step__controls">
+                <button id="process-tier-tokens-btn" class="btn-sm btn-secondary" onclick="processTierTokens()">
+                    Process Tier Tokens
+                </button>
+            </div>
+            <div class="gp-step__lastrun" id="tier-tokens-last-run"></div>
         </div>
 
         {# Step 5 — Manual Import #}

@@ -1720,38 +1720,62 @@ async def get_available_items(
         # Returns None for non-tier slots so the frontend hides the section.
         tier_rows: list = []
         if slot in _TIER_CATALYST_SLOTS and class_name and raid_ids:
-            # Shared raid-scope subquery text (reused in both paths)
-            _raid_scope_sql = """
-                SELECT DISTINCT is3.instance_name
-                  FROM guild_identity.item_sources is3
-                 WHERE is3.blizzard_instance_id = ANY($RAIDPARAM$)
-            """
+            t_armor = CLASS_ARMOR_TYPE.get(class_name, "")
 
-            excl_clause = ""
-            excl_params: list = []
-            if excluded_ids:
-                excl_params = [excluded_ids]
+            excl_params: list = [excluded_ids] if excluded_ids else []
 
             if slot in _MAIN_TIER_SLOTS:
-                # $1=slot_type, $2='%ClassName%', $3=raid_ids, [$4=excluded_ids]
-                params: list = [slot_type, f"%{class_name}%", raid_ids] + excl_params
-                excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
+                # $1=slot_type  $2='%ClassName%'  $3=raid_ids  $4=class_name(exact)
+                # [$5=armor_type]  [$N=excluded_ids]
+                params: list = [slot_type, f"%{class_name}%", raid_ids, class_name]
+                if t_armor:
+                    params.append(t_armor)
+                    fallback_armor_sql = f"AND wi.armor_type = ${len(params)}"
+                else:
+                    fallback_armor_sql = ""
+                excl_sql = ""
+                if excl_params:
+                    params += excl_params
+                    excl_sql = f"AND wi.id != ALL(${len(params)}::int[])"
+
                 tier_rows = await conn.fetch(
                     f"""
                     SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
                       FROM guild_identity.wow_items wi
                      WHERE wi.slot_type = $1
-                       AND wi.wowhead_tooltip_html LIKE $2
-                       AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
-                       AND EXISTS (
-                               SELECT 1 FROM guild_identity.item_sources is2
-                                WHERE is2.item_id = wi.id
-                                  AND is2.instance_name IN (
-                                      SELECT DISTINCT is3.instance_name
-                                        FROM guild_identity.item_sources is3
-                                       WHERE is3.blizzard_instance_id = ANY($3)
-                                  )
+                       AND (
+                           -- PRIMARY: Wowhead tooltip has class name + /item-set= link
+                           --          + encounter source in current raid.
+                           (    wi.wowhead_tooltip_html LIKE $2
+                            AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                            AND EXISTS (
+                                    SELECT 1 FROM guild_identity.item_sources is2
+                                     WHERE is2.item_id = wi.id
+                                       AND is2.instance_name IN (
+                                           SELECT DISTINCT is3.instance_name
+                                             FROM guild_identity.item_sources is3
+                                            WHERE is3.blizzard_instance_id = ANY($3)
+                                       )
+                                )
                            )
+                           OR
+                           -- FALLBACK: for new-expansion items whose Wowhead pages
+                           --   don't exist yet.  armor_type is set via Blizzard API
+                           --   (Phase 3 of Enrich Items); item must have no Journal
+                           --   source rows and must be in BIS for this class.
+                           (    {fallback_armor_sql.lstrip("AND ") if fallback_armor_sql else "TRUE"}
+                            AND NOT EXISTS (
+                                    SELECT 1 FROM guild_identity.item_sources s
+                                     WHERE s.item_id = wi.id
+                                )
+                            AND EXISTS (
+                                    SELECT 1 FROM guild_identity.bis_list_entries ble
+                                      JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
+                                      JOIN guild_identity.classes cl ON cl.id = sp.class_id
+                                     WHERE ble.item_id = wi.id AND cl.name = $4
+                                )
+                           )
+                       )
                        {excl_sql}
                      ORDER BY wi.name
                     """,
@@ -1759,28 +1783,44 @@ async def get_available_items(
                 )
 
             else:
-                # Catalyst slot — derive set-name suffix from the main tier anchor.
-                # If the anchor query returns nothing (e.g., tooltips not yet enriched
-                # on this environment), we return nothing rather than showing junk.
+                # Catalyst slot — derive set-name suffix from any main tier anchor.
+                # Anchor uses the same primary/fallback logic so it works even when
+                # Wowhead doesn't yet have the item page.
                 anchor = await conn.fetchrow(
                     """
                     SELECT wi.name
                       FROM guild_identity.wow_items wi
                      WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
-                       AND wi.wowhead_tooltip_html LIKE $1
-                       AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
-                       AND EXISTS (
-                               SELECT 1 FROM guild_identity.item_sources is2
-                                WHERE is2.item_id = wi.id
-                                  AND is2.instance_name IN (
-                                      SELECT DISTINCT is3.instance_name
-                                        FROM guild_identity.item_sources is3
-                                       WHERE is3.blizzard_instance_id = ANY($2)
-                                  )
+                       AND (
+                           (    wi.wowhead_tooltip_html LIKE $1
+                            AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                            AND EXISTS (
+                                    SELECT 1 FROM guild_identity.item_sources is2
+                                     WHERE is2.item_id = wi.id
+                                       AND is2.instance_name IN (
+                                           SELECT DISTINCT is3.instance_name
+                                             FROM guild_identity.item_sources is3
+                                            WHERE is3.blizzard_instance_id = ANY($2)
+                                       )
+                                )
                            )
+                           OR
+                           (    wi.armor_type = $3
+                            AND NOT EXISTS (
+                                    SELECT 1 FROM guild_identity.item_sources s
+                                     WHERE s.item_id = wi.id
+                                )
+                            AND EXISTS (
+                                    SELECT 1 FROM guild_identity.bis_list_entries ble
+                                      JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
+                                      JOIN guild_identity.classes cl ON cl.id = sp.class_id
+                                     WHERE ble.item_id = wi.id AND cl.name = $4
+                                )
+                           )
+                       )
                      LIMIT 1
                     """,
-                    f"%{class_name}%", raid_ids,
+                    f"%{class_name}%", raid_ids, t_armor or "leather", class_name,
                 )
 
                 if anchor:
@@ -1788,17 +1828,25 @@ async def get_available_items(
                     of_idx = anchor_name.find(" of ")
                     if of_idx >= 0:
                         set_suffix = anchor_name[of_idx:]  # e.g. " of the Luminous Bloom"
-                        # $1=slot_type, $2='%ClassName%', $3='%% of the Luminous Bloom',
-                        # [$4=excluded_ids]
-                        params = [slot_type, f"%{class_name}%", f"%{set_suffix}"] + excl_params
+                        # $1=slot_type  $2='%ClassName%'  $3='% of the Luminous Bloom'
+                        # $4=class_name(exact)  [$5=excluded_ids]
+                        params = [slot_type, f"%{class_name}%", f"%{set_suffix}", class_name] + excl_params
                         excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
                         tier_rows = await conn.fetch(
                             f"""
                             SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
                               FROM guild_identity.wow_items wi
                              WHERE wi.slot_type = $1
-                               AND wi.wowhead_tooltip_html LIKE $2
                                AND wi.name LIKE $3
+                               AND (
+                                   wi.wowhead_tooltip_html LIKE $2
+                                   OR EXISTS (
+                                       SELECT 1 FROM guild_identity.bis_list_entries ble
+                                         JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
+                                         JOIN guild_identity.classes cl ON cl.id = sp.class_id
+                                        WHERE ble.item_id = wi.id AND cl.name = $4
+                                   )
+                               )
                                {excl_sql}
                              ORDER BY wi.name
                             """,
