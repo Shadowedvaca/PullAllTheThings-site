@@ -1231,6 +1231,61 @@ const GP_SLOT_LABELS = {
 // Fallback track colors before API data loads
 const GP_TRACK_FALLBACK = { V: '#22c55e', C: '#3b82f6', H: '#a855f7', M: '#f97316' };
 
+// ── Phase 1F: Trinket tier & item badge constants/utilities ───────────────────
+
+const GP_SOURCE_ICONS = {
+  wowhead:   '/static/img/sources/wowhead.svg',
+  icy_veins: '/static/img/sources/icy-veins.svg',
+  archon:    '/static/img/sources/archon.svg',
+};
+
+// Returns an <img> tag for a source origin, or '' if unknown.
+function _gpSourceIcon(origin) {
+  const src = GP_SOURCE_ICONS[origin];
+  return src ? `<img src="${src}" class="gp-source-icon" alt="${_gpEsc(origin)}" loading="lazy">` : '';
+}
+
+/**
+ * Render a tier badge (or badges) for an array of source_ratings.
+ * ratings = [{source_origin, tier}, ...]
+ *
+ * When all sources agree on the same tier:  [icon1][icon2] S  (one badge)
+ * When sources disagree:  [icon1] S   [icon2] A            (two badges)
+ */
+function _gpRenderTierBadge(ratings) {
+  if (!ratings || !ratings.length) return '';
+  // Group by tier
+  const byTier = {};
+  for (const r of ratings) {
+    (byTier[r.tier] = byTier[r.tier] || []).push(r);
+  }
+  const tierKeys = Object.keys(byTier);
+  if (tierKeys.length === 1) {
+    const tier = tierKeys[0];
+    const icons = [...new Set(byTier[tier].map(r => r.source_origin))]
+      .map(_gpSourceIcon).join('');
+    return `<span class="gp-tier-badge gp-tier-${tier.toLowerCase()}">${icons}${tier}</span>`;
+  }
+  // Sources disagree — one badge per source
+  return ratings.map(r =>
+    `<span class="gp-tier-badge gp-tier-${r.tier.toLowerCase()}">${_gpSourceIcon(r.source_origin)}${r.tier}</span>`
+  ).join('');
+}
+
+/**
+ * Render EQUIPPED / BIS pill badges.
+ * Returns HTML string (may be empty).
+ */
+function _gpRenderItemBadges(isEquipped, isBis) {
+  let html = '';
+  if (isEquipped) html += '<span class="gp-item-badge gp-item-badge--equipped">Equipped</span>';
+  if (isBis)      html += '<span class="gp-item-badge gp-item-badge--bis">BIS</span>';
+  return html;
+}
+
+// Trinket ratings cache: "charId:slot" → {status:'loading'|'done'|'error', data:{...}}
+const _gpTrinketCache = {};
+
 // ── Per-character cache ────────────────────────────────────────────────────────
 
 const _gpCache = {};       // charId → API data (plan, slots, bisSources, heroTalents, trackColors)

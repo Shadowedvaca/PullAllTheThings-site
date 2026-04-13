@@ -2466,3 +2466,58 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   background: #1a1a1e;
   border-color: #d4a84b;
 }
+
+/* ── Phase 1F: Trinket tier badges ──────────────────────────────────────── */
+
+.gp-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  padding: 0.1rem 0.38rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.gp-tier-badge + .gp-tier-badge { margin-left: 0.25rem; }
+
+.gp-tier-s { background: rgba(212,168,75,0.15); color: #d4a84b; border: 1px solid rgba(212,168,75,0.45); }
+.gp-tier-a { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.40); }
+.gp-tier-b { background: rgba(96,165,250,0.12); color: #60a5fa; border: 1px solid rgba(96,165,250,0.40); }
+.gp-tier-c { background: rgba(156,163,175,0.12); color: #9ca3af; border: 1px solid rgba(156,163,175,0.35); }
+.gp-tier-d { background: rgba(248,113,113,0.10); color: #f87171; border: 1px solid rgba(248,113,113,0.35); }
+.gp-tier-f { background: rgba(248,113,113,0.10); color: #f87171; border: 1px solid rgba(248,113,113,0.35); }
+
+.gp-source-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ── Phase 1F: EQUIPPED / BIS item badges ───────────────────────────────── */
+
+.gp-item-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.32rem;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-left: 0.28rem;
+}
+.gp-item-badge--equipped {
+  background: rgba(212,168,75,0.18);
+  color: #d4a84b;
+  border: 1px solid rgba(212,168,75,0.45);
+}
+.gp-item-badge--bis {
+  background: rgba(45,212,191,0.13);
+  color: #2dd4bf;
+  border: 1px solid rgba(45,212,191,0.40);
+}

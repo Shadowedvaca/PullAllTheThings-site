@@ -287,6 +287,38 @@ async def delete_gear_plan(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/{character_id}/trinket-ratings")
+async def get_trinket_ratings(
+    character_id: int,
+    slot: str,
+    request: Request,
+    current_player: Player = Depends(get_current_player),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return trinket tier ratings for a character's plan spec.
+
+    Query params:
+        slot — must be 'trinket_1' or 'trinket_2'
+
+    Returns tiers (S→F) with is_equipped, is_bis, is_available_this_season per item.
+    """
+    if slot not in ("trinket_1", "trinket_2"):
+        return JSONResponse({"ok": False, "error": "slot must be 'trinket_1' or 'trinket_2'"}, status_code=400)
+
+    if not await _verify_ownership(current_player, character_id, db):
+        return JSONResponse({"ok": False, "error": "Character not linked to your account"}, status_code=403)
+
+    pool = await _get_pool(request)
+    if not pool:
+        return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
+
+    data = await svc.get_trinket_ratings(pool, current_player.id, character_id, slot)
+    if data is None:
+        return JSONResponse({"ok": False, "error": "Invalid slot"}, status_code=400)
+
+    return JSONResponse({"ok": True, "data": data})
+
+
 @router.get("/{character_id}/available-items")
 async def get_available_items(
     character_id: int,
