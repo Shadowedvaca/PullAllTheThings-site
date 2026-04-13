@@ -235,22 +235,19 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 2A — Catalyst Item Discovery** — `prod-v0.17.0`, no new migrations. Migrations through 0095.
+- **Catalyst display fixes** — `prod-v0.17.3`, no new migrations. Migrations through 0095.
+  - **`gear_plan_service.py` anchor query**: decoupled from `current_raid_ids` — PRIMARY now checks `instance_type='raid'` (any raid source, not just current season); FALLBACK tightened to `wowhead_tooltip_html IS NULL` only, preventing enriched non-tier boss drops (e.g. "Mask of Darkest Intent") from corrupting the set suffix derivation.
+  - **Main-5 display fallback**: removed `NOT EXISTS(item_sources)` gate — tier items already have sources after first sync run, which was causing head/shoulder/chest/hands/legs to vanish from the drawer.
+  - **Catalyst slot display**: removed class filter entirely; tier set suffix is class-discriminated by name. Fixes leather cloaks (`armor_type='cloth'` regardless of wearer class) and items not in any BIS list.
+  - **`item_source_sync.py` Pass 2**: replaced `bis_list_entries` JOIN with direct `wow_items` suffix query so catalyst items not in any BIS list (e.g. leather cloaks) receive raid boss sources.
+- **Phase 2A — Catalyst Item Discovery** — `prod-v0.17.0`, no new migrations.
   - **3 new Blizzard Appearance API methods** on `BlizzardClient`: `get_item_appearance_set_index`, `get_item_appearance_set`, `get_item_appearance`.
-  - **`sync_catalyst_items_via_appearance()`** in `item_source_sync.py`: crawls current-expansion tier set appearance sets (identified by suffix matching against main-5 items with existing raid sources) → stubs catalyst-slot item IDs (back/wrist/waist/feet) into `wow_items`. Anchors to current expansion only; fetches appearances in parallel via `asyncio.gather`. Falls back to `sync_tier_set_completions` if appearance index unavailable.
-  - **`enrich_catalyst_tier_items` Pass 1 extended** to all 9 slots: catalyst-slot items with Wowhead `/item-set=` tooltip links now get boss sources directly (cloth wrist/back, mail feet/waist). Falls back to union of all main-5 bosses when no per-slot mapping exists.
-  - **Pass 2** (suffix matching) handles remaining catalyst-slot items not yet indexed by Wowhead.
-  - **Result on prod**: all BIS tier items across all armor types and all slots (including back/wrist/waist/feet) have correct boss sources.
-- **Crafted item display + gear plan polish** — `prod-v0.16.7` through `prod-v0.16.17`, no new migrations.
-  - **Admin gear plan step order rewritten** (ELT pattern): Step 1=Sync Loot Tables (Blizzard API), Step 2=Enrich Items (Wowhead), Step 3=Process Tier Tokens, Step 4=Sync BIS Lists (supplemental), Step 5=Bulk Populate.
-  - **Blizzard API Explorer** (`/admin/blizzard-api`, GL only, migration 0095).
-  - **Crafted item pipeline** (prod-v0.16.10–16): Blizzard Item Search API discovery, quality filter, parallel enrichment.
-  - **Gear plan FAQ** (prod-v0.16.17): "What does BiS actually mean?" first entry.
-- **Tier/catalyst hotfixes** — `prod-v0.16.3` through `prod-v0.16.7`: two-path tier query, catalyst anchor, fallback Blizzard item-set API.
+  - **`sync_catalyst_items_via_appearance()`** in `item_source_sync.py`: crawls tier set appearance sets → stubs catalyst-slot item IDs (back/wrist/waist/feet) into `wow_items`. Parallelized via `asyncio.gather`.
+  - **`enrich_catalyst_tier_items` Pass 1** extended to all 9 slots. **Pass 2** handles items not yet Wowhead-indexed.
 - **Last migration:** 0095
-- **Last prod tag:** `prod-v0.17.0`
+- **Last prod tag:** `prod-v0.17.3`
 - **Active branch:** `main`
-- **Next:** Phase 2B — add `quality_track VARCHAR(1)` to `wow_items`; Phase 2C — quality-aware display. See `reference/gear-plan-1-catalyst-fix.md`.
+- **Next:** Delves + World Boss loot phase — schema (`current_delve_ids`, `world_boss_instance_ids` on `patt.raid_seasons`), admin UI multi-select overhaul, sync for `instance_type='delve'`/`'world_boss'`, gear plan display groups. See `reference/gear-plan-2-delves-worldboss.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
