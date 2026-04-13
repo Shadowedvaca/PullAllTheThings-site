@@ -499,7 +499,7 @@ async def sync_catalyst_items_via_appearance(
                    SELECT 1 FROM guild_identity.bis_list_entries ble
                     WHERE ble.item_id = wi.id
                )
-             LIMIT 30
+             ORDER BY wi.slot_type, wi.name
             """
         )
 
@@ -587,13 +587,14 @@ async def sync_catalyst_items_via_appearance(
                 if not app_data:
                     continue
 
-                item_ids = [
-                    item.get("id")
+                # Extract (id, name) pairs — name is required by the NOT NULL constraint.
+                item_entries = [
+                    (item.get("id"), item.get("name") or "")
                     for item in app_data.get("items", [])
                     if item.get("id")
                 ]
 
-                for blizzard_item_id in item_ids:
+                for blizzard_item_id, item_name in item_entries:
                     existing = await conn.fetchval(
                         "SELECT id FROM guild_identity.wow_items "
                         "WHERE blizzard_item_id = $1",
@@ -602,15 +603,23 @@ async def sync_catalyst_items_via_appearance(
                     if existing:
                         continue
 
+                    if not item_name:
+                        errors.append(
+                            f"sync_catalyst_items: skipping item {blizzard_item_id} "
+                            f"— no name returned by appearance API"
+                        )
+                        continue
+
                     try:
                         await conn.execute(
                             """
                             INSERT INTO guild_identity.wow_items
-                                   (blizzard_item_id, slot_type)
-                            VALUES ($1, 'other')
+                                   (blizzard_item_id, name, slot_type)
+                            VALUES ($1, $2, 'other')
                             ON CONFLICT (blizzard_item_id) DO NOTHING
                             """,
                             blizzard_item_id,
+                            item_name,
                         )
                         stubbed += 1
                         logger.info(
