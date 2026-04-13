@@ -787,15 +787,33 @@ async def enrich_catalyst_tier_items(
                         )
 
         # ── Pass 2: catalyst slots (back/wrist/waist/feet) ───────────────────
-        # For items whose Wowhead page is not yet indexed (no tooltip HTML), Pass 1
-        # can't detect them via item-set links.  Derive the tier set suffix from
-        # Pass 1 items and find catalyst-slot BIS items whose names share that suffix.
+        # Suffix derivation is done independently of Pass 1's tier_items so that
+        # it works even after the first run has already added sources to main-5
+        # items (which would then fail the fallback's NOT EXISTS check).
+        # Query: any BIS item in main-5 tier slots with "of the X" naming and
+        # armor_type set — these are always the tier set anchors regardless of
+        # source status.
+        suffix_seed_rows = await conn.fetch(
+            """
+            SELECT DISTINCT wi.name
+              FROM guild_identity.wow_items wi
+              JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+             WHERE wi.slot_type = ANY($1::text[])
+               AND wi.name LIKE '% of %'
+               AND wi.armor_type IS NOT NULL
+               AND NOT EXISTS (
+                       SELECT 1 FROM guild_identity.item_recipe_links irl
+                        WHERE irl.item_id = wi.id
+                   )
+            """,
+            list(_TIER_SLOTS),
+        )
         tier_suffixes: set[str] = set()
-        for t in tier_items:
-            name = t["name"] or ""
+        for row in suffix_seed_rows:
+            name = row["name"] or ""
             idx = name.find(" of ")
             if idx >= 0:
-                tier_suffixes.add(name[idx:])  # e.g. " of the Luminous Bloom"
+                tier_suffixes.add(name[idx:])
 
         if not tier_suffixes:
             logger.info(
@@ -804,7 +822,9 @@ async def enrich_catalyst_tier_items(
             )
             return added, errors
 
-        # Load all BIS items in catalyst slots; filter by suffix in Python.
+        # Load all BIS items in catalyst slots by BIS slot (not slot_type) so that
+        # newly-stubbed items with slot_type='other' are included before Enrich Items
+        # has run to resolve their real slot.
         all_catalyst_bis = await conn.fetch(
             """
             SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
@@ -812,7 +832,6 @@ async def enrich_catalyst_tier_items(
               FROM guild_identity.bis_list_entries ble
               JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
              WHERE ble.slot = ANY($1::text[])
-               AND wi.slot_type = ANY($1::text[])
             """,
             list(_CATALYST_SLOTS),
         )
@@ -860,7 +879,9 @@ async def enrich_catalyst_tier_items(
             eff_slot = tier["eff_slot"]
             bosses = catalyst_slot_to_bosses.get(eff_slot, [])
             if not bosses:
-                bosses = [("Revival Catalyst", "Revival Catalyst", "raid", None)]
+                # Fall back to all main-5 bosses (same raid bosses drop all tier
+                # tokens), then to a Revival Catalyst placeholder as last resort.
+                bosses = all_main_bosses or [("Revival Catalyst", "Revival Catalyst", "raid", None)]
 
             for enc_name, inst_name, inst_type, blizzard_inst_id in bosses:
                 try:
