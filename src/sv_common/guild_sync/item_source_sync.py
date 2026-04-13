@@ -669,9 +669,12 @@ async def enrich_catalyst_tier_items(
         )
 
         # ── Pass 1: all tier slots (main-5 + catalyst) with item-set tooltip link ──
-        # Catalyst-slot pieces (back/wrist/waist/feet) that Wowhead has already
-        # indexed will have /item-set=N/ links in their tooltip HTML, even though
-        # they never appear in the Blizzard Journal.  Query all 9 slots.
+        # PRIMARY: Wowhead tooltip has /item-set=/ link — definitive tier marker.
+        # FALLBACK: Wowhead not yet indexed for this expansion.  Detect by:
+        #   armor_type IS NOT NULL + no existing item_sources + in BIS lists.
+        #   This matches Midnight tier pieces on first-sync prod where Wowhead pages
+        #   don't exist yet (e.g., "Trunk of the Luminous Bloom" exists only from BIS
+        #   scraping, has no tooltip, and no boss sources — catalyst gives it).
         all_tier_slots = list(_TIER_SLOTS | _CATALYST_SLOTS)
         tier_items = await conn.fetch(
             """
@@ -680,7 +683,27 @@ async def enrich_catalyst_tier_items(
               FROM guild_identity.bis_list_entries ble
               JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
              WHERE ble.slot = ANY($1::text[])
-               AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
+               AND (
+                   -- PRIMARY: Wowhead tooltip confirms tier set membership.
+                   wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                   OR
+                   -- FALLBACK: No Wowhead page yet (new expansion).
+                   --   Item must have armor_type (enriched via Blizzard API) and
+                   --   no existing boss sources (if it already has sources it's a
+                   --   regular drop, not a catalyst-only piece).
+                   --   Crafted items are excluded — they have item_recipe_links
+                   --   rather than item_sources and must not get raid boss rows.
+                   (    wi.armor_type IS NOT NULL
+                    AND NOT EXISTS (
+                            SELECT 1 FROM guild_identity.item_sources s
+                             WHERE s.item_id = wi.id
+                        )
+                    AND NOT EXISTS (
+                            SELECT 1 FROM guild_identity.item_recipe_links irl
+                             WHERE irl.item_id = wi.id
+                        )
+                   )
+               )
             """,
             all_tier_slots,
         )
