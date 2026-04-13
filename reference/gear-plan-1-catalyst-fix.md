@@ -130,72 +130,100 @@ to resolve variants at query time.
 of which quality to aim for. The current display is described as "distracting super low
 stats."
 
-**Solution:** Show Wowhead tooltips at a specific item level, derived from the player's
-current equipped gear and the BIS recommendation logic below.
+**Solution:** Show Wowhead tooltips at a specific item level derived from the player's
+current equipped gear. Two rules — one for equipped gear, one for BIS recommendations.
 
 ### Display rules
 
-For each slot in the gear plan:
+**Equipped gear** (left side of gear plan, current paperdoll):
+- Show at the player's actual `character_equipment.item_level` for that slot.
+- If the slot is empty (no row in `character_equipment`), show no `?ilvl` param — base
+  tooltip only.
 
-| Player state | Show BIS at |
-|---|---|
-| Does not have BIS item | Player's current quality tier, 6/6 |
-| Has BIS item, rank < 6/6 | Same quality tier, 6/6 |
-| Has BIS item at 6/6 | Next quality tier, 1/6 |
-| Has BIS item at Mythic 6/6 | Mythic 6/6 (nothing higher) |
+**BIS items** (right side / available-items drawer):
+- Look up the player's equipped `quality_track` for that slot from `character_equipment`.
+- Show the BIS item at `quality_ilvl_map[track]['max']` — the ceiling of their current
+  tier. This is the meaningful upgrade target.
+- If the slot is empty (no `quality_track`), show no `?ilvl` param.
+- Crafted items use `crafted_ilvl_map[track]['max']` from the same season row.
 
-**Hard constraint:** The displayed quality tier must never be lower than the player's
-currently equipped quality tier for that slot. Quality tier order: V < C < H < M.
+No "rank counting," no "next tier" promotion logic. The max of the player's current tier
+is the right target — achievable, motivating, and accurate.
 
-If a player has a Hero item equipped, we never show a Champion recommendation — even if
-the BIS item only exists at Champion quality. In that case, show the BIS item at Hero 1/6
-minimum (the lowest Hero rank, which is still an upgrade over their current Hero rank if
-they are below 6/6, or show Hero 6/6 if they are already at Hero 6/6 and the item doesn't
-come at Mythic).
+### Ilvl map storage
 
-Formally: `display_tier = max(target_tier, equipped_tier)` where V=1, C=2, H=3, M=4.
+Season-specific data belongs in `patt.raid_seasons`, not `site_config`.
 
-For **equipped gear display**: show the item at its actual ilvl from `character_equipment.item_level`. This data is already synced from the Blizzard equipment API.
+**Migration 0099** adds two JSONB columns to `patt.raid_seasons`:
 
-### Quality tier ilvl map
-
-Season-specific. Store in `site_config` as JSON so it can be updated per patch without
-a code deploy:
-
-```json
-"quality_ilvl_map": {
-  "V": {"min": N, "max": N, "ranks": 6},
-  "C": {"min": N, "max": N, "ranks": 6},
-  "H": {"min": N, "max": N, "ranks": 6},
-  "M": {"min": N, "max": N, "ranks": 6}
-}
+```sql
+ALTER TABLE patt.raid_seasons
+  ADD COLUMN quality_ilvl_map  JSONB,
+  ADD COLUMN crafted_ilvl_map  JSONB;
 ```
 
-Future patches may add ranks to Hero and Mythic — update the `ranks` value and `max` ilvl
-in site_config, no code change needed.
+Seed the active Midnight Season 1 row (`id = 1`) immediately:
+
+```sql
+UPDATE patt.raid_seasons SET
+  quality_ilvl_map = '{
+    "A": {"min": 220, "max": 237},
+    "V": {"min": 233, "max": 250},
+    "C": {"min": 246, "max": 263},
+    "H": {"min": 259, "max": 276},
+    "M": {"min": 272, "max": 289}
+  }'::jsonb,
+  crafted_ilvl_map = '{
+    "A": {"min": 220, "max": 233},
+    "V": {"min": 233, "max": 246},
+    "H": {"min": 259, "max": 272},
+    "M": {"min": 272, "max": 285}
+  }'::jsonb
+WHERE id = 1;
+```
+
+Notes:
+- A (Adventurer) and V (Veteran) are stored for completeness but excluded from the gear
+  plan display (green/blue items are already filtered out).
+- No Champion crafted tier this season — intentionally absent from `crafted_ilvl_map`.
+- Update `quality_ilvl_map` and `crafted_ilvl_map` at the start of each new season or
+  when Blizzard adds upgrade ranks mid-patch. No code deploy needed.
 
 ### Wowhead tooltip rendering
 
-Wowhead's tooltip widget supports `?ilvl=N` on item links. The existing `power.js` widget
-loaded on My Characters handles this automatically. No new tooltip storage needed — we
-compute the target ilvl at render time and append it to the Wowhead item link.
+Wowhead's `?ilvl=N` param on item links makes the tooltip widget (already loaded via
+`power.js` on My Characters) render full scaled stats at that item level.
 
 ```
-https://www.wowhead.com/item=250024?ilvl=639
+https://www.wowhead.com/item=250024?ilvl=276
 ```
+
+No new tooltip storage needed — ilvl is computed at render time from the raid season map
+and the player's `character_equipment` row for that slot.
+
+### Service changes (`gear_plan_service.py`)
+
+- Load `quality_ilvl_map` and `crafted_ilvl_map` from the active raid season (join
+  `patt.raid_seasons WHERE is_active = TRUE`).
+- `get_available_items()`: add `target_ilvl: int | None` per item.
+  - For raid/dungeon/tier items: `quality_ilvl_map[slot_track]['max']` or `None`.
+  - For crafted items: `crafted_ilvl_map[slot_track]['max']` or `None`.
+- Equipped gear endpoint: already returns `item_level` from `character_equipment` — pass
+  it through as `equipped_ilvl` so the frontend can append `?ilvl=equipped_ilvl`.
 
 ### API changes
 
-- `GET /api/v1/me/gear-plan/{character_id}/available-items` — add `target_ilvl` and
-  `equipped_ilvl` fields to each item in the `tier` group
-- `GET /api/v1/me/gear-plan/{character_id}/slot-detail` (or drawer endpoint) — include
-  quality context per item
+- `GET /api/v1/me/gear-plan/{character_id}/available-items` — add `target_ilvl: int | None`
+  to each item object in all groups.
+- Equipped gear response — add `equipped_ilvl: int | None` (from `character_equipment.item_level`,
+  `None` if slot is empty).
 
-### Migration
+### Frontend changes (`my_characters.js` / slot drawer)
 
-- `site_config`: add `quality_ilvl_map JSONB` column
-- `wow_items`: add `quality_track VARCHAR(1)` (from 2B)
-- No new tables
+- BIS item Wowhead link: append `?ilvl={target_ilvl}` when `target_ilvl` is not null.
+- Equipped item Wowhead link (paperdoll): append `?ilvl={equipped_ilvl}` when not null.
+- No change to link structure when ilvl is null — base tooltip as before.
+- Cache buster bump required on `my_characters.js` and `my_characters.css`.
 
 ---
 
@@ -206,11 +234,11 @@ https://www.wowhead.com/item=250024?ilvl=639
   — appearance crawl provides all item IDs that need quality_track tagging
 
 2B must complete before 2C:
-  — quality_track on wow_items is required to resolve "Hero variant of item X"
-  — quality_ilvl_map in site_config must be populated before display logic runs
+  — quality_track on wow_items is required for item variant identification
+  — quality_track on character_equipment must be populated (already working)
 
-2C has no hard blockers after 2B, but quality_ilvl_map values must be
-confirmed from live Midnight season data before deploying display.
+2C has no hard blockers after 2B. Migration 0099 seeds Midnight S1 data
+immediately — no manual admin step required after deploy.
 ```
 
 ---
@@ -219,8 +247,8 @@ confirmed from live Midnight season data before deploying display.
 
 1. Does `/data/wow/item-appearance/{id}` return one item ID per appearance or multiple?
    Determines stub count per crawl hop.
-2. Confirm current Midnight quality track ilvl ranges (needed to populate
-   `quality_ilvl_map` in site_config).
+2. ✅ Midnight quality track ilvl ranges confirmed from Wowhead (April 2026) — seeded
+   in migration 0099.
 3. Confirm the 4 appearance sets per suffix map to LFR/Normal/Heroic/Mythic (not
    armor types or something else). Verify by querying the 4 sets for a known suffix
    via the Blizzard API Explorer.
