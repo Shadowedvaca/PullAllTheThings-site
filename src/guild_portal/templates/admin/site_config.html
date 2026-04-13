@@ -242,23 +242,6 @@ input:checked + .sc-slider::before {
     </div>
 </div>
 
-<div class="sc-card">
-    <h2 class="sc-card__title">Gear Plan — Quality Track ilvl Map</h2>
-    <p class="sc-card__subtitle">
-        Season-specific ilvl ranges per quality track. Used to compute the Wowhead <code>?ilvl=N</code>
-        tooltip link for BIS items in the gear plan slot drawer. Update each season when Blizzard
-        adjusts upgrade ilvl ceilings. V=Veteran/LFR, C=Champion/Normal, H=Hero/Heroic, M=Mythic.
-    </p>
-    <div class="sc-field">
-        <label for="sc-quality-ilvl-map">JSON (must be valid — V/C/H/M keys with min/max/ranks)</label>
-        <textarea id="sc-quality-ilvl-map" rows="8" style="font-family:monospace;font-size:0.8rem;width:100%;background:var(--color-bg);color:var(--color-text);border:1px solid var(--color-border);border-radius:4px;padding:0.5rem;resize:vertical">{{ config.quality_ilvl_map | tojson(indent=2) if config.quality_ilvl_map else '{}' }}</textarea>
-    </div>
-    <div class="sc-actions">
-        <button class="btn btn--primary" onclick="saveQualityIlvlMap()">Save ilvl Map</button>
-        <span class="sc-status" id="quality-ilvl-status"></span>
-    </div>
-</div>
-
 <script>
 function syncColorPicker(hex) {
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
@@ -322,20 +305,6 @@ function saveFeatures() {
         enable_guild_quotes: document.getElementById('sc-guild-quotes').checked,
         enable_contests: document.getElementById('sc-contests').checked,
     }, 'features-status');
-}
-
-function saveQualityIlvlMap() {
-    const raw = document.getElementById('sc-quality-ilvl-map').value.trim();
-    let parsed;
-    try {
-        parsed = JSON.parse(raw);
-    } catch (e) {
-        const st = document.getElementById('quality-ilvl-status');
-        st.style.color = '#f87171';
-        st.textContent = 'Invalid JSON: ' + e.message;
-        return;
-    }
-    patchConfig({ quality_ilvl_map: parsed }, 'quality-ilvl-status');
 }
 </script>
 {% endblock %}

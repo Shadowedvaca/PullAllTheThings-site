@@ -12,7 +12,6 @@ from typing import Optional
 
 import asyncpg
 
-from sv_common.config_cache import get_quality_ilvl_map
 from sv_common.guild_sync.quality_track import detect_crafted_track, is_crafted_item
 from sv_common.guild_sync.simc_parser import (
     SimcSlot,
@@ -65,48 +64,6 @@ TRACK_COLORS: dict[str, str] = {
     "H": "#a335ee",
     "M": "#ff8000",
 }
-
-_TRACK_SEQUENCE = ["V", "C", "H", "M"]
-
-
-def _compute_target_ilvl(
-    equipped_track: Optional[str],
-    equipped_ilvl: Optional[int],
-    ilvl_map: Optional[dict],
-) -> Optional[int]:
-    """Return the target display ilvl for a BIS item in this slot.
-
-    Display rules (Phase 2C):
-      - No equipped item or no map → None (no ?ilvl= appended to Wowhead link)
-      - Equipped item below max rank → show current track at max ilvl (6/6)
-      - Equipped item at max rank → show next track at min ilvl (1/N)
-      - Mythic at max → stay at Mythic max
-
-    Hard constraint (already satisfied by rule ordering): displayed track ≥ equipped track.
-    """
-    if not equipped_track or not ilvl_map:
-        return None
-    track_info = ilvl_map.get(equipped_track)
-    if not track_info:
-        return None
-    max_ilvl = track_info.get("max")
-    if not max_ilvl:
-        return None
-
-    # At max rank → suggest next tier at its minimum ilvl
-    if equipped_ilvl is not None and equipped_ilvl >= max_ilvl:
-        idx = _TRACK_SEQUENCE.index(equipped_track) if equipped_track in _TRACK_SEQUENCE else -1
-        if 0 <= idx < len(_TRACK_SEQUENCE) - 1:
-            next_track = _TRACK_SEQUENCE[idx + 1]
-            next_min = (ilvl_map.get(next_track) or {}).get("min")
-            if next_min:
-                return int(next_min)
-        # Mythic max or last track — stay at current max
-        return int(max_ilvl)
-
-    # Below max rank → show current track at max ilvl
-    return int(max_ilvl)
-
 
 # ── Class eligibility constants (Phase 1E.4) ──────────────────────────────────
 
@@ -1534,15 +1491,6 @@ async def get_plan_detail(
                     "no_recipe_found": True,
                 }
 
-        # Phase 2C: compute target ilvl for Wowhead ?ilvl= links in the drawer.
-        # equipped_ilvl comes from character_equipment.item_level (Blizzard API).
-        # target_ilvl is the recommended display ilvl for BIS/available items.
-        eq_track = equipped_track
-        eq_ilvl  = equipped.get("item_level") if equipped else None
-        ilvl_map = get_quality_ilvl_map()
-        target_ilvl  = _compute_target_ilvl(eq_track, eq_ilvl, ilvl_map)
-        equipped_ilvl = int(eq_ilvl) if eq_ilvl is not None else None
-
         slots_data[slot] = {
             "slot": slot,
             "canonical_slot": slot_remapping.get(slot, slot),
@@ -1559,8 +1507,6 @@ async def get_plan_detail(
             "crafted_source": crafted_source,
             "excluded_item_ids": excluded_ids,
             "excluded_items": excluded_items,
-            "target_ilvl": target_ilvl,
-            "equipped_ilvl": equipped_ilvl,
         }
 
     plan_dict = dict(plan_row)
@@ -1684,25 +1630,6 @@ async def get_available_items(
             )
             if slot_row:
                 excluded_ids = list(slot_row["excluded_item_ids"] or [])
-
-        # Phase 2C: fetch equipped item for this slot to compute target_ilvl.
-        # Normalize paired slots (ring_1/ring_2 → ring, trinket_1/trinket_2 → trinket)
-        # so the query matches the single slot_type stored in character_equipment.
-        slot_type_for_equip = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
-        equip_row = await conn.fetchrow(
-            """
-            SELECT ce.quality_track, ce.item_level
-              FROM guild_identity.character_equipment ce
-             WHERE ce.character_id = $1 AND ce.slot = $2
-             LIMIT 1
-            """,
-            character_id, slot_type_for_equip,
-        )
-        eq_track  = equip_row["quality_track"] if equip_row else None
-        eq_ilvl   = equip_row["item_level"]    if equip_row else None
-        ilvl_map  = get_quality_ilvl_map()
-        target_ilvl   = _compute_target_ilvl(eq_track, eq_ilvl, ilvl_map)
-        equipped_ilvl = int(eq_ilvl) if eq_ilvl is not None else None
 
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
@@ -2010,12 +1937,10 @@ async def get_available_items(
         ]
 
     return {
-        "tier":          tier_items,
-        "raid":          raid_items,
-        "dungeon":       dungeon_items,
-        "crafted":       crafted_items,
-        "target_ilvl":  target_ilvl,
-        "equipped_ilvl": equipped_ilvl,
+        "tier":    tier_items,
+        "raid":    raid_items,
+        "dungeon": dungeon_items,
+        "crafted": crafted_items,
     }
 
 

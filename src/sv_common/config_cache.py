@@ -70,13 +70,6 @@ def is_onboarding_enabled() -> bool:
     return bool(_cache.get("enable_onboarding", True))
 
 
-def get_quality_ilvl_map() -> dict:
-    """Return the season quality-track ilvl map from site_config.
-
-    Structure: {"V": {"min": N, "max": N, "ranks": N}, "C": {...}, "H": {...}, "M": {...}}
-    Returns an empty dict if not configured.
-    """
-    return dict(_cache.get("quality_ilvl_map") or {})
 
 
 def set_app_url(url: str) -> None:
