@@ -1449,8 +1449,9 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
   if (eq && eq.blizzard_item_id) {
     const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : (eq.is_crafted ? '#c0a060' : null);
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
+    const ilvlParam = eq.item_level ? `?ilvl=${eq.item_level}` : '';
     if (eq.icon_url) {
-      eBox.innerHTML = `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+      eBox.innerHTML = `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${ilvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
         <img class="mcn-slot-icon" src="${_gpEsc(eq.icon_url)}" alt="" title="${_gpEsc(eq.item_name || '')}"${bs} loading="lazy">
       </a>
       <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
@@ -1539,8 +1540,9 @@ function _gpRenderGearTable(slots, tc) {
       const badge  = eq.quality_track
         ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>`
         : '';
+      const eqIlvlParam = eq.item_level ? `?ilvl=${eq.item_level}` : '';
       const icon = eq.icon_url
-        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
+        ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${eqIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
              <img class="mcn-gt__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${iconBs}>
            </a>`
         : '';
@@ -2231,8 +2233,9 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     const useBtn = !equippedIsGoal
       ? `<button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem;flex-shrink:0;align-self:center" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${eq.blizzard_item_id})">Use</button>`
       : '';
+    const drawerIlvlParam = eq.item_level ? `?ilvl=${eq.item_level}` : '';
     equippedHtml = `<div class="mcn-drawer-item" style="align-items:center">
-      ${eq.icon_url ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
+      ${eq.icon_url ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${drawerIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
       <div class="mcn-drawer-item__info" style="flex:1">
         <div class="mcn-drawer-item__name"${ns}>
           ${_gpEsc(eq.item_name || 'Unknown')}
@@ -2487,8 +2490,9 @@ function _gpRenderAvailSections(dbSlot, groups, tc, status) {
 // raid boss, 'source_instance' for M+ dungeon name, null for crafted).
 function _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField) {
   const rows = items.map(item => {
+    const availIlvlParam = item.target_ilvl ? `?ilvl=${item.target_ilvl}` : '';
     const icon = item.icon_url
-      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}${availIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
     let trackCell = '';
@@ -2565,7 +2569,7 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
       const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
       if (bodyEl) {
         const tc = _gpCache[charId]?.track_colors || {};
-        bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, _gpAvailCache[key].groups, tc, 'done', _gpAvailCache[key].target_ilvl);
+        bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, _gpAvailCache[key].groups, tc, 'done');
       }
     }
     return;
