@@ -688,12 +688,14 @@ async def enrich_catalyst_tier_items(
                    wi.wowhead_tooltip_html LIKE '%/item-set=%'
                    OR
                    -- FALLBACK: No Wowhead page yet (new expansion).
-                   --   Item must have armor_type (enriched via Blizzard API) and
-                   --   no existing boss sources (if it already has sources it's a
-                   --   regular drop, not a catalyst-only piece).
-                   --   Crafted items are excluded — they have item_recipe_links
-                   --   rather than item_sources and must not get raid boss rows.
+                   --   Restricted to items with "of the X" suffix naming — the
+                   --   convention used by leather/mail Midnight tier pieces.
+                   --   Cloth/plate tier pieces use different names but have Wowhead
+                   --   pages, so they're caught by PRIMARY above.
+                   --   Also excludes crafted items (item_recipe_links) and items
+                   --   that already have boss sources.
                    (    wi.armor_type IS NOT NULL
+                    AND wi.name LIKE '% of %'
                     AND NOT EXISTS (
                             SELECT 1 FROM guild_identity.item_sources s
                              WHERE s.item_id = wi.id
