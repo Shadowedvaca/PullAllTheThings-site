@@ -1522,22 +1522,21 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
     const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : (eq.is_crafted ? '#c0a060' : null);
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
     const ilvlParam = eq.item_level ? `?ilvl=${eq.item_level}` : '';
-    // Step 9: trinket tier badge beside the icon (left of icon = side closest to center)
+    // Step 9: trinket tier badge stacked below ilvl (vertical layout)
     const isTrinketSlot = slotKey === 'trinket_1' || slotKey === 'trinket_2';
-    const tierAside = isTrinketSlot && eq.tier_badge?.length
-      ? `<div class="mcn-slot-trinket-tier-aside">${_gpRenderTierBadge(eq.tier_badge)}</div>`
+    const tierUnder = isTrinketSlot && eq.tier_badge?.length
+      ? `<div class="mcn-slot-trinket-tier-under">${_gpRenderTierBadge(eq.tier_badge)}</div>`
       : '';
     if (eq.icon_url) {
-      eBox.innerHTML = `<div class="mcn-slot-trinket-wrap">
-        ${tierAside}
-        <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${ilvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+      eBox.innerHTML = `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${ilvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
           <img class="mcn-slot-icon" src="${_gpEsc(eq.icon_url)}" alt="" title="${_gpEsc(eq.item_name || '')}"${bs} loading="lazy">
         </a>
-      </div>
-      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
+        <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>
+        ${tierUnder}`;
     } else {
       eBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--empty" title="${_gpEsc(eq.item_name || '')}">${_gpEsc((GP_SLOT_LABELS[slotKey] || slotKey)[0])}</div>
-      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
+      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>
+      ${tierUnder}`;
     }
   } else {
     eBox.appendChild(Object.assign(document.createElement('div'), { className: 'mcn-slot-icon mcn-slot-icon--no-goal' }));
@@ -2314,6 +2313,8 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     const ns = qc && qc !== '#888' ? ` style="color:${qc}"` : '';
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 6px ${qc}80"` : '';
     const badge = eq.quality_track ? `<span class="mcn-track-pill" style="background:${_gpEsc(qc)}">${_gpEsc(eq.quality_track)}</span>` : '';
+    const isTrinketDrawer = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
+    const drawerTierBadge = isTrinketDrawer && eq.tier_badge?.length ? _gpRenderTierBadge(eq.tier_badge) : '';
     const equippedIsGoal = eq.blizzard_item_id === sd.desired_blizzard_item_id;
     const useBtn = !equippedIsGoal
       ? `<button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem;flex-shrink:0;align-self:center" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${eq.blizzard_item_id})">Use</button>`
@@ -2325,7 +2326,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
         <div class="mcn-drawer-item__name"${ns}>
           ${_gpEsc(eq.item_name || 'Unknown')}
         </div>
-        <div class="mcn-drawer-item__meta">${eq.item_level ? eq.item_level + '\u00a0' : ''}${badge}</div>
+        <div class="mcn-drawer-item__meta">${eq.item_level ? eq.item_level + '\u00a0' : ''}${badge}${drawerTierBadge}</div>
       </div>
       ${useBtn}
     </div>`;
@@ -2530,9 +2531,10 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   for (const r of bis) {
     if (!itemMap.has(r.blizzard_item_id)) itemMap.set(r.blizzard_item_id, {
       bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url, srcIds: new Set(),
-      target_ilvl: r.target_ilvl || null,
-      is_equipped: r.is_equipped || false,
-      is_bis:      r.is_bis      || false,
+      target_ilvl:    r.target_ilvl    || null,
+      is_equipped:    r.is_equipped    || false,
+      is_bis:         r.is_bis         || false,
+      source_ratings: r.source_ratings || [],
     });
     itemMap.get(r.blizzard_item_id).srcIds.add(r.source_id);
   }
@@ -2557,8 +2559,10 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
       ? `<a href="https://www.wowhead.com/item=${item.bid}${bisIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
-    // Step 12: EQUIPPED / BIS badges on BIS list
-    const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis);
+    const isTrinketBis = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
+    const bisTierBadge = isTrinketBis && item.source_ratings?.length ? _gpRenderTierBadge(item.source_ratings) : '';
+    // Step 12: EQUIPPED / BIS badges on BIS list; trinkets also show tier badge
+    const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis) + bisTierBadge;
     return `<tr>
       <td class="mcn-bis-grid__name"><div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(item.name)}${badges}</div></td>
       ${cells}
@@ -2628,8 +2632,10 @@ function _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField) {
       : '';
 
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
-    // Step 12: EQUIPPED / BIS badges on available-items list
-    const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis);
+    const isTrinketAvail = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
+    const availTierBadge = isTrinketAvail && item.source_ratings?.length ? _gpRenderTierBadge(item.source_ratings) : '';
+    // Step 12: EQUIPPED / BIS badges on available-items list; trinkets also show tier badge
+    const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis) + availTierBadge;
     return `<tr>
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
@@ -2719,7 +2725,7 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
 
 // ── Trinket Rankings (Phase 1F Steps 11–12) ───────────────────────────────────
 
-const GP_CONTENT_TYPE_LABELS = { raid_boss: 'Raid', dungeon: 'M+', crafted: 'Crafted' };
+const GP_CONTENT_TYPE_LABELS = { raid: 'Raid', dungeon: 'M+', crafted: 'Crafted' };
 
 async function _gpLoadTrinketRatings(charId, dbSlot) {
   const key = `${charId}:${dbSlot}`;
@@ -2771,7 +2777,7 @@ function _gpRenderTrinketRankings(dbSlot, data, tc, activeFilter) {
   // Content type filter tabs
   const filterDefs = [
     { key: 'all',      label: 'All'    },
-    { key: 'raid_boss',label: 'Raid'   },
+    { key: 'raid',     label: 'Raid'   },
     { key: 'dungeon',  label: 'M+'     },
     { key: 'crafted',  label: 'Crafted'},
   ];
@@ -2828,12 +2834,14 @@ function _gpRenderTrinketRankings(dbSlot, data, tc, activeFilter) {
       ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}${ilvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
-    // Plain text source below name (no chips)
-    const sourceLabels = (item.content_types || [])
-      .map(ct => GP_CONTENT_TYPE_LABELS[ct] || ct)
-      .filter(Boolean);
-    const sourceText = sourceLabels.length
-      ? `<div class="gp-trank__source">${_gpEsc(sourceLabels.join(', '))}</div>` : '';
+    // Plain text source: deduplicated "Instance · Boss" lines
+    const sourceLines = [...new Set(
+      (item.sources || [])
+        .filter(s => s.instance_name || s.encounter_name)
+        .map(s => [s.instance_name, s.encounter_name].filter(Boolean).join(' \u00b7 '))
+    )];
+    const sourceText = sourceLines.length
+      ? `<div class="gp-trank__source">${sourceLines.map(_gpEsc).join('<br>')}</div>` : '';
 
     const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis);
 

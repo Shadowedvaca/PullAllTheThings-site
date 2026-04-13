@@ -161,6 +161,11 @@ _ARMOR_FILTER_SLOTS: frozenset[str] = frozenset(
     {"head", "shoulder", "chest", "wrist", "hands", "waist", "legs", "feet"}
 )
 _WEAPON_SLOTS: frozenset[str] = frozenset({"main_hand", "off_hand"})
+# Paired slots — rings and trinkets share merged BIS pools; is_bis fires for either slot
+_PAIRED_SLOT_MAP: dict[str, str] = {
+    "ring_1": "ring_2", "ring_2": "ring_1",
+    "trinket_1": "trinket_2", "trinket_2": "trinket_1",
+}
 
 # Slots that can have a tier/catalyst class set piece.
 _TIER_CATALYST_SLOTS: frozenset[str] = frozenset(
@@ -1139,46 +1144,40 @@ async def get_plan_detail(
 
                 equipped_by_slot = simc_equipped
 
-        # Phase 1F: trinket tier badges — attach source_ratings to equipped trinket items.
-        # Deduplicates by (origin, tier) so 3 identical Wowhead source rows show as one.
+        # Phase 1F: trinket tier ratings map — all ratings for this spec, used to
+        # stamp tier_badge on equipped items and source_ratings on BIS recs.
+        # Deduplicates by (origin, tier) so 3 identical Wowhead rows show as one.
+        _tb_map: dict[int, list[dict]] = {}
         if spec_id:
-            _trinket_bids_pd = [
-                equipped_by_slot[s]["blizzard_item_id"]
-                for s in ("trinket_1", "trinket_2")
-                if s in equipped_by_slot and equipped_by_slot[s].get("blizzard_item_id")
-            ]
-            if _trinket_bids_pd:
-                _tb_rows = await conn.fetch(
-                    """
-                    SELECT ttr.tier, ttr.source_id, bls.origin AS source_origin,
-                           wi.blizzard_item_id
-                      FROM guild_identity.trinket_tier_ratings ttr
-                      JOIN guild_identity.bis_list_sources bls ON bls.id = ttr.source_id
-                      JOIN guild_identity.wow_items wi ON wi.id = ttr.item_id
-                     WHERE ttr.spec_id = $1
-                       AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
-                       AND bls.is_active = TRUE
-                       AND wi.blizzard_item_id = ANY($3::int[])
-                     ORDER BY ttr.sort_order
-                    """,
-                    spec_id, hero_talent_id, _trinket_bids_pd,
-                )
-                _tb_map: dict[int, list[dict]] = {}
-                _tb_seen: set = set()
-                for r in _tb_rows:
-                    _bid = r["blizzard_item_id"]
-                    _key = (_bid, r["source_origin"], r["tier"])
-                    if _key not in _tb_seen:
-                        _tb_seen.add(_key)
-                        _tb_map.setdefault(_bid, []).append({
-                            "source_id": r["source_id"],
-                            "source_origin": r["source_origin"],
-                            "tier": r["tier"],
-                        })
-                for _ts in ("trinket_1", "trinket_2"):
-                    if _ts in equipped_by_slot:
-                        _eq = equipped_by_slot[_ts]
-                        _eq["tier_badge"] = _tb_map.get(_eq.get("blizzard_item_id")) or None
+            _tb_rows = await conn.fetch(
+                """
+                SELECT ttr.tier, ttr.source_id, bls.origin AS source_origin,
+                       wi.blizzard_item_id
+                  FROM guild_identity.trinket_tier_ratings ttr
+                  JOIN guild_identity.bis_list_sources bls ON bls.id = ttr.source_id
+                  JOIN guild_identity.wow_items wi ON wi.id = ttr.item_id
+                 WHERE ttr.spec_id = $1
+                   AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
+                   AND bls.is_active = TRUE
+                 ORDER BY ttr.sort_order
+                """,
+                spec_id, hero_talent_id,
+            )
+            _tb_seen: set = set()
+            for r in _tb_rows:
+                _bid = r["blizzard_item_id"]
+                _key = (_bid, r["source_origin"], r["tier"])
+                if _key not in _tb_seen:
+                    _tb_seen.add(_key)
+                    _tb_map.setdefault(_bid, []).append({
+                        "source_id": r["source_id"],
+                        "source_origin": r["source_origin"],
+                        "tier": r["tier"],
+                    })
+            for _ts in ("trinket_1", "trinket_2"):
+                if _ts in equipped_by_slot:
+                    _eq = equipped_by_slot[_ts]
+                    _eq["tier_badge"] = _tb_map.get(_eq.get("blizzard_item_id")) or None
 
         # Build bid → equipment data lookup BEFORE _normalize_paired_slot swaps
         # ring/trinket slot assignments.  Crafted detection must be slot-order-
@@ -1563,6 +1562,14 @@ async def get_plan_detail(
             is_bis, equipped_track, plan_crafted_ilvl_map
         )
 
+        # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS
+        _paired_slot = _PAIRED_SLOT_MAP.get(slot)
+        _paired_desired_bid: Optional[int] = None
+        if _paired_slot:
+            _pd = desired_by_slot.get(_paired_slot)
+            _paired_desired_bid = _pd["blizzard_item_id"] if _pd else None
+        _all_desired_bids: set[int] = {b for b in (desired_bid, _paired_desired_bid) if b}
+
         for rec in bis_recs:
             bid = rec["blizzard_item_id"]
             if bid in craftable_desired_bids:
@@ -1571,7 +1578,10 @@ async def get_plan_detail(
                 rec["target_ilvl"] = slot_noncrafted_ilvl
             # Phase 1F: EQUIPPED / BIS badges on BIS recommendations
             rec["is_equipped"] = bool(equipped_bid and bid == equipped_bid)
-            rec["is_bis"]      = bool(desired_bid and bid == desired_bid)
+            rec["is_bis"]      = bool(_all_desired_bids and bid in _all_desired_bids)
+            # Phase 1F: trinket tier badge on BIS recs (full-spec map fetched above)
+            if slot in _TRINKET_SLOTS:
+                rec["source_ratings"] = _tb_map.get(bid, [])
 
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
@@ -1774,21 +1784,27 @@ async def get_available_items(
             player_id, character_id,
         )
         desired_bid_for_slot: Optional[int] = None
+        all_desired_bids: set[int] = set()
         if plan_row:
-            slot_row = await conn.fetchrow(
+            _av_paired = _PAIRED_SLOT_MAP.get(slot)
+            _av_slots = [slot] + ([_av_paired] if _av_paired else [])
+            slot_rows = await conn.fetch(
                 """
-                SELECT excluded_item_ids, blizzard_item_id
+                SELECT slot, excluded_item_ids, blizzard_item_id
                   FROM guild_identity.gear_plan_slots
-                 WHERE plan_id = $1 AND slot = $2
+                 WHERE plan_id = $1 AND slot = ANY($2::text[])
                 """,
-                plan_row["id"], slot,
+                plan_row["id"], _av_slots,
             )
-            if slot_row:
-                excluded_ids = list(slot_row["excluded_item_ids"] or [])
-                desired_bid_for_slot = slot_row["blizzard_item_id"]
+            for sr in slot_rows:
+                if sr["slot"] == slot:
+                    excluded_ids = list(sr["excluded_item_ids"] or [])
+                    desired_bid_for_slot = sr["blizzard_item_id"]
+                if sr["blizzard_item_id"]:
+                    all_desired_bids.add(sr["blizzard_item_id"])
 
-        # BIS = wearing the exact desired item (same blizzard_item_id).
-        is_bis: bool = bool(equipped_bid and desired_bid_for_slot and equipped_bid == desired_bid_for_slot)
+        # BIS = wearing any desired item from this slot's paired pool.
+        is_bis: bool = bool(equipped_bid and all_desired_bids and equipped_bid in all_desired_bids)
 
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
@@ -2151,7 +2167,7 @@ async def get_available_items(
     for item in raid_items + dungeon_items + crafted_items + (tier_items or []):
         bid = item.get("blizzard_item_id")
         item["is_equipped"] = bool(bid and bid == equipped_bid)
-        item["is_bis"]      = bool(bid and bid == desired_bid_for_slot)
+        item["is_bis"]      = bool(bid and bid in all_desired_bids)
         if trinket_ratings_by_bid:
             item["source_ratings"] = trinket_ratings_by_bid.get(bid, [])
 
@@ -2327,17 +2343,23 @@ async def get_trinket_ratings(
             None,
         )
 
-        # Desired item for this slot
-        gps_row = await conn.fetchrow(
+        # Desired items for this slot and its pair (trinkets share BIS pools)
+        _tr_paired = _PAIRED_SLOT_MAP.get(slot)
+        _tr_slots = [slot] + ([_tr_paired] if _tr_paired else [])
+        gps_rows = await conn.fetch(
             """
-            SELECT gps.blizzard_item_id
+            SELECT gps.slot, gps.blizzard_item_id
               FROM guild_identity.gear_plan_slots gps
               JOIN guild_identity.gear_plans gp ON gp.id = gps.plan_id
-             WHERE gp.player_id = $1 AND gp.character_id = $2 AND gps.slot = $3
+             WHERE gp.player_id = $1 AND gp.character_id = $2 AND gps.slot = ANY($3::text[])
             """,
-            player_id, character_id, slot,
+            player_id, character_id, _tr_slots,
         )
-        desired_bid: Optional[int] = gps_row["blizzard_item_id"] if gps_row else None
+        desired_bid: Optional[int] = next(
+            (r["blizzard_item_id"] for r in gps_rows if r["slot"] == slot and r["blizzard_item_id"]),
+            None,
+        )
+        desired_bids: set[int] = {r["blizzard_item_id"] for r in gps_rows if r["blizzard_item_id"]}
 
         # Current season instance IDs + ilvl maps for availability check and target_ilvl
         season_row = await conn.fetchrow(
@@ -2390,10 +2412,10 @@ async def get_trinket_ratings(
             )
             available_item_ids = {r["item_id"] for r in avail_rows}
 
-        # Content types per item from item_sources
+        # Content types and source locations per item from item_sources
         content_rows = await conn.fetch(
             """
-            SELECT DISTINCT ttr.item_id, isrc.instance_type
+            SELECT ttr.item_id, isrc.instance_type, isrc.instance_name, isrc.encounter_name
               FROM guild_identity.trinket_tier_ratings ttr
               JOIN guild_identity.item_sources isrc ON isrc.item_id = ttr.item_id
                    AND NOT isrc.is_suspected_junk
@@ -2403,8 +2425,18 @@ async def get_trinket_ratings(
             spec_id, hero_talent_id,
         )
         content_by_item: dict[int, set[str]] = {}
+        sources_by_item: dict[int, list[dict]] = {}
         for r in content_rows:
-            content_by_item.setdefault(r["item_id"], set()).add(r["instance_type"])
+            item_id = r["item_id"]
+            content_by_item.setdefault(item_id, set()).add(r["instance_type"])
+            src_entry = {
+                "instance_type":  r["instance_type"],
+                "instance_name":  r["instance_name"]  or "",
+                "encounter_name": r["encounter_name"] or "",
+            }
+            existing = sources_by_item.setdefault(item_id, [])
+            if src_entry not in existing:
+                existing.append(src_entry)
 
         # Mark crafted trinkets
         crafted_rows_tr = await conn.fetch(
@@ -2455,7 +2487,7 @@ async def get_trinket_ratings(
     tier_bucket: dict[str, list[dict]] = {}
     for item_id, entry in item_map.items():
         tier = entry["tier"]
-        is_bis_item = bool(desired_bid and entry["blizzard_item_id"] == desired_bid)
+        is_bis_item = bool(desired_bids and entry["blizzard_item_id"] in desired_bids)
         is_crafted_item = item_id in crafted_item_ids
         if is_crafted_item:
             t_ilvl = _crafted_target_ilvl(
@@ -2473,6 +2505,7 @@ async def get_trinket_ratings(
             "sort_order": entry["sort_order"],
             "source_ratings": entry["source_ratings"],
             "content_types": list(content_by_item.get(item_id, set())),
+            "sources": sources_by_item.get(item_id, []),
             "is_equipped": entry["blizzard_item_id"] in equipped_bids,
             "is_bis": is_bis_item,
             "is_available_this_season": item_id in available_item_ids,

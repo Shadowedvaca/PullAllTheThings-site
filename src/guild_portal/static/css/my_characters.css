@@ -2524,15 +2524,15 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 
 /* ── Phase 1F: Trinket Rankings drawer section ───────────────────────────── */
 
-/* Tier badge to the left of the equipped trinket icon (side closest to center) */
-.mcn-slot-trinket-wrap {
+/* Trinket slot: tier badge stacked below the ilvl number */
+.mcn-slot-trinket-tier-under {
   display: flex;
-  align-items: center;
-  gap: 0.2rem;
+  justify-content: center;
+  margin-top: 0.08rem;
 }
-.mcn-slot-trinket-tier-aside .gp-tier-badge {
+.mcn-slot-trinket-tier-under .gp-tier-badge {
   font-size: 0.55rem;
-  padding: 0.03rem 0.2rem;
+  padding: 0.03rem 0.25rem;
   line-height: 1.3;
 }
 
