@@ -59,30 +59,57 @@ SLOT_DISPLAY = {
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
 
 
-def _max_track_ilvl(max_track: Optional[str], quality_ilvl_map: dict) -> Optional[int]:
-    """Return the max ilvl for the given quality track.  None if map or track missing."""
-    if not quality_ilvl_map or not max_track or max_track not in quality_ilvl_map:
+# Maps each quality track to the next track up (M stays at M — already maxed).
+NEXT_TRACK: dict[str, str] = {"V": "C", "C": "H", "H": "M", "M": "M"}
+
+
+def _noncrafted_target_ilvl(
+    is_bis: bool,
+    equipped_ilvl: Optional[int],
+    equipped_track: Optional[str],
+    quality_ilvl_map: dict,
+) -> Optional[int]:
+    """Phase 2C ilvl display rule for non-crafted items (raid, dungeon, tier).
+
+    BIS slot: show at the next quality track's max ilvl (V→C, C→H, H→M, M→M).
+    Not BIS:  show at the player's actual equipped ilvl.
+              If below Veteran track or slot empty, show Veteran max instead.
+    """
+    if not quality_ilvl_map:
         return None
-    return quality_ilvl_map[max_track].get("max")
+    if is_bis:
+        if not equipped_track or equipped_track not in NEXT_TRACK:
+            return quality_ilvl_map.get("V", {}).get("max")
+        return quality_ilvl_map.get(NEXT_TRACK[equipped_track], {}).get("max")
+    else:
+        eq_rank = TRACK_ORDER.get(equipped_track or "", -1)
+        v_rank  = TRACK_ORDER.get("V", 0)
+        if not equipped_ilvl or eq_rank < v_rank:
+            return quality_ilvl_map.get("V", {}).get("max")
+        return equipped_ilvl
 
 
-def _crafted_target_ilvl(equipped_ilvl: Optional[int], crafted_ilvl_map: dict) -> Optional[int]:
-    """Phase 2C display rule for crafted items.
+def _crafted_target_ilvl(
+    is_bis: bool,
+    equipped_track: Optional[str],
+    crafted_ilvl_map: dict,
+) -> Optional[int]:
+    """Phase 2C ilvl display rule for crafted items.
 
-    Returns the max ilvl of the lowest crafted track that is a meaningful upgrade:
-      - If equipped_ilvl is known: first track whose max > equipped_ilvl
-      - If slot is empty or unknown: highest track max
-      - If all tracks ≤ equipped_ilvl (already maxed): highest track max
+    3d. Equipped at M (any BIS)   → M max crafted
+    3b. BIS + equipped at H       → M max crafted
+    3a. BIS + equipped below H    → H max crafted
+    3c. Not BIS + H or below      → H max crafted
     """
     if not crafted_ilvl_map:
         return None
-    sorted_tracks = sorted(crafted_ilvl_map.keys(), key=lambda t: TRACK_ORDER.get(t, -1))
-    if equipped_ilvl:
-        for t in sorted_tracks:
-            if crafted_ilvl_map[t].get("max", 0) > equipped_ilvl:
-                return crafted_ilvl_map[t]["max"]
-    # Empty slot or already at/above all crafted tracks → show highest track max
-    return crafted_ilvl_map[sorted_tracks[-1]].get("max") if sorted_tracks else None
+    h_max = crafted_ilvl_map.get("H", {}).get("max")
+    m_max = crafted_ilvl_map.get("M", {}).get("max")
+    if equipped_track == "M":          # 3d — always M regardless of BIS
+        return m_max
+    if is_bis and equipped_track == "H":  # 3b
+        return m_max
+    return h_max                       # 3a, 3c, or empty/unknown
 
 
 TRACK_COLORS: dict[str, str] = {
@@ -1469,30 +1496,26 @@ async def get_plan_detail(
         equipped_track = equipped["quality_track"] if equipped else None
         equipped_ilvl_for_slot: Optional[int] = equipped.get("item_level") if equipped else None
 
-        # Phase 2C: add target_ilvl to each BIS rec so the frontend can append ?ilvl=N.
-        # Rule: non-crafted → max available track's max ilvl; crafted → min useful upgrade track.
+        # Phase 2C: compute slot-level target ilvls (same rules as available-items endpoint).
+        slot_noncrafted_ilvl = _noncrafted_target_ilvl(
+            is_bis, equipped_ilvl_for_slot, equipped_track, plan_quality_ilvl_map
+        )
+        slot_crafted_ilvl = _crafted_target_ilvl(
+            is_bis, equipped_track, plan_crafted_ilvl_map
+        )
+
         for rec in bis_recs:
             bid = rec["blizzard_item_id"]
-            rec_tracks = tracks_by_item.get(bid, [])
             if bid in craftable_desired_bids:
-                rec["target_ilvl"] = _crafted_target_ilvl(equipped_ilvl_for_slot, plan_crafted_ilvl_map)
-            elif rec_tracks:
-                max_t = max(rec_tracks, key=lambda t: TRACK_ORDER.get(t, -1))
-                rec["target_ilvl"] = _max_track_ilvl(max_t, plan_quality_ilvl_map)
+                rec["target_ilvl"] = slot_crafted_ilvl
             else:
-                rec["target_ilvl"] = None
+                rec["target_ilvl"] = slot_noncrafted_ilvl
 
-        # Phase 2C: add target_ilvl to the desired item (used for the goal icon link).
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
-                desired["target_ilvl"] = _crafted_target_ilvl(equipped_ilvl_for_slot, plan_crafted_ilvl_map)
+                desired["target_ilvl"] = slot_crafted_ilvl
             else:
-                des_tracks = tracks_by_item.get(desired_bid, [])
-                if des_tracks:
-                    max_t = max(des_tracks, key=lambda t: TRACK_ORDER.get(t, -1))
-                    desired["target_ilvl"] = _max_track_ilvl(max_t, plan_quality_ilvl_map)
-                else:
-                    desired["target_ilvl"] = None
+                desired["target_ilvl"] = slot_noncrafted_ilvl
 
         # For equipped crafted items whose quality_track wasn't detected during sync
         # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
@@ -1682,18 +1705,19 @@ async def get_available_items(
             quality_ilvl_map = json.loads(season_row["quality_ilvl_map"] or "{}")
             crafted_ilvl_map = json.loads(season_row["crafted_ilvl_map"] or "{}")
 
-        # Phase 2C: load equipped ilvl + quality track for this slot so target_ilvl
-        # can be computed.  Uses the slot parameter directly (same keys as character_equipment).
+        # Phase 2C: load equipped ilvl, quality track, and blizzard_item_id for this slot
+        # so we can compute target_ilvl and determine is_bis.
         equip_row = await conn.fetchrow(
             """
-            SELECT item_level, quality_track
+            SELECT item_level, quality_track, blizzard_item_id
               FROM guild_identity.character_equipment
              WHERE character_id = $1 AND slot = $2
             """,
             character_id, slot,
         )
-        equipped_ilvl: Optional[int] = equip_row["item_level"] if equip_row else None
-        equipped_track: Optional[str] = equip_row["quality_track"] if equip_row else None
+        equipped_ilvl: Optional[int]  = equip_row["item_level"]       if equip_row else None
+        equipped_track: Optional[str] = equip_row["quality_track"]    if equip_row else None
+        equipped_bid:   Optional[int] = equip_row["blizzard_item_id"] if equip_row else None
         all_season_ids = raid_ids + dungeon_ids
 
         # Phase 1E.5: fetch per-slot exclusions so we can hide excluded items
@@ -1702,10 +1726,11 @@ async def get_available_items(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
         )
+        desired_bid_for_slot: Optional[int] = None
         if plan_row:
             slot_row = await conn.fetchrow(
                 """
-                SELECT excluded_item_ids
+                SELECT excluded_item_ids, blizzard_item_id
                   FROM guild_identity.gear_plan_slots
                  WHERE plan_id = $1 AND slot = $2
                 """,
@@ -1713,6 +1738,10 @@ async def get_available_items(
             )
             if slot_row:
                 excluded_ids = list(slot_row["excluded_item_ids"] or [])
+                desired_bid_for_slot = slot_row["blizzard_item_id"]
+
+        # BIS = wearing the exact desired item (same blizzard_item_id).
+        is_bis: bool = bool(equipped_bid and desired_bid_for_slot and equipped_bid == desired_bid_for_slot)
 
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
@@ -2015,28 +2044,21 @@ async def get_available_items(
         item.pop("wowhead_tooltip_html", None)
 
     # ── Phase 2C: compute target_ilvl per item ─────────────────────────────────
-    # Raid/dungeon: show at max available quality track's max ilvl.
-    for item in raid_items + dungeon_items:
-        bid = item["blizzard_item_id"]
-        all_tracks = bid_tracks.get(bid, set())
-        if all_tracks:
-            max_track: Optional[str] = max(
-                all_tracks, key=lambda t: TRACK_ORDER.get(t, -1)
-            )
-        else:
-            max_track = None
-        item["target_ilvl"] = _max_track_ilvl(max_track, quality_ilvl_map)
+    noncrafted_ilvl = _noncrafted_target_ilvl(is_bis, equipped_ilvl, equipped_track, quality_ilvl_map)
+    crafted_ilvl    = _crafted_target_ilvl(is_bis, equipped_track, crafted_ilvl_map)
 
-    # Crafted: show at the lowest track that is a meaningful upgrade over equipped.
+    for item in raid_items + dungeon_items:
+        item["target_ilvl"] = noncrafted_ilvl
+
     for item in crafted_items:
-        item["target_ilvl"] = _crafted_target_ilvl(equipped_ilvl, crafted_ilvl_map)
+        item["target_ilvl"] = crafted_ilvl
 
     # ── Tier / Catalyst items ──────────────────────────────────────────────────
     # None means "this slot has no tier piece" — frontend hides the section.
     tier_items: Optional[list[dict]] = None
     if slot in _TIER_CATALYST_SLOTS:
-        # Tier/catalyst items are obtainable up to Mythic (M) track — show at M max.
-        tier_target: Optional[int] = _max_track_ilvl("M", quality_ilvl_map)
+        # Tier/catalyst items follow the same rule as raid drops.
+        tier_target: Optional[int] = noncrafted_ilvl
         tier_items = [
             {
                 "blizzard_item_id": r["blizzard_item_id"],
