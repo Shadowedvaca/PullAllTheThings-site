@@ -46,6 +46,15 @@
 
 ## Recent Changes
 
+### Phase 2B + 2C — Quality Track Mapping + Quality-Aware Ilvl Display (2026-04-13, migrations 0096 + 0099, prod-v0.18.0)
+- **Migration 0096:** `wow_items.quality_track VARCHAR(1) CHECK (IN 'V','C','H','M')` — tags catalyst items with quality track derived from Blizzard appearance set name suffix. All 64 Midnight catalyst items tagged `quality_track='C'` (appearance sets contain armor-type variants, not quality-tier variants). Migrations 0097+0098 (scrapped approach) ran on dev and cancelled out; net effect is 0096 only.
+- **Migration 0099:** `patt.raid_seasons.quality_ilvl_map JSONB` + `crafted_ilvl_map JSONB` — season-specific ilvl bands per quality track. Seeded for Midnight S1: quality `V{233-250} C{246-263} H{259-276} M{272-289}`, crafted `A{220-233} V{233-246} H{259-272} M{272-285}`. `RaidSeason` ORM model updated. Editable via Admin → Reference Tables → Raid Season Ilvl Maps (`PATCH /api/v1/admin/seasons/{id}`).
+- **`gear_plan_service.py`:** Two new helpers — `_noncrafted_target_ilvl(is_bis, equipped_ilvl, equipped_track, quality_ilvl_map)` and `_crafted_target_ilvl(is_bis, equipped_track, crafted_ilvl_map)`. Display rules: BIS slot → next track's max ilvl (V→C max, C→H max, H→M max, M→M max); not BIS → equipped ilvl (V max floor for below-V or empty); crafted → H crafted max unless BIS+H or any M equipped → M crafted max. `NEXT_TRACK` dict added. `get_available_items()` now also queries equipped `blizzard_item_id` and desired `blizzard_item_id` (from `gear_plan_slots`) to compute `is_bis` locally. `get_plan_detail()` uses already-computed `is_bis` per slot.
+- **`my_characters.js` (v2.6.2):** BIS star paperdoll: replaced static gold star SVG with faded item icon + star SVG overlay wrapped in Wowhead link at upgrade ilvl. `showGoal` icon link appends `?ilvl=goalItem.target_ilvl`. Drawer "Your Goal" link appends `?ilvl=desired.target_ilvl`. Equipped item links (paperdoll, gear table, drawer) append `?ilvl=equipped_ilvl`.
+- **`my_characters.css` (v2.0.2):** `.mcn-slot-icon-bis-wrap`, `.mcn-slot-icon--bis-faded`, `.mcn-slot-icon-star-overlay` — overlay layout for faded icon + star.
+- **`admin_routes.py`:** `SeasonUpdate` model extended with `quality_ilvl_map` / `crafted_ilvl_map`; `update_season()` persists and returns both.
+- **`reference_tables.html`:** New "Raid Season Ilvl Maps" section with JSON textareas + Save button per season.
+
 ### Phase 5.4 (2026-03-17, no migration)
 - **`member_routes.py`:** `GET /api/v1/me/character/{id}/crafting` — own-character auth; raw SQL joins `character_recipes` + `recipes` + `professions` + `profession_tiers`; returns `craftable` list (with `tier_name`, `expansion_name`) and `consumables` list via `get_consumable_prices_for_realm()`.
 - **`ah_service.py`:** `get_consumable_prices_for_realm(pool, realm_id)` — active tracked items filtered to `category IN ('consumable', 'material')`; merges commodity/realm prices; computes 24h `change_pct`; returns `min_buyout_display` + `wowhead_url` (search format).
