@@ -578,6 +578,8 @@ class RaidSeason(Base):
     blizzard_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
     current_raid_ids: Mapped[Optional[list[int]]] = mapped_column(ARRAY(Integer), nullable=True)
     current_instance_ids: Mapped[Optional[list[int]]] = mapped_column(ARRAY(Integer), nullable=True)
+    quality_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    crafted_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

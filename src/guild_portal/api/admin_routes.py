@@ -76,6 +76,8 @@ class SeasonUpdate(BaseModel):
     blizzard_mplus_season_id: int | None = None
     current_raid_ids: list[int] | None = None
     current_instance_ids: list[int] | None = None
+    quality_ilvl_map: dict | None = None
+    crafted_ilvl_map: dict | None = None
 
 
 class PlayerCreate(BaseModel):
@@ -347,6 +349,10 @@ async def update_season(
         season.current_raid_ids = body.current_raid_ids or None
     if "current_instance_ids" in body.model_fields_set:
         season.current_instance_ids = body.current_instance_ids or None
+    if "quality_ilvl_map" in body.model_fields_set:
+        season.quality_ilvl_map = body.quality_ilvl_map or None
+    if "crafted_ilvl_map" in body.model_fields_set:
+        season.crafted_ilvl_map = body.crafted_ilvl_map or None
     await db.commit()
     return {
         "ok": True,
@@ -361,6 +367,8 @@ async def update_season(
             "blizzard_mplus_season_id": season.blizzard_mplus_season_id,
             "current_raid_ids": season.current_raid_ids or [],
             "current_instance_ids": season.current_instance_ids or [],
+            "quality_ilvl_map": season.quality_ilvl_map or {},
+            "crafted_ilvl_map": season.crafted_ilvl_map or {},
         },
     }
 

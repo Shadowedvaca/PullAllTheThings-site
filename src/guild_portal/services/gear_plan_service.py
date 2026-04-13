@@ -1404,6 +1404,25 @@ async def get_plan_detail(
                     "total_crafters": rows[0]["total_crafters"],
                 }
 
+        # Phase 2C: load ilvl maps from active season for target_ilvl computation.
+        season_ilvl_row = await conn.fetchrow(
+            """SELECT quality_ilvl_map, crafted_ilvl_map
+                 FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"""
+        )
+        plan_quality_ilvl_map: dict = {}
+        plan_crafted_ilvl_map: dict = {}
+        if season_ilvl_row:
+            plan_quality_ilvl_map = json.loads(season_ilvl_row["quality_ilvl_map"] or "{}")
+            plan_crafted_ilvl_map = json.loads(season_ilvl_row["crafted_ilvl_map"] or "{}")
+        plan_best_crafted_track: Optional[str] = (
+            max(plan_crafted_ilvl_map.keys(), key=lambda t: TRACK_ORDER.get(t, -1))
+            if plan_crafted_ilvl_map else None
+        )
+        plan_crafted_max_ilvl: Optional[int] = (
+            plan_crafted_ilvl_map[plan_best_crafted_track].get("max")
+            if plan_best_crafted_track else None
+        )
+
     # Normalize ring and trinket pairs: swap equipped items to maximise BIS matches
     # and ensure consistent alphabetical ordering when no match exists.
     # slot_remapping tracks any visual→DB slot swaps so the frontend can write
@@ -1453,6 +1472,21 @@ async def get_plan_detail(
             available_tracks = ["H", "M"]
 
         equipped_track = equipped["quality_track"] if equipped else None
+        equipped_ilvl_for_slot: Optional[int] = equipped.get("item_level") if equipped else None
+
+        # Phase 2C: add target_ilvl to each BIS rec so the frontend can append ?ilvl=N.
+        for rec in bis_recs:
+            bid = rec["blizzard_item_id"]
+            rec_tracks = tracks_by_item.get(bid, [])
+            if bid in craftable_desired_bids:
+                rec["target_ilvl"] = plan_crafted_max_ilvl
+            elif rec_tracks:
+                min_t = min(rec_tracks, key=lambda t: TRACK_ORDER.get(t, 99))
+                rec["target_ilvl"] = _compute_target_ilvl(
+                    min_t, equipped_ilvl_for_slot, equipped_track, plan_quality_ilvl_map
+                )
+            else:
+                rec["target_ilvl"] = None
 
         # For equipped crafted items whose quality_track wasn't detected during sync
         # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
@@ -1713,8 +1747,7 @@ async def get_available_items(
                 f"""
                 SELECT wi.blizzard_item_id, wi.name, wi.icon_url,
                        {tooltip_col}
-                       is2.encounter_name, is2.instance_name, is2.instance_type,
-                       is2.quality_tracks
+                       is2.encounter_name, is2.instance_name, is2.instance_type
                   FROM guild_identity.wow_items wi
                   JOIN guild_identity.item_sources is2
                        ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
@@ -1932,11 +1965,11 @@ async def get_available_items(
                 entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
             target[bid] = entry
 
-        # Accumulate real quality_tracks from item_sources for target_ilvl
-        db_tracks = list(r["quality_tracks"] or [])
+        # Derive quality tracks from instance type (item_sources has no per-item
+        # quality_tracks column) and accumulate for target_ilvl computation.
         if bid not in bid_tracks:
             bid_tracks[bid] = set()
-        bid_tracks[bid].update(db_tracks)
+        bid_tracks[bid].update(_get_tracks(itype))
 
         tracks = _get_tracks(itype)
         src = {

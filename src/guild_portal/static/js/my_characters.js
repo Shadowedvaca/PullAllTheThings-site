@@ -2418,7 +2418,10 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
 
   const itemMap = new Map();
   for (const r of bis) {
-    if (!itemMap.has(r.blizzard_item_id)) itemMap.set(r.blizzard_item_id, { bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url, srcIds: new Set() });
+    if (!itemMap.has(r.blizzard_item_id)) itemMap.set(r.blizzard_item_id, {
+      bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url, srcIds: new Set(),
+      target_ilvl: r.target_ilvl || null,
+    });
     itemMap.get(r.blizzard_item_id).srcIds.add(r.source_id);
   }
 
@@ -2437,8 +2440,9 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
         ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;</td>`
         : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no">&mdash;</td>`
     ).join('');
+    const bisIlvlParam = item.target_ilvl ? `?ilvl=${item.target_ilvl}` : '';
     const icon = item.icon
-      ? `<a href="https://www.wowhead.com/item=${item.bid}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
+      ? `<a href="https://www.wowhead.com/item=${item.bid}${bisIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
