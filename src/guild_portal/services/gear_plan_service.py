@@ -1496,6 +1496,24 @@ async def get_plan_detail(
         equipped_track = equipped["quality_track"] if equipped else None
         equipped_ilvl_for_slot: Optional[int] = equipped.get("item_level") if equipped else None
 
+        # For equipped crafted items whose quality_track wasn't detected during sync
+        # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
+        # detect_crafted_track() uses track_from_bonus_ids; if those IDs aren't in
+        # the map it falls through to the ilvl threshold then defaults to "H".
+        # Write the computed track back into the equipped dict so the frontend
+        # receives the correct value rather than null.
+        if equipped and equipped_track is None and equipped.get("is_crafted"):
+            equipped_track = detect_crafted_track(
+                bonus_ids=equipped.get("bonus_ids") or [],
+            )
+            if equipped_track:
+                equipped["quality_track"] = equipped_track
+
+        equipped_bid = equipped["blizzard_item_id"] if equipped else None
+        upgrade_tracks = _upgrade_tracks(equipped_track, equipped_bid, desired_bid, available_tracks)
+
+        is_bis = bool(desired_bid and equipped_bid and equipped_bid == desired_bid)
+
         # Phase 2C: compute slot-level target ilvls (same rules as available-items endpoint).
         slot_noncrafted_ilvl = _noncrafted_target_ilvl(
             is_bis, equipped_ilvl_for_slot, equipped_track, plan_quality_ilvl_map
@@ -1516,24 +1534,6 @@ async def get_plan_detail(
                 desired["target_ilvl"] = slot_crafted_ilvl
             else:
                 desired["target_ilvl"] = slot_noncrafted_ilvl
-
-        # For equipped crafted items whose quality_track wasn't detected during sync
-        # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
-        # detect_crafted_track() uses track_from_bonus_ids; if those IDs aren't in
-        # the map it falls through to the ilvl threshold then defaults to "H".
-        # Write the computed track back into the equipped dict so the frontend
-        # receives the correct value rather than null.
-        if equipped and equipped_track is None and equipped.get("is_crafted"):
-            equipped_track = detect_crafted_track(
-                bonus_ids=equipped.get("bonus_ids") or [],
-            )
-            if equipped_track:
-                equipped["quality_track"] = equipped_track
-
-        equipped_bid = equipped["blizzard_item_id"] if equipped else None
-        upgrade_tracks = _upgrade_tracks(equipped_track, equipped_bid, desired_bid, available_tracks)
-
-        is_bis = bool(desired_bid and equipped_bid and equipped_bid == desired_bid)
 
         # Fallback: if wearing BIS but item has no item_sources data, infer upgrade
         # tracks from the equipped quality track (strictly above current track).
