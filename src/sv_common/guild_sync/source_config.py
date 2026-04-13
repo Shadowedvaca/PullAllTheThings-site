@@ -7,6 +7,7 @@ instance_type values stored in item_sources:
   'raid'       — regular raid boss drop
   'world_boss' — outdoor world boss (no Raid Finder tier)
   'dungeon'    — M+ dungeon drop
+  'catalyst'   — Revival Catalyst conversion (back/wrist/waist/feet tier slots)
 """
 
 # ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ TRACKS_BY_TYPE: dict[str, list[str]] = {
     "raid":       ["V", "C", "H", "M"],
     "world_boss": ["C", "H", "M"],   # No RF tier for outdoor world bosses
     "dungeon":    ["C", "H", "M"],
+    "catalyst":   ["C", "H", "M"],   # No RF tier; converts an existing drop
 }
 
 # ---------------------------------------------------------------------------
@@ -29,6 +31,7 @@ DISPLAY_NAME_BY_TYPE: dict[str, str | None] = {
     "raid":       None,
     "world_boss": "World Boss",
     "dungeon":    None,
+    "catalyst":   None,   # instance_name stored as "Revival Catalyst", use as-is
 }
 
 # ---------------------------------------------------------------------------

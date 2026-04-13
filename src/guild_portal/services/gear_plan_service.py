@@ -1851,6 +1851,7 @@ async def get_available_items(
                        ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
                  WHERE wi.slot_type = $1
                    AND is2.instance_type IN ('raid', 'dungeon')
+                   AND wi.quality_track IS DISTINCT FROM 'C'
                    {armor_clause}
                    {season_clause}
                    {exclude_clause}

@@ -669,28 +669,29 @@ async def sync_catalyst_items_via_appearance(
 async def enrich_catalyst_tier_items(
     pool: asyncpg.Pool,
 ) -> tuple[int, list[str]]:
-    """Add per-boss source rows for tier set BIS items obtained via Revival Catalyst.
+    """Add source rows for tier set items obtained via the Revival Catalyst.
 
     Two passes:
 
     Pass 1 — Main tier slots (head/shoulder/chest/hands/legs):
-        Detection: Wowhead tooltip HTML contains an /item-set=N/ link.
-        Mirror source rows from all raid bosses that drop gear in the same slot.
+        Detection: Wowhead tooltip HTML contains an /item-set=N/ link, OR the
+        Wowhead FALLBACK condition (armor_type set + "of the X" suffix + BIS entry
+        + no existing sources).  Inserts per-boss source rows (instance_type='raid'
+        or 'world_boss') so the drop location is visible.
 
     Pass 2 — Catalyst slots (back/wrist/waist/feet):
-        These never receive /item-set= tooltip links.
-        Detection: name-suffix match against confirmed Pass 1 tier items (e.g.,
-        "Barksash of the Luminous Bloom" shares the suffix with "Trunk of the
-        Luminous Bloom").  Mirror source rows from all raid bosses that drop gear
-        in the same catalyst slot.  Works even when Wowhead has not yet indexed
-        the new expansion items.
+        These items are never dropped by raid bosses and never receive /item-set=
+        tooltip links.  Detection: name-suffix match against confirmed Pass 1 tier
+        items.  Inserts a single instance_type='catalyst' row per item so the
+        drawer shows "Revival Catalyst" as the source.
 
     Returns (rows_added, errors).
     """
     errors: list[str] = []
 
     async with pool.acquire() as conn:
-        # Remove stale generic "Revival Catalyst" rows (replaced by per-boss rows).
+        # Remove stale generic "Revival Catalyst" rows for main tier items
+        # (replaced by per-boss rows in Pass 1).
         await conn.execute(
             """
             DELETE FROM guild_identity.item_sources
@@ -698,6 +699,21 @@ async def enrich_catalyst_tier_items(
                AND item_id IN (
                    SELECT wi.id FROM guild_identity.wow_items wi
                     WHERE wi.wowhead_tooltip_html LIKE '%/item-set=%'
+               )
+            """
+        )
+
+        # Remove any raid/world_boss source rows for catalyst items
+        # (quality_track='C' — these are Revival Catalyst pieces that are never
+        # dropped by bosses; migration 0101 cleaned them initially, this guards
+        # against re-insertion by Pass 1's FALLBACK path on subsequent runs).
+        await conn.execute(
+            """
+            DELETE FROM guild_identity.item_sources
+             WHERE instance_type IN ('raid', 'world_boss')
+               AND item_id IN (
+                   SELECT id FROM guild_identity.wow_items
+                    WHERE quality_track = 'C'
                )
             """
         )
@@ -717,6 +733,9 @@ async def enrich_catalyst_tier_items(
               FROM guild_identity.bis_list_entries ble
               JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
              WHERE ble.slot = ANY($1::text[])
+               -- Exclude catalyst items (quality_track='C') — they are handled by
+               -- Pass 2 with instance_type='catalyst', never by boss source rows.
+               AND wi.quality_track IS DISTINCT FROM 'C'
                AND (
                    -- PRIMARY: Wowhead tooltip confirms tier set membership.
                    wi.wowhead_tooltip_html LIKE '%/item-set=%'
@@ -821,6 +840,11 @@ async def enrich_catalyst_tier_items(
                         )
 
         # ── Pass 2: catalyst slots (back/wrist/waist/feet) ───────────────────
+        # These items are never dropped by raid bosses — they are obtained by
+        # converting any same-slot drop through the Revival Catalyst.  Insert a
+        # single instance_type='catalyst' row per item so the drawer shows
+        # "Revival Catalyst" as the only source.
+        #
         # Suffix derivation is done independently of Pass 1's tier_items so that
         # it works even after the first run has already added sources to main-5
         # items (which would then fail the fallback's NOT EXISTS check).
@@ -862,8 +886,7 @@ async def enrich_catalyst_tier_items(
         suffix_patterns = [f"%{s}" for s in tier_suffixes]
         all_catalyst_bis = await conn.fetch(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
-                   wi.slot_type AS eff_slot
+            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name
               FROM guild_identity.wow_items wi
              WHERE wi.slot_type = ANY($1::text[])
                AND wi.name LIKE ANY($2::text[])
@@ -881,69 +904,29 @@ async def enrich_catalyst_tier_items(
             )
             return added, errors
 
-        # Build slot → boss list for catalyst slots.
-        catalyst_boss_rows = await conn.fetch(
-            """
-            SELECT DISTINCT is2.encounter_name, is2.instance_name,
-                            is2.instance_type, is2.blizzard_instance_id, wi.slot_type
-              FROM guild_identity.item_sources is2
-              JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
-             WHERE is2.instance_type IN ('raid', 'world_boss')
-               AND wi.slot_type = ANY($1::text[])
-            """,
-            list(_CATALYST_SLOTS),
-        )
-
-        catalyst_slot_to_bosses: dict[str, list[tuple[str, str, str, Optional[int]]]] = {}
-        for r in catalyst_boss_rows:
-            st = r["slot_type"]
-            if st:
-                catalyst_slot_to_bosses.setdefault(st, []).append(
-                    (r["encounter_name"], r["instance_name"], r["instance_type"], r["blizzard_instance_id"])
-                )
-
         logger.info(
-            "enrich_catalyst: Pass 2 — adding boss sources for %d catalyst-slot items "
-            "(suffixes: %s)",
+            "enrich_catalyst: Pass 2 — adding Revival Catalyst source for %d "
+            "catalyst-slot items (suffixes: %s)",
             len(catalyst_items), sorted(tier_suffixes),
         )
 
         for tier in catalyst_items:
-            eff_slot = tier["eff_slot"]
-            bosses = catalyst_slot_to_bosses.get(eff_slot, [])
-            if not bosses:
-                # Fall back to all main-5 bosses (same raid bosses drop all tier
-                # tokens), then to a Revival Catalyst placeholder as last resort.
-                bosses = all_main_bosses or [("Revival Catalyst", "Revival Catalyst", "raid", None)]
-
-            for enc_name, inst_name, inst_type, blizzard_inst_id in bosses:
-                try:
-                    await conn.execute(
-                        """
-                        INSERT INTO guild_identity.item_sources
-                               (item_id, instance_type, encounter_name, instance_name,
-                                blizzard_instance_id)
-                        VALUES ($1, $2, $3, $4, $5)
-                        ON CONFLICT (item_id, instance_type, encounter_name)
-                        DO UPDATE SET
-                            instance_name        = EXCLUDED.instance_name,
-                            blizzard_instance_id = COALESCE(
-                                                       EXCLUDED.blizzard_instance_id,
-                                                       guild_identity.item_sources.blizzard_instance_id
-                                                   )
-                        """,
-                        tier["wow_item_id"],
-                        inst_type,
-                        enc_name,
-                        inst_name,
-                        blizzard_inst_id,
-                    )
-                    added += 1
-                except Exception as exc:
-                    errors.append(
-                        f"DB error (catalyst) for {tier['blizzard_item_id']} "
-                        f"({tier['name']}) boss {enc_name!r}: {exc}"
-                    )
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO guild_identity.item_sources
+                           (item_id, instance_type, encounter_name, instance_name)
+                    VALUES ($1, 'catalyst', 'Revival Catalyst', 'Revival Catalyst')
+                    ON CONFLICT (item_id, instance_type, encounter_name) DO NOTHING
+                    """,
+                    tier["wow_item_id"],
+                )
+                added += 1
+            except Exception as exc:
+                errors.append(
+                    f"DB error (catalyst) for {tier['blizzard_item_id']} "
+                    f"({tier['name']}): {exc}"
+                )
 
     return added, errors
 
