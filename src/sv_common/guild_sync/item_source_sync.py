@@ -499,7 +499,7 @@ async def sync_catalyst_items_via_appearance(
                    SELECT 1 FROM guild_identity.bis_list_entries ble
                     WHERE ble.item_id = wi.id
                )
-             ORDER BY wi.slot_type, wi.name
+             ORDER BY wi.name
             """
         )
 
