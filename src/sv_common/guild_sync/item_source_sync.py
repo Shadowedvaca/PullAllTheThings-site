@@ -29,8 +29,12 @@ logger = logging.getLogger(__name__)
 # Delay between encounter fetches to avoid hammering the API.
 _ENCOUNTER_DELAY = 0.2
 
-# Tier set item slots — the only slots where Catalyst-obtained items can exist.
+# Tier set item slots — the 5 main slots obtained via tier tokens / direct boss drop.
 _TIER_SLOTS = {"head", "shoulder", "chest", "hands", "legs"}
+
+# Catalyst-slot tier items — obtained only via the Creation Catalyst (no direct drop).
+# Their Wowhead tooltips do NOT contain /item-set= links, so they need name-suffix detection.
+_CATALYST_SLOTS = {"back", "wrist", "waist", "feet"}
 
 
 async def sync_item_sources(
@@ -476,18 +480,21 @@ async def sync_catalyst_items_via_appearance(
     errors: list[str] = []
     stubbed = 0
 
-    # Step 1: Find known tier items and collect (blizzard_item_id, name) pairs.
+    # Step 1: Find BIS items with "of the X" suffix in any tier or catalyst slot.
+    # No sources/armor_type filter — we only need the name to derive the suffix.
+    # On prod (new expansion, no Wowhead tooltips yet) these items exist from BIS
+    # scrapes but have no sources.  On dev they may already have sources; we still
+    # want to run the crawl so any missing quality-variant IDs are stubbed.
     async with pool.acquire() as conn:
         tier_rows = await conn.fetch(
             """
             SELECT DISTINCT wi.blizzard_item_id, wi.name
               FROM guild_identity.wow_items wi
-             WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
-               AND wi.armor_type IS NOT NULL
-               AND NOT EXISTS (
-                   SELECT 1 FROM guild_identity.item_sources s
-                    WHERE s.item_id = wi.id
-               )
+             WHERE wi.slot_type IN (
+                       'head','shoulder','chest','hands','legs',
+                       'back','wrist','waist','feet'
+                   )
+               AND wi.name LIKE '% of %'
                AND EXISTS (
                    SELECT 1 FROM guild_identity.bis_list_entries ble
                     WHERE ble.item_id = wi.id
@@ -502,24 +509,10 @@ async def sync_catalyst_items_via_appearance(
         )
         return 0, []
 
-    # Fetch names from Blizzard API for any items that are missing them.
-    known_items: list[tuple[int, str]] = []
-    for row in tier_rows:
-        name = row["name"] or ""
-        bid = row["blizzard_item_id"]
-        if not name or " of " not in name:
-            item_data = await client.get_item(bid)
-            if item_data:
-                name = item_data.get("name", "") or ""
-        if name and " of " in name:
-            known_items.append((bid, name))
-
-    if not known_items:
-        logger.info(
-            "sync_catalyst_items: no tier items with 'of the X' suffix found; "
-            "falling back to sync_tier_set_completions"
-        )
-        return await sync_tier_set_completions(pool, client)
+    # All rows already have "of" in their name (pre-filtered in SQL).
+    known_items: list[tuple[int, str]] = [
+        (row["blizzard_item_id"], row["name"]) for row in tier_rows
+    ]
 
     # Extract suffixes: "Midnight Vanguard's Chestguard of the Luminous Bloom"
     #                   → " of the Luminous Bloom"
@@ -647,10 +640,19 @@ async def enrich_catalyst_tier_items(
 ) -> tuple[int, list[str]]:
     """Add per-boss source rows for tier set BIS items obtained via Revival Catalyst.
 
-    Tier set pieces don't appear in the Blizzard Journal encounter item lists.
-    Detection: Wowhead tooltip HTML contains an /item-set=N/ link.
-    For each such item, mirror source rows of all bosses that drop gear in the
-    same slot — those are the bosses a player farms to get a Catalyst piece.
+    Two passes:
+
+    Pass 1 — Main tier slots (head/shoulder/chest/hands/legs):
+        Detection: Wowhead tooltip HTML contains an /item-set=N/ link.
+        Mirror source rows from all raid bosses that drop gear in the same slot.
+
+    Pass 2 — Catalyst slots (back/wrist/waist/feet):
+        These never receive /item-set= tooltip links.
+        Detection: name-suffix match against confirmed Pass 1 tier items (e.g.,
+        "Barksash of the Luminous Bloom" shares the suffix with "Trunk of the
+        Luminous Bloom").  Mirror source rows from all raid bosses that drop gear
+        in the same catalyst slot.  Works even when Wowhead has not yet indexed
+        the new expansion items.
 
     Returns (rows_added, errors).
     """
@@ -669,6 +671,7 @@ async def enrich_catalyst_tier_items(
             """
         )
 
+        # ── Pass 1: main-5 tier slots ─────────────────────────────────────────
         # Find all tier set items in BIS data (identified by item-set tooltip link).
         tier_items = await conn.fetch(
             """
@@ -682,11 +685,7 @@ async def enrich_catalyst_tier_items(
             list(_TIER_SLOTS),
         )
 
-        if not tier_items:
-            return 0, []
-
-        # Build slot → [(encounter_name, instance_name, instance_type, blizzard_instance_id)]
-        # from existing boss sources (raid + world_boss).
+        # Build slot → boss list from existing raid/world_boss sources.
         boss_rows = await conn.fetch(
             """
             SELECT DISTINCT is2.encounter_name, is2.instance_name,
@@ -707,13 +706,120 @@ async def enrich_catalyst_tier_items(
                     (r["encounter_name"], r["instance_name"], r["instance_type"], r["blizzard_instance_id"])
                 )
 
-        logger.info(
-            "Adding Catalyst boss-level source rows for %d tier set items", len(tier_items)
+        added = 0
+
+        if tier_items:
+            logger.info(
+                "enrich_catalyst: Pass 1 — adding boss sources for %d main-tier items",
+                len(tier_items),
+            )
+            for tier in tier_items:
+                bosses = slot_to_bosses.get(tier["eff_slot"], [])
+                if not bosses:
+                    bosses = [("Revival Catalyst", "Revival Catalyst", "raid", None)]
+
+                for enc_name, inst_name, inst_type, blizzard_inst_id in bosses:
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO guild_identity.item_sources
+                                   (item_id, instance_type, encounter_name, instance_name,
+                                    blizzard_instance_id)
+                            VALUES ($1, $2, $3, $4, $5)
+                            ON CONFLICT (item_id, instance_type, encounter_name)
+                            DO UPDATE SET
+                                instance_name        = EXCLUDED.instance_name,
+                                blizzard_instance_id = COALESCE(
+                                                           EXCLUDED.blizzard_instance_id,
+                                                           guild_identity.item_sources.blizzard_instance_id
+                                                       )
+                            """,
+                            tier["wow_item_id"],
+                            inst_type,
+                            enc_name,
+                            inst_name,
+                            blizzard_inst_id,
+                        )
+                        added += 1
+                    except Exception as exc:
+                        errors.append(
+                            f"DB error for {tier['blizzard_item_id']} ({tier['name']}) "
+                            f"boss {enc_name!r}: {exc}"
+                        )
+
+        # ── Pass 2: catalyst slots (back/wrist/waist/feet) ───────────────────
+        # These items don't have /item-set= tooltip links.
+        # Derive the tier set suffix from Pass 1 items and find catalyst-slot items
+        # in BIS whose names share that suffix.
+        tier_suffixes: set[str] = set()
+        for t in tier_items:
+            name = t["name"] or ""
+            idx = name.find(" of ")
+            if idx >= 0:
+                tier_suffixes.add(name[idx:])  # e.g. " of the Luminous Bloom"
+
+        if not tier_suffixes:
+            logger.info(
+                "enrich_catalyst: Pass 2 skipped — no tier set suffixes found "
+                "(main-5 items may not be Wowhead-enriched yet)"
+            )
+            return added, errors
+
+        # Load all BIS items in catalyst slots; filter by suffix in Python.
+        all_catalyst_bis = await conn.fetch(
+            """
+            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
+                   COALESCE(NULLIF(wi.slot_type, 'other'), ble.slot) AS eff_slot
+              FROM guild_identity.bis_list_entries ble
+              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
+             WHERE ble.slot = ANY($1::text[])
+               AND wi.slot_type = ANY($1::text[])
+            """,
+            list(_CATALYST_SLOTS),
         )
 
-        added = 0
-        for tier in tier_items:
-            bosses = slot_to_bosses.get(tier["eff_slot"], [])
+        catalyst_items = [
+            row for row in all_catalyst_bis
+            if any((row["name"] or "").endswith(suffix) for suffix in tier_suffixes)
+        ]
+
+        if not catalyst_items:
+            logger.info(
+                "enrich_catalyst: Pass 2 — no catalyst-slot items matched suffixes %s",
+                sorted(tier_suffixes),
+            )
+            return added, errors
+
+        # Build slot → boss list for catalyst slots.
+        catalyst_boss_rows = await conn.fetch(
+            """
+            SELECT DISTINCT is2.encounter_name, is2.instance_name,
+                            is2.instance_type, is2.blizzard_instance_id, wi.slot_type
+              FROM guild_identity.item_sources is2
+              JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
+             WHERE is2.instance_type IN ('raid', 'world_boss')
+               AND wi.slot_type = ANY($1::text[])
+            """,
+            list(_CATALYST_SLOTS),
+        )
+
+        catalyst_slot_to_bosses: dict[str, list[tuple[str, str, str, Optional[int]]]] = {}
+        for r in catalyst_boss_rows:
+            st = r["slot_type"]
+            if st:
+                catalyst_slot_to_bosses.setdefault(st, []).append(
+                    (r["encounter_name"], r["instance_name"], r["instance_type"], r["blizzard_instance_id"])
+                )
+
+        logger.info(
+            "enrich_catalyst: Pass 2 — adding boss sources for %d catalyst-slot items "
+            "(suffixes: %s)",
+            len(catalyst_items), sorted(tier_suffixes),
+        )
+
+        for tier in catalyst_items:
+            eff_slot = tier["eff_slot"]
+            bosses = catalyst_slot_to_bosses.get(eff_slot, [])
             if not bosses:
                 bosses = [("Revival Catalyst", "Revival Catalyst", "raid", None)]
 
@@ -728,8 +834,10 @@ async def enrich_catalyst_tier_items(
                         ON CONFLICT (item_id, instance_type, encounter_name)
                         DO UPDATE SET
                             instance_name        = EXCLUDED.instance_name,
-                            blizzard_instance_id = COALESCE(EXCLUDED.blizzard_instance_id,
-                                                            guild_identity.item_sources.blizzard_instance_id)
+                            blizzard_instance_id = COALESCE(
+                                                       EXCLUDED.blizzard_instance_id,
+                                                       guild_identity.item_sources.blizzard_instance_id
+                                                   )
                         """,
                         tier["wow_item_id"],
                         inst_type,
@@ -740,8 +848,8 @@ async def enrich_catalyst_tier_items(
                     added += 1
                 except Exception as exc:
                     errors.append(
-                        f"DB error for {tier['blizzard_item_id']} ({tier['name']}) "
-                        f"boss {enc_name!r}: {exc}"
+                        f"DB error (catalyst) for {tier['blizzard_item_id']} "
+                        f"({tier['name']}) boss {enc_name!r}: {exc}"
                     )
 
     return added, errors
