@@ -1,6 +1,6 @@
 # Gear Plan Phase 1F — Trinket Rankings
 
-> **Status:** In Progress — Steps 1–4 complete on `feature/gear-plan-phase-1f` (dev deployed)  
+> **Status:** In Progress — Steps 1–4 complete and verified on `feature/gear-plan-phase-1f` (dev deployed)  
 > **Depends on:** Phase 1A–1E (complete), Phase 1C item_sources data  
 > **Follows:** Current prod work (tier/catalyst hotfixes, Blizzard API Explorer)  
 > **Precedes:** Phase 2 (Enchants, Gems, Crafting)
@@ -450,13 +450,13 @@ See `docs/BACKUPS.md` — "Recovering from a Bad Delete" for the full procedure 
 | Step | Scope | Size | Status |
 |------|-------|------|--------|
 | 1 | Migration — `trinket_tier_ratings` table + index | Tiny | ✅ migration 0100 |
-| 2 | `bis_sync.py` — `_extract_trinket_tiers()` + `_upsert_trinket_ratings()` | Small | ✅ |
-| 3 | Admin gear plan — Trinket Ratings status tab | Small | ✅ |
+| 2 | `bis_sync.py` — `_extract_trinket_tiers()` + `_upsert_trinket_ratings()` | Small | ✅ verified — Balance Druid data confirmed correct in dev |
+| 3 | Admin gear plan — Trinket Ratings status tab + per-row Sync button with inline result | Small | ✅ |
 | 4 | Static assets — source icon SVGs in `static/img/sources/` | Tiny | ✅ (SVG placeholders; replace w/ real favicons when available) |
-| 5 | API — new `GET /trinket-ratings` endpoint | Small | ⬜ next batch |
-| 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small | ⬜ next batch |
-| 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small | ⬜ next batch |
-| 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small | ⬜ next batch |
+| 5 | API — new `GET /trinket-ratings` endpoint | Small | ⬜ |
+| 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small | ⬜ |
+| 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small | ⬜ |
+| 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small | ⬜ |
 | 9 | UI — paperdoll trinket slot tier overlay + unranked upgrade pill | Small | ⬜ |
 | 10 | UI — slot table tier badge on trinket rows | Small | ⬜ |
 | 11 | UI — Trinket Rankings drawer section (tabs, list, source switcher) | Medium | ⬜ |
@@ -464,6 +464,22 @@ See `docs/BACKUPS.md` — "Recovering from a Bad Delete" for the full procedure 
 | **Total** | | **Medium — 1-2 dev sessions** | |
 
 Steps 1–4 are backend setup. Steps 5–8 are API + shared JS utilities. Steps 9–12 are the visible UI work. Each step is independently deployable behind the existing gear plan feature gate (GL only for the admin side; character-owned gating for the member side).
+
+---
+
+## Implementation Notes (from Steps 1–4)
+
+### Wowhead closing tag normalisation
+Wowhead's raw HTML escapes BBCode closing tags as `[\/tag]` (backslash before slash). The regex approach (`\\?` to make the backslash optional) failed silently in practice. Fix: `_extract_trinket_tiers()` pre-normalises with `raw_html.replace("[\\/", "[/")` before applying regexes. Patterns use plain `[/tag]` form.
+
+### All three Wowhead sources return identical trinket data
+Wowhead has one trinket tier list per spec page — not separate per content-type. All three source rows (Raid/M+/Overall) produce identical `trinket_tier_ratings` rows. Expected. The `source_id` distinction becomes meaningful when Icy Veins data lands.
+
+### Items with empty names
+Some scraped items land with empty `item_name` — not in `WH.Gatherer.addData()` at scrape time. Stubs are in `wow_items` with the correct `blizzard_item_id`. Running Enrich Items fills the names.
+
+### Admin per-row Sync button (added to Step 3 scope)
+Each Scrape Targets row has an inline Sync button: fires `POST /api/v1/admin/bis/sync/target/{id}`, shows spinner on the button, then updates the row's status/items cells in place and displays `X BIS · Y trinkets` inline. Function: `resyncSingleTarget()` in `gear_plan_admin.js` (v1.2.0).
 
 ---
 
