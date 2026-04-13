@@ -135,36 +135,39 @@ current equipped gear. Two rules — one for equipped gear, one for BIS recommen
 
 ### Display rules
 
-**Equipped gear** (left side of gear plan, current paperdoll):
+One consistent rule applies to **every item** in the detail view (BIS recommendation,
+available-items drawer, any tooltip rendered for a slot):
+
+#### Equipped gear (paperdoll slots)
 - Show at the player's actual `character_equipment.item_level` for that slot.
-- If the slot is empty (no row in `character_equipment`), show no `?ilvl` param — base
-  tooltip only.
+- Slot empty → no `?ilvl`, base tooltip only.
 
-**BIS items** (right side / available-items drawer):
+#### All non-crafted items in the drawer
 
-Two cases, determined by whether the BIS item is what the player currently has equipped:
+Determine the item's **minimum available quality track** from `item_sources.quality_tracks`
+(the lowest track the item can be obtained at, e.g. `H` for a Heroic-only drop, `C` for a
+Normal drop).
 
-| Player state | Show BIS at |
+| Item's min quality vs equipped quality | Show at |
 |---|---|
-| Not wearing BIS in that slot | `character_equipment.item_level` for that slot — a direct swap comparison at equal ilvl |
-| Wearing BIS in that slot | `quality_ilvl_map[next_track]['max']` — ceiling of the next tier up |
-| Wearing BIS at Myth (no higher tier) | `quality_ilvl_map['M']['max']` — Myth ceiling |
-| Slot is empty | No `?ilvl` param — base tooltip only |
+| Item min quality ≤ player's equipped quality | Player's actual `equipped_ilvl` — a direct swap comparison at equal ilvl |
+| Item min quality > player's equipped quality | `quality_ilvl_map[item_min_quality]['max']` — ceiling of the tier required to obtain it |
+| Slot is empty | No `?ilvl` — base tooltip only |
 
-"Has BIS equipped" is determined by comparing `character_equipment.blizzard_item_id` for
-that slot against the BIS item's `blizzard_item_id` (via `wow_items`).
+**What this gives the player:**
+- Item available at their tier → "here's this item at your exact ilvl — would it be better?"
+- Item requires a higher tier → "here's the ceiling of what you'd get if you reach that tier."
 
-Track progression for "next tier": A → V → C → H → M (M is the cap, loops to itself).
+Track order for comparison: A(0) < V(1) < C(2) < H(3) < M(4)
 
-This gives two useful views:
-- **Not wearing BIS:** "Here's this item at the exact ilvl of what you have — a clean
-  stat comparison." Helps evaluate whether the BIS item is actually better than current.
-- **Wearing BIS:** "Here's the ceiling of the next track up." Shows the aspirational target
-  and motivates pushing to the next upgrade tier.
+#### Crafted items
 
-Crafted items follow the same logic using `crafted_ilvl_map` instead of `quality_ilvl_map`.
-If the player's equipped track has no entry in `crafted_ilvl_map` (e.g., Champion this
-season), fall back to base tooltip (no `?ilvl`).
+Always show at `crafted_ilvl_map[item_crafted_track]['max']` — the 5-star ceiling.
+No player-state dependency. Crafting at anything less than 5-star is a waste of mats,
+so we always show the fully-crafted version.
+
+If the item's crafted track has no entry in `crafted_ilvl_map` for this season (e.g.
+Champion is absent in Midnight S1), fall back to base tooltip (no `?ilvl`).
 
 ### Ilvl map storage
 
