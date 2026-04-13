@@ -680,8 +680,11 @@ async def enrich_catalyst_tier_items(
             """
         )
 
-        # ── Pass 1: main-5 tier slots ─────────────────────────────────────────
-        # Find all tier set items in BIS data (identified by item-set tooltip link).
+        # ── Pass 1: all tier slots (main-5 + catalyst) with item-set tooltip link ──
+        # Catalyst-slot pieces (back/wrist/waist/feet) that Wowhead has already
+        # indexed will have /item-set=N/ links in their tooltip HTML, even though
+        # they never appear in the Blizzard Journal.  Query all 9 slots.
+        all_tier_slots = list(_TIER_SLOTS | _CATALYST_SLOTS)
         tier_items = await conn.fetch(
             """
             SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
@@ -691,10 +694,11 @@ async def enrich_catalyst_tier_items(
              WHERE ble.slot = ANY($1::text[])
                AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
             """,
-            list(_TIER_SLOTS),
+            all_tier_slots,
         )
 
-        # Build slot → boss list from existing raid/world_boss sources.
+        # Build slot → boss list from existing raid/world_boss sources on main-5
+        # tier items (those are the only tier items that have sources at this point).
         boss_rows = await conn.fetch(
             """
             SELECT DISTINCT is2.encounter_name, is2.instance_name,
@@ -715,17 +719,30 @@ async def enrich_catalyst_tier_items(
                     (r["encounter_name"], r["instance_name"], r["instance_type"], r["blizzard_instance_id"])
                 )
 
+        # All bosses from all main-5 slots combined — used as fallback for
+        # catalyst-slot items whose slot_type has no direct boss mapping yet.
+        all_main_bosses: list[tuple[str, str, str, Optional[int]]] = []
+        seen_enc: set[str] = set()
+        for boss_list in slot_to_bosses.values():
+            for entry in boss_list:
+                if entry[0] not in seen_enc:
+                    seen_enc.add(entry[0])
+                    all_main_bosses.append(entry)
+
         added = 0
 
         if tier_items:
             logger.info(
-                "enrich_catalyst: Pass 1 — adding boss sources for %d main-tier items",
+                "enrich_catalyst: Pass 1 — adding boss sources for %d tier items "
+                "(main-5 + catalyst-slot with item-set link)",
                 len(tier_items),
             )
             for tier in tier_items:
                 bosses = slot_to_bosses.get(tier["eff_slot"], [])
                 if not bosses:
-                    bosses = [("Revival Catalyst", "Revival Catalyst", "raid", None)]
+                    # Catalyst slot: use all main-5 bosses (all bosses drop tier
+                    # tokens), or fall back to a Revival Catalyst placeholder.
+                    bosses = all_main_bosses or [("Revival Catalyst", "Revival Catalyst", "raid", None)]
 
                 for enc_name, inst_name, inst_type, blizzard_inst_id in bosses:
                     try:
@@ -757,9 +774,9 @@ async def enrich_catalyst_tier_items(
                         )
 
         # ── Pass 2: catalyst slots (back/wrist/waist/feet) ───────────────────
-        # These items don't have /item-set= tooltip links.
-        # Derive the tier set suffix from Pass 1 items and find catalyst-slot items
-        # in BIS whose names share that suffix.
+        # For items whose Wowhead page is not yet indexed (no tooltip HTML), Pass 1
+        # can't detect them via item-set links.  Derive the tier set suffix from
+        # Pass 1 items and find catalyst-slot BIS items whose names share that suffix.
         tier_suffixes: set[str] = set()
         for t in tier_items:
             name = t["name"] or ""
