@@ -1587,6 +1587,7 @@ class WowItem(Base):
     armor_type: Mapped[Optional[str]] = mapped_column(String(20))
     weapon_type: Mapped[Optional[str]] = mapped_column(String(30))
     wowhead_tooltip_html: Mapped[Optional[str]] = mapped_column(Text)
+    quality_track: Mapped[Optional[str]] = mapped_column(String(1))
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

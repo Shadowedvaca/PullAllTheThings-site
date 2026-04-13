@@ -29,6 +29,28 @@ logger = logging.getLogger(__name__)
 # Delay between encounter fetches to avoid hammering the API.
 _ENCOUNTER_DELAY = 0.2
 
+
+def _quality_track_from_set_name(set_name: str) -> Optional[str]:
+    """Derive V/C/H/M quality track from an appearance set name.
+
+    Blizzard appends a parenthetical qualifier to non-Normal quality tiers:
+      "(Raid Finder)" → V (Veteran)
+      no suffix       → C (Champion / Normal)
+      "(Heroic)"      → H (Hero)
+      "(Mythic)"      → M (Mythic)
+
+    Returns None if the name cannot be classified.
+    """
+    lower = set_name.strip().lower()
+    if lower.endswith("(mythic)"):
+        return "M"
+    if lower.endswith("(heroic)"):
+        return "H"
+    if lower.endswith("(raid finder)") or lower.endswith("(lfr)"):
+        return "V"
+    # No parenthetical qualifier → Normal / Champion track
+    return "C"
+
 # Tier set item slots — the 5 main slots obtained via tier tokens / direct boss drop.
 _TIER_SLOTS = {"head", "shoulder", "chest", "hands", "legs"}
 
@@ -530,7 +552,8 @@ async def sync_catalyst_items_via_appearance(
         )
         return await sync_tier_set_completions(pool, client)
 
-    matching_set_ids: list[int] = []
+    # list of (set_id, set_name) — name is used to derive quality_track.
+    matching_sets: list[tuple[int, str]] = []
     for app_set in all_app_sets:
         set_name = app_set.get("name", "")
         set_id = app_set.get("id")
@@ -539,14 +562,14 @@ async def sync_catalyst_items_via_appearance(
         for suffix in suffixes:
             # Strip leading space for the name comparison.
             if suffix.strip().lower() in set_name.lower():
-                matching_set_ids.append(set_id)
+                matching_sets.append((set_id, set_name))
                 logger.info(
                     "sync_catalyst_items: matched appearance set %d (%r)",
                     set_id, set_name,
                 )
                 break  # Don't match the same set twice
 
-    if not matching_set_ids:
+    if not matching_sets:
         logger.info(
             "sync_catalyst_items: no appearance sets matched suffixes %s; falling back",
             sorted(suffixes),
@@ -554,12 +577,18 @@ async def sync_catalyst_items_via_appearance(
         return await sync_tier_set_completions(pool, client)
 
     logger.info(
-        "sync_catalyst_items: crawling %d appearance set(s)", len(matching_set_ids)
+        "sync_catalyst_items: crawling %d appearance set(s)", len(matching_sets)
     )
 
     # Step 3: For each matched set, fetch all appearances in parallel, then stub.
     async with pool.acquire() as conn:
-        for set_id in matching_set_ids:
+        for set_id, set_name in matching_sets:
+            quality_track = _quality_track_from_set_name(set_name)
+            logger.info(
+                "sync_catalyst_items: set %d (%r) → quality_track=%r",
+                set_id, set_name, quality_track,
+            )
+
             set_data = await client.get_item_appearance_set(set_id)
             if not set_data:
                 msg = f"sync_catalyst_items: could not fetch appearance set {set_id}"
@@ -603,19 +632,24 @@ async def sync_catalyst_items_via_appearance(
                         result = await conn.execute(
                             """
                             INSERT INTO guild_identity.wow_items
-                                   (blizzard_item_id, name, slot_type)
-                            VALUES ($1, $2, 'other')
-                            ON CONFLICT (blizzard_item_id) DO NOTHING
+                                   (blizzard_item_id, name, slot_type, quality_track)
+                            VALUES ($1, $2, 'other', $3)
+                            ON CONFLICT (blizzard_item_id) DO UPDATE SET
+                                quality_track = COALESCE(
+                                    guild_identity.wow_items.quality_track,
+                                    EXCLUDED.quality_track
+                                )
                             """,
                             blizzard_item_id,
                             item_name,
+                            quality_track,
                         )
                         if result == "INSERT 0 1":
                             stubbed += 1
                             logger.info(
                                 "sync_catalyst_items: stubbed item %d "
-                                "from appearance %d (set %d)",
-                                blizzard_item_id, app_id, set_id,
+                                "from appearance %d (set %d, track=%s)",
+                                blizzard_item_id, app_id, set_id, quality_track,
                             )
                     except Exception as exc:
                         msg = (
@@ -627,7 +661,7 @@ async def sync_catalyst_items_via_appearance(
 
     logger.info(
         "sync_catalyst_items: stubbed %d new item(s) across %d appearance set(s)",
-        stubbed, len(matching_set_ids),
+        stubbed, len(matching_sets),
     )
     return stubbed, errors
 
