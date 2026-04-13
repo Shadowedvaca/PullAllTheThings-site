@@ -170,7 +170,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 |--------|-----------|
 | `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns, +`attendance_excuse_if_unavailable`, +`attendance_excuse_if_discord_absent`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`, +`active_connected_realm_ids`), `rank_wow_mapping` |
 | `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`, +**`in_guild`**, +**`last_equipment_sync`** — 0066, +**`race VARCHAR(40)`** — 0080), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history`, **`wow_items`**, **`item_sources`**, **`hero_talents`**, **`bis_list_sources`** (5 seed rows; display names updated to "u.gg Raid/M+/Overall" — 0075; `origin='archon'` stays as code id), **`bis_list_entries`** (`hero_talent_id=NULL` for Wowhead entries — 0076), **`character_equipment`**, **`gear_plans`** (+`simc_imported_at TIMESTAMPTZ`, +`equipped_source VARCHAR(10) DEFAULT 'blizzard'` — 0094), **`gear_plan_slots`**, **`bis_scrape_targets`** (Wowhead targets use `hero_talent_id=NULL` — 0076), **`bis_scrape_log`** (all 0066), **`item_recipe_links`** (item_id FK→wow_items, recipe_id FK→recipes, confidence INT CHECK 0–100, match_type VARCHAR(50), UNIQUE(item_id,recipe_id) — 0085) |
-| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`, +`is_deleted` BOOLEAN — 0062, +`signup_snapshot_at` — 0063), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`, +`was_available` BOOLEAN, +`raid_helper_status` VARCHAR(20) — 0063), `recurring_events`, `voice_attendance_log`, **`attendance_rules`** (id, name, group_label, group_type CHECK('promotion'/'warning'/'info'), is_active, target_rank_ids INTEGER[], result_rank_id FK→guild_ranks, conditions JSONB, sort_order, created_at — 0064) |
+| `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`, +**`quality_ilvl_map JSONB`**, +**`crafted_ilvl_map JSONB`** — 0099), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`, +`is_deleted` BOOLEAN — 0062, +`signup_snapshot_at` — 0063), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`, +`was_available` BOOLEAN, +`raid_helper_status` VARCHAR(20) — 0063), `recurring_events`, `voice_attendance_log`, **`attendance_rules`** (id, name, group_label, group_type CHECK('promotion'/'warning'/'info'), is_active, target_rank_ids INTEGER[], result_rank_id FK→guild_ranks, conditions JSONB, sort_order, created_at — 0064) |
 
 **Key design notes:**
 - `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`
@@ -235,19 +235,26 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **Phase 2C — Quality-Aware Ilvl Display** — migration 0099, on `feature/gear-plan-phase-2b`. **On dev, ready for testing.**
+  - **`patt.raid_seasons.quality_ilvl_map` + `crafted_ilvl_map` JSONB** (migration 0099) — season-specific ilvl bands per quality track; seeded for Midnight S1.
+  - **`_compute_target_ilvl()`** in `gear_plan_service.py` — compares item's min quality track (from `item_sources.quality_tracks`) vs player's equipped track; returns equipped ilvl or track ceiling.
+  - **`get_available_items()`** updated — loads both maps from active season; queries `character_equipment` for slot's equipped ilvl+track; adds `target_ilvl` to every item in all groups (raid, dungeon, crafted, tier).
+  - **Crafted items**: always `crafted_ilvl_map` max track ceiling (5-star = M in Midnight S1 → 285 ilvl).
+  - **Tier/catalyst items**: min track defaults to 'C' (Normal), same comparison logic as raid drops.
+  - **Frontend**: available-item Wowhead links append `?ilvl={target_ilvl}`; equipped-item links (paperdoll icon, gear table, drawer) append `?ilvl={equipped_ilvl}`. JS cache buster v2.6.0.
+- **Phase 2B — Full Variant Mapping** — migration 0096, on `feature/gear-plan-phase-2b`.
+  - **`wow_items.quality_track VARCHAR(1) CHECK (IN 'V','C','H','M')`** (migration 0096) — tags catalyst items with quality track derived from Blizzard appearance set name suffix.
+  - **Key finding**: In Midnight, all 4 appearance sets per tier suffix contain the SAME item IDs (armor-type variants cloth/leather/mail/plate — NOT quality-tier variants). `quality_track='C'` on all 64 catalyst items is correct.
+  - Migration 0097 (ADD COLUMN quality_ilvl_map — scrapped approach) + 0098 (DROP COLUMN) both run on dev; net effect on dev is 0096 only.
 - **Catalyst display fixes** — `prod-v0.17.3`, no new migrations. Migrations through 0095.
-  - **`gear_plan_service.py` anchor query**: decoupled from `current_raid_ids` — PRIMARY now checks `instance_type='raid'` (any raid source, not just current season); FALLBACK tightened to `wowhead_tooltip_html IS NULL` only, preventing enriched non-tier boss drops (e.g. "Mask of Darkest Intent") from corrupting the set suffix derivation.
-  - **Main-5 display fallback**: removed `NOT EXISTS(item_sources)` gate — tier items already have sources after first sync run, which was causing head/shoulder/chest/hands/legs to vanish from the drawer.
-  - **Catalyst slot display**: removed class filter entirely; tier set suffix is class-discriminated by name. Fixes leather cloaks (`armor_type='cloth'` regardless of wearer class) and items not in any BIS list.
-  - **`item_source_sync.py` Pass 2**: replaced `bis_list_entries` JOIN with direct `wow_items` suffix query so catalyst items not in any BIS list (e.g. leather cloaks) receive raid boss sources.
 - **Phase 2A — Catalyst Item Discovery** — `prod-v0.17.0`, no new migrations.
   - **3 new Blizzard Appearance API methods** on `BlizzardClient`: `get_item_appearance_set_index`, `get_item_appearance_set`, `get_item_appearance`.
-  - **`sync_catalyst_items_via_appearance()`** in `item_source_sync.py`: crawls tier set appearance sets → stubs catalyst-slot item IDs (back/wrist/waist/feet) into `wow_items`. Parallelized via `asyncio.gather`.
+  - **`sync_catalyst_items_via_appearance()`** in `item_source_sync.py`: crawls tier set appearance sets → stubs catalyst-slot item IDs into `wow_items`. Parallelized via `asyncio.gather`.
   - **`enrich_catalyst_tier_items` Pass 1** extended to all 9 slots. **Pass 2** handles items not yet Wowhead-indexed.
-- **Last migration:** 0095
+- **Last migration:** 0099 (dev only; prod still at 0095)
 - **Last prod tag:** `prod-v0.17.3`
-- **Active branch:** `main`
-- **Next:** Delves + World Boss loot phase — schema (`current_delve_ids`, `world_boss_instance_ids` on `patt.raid_seasons`), admin UI multi-select overhaul, sync for `instance_type='delve'`/`'world_boss'`, gear plan display groups. See `reference/gear-plan-2-delves-worldboss.md`.
+- **Active branch:** `feature/gear-plan-phase-2b`
+- **Next:** Test Phase 2C on dev, then PR + prod tag for 2B+2C combined. See `reference/gear-plan-1-catalyst-fix.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

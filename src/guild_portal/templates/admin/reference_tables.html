@@ -418,6 +418,45 @@
     </div>
 </div>
 
+{# ── Season Ilvl Maps (Phase 2C) ── #}
+<div class="rt-section">
+    <div class="rt-section__header">
+        <h2 class="rt-section__title">Raid Season Ilvl Maps</h2>
+        <span style="font-size:0.8rem;color:var(--color-text-muted);">Quality-track ilvl bands used for Wowhead tooltip scaling in the gear plan. Update at season start or when Blizzard adds upgrade ranks.</span>
+    </div>
+    {% for season in seasons %}
+    <div class="rt-card" style="margin-bottom:1rem;padding:1rem 1.25rem;background:var(--color-bg-panel);border:1px solid var(--color-border);border-radius:var(--radius);">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;">
+            <strong style="font-size:0.95rem;">{{ season.display_name }}</strong>
+            {% if season.is_active %}<span style="font-size:0.75rem;color:var(--color-accent);font-weight:700;">ACTIVE</span>{% endif %}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div>
+                <label style="display:block;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);margin-bottom:0.3rem;">
+                    Quality Ilvl Map <span style="font-weight:400;text-transform:none">(Raid / Dungeon / Tier drops)</span>
+                </label>
+                <textarea id="quality-ilvl-map-{{ season.id }}"
+                          rows="8" style="width:100%;font-family:monospace;font-size:0.8rem;background:var(--color-bg-deep,#0a0a0b);border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.5rem;resize:vertical;"
+                          placeholder='{"V":{"min":233,"max":250},"C":{"min":246,"max":263},"H":{"min":259,"max":276},"M":{"min":272,"max":289}}'>{{ season.quality_ilvl_map | tojson(indent=2) if season.quality_ilvl_map else '' }}</textarea>
+            </div>
+            <div>
+                <label style="display:block;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-muted);margin-bottom:0.3rem;">
+                    Crafted Ilvl Map <span style="font-weight:400;text-transform:none">(5-star ceiling per track)</span>
+                </label>
+                <textarea id="crafted-ilvl-map-{{ season.id }}"
+                          rows="8" style="width:100%;font-family:monospace;font-size:0.8rem;background:var(--color-bg-deep,#0a0a0b);border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.5rem;resize:vertical;"
+                          placeholder='{"H":{"min":259,"max":272},"M":{"min":272,"max":285}}'>{{ season.crafted_ilvl_map | tojson(indent=2) if season.crafted_ilvl_map else '' }}</textarea>
+            </div>
+        </div>
+        <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.75rem;">
+            <button class="btn btn-primary" style="font-size:0.85rem;padding:0.35rem 0.9rem;"
+                    onclick="saveIlvlMaps({{ season.id }}, this)">Save Ilvl Maps</button>
+            <span id="ilvl-map-status-{{ season.id }}" class="rt-status"></span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
 {# ── Settings Screen Permissions ── #}
 <div class="rt-section">
     <div class="rt-section__header">
@@ -959,6 +998,53 @@ async function createSeason() {
         }
     } catch (e) {
         showToast('Network error', true);
+    }
+}
+
+async function saveIlvlMaps(seasonId, btn) {
+    const statusEl = document.getElementById(`ilvl-map-status-${seasonId}`);
+    const qualityRaw = document.getElementById(`quality-ilvl-map-${seasonId}`).value.trim();
+    const craftedRaw = document.getElementById(`crafted-ilvl-map-${seasonId}`).value.trim();
+
+    let quality_ilvl_map = null, crafted_ilvl_map = null;
+    try {
+        if (qualityRaw) quality_ilvl_map = JSON.parse(qualityRaw);
+    } catch {
+        statusEl.textContent = 'Invalid JSON in Quality Ilvl Map';
+        statusEl.style.color = 'var(--color-danger)';
+        return;
+    }
+    try {
+        if (craftedRaw) crafted_ilvl_map = JSON.parse(craftedRaw);
+    } catch {
+        statusEl.textContent = 'Invalid JSON in Crafted Ilvl Map';
+        statusEl.style.color = 'var(--color-danger)';
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.textContent = 'Saving\u2026';
+    statusEl.style.color = '';
+    try {
+        const res = await fetch(`/api/v1/admin/seasons/${seasonId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quality_ilvl_map, crafted_ilvl_map }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            statusEl.textContent = 'Saved';
+            statusEl.style.color = 'var(--color-success, #4ade80)';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        } else {
+            statusEl.textContent = 'Error: ' + (data.error || 'unknown');
+            statusEl.style.color = 'var(--color-danger)';
+        }
+    } catch {
+        statusEl.textContent = 'Network error';
+        statusEl.style.color = 'var(--color-danger)';
+    } finally {
+        btn.disabled = false;
     }
 }
 </script>

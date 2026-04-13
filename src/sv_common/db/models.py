@@ -578,6 +578,8 @@ class RaidSeason(Base):
     blizzard_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
     current_raid_ids: Mapped[Optional[list[int]]] = mapped_column(ARRAY(Integer), nullable=True)
     current_instance_ids: Mapped[Optional[list[int]]] = mapped_column(ARRAY(Integer), nullable=True)
+    quality_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    crafted_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -1587,6 +1589,7 @@ class WowItem(Base):
     armor_type: Mapped[Optional[str]] = mapped_column(String(20))
     weapon_type: Mapped[Optional[str]] = mapped_column(String(30))
     wowhead_tooltip_html: Mapped[Optional[str]] = mapped_column(Text)
+    quality_track: Mapped[Optional[str]] = mapped_column(String(1))
     fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

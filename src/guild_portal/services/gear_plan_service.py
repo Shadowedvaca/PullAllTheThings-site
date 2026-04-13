@@ -7,6 +7,7 @@ the caller before invoking any mutating function.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 
@@ -56,6 +57,59 @@ SLOT_DISPLAY = {
 
 # Quality track ranking (lowest to highest)
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
+
+
+# Maps each quality track to the next track up (M stays at M — already maxed).
+NEXT_TRACK: dict[str, str] = {"V": "C", "C": "H", "H": "M", "M": "M"}
+
+
+def _noncrafted_target_ilvl(
+    is_bis: bool,
+    equipped_ilvl: Optional[int],
+    equipped_track: Optional[str],
+    quality_ilvl_map: dict,
+) -> Optional[int]:
+    """Phase 2C ilvl display rule for non-crafted items (raid, dungeon, tier).
+
+    BIS slot: show at the next quality track's max ilvl (V→C, C→H, H→M, M→M).
+    Not BIS:  show at the player's actual equipped ilvl.
+              If below Veteran track or slot empty, show Veteran max instead.
+    """
+    if not quality_ilvl_map:
+        return None
+    if is_bis:
+        if not equipped_track or equipped_track not in NEXT_TRACK:
+            return quality_ilvl_map.get("V", {}).get("max")
+        return quality_ilvl_map.get(NEXT_TRACK[equipped_track], {}).get("max")
+    else:
+        eq_rank = TRACK_ORDER.get(equipped_track or "", -1)
+        v_rank  = TRACK_ORDER.get("V", 0)
+        if not equipped_ilvl or eq_rank < v_rank:
+            return quality_ilvl_map.get("V", {}).get("max")
+        return equipped_ilvl
+
+
+def _crafted_target_ilvl(
+    is_bis: bool,
+    equipped_track: Optional[str],
+    crafted_ilvl_map: dict,
+) -> Optional[int]:
+    """Phase 2C ilvl display rule for crafted items.
+
+    3d. Equipped at M (any BIS)   → M max crafted
+    3b. BIS + equipped at H       → M max crafted
+    3a. BIS + equipped below H    → H max crafted
+    3c. Not BIS + H or below      → H max crafted
+    """
+    if not crafted_ilvl_map:
+        return None
+    h_max = crafted_ilvl_map.get("H", {}).get("max")
+    m_max = crafted_ilvl_map.get("M", {}).get("max")
+    if equipped_track == "M":          # 3d — always M regardless of BIS
+        return m_max
+    if is_bis and equipped_track == "H":  # 3b
+        return m_max
+    return h_max                       # 3a, 3c, or empty/unknown
 
 
 TRACK_COLORS: dict[str, str] = {
@@ -1379,6 +1433,18 @@ async def get_plan_detail(
                     "total_crafters": rows[0]["total_crafters"],
                 }
 
+        # Phase 2C: load ilvl maps from active season for target_ilvl computation.
+        season_ilvl_row = await conn.fetchrow(
+            """SELECT quality_ilvl_map, crafted_ilvl_map
+                 FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"""
+        )
+        plan_quality_ilvl_map: dict = {}
+        plan_crafted_ilvl_map: dict = {}
+        if season_ilvl_row:
+            plan_quality_ilvl_map = json.loads(season_ilvl_row["quality_ilvl_map"] or "{}")
+            plan_crafted_ilvl_map = json.loads(season_ilvl_row["crafted_ilvl_map"] or "{}")
+        # (plan_crafted_max_ilvl removed — now computed per slot via _crafted_target_ilvl)
+
     # Normalize ring and trinket pairs: swap equipped items to maximise BIS matches
     # and ensure consistent alphabetical ordering when no match exists.
     # slot_remapping tracks any visual→DB slot swaps so the frontend can write
@@ -1428,6 +1494,7 @@ async def get_plan_detail(
             available_tracks = ["H", "M"]
 
         equipped_track = equipped["quality_track"] if equipped else None
+        equipped_ilvl_for_slot: Optional[int] = equipped.get("item_level") if equipped else None
 
         # For equipped crafted items whose quality_track wasn't detected during sync
         # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
@@ -1446,6 +1513,27 @@ async def get_plan_detail(
         upgrade_tracks = _upgrade_tracks(equipped_track, equipped_bid, desired_bid, available_tracks)
 
         is_bis = bool(desired_bid and equipped_bid and equipped_bid == desired_bid)
+
+        # Phase 2C: compute slot-level target ilvls (same rules as available-items endpoint).
+        slot_noncrafted_ilvl = _noncrafted_target_ilvl(
+            is_bis, equipped_ilvl_for_slot, equipped_track, plan_quality_ilvl_map
+        )
+        slot_crafted_ilvl = _crafted_target_ilvl(
+            is_bis, equipped_track, plan_crafted_ilvl_map
+        )
+
+        for rec in bis_recs:
+            bid = rec["blizzard_item_id"]
+            if bid in craftable_desired_bids:
+                rec["target_ilvl"] = slot_crafted_ilvl
+            else:
+                rec["target_ilvl"] = slot_noncrafted_ilvl
+
+        if desired and desired_bid:
+            if desired_bid in craftable_desired_bids:
+                desired["target_ilvl"] = slot_crafted_ilvl
+            else:
+                desired["target_ilvl"] = slot_noncrafted_ilvl
 
         # Fallback: if wearing BIS but item has no item_sources data, infer upgrade
         # tracks from the equipped quality track (strictly above current track).
@@ -1600,17 +1688,36 @@ async def get_available_items(
         class_name = char_row["class_name"] or ""
         spec_name  = char_row["spec_name"] or ""
 
-        # Load current season filters — kept separate so raid and dungeon lists
-        # are drawn from their respective instance pools.
+        # Load current season filters and ilvl maps (Phase 2C).
         season_row = await conn.fetchrow(
-            """SELECT current_instance_ids, current_raid_ids
+            """SELECT current_instance_ids, current_raid_ids,
+                      quality_ilvl_map, crafted_ilvl_map
                  FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"""
         )
         raid_ids:    list[int] = []
         dungeon_ids: list[int] = []
+        quality_ilvl_map: dict = {}
+        crafted_ilvl_map: dict = {}
         if season_row:
             raid_ids    = list(season_row["current_raid_ids"]    or [])
             dungeon_ids = list(season_row["current_instance_ids"] or [])
+            # asyncpg returns JSONB as raw strings
+            quality_ilvl_map = json.loads(season_row["quality_ilvl_map"] or "{}")
+            crafted_ilvl_map = json.loads(season_row["crafted_ilvl_map"] or "{}")
+
+        # Phase 2C: load equipped ilvl, quality track, and blizzard_item_id for this slot
+        # so we can compute target_ilvl and determine is_bis.
+        equip_row = await conn.fetchrow(
+            """
+            SELECT item_level, quality_track, blizzard_item_id
+              FROM guild_identity.character_equipment
+             WHERE character_id = $1 AND slot = $2
+            """,
+            character_id, slot,
+        )
+        equipped_ilvl: Optional[int]  = equip_row["item_level"]       if equip_row else None
+        equipped_track: Optional[str] = equip_row["quality_track"]    if equip_row else None
+        equipped_bid:   Optional[int] = equip_row["blizzard_item_id"] if equip_row else None
         all_season_ids = raid_ids + dungeon_ids
 
         # Phase 1E.5: fetch per-slot exclusions so we can hide excluded items
@@ -1619,10 +1726,11 @@ async def get_available_items(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
         )
+        desired_bid_for_slot: Optional[int] = None
         if plan_row:
             slot_row = await conn.fetchrow(
                 """
-                SELECT excluded_item_ids
+                SELECT excluded_item_ids, blizzard_item_id
                   FROM guild_identity.gear_plan_slots
                  WHERE plan_id = $1 AND slot = $2
                 """,
@@ -1630,6 +1738,10 @@ async def get_available_items(
             )
             if slot_row:
                 excluded_ids = list(slot_row["excluded_item_ids"] or [])
+                desired_bid_for_slot = slot_row["blizzard_item_id"]
+
+        # BIS = wearing the exact desired item (same blizzard_item_id).
+        is_bis: bool = bool(equipped_bid and desired_bid_for_slot and equipped_bid == desired_bid_for_slot)
 
         # Normalize paired slots to canonical wow_items.slot_type
         slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
@@ -1869,6 +1981,8 @@ async def get_available_items(
     # ── Split drop rows by instance_type ──────────────────────────────────────
     raid_map:    dict[int, dict] = {}
     dungeon_map: dict[int, dict] = {}
+    # Phase 2C: collect actual quality_tracks per bid for target_ilvl computation.
+    bid_tracks: dict[int, set] = {}
 
     for r in drop_rows:
         bid   = r["blizzard_item_id"]
@@ -1885,6 +1999,12 @@ async def get_available_items(
             if need_tooltip:
                 entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
             target[bid] = entry
+
+        # Derive quality tracks from instance type (item_sources has no per-item
+        # quality_tracks column) and accumulate for target_ilvl computation.
+        if bid not in bid_tracks:
+            bid_tracks[bid] = set()
+        bid_tracks[bid].update(_get_tracks(itype))
 
         tracks = _get_tracks(itype)
         src = {
@@ -1923,15 +2043,28 @@ async def get_available_items(
     for item in raid_items + dungeon_items + crafted_items:
         item.pop("wowhead_tooltip_html", None)
 
+    # ── Phase 2C: compute target_ilvl per item ─────────────────────────────────
+    noncrafted_ilvl = _noncrafted_target_ilvl(is_bis, equipped_ilvl, equipped_track, quality_ilvl_map)
+    crafted_ilvl    = _crafted_target_ilvl(is_bis, equipped_track, crafted_ilvl_map)
+
+    for item in raid_items + dungeon_items:
+        item["target_ilvl"] = noncrafted_ilvl
+
+    for item in crafted_items:
+        item["target_ilvl"] = crafted_ilvl
+
     # ── Tier / Catalyst items ──────────────────────────────────────────────────
     # None means "this slot has no tier piece" — frontend hides the section.
     tier_items: Optional[list[dict]] = None
     if slot in _TIER_CATALYST_SLOTS:
+        # Tier/catalyst items follow the same rule as raid drops.
+        tier_target: Optional[int] = noncrafted_ilvl
         tier_items = [
             {
                 "blizzard_item_id": r["blizzard_item_id"],
                 "name": r["name"],
                 "icon_url": r["icon_url"],
+                "target_ilvl": tier_target,
             }
             for r in tier_rows
         ]

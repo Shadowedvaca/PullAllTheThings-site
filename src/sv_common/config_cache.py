@@ -70,6 +70,8 @@ def is_onboarding_enabled() -> bool:
     return bool(_cache.get("enable_onboarding", True))
 
 
+
+
 def set_app_url(url: str) -> None:
     """Store the app URL (set at startup from settings) so sv_common modules can read it."""
     _cache["_app_url"] = url.rstrip("/") if url else ""
