@@ -235,15 +235,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 2C — Quality-Aware Display** — migration 0097, on `feature/gear-plan-phase-2b`, pending PR + prod tag.
-  - **`common.site_config.quality_ilvl_map JSONB`** (migration 0097) — seeded with Midnight S1 ilvl ranges: V 250–262, C 263–268, H 269–276, M 282–285. Configurable via Admin → Site Config (new "Quality Track ilvl Map" card). Update each season.
-  - **`_compute_target_ilvl(track, ilvl, map)`** in `gear_plan_service.py` — display rules: below max rank → show current track max ilvl; at max rank → show next track min ilvl; Mythic max → stay.
-  - **`get_plan_detail()`** — adds `target_ilvl` + `equipped_ilvl` per slot.
-  - **`get_available_items()`** — fetches equipped quality for the slot; adds `target_ilvl` + `equipped_ilvl` to response.
-  - **`my_characters.js v2.6.0`** — `_whItemUrl(bid, ilvl)` helper appends `?ilvl=N` to Wowhead links; equipped/goal/BIS/available item icons all use it. Cache carries `target_ilvl` for re-render.
-  - **Key finding from Phase 2B data**: In Midnight, all 4 appearance sets per tier suffix contain the SAME item IDs (armor-type variants, not quality-tier variants). One item ID covers all quality tracks — quality_track='C' on all catalyst items is correct. Phase 2C ilvl display computes target ilvl from player's `character_equipment.quality_track` + `item_level`, not from `wow_items.quality_track`.
 - **Phase 2B — Full Variant Mapping** — migration 0096, on `feature/gear-plan-phase-2b`.
-  - **`wow_items.quality_track VARCHAR(1)`** — correctly tags all 64 catalyst items as 'C' (Midnight's single-item-ID design). Journal encounter items stay NULL.
+  - **`wow_items.quality_track VARCHAR(1) CHECK (IN 'V','C','H','M')`** (migration 0096) — tags catalyst items with quality track derived from Blizzard appearance set name suffix.
+  - **`_quality_track_from_set_name(set_name)`** in `item_source_sync.py` — parses `(Mythic)`→M, `(Heroic)`→H, `(Raid Finder)`→V, no qualifier→C.
+  - **`sync_catalyst_items_via_appearance()`** updated — derives quality_track per set; upserts with `ON CONFLICT DO UPDATE SET quality_track = COALESCE(existing, excluded)`.
+  - **Key finding**: In Midnight, all 4 appearance sets per tier suffix contain the SAME item IDs (armor-type variants cloth/leather/mail/plate — NOT quality-tier variants). One Blizzard item ID covers all quality tracks. `quality_track='C'` on all 64 catalyst items is correct.
+  - Migration 0097 (ADD COLUMN quality_ilvl_map — scrapped approach) + 0098 (DROP COLUMN) both run on dev; net effect on dev is 0096 only.
+- **Phase 2C — SCRAPPED** — ilvl ranges must come from the Blizzard API, NOT be hardcoded or stored in site_config. All 2C code was reverted. Design TBD.
 - **Catalyst display fixes** — `prod-v0.17.3`, no new migrations. Migrations through 0095.
   - **`gear_plan_service.py` anchor query**: decoupled from `current_raid_ids` — PRIMARY now checks `instance_type='raid'`; FALLBACK tightened to `wowhead_tooltip_html IS NULL` only.
   - **Main-5 display fallback**: removed `NOT EXISTS(item_sources)` gate.
@@ -253,10 +251,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **3 new Blizzard Appearance API methods** on `BlizzardClient`: `get_item_appearance_set_index`, `get_item_appearance_set`, `get_item_appearance`.
   - **`sync_catalyst_items_via_appearance()`** in `item_source_sync.py`: crawls tier set appearance sets → stubs catalyst-slot item IDs into `wow_items`. Parallelized via `asyncio.gather`.
   - **`enrich_catalyst_tier_items` Pass 1** extended to all 9 slots. **Pass 2** handles items not yet Wowhead-indexed.
-- **Last migration:** 0097 (dev only — not on prod yet)
+- **Last migration:** 0098 (dev only — 0096 is the only net change; 0097+0098 cancel out)
 - **Last prod tag:** `prod-v0.17.3`
 - **Active branch:** `feature/gear-plan-phase-2b`
-- **Next:** PR + prod tag for 2B+2C; then Phase 2 complete. See `reference/gear-plan-1-catalyst-fix.md` for any follow-ups.
+- **Next:** Phase 2C redesign — pull ilvl ranges from Blizzard API (no hardcoding, no site_config). Then PR + prod tag for 2B. See `reference/gear-plan-1-catalyst-fix.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
