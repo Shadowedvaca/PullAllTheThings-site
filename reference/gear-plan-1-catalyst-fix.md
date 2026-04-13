@@ -141,14 +141,30 @@ current equipped gear. Two rules — one for equipped gear, one for BIS recommen
   tooltip only.
 
 **BIS items** (right side / available-items drawer):
-- Look up the player's equipped `quality_track` for that slot from `character_equipment`.
-- Show the BIS item at `quality_ilvl_map[track]['max']` — the ceiling of their current
-  tier. This is the meaningful upgrade target.
-- If the slot is empty (no `quality_track`), show no `?ilvl` param.
-- Crafted items use `crafted_ilvl_map[track]['max']` from the same season row.
 
-No "rank counting," no "next tier" promotion logic. The max of the player's current tier
-is the right target — achievable, motivating, and accurate.
+Two cases, determined by whether the BIS item is what the player currently has equipped:
+
+| Player state | Show BIS at |
+|---|---|
+| Not wearing BIS in that slot | `character_equipment.item_level` for that slot — a direct swap comparison at equal ilvl |
+| Wearing BIS in that slot | `quality_ilvl_map[next_track]['max']` — ceiling of the next tier up |
+| Wearing BIS at Myth (no higher tier) | `quality_ilvl_map['M']['max']` — Myth ceiling |
+| Slot is empty | No `?ilvl` param — base tooltip only |
+
+"Has BIS equipped" is determined by comparing `character_equipment.blizzard_item_id` for
+that slot against the BIS item's `blizzard_item_id` (via `wow_items`).
+
+Track progression for "next tier": A → V → C → H → M (M is the cap, loops to itself).
+
+This gives two useful views:
+- **Not wearing BIS:** "Here's this item at the exact ilvl of what you have — a clean
+  stat comparison." Helps evaluate whether the BIS item is actually better than current.
+- **Wearing BIS:** "Here's the ceiling of the next track up." Shows the aspirational target
+  and motivates pushing to the next upgrade tier.
+
+Crafted items follow the same logic using `crafted_ilvl_map` instead of `quality_ilvl_map`.
+If the player's equipped track has no entry in `crafted_ilvl_map` (e.g., Champion this
+season), fall back to base tooltip (no `?ilvl`).
 
 ### Ilvl map storage
 
