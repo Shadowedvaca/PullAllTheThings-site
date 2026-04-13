@@ -480,21 +480,19 @@ async def sync_catalyst_items_via_appearance(
     errors: list[str] = []
     stubbed = 0
 
-    # Step 1: Find BIS items with "of the X" suffix in any tier or catalyst slot.
-    # No sources/armor_type filter — we only need the name to derive the suffix.
-    # On prod (new expansion, no Wowhead tooltips yet) these items exist from BIS
-    # scrapes but have no sources.  On dev they may already have sources; we still
-    # want to run the crawl so any missing quality-variant IDs are stubbed.
+    # Step 1: Derive tier-set suffixes from CURRENT-EXPANSION main-5 tier items.
+    # Anchor to items that already have raid sources (upserted by the journal walk
+    # that runs before this function).  This prevents old-expansion BIS items from
+    # flooding the suffix list and matching unrelated appearance sets.
     async with pool.acquire() as conn:
         tier_rows = await conn.fetch(
             """
             SELECT DISTINCT wi.blizzard_item_id, wi.name
               FROM guild_identity.wow_items wi
-             WHERE wi.slot_type IN (
-                       'head','shoulder','chest','hands','legs',
-                       'back','wrist','waist','feet'
-                   )
+              JOIN guild_identity.item_sources src ON src.item_id = wi.id
+             WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
                AND wi.name LIKE '% of %'
+               AND src.instance_type = 'raid'
                AND EXISTS (
                    SELECT 1 FROM guild_identity.bis_list_entries ble
                     WHERE ble.item_id = wi.id
@@ -505,19 +503,16 @@ async def sync_catalyst_items_via_appearance(
 
     if not tier_rows:
         logger.info(
-            "sync_catalyst_items: no known tier items found; skipping appearance crawl"
+            "sync_catalyst_items: no known tier items with raid sources found; "
+            "skipping appearance crawl"
         )
         return 0, []
-
-    # All rows already have "of" in their name (pre-filtered in SQL).
-    known_items: list[tuple[int, str]] = [
-        (row["blizzard_item_id"], row["name"]) for row in tier_rows
-    ]
 
     # Extract suffixes: "Midnight Vanguard's Chestguard of the Luminous Bloom"
     #                   → " of the Luminous Bloom"
     suffixes: set[str] = set()
-    for _bid, name in known_items:
+    for row in tier_rows:
+        name = row["name"] or ""
         idx = name.find(" of ")
         if idx >= 0:
             suffixes.add(name[idx:])
@@ -562,7 +557,7 @@ async def sync_catalyst_items_via_appearance(
         "sync_catalyst_items: crawling %d appearance set(s)", len(matching_set_ids)
     )
 
-    # Step 3: For each matched set, resolve appearances → item IDs → stub.
+    # Step 3: For each matched set, fetch all appearances in parallel, then stub.
     async with pool.acquire() as conn:
         for set_id in matching_set_ids:
             set_data = await client.get_item_appearance_set(set_id)
@@ -573,21 +568,23 @@ async def sync_catalyst_items_via_appearance(
                 continue
 
             appearances = set_data.get("appearances", [])
+            app_ids = [a.get("id") for a in appearances if a.get("id")]
             logger.info(
                 "sync_catalyst_items: set %d has %d appearance(s)",
-                set_id, len(appearances),
+                set_id, len(app_ids),
             )
 
-            for app_entry in appearances:
-                app_id = app_entry.get("id")
-                if not app_id:
+            # Fetch all appearances for this set concurrently.
+            app_results = await asyncio.gather(
+                *[client.get_item_appearance(app_id) for app_id in app_ids],
+                return_exceptions=True,
+            )
+
+            for app_id, app_data in zip(app_ids, app_results):
+                if isinstance(app_data, Exception) or not app_data:
                     continue
 
-                app_data = await client.get_item_appearance(app_id)
-                if not app_data:
-                    continue
-
-                # Extract (id, name) pairs — name is required by the NOT NULL constraint.
+                # Extract (id, name) pairs — name is required by NOT NULL constraint.
                 item_entries = [
                     (item.get("id"), item.get("name") or "")
                     for item in app_data.get("items", [])
@@ -595,14 +592,6 @@ async def sync_catalyst_items_via_appearance(
                 ]
 
                 for blizzard_item_id, item_name in item_entries:
-                    existing = await conn.fetchval(
-                        "SELECT id FROM guild_identity.wow_items "
-                        "WHERE blizzard_item_id = $1",
-                        blizzard_item_id,
-                    )
-                    if existing:
-                        continue
-
                     if not item_name:
                         errors.append(
                             f"sync_catalyst_items: skipping item {blizzard_item_id} "
@@ -611,7 +600,7 @@ async def sync_catalyst_items_via_appearance(
                         continue
 
                     try:
-                        await conn.execute(
+                        result = await conn.execute(
                             """
                             INSERT INTO guild_identity.wow_items
                                    (blizzard_item_id, name, slot_type)
@@ -621,12 +610,13 @@ async def sync_catalyst_items_via_appearance(
                             blizzard_item_id,
                             item_name,
                         )
-                        stubbed += 1
-                        logger.info(
-                            "sync_catalyst_items: stubbed item %d "
-                            "from appearance %d (set %d)",
-                            blizzard_item_id, app_id, set_id,
-                        )
+                        if result == "INSERT 0 1":
+                            stubbed += 1
+                            logger.info(
+                                "sync_catalyst_items: stubbed item %d "
+                                "from appearance %d (set %d)",
+                                blizzard_item_id, app_id, set_id,
+                            )
                     except Exception as exc:
                         msg = (
                             f"sync_catalyst_items: DB error stubbing item "
@@ -634,8 +624,6 @@ async def sync_catalyst_items_via_appearance(
                         )
                         logger.error(msg)
                         errors.append(msg)
-
-                await asyncio.sleep(0.1)  # Stay polite to the API
 
     logger.info(
         "sync_catalyst_items: stubbed %d new item(s) across %d appearance set(s)",
