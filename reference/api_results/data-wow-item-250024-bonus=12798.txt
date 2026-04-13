@@ -1,0 +1,332 @@
+/data/wow/item/250024?bonus=12798
+
+{
+  "_links": {
+    "self": {
+      "href": "https://us.api.blizzard.com/data/wow/item/250024?namespace=static-12.0.1_65617-us"
+    }
+  },
+  "id": 250024,
+  "name": "Branches of the Luminous Bloom",
+  "quality": {
+    "type": "EPIC",
+    "name": "Epic"
+  },
+  "level": 197,
+  "required_level": 90,
+  "media": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/media/item/250024?namespace=static-12.0.1_65617-us"
+    },
+    "id": 250024
+  },
+  "item_class": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/item-class/4?namespace=static-12.0.1_65617-us"
+    },
+    "name": "Armor",
+    "id": 4
+  },
+  "item_subclass": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/item-class/4/item-subclass/2?namespace=static-12.0.1_65617-us"
+    },
+    "name": "Leather",
+    "id": 2
+  },
+  "inventory_type": {
+    "type": "HEAD",
+    "name": "Head"
+  },
+  "purchase_price": 318322,
+  "sell_price": 63664,
+  "max_count": 0,
+  "is_equippable": true,
+  "is_stackable": false,
+  "preview_item": {
+    "item": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/250024?namespace=static-12.0.1_65617-us"
+      },
+      "id": 250024
+    },
+    "context": 0,
+    "bonus_list": [
+      13338,
+      13575
+    ],
+    "quality": {
+      "type": "EPIC",
+      "name": "Epic"
+    },
+    "name": "Branches of the Luminous Bloom",
+    "media": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/item/250024?namespace=static-12.0.1_65617-us"
+      },
+      "id": 250024
+    },
+    "item_class": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-class/4?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor",
+      "id": 4
+    },
+    "item_subclass": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-class/4/item-subclass/2?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Leather",
+      "id": 2
+    },
+    "inventory_type": {
+      "type": "HEAD",
+      "name": "Head"
+    },
+    "binding": {
+      "type": "ON_ACQUIRE",
+      "name": "Binds when picked up"
+    },
+    "armor": {
+      "value": 10,
+      "display": {
+        "display_string": "10 Armor",
+        "color": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 1
+        }
+      }
+    },
+    "stats": [
+      {
+        "type": {
+          "type": "INTELLECT",
+          "name": "Intellect"
+        },
+        "value": 9,
+        "display": {
+          "display_string": "+9 Intellect",
+          "color": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1
+          }
+        }
+      },
+      {
+        "type": {
+          "type": "AGILITY",
+          "name": "Agility"
+        },
+        "value": 9,
+        "is_negated": true,
+        "display": {
+          "display_string": "+9 Agility",
+          "color": {
+            "r": 128,
+            "g": 128,
+            "b": 128,
+            "a": 1
+          }
+        }
+      },
+      {
+        "type": {
+          "type": "STAMINA",
+          "name": "Stamina"
+        },
+        "value": 14,
+        "display": {
+          "display_string": "+14 Stamina",
+          "color": {
+            "r": 255,
+            "g": 255,
+            "b": 255,
+            "a": 1
+          }
+        }
+      },
+      {
+        "type": {
+          "type": "HASTE_RATING",
+          "name": "Haste"
+        },
+        "value": 12,
+        "is_equip_bonus": true,
+        "display": {
+          "display_string": "+12 Haste",
+          "color": {
+            "r": 0,
+            "g": 255,
+            "b": 0,
+            "a": 1
+          }
+        }
+      },
+      {
+        "type": {
+          "type": "MASTERY_RATING",
+          "name": "Mastery"
+        },
+        "value": 6,
+        "is_equip_bonus": true,
+        "display": {
+          "display_string": "+6 Mastery",
+          "color": {
+            "r": 0,
+            "g": 255,
+            "b": 0,
+            "a": 1
+          }
+        }
+      }
+    ],
+    "sell_price": {
+      "value": 19784,
+      "display_strings": {
+        "header": "Sell Price:",
+        "gold": "1",
+        "silver": "97",
+        "copper": "84"
+      }
+    },
+    "requirements": {
+      "level": {
+        "value": 90,
+        "display_string": "Requires Level 90"
+      },
+      "playable_classes": {
+        "links": [
+          {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/playable-class/11?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Druid",
+            "id": 11
+          }
+        ],
+        "display_string": "Classes: Druid"
+      }
+    },
+    "set": {
+      "item_set": {
+        "key": {
+          "href": "https://us.api.blizzard.com/data/wow/item-set/1980?namespace=static-12.0.1_65617-us"
+        },
+        "name": "Sprouts of the Luminous Bloom",
+        "id": 1980
+      },
+      "items": [
+        {
+          "item": {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/item/250027?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Trunk of the Luminous Bloom",
+            "id": 250027
+          }
+        },
+        {
+          "item": {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/item/250025?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Arbortenders of the Luminous Bloom",
+            "id": 250025
+          }
+        },
+        {
+          "item": {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/item/250024?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Branches of the Luminous Bloom",
+            "id": 250024
+          }
+        },
+        {
+          "item": {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/item/250023?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Phloemwraps of the Luminous Bloom",
+            "id": 250023
+          }
+        },
+        {
+          "item": {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/item/250022?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Seedpods of the Luminous Bloom",
+            "id": 250022
+          }
+        }
+      ],
+      "display_string": "Sprouts of the Luminous Bloom (0/5)"
+    },
+    "level": {
+      "value": 44,
+      "display_string": "Item Level 44"
+    },
+    "durability": {
+      "value": 100,
+      "display_string": "Durability 100 / 100"
+    }
+  },
+  "purchase_quantity": 1,
+  "appearances": [
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126759?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126759
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126723?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126723
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126711?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126711
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126757?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126757
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126733?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126733
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126769?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126769
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126721?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126721
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126747?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126747
+    }
+  ]
+}

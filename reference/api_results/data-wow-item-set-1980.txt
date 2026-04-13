@@ -1,0 +1,58 @@
+/data/wow/item-set/1980
+
+{
+  "_links": {
+    "self": {
+      "href": "https://us.api.blizzard.com/data/wow/item-set/1980?namespace=static-12.0.1_65617-us"
+    }
+  },
+  "id": 1980,
+  "name": "Sprouts of the Luminous Bloom",
+  "items": [
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/250027?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Trunk of the Luminous Bloom",
+      "id": 250027
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/250025?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Arbortenders of the Luminous Bloom",
+      "id": 250025
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/250024?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Branches of the Luminous Bloom",
+      "id": 250024
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/250023?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Phloemwraps of the Luminous Bloom",
+      "id": 250023
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/250022?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Seedpods of the Luminous Bloom",
+      "id": 250022
+    }
+  ],
+  "effects": [
+    {
+      "display_string": "Set: Shooting Stars deal 40% more damage and generate 2 additional Astral Power outside Eclipse.\r\n",
+      "required_count": 2
+    },
+    {
+      "display_string": "Set: Starfall and Starsurge damage increased by 5% and casting them has a 30% chance to strike an affected target with an exploding Shooting Star that also deals 52 Astral damage to all nearby enemies.",
+      "required_count": 4
+    }
+  ]
+}

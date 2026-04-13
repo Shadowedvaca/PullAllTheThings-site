@@ -1,0 +1,6605 @@
+/data/wow/item-set/index
+
+{
+  "_links": {
+    "self": {
+      "href": "https://us.api.blizzard.com/data/wow/item-set/?namespace=static-12.0.1_65617-us"
+    }
+  },
+  "item_sets": [
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/757?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Iceborne Embrace",
+      "id": 757
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/774?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wildhide",
+      "id": 774
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/777?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Investiture",
+      "id": 777
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/778?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Raiment",
+      "id": 778
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/780?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Felshroud",
+      "id": 780
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/631?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cyclone Raiment",
+      "id": 631
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/630?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tidefury Raiment",
+      "id": 630
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/681?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightbringer Raiment",
+      "id": 681
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/476?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Augur's Regalia",
+      "id": 476
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/477?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Predator's Armor",
+      "id": 477
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/161?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Defias Leather",
+      "id": 161
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/241?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shard of the Gods",
+      "id": 241
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/536?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Undead Cleansing",
+      "id": 536
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/528?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Redemption Armor",
+      "id": 528
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/619?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Primal Intent",
+      "id": 619
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/565?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Khorium Ward",
+      "id": 565
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/391?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Threads",
+      "id": 391
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/576?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fury of the Nether",
+      "id": 576
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/465?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Prayer of the Primal",
+      "id": 465
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/466?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Major Mojo Infusion",
+      "id": 466
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/478?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Madcap's Outfit",
+      "id": 478
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/558?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Arcanoweave Vestments",
+      "id": 558
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/384?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Battlegear",
+      "id": 384
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/65?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spider's Kiss",
+      "id": 65
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/341?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Regalia",
+      "id": 341
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/342?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Raiment",
+      "id": 342
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/609?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Wildhide",
+      "id": 609
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/346?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Threads",
+      "id": 346
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/556?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Imbued Netherweave",
+      "id": 556
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/639?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malorne Regalia",
+      "id": 639
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/640?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malorne Harness",
+      "id": 640
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/592?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Dreadgear",
+      "id": 592
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/593?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Earthshaker",
+      "id": 593
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/475?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Freethinker's Armor",
+      "id": 475
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/557?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Soulcloth Embrace",
+      "id": 557
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/583?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vindication",
+      "id": 583
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/688?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Refuge",
+      "id": 688
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/685?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Refuge",
+      "id": 685
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/686?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wartide",
+      "id": 686
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/551?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Refuge",
+      "id": 551
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/495?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Unyielding Strength",
+      "id": 495
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/472?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Will",
+      "id": 472
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/587?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Aegis",
+      "id": 587
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/613?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thick Draenic Armor",
+      "id": 613
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/584?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Sanctuary",
+      "id": 584
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/754?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Borean Embrace",
+      "id": 754
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/756?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frostscale Binding",
+      "id": 756
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/781?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blessed Regalia of Undead Cleansing",
+      "id": 781
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/782?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Undead Slayer's Blessed Armor",
+      "id": 782
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/784?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blessed Battlegear of Undead Slaying",
+      "id": 784
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/788?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadnaught Battlegear",
+      "id": 788
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/787?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadnaught Plate",
+      "id": 787
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/635?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cataclysm Regalia",
+      "id": 635
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/678?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thunderheart Raiment",
+      "id": 678
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/549?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Investiture",
+      "id": 549
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/485?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Intent",
+      "id": 485
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/397?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Sanctuary",
+      "id": 397
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/567?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Battlegear",
+      "id": 567
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/581?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Raiment",
+      "id": 581
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/582?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Aegis",
+      "id": 582
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/569?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Faith in Felsteel",
+      "id": 569
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/570?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Unyielding",
+      "id": 570
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/121?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cadaverous Garb",
+      "id": 121
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/487?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Resolution",
+      "id": 487
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/203?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Felheart Raiment",
+      "id": 203
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/205?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cenarion Raiment",
+      "id": 205
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/207?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Earthfury",
+      "id": 207
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/745?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Opportunist's Battlegear",
+      "id": 745
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/746?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Seer's Mail Battlegear",
+      "id": 746
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/562?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Adamantite Battlegear",
+      "id": 562
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/563?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Enchanted Adamantite Armor",
+      "id": 563
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/392?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Threads",
+      "id": 392
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/480?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Confessor's Raiment",
+      "id": 480
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/482?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Illusionist's Attire",
+      "id": 482
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/488?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Will",
+      "id": 488
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/474?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vindicator's Battlegear",
+      "id": 474
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/687?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Investiture",
+      "id": 687
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/506?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Eternal Justice",
+      "id": 506
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/572?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlecast Garb",
+      "id": 572
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/586?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Pursuit",
+      "id": 586
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/546?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Arcanum",
+      "id": 546
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/544?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Redoubt",
+      "id": 544
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/540?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Investiture",
+      "id": 540
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/552?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wrath of Spellfire",
+      "id": 552
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/555?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Netherweave Vestments",
+      "id": 555
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/484?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Fortitude",
+      "id": 484
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/548?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Guard",
+      "id": 548
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/124?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathbone Guardian",
+      "id": 124
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/566?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Burning Rage",
+      "id": 566
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/142?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormshroud Armor",
+      "id": 142
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/508?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Finery of Infinite Wisdom",
+      "id": 508
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/529?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plagueheart Raiment",
+      "id": 529
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/499?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Doomcaller's Attire",
+      "id": 499
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/764?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Duskweaver",
+      "id": 764
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/766?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vindication",
+      "id": 766
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/768?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Desecration",
+      "id": 768
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/773?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Refuge",
+      "id": 773
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/776?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vestments",
+      "id": 776
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/693?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Redemption",
+      "id": 693
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/738?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadweave Battlegear",
+      "id": 738
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/614?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wild Draenish Armor",
+      "id": 614
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/462?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Zanzil's Concentration",
+      "id": 462
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/648?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Aldor Regalia",
+      "id": 648
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/393?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Vestments",
+      "id": 393
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/750?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Savage Plate Battlegear",
+      "id": 750
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/386?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Earthshaker",
+      "id": 386
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/389?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Raiment",
+      "id": 389
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/204?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nightslayer Armor",
+      "id": 204
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/162?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Embrace of the Viper",
+      "id": 162
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/571?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Whitemend Wisdom",
+      "id": 571
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/559?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spellstrike Infusion",
+      "id": 559
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/761?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Winter Garb",
+      "id": 761
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/560?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fel Iron Plate",
+      "id": 560
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/578?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Earthshaker",
+      "id": 578
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/763?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frostwoven Power",
+      "id": 763
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/568?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Dreadgear",
+      "id": 568
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/517?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sorcerer's Regalia",
+      "id": 517
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/718?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Earthshaker",
+      "id": 718
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/163?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Chain of the Scarlet Crusade",
+      "id": 163
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/790?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Redemption Regalia",
+      "id": 790
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/143?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Devilsaur Armor",
+      "id": 143
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/793?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scourgeborne Plate",
+      "id": 793
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/794?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cryptstalker Battlegear",
+      "id": 794
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/796?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Earthshatter Garb",
+      "id": 796
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/797?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Earthshatter Regalia",
+      "id": 797
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/801?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bonescythe Battlegear",
+      "id": 801
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/803?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frostfire Garb",
+      "id": 803
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/804?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Faith",
+      "id": 804
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/805?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garb of Faith",
+      "id": 805
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/553?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shadow's Embrace",
+      "id": 553
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/791?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Redemption Plate",
+      "id": 791
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/739?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mooncloth Battlegear",
+      "id": 739
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/740?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Satin Battlegear",
+      "id": 740
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/741?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Evoker's Silk Battlegear",
+      "id": 741
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/666?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Avatar Regalia",
+      "id": 666
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/520?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ironweave Battlesuit",
+      "id": 520
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/469?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Determination",
+      "id": 469
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/748?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Seer's Linked Battlegear",
+      "id": 748
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/749?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stalker's Chain Battlegear",
+      "id": 749
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/594?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Earthshaker",
+      "id": 594
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/396?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Pursuit",
+      "id": 396
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/496?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Conqueror's Battlegear",
+      "id": 496
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/498?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Emblems of Veiled Shadows",
+      "id": 498
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/503?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Enigma Vestments",
+      "id": 503
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/442?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blood Tiger Harness",
+      "id": 442
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/443?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bloodsoul Embrace",
+      "id": 443
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/444?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Darksoul",
+      "id": 444
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/202?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Prophecy",
+      "id": 202
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/589?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Aegis",
+      "id": 589
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/511?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Heroism",
+      "id": 511
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/512?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Darkmantle Armor",
+      "id": 512
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/514?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Virtuous",
+      "id": 514
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/507?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garments of the Oracle",
+      "id": 507
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/489?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Black Dragon Mail",
+      "id": 489
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/490?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Green Dragon Mail",
+      "id": 490
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/521?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreamwalker Raiment",
+      "id": 521
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/542?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Arcanum",
+      "id": 542
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/770?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Earthshaker",
+      "id": 770
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/467?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Resolution",
+      "id": 467
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/468?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Resolve",
+      "id": 468
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/473?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Intent",
+      "id": 473
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/611?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Felscale Armor",
+      "id": 611
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/421?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bloodvine Garb",
+      "id": 421
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/441?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Primal Batskin",
+      "id": 441
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/595?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Pursuit",
+      "id": 595
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/81?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Postmaster",
+      "id": 81
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/665?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Avatar Raiment",
+      "id": 665
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/585?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wildhide",
+      "id": 585
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/588?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Battlegear",
+      "id": 588
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/771?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wartide",
+      "id": 771
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/213?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bloodfang Armor",
+      "id": 213
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/470?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Fortitude",
+      "id": 470
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/654?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warbringer Armor",
+      "id": 654
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/530?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cryptstalker Armor",
+      "id": 530
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/674?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Absolution Regalia",
+      "id": 674
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/612?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scaled Draenic Armor",
+      "id": 612
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/669?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gronnstalker's Armor",
+      "id": 669
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/210?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Netherwind Regalia",
+      "id": 210
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/211?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Transcendence",
+      "id": 211
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/217?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Judgment Armor",
+      "id": 217
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/617?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Netherstrike Armor",
+      "id": 617
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/618?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Windhawk Armor",
+      "id": 618
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/641?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nordrassil Harness",
+      "id": 641
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/642?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nordrassil Raiment",
+      "id": 642
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/643?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nordrassil Regalia",
+      "id": 643
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/41?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dal'Rend's Arms",
+      "id": 41
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/600?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Regalia",
+      "id": 600
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/216?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Ten Storms",
+      "id": 216
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/519?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Five Thunders",
+      "id": 519
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/545?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Battlearmor",
+      "id": 545
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/547?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Dreadgear",
+      "id": 547
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/620?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Assassination Armor",
+      "id": 620
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/622?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathmantle",
+      "id": 622
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/623?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Righteous Armor",
+      "id": 623
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/624?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Justicar Raiment",
+      "id": 624
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/743?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wyrmhide Battlegear",
+      "id": 743
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/479?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Haruspex's Garb",
+      "id": 479
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/632?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cyclone Regalia",
+      "id": 632
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/633?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cyclone Harness",
+      "id": 633
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/789?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Redemption Battlegear",
+      "id": 789
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/798?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreamwalker Battlegear",
+      "id": 798
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/684?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Skyshatter Regalia",
+      "id": 684
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/691?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Investiture",
+      "id": 691
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/692?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Investiture",
+      "id": 692
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/362?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Pursuit",
+      "id": 362
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/486?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Purpose",
+      "id": 486
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/625?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Justicar Armor",
+      "id": 625
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/182?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Devout",
+      "id": 182
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/650?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Beast Lord Armor",
+      "id": 650
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/209?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Might",
+      "id": 209
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/561?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fel Iron Chain",
+      "id": 561
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/575?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Felstalker Armor",
+      "id": 575
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/261?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spirit of Eskhandar",
+      "id": 261
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/394?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Vestments",
+      "id": 394
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/395?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Pursuit",
+      "id": 395
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/554?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Primal Mooncloth",
+      "id": 554
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/590?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Battlegear",
+      "id": 590
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/344?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Raiment",
+      "id": 344
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/343?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Regalia",
+      "id": 343
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/345?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Threads",
+      "id": 345
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/683?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Skyshatter Raiment",
+      "id": 683
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/535?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garb of the Undead Slayer",
+      "id": 535
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/543?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Pursuance",
+      "id": 543
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/510?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Trappings of the Unseen Path",
+      "id": 510
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/792?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scourgeborne Battlegear",
+      "id": 792
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/802?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plagueheart Garb",
+      "id": 802
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/634?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cataclysm Raiment",
+      "id": 634
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/636?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cataclysm Harness",
+      "id": 636
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/672?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Onslaught Battlegear",
+      "id": 672
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/461?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Twin Blades of Hakkari",
+      "id": 461
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/662?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hallowed Raiment",
+      "id": 662
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/651?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Demon Stalker Armor",
+      "id": 651
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/767?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Redemption",
+      "id": 767
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/638?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malorne Raiment",
+      "id": 638
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/550?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Pursuance",
+      "id": 550
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/647?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Incanter's Regalia",
+      "id": 647
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/649?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tirisfal Regalia",
+      "id": 649
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/652?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Rift Stalker Armor",
+      "id": 652
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/668?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Slayer's Armor",
+      "id": 668
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/653?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bold Armor",
+      "id": 653
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/655?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warbringer Battlegear",
+      "id": 655
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/656?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Destroyer Armor",
+      "id": 656
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/603?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Thunderfist",
+      "id": 603
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/597?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Raiment",
+      "id": 597
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Gladiator",
+      "id": 1
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/181?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Magister's Regalia",
+      "id": 181
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/606?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Vestments",
+      "id": 606
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/607?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Vindication",
+      "id": 607
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/646?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Corruptor Raiment",
+      "id": 646
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/483?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Determination",
+      "id": 483
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/779?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Regalia",
+      "id": 779
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/799?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreamwalker Regalia",
+      "id": 799
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/591?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Dreadgear",
+      "id": 591
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/602?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Sanctuary",
+      "id": 602
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/494?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Symbols of Unending Life",
+      "id": 494
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/282?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Battlegear",
+      "id": 282
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/321?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Imperial Plate",
+      "id": 321
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/690?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Redemption",
+      "id": 690
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/398?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Sanctuary",
+      "id": 398
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/186?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Beaststalker Armor",
+      "id": 186
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/637?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Moonglade Raiment",
+      "id": 637
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/812?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spring Tuxedo",
+      "id": 812
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/598?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Raiment",
+      "id": 598
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/599?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Regalia",
+      "id": 599
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/522?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Guard",
+      "id": 522
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/523?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadnaught's Battlegear",
+      "id": 523
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/524?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bonescythe Armor",
+      "id": 524
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/525?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Faith",
+      "id": 525
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/526?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frostfire Regalia",
+      "id": 526
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/673?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Onslaught Armor",
+      "id": 673
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/676?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thunderheart Harness",
+      "id": 676
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/677?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thunderheart Regalia",
+      "id": 677
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/679?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightbringer Armor",
+      "id": 679
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/680?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightbringer Battlegear",
+      "id": 680
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/601?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Sanctuary",
+      "id": 601
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/141?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Volcanic Armor",
+      "id": 141
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/657?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Destroyer Battlegear",
+      "id": 657
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/660?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Desolation Battlegear",
+      "id": 660
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/387?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Regalia",
+      "id": 387
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/493?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Genesis Raiment",
+      "id": 493
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/785?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Midsummer Reveler",
+      "id": 785
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/762?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Brewfest Garb",
+      "id": 762
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/775?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Sanctuary",
+      "id": 775
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/755?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nerubian Hive",
+      "id": 755
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/361?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Pursuit",
+      "id": 361
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/664?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Incarnate Regalia",
+      "id": 664
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/481?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Demoniac's Threads",
+      "id": 481
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/527?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Earthshatterer",
+      "id": 527
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/381?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Sanctuary",
+      "id": 381
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/382?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Sanctuary",
+      "id": 382
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/401?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Aegis",
+      "id": 401
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/577?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vestments",
+      "id": 577
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/564?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Flame Guard",
+      "id": 564
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/694?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Redemption",
+      "id": 694
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/402?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Aegis",
+      "id": 402
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/388?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Regalia",
+      "id": 388
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/516?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Soulforge Armor",
+      "id": 516
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/719?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Fists of Fury",
+      "id": 719
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/667?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Twin Stars",
+      "id": 667
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/831?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Siegebreaker Plate",
+      "id": 831
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/876?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Liadrin's Garb",
+      "id": 876
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/737?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Latro's Flurry",
+      "id": 737
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/742?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dragonhide Battlegear",
+      "id": 742
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/610?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Wildhide",
+      "id": 610
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/189?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Valor",
+      "id": 189
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/201?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Arcanist Regalia",
+      "id": 201
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/658?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mana-Etched Regalia",
+      "id": 658
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/659?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wastewalker Armor",
+      "id": 659
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/463?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Primal Blessing",
+      "id": 463
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/579?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Regalia",
+      "id": 579
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/573?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fel Skin",
+      "id": 573
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/574?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Strength of the Clefthoof",
+      "id": 574
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/604?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Thunderfist",
+      "id": 604
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/515?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Beastmaster Armor",
+      "id": 515
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/215?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dragonstalker Armor",
+      "id": 215
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/218?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Wrath",
+      "id": 218
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/661?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Doomplate Battlegear",
+      "id": 661
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/671?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tempest Regalia",
+      "id": 671
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/699?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Twin Blades of Azzinoth",
+      "id": 699
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/580?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Thunderfist",
+      "id": 580
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/183?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadmist Raiment",
+      "id": 183
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/383?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Battlegear",
+      "id": 383
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/500?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Implements of Unspoken Names",
+      "id": 500
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/501?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormcaller's Garb",
+      "id": 501
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/534?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Undead Slayer's Armor",
+      "id": 534
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/537?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Battlearmor",
+      "id": 537
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/538?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Stormcaller",
+      "id": 538
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/541?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Dreadgear",
+      "id": 541
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/760?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Dreadplate",
+      "id": 760
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/759?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Raine's Revenge",
+      "id": 759
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/772?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Pursuit",
+      "id": 772
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/629?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crystalforge Battlegear",
+      "id": 629
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/644?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Oblivion Raiment",
+      "id": 644
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/645?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Voidheart Raiment",
+      "id": 645
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/670?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malefic Raiment",
+      "id": 670
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/698?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Aegis",
+      "id": 698
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/502?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gift of the Gathering Storm",
+      "id": 502
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/509?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Striker's Garb",
+      "id": 509
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/491?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blue Dragon Mail",
+      "id": 491
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/348?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lieutenant Commander's Vestments",
+      "id": 348
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/144?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ironfeather Armor",
+      "id": 144
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/281?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Battlegear",
+      "id": 281
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/301?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Earthshaker",
+      "id": 301
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/122?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Necropile Raiment",
+      "id": 122
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/123?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bloodmail Regalia",
+      "id": 123
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/184?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shadowcraft Armor",
+      "id": 184
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/185?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wildheart Raiment",
+      "id": 185
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/822?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Aegis Regalia",
+      "id": 822
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/824?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Worldbreaker Garb",
+      "id": 824
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/826?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Terrorblade Battlegear",
+      "id": 826
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/829?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nightsong Regalia",
+      "id": 829
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/832?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sanctification Garb",
+      "id": 832
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/833?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sanctification Regalia",
+      "id": 833
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/615?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Felshroud",
+      "id": 615
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/212?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nemesis Raiment",
+      "id": 212
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/187?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Elements",
+      "id": 187
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/188?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightforge Armor",
+      "id": 188
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/504?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Trappings of Vaulted Secrets",
+      "id": 504
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/505?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Avenger's Battlegear",
+      "id": 505
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/813?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Eviscerator's Battlegear",
+      "id": 813
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/605?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Vestments",
+      "id": 605
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/898?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scourgelord's Plate",
+      "id": 898
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/901?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightsworn Plate",
+      "id": 901
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/828?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nightsong Garb",
+      "id": 828
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/820?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Aegis Battlegear",
+      "id": 820
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/910?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Felshroud",
+      "id": 910
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/912?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Earthshaker",
+      "id": 912
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/879?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Turalyon's Plate",
+      "id": 879
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/880?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Liadrin's Plate",
+      "id": 880
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/844?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sunstrider's Regalia",
+      "id": 844
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/663?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Incarnate Raiment",
+      "id": 663
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/865?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nobundo's Battlegear",
+      "id": 865
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/848?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Zabra's Raiment",
+      "id": 848
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/856?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Runetotem's Battlegear",
+      "id": 856
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/872?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Koltira's Battlegear",
+      "id": 872
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/858?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garona's Battlegear",
+      "id": 858
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/860?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Windrunner's Pursuit",
+      "id": 860
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/862?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thrall's Garb",
+      "id": 862
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/863?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thrall's Regalia",
+      "id": 863
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/866?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thrall's Battlegear",
+      "id": 866
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/870?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hellscream's Plate",
+      "id": 870
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/814?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ornate Saronite Battlegear",
+      "id": 814
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/819?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frostsavage Battlegear",
+      "id": 819
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/818?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Swiftarrow Battlegear",
+      "id": 818
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/815?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Overcaster Battlegear",
+      "id": 815
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/821?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Aegis Plate",
+      "id": 821
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/627?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crystalforge Raiment",
+      "id": 627
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/628?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crystalforge Armor",
+      "id": 628
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/695?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grand Marshal's Wartide",
+      "id": 695
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/696?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Wartide",
+      "id": 696
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/682?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Skyshatter Harness",
+      "id": 682
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/751?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crusader's Ornamented Battlegear",
+      "id": 751
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/596?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Pursuit",
+      "id": 596
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/823?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Worldbreaker Battlegear",
+      "id": 823
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/816?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Savage Saronite Battlegear",
+      "id": 816
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/838?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scourgestalker Battlegear",
+      "id": 838
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/883?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bloodmage's Regalia",
+      "id": 883
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/887?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lasherweave Garb",
+      "id": 887
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/892?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frost Witch's Garb",
+      "id": 892
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/900?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightsworn Battlegear",
+      "id": 900
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/894?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frost Witch's Battlegear",
+      "id": 894
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/899?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightsworn Garb",
+      "id": 899
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/825?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Worldbreaker Regalia",
+      "id": 825
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/868?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hellscream's Battlegear",
+      "id": 868
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/845?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gul'dan's Regalia",
+      "id": 845
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/869?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wrynn's Plate",
+      "id": 869
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/884?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dark Coven's Regalia",
+      "id": 884
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/885?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crimson Acolyte's Raiment",
+      "id": 885
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/886?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crimson Acolyte's Regalia",
+      "id": 886
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/889?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lasherweave Battlegear",
+      "id": 889
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/893?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frost Witch's Regalia",
+      "id": 893
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/827?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nightsong Battlegear",
+      "id": 827
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/877?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Turalyon's Battlegear",
+      "id": 877
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/859?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Windrunner's Battlegear",
+      "id": 859
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/817?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormhide Battlegear",
+      "id": 817
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/843?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Khadgar's Regalia",
+      "id": 843
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/846?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Kel'Thuzad's Regalia",
+      "id": 846
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/849?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Velen's Regalia",
+      "id": 849
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/852?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Runetotem's Garb",
+      "id": 852
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/853?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malfurion's Regalia",
+      "id": 853
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/854?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Runetotem's Regalia",
+      "id": 854
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/857?namespace=static-12.0.1_65617-us"
+      },
+      "name": "VanCleef's Battlegear",
+      "id": 857
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/875?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Turalyon's Garb",
+      "id": 875
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/850?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Zabra's Regalia",
+      "id": 850
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/861?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nobundo's Garb",
+      "id": 861
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/873?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thassarian's Plate",
+      "id": 873
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/929?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormrider's Regalia",
+      "id": 929
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/941?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shadowflame Regalia",
+      "id": 941
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/931?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Firelord's Vestments",
+      "id": 931
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/939?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Raging Elements",
+      "id": 939
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/689?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Refuge",
+      "id": 689
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/539?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Refuge",
+      "id": 539
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/390?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warlord's Raiment",
+      "id": 390
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/874?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Koltira's Plate",
+      "id": 874
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/944?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spiritmender",
+      "id": 944
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/936?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mercurial Regalia",
+      "id": 936
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/938?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Raging Elements",
+      "id": 938
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/940?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Raging Elements",
+      "id": 940
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/471?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Highlander's Purpose",
+      "id": 471
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/747?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Seer's Ringmail Battlegear",
+      "id": 747
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/945?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathspeaker",
+      "id": 945
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/951?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Agony and Torment",
+      "id": 951
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/891?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ahn'Kahar Blood Hunter's Battlegear",
+      "id": 891
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/937?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wind Dancer's Regalia",
+      "id": 937
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/744?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Kodohide Battlegear",
+      "id": 744
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/765?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Battlegear",
+      "id": 765
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/800?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreamwalker Garb",
+      "id": 800
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/795?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Earthshatter Battlegear",
+      "id": 795
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/888?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lasherweave Regalia",
+      "id": 888
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/895?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ymirjar Lord's Battlegear",
+      "id": 895
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/890?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shadowblade's Battlegear",
+      "id": 890
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/897?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scourgelord's Battlegear",
+      "id": 897
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/834?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Darkruned Battlegear",
+      "id": 834
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/835?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Darkruned Plate",
+      "id": 835
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/717?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Field Marshal's Earthshaker",
+      "id": 717
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/913?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wartide",
+      "id": 913
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/915?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Raiment",
+      "id": 915
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/916?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Investiture",
+      "id": 916
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/917?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vindication",
+      "id": 917
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/918?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Redemption",
+      "id": 918
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/919?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Regalia",
+      "id": 919
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/920?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Pursuit",
+      "id": 920
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/923?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Refuge",
+      "id": 923
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/924?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Desecration",
+      "id": 924
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/911?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Thunderfist",
+      "id": 911
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/930?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightning-Charged Battlegear",
+      "id": 930
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/943?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Earthen Battleplate",
+      "id": 943
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/914?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vestments",
+      "id": 914
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/933?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Reinforced Sapphirium Regalia",
+      "id": 933
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/925?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Magma Plated Battlegear",
+      "id": 925
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/926?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Magma Plated Battlearmor",
+      "id": 926
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/928?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormrider's Vestments",
+      "id": 928
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/932?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Reinforced Sapphirium Battleplate",
+      "id": 932
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/934?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Reinforced Sapphirium Battlearmor",
+      "id": 934
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/935?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mercurial Vestments",
+      "id": 935
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/881?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Purified Shard of the Gods",
+      "id": 881
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/882?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shiny Shard of the Gods",
+      "id": 882
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/871?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thassarian's Battlegear",
+      "id": 871
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/908?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Defiler's Resolve",
+      "id": 908
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/855?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malfurion's Battlegear",
+      "id": 855
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/864?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nobundo's Regalia",
+      "id": 864
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/836?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Kirin Tor Garb",
+      "id": 836
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/837?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathbringer Garb",
+      "id": 837
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/909?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Battlegear",
+      "id": 909
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/927?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormrider's Battlegarb",
+      "id": 927
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/942?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Earthen Warplate",
+      "id": 942
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1008?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Balespider's Burning Vestments",
+      "id": 1008
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1009?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Cleansing Flame",
+      "id": 1009
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/896?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ymirjar Lord's Plate",
+      "id": 896
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/842?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Awesome Party Ensemble",
+      "id": 842
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/847?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Velen's Raiment",
+      "id": 847
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/921?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wildhide",
+      "id": 921
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1015?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Volcanic Battlegear",
+      "id": 1015
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1016?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Volcanic Regalia",
+      "id": 1016
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1017?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Molten Giant Warplate",
+      "id": 1017
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1006?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Dark Phoenix",
+      "id": 1006
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1004?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Obsidian Arborweave Vestments",
+      "id": 1004
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1018?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Molten Giant Battleplate",
+      "id": 1018
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/626?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Justicar Battlegear",
+      "id": 626
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1005?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Flamewaker's Battlegear",
+      "id": 1005
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/851?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Malfurion's Garb",
+      "id": 851
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/616?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Netherscale Armor",
+      "id": 616
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/208?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lawbringer Armor",
+      "id": 208
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1057?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Necrotic Boneplate Battlegear",
+      "id": 1057
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1062?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Time Lord's Regalia",
+      "id": 1062
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1065?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of Radiant Glory",
+      "id": 1065
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1067?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Dying Light",
+      "id": 1067
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1069?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spiritwalker's Vestments",
+      "id": 1069
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/949?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Dark Brand",
+      "id": 949
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/950?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Big Wave",
+      "id": 950
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/922?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Sanctuary",
+      "id": 922
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/752?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crusader's Scaled Battlegear",
+      "id": 752
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/621?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Netherblade",
+      "id": 621
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/492?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Twilight Trappings",
+      "id": 492
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/675?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Absolution",
+      "id": 675
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/214?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormrage Raiment",
+      "id": 214
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/206?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Giantstalker Armor",
+      "id": 206
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/518?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathmist Raiment",
+      "id": 518
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/464?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Overlord's Resolution",
+      "id": 464
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/697?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Redoubt",
+      "id": 697
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1000?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Elementium Deathplate Battlegear",
+      "id": 1000
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1010?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Cleansing Flame",
+      "id": 1010
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1072?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Faceless Shroud",
+      "id": 1072
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1066?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Dying Light",
+      "id": 1066
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1073?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Colossal Dragonplate Battlegear",
+      "id": 1073
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1063?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Radiant Glory",
+      "id": 1063
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1059?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deep Earth Regalia",
+      "id": 1059
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1060?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deep Earth Vestments",
+      "id": 1060
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1087?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fangs of the Father",
+      "id": 1087
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1088?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Maw of Oblivion",
+      "id": 1088
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/608?namespace=static-12.0.1_65617-us"
+      },
+      "name": "High Warlord's Vindication",
+      "id": 608
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/769?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Thunderfist",
+      "id": 769
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/783?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blessed Garb of the Undead Slayer",
+      "id": 783
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/513?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Feralheart Raiment",
+      "id": 513
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/497?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathdealer's Embrace",
+      "id": 497
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/347?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Champion's Vestments",
+      "id": 347
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/830?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Siegebreaker Battlegear",
+      "id": 830
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/533?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Undead Slaying",
+      "id": 533
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1001?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Elementium Deathplate Battlearmor",
+      "id": 1001
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1007?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Firehawk Robes of Conflagration",
+      "id": 1007
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1002?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Obsidian Arborweave Battlegarb",
+      "id": 1002
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1003?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Obsidian Arborweave Regalia",
+      "id": 1003
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1011?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Immolation",
+      "id": 1011
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1012?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of Immolation",
+      "id": 1012
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1013?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlearmor of Immolation",
+      "id": 1013
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1014?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Volcanic Vestments",
+      "id": 1014
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1127?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Eternal Blossom",
+      "id": 1127
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1136?namespace=static-12.0.1_65617-us"
+      },
+      "name": "White Tiger Plate",
+      "id": 1136
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1131?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Red Crane",
+      "id": 1131
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1124?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of the Lost Catacomb",
+      "id": 1124
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1134?namespace=static-12.0.1_65617-us"
+      },
+      "name": "White Tiger Vestments",
+      "id": 1134
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1104?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Desecration",
+      "id": 1104
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1105?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Refuge",
+      "id": 1105
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1106?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Sanctuary",
+      "id": 1106
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1163?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Lightning Emperor",
+      "id": 1163
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1164?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of the Lightning Emperor",
+      "id": 1164
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1165?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Exorcist",
+      "id": 1165
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1166?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Exorcist",
+      "id": 1166
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1167?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nine-Tail Battlegear",
+      "id": 1167
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1168?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Witch Doctor",
+      "id": 1168
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1169?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Witch Doctor",
+      "id": 1169
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1170?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Witch Doctor",
+      "id": 1170
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1171?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Thousandfold Hells",
+      "id": 1171
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1172?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of the Last Mogu",
+      "id": 1172
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1173?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of the Last Mogu",
+      "id": 1173
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1107?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wildhide",
+      "id": 1107
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1108?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Pursuit",
+      "id": 1108
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1109?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Regalia",
+      "id": 1109
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1110?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Redemption",
+      "id": 1110
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1111?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vindication",
+      "id": 1111
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1113?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vestments",
+      "id": 1113
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1114?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wartide",
+      "id": 1114
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1115?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Earthshaker",
+      "id": 1115
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1116?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Thunderfist",
+      "id": 1116
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1117?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Felshroud",
+      "id": 1117
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1118?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Battlegear",
+      "id": 1118
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1119?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Copperskin",
+      "id": 1119
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1120?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Ironskin",
+      "id": 1120
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1128?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of the Eternal Blossom",
+      "id": 1128
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1145?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of Resounding Rings",
+      "id": 1145
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1138?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Guardian Serpent",
+      "id": 1138
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1130?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Burning Scroll",
+      "id": 1130
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1143?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sha-Skin Regalia",
+      "id": 1143
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1137?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Guardian Serpent",
+      "id": 1137
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1139?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Thousandfold Blades",
+      "id": 1139
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1147?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tradition of Cooking",
+      "id": 1147
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1123?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Lost Catacomb",
+      "id": 1123
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1125?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Eternal Blossom",
+      "id": 1125
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1129?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Yaungol Slayer Battlegear",
+      "id": 1129
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1132?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Red Crane",
+      "id": 1132
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1135?namespace=static-12.0.1_65617-us"
+      },
+      "name": "White Tiger Battlegear",
+      "id": 1135
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1141?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Firebird",
+      "id": 1141
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1142?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Firebird",
+      "id": 1142
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1144?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of Resounding Rings",
+      "id": 1144
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1151?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of the All-Consuming Maw",
+      "id": 1151
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1152?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of the All-Consuming Maw",
+      "id": 1152
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1153?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Haunted Forest",
+      "id": 1153
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1154?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Haunted Forest",
+      "id": 1154
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1155?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Haunted Forest",
+      "id": 1155
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1156?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of the Haunted Forest",
+      "id": 1156
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1157?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Saurok Stalker",
+      "id": 1157
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1158?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Chromatic Hydra",
+      "id": 1158
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1159?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fire-Charm Battlegear",
+      "id": 1159
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1160?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fire-Charm Vestments",
+      "id": 1160
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1161?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fire-Charm Armor",
+      "id": 1161
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1162?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Lightning Emperor",
+      "id": 1162
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/878?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Liadrin's Battlegear",
+      "id": 878
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/867?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wrynn's Battlegear",
+      "id": 867
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1070?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spiritwalker's Regalia",
+      "id": 1070
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1071?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spiritwalker's Battlegear",
+      "id": 1071
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1074?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Colossal Dragonplate Armor",
+      "id": 1074
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1058?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deep Earth Battlegarb",
+      "id": 1058
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1061?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wyrmstalker Battlegear",
+      "id": 1061
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1089?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Jaws of Retribution",
+      "id": 1089
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1068?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blackfang Battleweave",
+      "id": 1068
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1112?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Investiture",
+      "id": 1112
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1146?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Raiment",
+      "id": 1146
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1126?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Eternal Blossom",
+      "id": 1126
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1133?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of the Red Crane",
+      "id": 1133
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1140?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Firebird",
+      "id": 1140
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1056?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Necrotic Boneplate Armor",
+      "id": 1056
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1064?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of Radiant Glory",
+      "id": 1064
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1179?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of the Prehistoric Marauder",
+      "id": 1179
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1180?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of the Prehistoric Marauder",
+      "id": 1180
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1181?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Horned Nightmare",
+      "id": 1181
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1182?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Celestial Harmony Regalia",
+      "id": 1182
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1183?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Celestial Harmony Battlegear",
+      "id": 1183
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1184?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Celestial Harmony Vestment",
+      "id": 1184
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1193?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Seven Sacred Seals",
+      "id": 1193
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1194?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Chronomancer Regalia",
+      "id": 1194
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1195?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Unblinking Vigil",
+      "id": 1195
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1196?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of the Shattered Vale",
+      "id": 1196
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1197?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Shattered Vale",
+      "id": 1197
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1198?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Shattered Vale",
+      "id": 1198
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1199?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Shattered Vale",
+      "id": 1199
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1200?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of Cyclopean Dread",
+      "id": 1200
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1201?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of Cyclopean Dread",
+      "id": 1201
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1203?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Distinction",
+      "id": 1203
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1185?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Barbed Assassin Battlegear",
+      "id": 1185
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1186?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Ternion Glory",
+      "id": 1186
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1187?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Ternion Glory",
+      "id": 1187
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1188?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Plate of Winged Triumph",
+      "id": 1188
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1189?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Winged Triumph",
+      "id": 1189
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1190?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Winged Triumph",
+      "id": 1190
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1191?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of Seven Sacred Seals",
+      "id": 1191
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1192?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Seven Sacred Seals",
+      "id": 1192
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1228?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Wartide",
+      "id": 1228
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1229?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Felshroud",
+      "id": 1229
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1230?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Battlegear",
+      "id": 1230
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1231?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Distinction",
+      "id": 1231
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1233?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Living Wood Battlegear",
+      "id": 1233
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1234?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ogreskull Boneplate Battlegear",
+      "id": 1234
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1235?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Arcanoshatter Regalia",
+      "id": 1235
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1236?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Rylakstalker's Battlegear",
+      "id": 1236
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1237?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Somber Gaze",
+      "id": 1237
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1238?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Guiding Light",
+      "id": 1238
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1239?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Soul Priest's Raiment",
+      "id": 1239
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1240?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Poisoner's Battlegear",
+      "id": 1240
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1241?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Windspeaker's Regalia",
+      "id": 1241
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1242?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blackhand's Battlegear",
+      "id": 1242
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1243?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shadow Council's Garb",
+      "id": 1243
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1220?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Desecration",
+      "id": 1220
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1221?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Sanctuary",
+      "id": 1221
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1222?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Pursuit",
+      "id": 1222
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1223?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Regalia",
+      "id": 1223
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1224?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Ironskin",
+      "id": 1224
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1225?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vindication",
+      "id": 1225
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1226?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Investiture",
+      "id": 1226
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1227?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Vestments",
+      "id": 1227
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1266?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Illidari Slayer",
+      "id": 1266
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1267?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fel Infusion",
+      "id": 1267
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1245?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blacksteel Battleplate",
+      "id": 1245
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1246?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ashlink Armor",
+      "id": 1246
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1247?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sootfur Garb",
+      "id": 1247
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1248?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ebonflame Raiment",
+      "id": 1248
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1249?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Demongaze Armor",
+      "id": 1249
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1250?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Oathclaw Wargarb",
+      "id": 1250
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1251?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Raiment of the Arcanic Conclave",
+      "id": 1251
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1252?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlewrap of the Hurricane's Eye",
+      "id": 1252
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1253?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Savage Hunt",
+      "id": 1253
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1254?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Watch of the Ceaseless Vigil",
+      "id": 1254
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1255?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Attire of Piety",
+      "id": 1255
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1256?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Felblade Armor",
+      "id": 1256
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1257?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Embrace of the Living Mountain",
+      "id": 1257
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1258?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of Iron Wrath",
+      "id": 1258
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1259?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathrattle Regalia",
+      "id": 1259
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1268?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Scale's Embrace",
+      "id": 1268
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1244?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Might of the Warsong",
+      "id": 1244
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1260?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Felfume Raiment",
+      "id": 1260
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1261?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ironpelt Armor",
+      "id": 1261
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1262?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Rancorbite Battlegear",
+      "id": 1262
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1263?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Demonbreaker Wargear",
+      "id": 1263
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1269?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Deathlord's Battleplate",
+      "id": 1269
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1270?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Shattered Abyss",
+      "id": 1270
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1271?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreamgrove Raiment",
+      "id": 1271
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1272?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Guise of the Unseen Path",
+      "id": 1272
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1273?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vesture of Tirisgarde",
+      "id": 1273
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1274?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grandmaster's Finery",
+      "id": 1274
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1275?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of the Silver Hand",
+      "id": 1275
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1276?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the High Priest",
+      "id": 1276
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1277?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlegear of the Uncrowned",
+      "id": 1277
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1278?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Raiment of the Farseer",
+      "id": 1278
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1279?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Black Harvest",
+      "id": 1279
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1280?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battlelord's Plate",
+      "id": 1280
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1281?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadwyrm Battleplate",
+      "id": 1281
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1282?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestment of Second Sight",
+      "id": 1282
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1283?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garb of the Astral Warden",
+      "id": 1283
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1284?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Eagletalon Battlegear",
+      "id": 1284
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1285?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Everburning Knowledge",
+      "id": 1285
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1286?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Enveloped Dissonance",
+      "id": 1286
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1287?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Battleplate of the Highlord",
+      "id": 1287
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1288?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Purifier",
+      "id": 1288
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1299?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Burden of Power",
+      "id": 1299
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1301?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gravewarden Armaments",
+      "id": 1301
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1302?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Demonbane Armor",
+      "id": 1302
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1303?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormheart Raiment",
+      "id": 1303
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1304?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wildstalker Armor",
+      "id": 1304
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1305?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Arcane Tempest",
+      "id": 1305
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1306?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Xuen's Battlegear",
+      "id": 1306
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1293?namespace=static-12.0.1_65617-us"
+      },
+      "name": "March of the Legion",
+      "id": 1293
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1294?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Journey Through Time",
+      "id": 1294
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1295?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Nightwell Arcanum",
+      "id": 1295
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1296?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Jacin's Ruse",
+      "id": 1296
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1297?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Traitor's Oath",
+      "id": 1297
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1298?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fortitude of the Nightborne",
+      "id": 1298
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1307?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Radiant Lightbringer Armor",
+      "id": 1307
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1308?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of Blind Absolution",
+      "id": 1308
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1309?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fanged Slayer's Armor",
+      "id": 1309
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1310?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Skybreaker",
+      "id": 1310
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1311?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Diabolic Raiment",
+      "id": 1311
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1289?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Doomblade Battlegear",
+      "id": 1289
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1290?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Shackled Elements",
+      "id": 1290
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1291?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Legacy of Azj'Aqir",
+      "id": 1291
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1292?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warplate of the Obsidian Aspect",
+      "id": 1292
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1312?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Titanic Onslaught Armor",
+      "id": 1312
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1319?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Juggernaut Battlegear",
+      "id": 1319
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1320?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Grim Inquisitor's Regalia",
+      "id": 1320
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1321?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garb of Venerated Spirits",
+      "id": 1321
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1331?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Velen's Lament",
+      "id": 1331
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1332?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Umbra-Weaver's Portent",
+      "id": 1332
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1322?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of the Dashing Scoundrel",
+      "id": 1322
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1323?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gilded Seraph's Raiment",
+      "id": 1323
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1324?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Light's Vanguard Battleplate",
+      "id": 1324
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1325?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Chi-Ji's Battlegear",
+      "id": 1325
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1326?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Runebound Regalia",
+      "id": 1326
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1327?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Serpentstalker Guise",
+      "id": 1327
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1328?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bearmantle Battlegear",
+      "id": 1328
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1329?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Felreaper Vestments",
+      "id": 1329
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1330?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dreadwake Armor",
+      "id": 1330
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1333?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tailwind Regalia",
+      "id": 1333
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1334?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sea Sisters' Cunning",
+      "id": 1334
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1335?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Venombite Garb",
+      "id": 1335
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1336?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Thundercrash Armor",
+      "id": 1336
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1337?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sandstorm Plate",
+      "id": 1337
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1338?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Frenzied Battleplate",
+      "id": 1338
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1439?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Waycrest Legacy",
+      "id": 1439
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1440?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Brain Trust",
+      "id": 1440
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1442?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gift of the Loa",
+      "id": 1442
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1443?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Keepsakes of the Resolute Commandant",
+      "id": 1443
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1452?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Titanic Empowerment",
+      "id": 1452
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1456?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Mail Courier",
+      "id": 1456
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1459?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Selfless",
+      "id": 1459
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1460?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Rationale of Maldraxxus",
+      "id": 1460
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1461?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Faewoven Regalia",
+      "id": 1461
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1454?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hack and Gore",
+      "id": 1454
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1455?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Regalia of Fabled Adventurers",
+      "id": 1455
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1466?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garb of the Selfless",
+      "id": 1466
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1467?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Chain of the Selfless",
+      "id": 1467
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1468?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vestments of the Selfless",
+      "id": 1468
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1475?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Guile of Maldraxxus",
+      "id": 1475
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1476?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Alacrity of Maldraxxus",
+      "id": 1476
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1477?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Authority of Maldraxxus",
+      "id": 1477
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1478?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Oakheart Raiment",
+      "id": 1478
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1479?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Runewarden's Guise",
+      "id": 1479
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1480?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Queensguard Warbark",
+      "id": 1480
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1481?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ebony Death Shroud Armor",
+      "id": 1481
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1482?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fearstalker's Ebony Battlegear",
+      "id": 1482
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1483?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dread Sentinel's Ebony Battleplate",
+      "id": 1483
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1457?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hack and Gore",
+      "id": 1457
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1458?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gladiator's Distinction",
+      "id": 1458
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1463?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Inscrutable Exile's Garb",
+      "id": 1463
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1462?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Soulbreaker's Ebony Vestments",
+      "id": 1462
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1497?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Godstalker's Battlegear",
+      "id": 1497
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1498?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Luminous Chevalier's Gallantry",
+      "id": 1498
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1499?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Theurgic Starspeaker's Regalia",
+      "id": 1499
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1500?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The First Eidolon's Soulsteel",
+      "id": 1500
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1501?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mercurial Punisher's Painweave",
+      "id": 1501
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1502?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tapestry of the Fixed Stars",
+      "id": 1502
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1503?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Erudite Occultist's Vestments",
+      "id": 1503
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1504?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Garb of the Grand Upwelling",
+      "id": 1504
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1505?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Habiliments of the Empyrean",
+      "id": 1505
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1506?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armaments of the Infinite Infantry",
+      "id": 1506
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1507?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shroud of the Demon Star",
+      "id": 1507
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1510?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Horizon Strider's Garments",
+      "id": 1510
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1511?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Drakebreaker's Garb",
+      "id": 1511
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1512?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Drakebreaker's Battlegear",
+      "id": 1512
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1513?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Drakebreaker's Vestments",
+      "id": 1513
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1514?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Drakebreaker's Armor",
+      "id": 1514
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1496?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Soulblade Shadowhide",
+      "id": 1496
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1508?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ripped Secrets",
+      "id": 1508
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1515?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Woven Chronocloth",
+      "id": 1515
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1521?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Drape of Raging Tempests",
+      "id": 1521
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1516?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Azureweave Vestments",
+      "id": 1516
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1520?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Dragon Rider's Gear",
+      "id": 1520
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1523?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shroud of Raging Tempests",
+      "id": 1523
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1524?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scales of Raging Tempests",
+      "id": 1524
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1525?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Armor of Raging Tempests",
+      "id": 1525
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1526?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Haunted Frostbrood Remains",
+      "id": 1526
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1527?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Skybound Avenger's Flightwear",
+      "id": 1527
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1528?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lost Landcaller's Vesture",
+      "id": 1528
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1529?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormwing Harrier's Camouflage",
+      "id": 1529
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1530?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scales of the Awakened",
+      "id": 1530
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1531?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Bindings of the Crystal Scholar",
+      "id": 1531
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1532?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wrappings of the Waking Fist",
+      "id": 1532
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1509?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Playful Spirit's Fur",
+      "id": 1509
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1533?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Virtuous Silver Cataphract",
+      "id": 1533
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1534?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Draconic Hierophant's Finery",
+      "id": 1534
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1535?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vault Delver's Toolkit",
+      "id": 1535
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1536?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Elements of Infused Earth",
+      "id": 1536
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1537?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scalesworn Cultist's Habit",
+      "id": 1537
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1538?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stones of the Walking Mountain",
+      "id": 1538
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1539?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Might of the Drogbar",
+      "id": 1539
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1540?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lingering Phantom's Encasement",
+      "id": 1540
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1541?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Kinslayer's Burdens",
+      "id": 1541
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1542?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Strands of the Autumn Blaze",
+      "id": 1542
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1543?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Legacy of Obsidian Secrets",
+      "id": 1543
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1544?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ashen Predator's Scaleform",
+      "id": 1544
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1545?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Underlight Conjurer's Brilliance",
+      "id": 1545
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1546?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fangs of the Vermillion Forge",
+      "id": 1546
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1547?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Heartfire Sentinel's Authority",
+      "id": 1547
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1548?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Furnace Seraph's Verdict",
+      "id": 1548
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1549?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lurking Specter's Shadeweave",
+      "id": 1549
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1550?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Runes of the Cinderwolf",
+      "id": 1550
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1551?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sinister Savant's Cursethreads",
+      "id": 1551
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1552?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Irons of the Onyx Crucible",
+      "id": 1552
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1557?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Risen Nightmare's Gravemantle",
+      "id": 1557
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1558?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Screaming Torchfiend's Brutality",
+      "id": 1558
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1559?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Benevolent Embersage's Guidance",
+      "id": 1559
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1560?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Werynkeeper's Timeless Vigil",
+      "id": 1560
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1561?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blazing Dreamstalker's Trophies",
+      "id": 1561
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1562?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wayward Chronomancer's Clockwork",
+      "id": 1562
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1563?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mystic Heron's Discipline",
+      "id": 1563
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1564?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Zealous Pyreknight's Ardor",
+      "id": 1564
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1565?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blessings of Lunar Communion",
+      "id": 1565
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1566?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lucid Shadewalker's Silence",
+      "id": 1566
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1567?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vision of the Greatwolf Outcast",
+      "id": 1567
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1568?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Devout Ashdevil's Pactweave",
+      "id": 1568
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1569?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Molten Vanguard's Mortarplate",
+      "id": 1569
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1605?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wayward Chronomancer's Clockwork",
+      "id": 1605
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1606?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vision of the Greatwolf Outcast",
+      "id": 1606
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1614?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Draconic Warmonger's Armor",
+      "id": 1614
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1615?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Draconic Warmonger's Chainmail",
+      "id": 1615
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1616?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Draconic Warmonger's Vestments",
+      "id": 1616
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1683?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Woven Dawn",
+      "id": 1683
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1684?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warsculptor's Masterwork",
+      "id": 1684
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1685?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Rites of the Hexflame Coven",
+      "id": 1685
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1686?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Waves of the Forgotten Reservoir",
+      "id": 1686
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1687?namespace=static-12.0.1_65617-us"
+      },
+      "name": "K'areshi Phantom's Bindings",
+      "id": 1687
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1688?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shards of Living Luster",
+      "id": 1688
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1689?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Entombed Seraph's Radiance",
+      "id": 1689
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1690?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Gatecrasher's Fortitude",
+      "id": 1690
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1691?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sparks of Violet Rebirth",
+      "id": 1691
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1692?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lightless Scavenger's Necessities",
+      "id": 1692
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1693?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Destroyer's Scarred Wards",
+      "id": 1693
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1694?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mane of the Greatlynx",
+      "id": 1694
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1697?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Woven Dusk",
+      "id": 1697
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1553?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scalewarden's Garments",
+      "id": 1553
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1554?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scalewarden's Chainmail",
+      "id": 1554
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1555?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scalewarden's Battlegear",
+      "id": 1555
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1556?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scalewarden's Armaments",
+      "id": 1556
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1695?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Husk of the Hypogeal Nemesis",
+      "id": 1695
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1696?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Exhumed Centurion's Relics",
+      "id": 1696
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1834?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lingering Dark Iron Grace",
+      "id": 1834
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1867?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Cauldron Champion's Encore",
+      "id": 1867
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1868?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fel-Dealer's Contraband",
+      "id": 1868
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1869?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Roots of Reclaiming Blight",
+      "id": 1869
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1870?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Opulent Treasurescale's Hoard",
+      "id": 1870
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1871?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Tireless Collector's Bounties",
+      "id": 1871
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1872?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Jewels of the Aspectral Emissary",
+      "id": 1872
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1873?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ageless Serpent's Foresight",
+      "id": 1873
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1874?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Oath of the Aureate Sentry",
+      "id": 1874
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1875?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Confessor's Unshakable Virtue",
+      "id": 1875
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1876?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spectral Gambler's Last Call",
+      "id": 1876
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1572?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hellbloom Armaments",
+      "id": 1572
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1573?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hellbloom Chainmail",
+      "id": 1573
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1574?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hellbloom Battlegear",
+      "id": 1574
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1575?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hellbloom Garments",
+      "id": 1575
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1611?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Embrace of the Cinderbee",
+      "id": 1611
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1612?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Fury of the Stormrook",
+      "id": 1612
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1878?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spliced Fiendtrader's Influence",
+      "id": 1878
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1877?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Currents of the Gale Sovereign",
+      "id": 1877
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1879?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Underpin Strongarm's Muscle",
+      "id": 1879
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1957?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sunfire Silk Trappings",
+      "id": 1957
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1958?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Arcanoweave Trappings",
+      "id": 1958
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1960?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shards of the Void",
+      "id": 1960
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1966?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Murder Row Materials",
+      "id": 1966
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1967?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Root Warden's Regalia",
+      "id": 1967
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1919?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Hollow Sentinel's Wake",
+      "id": 1919
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1920?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Charhound's Vicious Hunt",
+      "id": 1920
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1921?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ornaments of the Mother Eagle",
+      "id": 1921
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1922?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Spellweaver's Immaculate Design",
+      "id": 1922
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1923?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Midnight Herald's Pledge",
+      "id": 1923
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1924?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Augur's Ephemeral Plumage",
+      "id": 1924
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1925?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Crash of Fallen Storms",
+      "id": 1925
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1926?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Vows of the Lucent Battalion",
+      "id": 1926
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1927?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Eulogy to a Dying Star",
+      "id": 1927
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1928?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Shroud of the Sudden Eclipse",
+      "id": 1928
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1929?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Howls of Channeled Fury",
+      "id": 1929
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1930?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Inquisitor's Feast of Madness",
+      "id": 1930
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1931?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Chains of the Living Weapon",
+      "id": 1931
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1613?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Ky'veza's Cruel Implements",
+      "id": 1613
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1617?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Draconic Warmonger's Garb",
+      "id": 1617
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1594?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Scales of the Awakened",
+      "id": 1594
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1595?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Stormwing Harrier's Camouflage",
+      "id": 1595
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1596?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Wrappings of the Waking Fist",
+      "id": 1596
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1597?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Strands of the Autumn Blaze",
+      "id": 1597
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1598?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Heartfire Sentinel's Authority",
+      "id": 1598
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1599?namespace=static-12.0.1_65617-us"
+      },
+      "name": "The Furnace Seraph's Verdict",
+      "id": 1599
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1600?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Lurking Specter's Shadeweave",
+      "id": 1600
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1601?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sinister Savant's Cursethreads",
+      "id": 1601
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1602?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Irons of the Onyx Crucible",
+      "id": 1602
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1603?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Risen Nightmare's Gravemantle",
+      "id": 1603
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1604?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Screaming Torchfiend's Brutality",
+      "id": 1604
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1970?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Torment's Duality",
+      "id": 1970
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1971?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Voidlight Bindings",
+      "id": 1971
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1974?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warmonger's Vestments",
+      "id": 1974
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1975?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warmonger's Armor",
+      "id": 1975
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1976?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warmonger's Chainmail",
+      "id": 1976
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1977?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Warmonger's Plate",
+      "id": 1977
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1978?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Relentless Rider's Lament",
+      "id": 1978
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1979?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Devouring Reaver's Sheathe",
+      "id": 1979
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1980?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Sprouts of the Luminous Bloom",
+      "id": 1980
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1981?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Livery of the Black Talon",
+      "id": 1981
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1982?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Primal Sentry's Camouflage",
+      "id": 1982
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1983?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Voidbreaker's Accordance",
+      "id": 1983
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1984?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Way of Ra-den's Chosen",
+      "id": 1984
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1985?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Luminant Verdict's Vestments",
+      "id": 1985
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1986?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Blind Oath's Burden",
+      "id": 1986
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1987?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Motley of the Grim Jest",
+      "id": 1987
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1988?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Mantle of the Primal Core",
+      "id": 1988
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1989?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Reign of the Abyssal Immolator",
+      "id": 1989
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-set/1990?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Rage of the Night Ender",
+      "id": 1990
+    }
+  ]
+}

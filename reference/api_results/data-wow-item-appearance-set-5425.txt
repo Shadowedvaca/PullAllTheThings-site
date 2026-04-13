@@ -1,0 +1,72 @@
+5425
+5426
+5427
+5428
+
+/data/wow/item-appearance/set/5425
+
+{
+  "_links": {
+    "self": {
+      "href": "https://us.api.blizzard.com/data/wow/item-appearance/set/5425?namespace=static-12.0.1_65617-us"
+    }
+  },
+  "id": 5425,
+  "set_name": "Sprouts of the Luminous Bloom",
+  "appearances": [
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126723?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126723
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126724?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126724
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126725?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126725
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126726?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126726
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126727?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126727
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126728?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126728
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126729?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126729
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126730?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126730
+    },
+    {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-appearance/126731?namespace=static-12.0.1_65617-us"
+      },
+      "id": 126731
+    }
+  ]
+}
