@@ -1380,6 +1380,7 @@ class SiteConfigUpdate(BaseModel):
     enable_guild_quotes: bool | None = None
     enable_contests: bool | None = None
     current_mplus_season_id: int | None = None
+    quality_ilvl_map: dict | None = None
 
 
 @router.patch(

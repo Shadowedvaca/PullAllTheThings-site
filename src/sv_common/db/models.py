@@ -207,6 +207,7 @@ class SiteConfig(Base):
     active_connected_realm_ids: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, server_default="{}"
     )
+    quality_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )

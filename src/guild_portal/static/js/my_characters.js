@@ -1285,6 +1285,11 @@ function _gpPill(t, tc) {
   return `<span class="mcn-track-pill" style="background:${_gpEsc(c)}">${_gpEsc(t)}</span>`;
 }
 
+// Build a Wowhead item URL, optionally with ?ilvl=N for quality-aware tooltips.
+function _whItemUrl(bid, ilvl) {
+  return ilvl ? `https://www.wowhead.com/item=${bid}?ilvl=${ilvl}` : `https://www.wowhead.com/item=${bid}`;
+}
+
 // Build grouped source HTML: one block per instance, bosses indented below.
 // Groups by display_name (server-computed from source_config).
 // track_label and display_name are both computed server-side.
@@ -2212,12 +2217,14 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   // normalization the visual position may differ from the DB slot (e.g. visual
   // ring_1 might correspond to DB ring_2 after an alphabetical swap).
   const dbSlot  = sd.canonical_slot || slotKey;
-  const eq      = sd.equipped;
-  const desired = sd.desired;
-  const bis     = sd.bis_recommendations || [];
-  const sources = sd.item_sources        || [];
-  const tracks  = sd.available_tracks    || [];
-  const upgrades = sd.upgrade_tracks     || [];
+  const eq        = sd.equipped;
+  const desired   = sd.desired;
+  const bis       = sd.bis_recommendations || [];
+  const sources   = sd.item_sources        || [];
+  const tracks    = sd.available_tracks    || [];
+  const upgrades  = sd.upgrade_tracks      || [];
+  const targetIlvl   = sd.target_ilvl   || null;
+  const equippedIlvl = sd.equipped_ilvl || (eq?.item_level) || null;
 
   // 1 — Equipped
   let equippedHtml;
@@ -2231,7 +2238,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
       ? `<button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem;flex-shrink:0;align-self:center" onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${eq.blizzard_item_id})">Use</button>`
       : '';
     equippedHtml = `<div class="mcn-drawer-item" style="align-items:center">
-      ${eq.icon_url ? `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
+      ${eq.icon_url ? `<a href="${_whItemUrl(eq.blizzard_item_id, equippedIlvl)}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy"${bs}></a>` : ''}
       <div class="mcn-drawer-item__info" style="flex:1">
         <div class="mcn-drawer-item__name"${ns}>
           ${_gpEsc(eq.item_name || 'Unknown')}
@@ -2246,14 +2253,14 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
 
   // 2 — BIS grid
   const PAIRED = new Set(['ring_1','ring_2','trinket_1','trinket_2']);
-  const bisHtml = _gpRenderBisGrid(slotKey, bis, tc, PAIRED.has(slotKey) ? null : (sd.desired_blizzard_item_id || null), dbSlot);
+  const bisHtml = _gpRenderBisGrid(slotKey, bis, tc, PAIRED.has(slotKey) ? null : (sd.desired_blizzard_item_id || null), dbSlot, targetIlvl);
 
   // 3 — Your goal
   let goalHtml;
   if (desired && desired.blizzard_item_id) {
     const locked = desired.is_locked;
     goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
-      ${desired.icon_url ? `<a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
+      ${desired.icon_url ? `<a href="${_whItemUrl(desired.blizzard_item_id, targetIlvl)}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name">
           ${_gpEsc(desired.item_name || 'Unknown')}
@@ -2336,7 +2343,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   const cacheKey = charId5 ? `${charId5}:${dbSlot}` : null;
   const avCached = cacheKey ? _gpAvailCache[cacheKey] : null;
   const availBodyHtml = avCached
-    ? _gpRenderAvailSections(dbSlot, avCached.groups, tc, avCached.status)
+    ? _gpRenderAvailSections(dbSlot, avCached.groups, tc, avCached.status, avCached.target_ilvl)
     : '<div class="mcn-drawer-empty">Loading\u2026</div>';
   const availHtml = `<div id="mcn-avail-body-${_gpEsc(dbSlot)}">${availBodyHtml}</div>`;
 
@@ -2358,7 +2365,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     ${excludedItems.length > 0 ? `<div class="mcn-drawer__bis-section">${excludedHtml}</div>` : ''}`;
 }
 
-function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
+function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot, targetIlvl) {
   dbSlot = dbSlot || slotKey;
   if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
 
@@ -2434,7 +2441,7 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
         : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no">&mdash;</td>`
     ).join('');
     const icon = item.icon
-      ? `<a href="https://www.wowhead.com/item=${item.bid}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
+      ? `<a href="${_whItemUrl(item.bid, targetIlvl)}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc = _gpEsc(item.name).replace(/'/g, "&#39;");
     return `<tr>
@@ -2455,7 +2462,7 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
 // Renders up to four collapsible sections: Tier/Catalyst, Raid Loot, Mythic+ Loot, Crafted.
 // `groups` is { tier: [...] | null, raid: [...], dungeon: [...], crafted: [...] } from the API.
 // Tier section is omitted entirely when groups.tier is null (non-tier slot).
-function _gpRenderAvailSections(dbSlot, groups, tc, status) {
+function _gpRenderAvailSections(dbSlot, groups, tc, status, targetIlvl) {
   if (status === 'loading') return '<div class="mcn-drawer-empty">Loading\u2026</div>';
   if (status === 'error')   return '<div class="mcn-drawer-empty">Could not load items</div>';
 
@@ -2472,7 +2479,7 @@ function _gpRenderAvailSections(dbSlot, groups, tc, status) {
   return sections.map(({ key, label, showTracks, subField }) => {
     const items = groups?.[key] || [];
     const bodyHtml = items.length
-      ? _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField)
+      ? _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField, targetIlvl)
       : `<div class="mcn-drawer-empty">No eligible ${label.toLowerCase()} items found</div>`;
     return `<details class="mcn-avail-section">
       <summary class="mcn-avail-section__toggle">${label}</summary>
@@ -2484,10 +2491,10 @@ function _gpRenderAvailSections(dbSlot, groups, tc, status) {
 // Renders one item table for a single source section.
 // subField: which source property to show as item subtitle ('source_name' for
 // raid boss, 'source_instance' for M+ dungeon name, null for crafted).
-function _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField) {
+function _gpRenderAvailTable(dbSlot, items, tc, showTracks, subField, targetIlvl) {
   const rows = items.map(item => {
     const icon = item.icon_url
-      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
+      ? `<a href="${_whItemUrl(item.blizzard_item_id, targetIlvl)}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
     let trackCell = '';
@@ -2564,7 +2571,7 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
       const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
       if (bodyEl) {
         const tc = _gpCache[charId]?.track_colors || {};
-        bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, _gpAvailCache[key].groups, tc, 'done');
+        bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, _gpAvailCache[key].groups, tc, 'done', _gpAvailCache[key].target_ilvl);
       }
     }
     return;
@@ -2575,12 +2582,13 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
   try {
     const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/available-items?slot=${encodeURIComponent(dbSlot)}`);
     if (resp.ok) {
-      _gpAvailCache[key] = { status: 'done', groups: resp.data || {} };
+      const d = resp.data || {};
+      _gpAvailCache[key] = { status: 'done', groups: d, target_ilvl: d.target_ilvl || null };
     } else {
-      _gpAvailCache[key] = { status: 'error', groups: {} };
+      _gpAvailCache[key] = { status: 'error', groups: {}, target_ilvl: null };
     }
   } catch {
-    _gpAvailCache[key] = { status: 'error', groups: {} };
+    _gpAvailCache[key] = { status: 'error', groups: {}, target_ilvl: null };
   }
 
   // Update the section in-place if still visible
@@ -2588,7 +2596,7 @@ async function _gpLoadAvailableItems(charId, dbSlot) {
   if (bodyEl) {
     const tc    = _gpCache[charId]?.track_colors || {};
     const state = _gpAvailCache[key];
-    bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, state.groups, tc, state.status);
+    bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, state.groups, tc, state.status, state.target_ilvl);
   }
 }
 
