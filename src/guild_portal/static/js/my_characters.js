@@ -1522,14 +1522,14 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
     const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : (eq.is_crafted ? '#c0a060' : null);
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
     const ilvlParam = eq.item_level ? `?ilvl=${eq.item_level}` : '';
-    // Step 9: trinket tier badge overlaid on top of the icon
+    // Step 9: trinket tier badge beside the icon (left of icon = side closest to center)
     const isTrinketSlot = slotKey === 'trinket_1' || slotKey === 'trinket_2';
-    const tierOverlay = isTrinketSlot && eq.tier_badge?.length
-      ? `<div class="mcn-slot-trinket-tier-overlay">${_gpRenderTierBadge(eq.tier_badge)}</div>`
+    const tierAside = isTrinketSlot && eq.tier_badge?.length
+      ? `<div class="mcn-slot-trinket-tier-aside">${_gpRenderTierBadge(eq.tier_badge)}</div>`
       : '';
     if (eq.icon_url) {
       eBox.innerHTML = `<div class="mcn-slot-trinket-wrap">
-        ${tierOverlay}
+        ${tierAside}
         <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${ilvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
           <img class="mcn-slot-icon" src="${_gpEsc(eq.icon_url)}" alt="" title="${_gpEsc(eq.item_name || '')}"${bs} loading="lazy">
         </a>
@@ -2823,27 +2823,28 @@ function _gpRenderTrinketRankings(dbSlot, data, tc, activeFilter) {
     const tierLetter = _gpEsc(item.tier);
     const tierBadge  = `<span class="gp-tier-badge gp-tier-${tierLetter.toLowerCase()}">${tierLetter}</span>`;
 
+    const ilvlParam = item.target_ilvl ? `?ilvl=${item.target_ilvl}` : '';
     const icon = item.icon_url
-      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}${ilvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
-    const contentChips = (item.content_types || []).map(ct =>
-      `<span class="gp-content-chip gp-content-chip--${_gpEsc(ct)}">${_gpEsc(GP_CONTENT_TYPE_LABELS[ct] || ct)}</span>`
-    ).join('');
+    // Plain text source below name (no chips)
+    const sourceLabels = (item.content_types || [])
+      .map(ct => GP_CONTENT_TYPE_LABELS[ct] || ct)
+      .filter(Boolean);
+    const sourceText = sourceLabels.length
+      ? `<div class="gp-trank__source">${_gpEsc(sourceLabels.join(', '))}</div>` : '';
 
     const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis);
-
-    const availBadge = item.is_available_this_season && !item.is_equipped && !item.is_bis
-      ? `<span class="gp-avail-badge">\u2191 avail</span>` : '';
 
     return `<tr>
       <td class="gp-trank__tier-cell">${tierBadge}</td>
       <td class="mcn-bis-grid__name">
         <div class="mcn-bis-grid__name-inner">
           ${icon}
-          <span>${_gpEsc(item.name)}</span>${badges}${availBadge ? ' ' + availBadge : ''}
+          <span>${_gpEsc(item.name)}</span>${badges}
         </div>
-        ${contentChips ? `<div class="gp-content-chips">${contentChips}</div>` : ''}
+        ${sourceText}
       </td>
       <td class="mcn-bis-grid__action">
         <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem"

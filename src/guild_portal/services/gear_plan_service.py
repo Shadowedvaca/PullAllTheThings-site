@@ -2307,7 +2307,7 @@ async def get_trinket_ratings(
         # Equipped trinket items (both slots — EQUIPPED badge fires for either)
         equip_rows = await conn.fetch(
             """
-            SELECT slot, blizzard_item_id
+            SELECT slot, blizzard_item_id, item_level, quality_track
               FROM guild_identity.character_equipment
              WHERE character_id = $1 AND slot = ANY($2::text[])
             """,
@@ -2316,6 +2316,14 @@ async def get_trinket_ratings(
         equipped_bids: set[int] = {r["blizzard_item_id"] for r in equip_rows if r["blizzard_item_id"]}
         equipped_bid_for_slot: Optional[int] = next(
             (r["blizzard_item_id"] for r in equip_rows if r["slot"] == slot and r["blizzard_item_id"]),
+            None,
+        )
+        equipped_ilvl_for_slot: Optional[int] = next(
+            (r["item_level"] for r in equip_rows if r["slot"] == slot and r["item_level"]),
+            None,
+        )
+        equipped_track_for_slot: Optional[str] = next(
+            (r["quality_track"] for r in equip_rows if r["slot"] == slot and r["quality_track"]),
             None,
         )
 
@@ -2331,9 +2339,9 @@ async def get_trinket_ratings(
         )
         desired_bid: Optional[int] = gps_row["blizzard_item_id"] if gps_row else None
 
-        # Current season instance IDs for availability check
+        # Current season instance IDs + ilvl maps for availability check and target_ilvl
         season_row = await conn.fetchrow(
-            "SELECT current_instance_ids, current_raid_ids FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"
+            "SELECT current_instance_ids, current_raid_ids, quality_ilvl_map, crafted_ilvl_map FROM patt.raid_seasons WHERE is_active = TRUE LIMIT 1"
         )
         all_season_ids: list[int] = []
         if season_row:
@@ -2341,6 +2349,12 @@ async def get_trinket_ratings(
                 list(season_row["current_raid_ids"]    or []) +
                 list(season_row["current_instance_ids"] or [])
             )
+
+        # Parse ilvl maps for target_ilvl computation
+        _qmap = season_row["quality_ilvl_map"] if season_row else None
+        _cmap = season_row["crafted_ilvl_map"]  if season_row else None
+        plan_quality_ilvl_map: dict = json.loads(_qmap) if isinstance(_qmap, str) else (_qmap or {})
+        plan_crafted_ilvl_map: dict = json.loads(_cmap) if isinstance(_cmap, str) else (_cmap or {})
 
         # Tier ratings for this spec
         rows = await conn.fetch(
@@ -2435,11 +2449,22 @@ async def get_trinket_ratings(
 
     rated_bids: set[int] = {v["blizzard_item_id"] for v in item_map.values()}
     equipped_is_unranked = bool(equipped_bid_for_slot and equipped_bid_for_slot not in rated_bids)
+    crafted_item_ids: set[int] = {r["item_id"] for r in crafted_rows_tr}
 
     # ── Group into tier buckets ────────────────────────────────────────────────
     tier_bucket: dict[str, list[dict]] = {}
     for item_id, entry in item_map.items():
         tier = entry["tier"]
+        is_bis_item = bool(desired_bid and entry["blizzard_item_id"] == desired_bid)
+        is_crafted_item = item_id in crafted_item_ids
+        if is_crafted_item:
+            t_ilvl = _crafted_target_ilvl(
+                is_bis_item, equipped_track_for_slot, plan_crafted_ilvl_map
+            )
+        else:
+            t_ilvl = _noncrafted_target_ilvl(
+                is_bis_item, equipped_ilvl_for_slot, equipped_track_for_slot, plan_quality_ilvl_map
+            )
         tier_bucket.setdefault(tier, []).append({
             "blizzard_item_id": entry["blizzard_item_id"],
             "item_id": item_id,
@@ -2449,8 +2474,9 @@ async def get_trinket_ratings(
             "source_ratings": entry["source_ratings"],
             "content_types": list(content_by_item.get(item_id, set())),
             "is_equipped": entry["blizzard_item_id"] in equipped_bids,
-            "is_bis": bool(desired_bid and entry["blizzard_item_id"] == desired_bid),
+            "is_bis": is_bis_item,
             "is_available_this_season": item_id in available_item_ids,
+            "target_ilvl": t_ilvl,
         })
 
     for tier_items_list in tier_bucket.values():
