@@ -988,7 +988,9 @@ _ITEM_MARKUP_RE = re.compile(r"\[item=(\d+)[^\]]*\]")
 # Raid/M+ "highlight" sections use [icon-badge=N] instead of [item=N]
 _ICON_BADGE_RE = re.compile(r"\[icon-badge=(\d+)")
 
-# Trinket tier list block patterns — match Wowhead BBCode tier-list markup
+# Trinket tier list block patterns — match Wowhead BBCode tier-list markup.
+# Note: raw_html is pre-normalised in _extract_trinket_tiers() to replace [\/ with [/,
+# so these patterns use plain [/tag] form without any backslash escaping.
 _TIER_LIST_BLOCK_RE = re.compile(r'\[tier-list[^\]]*\](.*?)\[/tier-list\]', re.DOTALL)
 _TIER_BLOCK_RE = re.compile(r'\[tier\](.*?)\[/tier\]', re.DOTALL)
 _TIER_LABEL_RE = re.compile(r'\[tier-label[^\]]*\]([SABCDF])\[/tier-label\]')
@@ -1111,6 +1113,10 @@ def _extract_trinket_tiers(raw_html: str, item_meta: dict[int, dict]) -> list[Ex
 
     Returns one ExtractedTrinketRating per (tier, item_id) pair found.
     """
+    # Wowhead escapes closing-tag slashes as [\/ in the raw HTML (e.g. [\/tier-list]).
+    # Normalise to standard [/ form before applying regexes.
+    raw_html = raw_html.replace("[\\/", "[/")
+
     ratings: list[ExtractedTrinketRating] = []
     for tier_list_match in _TIER_LIST_BLOCK_RE.finditer(raw_html):
         block = tier_list_match.group(1)
