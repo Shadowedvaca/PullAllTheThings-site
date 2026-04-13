@@ -642,6 +642,36 @@
   display: block;
 }
 
+/* BIS overlay: faded item icon with gold star superimposed */
+.mcn-slot-icon-bis-wrap {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.mcn-slot-icon--bis-faded {
+  width: 36px;
+  height: 36px;
+  opacity: 0.45;
+  border-radius: 3px;
+  border: 1px solid rgba(212, 168, 75, 0.5);
+  display: block;
+}
+.mcn-slot-icon-star-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  padding: 6px;
+  box-sizing: border-box;
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));
+}
+.mcn-slot-icon-link:hover .mcn-slot-icon--bis-faded {
+  opacity: 0.65;
+}
+
 /* ── ilvl text below equipped icon ──────────────────────────── */
 .mcn-slot-card__ilvl {
   font-size: 0.68rem;

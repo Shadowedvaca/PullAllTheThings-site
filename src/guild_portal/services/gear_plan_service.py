@@ -59,28 +59,30 @@ SLOT_DISPLAY = {
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
 
 
-def _compute_target_ilvl(
-    min_track: Optional[str],
-    equipped_ilvl: Optional[int],
-    equipped_track: Optional[str],
-    quality_ilvl_map: dict,
-) -> Optional[int]:
-    """Phase 2C display rule: compute the Wowhead ?ilvl= param for a non-crafted item.
+def _max_track_ilvl(max_track: Optional[str], quality_ilvl_map: dict) -> Optional[int]:
+    """Return the max ilvl for the given quality track.  None if map or track missing."""
+    if not quality_ilvl_map or not max_track or max_track not in quality_ilvl_map:
+        return None
+    return quality_ilvl_map[max_track].get("max")
 
-    Rules:
-      - Slot empty (no equipped_ilvl) → None (base tooltip, no ?ilvl)
-      - Item min track ≤ equipped track → show at player's equipped ilvl (direct comparison)
-      - Item min track >  equipped track → show at that track's max ilvl (ceiling)
+
+def _crafted_target_ilvl(equipped_ilvl: Optional[int], crafted_ilvl_map: dict) -> Optional[int]:
+    """Phase 2C display rule for crafted items.
+
+    Returns the max ilvl of the lowest crafted track that is a meaningful upgrade:
+      - If equipped_ilvl is known: first track whose max > equipped_ilvl
+      - If slot is empty or unknown: highest track max
+      - If all tracks ≤ equipped_ilvl (already maxed): highest track max
     """
-    if not quality_ilvl_map or not min_track or min_track not in quality_ilvl_map:
+    if not crafted_ilvl_map:
         return None
-    if not equipped_ilvl or not equipped_track:
-        return None
-    item_rank = TRACK_ORDER.get(min_track, 99)
-    eq_rank = TRACK_ORDER.get(equipped_track, -1)
-    if item_rank <= eq_rank:
-        return equipped_ilvl
-    return quality_ilvl_map[min_track].get("max")
+    sorted_tracks = sorted(crafted_ilvl_map.keys(), key=lambda t: TRACK_ORDER.get(t, -1))
+    if equipped_ilvl:
+        for t in sorted_tracks:
+            if crafted_ilvl_map[t].get("max", 0) > equipped_ilvl:
+                return crafted_ilvl_map[t]["max"]
+    # Empty slot or already at/above all crafted tracks → show highest track max
+    return crafted_ilvl_map[sorted_tracks[-1]].get("max") if sorted_tracks else None
 
 
 TRACK_COLORS: dict[str, str] = {
@@ -1414,14 +1416,7 @@ async def get_plan_detail(
         if season_ilvl_row:
             plan_quality_ilvl_map = json.loads(season_ilvl_row["quality_ilvl_map"] or "{}")
             plan_crafted_ilvl_map = json.loads(season_ilvl_row["crafted_ilvl_map"] or "{}")
-        plan_best_crafted_track: Optional[str] = (
-            max(plan_crafted_ilvl_map.keys(), key=lambda t: TRACK_ORDER.get(t, -1))
-            if plan_crafted_ilvl_map else None
-        )
-        plan_crafted_max_ilvl: Optional[int] = (
-            plan_crafted_ilvl_map[plan_best_crafted_track].get("max")
-            if plan_best_crafted_track else None
-        )
+        # (plan_crafted_max_ilvl removed — now computed per slot via _crafted_target_ilvl)
 
     # Normalize ring and trinket pairs: swap equipped items to maximise BIS matches
     # and ensure consistent alphabetical ordering when no match exists.
@@ -1475,18 +1470,29 @@ async def get_plan_detail(
         equipped_ilvl_for_slot: Optional[int] = equipped.get("item_level") if equipped else None
 
         # Phase 2C: add target_ilvl to each BIS rec so the frontend can append ?ilvl=N.
+        # Rule: non-crafted → max available track's max ilvl; crafted → min useful upgrade track.
         for rec in bis_recs:
             bid = rec["blizzard_item_id"]
             rec_tracks = tracks_by_item.get(bid, [])
             if bid in craftable_desired_bids:
-                rec["target_ilvl"] = plan_crafted_max_ilvl
+                rec["target_ilvl"] = _crafted_target_ilvl(equipped_ilvl_for_slot, plan_crafted_ilvl_map)
             elif rec_tracks:
-                min_t = min(rec_tracks, key=lambda t: TRACK_ORDER.get(t, 99))
-                rec["target_ilvl"] = _compute_target_ilvl(
-                    min_t, equipped_ilvl_for_slot, equipped_track, plan_quality_ilvl_map
-                )
+                max_t = max(rec_tracks, key=lambda t: TRACK_ORDER.get(t, -1))
+                rec["target_ilvl"] = _max_track_ilvl(max_t, plan_quality_ilvl_map)
             else:
                 rec["target_ilvl"] = None
+
+        # Phase 2C: add target_ilvl to the desired item (used for the goal icon link).
+        if desired and desired_bid:
+            if desired_bid in craftable_desired_bids:
+                desired["target_ilvl"] = _crafted_target_ilvl(equipped_ilvl_for_slot, plan_crafted_ilvl_map)
+            else:
+                des_tracks = tracks_by_item.get(desired_bid, [])
+                if des_tracks:
+                    max_t = max(des_tracks, key=lambda t: TRACK_ORDER.get(t, -1))
+                    desired["target_ilvl"] = _max_track_ilvl(max_t, plan_quality_ilvl_map)
+                else:
+                    desired["target_ilvl"] = None
 
         # For equipped crafted items whose quality_track wasn't detected during sync
         # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
@@ -2009,40 +2015,28 @@ async def get_available_items(
         item.pop("wowhead_tooltip_html", None)
 
     # ── Phase 2C: compute target_ilvl per item ─────────────────────────────────
-    # Raid/dungeon: use actual min quality track from item_sources; compare vs equipped.
+    # Raid/dungeon: show at max available quality track's max ilvl.
     for item in raid_items + dungeon_items:
         bid = item["blizzard_item_id"]
         all_tracks = bid_tracks.get(bid, set())
         if all_tracks:
-            min_track: Optional[str] = min(
-                all_tracks, key=lambda t: TRACK_ORDER.get(t, 99)
+            max_track: Optional[str] = max(
+                all_tracks, key=lambda t: TRACK_ORDER.get(t, -1)
             )
         else:
-            min_track = None
-        item["target_ilvl"] = _compute_target_ilvl(
-            min_track, equipped_ilvl, equipped_track, quality_ilvl_map
-        )
+            max_track = None
+        item["target_ilvl"] = _max_track_ilvl(max_track, quality_ilvl_map)
 
-    # Crafted: always show at 5-star ceiling (highest track in crafted_ilvl_map).
-    best_crafted_track: Optional[str] = (
-        max(crafted_ilvl_map.keys(), key=lambda t: TRACK_ORDER.get(t, -1))
-        if crafted_ilvl_map else None
-    )
-    crafted_target: Optional[int] = (
-        crafted_ilvl_map[best_crafted_track].get("max")
-        if best_crafted_track else None
-    )
+    # Crafted: show at the lowest track that is a meaningful upgrade over equipped.
     for item in crafted_items:
-        item["target_ilvl"] = crafted_target
+        item["target_ilvl"] = _crafted_target_ilvl(equipped_ilvl, crafted_ilvl_map)
 
     # ── Tier / Catalyst items ──────────────────────────────────────────────────
     # None means "this slot has no tier piece" — frontend hides the section.
     tier_items: Optional[list[dict]] = None
     if slot in _TIER_CATALYST_SLOTS:
-        # Tier/catalyst items are obtainable at minimum Normal (C) track.
-        tier_target: Optional[int] = _compute_target_ilvl(
-            "C", equipped_ilvl, equipped_track, quality_ilvl_map
-        )
+        # Tier/catalyst items are obtainable up to Mythic (M) track — show at M max.
+        tier_target: Optional[int] = _max_track_ilvl("M", quality_ilvl_map)
         tier_items = [
             {
                 "blizzard_item_id": r["blizzard_item_id"],

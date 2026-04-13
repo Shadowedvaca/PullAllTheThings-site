@@ -1394,10 +1394,24 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
         <polyline points="20 6 9 17 4 12"/>
       </svg></div>`;
   } else if (isBis) {
-    uBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--bis" title="BIS">
-      <svg viewBox="0 0 24 24" fill="#d4a84b" stroke="#b8922e" stroke-width="0.5" stroke-linejoin="round">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-      </svg></div>`;
+    const bisUpgradeIlvl = goalItem?.target_ilvl || '';
+    const bisIlvlParam = bisUpgradeIlvl ? `?ilvl=${bisUpgradeIlvl}` : '';
+    const bisTip = `BIS${bisUpgradeIlvl ? ' — upgrade to ilvl ' + bisUpgradeIlvl : ''}`;
+    if (eq?.icon_url) {
+      uBox.innerHTML = `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${bisIlvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+        <div class="mcn-slot-icon-bis-wrap" title="${_gpEsc(bisTip)}">
+          <img class="mcn-slot-icon mcn-slot-icon--bis-faded" src="${_gpEsc(eq.icon_url)}" alt="" loading="lazy">
+          <svg class="mcn-slot-icon-star-overlay" viewBox="0 0 24 24" fill="#d4a84b" stroke="#b8922e" stroke-width="0.5" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        </div>
+      </a>`;
+    } else {
+      uBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--bis" title="${_gpEsc(bisTip)}">
+        <svg viewBox="0 0 24 24" fill="#d4a84b" stroke="#b8922e" stroke-width="0.5" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg></div>`;
+    }
     if (upgrades.length) {
       const pills = document.createElement('div');
       pills.className = 'mcn-track-pills';
@@ -1408,7 +1422,8 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
     const qc = goalItem.quality_track ? _gpColor(goalItem.quality_track, tc)
       : (upgrades[0] ? _gpColor(upgrades[0], tc) : null);
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
-    uBox.innerHTML = `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+    const goalIlvlParam = goalItem.target_ilvl ? `?ilvl=${goalItem.target_ilvl}` : '';
+    uBox.innerHTML = `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}${goalIlvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
       <img class="mcn-slot-icon" src="${_gpEsc(goalItem.icon_url)}" alt="" title="${_gpEsc(goalItem.item_name || goalItem.name || '')}"${bs} loading="lazy">
     </a>`;
     if (upgrades.length) {
@@ -2256,8 +2271,9 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   let goalHtml;
   if (desired && desired.blizzard_item_id) {
     const locked = desired.is_locked;
+    const desiredIlvlParam = desired.target_ilvl ? `?ilvl=${desired.target_ilvl}` : '';
     goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
-      ${desired.icon_url ? `<a href="https://www.wowhead.com/item=${desired.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
+      ${desired.icon_url ? `<a href="https://www.wowhead.com/item=${desired.blizzard_item_id}${desiredIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name">
           ${_gpEsc(desired.item_name || 'Unknown')}
