@@ -2524,11 +2524,27 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 
 /* ── Phase 1F: Trinket Rankings drawer section ───────────────────────────── */
 
-/* Compact tier badge in paperdoll ilvl row */
-.mcn-slot-card__ilvl .gp-tier-badge {
-  font-size: 0.62rem;
-  padding: 0.05rem 0.22rem;
-  vertical-align: middle;
+/* Tier badge overlaid on top of the trinket slot icon */
+.mcn-slot-trinket-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+.mcn-slot-trinket-tier-overlay {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.mcn-slot-trinket-tier-overlay .gp-tier-badge {
+  font-size: 0.55rem;
+  padding: 0.03rem 0.18rem;
+  line-height: 1.3;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 
 /* Rankings header: filter tabs left, source icons right */
@@ -2575,29 +2591,15 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   gap: 0.35rem;
 }
 
-/* Per-tier group with horizontal rule divider */
-.gp-trinket-tier-group {
-  margin-top: 0.6rem;
+/* Flat trinket rankings table — tier badge in first column */
+.gp-trank__table {
+  width: 100%;
 }
-
-.gp-trinket-tier-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.3rem;
-}
-
-.gp-trinket-tier-header .gp-tier-badge {
-  font-size: 0.8rem;
-  padding: 0.1rem 0.5rem;
-  flex-shrink: 0;
-}
-
-.gp-trinket-tier-rule {
-  flex: 1;
-  border: none;
-  border-top: 1px solid rgba(255,255,255,0.10);
-  margin: 0;
+.gp-trank__tier-cell {
+  width: 2.5rem;
+  text-align: center;
+  vertical-align: middle;
+  padding: 0.25rem 0.2rem 0.25rem 0;
 }
 
 /* Content type chips (Raid / M+ / Crafted) */

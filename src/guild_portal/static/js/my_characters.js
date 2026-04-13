@@ -1522,19 +1522,22 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
     const qc = eq.quality_track ? _gpColor(eq.quality_track, tc) : (eq.is_crafted ? '#c0a060' : null);
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
     const ilvlParam = eq.item_level ? `?ilvl=${eq.item_level}` : '';
-    // Step 9: trinket tier badge inline with ilvl
+    // Step 9: trinket tier badge overlaid on top of the icon
     const isTrinketSlot = slotKey === 'trinket_1' || slotKey === 'trinket_2';
-    const tierSuffix = isTrinketSlot && eq.tier_badge?.length
-      ? ' ' + _gpRenderTierBadge(eq.tier_badge)
+    const tierOverlay = isTrinketSlot && eq.tier_badge?.length
+      ? `<div class="mcn-slot-trinket-tier-overlay">${_gpRenderTierBadge(eq.tier_badge)}</div>`
       : '';
     if (eq.icon_url) {
-      eBox.innerHTML = `<a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${ilvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
-        <img class="mcn-slot-icon" src="${_gpEsc(eq.icon_url)}" alt="" title="${_gpEsc(eq.item_name || '')}"${bs} loading="lazy">
-      </a>
-      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}${tierSuffix}</div>`;
+      eBox.innerHTML = `<div class="mcn-slot-trinket-wrap">
+        ${tierOverlay}
+        <a href="https://www.wowhead.com/item=${eq.blizzard_item_id}${ilvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+          <img class="mcn-slot-icon" src="${_gpEsc(eq.icon_url)}" alt="" title="${_gpEsc(eq.item_name || '')}"${bs} loading="lazy">
+        </a>
+      </div>
+      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
     } else {
       eBox.innerHTML = `<div class="mcn-slot-icon mcn-slot-icon--empty" title="${_gpEsc(eq.item_name || '')}">${_gpEsc((GP_SLOT_LABELS[slotKey] || slotKey)[0])}</div>
-      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}${tierSuffix}</div>`;
+      <div class="mcn-slot-card__ilvl">${eq.item_level || ''}</div>`;
     }
   } else {
     eBox.appendChild(Object.assign(document.createElement('div'), { className: 'mcn-slot-icon mcn-slot-icon--no-goal' }));
@@ -2758,6 +2761,8 @@ async function _gpLoadTrinketRatings(charId, dbSlot) {
   }
 }
 
+const GP_TIER_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
+
 function _gpRenderTrinketRankings(dbSlot, data, tc, activeFilter) {
   if (!data || !data.tiers || !data.tiers.length) {
     return '<div class="mcn-drawer-empty">No ranking data for this spec</div>';
@@ -2775,7 +2780,7 @@ function _gpRenderTrinketRankings(dbSlot, data, tc, activeFilter) {
              onclick="mcnGpSetTrinketFilter('${_gpEsc(dbSlot)}','${f.key}')">${f.label}</button>`
   ).join('');
 
-  // Source icons — gather all unique origins
+  // Source icons — gather unique origins across all items
   const allOrigins = new Set();
   for (const tg of data.tiers) {
     for (const item of tg.items || []) {
@@ -2792,60 +2797,62 @@ function _gpRenderTrinketRankings(dbSlot, data, tc, activeFilter) {
     ${sourceIconsHtml ? `<div class="gp-trinket-source-icons">${sourceIconsHtml}</div>` : ''}
   </div>`;
 
-  // Tier groups
-  let hasAnyItems = false;
-  const tierHtml = data.tiers.map(({ tier, items }) => {
-    const filtered = activeFilter === 'all'
-      ? (items || [])
-      : (items || []).filter(it => (it.content_types || []).includes(activeFilter));
-    if (!filtered.length) return '';
-    hasAnyItems = true;
+  // Flatten all tiers into a single sorted list — one row per item.
+  // Skip items with no name (unenriched stubs — e.g. Delve items not yet in pipeline).
+  const allItems = [];
+  for (const { tier, items } of data.tiers) {
+    for (const item of (items || [])) {
+      if (!item.name) continue; // skip unenriched stubs
+      allItems.push({ ...item, tier });
+    }
+  }
 
-    const rows = filtered.map(item => {
-      const icon = item.icon_url
-        ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
-        : `<span class="mcn-bis-grid__icon-ph"></span>`;
+  // Filter by content type tab, then sort by tier order
+  const filtered = activeFilter === 'all'
+    ? allItems
+    : allItems.filter(it => (it.content_types || []).includes(activeFilter));
+  filtered.sort((a, b) => (GP_TIER_ORDER[a.tier] ?? 9) - (GP_TIER_ORDER[b.tier] ?? 9));
 
-      const contentChips = (item.content_types || []).map(ct =>
-        `<span class="gp-content-chip gp-content-chip--${_gpEsc(ct)}">${_gpEsc(GP_CONTENT_TYPE_LABELS[ct] || ct)}</span>`
-      ).join('');
+  if (!filtered.length) {
+    const label = activeFilter === 'all' ? '' : (GP_CONTENT_TYPE_LABELS[activeFilter] || activeFilter) + ' ';
+    return headerHtml + `<div class="mcn-drawer-empty">No ${label}items ranked for this spec</div>`;
+  }
 
-      // Step 12: EQUIPPED / BIS badges
-      const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis);
+  // Single flat table — one row per item, tier badge in first column
+  const rows = filtered.map(item => {
+    const tierLetter = _gpEsc(item.tier);
+    const tierBadge  = `<span class="gp-tier-badge gp-tier-${tierLetter.toLowerCase()}">${tierLetter}</span>`;
 
-      const availBadge = item.is_available_this_season && !item.is_equipped && !item.is_bis
-        ? `<span class="gp-avail-badge">\u2191 available this season</span>` : '';
+    const icon = item.icon_url
+      ? `<a href="https://www.wowhead.com/item=${item.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(item.icon_url)}" alt="" loading="lazy"></a>`
+      : `<span class="mcn-bis-grid__icon-ph"></span>`;
 
-      const nameEsc = _gpEsc(item.name).replace(/'/g, '&#39;');
-      return `<tr>
-        <td class="mcn-bis-grid__name">
-          <div class="mcn-bis-grid__name-inner">
-            ${icon}
-            <span>${_gpEsc(item.name)}</span>${badges}
-          </div>
-          ${contentChips ? `<div class="gp-content-chips">${contentChips}</div>` : ''}
-          ${availBadge ? `<div>${availBadge}</div>` : ''}
-        </td>
-        <td class="mcn-bis-grid__action">
-          <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem"
-                  onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">Use</button>
-        </td>
-      </tr>`;
-    }).join('');
+    const contentChips = (item.content_types || []).map(ct =>
+      `<span class="gp-content-chip gp-content-chip--${_gpEsc(ct)}">${_gpEsc(GP_CONTENT_TYPE_LABELS[ct] || ct)}</span>`
+    ).join('');
 
-    const tierLetter = _gpEsc(tier);
-    return `<div class="gp-trinket-tier-group">
-      <div class="gp-trinket-tier-header">
-        <span class="gp-tier-badge gp-tier-${tierLetter.toLowerCase()}">${tierLetter}</span>
-        <hr class="gp-trinket-tier-rule">
-      </div>
-      <table class="mcn-bis-grid"><tbody>${rows}</tbody></table>
-    </div>`;
-  }).filter(Boolean).join('');
+    const badges = _gpRenderItemBadges(item.is_equipped, item.is_bis);
 
-  const bodyHtml = hasAnyItems
-    ? tierHtml
-    : `<div class="mcn-drawer-empty">No ${activeFilter === 'all' ? '' : (GP_CONTENT_TYPE_LABELS[activeFilter] || activeFilter) + ' '}items ranked for this spec</div>`;
+    const availBadge = item.is_available_this_season && !item.is_equipped && !item.is_bis
+      ? `<span class="gp-avail-badge">\u2191 avail</span>` : '';
+
+    return `<tr>
+      <td class="gp-trank__tier-cell">${tierBadge}</td>
+      <td class="mcn-bis-grid__name">
+        <div class="mcn-bis-grid__name-inner">
+          ${icon}
+          <span>${_gpEsc(item.name)}</span>${badges}${availBadge ? ' ' + availBadge : ''}
+        </div>
+        ${contentChips ? `<div class="gp-content-chips">${contentChips}</div>` : ''}
+      </td>
+      <td class="mcn-bis-grid__action">
+        <button class="btn btn-sm btn-secondary" type="button" style="padding:0.1rem 0.4rem;font-size:0.7rem"
+                onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${item.blizzard_item_id})">Use</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const bodyHtml = `<table class="mcn-bis-grid gp-trank__table"><tbody>${rows}</tbody></table>`;
 
   const unrankedNotice = data.equipped_is_unranked
     ? `<div class="gp-trinket-unranked-notice">Your equipped trinket in this slot has no tier rating — even a <span class="gp-tier-badge gp-tier-b">B</span>-tier trinket would be a meaningful upgrade.</div>`
