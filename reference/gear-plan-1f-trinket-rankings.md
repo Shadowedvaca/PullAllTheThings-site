@@ -457,10 +457,10 @@ See `docs/BACKUPS.md` — "Recovering from a Bad Delete" for the full procedure 
 | 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small | ✅ `get_plan_detail()` attaches `tier_badge` (source_ratings) to equipped trinket items |
 | 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small | ✅ All item groups get `is_equipped`/`is_bis`; trinket slots also get `source_ratings`; BIS recs stamped |
 | 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small | ✅ `GP_SOURCE_ICONS`, `_gpRenderTierBadge()`, `_gpRenderItemBadges()`, `_gpTrinketCache`; CSS v2.1.0 |
-| 9 | UI — paperdoll trinket slot tier overlay + unranked upgrade pill | Small | ⬜ |
-| 10 | UI — slot table tier badge on trinket rows | Small | ⬜ |
-| 11 | UI — Trinket Rankings drawer section (tabs, list, source switcher) | Medium | ⬜ |
-| 12 | UI — EQUIPPED / BIS badges across all three list sections | Medium | ⬜ |
+| 9 | UI — paperdoll trinket slot tier overlay + unranked upgrade pill | Small | ✅ |
+| 10 | UI — slot table tier badge on trinket rows | Small | ✅ |
+| 11 | UI — Trinket Rankings drawer section (tabs, list, source switcher) | Medium | ✅ |
+| 12 | UI — EQUIPPED / BIS badges across all three list sections | Medium | ✅ |
 | **Total** | | **Medium — 1-2 dev sessions** | |
 
 Steps 1–4 are backend setup. Steps 5–8 are API + shared JS utilities. Steps 9–12 are the visible UI work. Each step is independently deployable behind the existing gear plan feature gate (GL only for the admin side; character-owned gating for the member side).
@@ -505,6 +505,32 @@ Stamped in the per-slot loop in `get_plan_detail()`, right after the `target_ilv
 
 ### `_gpTrinketCache`
 Declared alongside `_gpAvailCache` for the upcoming Trinket Rankings drawer section (step 11). Shape: `"charId:slot"` → `{status:'loading'|'done'|'error', data:{...}}`.
+
+---
+
+## Implementation Notes (from Steps 9–12)
+
+### Paperdoll tier badge (Step 9)
+Added inline to the `.mcn-slot-card__ilvl` div — appended after the ilvl number for `trinket_1`/`trinket_2` slots when `eq.tier_badge` has entries. Uses the existing `.gp-tier-badge` CSS with a scoped `.mcn-slot-card__ilvl .gp-tier-badge` override to shrink the badge to fit the compact card. No unranked pill in the paperdoll card — card is already clickable to open the drawer where the Trinket Rankings section gives full detail.
+
+### Gear table tier badge (Step 10)
+Added `_gpRenderTierBadge(eq.tier_badge)` to the `.mcn-gt__meta` div in the Equipped cell for trinket rows. Sits inline alongside the ilvl number and track pill.
+
+### Trinket Rankings drawer section (Step 11)
+Added below BIS Recommendations and Available from Content, before Excluded Items. Structure:
+- `<details class="mcn-avail-section" open>` with DOM id `mcn-trinket-ratings-body-{slot}`
+- Async loaded by `_gpLoadTrinketRatings(charId, dbSlot)` — no-op if already loading/loaded
+- `_gpTrinketFilter` dict (`dbSlot → 'all'|'raid_boss'|'dungeon'|'crafted'`) drives filter state
+- `mcnGpSetTrinketFilter(dbSlot, filter)` — window global for onclick attrs; updates filter + re-renders body in-place
+- Tier groups rendered with a horizontal rule divider (`gp-trinket-tier-rule`) and a full-size tier badge as the group header
+
+### EQUIPPED / BIS badges (Step 12)
+- **BIS grid**: `is_equipped`/`is_bis` now stored in `itemMap` (taken from first rec per item). Badges rendered as `_gpRenderItemBadges(item.is_equipped, item.is_bis)` inline after the item name.
+- **Available from Content**: `_gpRenderItemBadges(item.is_equipped, item.is_bis)` added inline after item name in `_gpRenderAvailTable`.
+- **Trinket Rankings**: badges rendered per item inside `_gpRenderTrinketRankings`.
+
+### JS/CSS versions
+`my_characters.js` → v2.8.0, `my_characters.css` → v2.2.0.
 
 ---
 

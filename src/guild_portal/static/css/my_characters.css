@@ -2521,3 +2521,134 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   color: #2dd4bf;
   border: 1px solid rgba(45,212,191,0.40);
 }
+
+/* ── Phase 1F: Trinket Rankings drawer section ───────────────────────────── */
+
+/* Compact tier badge in paperdoll ilvl row */
+.mcn-slot-card__ilvl .gp-tier-badge {
+  font-size: 0.62rem;
+  padding: 0.05rem 0.22rem;
+  vertical-align: middle;
+}
+
+/* Rankings header: filter tabs left, source icons right */
+.gp-trinket-rankings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0 0.5rem;
+  flex-wrap: wrap;
+}
+
+.gp-trinket-filter-tabs {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.gp-trinket-filter-tab {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.gp-trinket-filter-tab:hover {
+  border-color: rgba(212,168,75,0.45);
+  color: var(--color-text);
+}
+.gp-trinket-filter-tab.is-active {
+  border-color: #d4a84b;
+  color: #d4a84b;
+  background: rgba(212,168,75,0.10);
+  font-weight: 700;
+}
+
+.gp-trinket-source-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Per-tier group with horizontal rule divider */
+.gp-trinket-tier-group {
+  margin-top: 0.6rem;
+}
+
+.gp-trinket-tier-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.gp-trinket-tier-header .gp-tier-badge {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  flex-shrink: 0;
+}
+
+.gp-trinket-tier-rule {
+  flex: 1;
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  margin: 0;
+}
+
+/* Content type chips (Raid / M+ / Crafted) */
+.gp-content-chips {
+  display: flex;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  flex-wrap: wrap;
+}
+
+.gp-content-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.03rem 0.28rem;
+  border-radius: 3px;
+  font-size: 0.60rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gp-content-chip--raid_boss {
+  background: rgba(251,191,36,0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,0.35);
+}
+.gp-content-chip--dungeon {
+  background: rgba(96,165,250,0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(96,165,250,0.35);
+}
+.gp-content-chip--crafted {
+  background: rgba(192,160,96,0.12);
+  color: #c0a060;
+  border: 1px solid rgba(192,160,96,0.35);
+}
+
+/* "↑ available this season" label */
+.gp-avail-badge {
+  font-size: 0.62rem;
+  color: #4ade80;
+  font-style: italic;
+}
+
+/* Unranked notice at bottom of rankings section */
+.gp-trinket-unranked-notice {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.65rem;
+  border-left: 3px solid rgba(156,163,175,0.40);
+  background: rgba(156,163,175,0.06);
+  border-radius: 0 3px 3px 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
