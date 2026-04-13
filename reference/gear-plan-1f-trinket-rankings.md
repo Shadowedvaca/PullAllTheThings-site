@@ -1,6 +1,6 @@
 # Gear Plan Phase 1F — Trinket Rankings
 
-> **Status:** In Progress — Steps 1–4 complete and verified on `feature/gear-plan-phase-1f` (dev deployed)  
+> **Status:** In Progress — Steps 1–8 complete and verified on `feature/gear-plan-phase-1f` (dev deployed)  
 > **Depends on:** Phase 1A–1E (complete), Phase 1C item_sources data  
 > **Follows:** Current prod work (tier/catalyst hotfixes, Blizzard API Explorer)  
 > **Precedes:** Phase 2 (Enchants, Gems, Crafting)
@@ -453,10 +453,10 @@ See `docs/BACKUPS.md` — "Recovering from a Bad Delete" for the full procedure 
 | 2 | `bis_sync.py` — `_extract_trinket_tiers()` + `_upsert_trinket_ratings()` | Small | ✅ verified — Balance Druid data confirmed correct in dev |
 | 3 | Admin gear plan — Trinket Ratings status tab + per-row Sync button with inline result | Small | ✅ |
 | 4 | Static assets — source icon SVGs in `static/img/sources/` | Tiny | ✅ (SVG placeholders; replace w/ real favicons when available) |
-| 5 | API — new `GET /trinket-ratings` endpoint | Small | ⬜ |
-| 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small | ⬜ |
-| 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small | ⬜ |
-| 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small | ⬜ |
+| 5 | API — new `GET /trinket-ratings` endpoint | Small | ✅ `get_trinket_ratings()` in `gear_plan_service.py`; route in `gear_plan_routes.py` |
+| 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small | ✅ `get_plan_detail()` attaches `tier_badge` (source_ratings) to equipped trinket items |
+| 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small | ✅ All item groups get `is_equipped`/`is_bis`; trinket slots also get `source_ratings`; BIS recs stamped |
+| 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small | ✅ `GP_SOURCE_ICONS`, `_gpRenderTierBadge()`, `_gpRenderItemBadges()`, `_gpTrinketCache`; CSS v2.1.0 |
 | 9 | UI — paperdoll trinket slot tier overlay + unranked upgrade pill | Small | ⬜ |
 | 10 | UI — slot table tier badge on trinket rows | Small | ⬜ |
 | 11 | UI — Trinket Rankings drawer section (tabs, list, source switcher) | Medium | ⬜ |
