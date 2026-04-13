@@ -1747,31 +1747,34 @@ async def get_available_items(
                  WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
                    AND wi.name LIKE '% of %'
                    AND (
+                       -- PRIMARY: Wowhead has indexed the item set link.  Any raid
+                       -- source qualifies — not gated on current_raid_ids so the
+                       -- anchor works even if the raid season config is incomplete.
                        (    wi.wowhead_tooltip_html LIKE $1
                         AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
                         AND EXISTS (
                                 SELECT 1 FROM guild_identity.item_sources is2
                                  WHERE is2.item_id = wi.id
-                                   AND is2.instance_name IN (
-                                       SELECT DISTINCT is3.instance_name
-                                         FROM guild_identity.item_sources is3
-                                        WHERE is3.blizzard_instance_id = ANY($2)
-                                   )
+                                   AND is2.instance_type = 'raid'
                             )
                        )
                        OR
-                       (    wi.armor_type = $3
+                       -- FALLBACK: Wowhead hasn't indexed the set yet.  Restrict to
+                       -- items with no tooltip (not yet enriched) so enriched non-tier
+                       -- boss drops with "of" in the name are excluded.
+                       (    wi.armor_type = $2
+                        AND wi.wowhead_tooltip_html IS NULL
                         AND EXISTS (
                                 SELECT 1 FROM guild_identity.bis_list_entries ble
                                   JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
                                   JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                 WHERE ble.item_id = wi.id AND cl.name = $4
+                                 WHERE ble.item_id = wi.id AND cl.name = $3
                             )
                        )
                    )
                  LIMIT 1
                 """,
-                f"%{class_name}%", raid_ids, t_armor or "leather", class_name,
+                f"%{class_name}%", t_armor or "leather", class_name,
             )
             set_suffix: Optional[str] = None
             if anchor_row:
