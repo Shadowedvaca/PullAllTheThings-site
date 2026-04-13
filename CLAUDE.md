@@ -235,21 +235,22 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Crafted item display + gear plan polish** — `prod-v0.16.7` through `prod-v0.16.17`, no new migrations. Migrations through 0095.
-  - **Admin gear plan step order rewritten** (ELT pattern): Step 1=Sync Loot Tables (Blizzard API), Step 2=Enrich Items (Wowhead), Step 3=Process Tier Tokens, Step 4=Sync BIS Lists (supplemental), Step 5=Bulk Populate. Manual Import step removed — SimC import lives on member My Characters page. `admin/gear_plan.html` only, no migration.
-  - **`sync_tier_set_completions` fallback** (`item_source_sync.py`): when Wowhead tooltips are NULL (new expansion, items not yet indexed), now falls back to calling `GET /data/wow/item/{id}` per tier candidate to read `item_set.id` from the Blizzard item API. Resolves the chicken-and-egg where the tooltip path found nothing for Midnight items.
-  - **Blizzard API Explorer** (`/admin/blizzard-api`, GL only, migration 0095): proxy page that calls any Blizzard Game Data API path using site credentials. Preset endpoint dropdown + editable path + param grid + syntax-highlighted JSON output. Used to validate API responses directly. `POST /admin/blizzard-api/probe` is the backend proxy.
-  - **Crafted item pipeline** (prod-v0.16.10–16): `item_recipe_link_sync.py` phase 2b uses Blizzard Item Search API to discover and stub craftable gear. `_parse_slot_and_armor()` handles 3 shapes of `item_subclass` from the search API. `Sync Crafted Items` button is polled (same pattern as Enrich Items) with live progress. Quality filter on crafted items requires confirmed `class="q4"` in Wowhead tooltip HTML. `enrich_unenriched_items()` expanded to also process crafted stubs (items in `item_recipe_links` with no tooltip) — previously only processed `slot_type='other'` stubs. The UPDATE uses COALESCE for slot_type/armor_type/icon_url/weapon_type so Blizzard-sourced values are preserved. `backfill_armor_type_from_tooltip()` runs at end of Enrich Items to parse armor_type from existing Wowhead tooltip HTML for items that had tooltips but missing armor_type.
-  - **Gear plan FAQ** (prod-v0.16.17): Added "What does BiS actually mean?" as first FAQ entry, explaining stat interactions and theorycraft context.
-  - **Phase 2 scoped** — `reference/gear-plan-phase-2-scope.md`. Three sub-steps: 2A catalyst item discovery via Appearance API, 2B full quality variant mapping, 2C quality-aware display. See scope doc for full detail.
-- **Tier/catalyst hotfixes** — tagged `prod-v0.16.3` through `prod-v0.16.7`.
-  - **Tier section two-path query**: PRIMARY path uses Wowhead tooltip class name + `/item-set=` + Journal source in current raid. FALLBACK path uses `armor_type` + `NOT EXISTS(item_sources)` + `EXISTS(BIS class entry)` + name suffix — handles Midnight tier items whose Wowhead pages don't exist yet.
-  - **Catalyst anchor**: requires `wi.name LIKE '% of %'`; set_suffix derived from anchor and applied to tighten fallback + catalyst slot queries.
-  - **Catalyst slots**: still empty on prod — `sync_tier_set_completions` cannot find set IDs when tooltips are NULL. Phase 2A (Appearance API crawl) is the proper fix.
+- **Phase 2A — Catalyst Item Discovery** — `prod-v0.17.0`, no new migrations. Migrations through 0095.
+  - **3 new Blizzard Appearance API methods** on `BlizzardClient`: `get_item_appearance_set_index`, `get_item_appearance_set`, `get_item_appearance`.
+  - **`sync_catalyst_items_via_appearance()`** in `item_source_sync.py`: crawls current-expansion tier set appearance sets (identified by suffix matching against main-5 items with existing raid sources) → stubs catalyst-slot item IDs (back/wrist/waist/feet) into `wow_items`. Anchors to current expansion only; fetches appearances in parallel via `asyncio.gather`. Falls back to `sync_tier_set_completions` if appearance index unavailable.
+  - **`enrich_catalyst_tier_items` Pass 1 extended** to all 9 slots: catalyst-slot items with Wowhead `/item-set=` tooltip links now get boss sources directly (cloth wrist/back, mail feet/waist). Falls back to union of all main-5 bosses when no per-slot mapping exists.
+  - **Pass 2** (suffix matching) handles remaining catalyst-slot items not yet indexed by Wowhead.
+  - **Result on prod**: all BIS tier items across all armor types and all slots (including back/wrist/waist/feet) have correct boss sources.
+- **Crafted item display + gear plan polish** — `prod-v0.16.7` through `prod-v0.16.17`, no new migrations.
+  - **Admin gear plan step order rewritten** (ELT pattern): Step 1=Sync Loot Tables (Blizzard API), Step 2=Enrich Items (Wowhead), Step 3=Process Tier Tokens, Step 4=Sync BIS Lists (supplemental), Step 5=Bulk Populate.
+  - **Blizzard API Explorer** (`/admin/blizzard-api`, GL only, migration 0095).
+  - **Crafted item pipeline** (prod-v0.16.10–16): Blizzard Item Search API discovery, quality filter, parallel enrichment.
+  - **Gear plan FAQ** (prod-v0.16.17): "What does BiS actually mean?" first entry.
+- **Tier/catalyst hotfixes** — `prod-v0.16.3` through `prod-v0.16.7`: two-path tier query, catalyst anchor, fallback Blizzard item-set API.
 - **Last migration:** 0095
-- **Last prod tag:** `prod-v0.16.17`
+- **Last prod tag:** `prod-v0.17.0`
 - **Active branch:** `main`
-- **Next:** Phase 2 — Catalyst Items + Quality-Aware Display (see `reference/gear-plan-phase-2-scope.md`).
+- **Next:** Phase 2B — add `quality_track VARCHAR(1)` to `wow_items`; Phase 2C — quality-aware display. See `reference/gear-plan-1-catalyst-fix.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

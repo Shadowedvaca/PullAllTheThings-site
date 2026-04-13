@@ -680,6 +680,47 @@ class BlizzardClient:
         preview = data.get("preview_item", {})
         return preview.get("name_description", {}).get("display_string") or None
 
+    # ── Item Appearance API ───────────────────────────────────────────────────
+
+    async def get_item_appearance_set_index(self) -> list[dict]:
+        """GET /data/wow/item-appearance/set/index — all item appearance sets.
+
+        Each entry has 'id' and 'name'.  Used to find all quality-variant sets
+        for a tier set suffix (e.g., LFR/Normal/Heroic/Mythic variants of a
+        named set like "of the Luminous Bloom").
+        Returns empty list on error.
+        """
+        data = await self._api_get(
+            "/data/wow/item-appearance/set/index",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+        if not data:
+            return []
+        return data.get("appearance_sets", [])
+
+    async def get_item_appearance_set(self, set_id: int) -> Optional[dict]:
+        """GET /data/wow/item-appearance/set/{id} — all appearances in a set.
+
+        Returns a dict with an 'appearances' list.  Each entry has an 'id'
+        (appearance ID).  Returns None on 404 or error.
+        """
+        return await self._api_get(
+            f"/data/wow/item-appearance/set/{set_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
+    async def get_item_appearance(self, appearance_id: int) -> Optional[dict]:
+        """GET /data/wow/item-appearance/{id} — items sharing a given appearance.
+
+        Returns a dict with an 'items' list, each having 'id' (blizzard_item_id).
+        Multiple items can share the same appearance (e.g., all quality variants of
+        a catalyst-slot tier piece).  Returns None on 404 or error.
+        """
+        return await self._api_get(
+            f"/data/wow/item-appearance/{appearance_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def get_connected_realm_id(self, realm_slug: str) -> int | None:
         """
         Resolve a realm slug to its connected realm ID.
