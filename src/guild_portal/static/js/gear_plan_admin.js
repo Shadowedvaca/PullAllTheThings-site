@@ -22,6 +22,13 @@ let _cells = {};        // {spec_id: {source_id: {ht_key: {status, items_found, 
 let _htBySpec = {};     // {spec_id: [{id, name, slug}]}
 let _logVisible = false;
 
+// Source icon mapping — .svg placeholders; replace with real favicons when available
+const SOURCE_ICONS = {
+    wowhead:   '/static/img/sources/wowhead.svg',
+    icy_veins: '/static/img/sources/icy-veins.svg',
+    archon:    '/static/img/sources/archon.svg',
+};
+
 // Active drill-down target
 let _drillSpecId = null;
 let _drillSourceId = null;
@@ -1555,6 +1562,53 @@ async function submitSimcImport() {
 // ---------------------------------------------------------------------------
 // Item Sources — Loot Tables
 // ---------------------------------------------------------------------------
+
+let _trinketRatingsVisible = false;
+
+function toggleTrinketRatings() {
+    _trinketRatingsVisible = !_trinketRatingsVisible;
+    document.getElementById('gp-trinket-ratings-content').style.display =
+        _trinketRatingsVisible ? 'block' : 'none';
+    document.getElementById('trinket-ratings-toggle-icon').textContent =
+        _trinketRatingsVisible ? '▲' : '▼';
+    if (_trinketRatingsVisible) loadTrinketRatings();
+}
+
+async function loadTrinketRatings() {
+    const tbody = document.getElementById('gp-trinket-ratings-body');
+    const countEl = document.getElementById('trinket-ratings-count');
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-text-muted); padding:1rem;">Loading…</td></tr>';
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/trinket-ratings-status');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed to load trinket ratings');
+
+        const rows = d.data || [];
+        if (countEl) countEl.textContent = `${rows.length} spec/source combinations`;
+
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-text-muted); padding:1rem;">No trinket ratings found. Run Step 4 — Sync BIS Lists to populate.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(r => {
+            const countColor = r.rating_count > 0 ? 'var(--color-success, #4ade80)' : 'var(--color-text-muted)';
+            const countText = r.rating_count > 0 ? `${r.rating_count} ratings` : 'No data';
+            const lastSynced = r.last_updated
+                ? new Date(r.last_updated).toLocaleString()
+                : 'Never';
+            return `<tr>
+                <td>${r.spec_name} (${r.class_name})</td>
+                <td>${r.source_name}</td>
+                <td style="color:${countColor}; font-weight:500;">${countText}</td>
+                <td style="color:var(--color-text-muted);">${lastSynced}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--color-error, #f87171); padding:1rem;">Error: ${err.message}</td></tr>`;
+    }
+}
 
 let _itemSourcesVisible = false;
 
