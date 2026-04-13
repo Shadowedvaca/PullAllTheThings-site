@@ -950,6 +950,47 @@ async function resyncTarget(targetId) {
     }
 }
 
+async function resyncSingleTarget(targetId, tr, btn, statusTd, itemsTd) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    // Clear any previous inline result
+    let resultTd = tr.querySelector('.target-inline-result');
+    if (!resultTd) {
+        resultTd = document.createElement('td');
+        resultTd.className = 'target-inline-result';
+        resultTd.style.cssText = 'font-size:0.75rem; padding-left:0.5rem;';
+        tr.appendChild(resultTd);
+    }
+    resultTd.textContent = '';
+
+    try {
+        const r = await fetch(`/api/v1/admin/bis/sync/target/${targetId}`, { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        // Update status + items cells inline
+        statusTd.className = `gp-log-status-${d.status || 'pending'}`;
+        statusTd.textContent = d.status || 'pending';
+        itemsTd.textContent = d.items_upserted || 0;
+
+        // Show result summary next to button
+        const trinketPart = d.trinkets_upserted != null
+            ? ` · ${d.trinkets_upserted} trinket${d.trinkets_upserted !== 1 ? 's' : ''}`
+            : '';
+        resultTd.style.color = 'var(--color-success, #4ade80)';
+        resultTd.textContent = `${d.items_upserted} BIS${trinketPart}`;
+
+        btn.textContent = 'Sync';
+        btn.disabled = false;
+    } catch (err) {
+        resultTd.style.color = 'var(--color-error, #f87171)';
+        resultTd.textContent = err.message;
+        btn.textContent = 'Sync';
+        btn.disabled = false;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Cross-reference
 // ---------------------------------------------------------------------------
@@ -1283,7 +1324,7 @@ function _renderTargets() {
                 syncBtn.title = 'Icy Veins extraction not yet implemented';
             } else {
                 syncBtn.textContent = 'Sync';
-                syncBtn.onclick = () => resyncTarget(t.id);
+                syncBtn.onclick = () => resyncSingleTarget(t.id, tr, syncBtn, statusTd, itemsTd);
             }
             actTd.appendChild(syncBtn);
         }
