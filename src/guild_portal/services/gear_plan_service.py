@@ -1747,35 +1747,34 @@ async def get_available_items(
                  WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
                    AND wi.name LIKE '% of %'
                    AND (
+                       -- PRIMARY: Wowhead has indexed the item set link.  Any raid
+                       -- source qualifies — not gated on current_raid_ids so the
+                       -- anchor works even if the raid season config is incomplete.
                        (    wi.wowhead_tooltip_html LIKE $1
                         AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
                         AND EXISTS (
                                 SELECT 1 FROM guild_identity.item_sources is2
                                  WHERE is2.item_id = wi.id
-                                   AND is2.instance_name IN (
-                                       SELECT DISTINCT is3.instance_name
-                                         FROM guild_identity.item_sources is3
-                                        WHERE is3.blizzard_instance_id = ANY($2)
-                                   )
+                                   AND is2.instance_type = 'raid'
                             )
                        )
                        OR
-                       (    wi.armor_type = $3
-                        AND NOT EXISTS (
-                                SELECT 1 FROM guild_identity.item_sources s
-                                 WHERE s.item_id = wi.id
-                            )
+                       -- FALLBACK: Wowhead hasn't indexed the set yet.  Restrict to
+                       -- items with no tooltip (not yet enriched) so enriched non-tier
+                       -- boss drops with "of" in the name are excluded.
+                       (    wi.armor_type = $2
+                        AND wi.wowhead_tooltip_html IS NULL
                         AND EXISTS (
                                 SELECT 1 FROM guild_identity.bis_list_entries ble
                                   JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
                                   JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                 WHERE ble.item_id = wi.id AND cl.name = $4
+                                 WHERE ble.item_id = wi.id AND cl.name = $3
                             )
                        )
                    )
                  LIMIT 1
                 """,
-                f"%{class_name}%", raid_ids, t_armor or "leather", class_name,
+                f"%{class_name}%", t_armor or "leather", class_name,
             )
             set_suffix: Optional[str] = None
             if anchor_row:
@@ -1826,14 +1825,12 @@ async def get_available_items(
                                 )
                            )
                            OR
-                           -- FALLBACK: items without a Wowhead tooltip yet (e.g. before
-                           --   Enrich Items has run).  Restricted to items matching the
-                           --   tier set name suffix so non-tier BIS items are excluded.
+                           -- FALLBACK: items not yet in Wowhead item-set (e.g. new
+                           --   expansion tier before Wowhead indexes the set).  Armor
+                           --   type + BIS entry + set suffix prevents non-tier items
+                           --   from appearing.  NOT gated on sources — items may have
+                           --   sources already (sources added on a prior sync).
                            (    {fallback_armor_sql.lstrip("AND ") if fallback_armor_sql else "TRUE"}
-                            AND NOT EXISTS (
-                                    SELECT 1 FROM guild_identity.item_sources s
-                                     WHERE s.item_id = wi.id
-                                )
                             AND EXISTS (
                                     SELECT 1 FROM guild_identity.bis_list_entries ble
                                       JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
@@ -1850,25 +1847,19 @@ async def get_available_items(
                 )
 
             else:
-                # Catalyst slot — use the suffix we already derived above.
+                # Catalyst slot — suffix is class-discriminated (each armor class has a
+                # unique tier set name), so suffix + slot is enough.  No class filter
+                # needed — cloaks have armor_type='cloth' regardless of wearer class,
+                # and catalyst items may not have BIS entries or enriched tooltips.
                 if set_suffix:
-                    params = [slot_type, f"%{class_name}%", f"%{set_suffix}", class_name] + excl_params
+                    params = [slot_type, f"%{set_suffix}"] + excl_params
                     excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
                     tier_rows = await conn.fetch(
                         f"""
                         SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
                           FROM guild_identity.wow_items wi
                          WHERE wi.slot_type = $1
-                           AND wi.name LIKE $3
-                           AND (
-                               wi.wowhead_tooltip_html LIKE $2
-                               OR EXISTS (
-                                   SELECT 1 FROM guild_identity.bis_list_entries ble
-                                     JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
-                                     JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                    WHERE ble.item_id = wi.id AND cl.name = $4
-                               )
-                           )
+                           AND wi.name LIKE $2
                            {excl_sql}
                          ORDER BY wi.name
                         """,

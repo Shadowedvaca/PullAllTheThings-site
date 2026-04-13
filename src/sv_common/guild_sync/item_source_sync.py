@@ -822,24 +822,23 @@ async def enrich_catalyst_tier_items(
             )
             return added, errors
 
-        # Load all BIS items in catalyst slots by BIS slot (not slot_type) so that
-        # newly-stubbed items with slot_type='other' are included before Enrich Items
-        # has run to resolve their real slot.
+        # Load catalyst-slot items directly from wow_items whose name ends with a known
+        # tier suffix.  No BIS JOIN — catalyst items from the appearance crawl may not
+        # have BIS entries (e.g. leather cloaks are never recommended by BIS scrapers).
+        suffix_patterns = [f"%{s}" for s in tier_suffixes]
         all_catalyst_bis = await conn.fetch(
             """
             SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
-                   COALESCE(NULLIF(wi.slot_type, 'other'), ble.slot) AS eff_slot
-              FROM guild_identity.bis_list_entries ble
-              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-             WHERE ble.slot = ANY($1::text[])
+                   wi.slot_type AS eff_slot
+              FROM guild_identity.wow_items wi
+             WHERE wi.slot_type = ANY($1::text[])
+               AND wi.name LIKE ANY($2::text[])
             """,
             list(_CATALYST_SLOTS),
+            suffix_patterns,
         )
 
-        catalyst_items = [
-            row for row in all_catalyst_bis
-            if any((row["name"] or "").endswith(suffix) for suffix in tier_suffixes)
-        ]
+        catalyst_items = list(all_catalyst_bis)
 
         if not catalyst_items:
             logger.info(
