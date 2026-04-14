@@ -2036,3 +2036,25 @@ async function bulkPopulatePlans() {
         _setBtnDone(btn);
     }
 }
+
+async function rebuildEnrichment() {
+    const btn = document.getElementById('rebuild-enrichment-btn');
+    const result = document.getElementById('rebuild-enrichment-result');
+    _setBtnRunning(btn);
+    if (result) result.textContent = '';
+    setStatusHtml('<span class="spinner"></span> Rebuilding enrichment tables…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/rebuild-enrichment', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const c = d.counts;
+        const msg = `Enrichment rebuild complete — ${c.items} items (${c.drop} drop, ${c.tier} tier, ${c.crafted} crafted, ${c.catalyst} catalyst, ${c.unknown} unknown), ${c.item_sources} sources, ${c.bis_entries} BIS entries, ${c.trinket_ratings} trinket ratings.`;
+        setStatus(msg, 'success');
+        if (result) result.textContent = msg;
+    } catch (err) {
+        setStatus('Rebuild enrichment failed: ' + err.message, 'error');
+        if (result) result.textContent = 'Error: ' + err.message;
+    } finally {
+        _setBtnDone(btn);
+    }
+}

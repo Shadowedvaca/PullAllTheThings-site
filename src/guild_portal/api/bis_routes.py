@@ -29,6 +29,7 @@ Endpoints:
   GET  /api/v1/admin/bis/sync-crafted-items  (poll status)
   POST /api/v1/admin/bis/sync-crafted-items  (start job)
   GET  /api/v1/admin/bis/trinket-ratings-status
+  POST /api/v1/admin/bis/rebuild-enrichment
 """
 
 import logging
@@ -886,6 +887,47 @@ async def process_tier_tokens(
     from sv_common.guild_sync.item_source_sync import process_tier_tokens as _process
     result = await _process(pool)
     return {"ok": True, **result}
+
+
+@router.post("/rebuild-enrichment")
+async def rebuild_enrichment(
+    request: Request, player: Player = Depends(require_rank(5))
+):
+    """Rebuild all enrichment schema tables from guild_identity data (GL only).
+
+    Calls enrichment.sp_rebuild_all() which runs all enrichment sprocs in order:
+      items → item_sources → item_recipes → bis_entries → trinket_ratings
+      → update_item_categories → flag_junk_sources
+
+    Safe to re-run.  Takes a few seconds on a populated database.
+    """
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        await conn.execute("CALL enrichment.sp_rebuild_all()")
+        counts = await conn.fetchrow(
+            """
+            SELECT
+                (SELECT count(*) FROM enrichment.items)            AS items,
+                (SELECT count(*) FROM enrichment.item_sources)     AS item_sources,
+                (SELECT count(*) FROM enrichment.item_recipes)     AS item_recipes,
+                (SELECT count(*) FROM enrichment.bis_entries)      AS bis_entries,
+                (SELECT count(*) FROM enrichment.trinket_ratings)  AS trinket_ratings,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'crafted')                 AS crafted,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'catalyst')                AS catalyst,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'tier')                    AS tier,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'drop')                    AS drop,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'unknown')                 AS unknown
+            """
+        )
+    return {
+        "ok": True,
+        "counts": dict(counts),
+    }
 
 
 @router.delete("/item-sources/{source_id}")
