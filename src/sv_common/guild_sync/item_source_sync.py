@@ -718,6 +718,21 @@ async def enrich_catalyst_tier_items(
             """
         )
 
+        # Remove any raid/world_boss source rows for craftable items.
+        # Crafted gear never drops from bosses; these rows are spurious and arise
+        # when crafted gear sets (e.g. Arcanoweave) have /item-set= tooltip links
+        # that match Pass 1's tier-detection heuristic.  Migration 0102 cleaned
+        # them initially; this guard prevents re-insertion on future runs.
+        await conn.execute(
+            """
+            DELETE FROM guild_identity.item_sources
+             WHERE instance_type IN ('raid', 'world_boss')
+               AND item_id IN (
+                   SELECT item_id FROM guild_identity.item_recipe_links
+               )
+            """
+        )
+
         # ── Pass 1: all tier slots (main-5 + catalyst) with item-set tooltip link ──
         # PRIMARY: Wowhead tooltip has /item-set=/ link — definitive tier marker.
         # FALLBACK: Wowhead not yet indexed for this expansion.  Detect by:
@@ -736,6 +751,14 @@ async def enrich_catalyst_tier_items(
                -- Exclude catalyst items (quality_track='C') — they are handled by
                -- Pass 2 with instance_type='catalyst', never by boss source rows.
                AND wi.quality_track IS DISTINCT FROM 'C'
+               -- Exclude craftable items — crafted gear never drops from bosses.
+               -- Crafted gear sets in Midnight also have /item-set= links in their
+               -- Wowhead tooltips, which would otherwise match the PRIMARY condition
+               -- below and result in spurious boss source rows.
+               AND NOT EXISTS (
+                       SELECT 1 FROM guild_identity.item_recipe_links irl
+                        WHERE irl.item_id = wi.id
+                   )
                AND (
                    -- PRIMARY: Wowhead tooltip confirms tier set membership.
                    wi.wowhead_tooltip_html LIKE '%/item-set=%'
