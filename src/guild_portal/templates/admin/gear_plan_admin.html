@@ -455,7 +455,7 @@ async function _landingPost(endpoint) {
     _landingShowProgress(0);
     setStatus('Starting…', 'running');
     try {
-        const res = await fetch('/api/v1/bis/' + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const res = await fetch('/api/v1/admin/bis/' + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await res.json();
         if (!d.ok) {
             setStatus('Error: ' + (d.error || 'unknown'), 'error');
@@ -481,7 +481,7 @@ function _startLandingPoll() {
 
 async function _pollLanding() {
     try {
-        const res = await fetch('/api/v1/bis/landing-status');
+        const res = await fetch('/api/v1/admin/bis/landing-status');
         const d = await res.json();
         if (!d.ok) return;
         const s = d;  // status fields are at top level, not nested
@@ -535,7 +535,7 @@ async function enrichAndClassify() {
     const el = document.getElementById('enrich-classify-result');
     if (el) el.textContent = '';
     try {
-        const res = await fetch('/api/v1/bis/enrich-and-classify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const res = await fetch('/api/v1/admin/bis/enrich-and-classify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await res.json();
         if (!d.ok) {
             setStatus('Error: ' + (d.error || 'unknown'), 'error');
@@ -558,7 +558,7 @@ function _startEcPoll() {
 
 async function _pollEc() {
     try {
-        const res = await fetch('/api/v1/bis/enrich-classify-status');
+        const res = await fetch('/api/v1/admin/bis/enrich-classify-status');
         const d = await res.json();
         if (!d.ok) return;
         const s = d;  // status fields are at top level, not nested
@@ -591,7 +591,7 @@ async function testBloodDk() {
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
     setStatus('Fetching Blood DK BIS data…', 'running');
     try {
-        const res = await fetch('/api/v1/bis/sync/test-blood-dk', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const res = await fetch('/api/v1/admin/bis/sync/test-blood-dk', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await res.json();
         if (d.ok) {
             const msg = d.spec_id ? `spec_id=${d.spec_id}` : 'Done';
@@ -613,10 +613,10 @@ window.addEventListener('DOMContentLoaded', () => {
     loadLog();
 
     // If a background task was already running before page load, reconnect polls
-    fetch('/api/v1/bis/landing-status').then(r => r.json()).then(d => {
+    fetch('/api/v1/admin/bis/landing-status').then(r => r.json()).then(d => {
         if (d.ok && d.running) { _landingSetBtn(true); _startLandingPoll(); }
     }).catch(() => {});
-    fetch('/api/v1/bis/enrich-classify-status').then(r => r.json()).then(d => {
+    fetch('/api/v1/admin/bis/enrich-classify-status').then(r => r.json()).then(d => {
         if (d.ok && d.running) { _ecSetBtn(true); _startEcPoll(); }
     }).catch(() => {});
 });
