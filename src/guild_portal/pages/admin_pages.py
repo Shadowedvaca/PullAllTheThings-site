@@ -71,6 +71,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/attendance",      "attendance_report"),
     ("/admin/quotes",          "quotes"),
     ("/admin/error-routing",   "error_routing"),
+    ("/admin/gear-plan-admin", "gear_plan_admin"),
     ("/admin/gear-plan",       "gear_plan"),
 ]
 
@@ -4066,3 +4067,19 @@ async def db_explorer_data(
     except Exception as exc:
         logger.exception("db_explorer data error for %s.%s", schema, name)
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# Gear Plan Admin  (GL only — screen_key "gear_plan_admin")
+# ---------------------------------------------------------------------------
+
+
+@router.get("/gear-plan-admin", response_class=HTMLResponse)
+async def admin_gear_plan_admin_page(
+    request: Request, db: AsyncSession = Depends(get_db)
+):
+    player = await _require_screen("gear_plan_admin", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/gear-plan-admin")
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/gear_plan_admin.html", ctx)
