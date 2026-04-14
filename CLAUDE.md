@@ -235,7 +235,12 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1F — Trinket Rankings** — `prod-v0.19.0`, merged to main. Complete.
+- **Gear Plan Schema Overhaul — Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete.
+  - **No migration.** Pure sort fix: Roster Needs drill panel now displays players alphabetically.
+  - `_serialize_tracks()` in `gear_needs_routes.py` — sort entries by `player_name` + `player_id` before response.
+  - `_gatherInstEntries()` and `_renderByPlayer()` in `roster_needs.js` — sort merged per-player lists alphabetically.
+  - `roster_needs.js?v=1.1.1` cache buster.
+- **Previous: Phase 1F — Trinket Rankings** — `prod-v0.19.0`, merged to main. Complete.
   - **Migration 0100**: `guild_identity.trinket_tier_ratings` — tier (S/A/B/C/D) per item per spec per source; FK to `wow_items`, `specializations`, `hero_talents`, `bis_list_sources`.
   - **Migrations 0101–0103**: junk source purges (catalyst, crafted) + `item_sources.instance_type` constraint updated to include `'catalyst'`.
   - **Wowhead trinket scraper** (`bis_sync.py`) — scrapes per-spec trinket tier lists; deduplicates by (source, spec, item); admin "Sync Trinket Rankings" button on `/admin/gear-plan`.
@@ -247,9 +252,9 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Paired-slot BIS**: ring_1↔ring_2 and trinket_1↔trinket_2 — both desired items marked BIS across all lists and all three service functions.
   - JS v2.8.3, CSS v2.2.3.
 - **Last migration:** 0103
-- **Last prod tag:** `prod-v0.19.0`
+- **Last prod tag:** `prod-v0.19.1`
 - **Active branch:** `main`
-- **Next:** Gear Plan Schema Overhaul. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Next:** Gear Plan Schema Overhaul Phase A. See `reference/gear-plan-1-schema-overhaul.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

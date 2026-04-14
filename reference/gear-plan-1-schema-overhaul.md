@@ -1,6 +1,6 @@
 # Gear Plan — Schema Overhaul Plan
 
-> **Status:** Planning  
+> **Status:** Phase 0 complete (`prod-v0.19.1`). Phase A next.  
 > **Trigger:** Repeated slot drawer bugs traced to transform logic running inside live UI queries,
 > with categorization heuristics (tooltip HTML parsing, NOT EXISTS checks, suffix derivation)
 > fighting each other every time data state changes.  
@@ -441,7 +441,7 @@ to enrichment.
 
 This is a multi-phase migration. Nothing breaks until Phase 5. Each phase can ship independently.
 
-### Phase 0 — Quick Fixes (no schema change, ship immediately)
+### Phase 0 — Quick Fixes (no schema change, ship immediately) ✓ prod-v0.19.1
 
 **Roster Needs — duplicated / out-of-order raid list**
 
