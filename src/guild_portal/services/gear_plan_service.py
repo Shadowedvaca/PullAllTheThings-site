@@ -1721,7 +1721,6 @@ async def get_available_items(
         equipped_ilvl: Optional[int]  = equip_row["item_level"]       if equip_row else None
         equipped_track: Optional[str] = equip_row["quality_track"]    if equip_row else None
         equipped_bid:   Optional[int] = equip_row["blizzard_item_id"] if equip_row else None
-        all_season_ids = raid_ids + dungeon_ids
 
         # Phase 1E.5: fetch per-slot exclusions so we can hide excluded items
         excluded_ids: list[int] = []
@@ -1769,11 +1768,12 @@ async def get_available_items(
             )
             excluded_blizzard_ids = [r["blizzard_item_id"] for r in _excl_rows]
 
-        # ── viz.slot_items: single query replaces Q1/Q2/Q3 (Phase D) ─────────
-        # item_category discriminates: 'drop' (raid/dungeon), 'crafted',
-        # 'tier' (main 5-slot tier pieces), 'catalyst' (back/wrist/waist/feet set pieces).
+        # ── viz.slot_items: single query for all item categories (Phase E) ─────
+        # The view's item_seasons JOIN already limits results to the active season,
+        # so no Python-side season instance ID filter is needed.
+        # item_category discriminates: 'raid'/'dungeon', 'crafted',
+        # 'tier' (5-slot tier token pieces), 'catalyst' (back/wrist/waist/feet set pieces).
         # quality_tracks is pre-computed by the enrichment sproc.
-        # Armor type is now a direct column filter — no tooltip HTML fallback.
         viz_rows = await conn.fetch(
             """
             SELECT blizzard_item_id, name, icon_url, item_category,
@@ -1782,16 +1782,11 @@ async def get_available_items(
               FROM viz.slot_items
              WHERE slot_type = $1
                AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
-               AND (
-                   (item_category = 'drop' AND blizzard_instance_id = ANY($3::int[]))
-                   OR item_category = 'crafted'
-                   OR item_category IN ('tier', 'catalyst')
-               )
-               AND NOT (blizzard_item_id = ANY($4::int[]))
+               AND item_category IN ('raid', 'dungeon', 'crafted', 'tier', 'catalyst')
+               AND NOT (blizzard_item_id = ANY($3::int[]))
             """,
             slot_type,
             armor_filter,
-            all_season_ids or [],
             excluded_blizzard_ids,
         )
 
@@ -1837,8 +1832,8 @@ async def get_available_items(
         cat   = r["item_category"]
         itype = r["instance_type"]
 
-        if cat == "drop":
-            target = raid_map if itype == "raid" else dungeon_map
+        if cat in ("raid", "dungeon"):
+            target = raid_map if cat == "raid" else dungeon_map
             if bid not in target:
                 target[bid] = {
                     "blizzard_item_id": bid,
