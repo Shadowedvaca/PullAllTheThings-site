@@ -1,0 +1,2464 @@
+id,source_id,spec_id,hero_talent_id,item_id,blizzard_item_id,item_name,tier,sort_order
+2444,3,1,,5789,249805,Undreamt God's Oozing Vestige,A,0
+2441,3,1,,29,249343,Gaze of the Alnseer,S,0
+2450,3,1,,1335,250258,Vessel of Tortured Souls,B,0
+2458,3,1,,5727,250226,Latch's Crooked Hook,C,0
+2451,3,1,,5658,250241,Mark of Light,B,1
+2445,3,1,,485,249806,Radiant Plume,A,1
+2459,3,1,,14807,193719,Dragon Games Equipment,C,1
+2442,3,1,,2570,249342,Heart of Ancient Hunger,S,1
+2443,3,1,,30,249344,Light Company Guidon,S,2
+2460,3,1,,2017,151307,Void Stalker's Contract,C,2
+2446,3,1,,1349,260235,Umbral Plume,A,2
+2452,3,1,,5733,250227,Kroluk's Warbanner,B,2
+2461,3,1,,5703,250245,Tumor of the Swarm,C,3
+2447,3,1,,14,250256,Heart of Wind,A,3
+2453,3,1,,15,252420,Solarflare Prism,B,3
+2454,3,1,,2059,249339,Gloom-Spattered Dreadscale,B,4
+2448,3,1,,59,193701,Algeth'ar Puzzle Box,A,4
+2462,3,1,,2016,151312,Ampoule of Pure Void,C,4
+2463,3,1,,5615,250243,Manaheart's Binding Flame,C,5
+2455,3,1,,5575,250242,Jelly Replicator,B,5
+2449,3,1,,5893,249807,The Eternal Egg,A,5
+2456,3,1,,9091,252421,Rotting Globule,B,6
+2457,3,1,,12027,252418,Solar Core Igniter,B,7
+1502,3,2,,29,249343,Gaze of the Alnseer,S,0
+1519,3,2,,5727,250226,Latch's Crooked Hook,C,0
+1511,3,2,,1335,250258,Vessel of Tortured Souls,B,0
+1505,3,2,,5789,249805,Undreamt God's Oozing Vestige,A,0
+1520,3,2,,14807,193719,Dragon Games Equipment,C,1
+1506,3,2,,485,249806,Radiant Plume,A,1
+1503,3,2,,2570,249342,Heart of Ancient Hunger,S,1
+1512,3,2,,5658,250241,Mark of Light,B,1
+1504,3,2,,30,249344,Light Company Guidon,S,2
+1521,3,2,,2017,151307,Void Stalker's Contract,C,2
+1513,3,2,,5733,250227,Kroluk's Warbanner,B,2
+1507,3,2,,1349,260235,Umbral Plume,A,2
+1522,3,2,,5703,250245,Tumor of the Swarm,C,3
+1514,3,2,,15,252420,Solarflare Prism,B,3
+1508,3,2,,14,250256,Heart of Wind,A,3
+1523,3,2,,2016,151312,Ampoule of Pure Void,C,4
+1515,3,2,,2059,249339,Gloom-Spattered Dreadscale,B,4
+1509,3,2,,59,193701,Algeth'ar Puzzle Box,A,4
+1510,3,2,,5893,249807,The Eternal Egg,A,5
+1524,3,2,,5615,250243,Manaheart's Binding Flame,C,5
+1516,3,2,,5575,250242,Jelly Replicator,B,5
+1517,3,2,,9091,252421,Rotting Globule,B,6
+1518,3,2,,12027,252418,Solar Core Igniter,B,7
+1260,3,3,,5575,250242,Jelly Replicator,D,0
+1241,3,3,,17046,251784,Sylvan Wakrapuku,B,0
+1230,3,3,,485,249806,Radiant Plume,S,0
+1252,3,3,,18400,251783,Lost Idol of the Hash'ey,C,0
+1234,3,3,,2017,151307,Void Stalker's Contract,A,0
+1253,3,3,,31226,246306,Darkmoon Dominion: Rot,C,1
+1242,3,3,,5733,250227,Kroluk's Warbanner,B,1
+1261,3,3,,14,250256,Heart of Wind,D,1
+1231,3,3,,1349,260235,Umbral Plume,S,1
+1235,3,3,,2059,249339,Gloom-Spattered Dreadscale,A,1
+1262,3,3,,17009,251787,Sealed Chaos Urn,D,2
+1254,3,3,,18474,251791,Holy Retributor's Order,C,2
+1243,3,3,,16570,251785,Void-Reaper's Libram,B,2
+1236,3,3,,5727,250226,Latch's Crooked Hook,A,2
+1232,3,3,,29,249343,Gaze of the Alnseer,S,2
+1255,3,3,,30,249344,Light Company Guidon,C,3
+1237,3,3,,15,252420,Solarflare Prism,A,3
+1263,3,3,,31224,246305,Darkmoon Dominion: Blood,D,3
+1233,3,3,,5877,249345,Ranger-Captain's Iridescent Insignia,S,3
+1244,3,3,,1335,250258,Vessel of Tortured Souls,B,3
+1238,3,3,,5789,249805,Undreamt God's Oozing Vestige,A,4
+1256,3,3,,30467,264694,Ultradon Cuirass,C,4
+1245,3,3,,5581,250257,Eye of the Drowning Void,B,4
+1239,3,3,,2016,151312,Ampoule of Pure Void,A,5
+1257,3,3,,149,250144,Emberwing Feather,C,5
+1246,3,3,,59,193701,Algeth'ar Puzzle Box,B,5
+1258,3,3,,31208,246304,Darkmoon Dominion: Hunt,C,6
+1240,3,3,,9091,252421,Rotting Globule,A,6
+1247,3,3,,16482,251792,Glorious Crusader's Keepsake,B,6
+1248,3,3,,17352,251790,Desecrated Chalice,B,7
+1259,3,3,,5893,249807,The Eternal Egg,C,7
+1249,3,3,,31233,246307,Darkmoon Dominion: Void,B,8
+1250,3,3,,31234,241340,Magister's Alchemist Stone,B,9
+1251,3,3,,12027,252418,Solar Core Igniter,B,10
+510,3,4,,2016,151312,Ampoule of Pure Void,C,0
+495,3,4,,5893,249807,The Eternal Egg,A,0
+502,3,4,,12027,252418,Solar Core Igniter,B,0
+491,3,4,,29,249343,Gaze of the Alnseer,S,0
+511,3,4,,5733,250227,Kroluk's Warbanner,C,1
+496,3,4,,2059,249339,Gloom-Spattered Dreadscale,A,1
+503,3,4,,5703,250245,Tumor of the Swarm,B,1
+492,3,4,,59,193701,Algeth'ar Puzzle Box,S,1
+504,3,4,,5615,250243,Manaheart's Binding Flame,B,2
+512,3,4,,5727,250226,Latch's Crooked Hook,C,2
+497,3,4,,149,250144,Emberwing Feather,A,2
+493,3,4,,485,249806,Radiant Plume,S,2
+513,3,4,,2017,151307,Void Stalker's Contract,C,3
+498,3,4,,5789,249805,Undreamt God's Oozing Vestige,A,3
+505,3,4,,5575,250242,Jelly Replicator,B,3
+494,3,4,,1349,260235,Umbral Plume,S,3
+506,3,4,,5581,250257,Eye of the Drowning Void,B,4
+499,3,4,,30,249344,Light Company Guidon,A,4
+507,3,4,,1335,250258,Vessel of Tortured Souls,B,5
+500,3,4,,15,252420,Solarflare Prism,A,5
+508,3,4,,5877,249345,Ranger-Captain's Iridescent Insignia,B,6
+501,3,4,,14,250256,Heart of Wind,A,6
+509,3,4,,9091,252421,Rotting Globule,B,7
+316,3,5,,29,249343,Gaze of the Alnseer,S,0
+318,3,5,,15,252420,Solarflare Prism,A,0
+323,3,5,,1335,250258,Vessel of Tortured Souls,B,0
+341,3,5,,5575,250242,Jelly Replicator,D,0
+331,3,5,,18400,251783,Lost Idol of the Hash'ey,C,0
+332,3,5,,149,250144,Emberwing Feather,C,1
+324,3,5,,14,250256,Heart of Wind,B,1
+342,3,5,,5727,250226,Latch's Crooked Hook,D,1
+317,3,5,,30,249344,Light Company Guidon,S,1
+319,3,5,,1349,260235,Umbral Plume,A,1
+343,3,5,,2017,151307,Void Stalker's Contract,D,2
+333,3,5,,5581,250257,Eye of the Drowning Void,C,2
+320,3,5,,2059,249339,Gloom-Spattered Dreadscale,A,2
+325,3,5,,30467,264694,Ultradon Cuirass,B,2
+334,3,5,,5893,249807,The Eternal Egg,C,3
+326,3,5,,9091,252421,Rotting Globule,B,3
+321,3,5,,16759,251782,Withered Saptor's Paw,A,3
+344,3,5,,17352,251790,Desecrated Chalice,D,3
+345,3,5,,17009,251787,Sealed Chaos Urn,D,4
+327,3,5,,5877,249345,Ranger-Captain's Iridescent Insignia,B,4
+335,3,5,,16570,251785,Void-Reaper's Libram,C,4
+322,3,5,,16482,251792,Glorious Crusader's Keepsake,A,4
+336,3,5,,485,249806,Radiant Plume,C,5
+328,3,5,,5789,249805,Undreamt God's Oozing Vestige,B,5
+337,3,5,,18474,251791,Holy Retributor's Order,C,6
+329,3,5,,59,193701,Algeth'ar Puzzle Box,B,6
+330,3,5,,12027,252418,Solar Core Igniter,B,7
+338,3,5,,2016,151312,Ampoule of Pure Void,C,7
+339,3,5,,5733,250227,Kroluk's Warbanner,C,8
+340,3,5,,17046,251784,Sylvan Wakrapuku,C,9
+39,3,6,,29,249343,Gaze of the Alnseer,S,0
+41,3,6,,1349,260235,Umbral Plume,A,0
+46,3,6,,31208,246304,Darkmoon Dominion: Hunt,B,0
+54,3,6,,5658,250241,Mark of Light,C,0
+47,3,6,,5789,249805,Undreamt God's Oozing Vestige,B,1
+40,3,6,,30,249344,Light Company Guidon,S,1
+55,3,6,,31226,246306,Darkmoon Dominion: Rot,C,1
+42,3,6,,2570,249342,Heart of Ancient Hunger,A,1
+56,3,6,,31224,246305,Darkmoon Dominion: Blood,C,2
+48,3,6,,59,193701,Algeth'ar Puzzle Box,B,2
+43,3,6,,485,249806,Radiant Plume,A,2
+49,3,6,,1335,250258,Vessel of Tortured Souls,B,3
+44,3,6,,15,252420,Solarflare Prism,A,3
+57,3,6,,31234,241340,Magister's Alchemist Stone,C,3
+45,3,6,,14,250256,Heart of Wind,A,4
+50,3,6,,5733,250227,Kroluk's Warbanner,B,4
+51,3,6,,5727,250226,Latch's Crooked Hook,B,5
+52,3,6,,14807,193719,Dragon Games Equipment,B,6
+53,3,6,,31233,246307,Darkmoon Dominion: Void,B,7
+2143,3,7,,5907,249811,Light of the Cosmic Crescendo,A,0
+2140,3,7,,299,264507,Crucible of Erratic Energies,S,0
+2159,3,7,,31234,241340,Magister's Alchemist Stone,D,0
+2154,3,7,,12106,252411,Radiant Sunstone,C,0
+2148,3,7,,5650,250253,Whisper of the Duskwraith,B,0
+2160,3,7,,20658,264701,Cosmic Bell,D,1
+2144,3,7,,1137,249808,Litany of Lightblind Wrath,A,1
+2149,3,7,,14,250256,Heart of Wind,B,1
+2141,3,7,,29,249343,Gaze of the Alnseer,S,1
+2155,3,7,,16482,251792,Glorious Crusader's Keepsake,C,1
+2150,3,7,,13408,151340,Echo of L'ura,B,2
+2156,3,7,,17214,251788,Gift of Light,C,2
+2145,3,7,,16769,248583,Drum of Renewed Bonds,A,2
+2142,3,7,,334,249809,Locus-Walker's Ribbon,S,2
+2157,3,7,,23109,251789,Consecrated Chalice,C,3
+2146,3,7,,165,249346,Vaelgor's Final Stare,A,3
+2151,3,7,,5562,250246,Refueling Orb,B,3
+2158,3,7,,9102,50259,Nevermelting Ice Crystal,C,4
+2147,3,7,,3782,193718,Emerald Coach's Whistle,A,4
+2152,3,7,,149,250144,Emberwing Feather,B,4
+2153,3,7,,5837,249341,Volatile Void Suffuser,B,5
+1640,3,8,,5562,250246,Refueling Orb,C,0
+1633,3,8,,14,250256,Heart of Wind,A,0
+1636,3,8,,3782,193718,Emerald Coach's Whistle,B,0
+1630,3,8,,165,249346,Vaelgor's Final Stare,S,0
+1643,3,8,,1335,250258,Vessel of Tortured Souls,D,0
+1644,3,8,,20658,264701,Cosmic Bell,D,1
+1641,3,8,,31234,241340,Magister's Alchemist Stone,C,1
+1637,3,8,,16482,251792,Glorious Crusader's Keepsake,B,1
+1634,3,8,,5837,249341,Volatile Void Suffuser,A,1
+1631,3,8,,1137,249808,Litany of Lightblind Wrath,S,1
+1632,3,8,,334,249809,Locus-Walker's Ribbon,S,2
+1645,3,8,,17009,251787,Sealed Chaos Urn,D,2
+1642,3,8,,17214,251788,Gift of Light,C,2
+1638,3,8,,29,249343,Gaze of the Alnseer,B,2
+1635,3,8,,149,250144,Emberwing Feather,A,2
+1646,3,8,,23109,251789,Consecrated Chalice,D,3
+1639,3,8,,5907,249811,Light of the Cosmic Crescendo,B,3
+1647,3,8,,16952,251786,Ever-Collapsing Void Fissure,D,4
+1696,3,9,,17214,251788,Gift of Light,C,0
+1689,3,9,,29,249343,Gaze of the Alnseer,B,0
+1684,3,9,,1137,249808,Litany of Lightblind Wrath,S,0
+1686,3,9,,3782,193718,Emerald Coach's Whistle,A,0
+1697,3,9,,1335,250258,Vessel of Tortured Souls,D,0
+1687,3,9,,165,249346,Vaelgor's Final Stare,A,1
+1685,3,9,,334,249809,Locus-Walker's Ribbon,S,1
+1690,3,9,,5837,249341,Volatile Void Suffuser,B,1
+1698,3,9,,20658,264701,Cosmic Bell,D,1
+1691,3,9,,149,250144,Emberwing Feather,B,2
+1699,3,9,,17009,251787,Sealed Chaos Urn,D,2
+1688,3,9,,14,250256,Heart of Wind,A,2
+1700,3,9,,23109,251789,Consecrated Chalice,D,3
+1692,3,9,,5907,249811,Light of the Cosmic Crescendo,B,3
+1693,3,9,,16482,251792,Glorious Crusader's Keepsake,B,4
+1701,3,9,,16952,251786,Ever-Collapsing Void Fissure,D,4
+1694,3,9,,5562,250246,Refueling Orb,B,5
+1695,3,9,,31234,241340,Magister's Alchemist Stone,B,6
+1438,3,10,,29,249343,Gaze of the Alnseer,S,0
+1441,3,10,,5907,249811,Light of the Cosmic Crescendo,A,0
+1446,3,10,,3782,193718,Emerald Coach's Whistle,B,0
+1454,3,10,,13408,151340,Echo of L'ura,D,0
+1449,3,10,,5650,250253,Whisper of the Duskwraith,C,0
+1450,3,10,,12106,252411,Radiant Sunstone,C,1
+1455,3,10,,31234,241340,Magister's Alchemist Stone,D,1
+1442,3,10,,165,249346,Vaelgor's Final Stare,A,1
+1439,3,10,,334,249809,Locus-Walker's Ribbon,S,1
+1447,3,10,,5750,250462,Forgotten Farstrider's Insignia,B,1
+1451,3,10,,5562,250246,Refueling Orb,C,2
+1448,3,10,,5837,249341,Volatile Void Suffuser,B,2
+1440,3,10,,1137,249808,Litany of Lightblind Wrath,S,2
+1443,3,10,,299,264507,Crucible of Erratic Energies,A,2
+1444,3,10,,14,250256,Heart of Wind,A,3
+1452,3,10,,1335,250258,Vessel of Tortured Souls,C,3
+1445,3,10,,149,250144,Emberwing Feather,A,4
+1453,3,10,,9102,50259,Nevermelting Ice Crystal,C,4
+1338,3,11,,31234,241340,Magister's Alchemist Stone,F,0
+1314,3,11,,1137,249808,Litany of Lightblind Wrath,S,0
+1316,3,11,,334,249809,Locus-Walker's Ribbon,A,0
+1321,3,11,,5907,249811,Light of the Cosmic Crescendo,B,0
+1325,3,11,,3782,193718,Emerald Coach's Whistle,C,0
+1329,3,11,,21177,241291,Primal Philosopher's Stone,D,0
+1330,3,11,,12106,252411,Radiant Sunstone,D,1
+1315,3,11,,29,249343,Gaze of the Alnseer,S,1
+1317,3,11,,14,250256,Heart of Wind,A,1
+1322,3,11,,165,249346,Vaelgor's Final Stare,B,1
+1326,3,11,,5650,250253,Whisper of the Duskwraith,C,1
+1327,3,11,,5562,250246,Refueling Orb,C,2
+1331,3,11,,9102,50259,Nevermelting Ice Crystal,D,2
+1323,3,11,,16482,251792,Glorious Crusader's Keepsake,B,2
+1318,3,11,,299,264507,Crucible of Erratic Energies,A,2
+1332,3,11,,17214,251788,Gift of Light,D,3
+1319,3,11,,5837,249341,Volatile Void Suffuser,A,3
+1324,3,11,,16769,248583,Drum of Renewed Bonds,B,3
+1328,3,11,,13408,151340,Echo of L'ura,C,3
+1320,3,11,,149,250144,Emberwing Feather,A,4
+1333,3,11,,1335,250258,Vessel of Tortured Souls,D,4
+1334,3,11,,23109,251789,Consecrated Chalice,D,5
+1335,3,11,,16952,251786,Ever-Collapsing Void Fissure,D,6
+1336,3,11,,30467,264694,Ultradon Cuirass,D,7
+1337,3,11,,20658,264701,Cosmic Bell,D,8
+747,3,12,,29,249343,Gaze of the Alnseer,A,0
+757,3,12,,1335,250258,Vessel of Tortured Souls,D,0
+756,3,12,,17214,251788,Gift of Light,C,0
+753,3,12,,5907,249811,Light of the Cosmic Crescendo,B,0
+744,3,12,,334,249809,Locus-Walker's Ribbon,S,0
+758,3,12,,20658,264701,Cosmic Bell,D,1
+745,3,12,,165,249346,Vaelgor's Final Stare,S,1
+748,3,12,,14,250256,Heart of Wind,A,1
+754,3,12,,5837,249341,Volatile Void Suffuser,B,1
+755,3,12,,5562,250246,Refueling Orb,B,2
+759,3,12,,17009,251787,Sealed Chaos Urn,D,2
+749,3,12,,149,250144,Emberwing Feather,A,2
+746,3,12,,1137,249808,Litany of Lightblind Wrath,S,2
+760,3,12,,23109,251789,Consecrated Chalice,D,3
+750,3,12,,16482,251792,Glorious Crusader's Keepsake,A,3
+751,3,12,,299,264507,Crucible of Erratic Energies,A,4
+761,3,12,,16952,251786,Ever-Collapsing Void Fissure,D,4
+752,3,12,,3782,193718,Emerald Coach's Whistle,A,5
+762,3,12,,31234,241340,Magister's Alchemist Stone,D,5
+562,3,13,,1335,250258,Vessel of Tortured Souls,D,0
+550,3,13,,29,249343,Gaze of the Alnseer,S,0
+553,3,13,,165,249346,Vaelgor's Final Stare,A,0
+558,3,13,,5907,249811,Light of the Cosmic Crescendo,B,0
+561,3,13,,17214,251788,Gift of Light,C,0
+559,3,13,,5837,249341,Volatile Void Suffuser,B,1
+551,3,13,,334,249809,Locus-Walker's Ribbon,S,1
+554,3,13,,14,250256,Heart of Wind,A,1
+563,3,13,,20658,264701,Cosmic Bell,D,1
+560,3,13,,5562,250246,Refueling Orb,B,2
+555,3,13,,149,250144,Emberwing Feather,A,2
+564,3,13,,17009,251787,Sealed Chaos Urn,D,2
+552,3,13,,1137,249808,Litany of Lightblind Wrath,S,2
+565,3,13,,23109,251789,Consecrated Chalice,D,3
+556,3,13,,16482,251792,Glorious Crusader's Keepsake,A,3
+557,3,13,,3782,193718,Emerald Coach's Whistle,A,4
+566,3,13,,16952,251786,Ever-Collapsing Void Fissure,D,4
+567,3,13,,31234,241340,Magister's Alchemist Stone,D,5
+2342,3,14,,1335,250258,Vessel of Tortured Souls,B,0
+2335,3,14,,29,249343,Gaze of the Alnseer,S,0
+2346,3,14,,14807,193719,Dragon Games Equipment,C,0
+2338,3,14,,1349,260235,Umbral Plume,A,0
+2347,3,14,,5658,250241,Mark of Light,C,1
+2336,3,14,,2570,249342,Heart of Ancient Hunger,S,1
+2343,3,14,,14,250256,Heart of Wind,B,1
+2339,3,14,,485,249806,Radiant Plume,A,1
+2337,3,14,,59,193701,Algeth'ar Puzzle Box,S,2
+2348,3,14,,5733,250227,Kroluk's Warbanner,C,2
+2340,3,14,,30,249344,Light Company Guidon,A,2
+2344,3,14,,5789,249805,Undreamt God's Oozing Vestige,B,2
+2345,3,14,,5727,250226,Latch's Crooked Hook,B,3
+2349,3,14,,2017,151307,Void Stalker's Contract,C,3
+2341,3,14,,15,252420,Solarflare Prism,A,3
+2380,3,15,,29,249343,Gaze of the Alnseer,S,0
+2391,3,15,,14807,193719,Dragon Games Equipment,C,0
+2387,3,15,,1335,250258,Vessel of Tortured Souls,B,0
+2383,3,15,,1349,260235,Umbral Plume,A,0
+2392,3,15,,5658,250241,Mark of Light,C,1
+2388,3,15,,14,250256,Heart of Wind,B,1
+2384,3,15,,485,249806,Radiant Plume,A,1
+2381,3,15,,2570,249342,Heart of Ancient Hunger,S,1
+2385,3,15,,30,249344,Light Company Guidon,A,2
+2389,3,15,,5789,249805,Undreamt God's Oozing Vestige,B,2
+2382,3,15,,59,193701,Algeth'ar Puzzle Box,S,2
+2393,3,15,,5733,250227,Kroluk's Warbanner,C,2
+2394,3,15,,2017,151307,Void Stalker's Contract,C,3
+2386,3,15,,15,252420,Solarflare Prism,A,3
+2390,3,15,,5727,250226,Latch's Crooked Hook,B,3
+2074,3,16,,29,249343,Gaze of the Alnseer,S,0
+2080,3,16,,30,249344,Light Company Guidon,B,0
+2077,3,16,,149,250144,Emberwing Feather,A,0
+2097,3,16,,17009,251787,Sealed Chaos Urn,F,0
+2091,3,16,,31233,246307,Darkmoon Dominion: Void,D,0
+2085,3,16,,5581,250257,Eye of the Drowning Void,C,0
+2092,3,16,,31234,241340,Magister's Alchemist Stone,D,1
+2078,3,16,,15,252420,Solarflare Prism,A,1
+2086,3,16,,5727,250226,Latch's Crooked Hook,C,1
+2075,3,16,,485,249806,Radiant Plume,S,1
+2081,3,16,,1335,250258,Vessel of Tortured Souls,B,1
+2079,3,16,,14,250256,Heart of Wind,A,2
+2093,3,16,,16570,251785,Void-Reaper's Libram,D,2
+2076,3,16,,59,193701,Algeth'ar Puzzle Box,S,2
+2087,3,16,,18400,251783,Lost Idol of the Hash'ey,C,2
+2082,3,16,,5877,249345,Ranger-Captain's Iridescent Insignia,B,2
+2083,3,16,,16482,251792,Glorious Crusader's Keepsake,B,3
+2094,3,16,,31226,246306,Darkmoon Dominion: Rot,D,3
+2088,3,16,,2017,151307,Void Stalker's Contract,C,3
+2089,3,16,,31208,246304,Darkmoon Dominion: Hunt,C,4
+2084,3,16,,5789,249805,Undreamt God's Oozing Vestige,B,4
+2095,3,16,,16759,251782,Withered Saptor's Paw,D,4
+2096,3,16,,17046,251784,Sylvan Wakrapuku,D,5
+2090,3,16,,31224,246305,Darkmoon Dominion: Blood,C,5
+1816,3,17,,30,249344,Light Company Guidon,B,0
+1806,3,17,,29,249343,Gaze of the Alnseer,S,0
+1820,3,17,,18474,251791,Holy Retributor's Order,C,0
+1808,3,17,,485,249806,Radiant Plume,A,0
+1824,3,17,,5727,250226,Latch's Crooked Hook,D,0
+1817,3,17,,14,250256,Heart of Wind,B,1
+1825,3,17,,2017,151307,Void Stalker's Contract,D,1
+1821,3,17,,31208,246304,Darkmoon Dominion: Hunt,C,1
+1807,3,17,,59,193701,Algeth'ar Puzzle Box,S,1
+1809,3,17,,1349,260235,Umbral Plume,A,1
+1826,3,17,,31233,246307,Darkmoon Dominion: Void,D,2
+1822,3,17,,16759,251782,Withered Saptor's Paw,C,2
+1818,3,17,,18400,251783,Lost Idol of the Hash'ey,B,2
+1810,3,17,,149,250144,Emberwing Feather,A,2
+1819,3,17,,5581,250257,Eye of the Drowning Void,B,3
+1811,3,17,,15,252420,Solarflare Prism,A,3
+1827,3,17,,31226,246306,Darkmoon Dominion: Rot,D,3
+1823,3,17,,16570,251785,Void-Reaper's Libram,C,3
+1828,3,17,,31224,246305,Darkmoon Dominion: Blood,D,4
+1812,3,17,,5733,250227,Kroluk's Warbanner,A,4
+1829,3,17,,5750,250462,Forgotten Farstrider's Insignia,D,5
+1813,3,17,,5877,249345,Ranger-Captain's Iridescent Insignia,A,5
+1814,3,17,,5789,249805,Undreamt God's Oozing Vestige,A,6
+1830,3,17,,17046,251784,Sylvan Wakrapuku,D,6
+1815,3,17,,299,264507,Crucible of Erratic Energies,A,7
+1831,3,17,,16482,251792,Glorious Crusader's Keepsake,D,7
+1832,3,17,,17009,251787,Sealed Chaos Urn,D,8
+1833,3,17,,1335,250258,Vessel of Tortured Souls,D,9
+1882,3,18,,485,249806,Radiant Plume,A,0
+1889,3,18,,149,250144,Emberwing Feather,C,0
+1891,3,18,,1335,250258,Vessel of Tortured Souls,D,0
+1887,3,18,,5581,250257,Eye of the Drowning Void,B,0
+1878,3,18,,29,249343,Gaze of the Alnseer,S,0
+1883,3,18,,14,250256,Heart of Wind,A,1
+1879,3,18,,1349,260235,Umbral Plume,S,1
+1888,3,18,,2017,151307,Void Stalker's Contract,B,1
+1890,3,18,,59,193701,Algeth'ar Puzzle Box,C,1
+1892,3,18,,5789,249805,Undreamt God's Oozing Vestige,D,1
+1880,3,18,,5877,249345,Ranger-Captain's Iridescent Insignia,S,2
+1884,3,18,,5727,250226,Latch's Crooked Hook,A,2
+1893,3,18,,5750,250462,Forgotten Farstrider's Insignia,D,2
+1894,3,18,,18400,251783,Lost Idol of the Hash'ey,D,3
+1881,3,18,,15,252420,Solarflare Prism,S,3
+1885,3,18,,30,249344,Light Company Guidon,A,3
+1895,3,18,,31234,241340,Magister's Alchemist Stone,D,4
+1886,3,18,,5733,250227,Kroluk's Warbanner,A,4
+1896,3,18,,31233,246307,Darkmoon Dominion: Void,D,5
+1897,3,18,,31226,246306,Darkmoon Dominion: Rot,D,6
+1898,3,18,,31208,246304,Darkmoon Dominion: Hunt,D,7
+1899,3,18,,31224,246305,Darkmoon Dominion: Blood,D,8
+1965,3,19,,1335,250258,Vessel of Tortured Souls,C,0
+1971,3,19,,31224,246305,Darkmoon Dominion: Blood,D,0
+1950,3,19,,30,249344,Light Company Guidon,S,0
+1952,3,19,,485,249806,Radiant Plume,A,0
+1957,3,19,,14,250256,Heart of Wind,B,0
+1951,3,19,,29,249343,Gaze of the Alnseer,S,1
+1958,3,19,,15,252420,Solarflare Prism,B,1
+1953,3,19,,1349,260235,Umbral Plume,A,1
+1966,3,19,,5581,250257,Eye of the Drowning Void,C,1
+1972,3,19,,31208,246304,Darkmoon Dominion: Hunt,D,1
+1967,3,19,,17009,251787,Sealed Chaos Urn,C,2
+1973,3,19,,31226,246306,Darkmoon Dominion: Rot,D,2
+1959,3,19,,5733,250227,Kroluk's Warbanner,B,2
+1954,3,19,,59,193701,Algeth'ar Puzzle Box,A,2
+1955,3,19,,149,250144,Emberwing Feather,A,3
+1968,3,19,,18400,251783,Lost Idol of the Hash'ey,C,3
+1974,3,19,,31233,246307,Darkmoon Dominion: Void,D,3
+1960,3,19,,16759,251782,Withered Saptor's Paw,B,3
+1969,3,19,,16570,251785,Void-Reaper's Libram,C,4
+1956,3,19,,5877,249345,Ranger-Captain's Iridescent Insignia,A,4
+1961,3,19,,31234,241340,Magister's Alchemist Stone,B,4
+1962,3,19,,5789,249805,Undreamt God's Oozing Vestige,B,5
+1970,3,19,,19853,252957,Tangle of Vibrant Vines,C,5
+1963,3,19,,5727,250226,Latch's Crooked Hook,B,6
+1964,3,19,,2017,151307,Void Stalker's Contract,B,7
+1571,3,20,,59,193701,Algeth'ar Puzzle Box,S,0
+1582,3,20,,5789,249805,Undreamt God's Oozing Vestige,C,0
+1576,3,20,,30,249344,Light Company Guidon,B,0
+1574,3,20,,29,249343,Gaze of the Alnseer,A,0
+1590,3,20,,5658,250241,Mark of Light,D,0
+1577,3,20,,15,252420,Solarflare Prism,B,1
+1572,3,20,,485,249806,Radiant Plume,S,1
+1583,3,20,,1335,250258,Vessel of Tortured Souls,C,1
+1591,3,20,,2017,151307,Void Stalker's Contract,D,1
+1575,3,20,,2570,249342,Heart of Ancient Hunger,A,1
+1592,3,20,,5750,250462,Forgotten Farstrider's Insignia,D,2
+1578,3,20,,14,250256,Heart of Wind,B,2
+1584,3,20,,5727,250226,Latch's Crooked Hook,C,2
+1573,3,20,,1349,260235,Umbral Plume,S,2
+1579,3,20,,5733,250227,Kroluk's Warbanner,B,3
+1593,3,20,,18400,251783,Lost Idol of the Hash'ey,D,3
+1585,3,20,,14807,193719,Dragon Games Equipment,C,3
+1580,3,20,,31224,246305,Darkmoon Dominion: Blood,B,4
+1586,3,20,,31226,246306,Darkmoon Dominion: Rot,C,4
+1587,3,20,,31233,246307,Darkmoon Dominion: Void,C,5
+1581,3,20,,31208,246304,Darkmoon Dominion: Hunt,B,5
+1588,3,20,,31234,241340,Magister's Alchemist Stone,C,6
+1589,3,20,,38879,255613,"",C,7
+1381,3,21,,485,249806,Radiant Plume,S,0
+1389,3,21,,5727,250226,Latch's Crooked Hook,B,0
+1399,3,21,,31233,246307,Darkmoon Dominion: Void,D,0
+1397,3,21,,1335,250258,Vessel of Tortured Souls,C,0
+1384,3,21,,149,250144,Emberwing Feather,A,0
+1390,3,21,,5733,250227,Kroluk's Warbanner,B,1
+1382,3,21,,29,249343,Gaze of the Alnseer,S,1
+1400,3,21,,31234,241340,Magister's Alchemist Stone,D,1
+1385,3,21,,14,250256,Heart of Wind,A,1
+1398,3,21,,31224,246305,Darkmoon Dominion: Blood,C,1
+1401,3,21,,18400,251783,Lost Idol of the Hash'ey,D,2
+1386,3,21,,5789,249805,Undreamt God's Oozing Vestige,A,2
+1383,3,21,,59,193701,Algeth'ar Puzzle Box,S,2
+1391,3,21,,5581,250257,Eye of the Drowning Void,B,2
+1392,3,21,,31208,246304,Darkmoon Dominion: Hunt,B,3
+1387,3,21,,30,249344,Light Company Guidon,A,3
+1393,3,21,,31226,246306,Darkmoon Dominion: Rot,B,4
+1388,3,21,,15,252420,Solarflare Prism,A,4
+1394,3,21,,5750,250462,Forgotten Farstrider's Insignia,B,5
+1395,3,21,,5877,249345,Ranger-Captain's Iridescent Insignia,B,6
+1396,3,21,,2017,151307,Void Stalker's Contract,B,7
+925,3,22,,29,249343,Gaze of the Alnseer,A,0
+922,3,22,,59,193701,Algeth'ar Puzzle Box,S,0
+931,3,22,,1335,250258,Vessel of Tortured Souls,B,0
+937,3,22,,30,249344,Light Company Guidon,C,0
+940,3,22,,5727,250226,Latch's Crooked Hook,D,0
+923,3,22,,485,249806,Radiant Plume,S,1
+941,3,22,,5581,250257,Eye of the Drowning Void,D,1
+938,3,22,,17046,251784,Sylvan Wakrapuku,C,1
+932,3,22,,5733,250227,Kroluk's Warbanner,B,1
+926,3,22,,17009,251787,Sealed Chaos Urn,A,1
+939,3,22,,18400,251783,Lost Idol of the Hash'ey,C,2
+933,3,22,,15,252420,Solarflare Prism,B,2
+927,3,22,,16759,251782,Withered Saptor's Paw,A,2
+924,3,22,,1349,260235,Umbral Plume,S,2
+942,3,22,,2017,151307,Void Stalker's Contract,D,2
+928,3,22,,14,250256,Heart of Wind,A,3
+934,3,22,,149,250144,Emberwing Feather,B,3
+935,3,22,,5750,250462,Forgotten Farstrider's Insignia,B,4
+929,3,22,,16482,251792,Glorious Crusader's Keepsake,A,4
+930,3,22,,5877,249345,Ranger-Captain's Iridescent Insignia,A,5
+936,3,22,,31208,246304,Darkmoon Dominion: Hunt,B,5
+439,3,23,,1335,250258,Vessel of Tortured Souls,C,0
+430,3,23,,59,193701,Algeth'ar Puzzle Box,S,0
+436,3,23,,5733,250227,Kroluk's Warbanner,B,0
+443,3,23,,2017,151307,Void Stalker's Contract,D,0
+433,3,23,,29,249343,Gaze of the Alnseer,A,0
+444,3,23,,2017,151307,Void Stalker's Contract,D,1
+437,3,23,,5789,249805,Undreamt God's Oozing Vestige,B,1
+431,3,23,,485,249806,Radiant Plume,S,1
+440,3,23,,30,249344,Light Company Guidon,C,1
+434,3,23,,5877,249345,Ranger-Captain's Iridescent Insignia,A,1
+438,3,23,,149,250144,Emberwing Feather,B,2
+441,3,23,,5581,250257,Eye of the Drowning Void,C,2
+435,3,23,,14,250256,Heart of Wind,A,2
+432,3,23,,1349,260235,Umbral Plume,S,2
+442,3,23,,5727,250226,Latch's Crooked Hook,C,3
+253,3,24,,30,249344,Light Company Guidon,D,0
+247,3,24,,5733,250227,Kroluk's Warbanner,C,0
+243,3,24,,2017,151307,Void Stalker's Contract,B,0
+240,3,24,,1349,260235,Umbral Plume,A,0
+238,3,24,,59,193701,Algeth'ar Puzzle Box,S,0
+239,3,24,,29,249343,Gaze of the Alnseer,S,1
+241,3,24,,485,249806,Radiant Plume,A,1
+254,3,24,,149,250144,Emberwing Feather,D,1
+244,3,24,,5581,250257,Eye of the Drowning Void,B,1
+248,3,24,,31208,246304,Darkmoon Dominion: Hunt,C,1
+242,3,24,,15,252420,Solarflare Prism,A,2
+245,3,24,,5727,250226,Latch's Crooked Hook,B,2
+255,3,24,,5750,250462,Forgotten Farstrider's Insignia,D,2
+249,3,24,,31224,246305,Darkmoon Dominion: Blood,C,2
+250,3,24,,31226,246306,Darkmoon Dominion: Rot,C,3
+246,3,24,,14,250256,Heart of Wind,B,3
+251,3,24,,31233,246307,Darkmoon Dominion: Void,C,4
+252,3,24,,31234,241340,Magister's Alchemist Stone,C,5
+72,3,25,,59,193701,Algeth'ar Puzzle Box,A,0
+74,3,25,,1335,250258,Vessel of Tortured Souls,B,0
+75,3,25,,31234,241340,Magister's Alchemist Stone,C,0
+67,3,25,,30,249344,Light Company Guidon,S,0
+68,3,25,,29,249343,Gaze of the Alnseer,S,1
+73,3,25,,15,252420,Solarflare Prism,A,1
+69,3,25,,485,249806,Radiant Plume,S,2
+70,3,25,,1349,260235,Umbral Plume,S,3
+71,3,25,,2570,249342,Heart of Ancient Hunger,S,4
+130,3,26,,21164,245829,Darkmoon Deck: Hunt,A,0
+125,3,26,,30,249344,Light Company Guidon,S,0
+134,3,26,,36443,245855,"",B,0
+141,3,26,,5658,250241,Mark of Light,C,0
+144,3,26,,36453,245846,"",D,0
+135,3,26,,1335,250258,Vessel of Tortured Souls,B,1
+142,3,26,,2017,151307,Void Stalker's Contract,C,1
+126,3,26,,29,249343,Gaze of the Alnseer,S,1
+131,3,26,,15,252420,Solarflare Prism,A,1
+132,3,26,,14,250256,Heart of Wind,A,2
+143,3,26,,31234,241340,Magister's Alchemist Stone,C,2
+136,3,26,,14807,193719,Dragon Games Equipment,B,2
+127,3,26,,1349,260235,Umbral Plume,S,2
+133,3,26,,59,193701,Algeth'ar Puzzle Box,A,3
+137,3,26,,5789,249805,Undreamt God's Oozing Vestige,B,3
+128,3,26,,485,249806,Radiant Plume,S,3
+129,3,26,,2570,249342,Heart of Ancient Hunger,S,4
+138,3,26,,5733,250227,Kroluk's Warbanner,B,4
+139,3,26,,5727,250226,Latch's Crooked Hook,B,5
+140,3,26,,36449,245750,"",B,6
+2198,3,27,,21164,245829,Darkmoon Deck: Hunt,B,0
+2193,3,27,,29,249343,Gaze of the Alnseer,S,0
+2195,3,27,,864,249810,Shadow of the Empyrean Requiem,A,0
+2206,3,27,,5836,249340,Wraps of Cosmic Madness,D,0
+2203,3,27,,9102,50259,Nevermelting Ice Crystal,C,0
+2207,3,27,,333,250223,Soulcatcher's Charm,D,1
+2199,3,27,,36443,245855,"",B,1
+2194,3,27,,149,250144,Emberwing Feather,S,1
+2196,3,27,,165,249346,Vaelgor's Final Stare,A,1
+2204,3,27,,13390,151310,Reality Breacher,C,1
+2200,3,27,,36449,245750,"",B,2
+2208,3,27,,334,249809,Locus-Walker's Ribbon,D,2
+2197,3,27,,14,250256,Heart of Wind,A,2
+2205,3,27,,5581,250257,Eye of the Drowning Void,C,2
+2201,3,27,,36453,245846,"",B,3
+2202,3,27,,1335,250258,Vessel of Tortured Souls,B,4
+2240,3,28,,9102,50259,Nevermelting Ice Crystal,D,0
+2231,3,28,,1335,250258,Vessel of Tortured Souls,B,0
+2235,3,28,,5581,250257,Eye of the Drowning Void,C,0
+2225,3,28,,149,250144,Emberwing Feather,S,0
+2228,3,28,,29,249343,Gaze of the Alnseer,A,0
+2226,3,28,,334,249809,Locus-Walker's Ribbon,S,1
+2232,3,28,,333,250223,Soulcatcher's Charm,B,1
+2236,3,28,,21164,245829,Darkmoon Deck: Hunt,C,1
+2229,3,28,,864,249810,Shadow of the Empyrean Requiem,A,1
+2230,3,28,,14,250256,Heart of Wind,A,2
+2233,3,28,,13390,151310,Reality Breacher,B,2
+2227,3,28,,165,249346,Vaelgor's Final Stare,S,2
+2237,3,28,,36443,245855,"",C,2
+2238,3,28,,36449,245750,"",C,3
+2234,3,28,,5836,249340,Wraps of Cosmic Madness,B,3
+2239,3,28,,36453,245846,"",C,4
+2291,3,29,,334,249809,Locus-Walker's Ribbon,A,0
+2299,3,29,,36449,245750,"",C,0
+2304,3,29,,5836,249340,Wraps of Cosmic Madness,D,0
+2294,3,29,,1335,250258,Vessel of Tortured Souls,B,0
+2289,3,29,,29,249343,Gaze of the Alnseer,S,0
+2295,3,29,,21164,245829,Darkmoon Deck: Hunt,B,1
+2300,3,29,,36453,245846,"",C,1
+2292,3,29,,864,249810,Shadow of the Empyrean Requiem,A,1
+2290,3,29,,165,249346,Vaelgor's Final Stare,S,1
+2296,3,29,,149,250144,Emberwing Feather,B,2
+2293,3,29,,333,250223,Soulcatcher's Charm,A,2
+2301,3,29,,9102,50259,Nevermelting Ice Crystal,C,2
+2302,3,29,,13390,151310,Reality Breacher,C,3
+2297,3,29,,14,250256,Heart of Wind,B,3
+2298,3,29,,36443,245855,"",B,4
+2303,3,29,,5581,250257,Eye of the Drowning Void,C,4
+2021,3,30,,333,250223,Soulcatcher's Charm,D,0
+2013,3,30,,1335,250258,Vessel of Tortured Souls,A,0
+2009,3,30,,29,249343,Gaze of the Alnseer,S,0
+2015,3,30,,21164,245829,Darkmoon Deck: Hunt,B,0
+2016,3,30,,864,249810,Shadow of the Empyrean Requiem,C,0
+2017,3,30,,5581,250257,Eye of the Drowning Void,C,1
+2022,3,30,,13390,151310,Reality Breacher,D,1
+2010,3,30,,149,250144,Emberwing Feather,S,1
+2014,3,30,,14,250256,Heart of Wind,A,1
+2011,3,30,,165,249346,Vaelgor's Final Stare,S,2
+2023,3,30,,5836,249340,Wraps of Cosmic Madness,D,2
+2018,3,30,,36443,245855,"",C,2
+2012,3,30,,334,249809,Locus-Walker's Ribbon,S,3
+2019,3,30,,36449,245750,"",C,3
+2024,3,30,,9102,50259,Nevermelting Ice Crystal,D,3
+2020,3,30,,36453,245846,"",C,4
+2025,3,30,,5750,250462,Forgotten Farstrider's Insignia,D,4
+1740,3,31,,864,249810,Shadow of the Empyrean Requiem,B,0
+1736,3,31,,334,249809,Locus-Walker's Ribbon,A,0
+1734,3,31,,29,249343,Gaze of the Alnseer,S,0
+1748,3,31,,5836,249340,Wraps of Cosmic Madness,D,0
+1745,3,31,,9102,50259,Nevermelting Ice Crystal,C,0
+1746,3,31,,13390,151310,Reality Breacher,C,1
+1735,3,31,,165,249346,Vaelgor's Final Stare,S,1
+1737,3,31,,149,250144,Emberwing Feather,A,1
+1741,3,31,,21164,245829,Darkmoon Deck: Hunt,B,1
+1749,3,31,,1335,250258,Vessel of Tortured Souls,D,1
+1747,3,31,,5581,250257,Eye of the Drowning Void,C,2
+1738,3,31,,14,250256,Heart of Wind,A,2
+1742,3,31,,36443,245855,"",B,2
+1743,3,31,,36449,245750,"",B,3
+1739,3,31,,333,250223,Soulcatcher's Charm,A,3
+1744,3,31,,36453,245846,"",B,4
+1004,3,32,,5581,250257,Eye of the Drowning Void,B,0
+1019,3,32,,31224,246305,Darkmoon Dominion: Blood,F,0
+1014,3,32,,16570,251785,Void-Reaper's Libram,D,0
+997,3,32,,165,249346,Vaelgor's Final Stare,S,0
+999,3,32,,149,250144,Emberwing Feather,A,0
+1010,3,32,,16952,251786,Ever-Collapsing Void Fissure,C,0
+1015,3,32,,17046,251784,Sylvan Wakrapuku,D,1
+998,3,32,,29,249343,Gaze of the Alnseer,S,1
+1005,3,32,,38879,255613,"",B,1
+1000,3,32,,864,249810,Shadow of the Empyrean Requiem,A,1
+1020,3,32,,31234,241340,Magister's Alchemist Stone,F,1
+1011,3,32,,16566,264878,Astalor's Anguish Agitator,C,1
+1021,3,32,,31208,246304,Darkmoon Dominion: Hunt,F,2
+1016,3,32,,19853,252957,Tangle of Vibrant Vines,D,2
+1012,3,32,,16482,251792,Glorious Crusader's Keepsake,C,2
+1006,3,32,,38880,255614,"",B,2
+1001,3,32,,1335,250258,Vessel of Tortured Souls,A,2
+1002,3,32,,5836,249340,Wraps of Cosmic Madness,A,3
+1007,3,32,,333,250223,Soulcatcher's Charm,B,3
+1022,3,32,,31233,246307,Darkmoon Dominion: Void,F,3
+1013,3,32,,13390,151310,Reality Breacher,C,3
+1017,3,32,,334,249809,Locus-Walker's Ribbon,D,3
+1018,3,32,,17009,251787,Sealed Chaos Urn,D,4
+1023,3,32,,31226,246306,Darkmoon Dominion: Rot,F,4
+1003,3,32,,14,250256,Heart of Wind,A,4
+1008,3,32,,9102,50259,Nevermelting Ice Crystal,B,4
+1009,3,32,,16769,248583,Drum of Renewed Bonds,B,5
+1072,3,33,,149,250144,Emberwing Feather,S,0
+1080,3,33,,18400,251783,Lost Idol of the Hash'ey,B,0
+1085,3,33,,5750,250462,Forgotten Farstrider's Insignia,C,0
+1091,3,33,,17009,251787,Sealed Chaos Urn,D,0
+1076,3,33,,333,250223,Soulcatcher's Charm,A,0
+1092,3,33,,13390,151310,Reality Breacher,D,1
+1077,3,33,,864,249810,Shadow of the Empyrean Requiem,A,1
+1086,3,33,,31233,246307,Darkmoon Dominion: Void,C,1
+1081,3,33,,31208,246304,Darkmoon Dominion: Hunt,B,1
+1073,3,33,,334,249809,Locus-Walker's Ribbon,S,1
+1082,3,33,,16482,251792,Glorious Crusader's Keepsake,B,2
+1087,3,33,,31234,241340,Magister's Alchemist Stone,C,2
+1093,3,33,,9102,50259,Nevermelting Ice Crystal,D,2
+1074,3,33,,165,249346,Vaelgor's Final Stare,S,2
+1078,3,33,,14,250256,Heart of Wind,A,2
+1088,3,33,,16566,264878,Astalor's Anguish Agitator,C,3
+1083,3,33,,5836,249340,Wraps of Cosmic Madness,B,3
+1075,3,33,,29,249343,Gaze of the Alnseer,S,3
+1094,3,33,,5581,250257,Eye of the Drowning Void,D,3
+1079,3,33,,1335,250258,Vessel of Tortured Souls,A,3
+1095,3,33,,17046,251784,Sylvan Wakrapuku,D,4
+1089,3,33,,16952,251786,Ever-Collapsing Void Fissure,C,4
+1084,3,33,,17009,251787,Sealed Chaos Urn,B,4
+1090,3,33,,16570,251785,Void-Reaper's Libram,C,5
+1159,3,34,,9102,50259,Nevermelting Ice Crystal,D,0
+1142,3,34,,334,249809,Locus-Walker's Ribbon,A,0
+1140,3,34,,29,249343,Gaze of the Alnseer,S,0
+1158,3,34,,16952,251786,Ever-Collapsing Void Fissure,C,0
+1149,3,34,,864,249810,Shadow of the Empyrean Requiem,B,0
+1141,3,34,,165,249346,Vaelgor's Final Stare,S,1
+1143,3,34,,333,250223,Soulcatcher's Charm,A,1
+1150,3,34,,31224,246305,Darkmoon Dominion: Blood,B,1
+1160,3,34,,17009,251787,Sealed Chaos Urn,D,1
+1161,3,34,,19853,252957,Tangle of Vibrant Vines,D,2
+1151,3,34,,1335,250258,Vessel of Tortured Souls,B,2
+1144,3,34,,149,250144,Emberwing Feather,A,2
+1145,3,34,,31208,246304,Darkmoon Dominion: Hunt,A,3
+1152,3,34,,14,250256,Heart of Wind,B,3
+1146,3,34,,16769,248583,Drum of Renewed Bonds,A,4
+1153,3,34,,31233,246307,Darkmoon Dominion: Void,B,4
+1154,3,34,,31234,241340,Magister's Alchemist Stone,B,5
+1147,3,34,,16482,251792,Glorious Crusader's Keepsake,A,5
+1155,3,34,,31226,246306,Darkmoon Dominion: Rot,B,6
+1148,3,34,,16566,264878,Astalor's Anguish Agitator,A,6
+1156,3,34,,16570,251785,Void-Reaper's Libram,B,7
+1157,3,34,,17046,251784,Sylvan Wakrapuku,B,8
+831,3,35,,31224,246305,Darkmoon Dominion: Blood,C,0
+815,3,35,,1349,260235,Umbral Plume,A,0
+836,3,35,,5750,250462,Forgotten Farstrider's Insignia,D,0
+821,3,35,,1335,250258,Vessel of Tortured Souls,B,0
+813,3,35,,59,193701,Algeth'ar Puzzle Box,S,0
+814,3,35,,485,249806,Radiant Plume,S,1
+837,3,35,,17009,251787,Sealed Chaos Urn,D,1
+816,3,35,,29,249343,Gaze of the Alnseer,A,1
+832,3,35,,31208,246304,Darkmoon Dominion: Hunt,C,1
+822,3,35,,5581,250257,Eye of the Drowning Void,B,1
+823,3,35,,2017,151307,Void Stalker's Contract,B,2
+817,3,35,,149,250144,Emberwing Feather,A,2
+833,3,35,,31226,246306,Darkmoon Dominion: Rot,C,2
+834,3,35,,31233,246307,Darkmoon Dominion: Void,C,3
+818,3,35,,15,252420,Solarflare Prism,A,3
+824,3,35,,14,250256,Heart of Wind,B,3
+819,3,35,,5877,249345,Ranger-Captain's Iridescent Insignia,A,4
+835,3,35,,31234,241340,Magister's Alchemist Stone,C,4
+825,3,35,,5789,249805,Undreamt God's Oozing Vestige,B,4
+826,3,35,,30,249344,Light Company Guidon,B,5
+820,3,35,,16482,251792,Glorious Crusader's Keepsake,A,5
+827,3,35,,16759,251782,Withered Saptor's Paw,B,6
+828,3,35,,18400,251783,Lost Idol of the Hash'ey,B,7
+829,3,35,,16570,251785,Void-Reaper's Libram,B,8
+830,3,35,,17046,251784,Sylvan Wakrapuku,B,9
+875,3,36,,14,250256,Heart of Wind,C,0
+878,3,36,,5727,250226,Latch's Crooked Hook,D,0
+869,3,36,,149,250144,Emberwing Feather,A,0
+872,3,36,,5877,249345,Ranger-Captain's Iridescent Insignia,B,0
+866,3,36,,59,193701,Algeth'ar Puzzle Box,S,0
+879,3,36,,5789,249805,Undreamt God's Oozing Vestige,D,1
+867,3,36,,1349,260235,Umbral Plume,S,1
+876,3,36,,2017,151307,Void Stalker's Contract,C,1
+873,3,36,,15,252420,Solarflare Prism,B,1
+870,3,36,,29,249343,Gaze of the Alnseer,A,1
+874,3,36,,1335,250258,Vessel of Tortured Souls,B,2
+877,3,36,,5581,250257,Eye of the Drowning Void,C,2
+868,3,36,,485,249806,Radiant Plume,S,2
+871,3,36,,30,249344,Light Company Guidon,A,2
+684,3,37,,334,249809,Locus-Walker's Ribbon,S,0
+687,3,37,,1335,250258,Vessel of Tortured Souls,A,0
+692,3,37,,18400,251783,Lost Idol of the Hash'ey,B,0
+696,3,37,,31208,246304,Darkmoon Dominion: Hunt,C,0
+702,3,37,,17009,251787,Sealed Chaos Urn,D,0
+703,3,37,,17046,251784,Sylvan Wakrapuku,D,1
+693,3,37,,5581,250257,Eye of the Drowning Void,B,1
+697,3,37,,31233,246307,Darkmoon Dominion: Void,C,1
+685,3,37,,165,249346,Vaelgor's Final Stare,S,1
+688,3,37,,29,249343,Gaze of the Alnseer,A,1
+689,3,37,,864,249810,Shadow of the Empyrean Requiem,A,2
+704,3,37,,13390,151310,Reality Breacher,D,2
+694,3,37,,16482,251792,Glorious Crusader's Keepsake,B,2
+698,3,37,,31234,241340,Magister's Alchemist Stone,C,2
+686,3,37,,333,250223,Soulcatcher's Charm,S,2
+705,3,37,,9102,50259,Nevermelting Ice Crystal,D,3
+690,3,37,,149,250144,Emberwing Feather,A,3
+695,3,37,,5836,249340,Wraps of Cosmic Madness,B,3
+699,3,37,,16570,251785,Void-Reaper's Libram,C,3
+691,3,37,,14,250256,Heart of Wind,A,4
+700,3,37,,16566,264878,Astalor's Anguish Agitator,C,4
+701,3,37,,16952,251786,Ever-Collapsing Void Fissure,C,5
+596,3,38,,14,250256,Heart of Wind,A,0
+604,3,38,,29,249343,Gaze of the Alnseer,C,0
+592,3,38,,864,249810,Shadow of the Empyrean Requiem,S,0
+611,3,38,,9102,50259,Nevermelting Ice Crystal,D,0
+601,3,38,,5581,250257,Eye of the Drowning Void,B,0
+593,3,38,,333,250223,Soulcatcher's Charm,S,1
+612,3,38,,16952,251786,Ever-Collapsing Void Fissure,D,1
+605,3,38,,1335,250258,Vessel of Tortured Souls,C,1
+602,3,38,,16769,248583,Drum of Renewed Bonds,B,1
+597,3,38,,5836,249340,Wraps of Cosmic Madness,A,1
+613,3,38,,36443,245855,"",D,2
+603,3,38,,16570,251785,Void-Reaper's Libram,B,2
+598,3,38,,299,264507,Crucible of Erratic Energies,A,2
+594,3,38,,334,249809,Locus-Walker's Ribbon,S,2
+606,3,38,,13390,151310,Reality Breacher,C,2
+595,3,38,,165,249346,Vaelgor's Final Stare,S,3
+599,3,38,,149,250144,Emberwing Feather,A,3
+614,3,38,,36453,245846,"",D,3
+607,3,38,,17046,251784,Sylvan Wakrapuku,C,3
+600,3,38,,3782,193718,Emerald Coach's Whistle,A,4
+615,3,38,,36449,245750,"",D,4
+608,3,38,,16482,251792,Glorious Crusader's Keepsake,C,4
+609,3,38,,16566,264878,Astalor's Anguish Agitator,C,5
+610,3,38,,21164,245829,Darkmoon Deck: Hunt,C,6
+395,3,39,,1335,250258,Vessel of Tortured Souls,D,0
+390,3,39,,5581,250257,Eye of the Drowning Void,C,0
+384,3,39,,29,249343,Gaze of the Alnseer,A,0
+386,3,39,,864,249810,Shadow of the Empyrean Requiem,B,0
+382,3,39,,165,249346,Vaelgor's Final Stare,S,0
+387,3,39,,149,250144,Emberwing Feather,B,1
+383,3,39,,334,249809,Locus-Walker's Ribbon,S,1
+385,3,39,,333,250223,Soulcatcher's Charm,A,1
+391,3,39,,14,250256,Heart of Wind,C,1
+396,3,39,,13390,151310,Reality Breacher,D,1
+392,3,39,,16482,251792,Glorious Crusader's Keepsake,C,2
+388,3,39,,3782,193718,Emerald Coach's Whistle,B,2
+397,3,39,,17009,251787,Sealed Chaos Urn,D,2
+389,3,39,,5836,249340,Wraps of Cosmic Madness,B,3
+393,3,39,,16570,251785,Void-Reaper's Libram,C,3
+398,3,39,,17046,251784,Sylvan Wakrapuku,D,3
+394,3,39,,16952,251786,Ever-Collapsing Void Fissure,C,4
+399,3,39,,18400,251783,Lost Idol of the Hash'ey,D,4
+169,3,41,,864,249810,Shadow of the Empyrean Requiem,B,0
+178,3,41,,333,250223,Soulcatcher's Charm,D,0
+166,3,41,,149,250144,Emberwing Feather,A,0
+171,3,41,,9102,50259,Nevermelting Ice Crystal,C,0
+164,3,41,,29,249343,Gaze of the Alnseer,S,0
+165,3,41,,165,249346,Vaelgor's Final Stare,S,1
+170,3,41,,1335,250258,Vessel of Tortured Souls,B,1
+172,3,41,,5581,250257,Eye of the Drowning Void,C,1
+167,3,41,,14,250256,Heart of Wind,A,1
+179,3,41,,5750,250462,Forgotten Farstrider's Insignia,D,1
+168,3,41,,334,249809,Locus-Walker's Ribbon,A,2
+180,3,41,,31224,246305,Darkmoon Dominion: Blood,D,2
+173,3,41,,1137,249808,Litany of Lightblind Wrath,C,2
+174,3,41,,13390,151310,Reality Breacher,C,3
+181,3,41,,31226,246306,Darkmoon Dominion: Rot,D,3
+175,3,41,,31208,246304,Darkmoon Dominion: Hunt,C,4
+182,3,41,,31233,246307,Darkmoon Dominion: Void,D,4
+176,3,41,,31234,241340,Magister's Alchemist Stone,C,5
+177,3,41,,5836,249340,Wraps of Cosmic Madness,C,6
+2421,7,1,,5789,249805,Undreamt God's Oozing Vestige,A,0
+2418,7,1,,29,249343,Gaze of the Alnseer,S,0
+2427,7,1,,1335,250258,Vessel of Tortured Souls,B,0
+2435,7,1,,5727,250226,Latch's Crooked Hook,C,0
+2428,7,1,,5658,250241,Mark of Light,B,1
+2419,7,1,,2570,249342,Heart of Ancient Hunger,S,1
+2422,7,1,,485,249806,Radiant Plume,A,1
+2436,7,1,,14807,193719,Dragon Games Equipment,C,1
+2423,7,1,,1349,260235,Umbral Plume,A,2
+2420,7,1,,30,249344,Light Company Guidon,S,2
+2437,7,1,,2017,151307,Void Stalker's Contract,C,2
+2429,7,1,,5733,250227,Kroluk's Warbanner,B,2
+2438,7,1,,5703,250245,Tumor of the Swarm,C,3
+2424,7,1,,14,250256,Heart of Wind,A,3
+2430,7,1,,15,252420,Solarflare Prism,B,3
+2431,7,1,,2059,249339,Gloom-Spattered Dreadscale,B,4
+2439,7,1,,2016,151312,Ampoule of Pure Void,C,4
+2425,7,1,,59,193701,Algeth'ar Puzzle Box,A,4
+2440,7,1,,5615,250243,Manaheart's Binding Flame,C,5
+2426,7,1,,5893,249807,The Eternal Egg,A,5
+2432,7,1,,5575,250242,Jelly Replicator,B,5
+2433,7,1,,9091,252421,Rotting Globule,B,6
+2434,7,1,,12027,252418,Solar Core Igniter,B,7
+1479,7,2,,29,249343,Gaze of the Alnseer,S,0
+1496,7,2,,5727,250226,Latch's Crooked Hook,C,0
+1488,7,2,,1335,250258,Vessel of Tortured Souls,B,0
+1482,7,2,,5789,249805,Undreamt God's Oozing Vestige,A,0
+1497,7,2,,14807,193719,Dragon Games Equipment,C,1
+1489,7,2,,5658,250241,Mark of Light,B,1
+1483,7,2,,485,249806,Radiant Plume,A,1
+1480,7,2,,2570,249342,Heart of Ancient Hunger,S,1
+1490,7,2,,5733,250227,Kroluk's Warbanner,B,2
+1484,7,2,,1349,260235,Umbral Plume,A,2
+1481,7,2,,30,249344,Light Company Guidon,S,2
+1498,7,2,,2017,151307,Void Stalker's Contract,C,2
+1491,7,2,,15,252420,Solarflare Prism,B,3
+1485,7,2,,14,250256,Heart of Wind,A,3
+1499,7,2,,5703,250245,Tumor of the Swarm,C,3
+1486,7,2,,59,193701,Algeth'ar Puzzle Box,A,4
+1492,7,2,,2059,249339,Gloom-Spattered Dreadscale,B,4
+1500,7,2,,2016,151312,Ampoule of Pure Void,C,4
+1501,7,2,,5615,250243,Manaheart's Binding Flame,C,5
+1493,7,2,,5575,250242,Jelly Replicator,B,5
+1487,7,2,,5893,249807,The Eternal Egg,A,5
+1494,7,2,,9091,252421,Rotting Globule,B,6
+1495,7,2,,12027,252418,Solar Core Igniter,B,7
+1226,7,3,,5575,250242,Jelly Replicator,D,0
+1218,7,3,,18400,251783,Lost Idol of the Hash'ey,C,0
+1196,7,3,,485,249806,Radiant Plume,S,0
+1207,7,3,,17046,251784,Sylvan Wakrapuku,B,0
+1200,7,3,,2017,151307,Void Stalker's Contract,A,0
+1219,7,3,,31226,246306,Darkmoon Dominion: Rot,C,1
+1201,7,3,,2059,249339,Gloom-Spattered Dreadscale,A,1
+1197,7,3,,1349,260235,Umbral Plume,S,1
+1227,7,3,,14,250256,Heart of Wind,D,1
+1208,7,3,,5733,250227,Kroluk's Warbanner,B,1
+1202,7,3,,5727,250226,Latch's Crooked Hook,A,2
+1228,7,3,,17009,251787,Sealed Chaos Urn,D,2
+1198,7,3,,29,249343,Gaze of the Alnseer,S,2
+1209,7,3,,16570,251785,Void-Reaper's Libram,B,2
+1220,7,3,,18474,251791,Holy Retributor's Order,C,2
+1199,7,3,,5877,249345,Ranger-Captain's Iridescent Insignia,S,3
+1229,7,3,,31224,246305,Darkmoon Dominion: Blood,D,3
+1210,7,3,,1335,250258,Vessel of Tortured Souls,B,3
+1203,7,3,,15,252420,Solarflare Prism,A,3
+1221,7,3,,30,249344,Light Company Guidon,C,3
+1211,7,3,,5581,250257,Eye of the Drowning Void,B,4
+1204,7,3,,5789,249805,Undreamt God's Oozing Vestige,A,4
+1222,7,3,,30467,264694,Ultradon Cuirass,C,4
+1223,7,3,,149,250144,Emberwing Feather,C,5
+1205,7,3,,2016,151312,Ampoule of Pure Void,A,5
+1212,7,3,,59,193701,Algeth'ar Puzzle Box,B,5
+1224,7,3,,31208,246304,Darkmoon Dominion: Hunt,C,6
+1206,7,3,,9091,252421,Rotting Globule,A,6
+1213,7,3,,16482,251792,Glorious Crusader's Keepsake,B,6
+1225,7,3,,5893,249807,The Eternal Egg,C,7
+1214,7,3,,17352,251790,Desecrated Chalice,B,7
+1215,7,3,,31233,246307,Darkmoon Dominion: Void,B,8
+1216,7,3,,31234,241340,Magister's Alchemist Stone,B,9
+1217,7,3,,12027,252418,Solar Core Igniter,B,10
+479,7,4,,12027,252418,Solar Core Igniter,B,0
+487,7,4,,2016,151312,Ampoule of Pure Void,C,0
+468,7,4,,29,249343,Gaze of the Alnseer,S,0
+472,7,4,,5893,249807,The Eternal Egg,A,0
+480,7,4,,5703,250245,Tumor of the Swarm,B,1
+473,7,4,,2059,249339,Gloom-Spattered Dreadscale,A,1
+488,7,4,,5733,250227,Kroluk's Warbanner,C,1
+469,7,4,,59,193701,Algeth'ar Puzzle Box,S,1
+489,7,4,,5727,250226,Latch's Crooked Hook,C,2
+474,7,4,,149,250144,Emberwing Feather,A,2
+470,7,4,,485,249806,Radiant Plume,S,2
+481,7,4,,5615,250243,Manaheart's Binding Flame,B,2
+490,7,4,,2017,151307,Void Stalker's Contract,C,3
+482,7,4,,5575,250242,Jelly Replicator,B,3
+475,7,4,,5789,249805,Undreamt God's Oozing Vestige,A,3
+471,7,4,,1349,260235,Umbral Plume,S,3
+483,7,4,,5581,250257,Eye of the Drowning Void,B,4
+476,7,4,,30,249344,Light Company Guidon,A,4
+484,7,4,,1335,250258,Vessel of Tortured Souls,B,5
+477,7,4,,15,252420,Solarflare Prism,A,5
+485,7,4,,5877,249345,Ranger-Captain's Iridescent Insignia,B,6
+478,7,4,,14,250256,Heart of Wind,A,6
+486,7,4,,9091,252421,Rotting Globule,B,7
+286,7,5,,29,249343,Gaze of the Alnseer,S,0
+288,7,5,,15,252420,Solarflare Prism,A,0
+301,7,5,,18400,251783,Lost Idol of the Hash'ey,C,0
+293,7,5,,1335,250258,Vessel of Tortured Souls,B,0
+311,7,5,,5575,250242,Jelly Replicator,D,0
+312,7,5,,5727,250226,Latch's Crooked Hook,D,1
+289,7,5,,1349,260235,Umbral Plume,A,1
+302,7,5,,149,250144,Emberwing Feather,C,1
+294,7,5,,14,250256,Heart of Wind,B,1
+287,7,5,,30,249344,Light Company Guidon,S,1
+313,7,5,,2017,151307,Void Stalker's Contract,D,2
+290,7,5,,2059,249339,Gloom-Spattered Dreadscale,A,2
+303,7,5,,5581,250257,Eye of the Drowning Void,C,2
+295,7,5,,30467,264694,Ultradon Cuirass,B,2
+304,7,5,,5893,249807,The Eternal Egg,C,3
+296,7,5,,9091,252421,Rotting Globule,B,3
+314,7,5,,17352,251790,Desecrated Chalice,D,3
+291,7,5,,16759,251782,Withered Saptor's Paw,A,3
+292,7,5,,16482,251792,Glorious Crusader's Keepsake,A,4
+297,7,5,,5877,249345,Ranger-Captain's Iridescent Insignia,B,4
+315,7,5,,17009,251787,Sealed Chaos Urn,D,4
+305,7,5,,16570,251785,Void-Reaper's Libram,C,4
+306,7,5,,485,249806,Radiant Plume,C,5
+298,7,5,,5789,249805,Undreamt God's Oozing Vestige,B,5
+307,7,5,,18474,251791,Holy Retributor's Order,C,6
+299,7,5,,59,193701,Algeth'ar Puzzle Box,B,6
+300,7,5,,12027,252418,Solar Core Igniter,B,7
+308,7,5,,2016,151312,Ampoule of Pure Void,C,7
+309,7,5,,5733,250227,Kroluk's Warbanner,C,8
+310,7,5,,17046,251784,Sylvan Wakrapuku,C,9
+22,7,6,,1349,260235,Umbral Plume,A,0
+27,7,6,,31208,246304,Darkmoon Dominion: Hunt,B,0
+35,7,6,,5658,250241,Mark of Light,C,0
+20,7,6,,29,249343,Gaze of the Alnseer,S,0
+36,7,6,,31226,246306,Darkmoon Dominion: Rot,C,1
+23,7,6,,2570,249342,Heart of Ancient Hunger,A,1
+21,7,6,,30,249344,Light Company Guidon,S,1
+28,7,6,,5789,249805,Undreamt God's Oozing Vestige,B,1
+37,7,6,,31224,246305,Darkmoon Dominion: Blood,C,2
+29,7,6,,59,193701,Algeth'ar Puzzle Box,B,2
+24,7,6,,485,249806,Radiant Plume,A,2
+30,7,6,,1335,250258,Vessel of Tortured Souls,B,3
+25,7,6,,15,252420,Solarflare Prism,A,3
+38,7,6,,31234,241340,Magister's Alchemist Stone,C,3
+26,7,6,,14,250256,Heart of Wind,A,4
+31,7,6,,5733,250227,Kroluk's Warbanner,B,4
+32,7,6,,5727,250226,Latch's Crooked Hook,B,5
+33,7,6,,14807,193719,Dragon Games Equipment,B,6
+34,7,6,,31233,246307,Darkmoon Dominion: Void,B,7
+2138,7,7,,31234,241340,Magister's Alchemist Stone,D,0
+2119,7,7,,299,264507,Crucible of Erratic Energies,S,0
+2127,7,7,,5650,250253,Whisper of the Duskwraith,B,0
+2133,7,7,,12106,252411,Radiant Sunstone,C,0
+2122,7,7,,5907,249811,Light of the Cosmic Crescendo,A,0
+2134,7,7,,16482,251792,Glorious Crusader's Keepsake,C,1
+2120,7,7,,29,249343,Gaze of the Alnseer,S,1
+2128,7,7,,14,250256,Heart of Wind,B,1
+2139,7,7,,20658,264701,Cosmic Bell,D,1
+2123,7,7,,1137,249808,Litany of Lightblind Wrath,A,1
+2135,7,7,,17214,251788,Gift of Light,C,2
+2129,7,7,,13408,151340,Echo of L'ura,B,2
+2124,7,7,,16769,248583,Drum of Renewed Bonds,A,2
+2121,7,7,,334,249809,Locus-Walker's Ribbon,S,2
+2136,7,7,,23109,251789,Consecrated Chalice,C,3
+2125,7,7,,165,249346,Vaelgor's Final Stare,A,3
+2130,7,7,,5562,250246,Refueling Orb,B,3
+2137,7,7,,9102,50259,Nevermelting Ice Crystal,C,4
+2126,7,7,,3782,193718,Emerald Coach's Whistle,A,4
+2131,7,7,,149,250144,Emberwing Feather,B,4
+2132,7,7,,5837,249341,Volatile Void Suffuser,B,5
+1625,7,8,,1335,250258,Vessel of Tortured Souls,D,0
+1622,7,8,,5562,250246,Refueling Orb,C,0
+1618,7,8,,3782,193718,Emerald Coach's Whistle,B,0
+1615,7,8,,14,250256,Heart of Wind,A,0
+1612,7,8,,165,249346,Vaelgor's Final Stare,S,0
+1613,7,8,,1137,249808,Litany of Lightblind Wrath,S,1
+1619,7,8,,16482,251792,Glorious Crusader's Keepsake,B,1
+1623,7,8,,31234,241340,Magister's Alchemist Stone,C,1
+1626,7,8,,20658,264701,Cosmic Bell,D,1
+1616,7,8,,5837,249341,Volatile Void Suffuser,A,1
+1620,7,8,,29,249343,Gaze of the Alnseer,B,2
+1614,7,8,,334,249809,Locus-Walker's Ribbon,S,2
+1617,7,8,,149,250144,Emberwing Feather,A,2
+1627,7,8,,17009,251787,Sealed Chaos Urn,D,2
+1624,7,8,,17214,251788,Gift of Light,C,2
+1628,7,8,,23109,251789,Consecrated Chalice,D,3
+1621,7,8,,5907,249811,Light of the Cosmic Crescendo,B,3
+1629,7,8,,16952,251786,Ever-Collapsing Void Fissure,D,4
+1671,7,9,,29,249343,Gaze of the Alnseer,B,0
+1679,7,9,,1335,250258,Vessel of Tortured Souls,D,0
+1678,7,9,,17214,251788,Gift of Light,C,0
+1666,7,9,,1137,249808,Litany of Lightblind Wrath,S,0
+1668,7,9,,3782,193718,Emerald Coach's Whistle,A,0
+1672,7,9,,5837,249341,Volatile Void Suffuser,B,1
+1680,7,9,,20658,264701,Cosmic Bell,D,1
+1669,7,9,,165,249346,Vaelgor's Final Stare,A,1
+1667,7,9,,334,249809,Locus-Walker's Ribbon,S,1
+1670,7,9,,14,250256,Heart of Wind,A,2
+1673,7,9,,149,250144,Emberwing Feather,B,2
+1681,7,9,,17009,251787,Sealed Chaos Urn,D,2
+1682,7,9,,23109,251789,Consecrated Chalice,D,3
+1674,7,9,,5907,249811,Light of the Cosmic Crescendo,B,3
+1675,7,9,,16482,251792,Glorious Crusader's Keepsake,B,4
+1683,7,9,,16952,251786,Ever-Collapsing Void Fissure,D,4
+1676,7,9,,5562,250246,Refueling Orb,B,5
+1677,7,9,,31234,241340,Magister's Alchemist Stone,B,6
+1420,7,10,,29,249343,Gaze of the Alnseer,S,0
+1431,7,10,,5650,250253,Whisper of the Duskwraith,C,0
+1428,7,10,,3782,193718,Emerald Coach's Whistle,B,0
+1436,7,10,,13408,151340,Echo of L'ura,D,0
+1423,7,10,,5907,249811,Light of the Cosmic Crescendo,A,0
+1429,7,10,,5750,250462,Forgotten Farstrider's Insignia,B,1
+1432,7,10,,12106,252411,Radiant Sunstone,C,1
+1437,7,10,,31234,241340,Magister's Alchemist Stone,D,1
+1424,7,10,,165,249346,Vaelgor's Final Stare,A,1
+1421,7,10,,334,249809,Locus-Walker's Ribbon,S,1
+1425,7,10,,299,264507,Crucible of Erratic Energies,A,2
+1430,7,10,,5837,249341,Volatile Void Suffuser,B,2
+1422,7,10,,1137,249808,Litany of Lightblind Wrath,S,2
+1433,7,10,,5562,250246,Refueling Orb,C,2
+1434,7,10,,1335,250258,Vessel of Tortured Souls,C,3
+1426,7,10,,14,250256,Heart of Wind,A,3
+1435,7,10,,9102,50259,Nevermelting Ice Crystal,C,4
+1427,7,10,,149,250144,Emberwing Feather,A,4
+1296,7,11,,5907,249811,Light of the Cosmic Crescendo,B,0
+1289,7,11,,1137,249808,Litany of Lightblind Wrath,S,0
+1291,7,11,,334,249809,Locus-Walker's Ribbon,A,0
+1313,7,11,,31234,241340,Magister's Alchemist Stone,F,0
+1304,7,11,,21177,241291,Primal Philosopher's Stone,D,0
+1300,7,11,,3782,193718,Emerald Coach's Whistle,C,0
+1292,7,11,,14,250256,Heart of Wind,A,1
+1290,7,11,,29,249343,Gaze of the Alnseer,S,1
+1301,7,11,,5650,250253,Whisper of the Duskwraith,C,1
+1297,7,11,,165,249346,Vaelgor's Final Stare,B,1
+1305,7,11,,12106,252411,Radiant Sunstone,D,1
+1302,7,11,,5562,250246,Refueling Orb,C,2
+1306,7,11,,9102,50259,Nevermelting Ice Crystal,D,2
+1293,7,11,,299,264507,Crucible of Erratic Energies,A,2
+1298,7,11,,16482,251792,Glorious Crusader's Keepsake,B,2
+1299,7,11,,16769,248583,Drum of Renewed Bonds,B,3
+1294,7,11,,5837,249341,Volatile Void Suffuser,A,3
+1303,7,11,,13408,151340,Echo of L'ura,C,3
+1307,7,11,,17214,251788,Gift of Light,D,3
+1308,7,11,,1335,250258,Vessel of Tortured Souls,D,4
+1295,7,11,,149,250144,Emberwing Feather,A,4
+1309,7,11,,23109,251789,Consecrated Chalice,D,5
+1310,7,11,,16952,251786,Ever-Collapsing Void Fissure,D,6
+1311,7,11,,30467,264694,Ultradon Cuirass,D,7
+1312,7,11,,20658,264701,Cosmic Bell,D,8
+738,7,12,,1335,250258,Vessel of Tortured Souls,D,0
+734,7,12,,5907,249811,Light of the Cosmic Crescendo,B,0
+728,7,12,,29,249343,Gaze of the Alnseer,A,0
+725,7,12,,334,249809,Locus-Walker's Ribbon,S,0
+737,7,12,,17214,251788,Gift of Light,C,0
+739,7,12,,20658,264701,Cosmic Bell,D,1
+735,7,12,,5837,249341,Volatile Void Suffuser,B,1
+729,7,12,,14,250256,Heart of Wind,A,1
+726,7,12,,165,249346,Vaelgor's Final Stare,S,1
+736,7,12,,5562,250246,Refueling Orb,B,2
+740,7,12,,17009,251787,Sealed Chaos Urn,D,2
+730,7,12,,149,250144,Emberwing Feather,A,2
+727,7,12,,1137,249808,Litany of Lightblind Wrath,S,2
+741,7,12,,23109,251789,Consecrated Chalice,D,3
+731,7,12,,16482,251792,Glorious Crusader's Keepsake,A,3
+742,7,12,,16952,251786,Ever-Collapsing Void Fissure,D,4
+732,7,12,,299,264507,Crucible of Erratic Energies,A,4
+743,7,12,,31234,241340,Magister's Alchemist Stone,D,5
+733,7,12,,3782,193718,Emerald Coach's Whistle,A,5
+543,7,13,,17214,251788,Gift of Light,C,0
+540,7,13,,5907,249811,Light of the Cosmic Crescendo,B,0
+535,7,13,,165,249346,Vaelgor's Final Stare,A,0
+532,7,13,,29,249343,Gaze of the Alnseer,S,0
+544,7,13,,1335,250258,Vessel of Tortured Souls,D,0
+545,7,13,,20658,264701,Cosmic Bell,D,1
+541,7,13,,5837,249341,Volatile Void Suffuser,B,1
+533,7,13,,334,249809,Locus-Walker's Ribbon,S,1
+536,7,13,,14,250256,Heart of Wind,A,1
+546,7,13,,17009,251787,Sealed Chaos Urn,D,2
+542,7,13,,5562,250246,Refueling Orb,B,2
+537,7,13,,149,250144,Emberwing Feather,A,2
+534,7,13,,1137,249808,Litany of Lightblind Wrath,S,2
+547,7,13,,23109,251789,Consecrated Chalice,D,3
+538,7,13,,16482,251792,Glorious Crusader's Keepsake,A,3
+539,7,13,,3782,193718,Emerald Coach's Whistle,A,4
+548,7,13,,16952,251786,Ever-Collapsing Void Fissure,D,4
+549,7,13,,31234,241340,Magister's Alchemist Stone,D,5
+2327,7,14,,1335,250258,Vessel of Tortured Souls,B,0
+2320,7,14,,29,249343,Gaze of the Alnseer,S,0
+2323,7,14,,1349,260235,Umbral Plume,A,0
+2331,7,14,,14807,193719,Dragon Games Equipment,C,0
+2332,7,14,,5658,250241,Mark of Light,C,1
+2321,7,14,,2570,249342,Heart of Ancient Hunger,S,1
+2324,7,14,,485,249806,Radiant Plume,A,1
+2328,7,14,,14,250256,Heart of Wind,B,1
+2325,7,14,,30,249344,Light Company Guidon,A,2
+2329,7,14,,5789,249805,Undreamt God's Oozing Vestige,B,2
+2333,7,14,,5733,250227,Kroluk's Warbanner,C,2
+2322,7,14,,59,193701,Algeth'ar Puzzle Box,S,2
+2326,7,14,,15,252420,Solarflare Prism,A,3
+2334,7,14,,2017,151307,Void Stalker's Contract,C,3
+2330,7,14,,5727,250226,Latch's Crooked Hook,B,3
+2372,7,15,,1335,250258,Vessel of Tortured Souls,B,0
+2376,7,15,,14807,193719,Dragon Games Equipment,C,0
+2368,7,15,,1349,260235,Umbral Plume,A,0
+2365,7,15,,29,249343,Gaze of the Alnseer,S,0
+2366,7,15,,2570,249342,Heart of Ancient Hunger,S,1
+2377,7,15,,5658,250241,Mark of Light,C,1
+2373,7,15,,14,250256,Heart of Wind,B,1
+2369,7,15,,485,249806,Radiant Plume,A,1
+2378,7,15,,5733,250227,Kroluk's Warbanner,C,2
+2374,7,15,,5789,249805,Undreamt God's Oozing Vestige,B,2
+2367,7,15,,59,193701,Algeth'ar Puzzle Box,S,2
+2370,7,15,,30,249344,Light Company Guidon,A,2
+2375,7,15,,5727,250226,Latch's Crooked Hook,B,3
+2371,7,15,,15,252420,Solarflare Prism,A,3
+2379,7,15,,2017,151307,Void Stalker's Contract,C,3
+2073,7,16,,17009,251787,Sealed Chaos Urn,F,0
+2056,7,16,,30,249344,Light Company Guidon,B,0
+2053,7,16,,149,250144,Emberwing Feather,A,0
+2050,7,16,,29,249343,Gaze of the Alnseer,S,0
+2067,7,16,,31233,246307,Darkmoon Dominion: Void,D,0
+2061,7,16,,5581,250257,Eye of the Drowning Void,C,0
+2051,7,16,,485,249806,Radiant Plume,S,1
+2068,7,16,,31234,241340,Magister's Alchemist Stone,D,1
+2062,7,16,,5727,250226,Latch's Crooked Hook,C,1
+2057,7,16,,1335,250258,Vessel of Tortured Souls,B,1
+2054,7,16,,15,252420,Solarflare Prism,A,1
+2063,7,16,,18400,251783,Lost Idol of the Hash'ey,C,2
+2069,7,16,,16570,251785,Void-Reaper's Libram,D,2
+2052,7,16,,59,193701,Algeth'ar Puzzle Box,S,2
+2055,7,16,,14,250256,Heart of Wind,A,2
+2058,7,16,,5877,249345,Ranger-Captain's Iridescent Insignia,B,2
+2059,7,16,,16482,251792,Glorious Crusader's Keepsake,B,3
+2070,7,16,,31226,246306,Darkmoon Dominion: Rot,D,3
+2064,7,16,,2017,151307,Void Stalker's Contract,C,3
+2060,7,16,,5789,249805,Undreamt God's Oozing Vestige,B,4
+2065,7,16,,31208,246304,Darkmoon Dominion: Hunt,C,4
+2071,7,16,,16759,251782,Withered Saptor's Paw,D,4
+2072,7,16,,17046,251784,Sylvan Wakrapuku,D,5
+2066,7,16,,31224,246305,Darkmoon Dominion: Blood,C,5
+1780,7,17,,485,249806,Radiant Plume,A,0
+1796,7,17,,5727,250226,Latch's Crooked Hook,D,0
+1792,7,17,,18474,251791,Holy Retributor's Order,C,0
+1788,7,17,,30,249344,Light Company Guidon,B,0
+1778,7,17,,29,249343,Gaze of the Alnseer,S,0
+1789,7,17,,14,250256,Heart of Wind,B,1
+1793,7,17,,31208,246304,Darkmoon Dominion: Hunt,C,1
+1797,7,17,,2017,151307,Void Stalker's Contract,D,1
+1779,7,17,,59,193701,Algeth'ar Puzzle Box,S,1
+1781,7,17,,1349,260235,Umbral Plume,A,1
+1782,7,17,,149,250144,Emberwing Feather,A,2
+1794,7,17,,16759,251782,Withered Saptor's Paw,C,2
+1798,7,17,,31233,246307,Darkmoon Dominion: Void,D,2
+1790,7,17,,18400,251783,Lost Idol of the Hash'ey,B,2
+1799,7,17,,31226,246306,Darkmoon Dominion: Rot,D,3
+1791,7,17,,5581,250257,Eye of the Drowning Void,B,3
+1783,7,17,,15,252420,Solarflare Prism,A,3
+1795,7,17,,16570,251785,Void-Reaper's Libram,C,3
+1800,7,17,,31224,246305,Darkmoon Dominion: Blood,D,4
+1784,7,17,,5733,250227,Kroluk's Warbanner,A,4
+1785,7,17,,5877,249345,Ranger-Captain's Iridescent Insignia,A,5
+1801,7,17,,5750,250462,Forgotten Farstrider's Insignia,D,5
+1802,7,17,,17046,251784,Sylvan Wakrapuku,D,6
+1786,7,17,,5789,249805,Undreamt God's Oozing Vestige,A,6
+1803,7,17,,16482,251792,Glorious Crusader's Keepsake,D,7
+1787,7,17,,299,264507,Crucible of Erratic Energies,A,7
+1804,7,17,,17009,251787,Sealed Chaos Urn,D,8
+1805,7,17,,1335,250258,Vessel of Tortured Souls,D,9
+1860,7,18,,485,249806,Radiant Plume,A,0
+1856,7,18,,29,249343,Gaze of the Alnseer,S,0
+1865,7,18,,5581,250257,Eye of the Drowning Void,B,0
+1867,7,18,,149,250144,Emberwing Feather,C,0
+1869,7,18,,1335,250258,Vessel of Tortured Souls,D,0
+1861,7,18,,14,250256,Heart of Wind,A,1
+1857,7,18,,1349,260235,Umbral Plume,S,1
+1870,7,18,,5789,249805,Undreamt God's Oozing Vestige,D,1
+1868,7,18,,59,193701,Algeth'ar Puzzle Box,C,1
+1866,7,18,,2017,151307,Void Stalker's Contract,B,1
+1871,7,18,,5750,250462,Forgotten Farstrider's Insignia,D,2
+1858,7,18,,5877,249345,Ranger-Captain's Iridescent Insignia,S,2
+1862,7,18,,5727,250226,Latch's Crooked Hook,A,2
+1863,7,18,,30,249344,Light Company Guidon,A,3
+1859,7,18,,15,252420,Solarflare Prism,S,3
+1872,7,18,,18400,251783,Lost Idol of the Hash'ey,D,3
+1873,7,18,,31234,241340,Magister's Alchemist Stone,D,4
+1864,7,18,,5733,250227,Kroluk's Warbanner,A,4
+1874,7,18,,31233,246307,Darkmoon Dominion: Void,D,5
+1875,7,18,,31226,246306,Darkmoon Dominion: Rot,D,6
+1876,7,18,,31208,246304,Darkmoon Dominion: Hunt,D,7
+1877,7,18,,31224,246305,Darkmoon Dominion: Blood,D,8
+1946,7,19,,31224,246305,Darkmoon Dominion: Blood,D,0
+1925,7,19,,30,249344,Light Company Guidon,S,0
+1927,7,19,,485,249806,Radiant Plume,A,0
+1940,7,19,,1335,250258,Vessel of Tortured Souls,C,0
+1932,7,19,,14,250256,Heart of Wind,B,0
+1933,7,19,,15,252420,Solarflare Prism,B,1
+1928,7,19,,1349,260235,Umbral Plume,A,1
+1926,7,19,,29,249343,Gaze of the Alnseer,S,1
+1941,7,19,,5581,250257,Eye of the Drowning Void,C,1
+1947,7,19,,31208,246304,Darkmoon Dominion: Hunt,D,1
+1948,7,19,,31226,246306,Darkmoon Dominion: Rot,D,2
+1942,7,19,,17009,251787,Sealed Chaos Urn,C,2
+1929,7,19,,59,193701,Algeth'ar Puzzle Box,A,2
+1934,7,19,,5733,250227,Kroluk's Warbanner,B,2
+1930,7,19,,149,250144,Emberwing Feather,A,3
+1949,7,19,,31233,246307,Darkmoon Dominion: Void,D,3
+1943,7,19,,18400,251783,Lost Idol of the Hash'ey,C,3
+1935,7,19,,16759,251782,Withered Saptor's Paw,B,3
+1931,7,19,,5877,249345,Ranger-Captain's Iridescent Insignia,A,4
+1936,7,19,,31234,241340,Magister's Alchemist Stone,B,4
+1944,7,19,,16570,251785,Void-Reaper's Libram,C,4
+1937,7,19,,5789,249805,Undreamt God's Oozing Vestige,B,5
+1945,7,19,,19853,252957,Tangle of Vibrant Vines,C,5
+1938,7,19,,5727,250226,Latch's Crooked Hook,B,6
+1939,7,19,,2017,151307,Void Stalker's Contract,B,7
+1567,7,20,,5658,250241,Mark of Light,D,0
+1551,7,20,,29,249343,Gaze of the Alnseer,A,0
+1559,7,20,,5789,249805,Undreamt God's Oozing Vestige,C,0
+1553,7,20,,30,249344,Light Company Guidon,B,0
+1548,7,20,,59,193701,Algeth'ar Puzzle Box,S,0
+1552,7,20,,2570,249342,Heart of Ancient Hunger,A,1
+1568,7,20,,2017,151307,Void Stalker's Contract,D,1
+1560,7,20,,1335,250258,Vessel of Tortured Souls,C,1
+1554,7,20,,15,252420,Solarflare Prism,B,1
+1549,7,20,,485,249806,Radiant Plume,S,1
+1561,7,20,,5727,250226,Latch's Crooked Hook,C,2
+1555,7,20,,14,250256,Heart of Wind,B,2
+1550,7,20,,1349,260235,Umbral Plume,S,2
+1569,7,20,,5750,250462,Forgotten Farstrider's Insignia,D,2
+1556,7,20,,5733,250227,Kroluk's Warbanner,B,3
+1570,7,20,,18400,251783,Lost Idol of the Hash'ey,D,3
+1562,7,20,,14807,193719,Dragon Games Equipment,C,3
+1557,7,20,,31224,246305,Darkmoon Dominion: Blood,B,4
+1563,7,20,,31226,246306,Darkmoon Dominion: Rot,C,4
+1558,7,20,,31208,246304,Darkmoon Dominion: Hunt,B,5
+1564,7,20,,31233,246307,Darkmoon Dominion: Void,C,5
+1565,7,20,,31234,241340,Magister's Alchemist Stone,C,6
+1566,7,20,,38879,255613,"",C,7
+1376,7,21,,1335,250258,Vessel of Tortured Souls,C,0
+1363,7,21,,149,250144,Emberwing Feather,A,0
+1360,7,21,,485,249806,Radiant Plume,S,0
+1378,7,21,,31233,246307,Darkmoon Dominion: Void,D,0
+1368,7,21,,5727,250226,Latch's Crooked Hook,B,0
+1364,7,21,,14,250256,Heart of Wind,A,1
+1379,7,21,,31234,241340,Magister's Alchemist Stone,D,1
+1369,7,21,,5733,250227,Kroluk's Warbanner,B,1
+1377,7,21,,31224,246305,Darkmoon Dominion: Blood,C,1
+1361,7,21,,29,249343,Gaze of the Alnseer,S,1
+1380,7,21,,18400,251783,Lost Idol of the Hash'ey,D,2
+1365,7,21,,5789,249805,Undreamt God's Oozing Vestige,A,2
+1362,7,21,,59,193701,Algeth'ar Puzzle Box,S,2
+1370,7,21,,5581,250257,Eye of the Drowning Void,B,2
+1366,7,21,,30,249344,Light Company Guidon,A,3
+1371,7,21,,31208,246304,Darkmoon Dominion: Hunt,B,3
+1372,7,21,,31226,246306,Darkmoon Dominion: Rot,B,4
+1367,7,21,,15,252420,Solarflare Prism,A,4
+1373,7,21,,5750,250462,Forgotten Farstrider's Insignia,B,5
+1374,7,21,,5877,249345,Ranger-Captain's Iridescent Insignia,B,6
+1375,7,21,,2017,151307,Void Stalker's Contract,B,7
+919,7,22,,5727,250226,Latch's Crooked Hook,D,0
+901,7,22,,59,193701,Algeth'ar Puzzle Box,S,0
+904,7,22,,29,249343,Gaze of the Alnseer,A,0
+910,7,22,,1335,250258,Vessel of Tortured Souls,B,0
+916,7,22,,30,249344,Light Company Guidon,C,0
+902,7,22,,485,249806,Radiant Plume,S,1
+920,7,22,,5581,250257,Eye of the Drowning Void,D,1
+911,7,22,,5733,250227,Kroluk's Warbanner,B,1
+905,7,22,,17009,251787,Sealed Chaos Urn,A,1
+917,7,22,,17046,251784,Sylvan Wakrapuku,C,1
+918,7,22,,18400,251783,Lost Idol of the Hash'ey,C,2
+906,7,22,,16759,251782,Withered Saptor's Paw,A,2
+912,7,22,,15,252420,Solarflare Prism,B,2
+903,7,22,,1349,260235,Umbral Plume,S,2
+921,7,22,,2017,151307,Void Stalker's Contract,D,2
+913,7,22,,149,250144,Emberwing Feather,B,3
+907,7,22,,14,250256,Heart of Wind,A,3
+914,7,22,,5750,250462,Forgotten Farstrider's Insignia,B,4
+908,7,22,,16482,251792,Glorious Crusader's Keepsake,A,4
+909,7,22,,5877,249345,Ranger-Captain's Iridescent Insignia,A,5
+915,7,22,,31208,246304,Darkmoon Dominion: Hunt,B,5
+415,7,23,,59,193701,Algeth'ar Puzzle Box,S,0
+424,7,23,,1335,250258,Vessel of Tortured Souls,C,0
+428,7,23,,2017,151307,Void Stalker's Contract,D,0
+421,7,23,,5733,250227,Kroluk's Warbanner,B,0
+418,7,23,,29,249343,Gaze of the Alnseer,A,0
+416,7,23,,485,249806,Radiant Plume,S,1
+419,7,23,,5877,249345,Ranger-Captain's Iridescent Insignia,A,1
+422,7,23,,5789,249805,Undreamt God's Oozing Vestige,B,1
+429,7,23,,2017,151307,Void Stalker's Contract,D,1
+425,7,23,,30,249344,Light Company Guidon,C,1
+420,7,23,,14,250256,Heart of Wind,A,2
+426,7,23,,5581,250257,Eye of the Drowning Void,C,2
+417,7,23,,1349,260235,Umbral Plume,S,2
+423,7,23,,149,250144,Emberwing Feather,B,2
+427,7,23,,5727,250226,Latch's Crooked Hook,C,3
+229,7,24,,5733,250227,Kroluk's Warbanner,C,0
+220,7,24,,59,193701,Algeth'ar Puzzle Box,S,0
+222,7,24,,1349,260235,Umbral Plume,A,0
+235,7,24,,30,249344,Light Company Guidon,D,0
+225,7,24,,2017,151307,Void Stalker's Contract,B,0
+236,7,24,,149,250144,Emberwing Feather,D,1
+223,7,24,,485,249806,Radiant Plume,A,1
+221,7,24,,29,249343,Gaze of the Alnseer,S,1
+226,7,24,,5581,250257,Eye of the Drowning Void,B,1
+230,7,24,,31208,246304,Darkmoon Dominion: Hunt,C,1
+227,7,24,,5727,250226,Latch's Crooked Hook,B,2
+224,7,24,,15,252420,Solarflare Prism,A,2
+237,7,24,,5750,250462,Forgotten Farstrider's Insignia,D,2
+231,7,24,,31224,246305,Darkmoon Dominion: Blood,C,2
+232,7,24,,31226,246306,Darkmoon Dominion: Rot,C,3
+228,7,24,,14,250256,Heart of Wind,B,3
+233,7,24,,31233,246307,Darkmoon Dominion: Void,C,4
+234,7,24,,31234,241340,Magister's Alchemist Stone,C,5
+76,7,25,,30,249344,Light Company Guidon,S,0
+81,7,25,,59,193701,Algeth'ar Puzzle Box,A,0
+83,7,25,,1335,250258,Vessel of Tortured Souls,B,0
+84,7,25,,31234,241340,Magister's Alchemist Stone,C,0
+77,7,25,,29,249343,Gaze of the Alnseer,S,1
+82,7,25,,15,252420,Solarflare Prism,A,1
+78,7,25,,485,249806,Radiant Plume,S,2
+79,7,25,,1349,260235,Umbral Plume,S,3
+80,7,25,,2570,249342,Heart of Ancient Hunger,S,4
+110,7,26,,21164,245829,Darkmoon Deck: Hunt,A,0
+124,7,26,,36453,245846,"",D,0
+121,7,26,,5658,250241,Mark of Light,C,0
+105,7,26,,30,249344,Light Company Guidon,S,0
+114,7,26,,36443,245855,"",B,0
+106,7,26,,29,249343,Gaze of the Alnseer,S,1
+115,7,26,,1335,250258,Vessel of Tortured Souls,B,1
+111,7,26,,15,252420,Solarflare Prism,A,1
+122,7,26,,2017,151307,Void Stalker's Contract,C,1
+107,7,26,,1349,260235,Umbral Plume,S,2
+123,7,26,,31234,241340,Magister's Alchemist Stone,C,2
+116,7,26,,14807,193719,Dragon Games Equipment,B,2
+112,7,26,,14,250256,Heart of Wind,A,2
+113,7,26,,59,193701,Algeth'ar Puzzle Box,A,3
+117,7,26,,5789,249805,Undreamt God's Oozing Vestige,B,3
+108,7,26,,485,249806,Radiant Plume,S,3
+118,7,26,,5733,250227,Kroluk's Warbanner,B,4
+109,7,26,,2570,249342,Heart of Ancient Hunger,S,4
+119,7,26,,5727,250226,Latch's Crooked Hook,B,5
+120,7,26,,36449,245750,"",B,6
+2179,7,27,,864,249810,Shadow of the Empyrean Requiem,A,0
+2182,7,27,,21164,245829,Darkmoon Deck: Hunt,B,0
+2187,7,27,,9102,50259,Nevermelting Ice Crystal,C,0
+2190,7,27,,5836,249340,Wraps of Cosmic Madness,D,0
+2177,7,27,,29,249343,Gaze of the Alnseer,S,0
+2180,7,27,,165,249346,Vaelgor's Final Stare,A,1
+2178,7,27,,149,250144,Emberwing Feather,S,1
+2183,7,27,,36443,245855,"",B,1
+2188,7,27,,13390,151310,Reality Breacher,C,1
+2191,7,27,,333,250223,Soulcatcher's Charm,D,1
+2189,7,27,,5581,250257,Eye of the Drowning Void,C,2
+2184,7,27,,36449,245750,"",B,2
+2192,7,27,,334,249809,Locus-Walker's Ribbon,D,2
+2181,7,27,,14,250256,Heart of Wind,A,2
+2185,7,27,,36453,245846,"",B,3
+2186,7,27,,1335,250258,Vessel of Tortured Souls,B,4
+2212,7,28,,29,249343,Gaze of the Alnseer,A,0
+2215,7,28,,1335,250258,Vessel of Tortured Souls,B,0
+2209,7,28,,149,250144,Emberwing Feather,S,0
+2224,7,28,,9102,50259,Nevermelting Ice Crystal,D,0
+2219,7,28,,5581,250257,Eye of the Drowning Void,C,0
+2213,7,28,,864,249810,Shadow of the Empyrean Requiem,A,1
+2210,7,28,,334,249809,Locus-Walker's Ribbon,S,1
+2216,7,28,,333,250223,Soulcatcher's Charm,B,1
+2220,7,28,,21164,245829,Darkmoon Deck: Hunt,C,1
+2217,7,28,,13390,151310,Reality Breacher,B,2
+2221,7,28,,36443,245855,"",C,2
+2214,7,28,,14,250256,Heart of Wind,A,2
+2211,7,28,,165,249346,Vaelgor's Final Stare,S,2
+2222,7,28,,36449,245750,"",C,3
+2218,7,28,,5836,249340,Wraps of Cosmic Madness,B,3
+2223,7,28,,36453,245846,"",C,4
+2288,7,29,,5836,249340,Wraps of Cosmic Madness,D,0
+2283,7,29,,36449,245750,"",C,0
+2275,7,29,,334,249809,Locus-Walker's Ribbon,A,0
+2273,7,29,,29,249343,Gaze of the Alnseer,S,0
+2278,7,29,,1335,250258,Vessel of Tortured Souls,B,0
+2274,7,29,,165,249346,Vaelgor's Final Stare,S,1
+2284,7,29,,36453,245846,"",C,1
+2279,7,29,,21164,245829,Darkmoon Deck: Hunt,B,1
+2276,7,29,,864,249810,Shadow of the Empyrean Requiem,A,1
+2285,7,29,,9102,50259,Nevermelting Ice Crystal,C,2
+2277,7,29,,333,250223,Soulcatcher's Charm,A,2
+2280,7,29,,149,250144,Emberwing Feather,B,2
+2286,7,29,,13390,151310,Reality Breacher,C,3
+2281,7,29,,14,250256,Heart of Wind,B,3
+2287,7,29,,5581,250257,Eye of the Drowning Void,C,4
+2282,7,29,,36443,245855,"",B,4
+1996,7,30,,1335,250258,Vessel of Tortured Souls,A,0
+1992,7,30,,29,249343,Gaze of the Alnseer,S,0
+2004,7,30,,333,250223,Soulcatcher's Charm,D,0
+1998,7,30,,21164,245829,Darkmoon Deck: Hunt,B,0
+1999,7,30,,864,249810,Shadow of the Empyrean Requiem,C,0
+2000,7,30,,5581,250257,Eye of the Drowning Void,C,1
+2005,7,30,,13390,151310,Reality Breacher,D,1
+1997,7,30,,14,250256,Heart of Wind,A,1
+1993,7,30,,149,250144,Emberwing Feather,S,1
+2001,7,30,,36443,245855,"",C,2
+2006,7,30,,5836,249340,Wraps of Cosmic Madness,D,2
+1994,7,30,,165,249346,Vaelgor's Final Stare,S,2
+1995,7,30,,334,249809,Locus-Walker's Ribbon,S,3
+2002,7,30,,36449,245750,"",C,3
+2007,7,30,,9102,50259,Nevermelting Ice Crystal,D,3
+2008,7,30,,5750,250462,Forgotten Farstrider's Insignia,D,4
+2003,7,30,,36453,245846,"",C,4
+1720,7,31,,334,249809,Locus-Walker's Ribbon,A,0
+1732,7,31,,5836,249340,Wraps of Cosmic Madness,D,0
+1729,7,31,,9102,50259,Nevermelting Ice Crystal,C,0
+1724,7,31,,864,249810,Shadow of the Empyrean Requiem,B,0
+1718,7,31,,29,249343,Gaze of the Alnseer,S,0
+1725,7,31,,21164,245829,Darkmoon Deck: Hunt,B,1
+1721,7,31,,149,250144,Emberwing Feather,A,1
+1719,7,31,,165,249346,Vaelgor's Final Stare,S,1
+1730,7,31,,13390,151310,Reality Breacher,C,1
+1733,7,31,,1335,250258,Vessel of Tortured Souls,D,1
+1726,7,31,,36443,245855,"",B,2
+1722,7,31,,14,250256,Heart of Wind,A,2
+1731,7,31,,5581,250257,Eye of the Drowning Void,C,2
+1723,7,31,,333,250223,Soulcatcher's Charm,A,3
+1727,7,31,,36449,245750,"",B,3
+1728,7,31,,36453,245846,"",B,4
+970,7,32,,165,249346,Vaelgor's Final Stare,S,0
+992,7,32,,31224,246305,Darkmoon Dominion: Blood,F,0
+987,7,32,,16570,251785,Void-Reaper's Libram,D,0
+983,7,32,,16952,251786,Ever-Collapsing Void Fissure,C,0
+977,7,32,,5581,250257,Eye of the Drowning Void,B,0
+972,7,32,,149,250144,Emberwing Feather,A,0
+993,7,32,,31234,241340,Magister's Alchemist Stone,F,1
+973,7,32,,864,249810,Shadow of the Empyrean Requiem,A,1
+978,7,32,,38879,255613,"",B,1
+984,7,32,,16566,264878,Astalor's Anguish Agitator,C,1
+988,7,32,,17046,251784,Sylvan Wakrapuku,D,1
+971,7,32,,29,249343,Gaze of the Alnseer,S,1
+974,7,32,,1335,250258,Vessel of Tortured Souls,A,2
+985,7,32,,16482,251792,Glorious Crusader's Keepsake,C,2
+989,7,32,,19853,252957,Tangle of Vibrant Vines,D,2
+979,7,32,,38880,255614,"",B,2
+994,7,32,,31208,246304,Darkmoon Dominion: Hunt,F,2
+980,7,32,,333,250223,Soulcatcher's Charm,B,3
+990,7,32,,334,249809,Locus-Walker's Ribbon,D,3
+986,7,32,,13390,151310,Reality Breacher,C,3
+975,7,32,,5836,249340,Wraps of Cosmic Madness,A,3
+995,7,32,,31233,246307,Darkmoon Dominion: Void,F,3
+981,7,32,,9102,50259,Nevermelting Ice Crystal,B,4
+976,7,32,,14,250256,Heart of Wind,A,4
+991,7,32,,17009,251787,Sealed Chaos Urn,D,4
+996,7,32,,31226,246306,Darkmoon Dominion: Rot,F,4
+982,7,32,,16769,248583,Drum of Renewed Bonds,B,5
+1067,7,33,,17009,251787,Sealed Chaos Urn,D,0
+1048,7,33,,149,250144,Emberwing Feather,S,0
+1052,7,33,,333,250223,Soulcatcher's Charm,A,0
+1061,7,33,,5750,250462,Forgotten Farstrider's Insignia,C,0
+1056,7,33,,18400,251783,Lost Idol of the Hash'ey,B,0
+1062,7,33,,31233,246307,Darkmoon Dominion: Void,C,1
+1053,7,33,,864,249810,Shadow of the Empyrean Requiem,A,1
+1057,7,33,,31208,246304,Darkmoon Dominion: Hunt,B,1
+1068,7,33,,13390,151310,Reality Breacher,D,1
+1049,7,33,,334,249809,Locus-Walker's Ribbon,S,1
+1058,7,33,,16482,251792,Glorious Crusader's Keepsake,B,2
+1050,7,33,,165,249346,Vaelgor's Final Stare,S,2
+1063,7,33,,31234,241340,Magister's Alchemist Stone,C,2
+1054,7,33,,14,250256,Heart of Wind,A,2
+1069,7,33,,9102,50259,Nevermelting Ice Crystal,D,2
+1059,7,33,,5836,249340,Wraps of Cosmic Madness,B,3
+1051,7,33,,29,249343,Gaze of the Alnseer,S,3
+1055,7,33,,1335,250258,Vessel of Tortured Souls,A,3
+1064,7,33,,16566,264878,Astalor's Anguish Agitator,C,3
+1070,7,33,,5581,250257,Eye of the Drowning Void,D,3
+1071,7,33,,17046,251784,Sylvan Wakrapuku,D,4
+1065,7,33,,16952,251786,Ever-Collapsing Void Fissure,C,4
+1060,7,33,,17009,251787,Sealed Chaos Urn,B,4
+1066,7,33,,16570,251785,Void-Reaper's Libram,C,5
+1127,7,34,,864,249810,Shadow of the Empyrean Requiem,B,0
+1118,7,34,,29,249343,Gaze of the Alnseer,S,0
+1120,7,34,,334,249809,Locus-Walker's Ribbon,A,0
+1136,7,34,,16952,251786,Ever-Collapsing Void Fissure,C,0
+1137,7,34,,9102,50259,Nevermelting Ice Crystal,D,0
+1138,7,34,,17009,251787,Sealed Chaos Urn,D,1
+1128,7,34,,31224,246305,Darkmoon Dominion: Blood,B,1
+1121,7,34,,333,250223,Soulcatcher's Charm,A,1
+1119,7,34,,165,249346,Vaelgor's Final Stare,S,1
+1139,7,34,,19853,252957,Tangle of Vibrant Vines,D,2
+1122,7,34,,149,250144,Emberwing Feather,A,2
+1129,7,34,,1335,250258,Vessel of Tortured Souls,B,2
+1123,7,34,,31208,246304,Darkmoon Dominion: Hunt,A,3
+1130,7,34,,14,250256,Heart of Wind,B,3
+1124,7,34,,16769,248583,Drum of Renewed Bonds,A,4
+1131,7,34,,31233,246307,Darkmoon Dominion: Void,B,4
+1132,7,34,,31234,241340,Magister's Alchemist Stone,B,5
+1125,7,34,,16482,251792,Glorious Crusader's Keepsake,A,5
+1126,7,34,,16566,264878,Astalor's Anguish Agitator,A,6
+1133,7,34,,31226,246306,Darkmoon Dominion: Rot,B,6
+1134,7,34,,16570,251785,Void-Reaper's Libram,B,7
+1135,7,34,,17046,251784,Sylvan Wakrapuku,B,8
+790,7,35,,1349,260235,Umbral Plume,A,0
+806,7,35,,31224,246305,Darkmoon Dominion: Blood,C,0
+788,7,35,,59,193701,Algeth'ar Puzzle Box,S,0
+796,7,35,,1335,250258,Vessel of Tortured Souls,B,0
+811,7,35,,5750,250462,Forgotten Farstrider's Insignia,D,0
+789,7,35,,485,249806,Radiant Plume,S,1
+812,7,35,,17009,251787,Sealed Chaos Urn,D,1
+807,7,35,,31208,246304,Darkmoon Dominion: Hunt,C,1
+797,7,35,,5581,250257,Eye of the Drowning Void,B,1
+791,7,35,,29,249343,Gaze of the Alnseer,A,1
+792,7,35,,149,250144,Emberwing Feather,A,2
+808,7,35,,31226,246306,Darkmoon Dominion: Rot,C,2
+798,7,35,,2017,151307,Void Stalker's Contract,B,2
+809,7,35,,31233,246307,Darkmoon Dominion: Void,C,3
+793,7,35,,15,252420,Solarflare Prism,A,3
+799,7,35,,14,250256,Heart of Wind,B,3
+810,7,35,,31234,241340,Magister's Alchemist Stone,C,4
+800,7,35,,5789,249805,Undreamt God's Oozing Vestige,B,4
+794,7,35,,5877,249345,Ranger-Captain's Iridescent Insignia,A,4
+801,7,35,,30,249344,Light Company Guidon,B,5
+795,7,35,,16482,251792,Glorious Crusader's Keepsake,A,5
+802,7,35,,16759,251782,Withered Saptor's Paw,B,6
+803,7,35,,18400,251783,Lost Idol of the Hash'ey,B,7
+804,7,35,,16570,251785,Void-Reaper's Libram,B,8
+805,7,35,,17046,251784,Sylvan Wakrapuku,B,9
+861,7,36,,14,250256,Heart of Wind,C,0
+864,7,36,,5727,250226,Latch's Crooked Hook,D,0
+852,7,36,,59,193701,Algeth'ar Puzzle Box,S,0
+855,7,36,,149,250144,Emberwing Feather,A,0
+858,7,36,,5877,249345,Ranger-Captain's Iridescent Insignia,B,0
+859,7,36,,15,252420,Solarflare Prism,B,1
+853,7,36,,1349,260235,Umbral Plume,S,1
+865,7,36,,5789,249805,Undreamt God's Oozing Vestige,D,1
+856,7,36,,29,249343,Gaze of the Alnseer,A,1
+862,7,36,,2017,151307,Void Stalker's Contract,C,1
+857,7,36,,30,249344,Light Company Guidon,A,2
+863,7,36,,5581,250257,Eye of the Drowning Void,C,2
+854,7,36,,485,249806,Radiant Plume,S,2
+860,7,36,,1335,250258,Vessel of Tortured Souls,B,2
+674,7,37,,31208,246304,Darkmoon Dominion: Hunt,C,0
+680,7,37,,17009,251787,Sealed Chaos Urn,D,0
+670,7,37,,18400,251783,Lost Idol of the Hash'ey,B,0
+665,7,37,,1335,250258,Vessel of Tortured Souls,A,0
+662,7,37,,334,249809,Locus-Walker's Ribbon,S,0
+681,7,37,,17046,251784,Sylvan Wakrapuku,D,1
+675,7,37,,31233,246307,Darkmoon Dominion: Void,C,1
+671,7,37,,5581,250257,Eye of the Drowning Void,B,1
+666,7,37,,29,249343,Gaze of the Alnseer,A,1
+663,7,37,,165,249346,Vaelgor's Final Stare,S,1
+682,7,37,,13390,151310,Reality Breacher,D,2
+672,7,37,,16482,251792,Glorious Crusader's Keepsake,B,2
+676,7,37,,31234,241340,Magister's Alchemist Stone,C,2
+667,7,37,,864,249810,Shadow of the Empyrean Requiem,A,2
+664,7,37,,333,250223,Soulcatcher's Charm,S,2
+677,7,37,,16570,251785,Void-Reaper's Libram,C,3
+683,7,37,,9102,50259,Nevermelting Ice Crystal,D,3
+673,7,37,,5836,249340,Wraps of Cosmic Madness,B,3
+668,7,37,,149,250144,Emberwing Feather,A,3
+669,7,37,,14,250256,Heart of Wind,A,4
+678,7,37,,16566,264878,Astalor's Anguish Agitator,C,4
+679,7,37,,16952,251786,Ever-Collapsing Void Fissure,C,5
+625,7,38,,5581,250257,Eye of the Drowning Void,B,0
+616,7,38,,864,249810,Shadow of the Empyrean Requiem,S,0
+635,7,38,,9102,50259,Nevermelting Ice Crystal,D,0
+620,7,38,,14,250256,Heart of Wind,A,0
+628,7,38,,29,249343,Gaze of the Alnseer,C,0
+629,7,38,,1335,250258,Vessel of Tortured Souls,C,1
+626,7,38,,16769,248583,Drum of Renewed Bonds,B,1
+621,7,38,,5836,249340,Wraps of Cosmic Madness,A,1
+636,7,38,,16952,251786,Ever-Collapsing Void Fissure,D,1
+617,7,38,,333,250223,Soulcatcher's Charm,S,1
+630,7,38,,13390,151310,Reality Breacher,C,2
+637,7,38,,36443,245855,"",D,2
+627,7,38,,16570,251785,Void-Reaper's Libram,B,2
+622,7,38,,299,264507,Crucible of Erratic Energies,A,2
+618,7,38,,334,249809,Locus-Walker's Ribbon,S,2
+619,7,38,,165,249346,Vaelgor's Final Stare,S,3
+623,7,38,,149,250144,Emberwing Feather,A,3
+638,7,38,,36453,245846,"",D,3
+631,7,38,,17046,251784,Sylvan Wakrapuku,C,3
+632,7,38,,16482,251792,Glorious Crusader's Keepsake,C,4
+639,7,38,,36449,245750,"",D,4
+624,7,38,,3782,193718,Emerald Coach's Whistle,A,4
+633,7,38,,16566,264878,Astalor's Anguish Agitator,C,5
+634,7,38,,21164,245829,Darkmoon Deck: Hunt,C,6
+372,7,39,,5581,250257,Eye of the Drowning Void,C,0
+364,7,39,,165,249346,Vaelgor's Final Stare,S,0
+368,7,39,,864,249810,Shadow of the Empyrean Requiem,B,0
+366,7,39,,29,249343,Gaze of the Alnseer,A,0
+377,7,39,,1335,250258,Vessel of Tortured Souls,D,0
+378,7,39,,13390,151310,Reality Breacher,D,1
+373,7,39,,14,250256,Heart of Wind,C,1
+369,7,39,,149,250144,Emberwing Feather,B,1
+367,7,39,,333,250223,Soulcatcher's Charm,A,1
+365,7,39,,334,249809,Locus-Walker's Ribbon,S,1
+370,7,39,,3782,193718,Emerald Coach's Whistle,B,2
+379,7,39,,17009,251787,Sealed Chaos Urn,D,2
+374,7,39,,16482,251792,Glorious Crusader's Keepsake,C,2
+375,7,39,,16570,251785,Void-Reaper's Libram,C,3
+371,7,39,,5836,249340,Wraps of Cosmic Madness,B,3
+380,7,39,,17046,251784,Sylvan Wakrapuku,D,3
+376,7,39,,16952,251786,Ever-Collapsing Void Fissure,C,4
+381,7,39,,18400,251783,Lost Idol of the Hash'ey,D,4
+185,7,41,,149,250144,Emberwing Feather,A,0
+188,7,41,,864,249810,Shadow of the Empyrean Requiem,B,0
+190,7,41,,9102,50259,Nevermelting Ice Crystal,C,0
+183,7,41,,29,249343,Gaze of the Alnseer,S,0
+197,7,41,,333,250223,Soulcatcher's Charm,D,0
+198,7,41,,5750,250462,Forgotten Farstrider's Insignia,D,1
+184,7,41,,165,249346,Vaelgor's Final Stare,S,1
+186,7,41,,14,250256,Heart of Wind,A,1
+189,7,41,,1335,250258,Vessel of Tortured Souls,B,1
+191,7,41,,5581,250257,Eye of the Drowning Void,C,1
+199,7,41,,31224,246305,Darkmoon Dominion: Blood,D,2
+187,7,41,,334,249809,Locus-Walker's Ribbon,A,2
+192,7,41,,1137,249808,Litany of Lightblind Wrath,C,2
+193,7,41,,13390,151310,Reality Breacher,C,3
+200,7,41,,31226,246306,Darkmoon Dominion: Rot,D,3
+194,7,41,,31208,246304,Darkmoon Dominion: Hunt,C,4
+201,7,41,,31233,246307,Darkmoon Dominion: Void,D,4
+195,7,41,,31234,241340,Magister's Alchemist Stone,C,5
+196,7,41,,5836,249340,Wraps of Cosmic Madness,C,6
+2395,8,1,,29,249343,Gaze of the Alnseer,S,0
+2404,8,1,,1335,250258,Vessel of Tortured Souls,B,0
+2412,8,1,,5727,250226,Latch's Crooked Hook,C,0
+2398,8,1,,5789,249805,Undreamt God's Oozing Vestige,A,0
+2396,8,1,,2570,249342,Heart of Ancient Hunger,S,1
+2399,8,1,,485,249806,Radiant Plume,A,1
+2405,8,1,,5658,250241,Mark of Light,B,1
+2413,8,1,,14807,193719,Dragon Games Equipment,C,1
+2400,8,1,,1349,260235,Umbral Plume,A,2
+2397,8,1,,30,249344,Light Company Guidon,S,2
+2406,8,1,,5733,250227,Kroluk's Warbanner,B,2
+2414,8,1,,2017,151307,Void Stalker's Contract,C,2
+2415,8,1,,5703,250245,Tumor of the Swarm,C,3
+2401,8,1,,14,250256,Heart of Wind,A,3
+2407,8,1,,15,252420,Solarflare Prism,B,3
+2416,8,1,,2016,151312,Ampoule of Pure Void,C,4
+2408,8,1,,2059,249339,Gloom-Spattered Dreadscale,B,4
+2402,8,1,,59,193701,Algeth'ar Puzzle Box,A,4
+2417,8,1,,5615,250243,Manaheart's Binding Flame,C,5
+2403,8,1,,5893,249807,The Eternal Egg,A,5
+2409,8,1,,5575,250242,Jelly Replicator,B,5
+2410,8,1,,9091,252421,Rotting Globule,B,6
+2411,8,1,,12027,252418,Solar Core Igniter,B,7
+1465,8,2,,1335,250258,Vessel of Tortured Souls,B,0
+1459,8,2,,5789,249805,Undreamt God's Oozing Vestige,A,0
+1473,8,2,,5727,250226,Latch's Crooked Hook,C,0
+1456,8,2,,29,249343,Gaze of the Alnseer,S,0
+1466,8,2,,5658,250241,Mark of Light,B,1
+1457,8,2,,2570,249342,Heart of Ancient Hunger,S,1
+1460,8,2,,485,249806,Radiant Plume,A,1
+1474,8,2,,14807,193719,Dragon Games Equipment,C,1
+1458,8,2,,30,249344,Light Company Guidon,S,2
+1467,8,2,,5733,250227,Kroluk's Warbanner,B,2
+1475,8,2,,2017,151307,Void Stalker's Contract,C,2
+1461,8,2,,1349,260235,Umbral Plume,A,2
+1462,8,2,,14,250256,Heart of Wind,A,3
+1476,8,2,,5703,250245,Tumor of the Swarm,C,3
+1468,8,2,,15,252420,Solarflare Prism,B,3
+1477,8,2,,2016,151312,Ampoule of Pure Void,C,4
+1469,8,2,,2059,249339,Gloom-Spattered Dreadscale,B,4
+1463,8,2,,59,193701,Algeth'ar Puzzle Box,A,4
+1464,8,2,,5893,249807,The Eternal Egg,A,5
+1478,8,2,,5615,250243,Manaheart's Binding Flame,C,5
+1470,8,2,,5575,250242,Jelly Replicator,B,5
+1471,8,2,,9091,252421,Rotting Globule,B,6
+1472,8,2,,12027,252418,Solar Core Igniter,B,7
+1192,8,3,,5575,250242,Jelly Replicator,D,0
+1184,8,3,,18400,251783,Lost Idol of the Hash'ey,C,0
+1173,8,3,,17046,251784,Sylvan Wakrapuku,B,0
+1166,8,3,,2017,151307,Void Stalker's Contract,A,0
+1162,8,3,,485,249806,Radiant Plume,S,0
+1193,8,3,,14,250256,Heart of Wind,D,1
+1185,8,3,,31226,246306,Darkmoon Dominion: Rot,C,1
+1167,8,3,,2059,249339,Gloom-Spattered Dreadscale,A,1
+1174,8,3,,5733,250227,Kroluk's Warbanner,B,1
+1163,8,3,,1349,260235,Umbral Plume,S,1
+1186,8,3,,18474,251791,Holy Retributor's Order,C,2
+1168,8,3,,5727,250226,Latch's Crooked Hook,A,2
+1175,8,3,,16570,251785,Void-Reaper's Libram,B,2
+1164,8,3,,29,249343,Gaze of the Alnseer,S,2
+1194,8,3,,17009,251787,Sealed Chaos Urn,D,2
+1169,8,3,,15,252420,Solarflare Prism,A,3
+1165,8,3,,5877,249345,Ranger-Captain's Iridescent Insignia,S,3
+1195,8,3,,31224,246305,Darkmoon Dominion: Blood,D,3
+1187,8,3,,30,249344,Light Company Guidon,C,3
+1176,8,3,,1335,250258,Vessel of Tortured Souls,B,3
+1177,8,3,,5581,250257,Eye of the Drowning Void,B,4
+1188,8,3,,30467,264694,Ultradon Cuirass,C,4
+1170,8,3,,5789,249805,Undreamt God's Oozing Vestige,A,4
+1171,8,3,,2016,151312,Ampoule of Pure Void,A,5
+1189,8,3,,149,250144,Emberwing Feather,C,5
+1178,8,3,,59,193701,Algeth'ar Puzzle Box,B,5
+1179,8,3,,16482,251792,Glorious Crusader's Keepsake,B,6
+1190,8,3,,31208,246304,Darkmoon Dominion: Hunt,C,6
+1172,8,3,,9091,252421,Rotting Globule,A,6
+1180,8,3,,17352,251790,Desecrated Chalice,B,7
+1191,8,3,,5893,249807,The Eternal Egg,C,7
+1181,8,3,,31233,246307,Darkmoon Dominion: Void,B,8
+1182,8,3,,31234,241340,Magister's Alchemist Stone,B,9
+1183,8,3,,12027,252418,Solar Core Igniter,B,10
+449,8,4,,5893,249807,The Eternal Egg,A,0
+445,8,4,,29,249343,Gaze of the Alnseer,S,0
+456,8,4,,12027,252418,Solar Core Igniter,B,0
+464,8,4,,2016,151312,Ampoule of Pure Void,C,0
+457,8,4,,5703,250245,Tumor of the Swarm,B,1
+446,8,4,,59,193701,Algeth'ar Puzzle Box,S,1
+465,8,4,,5733,250227,Kroluk's Warbanner,C,1
+450,8,4,,2059,249339,Gloom-Spattered Dreadscale,A,1
+451,8,4,,149,250144,Emberwing Feather,A,2
+458,8,4,,5615,250243,Manaheart's Binding Flame,B,2
+447,8,4,,485,249806,Radiant Plume,S,2
+466,8,4,,5727,250226,Latch's Crooked Hook,C,2
+467,8,4,,2017,151307,Void Stalker's Contract,C,3
+459,8,4,,5575,250242,Jelly Replicator,B,3
+452,8,4,,5789,249805,Undreamt God's Oozing Vestige,A,3
+448,8,4,,1349,260235,Umbral Plume,S,3
+460,8,4,,5581,250257,Eye of the Drowning Void,B,4
+453,8,4,,30,249344,Light Company Guidon,A,4
+454,8,4,,15,252420,Solarflare Prism,A,5
+461,8,4,,1335,250258,Vessel of Tortured Souls,B,5
+455,8,4,,14,250256,Heart of Wind,A,6
+462,8,4,,5877,249345,Ranger-Captain's Iridescent Insignia,B,6
+463,8,4,,9091,252421,Rotting Globule,B,7
+256,8,5,,29,249343,Gaze of the Alnseer,S,0
+281,8,5,,5575,250242,Jelly Replicator,D,0
+271,8,5,,18400,251783,Lost Idol of the Hash'ey,C,0
+258,8,5,,15,252420,Solarflare Prism,A,0
+263,8,5,,1335,250258,Vessel of Tortured Souls,B,0
+257,8,5,,30,249344,Light Company Guidon,S,1
+259,8,5,,1349,260235,Umbral Plume,A,1
+272,8,5,,149,250144,Emberwing Feather,C,1
+282,8,5,,5727,250226,Latch's Crooked Hook,D,1
+264,8,5,,14,250256,Heart of Wind,B,1
+273,8,5,,5581,250257,Eye of the Drowning Void,C,2
+283,8,5,,2017,151307,Void Stalker's Contract,D,2
+260,8,5,,2059,249339,Gloom-Spattered Dreadscale,A,2
+265,8,5,,30467,264694,Ultradon Cuirass,B,2
+266,8,5,,9091,252421,Rotting Globule,B,3
+284,8,5,,17352,251790,Desecrated Chalice,D,3
+261,8,5,,16759,251782,Withered Saptor's Paw,A,3
+274,8,5,,5893,249807,The Eternal Egg,C,3
+267,8,5,,5877,249345,Ranger-Captain's Iridescent Insignia,B,4
+275,8,5,,16570,251785,Void-Reaper's Libram,C,4
+285,8,5,,17009,251787,Sealed Chaos Urn,D,4
+262,8,5,,16482,251792,Glorious Crusader's Keepsake,A,4
+268,8,5,,5789,249805,Undreamt God's Oozing Vestige,B,5
+276,8,5,,485,249806,Radiant Plume,C,5
+269,8,5,,59,193701,Algeth'ar Puzzle Box,B,6
+277,8,5,,18474,251791,Holy Retributor's Order,C,6
+278,8,5,,2016,151312,Ampoule of Pure Void,C,7
+270,8,5,,12027,252418,Solar Core Igniter,B,7
+279,8,5,,5733,250227,Kroluk's Warbanner,C,8
+280,8,5,,17046,251784,Sylvan Wakrapuku,C,9
+1,8,6,,29,249343,Gaze of the Alnseer,S,0
+8,8,6,,31208,246304,Darkmoon Dominion: Hunt,B,0
+3,8,6,,1349,260235,Umbral Plume,A,0
+16,8,6,,5658,250241,Mark of Light,C,0
+2,8,6,,30,249344,Light Company Guidon,S,1
+9,8,6,,5789,249805,Undreamt God's Oozing Vestige,B,1
+4,8,6,,2570,249342,Heart of Ancient Hunger,A,1
+17,8,6,,31226,246306,Darkmoon Dominion: Rot,C,1
+10,8,6,,59,193701,Algeth'ar Puzzle Box,B,2
+18,8,6,,31224,246305,Darkmoon Dominion: Blood,C,2
+5,8,6,,485,249806,Radiant Plume,A,2
+19,8,6,,31234,241340,Magister's Alchemist Stone,C,3
+6,8,6,,15,252420,Solarflare Prism,A,3
+11,8,6,,1335,250258,Vessel of Tortured Souls,B,3
+12,8,6,,5733,250227,Kroluk's Warbanner,B,4
+7,8,6,,14,250256,Heart of Wind,A,4
+13,8,6,,5727,250226,Latch's Crooked Hook,B,5
+14,8,6,,14807,193719,Dragon Games Equipment,B,6
+15,8,6,,31233,246307,Darkmoon Dominion: Void,B,7
+2112,8,7,,12106,252411,Radiant Sunstone,C,0
+2106,8,7,,5650,250253,Whisper of the Duskwraith,B,0
+2117,8,7,,31234,241340,Magister's Alchemist Stone,D,0
+2098,8,7,,299,264507,Crucible of Erratic Energies,S,0
+2101,8,7,,5907,249811,Light of the Cosmic Crescendo,A,0
+2102,8,7,,1137,249808,Litany of Lightblind Wrath,A,1
+2118,8,7,,20658,264701,Cosmic Bell,D,1
+2113,8,7,,16482,251792,Glorious Crusader's Keepsake,C,1
+2107,8,7,,14,250256,Heart of Wind,B,1
+2099,8,7,,29,249343,Gaze of the Alnseer,S,1
+2114,8,7,,17214,251788,Gift of Light,C,2
+2103,8,7,,16769,248583,Drum of Renewed Bonds,A,2
+2100,8,7,,334,249809,Locus-Walker's Ribbon,S,2
+2108,8,7,,13408,151340,Echo of L'ura,B,2
+2104,8,7,,165,249346,Vaelgor's Final Stare,A,3
+2115,8,7,,23109,251789,Consecrated Chalice,C,3
+2109,8,7,,5562,250246,Refueling Orb,B,3
+2110,8,7,,149,250144,Emberwing Feather,B,4
+2105,8,7,,3782,193718,Emerald Coach's Whistle,A,4
+2116,8,7,,9102,50259,Nevermelting Ice Crystal,C,4
+2111,8,7,,5837,249341,Volatile Void Suffuser,B,5
+1597,8,8,,14,250256,Heart of Wind,A,0
+1600,8,8,,3782,193718,Emerald Coach's Whistle,B,0
+1604,8,8,,5562,250246,Refueling Orb,C,0
+1594,8,8,,165,249346,Vaelgor's Final Stare,S,0
+1607,8,8,,1335,250258,Vessel of Tortured Souls,D,0
+1595,8,8,,1137,249808,Litany of Lightblind Wrath,S,1
+1601,8,8,,16482,251792,Glorious Crusader's Keepsake,B,1
+1608,8,8,,20658,264701,Cosmic Bell,D,1
+1598,8,8,,5837,249341,Volatile Void Suffuser,A,1
+1605,8,8,,31234,241340,Magister's Alchemist Stone,C,1
+1606,8,8,,17214,251788,Gift of Light,C,2
+1596,8,8,,334,249809,Locus-Walker's Ribbon,S,2
+1599,8,8,,149,250144,Emberwing Feather,A,2
+1602,8,8,,29,249343,Gaze of the Alnseer,B,2
+1609,8,8,,17009,251787,Sealed Chaos Urn,D,2
+1603,8,8,,5907,249811,Light of the Cosmic Crescendo,B,3
+1610,8,8,,23109,251789,Consecrated Chalice,D,3
+1611,8,8,,16952,251786,Ever-Collapsing Void Fissure,D,4
+1660,8,9,,17214,251788,Gift of Light,C,0
+1653,8,9,,29,249343,Gaze of the Alnseer,B,0
+1648,8,9,,1137,249808,Litany of Lightblind Wrath,S,0
+1661,8,9,,1335,250258,Vessel of Tortured Souls,D,0
+1650,8,9,,3782,193718,Emerald Coach's Whistle,A,0
+1662,8,9,,20658,264701,Cosmic Bell,D,1
+1651,8,9,,165,249346,Vaelgor's Final Stare,A,1
+1654,8,9,,5837,249341,Volatile Void Suffuser,B,1
+1649,8,9,,334,249809,Locus-Walker's Ribbon,S,1
+1652,8,9,,14,250256,Heart of Wind,A,2
+1655,8,9,,149,250144,Emberwing Feather,B,2
+1663,8,9,,17009,251787,Sealed Chaos Urn,D,2
+1656,8,9,,5907,249811,Light of the Cosmic Crescendo,B,3
+1664,8,9,,23109,251789,Consecrated Chalice,D,3
+1665,8,9,,16952,251786,Ever-Collapsing Void Fissure,D,4
+1657,8,9,,16482,251792,Glorious Crusader's Keepsake,B,4
+1658,8,9,,5562,250246,Refueling Orb,B,5
+1659,8,9,,31234,241340,Magister's Alchemist Stone,B,6
+1405,8,10,,5907,249811,Light of the Cosmic Crescendo,A,0
+1402,8,10,,29,249343,Gaze of the Alnseer,S,0
+1410,8,10,,3782,193718,Emerald Coach's Whistle,B,0
+1418,8,10,,13408,151340,Echo of L'ura,D,0
+1413,8,10,,5650,250253,Whisper of the Duskwraith,C,0
+1419,8,10,,31234,241340,Magister's Alchemist Stone,D,1
+1406,8,10,,165,249346,Vaelgor's Final Stare,A,1
+1414,8,10,,12106,252411,Radiant Sunstone,C,1
+1403,8,10,,334,249809,Locus-Walker's Ribbon,S,1
+1411,8,10,,5750,250462,Forgotten Farstrider's Insignia,B,1
+1407,8,10,,299,264507,Crucible of Erratic Energies,A,2
+1404,8,10,,1137,249808,Litany of Lightblind Wrath,S,2
+1412,8,10,,5837,249341,Volatile Void Suffuser,B,2
+1415,8,10,,5562,250246,Refueling Orb,C,2
+1408,8,10,,14,250256,Heart of Wind,A,3
+1416,8,10,,1335,250258,Vessel of Tortured Souls,C,3
+1409,8,10,,149,250144,Emberwing Feather,A,4
+1417,8,10,,9102,50259,Nevermelting Ice Crystal,C,4
+1271,8,11,,5907,249811,Light of the Cosmic Crescendo,B,0
+1288,8,11,,31234,241340,Magister's Alchemist Stone,F,0
+1279,8,11,,21177,241291,Primal Philosopher's Stone,D,0
+1275,8,11,,3782,193718,Emerald Coach's Whistle,C,0
+1266,8,11,,334,249809,Locus-Walker's Ribbon,A,0
+1264,8,11,,1137,249808,Litany of Lightblind Wrath,S,0
+1265,8,11,,29,249343,Gaze of the Alnseer,S,1
+1276,8,11,,5650,250253,Whisper of the Duskwraith,C,1
+1267,8,11,,14,250256,Heart of Wind,A,1
+1280,8,11,,12106,252411,Radiant Sunstone,D,1
+1272,8,11,,165,249346,Vaelgor's Final Stare,B,1
+1273,8,11,,16482,251792,Glorious Crusader's Keepsake,B,2
+1268,8,11,,299,264507,Crucible of Erratic Energies,A,2
+1281,8,11,,9102,50259,Nevermelting Ice Crystal,D,2
+1277,8,11,,5562,250246,Refueling Orb,C,2
+1282,8,11,,17214,251788,Gift of Light,D,3
+1269,8,11,,5837,249341,Volatile Void Suffuser,A,3
+1274,8,11,,16769,248583,Drum of Renewed Bonds,B,3
+1278,8,11,,13408,151340,Echo of L'ura,C,3
+1283,8,11,,1335,250258,Vessel of Tortured Souls,D,4
+1270,8,11,,149,250144,Emberwing Feather,A,4
+1284,8,11,,23109,251789,Consecrated Chalice,D,5
+1285,8,11,,16952,251786,Ever-Collapsing Void Fissure,D,6
+1286,8,11,,30467,264694,Ultradon Cuirass,D,7
+1287,8,11,,20658,264701,Cosmic Bell,D,8
+718,8,12,,17214,251788,Gift of Light,C,0
+706,8,12,,334,249809,Locus-Walker's Ribbon,S,0
+709,8,12,,29,249343,Gaze of the Alnseer,A,0
+715,8,12,,5907,249811,Light of the Cosmic Crescendo,B,0
+719,8,12,,1335,250258,Vessel of Tortured Souls,D,0
+707,8,12,,165,249346,Vaelgor's Final Stare,S,1
+710,8,12,,14,250256,Heart of Wind,A,1
+720,8,12,,20658,264701,Cosmic Bell,D,1
+716,8,12,,5837,249341,Volatile Void Suffuser,B,1
+708,8,12,,1137,249808,Litany of Lightblind Wrath,S,2
+711,8,12,,149,250144,Emberwing Feather,A,2
+717,8,12,,5562,250246,Refueling Orb,B,2
+721,8,12,,17009,251787,Sealed Chaos Urn,D,2
+722,8,12,,23109,251789,Consecrated Chalice,D,3
+712,8,12,,16482,251792,Glorious Crusader's Keepsake,A,3
+723,8,12,,16952,251786,Ever-Collapsing Void Fissure,D,4
+713,8,12,,299,264507,Crucible of Erratic Energies,A,4
+714,8,12,,3782,193718,Emerald Coach's Whistle,A,5
+724,8,12,,31234,241340,Magister's Alchemist Stone,D,5
+526,8,13,,1335,250258,Vessel of Tortured Souls,D,0
+514,8,13,,29,249343,Gaze of the Alnseer,S,0
+517,8,13,,165,249346,Vaelgor's Final Stare,A,0
+525,8,13,,17214,251788,Gift of Light,C,0
+522,8,13,,5907,249811,Light of the Cosmic Crescendo,B,0
+523,8,13,,5837,249341,Volatile Void Suffuser,B,1
+527,8,13,,20658,264701,Cosmic Bell,D,1
+518,8,13,,14,250256,Heart of Wind,A,1
+515,8,13,,334,249809,Locus-Walker's Ribbon,S,1
+519,8,13,,149,250144,Emberwing Feather,A,2
+524,8,13,,5562,250246,Refueling Orb,B,2
+516,8,13,,1137,249808,Litany of Lightblind Wrath,S,2
+528,8,13,,17009,251787,Sealed Chaos Urn,D,2
+520,8,13,,16482,251792,Glorious Crusader's Keepsake,A,3
+529,8,13,,23109,251789,Consecrated Chalice,D,3
+521,8,13,,3782,193718,Emerald Coach's Whistle,A,4
+530,8,13,,16952,251786,Ever-Collapsing Void Fissure,D,4
+531,8,13,,31234,241340,Magister's Alchemist Stone,D,5
+2312,8,14,,1335,250258,Vessel of Tortured Souls,B,0
+2308,8,14,,1349,260235,Umbral Plume,A,0
+2305,8,14,,29,249343,Gaze of the Alnseer,S,0
+2316,8,14,,14807,193719,Dragon Games Equipment,C,0
+2309,8,14,,485,249806,Radiant Plume,A,1
+2317,8,14,,5658,250241,Mark of Light,C,1
+2313,8,14,,14,250256,Heart of Wind,B,1
+2306,8,14,,2570,249342,Heart of Ancient Hunger,S,1
+2307,8,14,,59,193701,Algeth'ar Puzzle Box,S,2
+2310,8,14,,30,249344,Light Company Guidon,A,2
+2314,8,14,,5789,249805,Undreamt God's Oozing Vestige,B,2
+2318,8,14,,5733,250227,Kroluk's Warbanner,C,2
+2311,8,14,,15,252420,Solarflare Prism,A,3
+2319,8,14,,2017,151307,Void Stalker's Contract,C,3
+2315,8,14,,5727,250226,Latch's Crooked Hook,B,3
+2361,8,15,,14807,193719,Dragon Games Equipment,C,0
+2357,8,15,,1335,250258,Vessel of Tortured Souls,B,0
+2353,8,15,,1349,260235,Umbral Plume,A,0
+2350,8,15,,29,249343,Gaze of the Alnseer,S,0
+2354,8,15,,485,249806,Radiant Plume,A,1
+2362,8,15,,5658,250241,Mark of Light,C,1
+2351,8,15,,2570,249342,Heart of Ancient Hunger,S,1
+2358,8,15,,14,250256,Heart of Wind,B,1
+2352,8,15,,59,193701,Algeth'ar Puzzle Box,S,2
+2359,8,15,,5789,249805,Undreamt God's Oozing Vestige,B,2
+2363,8,15,,5733,250227,Kroluk's Warbanner,C,2
+2355,8,15,,30,249344,Light Company Guidon,A,2
+2364,8,15,,2017,151307,Void Stalker's Contract,C,3
+2356,8,15,,15,252420,Solarflare Prism,A,3
+2360,8,15,,5727,250226,Latch's Crooked Hook,B,3
+2049,8,16,,17009,251787,Sealed Chaos Urn,F,0
+2043,8,16,,31233,246307,Darkmoon Dominion: Void,D,0
+2037,8,16,,5581,250257,Eye of the Drowning Void,C,0
+2026,8,16,,29,249343,Gaze of the Alnseer,S,0
+2029,8,16,,149,250144,Emberwing Feather,A,0
+2032,8,16,,30,249344,Light Company Guidon,B,0
+2038,8,16,,5727,250226,Latch's Crooked Hook,C,1
+2027,8,16,,485,249806,Radiant Plume,S,1
+2044,8,16,,31234,241340,Magister's Alchemist Stone,D,1
+2033,8,16,,1335,250258,Vessel of Tortured Souls,B,1
+2030,8,16,,15,252420,Solarflare Prism,A,1
+2028,8,16,,59,193701,Algeth'ar Puzzle Box,S,2
+2031,8,16,,14,250256,Heart of Wind,A,2
+2034,8,16,,5877,249345,Ranger-Captain's Iridescent Insignia,B,2
+2045,8,16,,16570,251785,Void-Reaper's Libram,D,2
+2039,8,16,,18400,251783,Lost Idol of the Hash'ey,C,2
+2035,8,16,,16482,251792,Glorious Crusader's Keepsake,B,3
+2040,8,16,,2017,151307,Void Stalker's Contract,C,3
+2046,8,16,,31226,246306,Darkmoon Dominion: Rot,D,3
+2036,8,16,,5789,249805,Undreamt God's Oozing Vestige,B,4
+2041,8,16,,31208,246304,Darkmoon Dominion: Hunt,C,4
+2047,8,16,,16759,251782,Withered Saptor's Paw,D,4
+2042,8,16,,31224,246305,Darkmoon Dominion: Blood,C,5
+2048,8,16,,17046,251784,Sylvan Wakrapuku,D,5
+1750,8,17,,29,249343,Gaze of the Alnseer,S,0
+1760,8,17,,30,249344,Light Company Guidon,B,0
+1764,8,17,,18474,251791,Holy Retributor's Order,C,0
+1752,8,17,,485,249806,Radiant Plume,A,0
+1768,8,17,,5727,250226,Latch's Crooked Hook,D,0
+1751,8,17,,59,193701,Algeth'ar Puzzle Box,S,1
+1753,8,17,,1349,260235,Umbral Plume,A,1
+1769,8,17,,2017,151307,Void Stalker's Contract,D,1
+1761,8,17,,14,250256,Heart of Wind,B,1
+1765,8,17,,31208,246304,Darkmoon Dominion: Hunt,C,1
+1762,8,17,,18400,251783,Lost Idol of the Hash'ey,B,2
+1766,8,17,,16759,251782,Withered Saptor's Paw,C,2
+1770,8,17,,31233,246307,Darkmoon Dominion: Void,D,2
+1754,8,17,,149,250144,Emberwing Feather,A,2
+1767,8,17,,16570,251785,Void-Reaper's Libram,C,3
+1763,8,17,,5581,250257,Eye of the Drowning Void,B,3
+1755,8,17,,15,252420,Solarflare Prism,A,3
+1771,8,17,,31226,246306,Darkmoon Dominion: Rot,D,3
+1772,8,17,,31224,246305,Darkmoon Dominion: Blood,D,4
+1756,8,17,,5733,250227,Kroluk's Warbanner,A,4
+1773,8,17,,5750,250462,Forgotten Farstrider's Insignia,D,5
+1757,8,17,,5877,249345,Ranger-Captain's Iridescent Insignia,A,5
+1758,8,17,,5789,249805,Undreamt God's Oozing Vestige,A,6
+1774,8,17,,17046,251784,Sylvan Wakrapuku,D,6
+1759,8,17,,299,264507,Crucible of Erratic Energies,A,7
+1775,8,17,,16482,251792,Glorious Crusader's Keepsake,D,7
+1776,8,17,,17009,251787,Sealed Chaos Urn,D,8
+1777,8,17,,1335,250258,Vessel of Tortured Souls,D,9
+1847,8,18,,1335,250258,Vessel of Tortured Souls,D,0
+1845,8,18,,149,250144,Emberwing Feather,C,0
+1843,8,18,,5581,250257,Eye of the Drowning Void,B,0
+1838,8,18,,485,249806,Radiant Plume,A,0
+1834,8,18,,29,249343,Gaze of the Alnseer,S,0
+1835,8,18,,1349,260235,Umbral Plume,S,1
+1839,8,18,,14,250256,Heart of Wind,A,1
+1844,8,18,,2017,151307,Void Stalker's Contract,B,1
+1846,8,18,,59,193701,Algeth'ar Puzzle Box,C,1
+1848,8,18,,5789,249805,Undreamt God's Oozing Vestige,D,1
+1836,8,18,,5877,249345,Ranger-Captain's Iridescent Insignia,S,2
+1840,8,18,,5727,250226,Latch's Crooked Hook,A,2
+1849,8,18,,5750,250462,Forgotten Farstrider's Insignia,D,2
+1850,8,18,,18400,251783,Lost Idol of the Hash'ey,D,3
+1841,8,18,,30,249344,Light Company Guidon,A,3
+1837,8,18,,15,252420,Solarflare Prism,S,3
+1842,8,18,,5733,250227,Kroluk's Warbanner,A,4
+1851,8,18,,31234,241340,Magister's Alchemist Stone,D,4
+1852,8,18,,31233,246307,Darkmoon Dominion: Void,D,5
+1853,8,18,,31226,246306,Darkmoon Dominion: Rot,D,6
+1854,8,18,,31208,246304,Darkmoon Dominion: Hunt,D,7
+1855,8,18,,31224,246305,Darkmoon Dominion: Blood,D,8
+1902,8,19,,485,249806,Radiant Plume,A,0
+1900,8,19,,30,249344,Light Company Guidon,S,0
+1921,8,19,,31224,246305,Darkmoon Dominion: Blood,D,0
+1915,8,19,,1335,250258,Vessel of Tortured Souls,C,0
+1907,8,19,,14,250256,Heart of Wind,B,0
+1901,8,19,,29,249343,Gaze of the Alnseer,S,1
+1903,8,19,,1349,260235,Umbral Plume,A,1
+1916,8,19,,5581,250257,Eye of the Drowning Void,C,1
+1922,8,19,,31208,246304,Darkmoon Dominion: Hunt,D,1
+1908,8,19,,15,252420,Solarflare Prism,B,1
+1917,8,19,,17009,251787,Sealed Chaos Urn,C,2
+1904,8,19,,59,193701,Algeth'ar Puzzle Box,A,2
+1923,8,19,,31226,246306,Darkmoon Dominion: Rot,D,2
+1909,8,19,,5733,250227,Kroluk's Warbanner,B,2
+1905,8,19,,149,250144,Emberwing Feather,A,3
+1910,8,19,,16759,251782,Withered Saptor's Paw,B,3
+1918,8,19,,18400,251783,Lost Idol of the Hash'ey,C,3
+1924,8,19,,31233,246307,Darkmoon Dominion: Void,D,3
+1919,8,19,,16570,251785,Void-Reaper's Libram,C,4
+1911,8,19,,31234,241340,Magister's Alchemist Stone,B,4
+1906,8,19,,5877,249345,Ranger-Captain's Iridescent Insignia,A,4
+1920,8,19,,19853,252957,Tangle of Vibrant Vines,C,5
+1912,8,19,,5789,249805,Undreamt God's Oozing Vestige,B,5
+1913,8,19,,5727,250226,Latch's Crooked Hook,B,6
+1914,8,19,,2017,151307,Void Stalker's Contract,B,7
+1536,8,20,,5789,249805,Undreamt God's Oozing Vestige,C,0
+1544,8,20,,5658,250241,Mark of Light,D,0
+1530,8,20,,30,249344,Light Company Guidon,B,0
+1528,8,20,,29,249343,Gaze of the Alnseer,A,0
+1525,8,20,,59,193701,Algeth'ar Puzzle Box,S,0
+1531,8,20,,15,252420,Solarflare Prism,B,1
+1529,8,20,,2570,249342,Heart of Ancient Hunger,A,1
+1526,8,20,,485,249806,Radiant Plume,S,1
+1545,8,20,,2017,151307,Void Stalker's Contract,D,1
+1537,8,20,,1335,250258,Vessel of Tortured Souls,C,1
+1538,8,20,,5727,250226,Latch's Crooked Hook,C,2
+1527,8,20,,1349,260235,Umbral Plume,S,2
+1532,8,20,,14,250256,Heart of Wind,B,2
+1546,8,20,,5750,250462,Forgotten Farstrider's Insignia,D,2
+1547,8,20,,18400,251783,Lost Idol of the Hash'ey,D,3
+1533,8,20,,5733,250227,Kroluk's Warbanner,B,3
+1539,8,20,,14807,193719,Dragon Games Equipment,C,3
+1540,8,20,,31226,246306,Darkmoon Dominion: Rot,C,4
+1534,8,20,,31224,246305,Darkmoon Dominion: Blood,B,4
+1535,8,20,,31208,246304,Darkmoon Dominion: Hunt,B,5
+1541,8,20,,31233,246307,Darkmoon Dominion: Void,C,5
+1542,8,20,,31234,241340,Magister's Alchemist Stone,C,6
+1543,8,20,,38879,255613,"",C,7
+1342,8,21,,149,250144,Emberwing Feather,A,0
+1339,8,21,,485,249806,Radiant Plume,S,0
+1347,8,21,,5727,250226,Latch's Crooked Hook,B,0
+1355,8,21,,1335,250258,Vessel of Tortured Souls,C,0
+1357,8,21,,31233,246307,Darkmoon Dominion: Void,D,0
+1358,8,21,,31234,241340,Magister's Alchemist Stone,D,1
+1343,8,21,,14,250256,Heart of Wind,A,1
+1348,8,21,,5733,250227,Kroluk's Warbanner,B,1
+1340,8,21,,29,249343,Gaze of the Alnseer,S,1
+1356,8,21,,31224,246305,Darkmoon Dominion: Blood,C,1
+1341,8,21,,59,193701,Algeth'ar Puzzle Box,S,2
+1349,8,21,,5581,250257,Eye of the Drowning Void,B,2
+1344,8,21,,5789,249805,Undreamt God's Oozing Vestige,A,2
+1359,8,21,,18400,251783,Lost Idol of the Hash'ey,D,2
+1345,8,21,,30,249344,Light Company Guidon,A,3
+1350,8,21,,31208,246304,Darkmoon Dominion: Hunt,B,3
+1346,8,21,,15,252420,Solarflare Prism,A,4
+1351,8,21,,31226,246306,Darkmoon Dominion: Rot,B,4
+1352,8,21,,5750,250462,Forgotten Farstrider's Insignia,B,5
+1353,8,21,,5877,249345,Ranger-Captain's Iridescent Insignia,B,6
+1354,8,21,,2017,151307,Void Stalker's Contract,B,7
+883,8,22,,29,249343,Gaze of the Alnseer,A,0
+889,8,22,,1335,250258,Vessel of Tortured Souls,B,0
+895,8,22,,30,249344,Light Company Guidon,C,0
+880,8,22,,59,193701,Algeth'ar Puzzle Box,S,0
+898,8,22,,5727,250226,Latch's Crooked Hook,D,0
+890,8,22,,5733,250227,Kroluk's Warbanner,B,1
+896,8,22,,17046,251784,Sylvan Wakrapuku,C,1
+884,8,22,,17009,251787,Sealed Chaos Urn,A,1
+881,8,22,,485,249806,Radiant Plume,S,1
+899,8,22,,5581,250257,Eye of the Drowning Void,D,1
+900,8,22,,2017,151307,Void Stalker's Contract,D,2
+885,8,22,,16759,251782,Withered Saptor's Paw,A,2
+882,8,22,,1349,260235,Umbral Plume,S,2
+891,8,22,,15,252420,Solarflare Prism,B,2
+897,8,22,,18400,251783,Lost Idol of the Hash'ey,C,2
+892,8,22,,149,250144,Emberwing Feather,B,3
+886,8,22,,14,250256,Heart of Wind,A,3
+893,8,22,,5750,250462,Forgotten Farstrider's Insignia,B,4
+887,8,22,,16482,251792,Glorious Crusader's Keepsake,A,4
+888,8,22,,5877,249345,Ranger-Captain's Iridescent Insignia,A,5
+894,8,22,,31208,246304,Darkmoon Dominion: Hunt,B,5
+413,8,23,,2017,151307,Void Stalker's Contract,D,0
+403,8,23,,29,249343,Gaze of the Alnseer,A,0
+400,8,23,,59,193701,Algeth'ar Puzzle Box,S,0
+409,8,23,,1335,250258,Vessel of Tortured Souls,C,0
+406,8,23,,5733,250227,Kroluk's Warbanner,B,0
+404,8,23,,5877,249345,Ranger-Captain's Iridescent Insignia,A,1
+407,8,23,,5789,249805,Undreamt God's Oozing Vestige,B,1
+401,8,23,,485,249806,Radiant Plume,S,1
+410,8,23,,30,249344,Light Company Guidon,C,1
+414,8,23,,2017,151307,Void Stalker's Contract,D,1
+408,8,23,,149,250144,Emberwing Feather,B,2
+405,8,23,,14,250256,Heart of Wind,A,2
+402,8,23,,1349,260235,Umbral Plume,S,2
+411,8,23,,5581,250257,Eye of the Drowning Void,C,2
+412,8,23,,5727,250226,Latch's Crooked Hook,C,3
+211,8,24,,5733,250227,Kroluk's Warbanner,C,0
+217,8,24,,30,249344,Light Company Guidon,D,0
+207,8,24,,2017,151307,Void Stalker's Contract,B,0
+202,8,24,,59,193701,Algeth'ar Puzzle Box,S,0
+204,8,24,,1349,260235,Umbral Plume,A,0
+203,8,24,,29,249343,Gaze of the Alnseer,S,1
+208,8,24,,5581,250257,Eye of the Drowning Void,B,1
+212,8,24,,31208,246304,Darkmoon Dominion: Hunt,C,1
+205,8,24,,485,249806,Radiant Plume,A,1
+218,8,24,,149,250144,Emberwing Feather,D,1
+219,8,24,,5750,250462,Forgotten Farstrider's Insignia,D,2
+213,8,24,,31224,246305,Darkmoon Dominion: Blood,C,2
+206,8,24,,15,252420,Solarflare Prism,A,2
+209,8,24,,5727,250226,Latch's Crooked Hook,B,2
+210,8,24,,14,250256,Heart of Wind,B,3
+214,8,24,,31226,246306,Darkmoon Dominion: Rot,C,3
+215,8,24,,31233,246307,Darkmoon Dominion: Void,C,4
+216,8,24,,31234,241340,Magister's Alchemist Stone,C,5
+65,8,25,,1335,250258,Vessel of Tortured Souls,B,0
+66,8,25,,31234,241340,Magister's Alchemist Stone,C,0
+63,8,25,,59,193701,Algeth'ar Puzzle Box,A,0
+58,8,25,,30,249344,Light Company Guidon,S,0
+64,8,25,,15,252420,Solarflare Prism,A,1
+59,8,25,,29,249343,Gaze of the Alnseer,S,1
+60,8,25,,485,249806,Radiant Plume,S,2
+61,8,25,,1349,260235,Umbral Plume,S,3
+62,8,25,,2570,249342,Heart of Ancient Hunger,S,4
+85,8,26,,30,249344,Light Company Guidon,S,0
+90,8,26,,21164,245829,Darkmoon Deck: Hunt,A,0
+101,8,26,,5658,250241,Mark of Light,C,0
+104,8,26,,36453,245846,"",D,0
+94,8,26,,36443,245855,"",B,0
+91,8,26,,15,252420,Solarflare Prism,A,1
+86,8,26,,29,249343,Gaze of the Alnseer,S,1
+102,8,26,,2017,151307,Void Stalker's Contract,C,1
+95,8,26,,1335,250258,Vessel of Tortured Souls,B,1
+92,8,26,,14,250256,Heart of Wind,A,2
+96,8,26,,14807,193719,Dragon Games Equipment,B,2
+87,8,26,,1349,260235,Umbral Plume,S,2
+103,8,26,,31234,241340,Magister's Alchemist Stone,C,2
+88,8,26,,485,249806,Radiant Plume,S,3
+97,8,26,,5789,249805,Undreamt God's Oozing Vestige,B,3
+93,8,26,,59,193701,Algeth'ar Puzzle Box,A,3
+98,8,26,,5733,250227,Kroluk's Warbanner,B,4
+89,8,26,,2570,249342,Heart of Ancient Hunger,S,4
+99,8,26,,5727,250226,Latch's Crooked Hook,B,5
+100,8,26,,36449,245750,"",B,6
+2163,8,27,,864,249810,Shadow of the Empyrean Requiem,A,0
+2166,8,27,,21164,245829,Darkmoon Deck: Hunt,B,0
+2161,8,27,,29,249343,Gaze of the Alnseer,S,0
+2174,8,27,,5836,249340,Wraps of Cosmic Madness,D,0
+2171,8,27,,9102,50259,Nevermelting Ice Crystal,C,0
+2167,8,27,,36443,245855,"",B,1
+2162,8,27,,149,250144,Emberwing Feather,S,1
+2164,8,27,,165,249346,Vaelgor's Final Stare,A,1
+2172,8,27,,13390,151310,Reality Breacher,C,1
+2175,8,27,,333,250223,Soulcatcher's Charm,D,1
+2173,8,27,,5581,250257,Eye of the Drowning Void,C,2
+2165,8,27,,14,250256,Heart of Wind,A,2
+2168,8,27,,36449,245750,"",B,2
+2176,8,27,,334,249809,Locus-Walker's Ribbon,D,2
+2169,8,27,,36453,245846,"",B,3
+2170,8,27,,1335,250258,Vessel of Tortured Souls,B,4
+2244,8,28,,29,249343,Gaze of the Alnseer,A,0
+2251,8,28,,5581,250257,Eye of the Drowning Void,C,0
+2256,8,28,,9102,50259,Nevermelting Ice Crystal,D,0
+2247,8,28,,1335,250258,Vessel of Tortured Souls,B,0
+2241,8,28,,149,250144,Emberwing Feather,S,0
+2252,8,28,,21164,245829,Darkmoon Deck: Hunt,C,1
+2248,8,28,,333,250223,Soulcatcher's Charm,B,1
+2245,8,28,,864,249810,Shadow of the Empyrean Requiem,A,1
+2242,8,28,,334,249809,Locus-Walker's Ribbon,S,1
+2253,8,28,,36443,245855,"",C,2
+2249,8,28,,13390,151310,Reality Breacher,B,2
+2243,8,28,,165,249346,Vaelgor's Final Stare,S,2
+2246,8,28,,14,250256,Heart of Wind,A,2
+2250,8,28,,5836,249340,Wraps of Cosmic Madness,B,3
+2254,8,28,,36449,245750,"",C,3
+2255,8,28,,36453,245846,"",C,4
+2262,8,29,,1335,250258,Vessel of Tortured Souls,B,0
+2259,8,29,,334,249809,Locus-Walker's Ribbon,A,0
+2272,8,29,,5836,249340,Wraps of Cosmic Madness,D,0
+2267,8,29,,36449,245750,"",C,0
+2257,8,29,,29,249343,Gaze of the Alnseer,S,0
+2263,8,29,,21164,245829,Darkmoon Deck: Hunt,B,1
+2260,8,29,,864,249810,Shadow of the Empyrean Requiem,A,1
+2268,8,29,,36453,245846,"",C,1
+2258,8,29,,165,249346,Vaelgor's Final Stare,S,1
+2264,8,29,,149,250144,Emberwing Feather,B,2
+2261,8,29,,333,250223,Soulcatcher's Charm,A,2
+2269,8,29,,9102,50259,Nevermelting Ice Crystal,C,2
+2270,8,29,,13390,151310,Reality Breacher,C,3
+2265,8,29,,14,250256,Heart of Wind,B,3
+2271,8,29,,5581,250257,Eye of the Drowning Void,C,4
+2266,8,29,,36443,245855,"",B,4
+1982,8,30,,864,249810,Shadow of the Empyrean Requiem,C,0
+1975,8,30,,29,249343,Gaze of the Alnseer,S,0
+1979,8,30,,1335,250258,Vessel of Tortured Souls,A,0
+1981,8,30,,21164,245829,Darkmoon Deck: Hunt,B,0
+1987,8,30,,333,250223,Soulcatcher's Charm,D,0
+1980,8,30,,14,250256,Heart of Wind,A,1
+1983,8,30,,5581,250257,Eye of the Drowning Void,C,1
+1988,8,30,,13390,151310,Reality Breacher,D,1
+1976,8,30,,149,250144,Emberwing Feather,S,1
+1989,8,30,,5836,249340,Wraps of Cosmic Madness,D,2
+1984,8,30,,36443,245855,"",C,2
+1977,8,30,,165,249346,Vaelgor's Final Stare,S,2
+1978,8,30,,334,249809,Locus-Walker's Ribbon,S,3
+1990,8,30,,9102,50259,Nevermelting Ice Crystal,D,3
+1985,8,30,,36449,245750,"",C,3
+1986,8,30,,36453,245846,"",C,4
+1991,8,30,,5750,250462,Forgotten Farstrider's Insignia,D,4
+1708,8,31,,864,249810,Shadow of the Empyrean Requiem,B,0
+1716,8,31,,5836,249340,Wraps of Cosmic Madness,D,0
+1702,8,31,,29,249343,Gaze of the Alnseer,S,0
+1713,8,31,,9102,50259,Nevermelting Ice Crystal,C,0
+1704,8,31,,334,249809,Locus-Walker's Ribbon,A,0
+1714,8,31,,13390,151310,Reality Breacher,C,1
+1703,8,31,,165,249346,Vaelgor's Final Stare,S,1
+1709,8,31,,21164,245829,Darkmoon Deck: Hunt,B,1
+1705,8,31,,149,250144,Emberwing Feather,A,1
+1717,8,31,,1335,250258,Vessel of Tortured Souls,D,1
+1710,8,31,,36443,245855,"",B,2
+1715,8,31,,5581,250257,Eye of the Drowning Void,C,2
+1706,8,31,,14,250256,Heart of Wind,A,2
+1707,8,31,,333,250223,Soulcatcher's Charm,A,3
+1711,8,31,,36449,245750,"",B,3
+1712,8,31,,36453,245846,"",B,4
+965,8,32,,31224,246305,Darkmoon Dominion: Blood,F,0
+943,8,32,,165,249346,Vaelgor's Final Stare,S,0
+960,8,32,,16570,251785,Void-Reaper's Libram,D,0
+950,8,32,,5581,250257,Eye of the Drowning Void,B,0
+956,8,32,,16952,251786,Ever-Collapsing Void Fissure,C,0
+945,8,32,,149,250144,Emberwing Feather,A,0
+966,8,32,,31234,241340,Magister's Alchemist Stone,F,1
+944,8,32,,29,249343,Gaze of the Alnseer,S,1
+946,8,32,,864,249810,Shadow of the Empyrean Requiem,A,1
+951,8,32,,38879,255613,"",B,1
+957,8,32,,16566,264878,Astalor's Anguish Agitator,C,1
+961,8,32,,17046,251784,Sylvan Wakrapuku,D,1
+947,8,32,,1335,250258,Vessel of Tortured Souls,A,2
+967,8,32,,31208,246304,Darkmoon Dominion: Hunt,F,2
+952,8,32,,38880,255614,"",B,2
+958,8,32,,16482,251792,Glorious Crusader's Keepsake,C,2
+962,8,32,,19853,252957,Tangle of Vibrant Vines,D,2
+968,8,32,,31233,246307,Darkmoon Dominion: Void,F,3
+959,8,32,,13390,151310,Reality Breacher,C,3
+953,8,32,,333,250223,Soulcatcher's Charm,B,3
+948,8,32,,5836,249340,Wraps of Cosmic Madness,A,3
+963,8,32,,334,249809,Locus-Walker's Ribbon,D,3
+954,8,32,,9102,50259,Nevermelting Ice Crystal,B,4
+969,8,32,,31226,246306,Darkmoon Dominion: Rot,F,4
+964,8,32,,17009,251787,Sealed Chaos Urn,D,4
+949,8,32,,14,250256,Heart of Wind,A,4
+955,8,32,,16769,248583,Drum of Renewed Bonds,B,5
+1028,8,33,,333,250223,Soulcatcher's Charm,A,0
+1024,8,33,,149,250144,Emberwing Feather,S,0
+1043,8,33,,17009,251787,Sealed Chaos Urn,D,0
+1032,8,33,,18400,251783,Lost Idol of the Hash'ey,B,0
+1037,8,33,,5750,250462,Forgotten Farstrider's Insignia,C,0
+1038,8,33,,31233,246307,Darkmoon Dominion: Void,C,1
+1044,8,33,,13390,151310,Reality Breacher,D,1
+1025,8,33,,334,249809,Locus-Walker's Ribbon,S,1
+1029,8,33,,864,249810,Shadow of the Empyrean Requiem,A,1
+1033,8,33,,31208,246304,Darkmoon Dominion: Hunt,B,1
+1039,8,33,,31234,241340,Magister's Alchemist Stone,C,2
+1034,8,33,,16482,251792,Glorious Crusader's Keepsake,B,2
+1030,8,33,,14,250256,Heart of Wind,A,2
+1026,8,33,,165,249346,Vaelgor's Final Stare,S,2
+1045,8,33,,9102,50259,Nevermelting Ice Crystal,D,2
+1027,8,33,,29,249343,Gaze of the Alnseer,S,3
+1046,8,33,,5581,250257,Eye of the Drowning Void,D,3
+1031,8,33,,1335,250258,Vessel of Tortured Souls,A,3
+1035,8,33,,5836,249340,Wraps of Cosmic Madness,B,3
+1040,8,33,,16566,264878,Astalor's Anguish Agitator,C,3
+1047,8,33,,17046,251784,Sylvan Wakrapuku,D,4
+1036,8,33,,17009,251787,Sealed Chaos Urn,B,4
+1041,8,33,,16952,251786,Ever-Collapsing Void Fissure,C,4
+1042,8,33,,16570,251785,Void-Reaper's Libram,C,5
+1105,8,34,,864,249810,Shadow of the Empyrean Requiem,B,0
+1096,8,34,,29,249343,Gaze of the Alnseer,S,0
+1114,8,34,,16952,251786,Ever-Collapsing Void Fissure,C,0
+1115,8,34,,9102,50259,Nevermelting Ice Crystal,D,0
+1098,8,34,,334,249809,Locus-Walker's Ribbon,A,0
+1106,8,34,,31224,246305,Darkmoon Dominion: Blood,B,1
+1116,8,34,,17009,251787,Sealed Chaos Urn,D,1
+1097,8,34,,165,249346,Vaelgor's Final Stare,S,1
+1099,8,34,,333,250223,Soulcatcher's Charm,A,1
+1107,8,34,,1335,250258,Vessel of Tortured Souls,B,2
+1100,8,34,,149,250144,Emberwing Feather,A,2
+1117,8,34,,19853,252957,Tangle of Vibrant Vines,D,2
+1108,8,34,,14,250256,Heart of Wind,B,3
+1101,8,34,,31208,246304,Darkmoon Dominion: Hunt,A,3
+1109,8,34,,31233,246307,Darkmoon Dominion: Void,B,4
+1102,8,34,,16769,248583,Drum of Renewed Bonds,A,4
+1103,8,34,,16482,251792,Glorious Crusader's Keepsake,A,5
+1110,8,34,,31234,241340,Magister's Alchemist Stone,B,5
+1104,8,34,,16566,264878,Astalor's Anguish Agitator,A,6
+1111,8,34,,31226,246306,Darkmoon Dominion: Rot,B,6
+1112,8,34,,16570,251785,Void-Reaper's Libram,B,7
+1113,8,34,,17046,251784,Sylvan Wakrapuku,B,8
+781,8,35,,31224,246305,Darkmoon Dominion: Blood,C,0
+771,8,35,,1335,250258,Vessel of Tortured Souls,B,0
+765,8,35,,1349,260235,Umbral Plume,A,0
+786,8,35,,5750,250462,Forgotten Farstrider's Insignia,D,0
+763,8,35,,59,193701,Algeth'ar Puzzle Box,S,0
+766,8,35,,29,249343,Gaze of the Alnseer,A,1
+772,8,35,,5581,250257,Eye of the Drowning Void,B,1
+764,8,35,,485,249806,Radiant Plume,S,1
+782,8,35,,31208,246304,Darkmoon Dominion: Hunt,C,1
+787,8,35,,17009,251787,Sealed Chaos Urn,D,1
+783,8,35,,31226,246306,Darkmoon Dominion: Rot,C,2
+773,8,35,,2017,151307,Void Stalker's Contract,B,2
+767,8,35,,149,250144,Emberwing Feather,A,2
+784,8,35,,31233,246307,Darkmoon Dominion: Void,C,3
+768,8,35,,15,252420,Solarflare Prism,A,3
+774,8,35,,14,250256,Heart of Wind,B,3
+769,8,35,,5877,249345,Ranger-Captain's Iridescent Insignia,A,4
+775,8,35,,5789,249805,Undreamt God's Oozing Vestige,B,4
+785,8,35,,31234,241340,Magister's Alchemist Stone,C,4
+776,8,35,,30,249344,Light Company Guidon,B,5
+770,8,35,,16482,251792,Glorious Crusader's Keepsake,A,5
+777,8,35,,16759,251782,Withered Saptor's Paw,B,6
+778,8,35,,18400,251783,Lost Idol of the Hash'ey,B,7
+779,8,35,,16570,251785,Void-Reaper's Libram,B,8
+780,8,35,,17046,251784,Sylvan Wakrapuku,B,9
+847,8,36,,14,250256,Heart of Wind,C,0
+841,8,36,,149,250144,Emberwing Feather,A,0
+838,8,36,,59,193701,Algeth'ar Puzzle Box,S,0
+850,8,36,,5727,250226,Latch's Crooked Hook,D,0
+844,8,36,,5877,249345,Ranger-Captain's Iridescent Insignia,B,0
+851,8,36,,5789,249805,Undreamt God's Oozing Vestige,D,1
+842,8,36,,29,249343,Gaze of the Alnseer,A,1
+839,8,36,,1349,260235,Umbral Plume,S,1
+848,8,36,,2017,151307,Void Stalker's Contract,C,1
+845,8,36,,15,252420,Solarflare Prism,B,1
+840,8,36,,485,249806,Radiant Plume,S,2
+843,8,36,,30,249344,Light Company Guidon,A,2
+846,8,36,,1335,250258,Vessel of Tortured Souls,B,2
+849,8,36,,5581,250257,Eye of the Drowning Void,C,2
+658,8,37,,17009,251787,Sealed Chaos Urn,D,0
+648,8,37,,18400,251783,Lost Idol of the Hash'ey,B,0
+643,8,37,,1335,250258,Vessel of Tortured Souls,A,0
+640,8,37,,334,249809,Locus-Walker's Ribbon,S,0
+652,8,37,,31208,246304,Darkmoon Dominion: Hunt,C,0
+649,8,37,,5581,250257,Eye of the Drowning Void,B,1
+641,8,37,,165,249346,Vaelgor's Final Stare,S,1
+659,8,37,,17046,251784,Sylvan Wakrapuku,D,1
+653,8,37,,31233,246307,Darkmoon Dominion: Void,C,1
+644,8,37,,29,249343,Gaze of the Alnseer,A,1
+642,8,37,,333,250223,Soulcatcher's Charm,S,2
+654,8,37,,31234,241340,Magister's Alchemist Stone,C,2
+645,8,37,,864,249810,Shadow of the Empyrean Requiem,A,2
+650,8,37,,16482,251792,Glorious Crusader's Keepsake,B,2
+660,8,37,,13390,151310,Reality Breacher,D,2
+651,8,37,,5836,249340,Wraps of Cosmic Madness,B,3
+661,8,37,,9102,50259,Nevermelting Ice Crystal,D,3
+655,8,37,,16570,251785,Void-Reaper's Libram,C,3
+646,8,37,,149,250144,Emberwing Feather,A,3
+647,8,37,,14,250256,Heart of Wind,A,4
+656,8,37,,16566,264878,Astalor's Anguish Agitator,C,4
+657,8,37,,16952,251786,Ever-Collapsing Void Fissure,C,5
+580,8,38,,29,249343,Gaze of the Alnseer,C,0
+572,8,38,,14,250256,Heart of Wind,A,0
+568,8,38,,864,249810,Shadow of the Empyrean Requiem,S,0
+577,8,38,,5581,250257,Eye of the Drowning Void,B,0
+587,8,38,,9102,50259,Nevermelting Ice Crystal,D,0
+569,8,38,,333,250223,Soulcatcher's Charm,S,1
+581,8,38,,1335,250258,Vessel of Tortured Souls,C,1
+578,8,38,,16769,248583,Drum of Renewed Bonds,B,1
+573,8,38,,5836,249340,Wraps of Cosmic Madness,A,1
+588,8,38,,16952,251786,Ever-Collapsing Void Fissure,D,1
+579,8,38,,16570,251785,Void-Reaper's Libram,B,2
+570,8,38,,334,249809,Locus-Walker's Ribbon,S,2
+574,8,38,,299,264507,Crucible of Erratic Energies,A,2
+589,8,38,,36443,245855,"",D,2
+582,8,38,,13390,151310,Reality Breacher,C,2
+575,8,38,,149,250144,Emberwing Feather,A,3
+590,8,38,,36453,245846,"",D,3
+583,8,38,,17046,251784,Sylvan Wakrapuku,C,3
+571,8,38,,165,249346,Vaelgor's Final Stare,S,3
+576,8,38,,3782,193718,Emerald Coach's Whistle,A,4
+591,8,38,,36449,245750,"",D,4
+584,8,38,,16482,251792,Glorious Crusader's Keepsake,C,4
+585,8,38,,16566,264878,Astalor's Anguish Agitator,C,5
+586,8,38,,21164,245829,Darkmoon Deck: Hunt,C,6
+346,8,39,,165,249346,Vaelgor's Final Stare,S,0
+359,8,39,,1335,250258,Vessel of Tortured Souls,D,0
+354,8,39,,5581,250257,Eye of the Drowning Void,C,0
+348,8,39,,29,249343,Gaze of the Alnseer,A,0
+350,8,39,,864,249810,Shadow of the Empyrean Requiem,B,0
+349,8,39,,333,250223,Soulcatcher's Charm,A,1
+347,8,39,,334,249809,Locus-Walker's Ribbon,S,1
+360,8,39,,13390,151310,Reality Breacher,D,1
+355,8,39,,14,250256,Heart of Wind,C,1
+351,8,39,,149,250144,Emberwing Feather,B,1
+352,8,39,,3782,193718,Emerald Coach's Whistle,B,2
+356,8,39,,16482,251792,Glorious Crusader's Keepsake,C,2
+361,8,39,,17009,251787,Sealed Chaos Urn,D,2
+357,8,39,,16570,251785,Void-Reaper's Libram,C,3
+353,8,39,,5836,249340,Wraps of Cosmic Madness,B,3
+362,8,39,,17046,251784,Sylvan Wakrapuku,D,3
+363,8,39,,18400,251783,Lost Idol of the Hash'ey,D,4
+358,8,39,,16952,251786,Ever-Collapsing Void Fissure,C,4
+152,8,41,,9102,50259,Nevermelting Ice Crystal,C,0
+147,8,41,,149,250144,Emberwing Feather,A,0
+145,8,41,,29,249343,Gaze of the Alnseer,S,0
+159,8,41,,333,250223,Soulcatcher's Charm,D,0
+150,8,41,,864,249810,Shadow of the Empyrean Requiem,B,0
+160,8,41,,5750,250462,Forgotten Farstrider's Insignia,D,1
+153,8,41,,5581,250257,Eye of the Drowning Void,C,1
+151,8,41,,1335,250258,Vessel of Tortured Souls,B,1
+148,8,41,,14,250256,Heart of Wind,A,1
+146,8,41,,165,249346,Vaelgor's Final Stare,S,1
+161,8,41,,31224,246305,Darkmoon Dominion: Blood,D,2
+149,8,41,,334,249809,Locus-Walker's Ribbon,A,2
+154,8,41,,1137,249808,Litany of Lightblind Wrath,C,2
+155,8,41,,13390,151310,Reality Breacher,C,3
+162,8,41,,31226,246306,Darkmoon Dominion: Rot,D,3
+163,8,41,,31233,246307,Darkmoon Dominion: Void,D,4
+156,8,41,,31208,246304,Darkmoon Dominion: Hunt,C,4
+157,8,41,,31234,241340,Magister's Alchemist Stone,C,5
+158,8,41,,5836,249340,Wraps of Cosmic Madness,C,6
