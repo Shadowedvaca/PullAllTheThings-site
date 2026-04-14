@@ -265,6 +265,7 @@ function _renderHeader(char) {
     if (char.raiderio_url) links.push({ href: char.raiderio_url, label: "Raider.IO" });
     if (char.wcl_url)      links.push({ href: char.wcl_url,      label: "Warcraft Logs" });
     if (char.armory_url)   links.push({ href: char.armory_url,   label: "Armory" });
+    if (char.class_name === "Hunter") links.push({ href: "https://www.wow-petopia.com/browse.php", label: "Petopia" });
     extEl.innerHTML = links.map(l =>
       `<a href="${l.href}" target="_blank" rel="noopener noreferrer" class="mcn-char-ext-link">${l.label} &#8599;</a>`
     ).join("");
