@@ -1,0 +1,677 @@
+{% extends "base_admin.html" %}
+{% block title %}DB Explorer{% endblock %}
+
+{% block head %}
+<style>
+/* ── Layout ─────────────────────────────────────────────────────────── */
+.dbx-shell {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* ── Left sidebar ────────────────────────────────────────────────────── */
+.dbx-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #0f0f12;
+}
+.dbx-sidebar-top {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.dbx-sidebar-top label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+}
+.dbx-schema-sel {
+    width: 100%;
+    background: #1a1a1e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.35rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.dbx-type-tabs {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+.dbx-type-tab {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    border: 1px solid var(--color-border);
+    background: none;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.dbx-type-tab.active {
+    background: var(--color-gold);
+    color: #0a0a0b;
+    border-color: var(--color-gold);
+}
+.dbx-obj-search {
+    width: 100%;
+    background: #1a1a1e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+.dbx-obj-search::placeholder { color: var(--color-text-muted); }
+
+.dbx-obj-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.25rem 0;
+}
+.dbx-obj-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+}
+.dbx-obj-item:hover { background: #1a1a1e; color: var(--color-text); }
+.dbx-obj-item.active { background: #1e1e24; color: var(--color-gold); }
+.dbx-obj-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.1rem 0.3rem;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+.dbx-obj-badge.TABLE  { background: #1d3557; color: #74b9ff; }
+.dbx-obj-badge.VIEW   { background: #1b3a2a; color: #55efc4; }
+.dbx-obj-badge.PROCEDURE,
+.dbx-obj-badge.FUNCTION { background: #3d1f4e; color: #d6a8ff; }
+.dbx-obj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbx-obj-empty { padding: 0.75rem; color: var(--color-text-muted); font-size: 0.82rem; font-style: italic; }
+
+/* ── Main panel ──────────────────────────────────────────────────────── */
+.dbx-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.dbx-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    font-style: italic;
+}
+
+/* ── Object header ───────────────────────────────────────────────────── */
+.dbx-obj-header {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: #0f0f12;
+    flex-shrink: 0;
+}
+.dbx-obj-header-name {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    color: var(--color-gold);
+}
+.dbx-obj-header-schema {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+/* ── Code section ────────────────────────────────────────────────────── */
+.dbx-code-section {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.dbx-code-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    background: #0f0f12;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    width: 100%;
+    text-align: left;
+}
+.dbx-code-toggle:hover { color: var(--color-text); }
+.dbx-code-toggle .dbx-chevron { transition: transform 0.15s; font-size: 0.7rem; }
+.dbx-code-toggle.open .dbx-chevron { transform: rotate(90deg); }
+
+.dbx-code-wrap {
+    position: relative;
+    background: #0a0a0d;
+    max-height: 340px;
+    overflow: auto;
+    display: none;
+}
+.dbx-code-wrap.visible { display: block; }
+.dbx-code-wrap pre {
+    margin: 0;
+    padding: 0.75rem 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: #c9d1d9;
+    white-space: pre;
+    tab-size: 4;
+}
+.dbx-copy-btn {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    background: #2a2a2e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    z-index: 1;
+}
+.dbx-copy-btn:hover { color: var(--color-text); }
+
+/* ── Data section ────────────────────────────────────────────────────── */
+.dbx-data-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.dbx-data-toolbar {
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: #0f0f12;
+    flex-wrap: wrap;
+}
+.dbx-search-input {
+    background: #1a1a1e;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    width: 220px;
+}
+.dbx-search-input::placeholder { color: var(--color-text-muted); }
+.dbx-row-info {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-left: auto;
+}
+.dbx-btn {
+    padding: 0.3rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background: #2a2a2e;
+    color: var(--color-text);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.dbx-btn:hover { opacity: 0.8; }
+.dbx-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.dbx-btn-gold { background: var(--color-gold); color: #0a0a0b; border-color: var(--color-gold); font-weight: 600; }
+
+.dbx-table-wrap {
+    flex: 1;
+    overflow: auto;
+}
+.dbx-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+.dbx-table th {
+    position: sticky;
+    top: 0;
+    background: #141418;
+    color: var(--color-text-muted);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+.dbx-table th:hover { color: var(--color-text); }
+.dbx-table th.sort-asc::after  { content: ' ▲'; color: var(--color-gold); font-size: 0.65rem; }
+.dbx-table th.sort-desc::after { content: ' ▼'; color: var(--color-gold); font-size: 0.65rem; }
+.dbx-table td {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid #1a1a1e;
+    color: var(--color-text);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
+}
+.dbx-table td.null-val { color: var(--color-text-muted); font-style: italic; }
+.dbx-table tr:hover td { background: #1a1a1e; }
+.dbx-table-empty { padding: 1.5rem; color: var(--color-text-muted); font-size: 0.85rem; font-style: italic; }
+
+.dbx-pagination {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-top: 1px solid var(--color-border);
+    background: #0f0f12;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+}
+.dbx-pagination-info { color: var(--color-text-muted); flex: 1; }
+
+/* ── Loading spinner ─────────────────────────────────────────────────── */
+.dbx-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+.spinner-sm {
+    width: 14px; height: 14px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-gold);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set current_screen = "db_explorer" %}
+<div class="dbx-shell">
+
+    {# ── Left sidebar ───────────────────────────────────────────────── #}
+    <aside class="dbx-sidebar">
+        <div class="dbx-sidebar-top">
+            <div>
+                <label for="dbx-schema">Schema</label>
+                <select id="dbx-schema" class="dbx-schema-sel" onchange="loadObjects()">
+                    <option value="">Loading…</option>
+                </select>
+            </div>
+            <div>
+                <div class="dbx-type-tabs" id="dbx-type-tabs">
+                    <button class="dbx-type-tab active" data-type="ALL"  onclick="setTypeFilter('ALL')">All</button>
+                    <button class="dbx-type-tab" data-type="TABLE"      onclick="setTypeFilter('TABLE')">Tables</button>
+                    <button class="dbx-type-tab" data-type="VIEW"       onclick="setTypeFilter('VIEW')">Views</button>
+                    <button class="dbx-type-tab" data-type="ROUTINE"    onclick="setTypeFilter('ROUTINE')">Routines</button>
+                </div>
+            </div>
+            <input type="search" class="dbx-obj-search" id="dbx-obj-search"
+                   placeholder="Filter objects…" oninput="renderObjectList()">
+        </div>
+        <div class="dbx-obj-list" id="dbx-obj-list">
+            <div class="dbx-obj-empty">Select a schema above.</div>
+        </div>
+    </aside>
+
+    {# ── Main panel ─────────────────────────────────────────────────── #}
+    <div class="dbx-main" id="dbx-main">
+        <div class="dbx-placeholder" id="dbx-placeholder">
+            Select a schema and object to explore.
+        </div>
+
+        {# Object header — hidden until selection #}
+        <div class="dbx-obj-header" id="dbx-obj-header" style="display:none">
+            <span class="dbx-obj-badge" id="dbx-hdr-badge">TABLE</span>
+            <span class="dbx-obj-header-schema" id="dbx-hdr-schema"></span>
+            <span style="color:var(--color-text-muted)">.</span>
+            <span class="dbx-obj-header-name" id="dbx-hdr-name"></span>
+        </div>
+
+        {# Code section #}
+        <div class="dbx-code-section" id="dbx-code-section" style="display:none">
+            <button class="dbx-code-toggle" id="dbx-code-toggle" onclick="toggleCode()">
+                <span class="dbx-chevron">▶</span>
+                <span id="dbx-code-label">Definition</span>
+            </button>
+            <div class="dbx-code-wrap" id="dbx-code-wrap">
+                <button class="dbx-copy-btn" onclick="copyCode()">Copy</button>
+                <pre id="dbx-code-pre"></pre>
+            </div>
+        </div>
+
+        {# Data section — only for tables/views #}
+        <div class="dbx-data-section" id="dbx-data-section" style="display:none">
+            <div class="dbx-data-toolbar">
+                <input type="search" class="dbx-search-input" id="dbx-data-search"
+                       placeholder="Search all columns…"
+                       oninput="debounceSearch(this.value)">
+                <button class="dbx-btn" onclick="exportCsv()">Export CSV</button>
+                <span class="dbx-row-info" id="dbx-row-info"></span>
+            </div>
+            <div class="dbx-table-wrap" id="dbx-table-wrap">
+                <div class="dbx-loading"><span class="spinner-sm"></span> Loading data…</div>
+            </div>
+            <div class="dbx-pagination" id="dbx-pagination" style="display:none">
+                <button class="dbx-btn" id="dbx-prev" onclick="paginate(-1)" disabled>← Prev</button>
+                <span class="dbx-pagination-info" id="dbx-page-info"></span>
+                <button class="dbx-btn" id="dbx-next" onclick="paginate(1)" disabled>Next →</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let _allObjects = [];       // full object list for current schema
+let _typeFilter = 'ALL';
+let _currentObj = null;     // {schema, name, type}
+let _sortCol = null;
+let _sortDir = 'asc';
+let _offset = 0;
+let _limit = 200;
+let _total = 0;
+let _searchVal = '';
+let _searchTimer = null;
+let _codeOpen = false;
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async function init() {
+    const resp = await fetch('/admin/db-explorer/schemas', { credentials: 'include' });
+    const d = await resp.json();
+    if (!d.ok) { console.error('Failed to load schemas', d.error); return; }
+
+    const sel = document.getElementById('dbx-schema');
+    sel.innerHTML = '<option value="">— select schema —</option>';
+    d.schemas.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        sel.appendChild(opt);
+    });
+})();
+
+// ── Schema / object list ──────────────────────────────────────────────────
+async function loadObjects() {
+    const schema = document.getElementById('dbx-schema').value;
+    if (!schema) { _allObjects = []; renderObjectList(); return; }
+
+    const list = document.getElementById('dbx-obj-list');
+    list.innerHTML = '<div class="dbx-obj-empty"><span class="spinner-sm" style="display:inline-block;vertical-align:middle;margin-right:4px"></span> Loading…</div>';
+
+    const resp = await fetch(`/admin/db-explorer/objects?schema=${encodeURIComponent(schema)}`, { credentials: 'include' });
+    const d = await resp.json();
+    if (!d.ok) { list.innerHTML = `<div class="dbx-obj-empty">Error: ${escHtml(d.error)}</div>`; return; }
+
+    _allObjects = d.objects;
+    renderObjectList();
+}
+
+function setTypeFilter(t) {
+    _typeFilter = t;
+    document.querySelectorAll('.dbx-type-tab').forEach(b => {
+        b.classList.toggle('active', b.dataset.type === t);
+    });
+    renderObjectList();
+}
+
+function renderObjectList() {
+    const query = document.getElementById('dbx-obj-search').value.toLowerCase();
+    const list = document.getElementById('dbx-obj-list');
+
+    const filtered = _allObjects.filter(o => {
+        if (_typeFilter !== 'ALL') {
+            if (_typeFilter === 'ROUTINE' && o.type !== 'PROCEDURE' && o.type !== 'FUNCTION') return false;
+            if (_typeFilter !== 'ROUTINE' && o.type !== _typeFilter) return false;
+        }
+        if (query && !o.name.toLowerCase().includes(query)) return false;
+        return true;
+    });
+
+    if (!filtered.length) {
+        list.innerHTML = '<div class="dbx-obj-empty">No objects found.</div>';
+        return;
+    }
+
+    list.innerHTML = filtered.map(o => `
+        <button class="dbx-obj-item ${_currentObj && _currentObj.name === o.name && _currentObj.type === o.type ? 'active' : ''}"
+                onclick="selectObject(${JSON.stringify(o.name)}, ${JSON.stringify(o.type)})">
+            <span class="dbx-obj-badge ${escHtml(o.type)}">${escHtml(o.type.substring(0,4))}</span>
+            <span class="dbx-obj-name">${escHtml(o.name)}</span>
+        </button>
+    `).join('');
+}
+
+// ── Object selection ──────────────────────────────────────────────────────
+async function selectObject(name, type) {
+    const schema = document.getElementById('dbx-schema').value;
+    if (!schema) return;
+
+    _currentObj = { schema, name, type };
+    _offset = 0;
+    _sortCol = null;
+    _sortDir = 'asc';
+    _searchVal = '';
+    document.getElementById('dbx-data-search').value = '';
+
+    // Update active state in list
+    renderObjectList();
+
+    // Show header
+    document.getElementById('dbx-placeholder').style.display = 'none';
+    document.getElementById('dbx-obj-header').style.display = 'flex';
+    document.getElementById('dbx-hdr-badge').textContent = type;
+    document.getElementById('dbx-hdr-badge').className = `dbx-obj-badge ${type}`;
+    document.getElementById('dbx-hdr-schema').textContent = schema;
+    document.getElementById('dbx-hdr-name').textContent = name;
+
+    // Show code section; auto-open for routines
+    document.getElementById('dbx-code-section').style.display = '';
+    const isRoutine = type === 'PROCEDURE' || type === 'FUNCTION';
+    document.getElementById('dbx-code-label').textContent = isRoutine ? 'Procedure Code' : 'Table Definition';
+    document.getElementById('dbx-code-pre').textContent = 'Loading…';
+    if (isRoutine && !_codeOpen) toggleCode();
+    else if (!isRoutine && _codeOpen) toggleCode();
+
+    // Show/hide data section
+    const hasData = type === 'TABLE' || type === 'VIEW';
+    document.getElementById('dbx-data-section').style.display = hasData ? 'flex' : 'none';
+
+    // Load definition
+    loadDefinition(schema, name, type);
+
+    // Load data if applicable
+    if (hasData) loadData();
+}
+
+function toggleCode() {
+    _codeOpen = !_codeOpen;
+    const wrap = document.getElementById('dbx-code-wrap');
+    const toggle = document.getElementById('dbx-code-toggle');
+    wrap.classList.toggle('visible', _codeOpen);
+    toggle.classList.toggle('open', _codeOpen);
+}
+
+async function loadDefinition(schema, name, type) {
+    const url = `/admin/db-explorer/definition?schema=${encodeURIComponent(schema)}&name=${encodeURIComponent(name)}&obj_type=${encodeURIComponent(type)}`;
+    try {
+        const resp = await fetch(url, { credentials: 'include' });
+        const d = await resp.json();
+        document.getElementById('dbx-code-pre').textContent = d.ok ? d.code : `Error: ${d.error}`;
+    } catch (e) {
+        document.getElementById('dbx-code-pre').textContent = `Error: ${e}`;
+    }
+}
+
+function copyCode() {
+    const text = document.getElementById('dbx-code-pre').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.dbx-copy-btn');
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = orig, 1500);
+    });
+}
+
+// ── Data grid ─────────────────────────────────────────────────────────────
+async function loadData() {
+    if (!_currentObj) return;
+    const { schema, name } = _currentObj;
+
+    const wrap = document.getElementById('dbx-table-wrap');
+    wrap.innerHTML = '<div class="dbx-loading"><span class="spinner-sm"></span> Loading data…</div>';
+    document.getElementById('dbx-pagination').style.display = 'none';
+    document.getElementById('dbx-row-info').textContent = '';
+
+    const params = new URLSearchParams({
+        schema, name,
+        limit: _limit,
+        offset: _offset,
+        direction: _sortDir,
+    });
+    if (_sortCol) params.set('sort', _sortCol);
+    if (_searchVal) params.set('search', _searchVal);
+
+    try {
+        const resp = await fetch(`/admin/db-explorer/data?${params}`, { credentials: 'include' });
+        const d = await resp.json();
+        if (!d.ok) { wrap.innerHTML = `<div class="dbx-table-empty">Error: ${escHtml(d.error)}</div>`; return; }
+
+        _total = d.total;
+        renderTable(d.columns, d.rows);
+        renderPagination();
+
+        const from = _offset + 1;
+        const to = Math.min(_offset + d.rows.length, _total);
+        document.getElementById('dbx-row-info').textContent =
+            _total === 0 ? 'No rows' : `${from}–${to} of ${_total.toLocaleString()} rows`;
+    } catch (e) {
+        wrap.innerHTML = `<div class="dbx-table-empty">Error: ${e}</div>`;
+    }
+}
+
+function renderTable(columns, rows) {
+    const wrap = document.getElementById('dbx-table-wrap');
+    if (!rows.length) {
+        wrap.innerHTML = '<div class="dbx-table-empty">No rows returned.</div>';
+        return;
+    }
+
+    const thead = columns.map(col => {
+        let cls = '';
+        if (_sortCol === col) cls = _sortDir === 'asc' ? 'sort-asc' : 'sort-desc';
+        return `<th class="${cls}" onclick="sortBy(${JSON.stringify(col)})">${escHtml(col)}</th>`;
+    }).join('');
+
+    const tbody = rows.map(row =>
+        '<tr>' + row.map(val => {
+            if (val === null) return '<td class="null-val">NULL</td>';
+            const s = String(val);
+            return `<td title="${escHtml(s)}">${escHtml(s)}</td>`;
+        }).join('') + '</tr>'
+    ).join('');
+
+    wrap.innerHTML = `
+        <table class="dbx-table">
+            <thead><tr>${thead}</tr></thead>
+            <tbody>${tbody}</tbody>
+        </table>`;
+}
+
+function renderPagination() {
+    const pg = document.getElementById('dbx-pagination');
+    if (_total <= _limit) { pg.style.display = 'none'; return; }
+    pg.style.display = 'flex';
+
+    const page = Math.floor(_offset / _limit) + 1;
+    const pages = Math.ceil(_total / _limit);
+    document.getElementById('dbx-page-info').textContent = `Page ${page} of ${pages}`;
+    document.getElementById('dbx-prev').disabled = _offset === 0;
+    document.getElementById('dbx-next').disabled = _offset + _limit >= _total;
+}
+
+function paginate(dir) {
+    _offset = Math.max(0, _offset + dir * _limit);
+    loadData();
+}
+
+function sortBy(col) {
+    if (_sortCol === col) {
+        _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        _sortCol = col;
+        _sortDir = 'asc';
+    }
+    _offset = 0;
+    loadData();
+}
+
+function debounceSearch(val) {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => {
+        _searchVal = val;
+        _offset = 0;
+        loadData();
+    }, 350);
+}
+
+function exportCsv() {
+    if (!_currentObj) return;
+    const { schema, name } = _currentObj;
+    const params = new URLSearchParams({ schema, name, fmt: 'csv', limit: 10000, offset: 0 });
+    if (_searchVal) params.set('search', _searchVal);
+    if (_sortCol) params.set('sort', _sortCol);
+    params.set('direction', _sortDir);
+    window.location.href = `/admin/db-explorer/data?${params}`;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function escHtml(s) {
+    return String(s ?? '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}
