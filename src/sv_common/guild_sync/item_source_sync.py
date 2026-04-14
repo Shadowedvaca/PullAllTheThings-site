@@ -14,6 +14,7 @@ Display/track rule changes only require a code deploy — no re-sync.
 """
 
 import asyncio
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -249,6 +250,17 @@ async def _sync_encounter(
     enc_data = await client.get_journal_encounter(encounter_id)
     if not enc_data:
         return 0, [f"Could not fetch encounter {encounter_id} from Blizzard API"]
+
+    # Phase A: dual-write raw payload to landing schema
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO landing.blizzard_journal_encounters
+                (encounter_id, instance_id, payload)
+            VALUES ($1, $2, $3::jsonb)
+            """,
+            encounter_id, instance_id, json.dumps(enc_data),
+        )
 
     items = enc_data.get("items", [])
     if not items:
@@ -608,6 +620,18 @@ async def sync_catalyst_items_via_appearance(
                 *[client.get_item_appearance(app_id) for app_id in app_ids],
                 return_exceptions=True,
             )
+
+            # Phase A: dual-write raw appearance payloads to landing schema
+            for app_id, app_data in zip(app_ids, app_results):
+                if isinstance(app_data, Exception) or not app_data:
+                    continue
+                await conn.execute(
+                    """
+                    INSERT INTO landing.blizzard_appearances (appearance_id, payload)
+                    VALUES ($1, $2::jsonb)
+                    """,
+                    app_id, json.dumps(app_data),
+                )
 
             for app_id, app_data in zip(app_ids, app_results):
                 if isinstance(app_data, Exception) or not app_data:

@@ -1,0 +1,81 @@
+id,spec_id,name,slug
+1,1,Mountain Thane,mountain_thane
+2,1,Colossus,colossus
+3,2,Templar,templar
+4,2,Lightsmith,lightsmith
+5,3,Conduit of the Celestials,conduit_of_the_celestials
+6,3,Master of Harmony,master_of_harmony
+7,4,Elune's Chosen,elunes_chosen
+8,4,Druid of the Claw,druid_of_the_claw
+9,5,Annihilator,annihilator
+10,5,Aldrachi Reaver,aldrachi_reaver
+11,6,Deathbringer,deathbringer
+12,6,San'layn,san_layn
+13,7,Totemic,totemic
+14,7,Farseer,farseer
+15,8,Oracle,oracle
+16,8,Archon,archon
+17,9,Oracle,oracle
+18,9,Archon,archon
+19,10,Lightsmith,lightsmith
+20,10,Herald of the Sun,herald_of_the_sun
+21,11,Shado-pan,shado_pan
+22,11,Master of Harmony,master_of_harmony
+23,12,Flameshaper,flameshaper
+24,12,Chronowarden,chronowarden
+25,13,Wildstalker,wildstalker
+26,13,Keeper of the Grove,keeper_of_the_grove
+27,14,Mountain Thane,mountain_thane
+28,14,Slayer,slayer
+29,15,Mountain Thane,mountain_thane
+30,15,Slayer,slayer
+31,16,Totemic,totemic
+32,16,Stormbringer,stormbringer
+33,17,Trickster,trickster
+34,17,Fatebound,fatebound
+35,18,Deathstalker,deathstalker
+36,18,Fatebound,fatebound
+37,19,Deathstalker,deathstalker
+38,19,Trickster,trickster
+39,20,Herald of the Sun,herald_of_the_sun
+40,20,Templar,templar
+41,21,Shado-pan,shado_pan
+42,21,Conduit of the Celestials,conduit_of_the_celestials
+43,22,Sentinel,sentinel
+44,22,Pack Leader,pack_leader
+45,23,Wildstalker,wildstalker
+46,23,Druid of the Claw,druid_of_the_claw
+47,24,Scarred,scarred
+48,24,Aldrachi Reaver,aldrachi_reaver
+49,25,Deathbringer,deathbringer
+50,25,Rider of the Apocalypse,rider_of_the_apocalypse
+51,26,Rider of the Apocalypse,rider_of_the_apocalypse
+52,26,San'layn,san_layn
+53,27,Soul Harvester,soul_harvester
+54,27,Hellcaller,hellcaller
+55,28,Soul Harvester,soul_harvester
+56,28,Diabolist,diabolist
+57,29,Diabolist,diabolist
+58,29,Hellcaller,hellcaller
+59,30,Totemic,totemic
+60,30,Farseer,farseer
+61,31,Voidweaver,voidweaver
+62,31,Archon,archon
+63,32,Sunfury,sunfury
+64,32,Spellslinger,spellslinger
+65,33,Sunfury,sunfury
+66,33,Frostfire,frostfire
+67,34,Frostfire,frostfire
+68,34,Spellslinger,spellslinger
+69,35,Dark Ranger,dark_ranger
+70,35,Pack Leader,pack_leader
+71,36,Dark Ranger,dark_ranger
+72,36,Sentinel,sentinel
+73,37,Flameshaper,flameshaper
+74,37,Scalecommander,scalecommander
+75,38,Chronowarden,chronowarden
+76,38,Scalecommander,scalecommander
+77,39,Keeper of the Grove,keeper_of_the_grove
+78,39,Elune's Chosen,elunes_chosen
+79,41,Annihilator,annihilator
+80,41,Scarred,scarred

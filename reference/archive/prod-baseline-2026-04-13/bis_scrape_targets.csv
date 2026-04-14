@@ -1,0 +1,481 @@
+id,source_id,spec_id,hero_talent_id,content_type,url,preferred_technique,status,items_found,last_fetched
+1,8,6,,mythic_plus,https://www.wowhead.com/guide/classes/death-knight/blood/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:00:49.275592+00
+2,8,25,,mythic_plus,https://www.wowhead.com/guide/classes/death-knight/frost/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:00.965176+00
+3,8,26,,mythic_plus,https://www.wowhead.com/guide/classes/death-knight/unholy/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:11.950366+00
+4,8,41,,mythic_plus,https://www.wowhead.com/guide/classes/demon-hunter/devourer/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:23.041373+00
+5,8,24,,mythic_plus,https://www.wowhead.com/guide/classes/demon-hunter/havoc/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:34.243458+00
+6,8,5,,mythic_plus,https://www.wowhead.com/guide/classes/demon-hunter/vengeance/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:45.240061+00
+7,8,39,,mythic_plus,https://www.wowhead.com/guide/classes/druid/balance/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:02:02.977211+00
+8,8,23,,mythic_plus,https://www.wowhead.com/guide/classes/druid/feral/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:02:30.357913+00
+9,8,4,,mythic_plus,https://www.wowhead.com/guide/classes/druid/guardian/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:02:57.943711+00
+10,8,13,,mythic_plus,https://www.wowhead.com/guide/classes/druid/restoration/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:03:26.126717+00
+11,8,38,,mythic_plus,https://www.wowhead.com/guide/classes/evoker/augmentation/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:03:53.760869+00
+12,8,37,,mythic_plus,https://www.wowhead.com/guide/classes/evoker/devastation/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:04:21.389731+00
+13,8,12,,mythic_plus,https://www.wowhead.com/guide/classes/evoker/preservation/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:04:46.764353+00
+14,8,35,,mythic_plus,https://www.wowhead.com/guide/classes/hunter/beast-mastery/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:05:11.843383+00
+15,8,36,,mythic_plus,https://www.wowhead.com/guide/classes/hunter/marksmanship/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:05:36.651114+00
+16,8,22,,mythic_plus,https://www.wowhead.com/guide/classes/hunter/survival/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:06:02.45649+00
+17,8,32,,mythic_plus,https://www.wowhead.com/guide/classes/mage/arcane/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:06:27.350705+00
+18,8,33,,mythic_plus,https://www.wowhead.com/guide/classes/mage/fire/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:06:53.185628+00
+19,8,34,,mythic_plus,https://www.wowhead.com/guide/classes/mage/frost/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:07.766982+00
+20,8,3,,mythic_plus,https://www.wowhead.com/guide/classes/monk/brewmaster/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:07:18.738774+00
+21,8,11,,mythic_plus,https://www.wowhead.com/guide/classes/monk/mistweaver/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:30.309056+00
+22,8,21,,mythic_plus,https://www.wowhead.com/guide/classes/monk/windwalker/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:07:41.28144+00
+23,8,10,,mythic_plus,https://www.wowhead.com/guide/classes/paladin/holy/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:52.291453+00
+24,8,2,,mythic_plus,https://www.wowhead.com/guide/classes/paladin/protection/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:08:05.581787+00
+25,8,20,,mythic_plus,https://www.wowhead.com/guide/classes/paladin/retribution/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:08:32.479314+00
+26,8,8,,mythic_plus,https://www.wowhead.com/guide/classes/priest/discipline/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:08:57.977942+00
+27,8,9,,mythic_plus,https://www.wowhead.com/guide/classes/priest/holy/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:09.036969+00
+28,8,31,,mythic_plus,https://www.wowhead.com/guide/classes/priest/shadow/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:20.891201+00
+29,8,17,,mythic_plus,https://www.wowhead.com/guide/classes/rogue/assassination/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:09:31.805234+00
+30,8,18,,mythic_plus,https://www.wowhead.com/guide/classes/rogue/outlaw/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:09:53.077864+00
+31,8,19,,mythic_plus,https://www.wowhead.com/guide/classes/rogue/subtlety/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:10:19.353882+00
+32,8,30,,mythic_plus,https://www.wowhead.com/guide/classes/shaman/elemental/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:10:44.324964+00
+33,8,16,,mythic_plus,https://www.wowhead.com/guide/classes/shaman/enhancement/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:11:12.10871+00
+34,8,7,,mythic_plus,https://www.wowhead.com/guide/classes/shaman/restoration/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:11:37.542251+00
+35,8,27,,mythic_plus,https://www.wowhead.com/guide/classes/warlock/affliction/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:02.111944+00
+36,8,28,,mythic_plus,https://www.wowhead.com/guide/classes/warlock/demonology/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:45.044304+00
+37,8,29,,mythic_plus,https://www.wowhead.com/guide/classes/warlock/destruction/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:53.538257+00
+38,8,14,,mythic_plus,https://www.wowhead.com/guide/classes/warrior/arms/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:13:12.237438+00
+39,8,15,,mythic_plus,https://www.wowhead.com/guide/classes/warrior/fury/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:13:23.76275+00
+40,8,1,,mythic_plus,https://www.wowhead.com/guide/classes/warrior/protection/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:13:50.085609+00
+41,7,6,,raid,https://www.wowhead.com/guide/classes/death-knight/blood/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:00:50.348187+00
+42,7,25,,raid,https://www.wowhead.com/guide/classes/death-knight/frost/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:02.013898+00
+43,7,26,,raid,https://www.wowhead.com/guide/classes/death-knight/unholy/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:13.012499+00
+44,7,41,,raid,https://www.wowhead.com/guide/classes/demon-hunter/devourer/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:33.081505+00
+45,7,24,,raid,https://www.wowhead.com/guide/classes/demon-hunter/havoc/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:35.301961+00
+46,7,5,,raid,https://www.wowhead.com/guide/classes/demon-hunter/vengeance/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:46.301516+00
+47,7,39,,raid,https://www.wowhead.com/guide/classes/druid/balance/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:02:04.056242+00
+48,7,23,,raid,https://www.wowhead.com/guide/classes/druid/feral/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:02:31.422785+00
+49,7,4,,raid,https://www.wowhead.com/guide/classes/druid/guardian/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:03:00.886975+00
+50,7,13,,raid,https://www.wowhead.com/guide/classes/druid/restoration/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:03:27.174699+00
+51,7,38,,raid,https://www.wowhead.com/guide/classes/evoker/augmentation/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:04:13.032799+00
+52,7,37,,raid,https://www.wowhead.com/guide/classes/evoker/devastation/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:04:22.448589+00
+53,7,12,,raid,https://www.wowhead.com/guide/classes/evoker/preservation/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:04:47.814079+00
+54,7,35,,raid,https://www.wowhead.com/guide/classes/hunter/beast-mastery/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:05:12.916275+00
+55,7,36,,raid,https://www.wowhead.com/guide/classes/hunter/marksmanship/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:05:37.707001+00
+56,7,22,,raid,https://www.wowhead.com/guide/classes/hunter/survival/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:06:03.513268+00
+57,7,32,,raid,https://www.wowhead.com/guide/classes/mage/arcane/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:06:28.397756+00
+58,7,33,,raid,https://www.wowhead.com/guide/classes/mage/fire/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:06:54.258556+00
+59,7,34,,raid,https://www.wowhead.com/guide/classes/mage/frost/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:08.8329+00
+60,7,3,,raid,https://www.wowhead.com/guide/classes/monk/brewmaster/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:07:19.801382+00
+61,7,11,,raid,https://www.wowhead.com/guide/classes/monk/mistweaver/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:31.368202+00
+62,7,21,,raid,https://www.wowhead.com/guide/classes/monk/windwalker/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:07:42.353939+00
+63,7,10,,raid,https://www.wowhead.com/guide/classes/paladin/holy/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:53.34954+00
+64,7,2,,raid,https://www.wowhead.com/guide/classes/paladin/protection/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:08:06.646018+00
+65,7,20,,raid,https://www.wowhead.com/guide/classes/paladin/retribution/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:08:33.551978+00
+66,7,8,,raid,https://www.wowhead.com/guide/classes/priest/discipline/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:08:59.045706+00
+67,7,9,,raid,https://www.wowhead.com/guide/classes/priest/holy/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:10.088496+00
+68,7,31,,raid,https://www.wowhead.com/guide/classes/priest/shadow/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:21.945656+00
+69,7,17,,raid,https://www.wowhead.com/guide/classes/rogue/assassination/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:09:32.875268+00
+70,7,18,,raid,https://www.wowhead.com/guide/classes/rogue/outlaw/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:09:54.127813+00
+71,7,19,,raid,https://www.wowhead.com/guide/classes/rogue/subtlety/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:10:20.417224+00
+72,7,30,,raid,https://www.wowhead.com/guide/classes/shaman/elemental/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:10:45.396875+00
+73,7,16,,raid,https://www.wowhead.com/guide/classes/shaman/enhancement/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:11:13.176204+00
+74,7,7,,raid,https://www.wowhead.com/guide/classes/shaman/restoration/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:11:38.587995+00
+75,7,27,,raid,https://www.wowhead.com/guide/classes/warlock/affliction/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:03.172704+00
+76,7,28,,raid,https://www.wowhead.com/guide/classes/warlock/demonology/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:27.976627+00
+77,7,29,,raid,https://www.wowhead.com/guide/classes/warlock/destruction/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:54.611467+00
+78,7,14,,raid,https://www.wowhead.com/guide/classes/warrior/arms/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:13:13.310476+00
+79,7,15,,raid,https://www.wowhead.com/guide/classes/warrior/fury/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:13:24.828757+00
+80,7,1,,raid,https://www.wowhead.com/guide/classes/warrior/protection/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:13:51.141086+00
+81,3,6,,overall,https://www.wowhead.com/guide/classes/death-knight/blood/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:00:51.402553+00
+82,3,25,,overall,https://www.wowhead.com/guide/classes/death-knight/frost/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:03.076419+00
+83,3,26,,overall,https://www.wowhead.com/guide/classes/death-knight/unholy/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:21.899977+00
+84,3,41,,overall,https://www.wowhead.com/guide/classes/demon-hunter/devourer/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:24.099122+00
+85,3,24,,overall,https://www.wowhead.com/guide/classes/demon-hunter/havoc/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:36.352736+00
+86,3,5,,overall,https://www.wowhead.com/guide/classes/demon-hunter/vengeance/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:01:47.351773+00
+87,3,39,,overall,https://www.wowhead.com/guide/classes/druid/balance/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:02:05.135278+00
+88,3,23,,overall,https://www.wowhead.com/guide/classes/druid/feral/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:02:32.498608+00
+89,3,4,,overall,https://www.wowhead.com/guide/classes/druid/guardian/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:03:01.93915+00
+90,3,13,,overall,https://www.wowhead.com/guide/classes/druid/restoration/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:03:28.221138+00
+91,3,38,,overall,https://www.wowhead.com/guide/classes/evoker/augmentation/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:03:54.816976+00
+92,3,37,,overall,https://www.wowhead.com/guide/classes/evoker/devastation/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:04:45.350888+00
+93,3,12,,overall,https://www.wowhead.com/guide/classes/evoker/preservation/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:04:48.88388+00
+94,3,35,,overall,https://www.wowhead.com/guide/classes/hunter/beast-mastery/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:05:35.488947+00
+95,3,36,,overall,https://www.wowhead.com/guide/classes/hunter/marksmanship/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:05:38.754874+00
+96,3,22,,overall,https://www.wowhead.com/guide/classes/hunter/survival/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:06:04.567986+00
+97,3,32,,overall,https://www.wowhead.com/guide/classes/mage/arcane/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:06:29.44283+00
+98,3,33,,overall,https://www.wowhead.com/guide/classes/mage/fire/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:06:56.679324+00
+99,3,34,,overall,https://www.wowhead.com/guide/classes/mage/frost/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:09.905153+00
+100,3,3,,overall,https://www.wowhead.com/guide/classes/monk/brewmaster/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:07:20.869928+00
+101,3,11,,overall,https://www.wowhead.com/guide/classes/monk/mistweaver/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:32.430387+00
+102,3,21,,overall,https://www.wowhead.com/guide/classes/monk/windwalker/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:07:49.907843+00
+103,3,10,,overall,https://www.wowhead.com/guide/classes/paladin/holy/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:07:54.430897+00
+104,3,2,,overall,https://www.wowhead.com/guide/classes/paladin/protection/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:08:30.859767+00
+105,3,20,,overall,https://www.wowhead.com/guide/classes/paladin/retribution/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:08:34.620538+00
+106,3,8,,overall,https://www.wowhead.com/guide/classes/priest/discipline/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:00.113094+00
+107,3,9,,overall,https://www.wowhead.com/guide/classes/priest/holy/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:11.145829+00
+108,3,31,,overall,https://www.wowhead.com/guide/classes/priest/shadow/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:09:22.994809+00
+109,3,17,,overall,https://www.wowhead.com/guide/classes/rogue/assassination/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:09:33.930204+00
+110,3,18,,overall,https://www.wowhead.com/guide/classes/rogue/outlaw/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:09:55.182134+00
+111,3,19,,overall,https://www.wowhead.com/guide/classes/rogue/subtlety/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:10:42.927756+00
+112,3,30,,overall,https://www.wowhead.com/guide/classes/shaman/elemental/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:10:46.465597+00
+113,3,16,,overall,https://www.wowhead.com/guide/classes/shaman/enhancement/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:11:14.231984+00
+114,3,7,,overall,https://www.wowhead.com/guide/classes/shaman/restoration/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:11:39.641473+00
+115,3,27,,overall,https://www.wowhead.com/guide/classes/warlock/affliction/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:04.237914+00
+116,3,28,,overall,https://www.wowhead.com/guide/classes/warlock/demonology/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:29.033835+00
+117,3,29,,overall,https://www.wowhead.com/guide/classes/warlock/destruction/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:12:55.670244+00
+118,3,14,,overall,https://www.wowhead.com/guide/classes/warrior/arms/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:13:14.365878+00
+119,3,15,,overall,https://www.wowhead.com/guide/classes/warrior/fury/bis-gear#bis-gear,wh_gatherer,success,15,2026-04-12 06:13:26.030741+00
+120,3,1,,overall,https://www.wowhead.com/guide/classes/warrior/protection/bis-gear#bis-gear,wh_gatherer,success,16,2026-04-12 06:13:52.203937+00
+121,9,6,,overall,https://www.icy-veins.com/wow/blood-death-knight-pve-tank-gear-best-in-slot,html_parse,pending,0,
+122,9,25,,overall,https://www.icy-veins.com/wow/frost-death-knight-pve-dps-gear-best-in-slot,html_parse,pending,0,
+123,9,26,,overall,https://www.icy-veins.com/wow/unholy-death-knight-pve-dps-gear-best-in-slot,html_parse,pending,0,
+124,9,41,,overall,https://www.icy-veins.com/wow/devourer-demon-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+125,9,24,,overall,https://www.icy-veins.com/wow/havoc-demon-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+126,9,5,,overall,https://www.icy-veins.com/wow/vengeance-demon-hunter-pve-tank-gear-best-in-slot,html_parse,pending,0,
+127,9,39,,overall,https://www.icy-veins.com/wow/balance-druid-pve-dps-gear-best-in-slot,html_parse,pending,0,
+128,9,23,,overall,https://www.icy-veins.com/wow/feral-druid-pve-dps-gear-best-in-slot,html_parse,pending,0,
+129,9,4,,overall,https://www.icy-veins.com/wow/guardian-druid-pve-tank-gear-best-in-slot,html_parse,pending,0,
+130,9,13,,overall,https://www.icy-veins.com/wow/restoration-druid-pve-healer-gear-best-in-slot,html_parse,pending,0,
+131,9,38,,overall,https://www.icy-veins.com/wow/augmentation-evoker-pve-dps-gear-best-in-slot,html_parse,pending,0,
+132,9,37,,overall,https://www.icy-veins.com/wow/devastation-evoker-pve-dps-gear-best-in-slot,html_parse,pending,0,
+133,9,12,,overall,https://www.icy-veins.com/wow/preservation-evoker-pve-healer-gear-best-in-slot,html_parse,pending,0,
+134,9,35,,overall,https://www.icy-veins.com/wow/beast-mastery-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+135,9,36,,overall,https://www.icy-veins.com/wow/marksmanship-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+136,9,22,,overall,https://www.icy-veins.com/wow/survival-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+137,9,32,,overall,https://www.icy-veins.com/wow/arcane-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+138,9,33,,overall,https://www.icy-veins.com/wow/fire-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+139,9,34,,overall,https://www.icy-veins.com/wow/frost-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+140,9,3,,overall,https://www.icy-veins.com/wow/brewmaster-monk-pve-tank-gear-best-in-slot,html_parse,pending,0,
+141,9,11,,overall,https://www.icy-veins.com/wow/mistweaver-monk-pve-healer-gear-best-in-slot,html_parse,pending,0,
+142,9,21,,overall,https://www.icy-veins.com/wow/windwalker-monk-pve-dps-gear-best-in-slot,html_parse,pending,0,
+143,9,10,,overall,https://www.icy-veins.com/wow/holy-paladin-pve-healer-gear-best-in-slot,html_parse,pending,0,
+144,9,2,,overall,https://www.icy-veins.com/wow/protection-paladin-pve-tank-gear-best-in-slot,html_parse,pending,0,
+145,9,20,,overall,https://www.icy-veins.com/wow/retribution-paladin-pve-dps-gear-best-in-slot,html_parse,pending,0,
+146,9,8,,overall,https://www.icy-veins.com/wow/discipline-priest-pve-healer-gear-best-in-slot,html_parse,pending,0,
+147,9,9,,overall,https://www.icy-veins.com/wow/holy-priest-pve-healer-gear-best-in-slot,html_parse,pending,0,
+148,9,31,,overall,https://www.icy-veins.com/wow/shadow-priest-pve-dps-gear-best-in-slot,html_parse,pending,0,
+149,9,17,,overall,https://www.icy-veins.com/wow/assassination-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+150,9,18,,overall,https://www.icy-veins.com/wow/outlaw-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+151,9,19,,overall,https://www.icy-veins.com/wow/subtlety-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+152,9,30,,overall,https://www.icy-veins.com/wow/elemental-shaman-pve-dps-gear-best-in-slot,html_parse,pending,0,
+153,9,16,,overall,https://www.icy-veins.com/wow/enhancement-shaman-pve-dps-gear-best-in-slot,html_parse,pending,0,
+154,9,7,,overall,https://www.icy-veins.com/wow/restoration-shaman-pve-healer-gear-best-in-slot,html_parse,pending,0,
+155,9,27,,overall,https://www.icy-veins.com/wow/affliction-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+156,9,28,,overall,https://www.icy-veins.com/wow/demonology-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+157,9,29,,overall,https://www.icy-veins.com/wow/destruction-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+158,9,14,,overall,https://www.icy-veins.com/wow/arms-warrior-pve-dps-gear-best-in-slot,html_parse,pending,0,
+159,9,15,,overall,https://www.icy-veins.com/wow/fury-warrior-pve-dps-gear-best-in-slot,html_parse,pending,0,
+160,9,1,,overall,https://www.icy-veins.com/wow/protection-warrior-pve-tank-gear-best-in-slot,html_parse,pending,0,
+161,5,6,,mythic_plus,https://www.icy-veins.com/wow/blood-death-knight-pve-tank-gear-best-in-slot,html_parse,pending,0,
+162,5,25,,mythic_plus,https://www.icy-veins.com/wow/frost-death-knight-pve-dps-gear-best-in-slot,html_parse,pending,0,
+163,5,26,,mythic_plus,https://www.icy-veins.com/wow/unholy-death-knight-pve-dps-gear-best-in-slot,html_parse,pending,0,
+164,5,41,,mythic_plus,https://www.icy-veins.com/wow/devourer-demon-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+165,5,24,,mythic_plus,https://www.icy-veins.com/wow/havoc-demon-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+166,5,5,,mythic_plus,https://www.icy-veins.com/wow/vengeance-demon-hunter-pve-tank-gear-best-in-slot,html_parse,pending,0,
+167,5,39,,mythic_plus,https://www.icy-veins.com/wow/balance-druid-pve-dps-gear-best-in-slot,html_parse,pending,0,
+168,5,23,,mythic_plus,https://www.icy-veins.com/wow/feral-druid-pve-dps-gear-best-in-slot,html_parse,pending,0,
+169,5,4,,mythic_plus,https://www.icy-veins.com/wow/guardian-druid-pve-tank-gear-best-in-slot,html_parse,pending,0,
+170,5,13,,mythic_plus,https://www.icy-veins.com/wow/restoration-druid-pve-healer-gear-best-in-slot,html_parse,pending,0,
+171,5,38,,mythic_plus,https://www.icy-veins.com/wow/augmentation-evoker-pve-dps-gear-best-in-slot,html_parse,pending,0,
+172,5,37,,mythic_plus,https://www.icy-veins.com/wow/devastation-evoker-pve-dps-gear-best-in-slot,html_parse,pending,0,
+173,5,12,,mythic_plus,https://www.icy-veins.com/wow/preservation-evoker-pve-healer-gear-best-in-slot,html_parse,pending,0,
+174,5,35,,mythic_plus,https://www.icy-veins.com/wow/beast-mastery-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+175,5,36,,mythic_plus,https://www.icy-veins.com/wow/marksmanship-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+176,5,22,,mythic_plus,https://www.icy-veins.com/wow/survival-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+177,5,32,,mythic_plus,https://www.icy-veins.com/wow/arcane-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+178,5,33,,mythic_plus,https://www.icy-veins.com/wow/fire-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+179,5,34,,mythic_plus,https://www.icy-veins.com/wow/frost-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+180,5,3,,mythic_plus,https://www.icy-veins.com/wow/brewmaster-monk-pve-tank-gear-best-in-slot,html_parse,pending,0,
+181,5,11,,mythic_plus,https://www.icy-veins.com/wow/mistweaver-monk-pve-healer-gear-best-in-slot,html_parse,pending,0,
+182,5,21,,mythic_plus,https://www.icy-veins.com/wow/windwalker-monk-pve-dps-gear-best-in-slot,html_parse,pending,0,
+183,5,10,,mythic_plus,https://www.icy-veins.com/wow/holy-paladin-pve-healer-gear-best-in-slot,html_parse,pending,0,
+184,5,2,,mythic_plus,https://www.icy-veins.com/wow/protection-paladin-pve-tank-gear-best-in-slot,html_parse,pending,0,
+185,5,20,,mythic_plus,https://www.icy-veins.com/wow/retribution-paladin-pve-dps-gear-best-in-slot,html_parse,pending,0,
+186,5,8,,mythic_plus,https://www.icy-veins.com/wow/discipline-priest-pve-healer-gear-best-in-slot,html_parse,pending,0,
+187,5,9,,mythic_plus,https://www.icy-veins.com/wow/holy-priest-pve-healer-gear-best-in-slot,html_parse,pending,0,
+188,5,31,,mythic_plus,https://www.icy-veins.com/wow/shadow-priest-pve-dps-gear-best-in-slot,html_parse,pending,0,
+189,5,17,,mythic_plus,https://www.icy-veins.com/wow/assassination-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+190,5,18,,mythic_plus,https://www.icy-veins.com/wow/outlaw-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+191,5,19,,mythic_plus,https://www.icy-veins.com/wow/subtlety-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+192,5,30,,mythic_plus,https://www.icy-veins.com/wow/elemental-shaman-pve-dps-gear-best-in-slot,html_parse,pending,0,
+193,5,16,,mythic_plus,https://www.icy-veins.com/wow/enhancement-shaman-pve-dps-gear-best-in-slot,html_parse,pending,0,
+194,5,7,,mythic_plus,https://www.icy-veins.com/wow/restoration-shaman-pve-healer-gear-best-in-slot,html_parse,pending,0,
+195,5,27,,mythic_plus,https://www.icy-veins.com/wow/affliction-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+196,5,28,,mythic_plus,https://www.icy-veins.com/wow/demonology-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+197,5,29,,mythic_plus,https://www.icy-veins.com/wow/destruction-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+198,5,14,,mythic_plus,https://www.icy-veins.com/wow/arms-warrior-pve-dps-gear-best-in-slot,html_parse,pending,0,
+199,5,15,,mythic_plus,https://www.icy-veins.com/wow/fury-warrior-pve-dps-gear-best-in-slot,html_parse,pending,0,
+200,5,1,,mythic_plus,https://www.icy-veins.com/wow/protection-warrior-pve-tank-gear-best-in-slot,html_parse,pending,0,
+201,4,6,,raid,https://www.icy-veins.com/wow/blood-death-knight-pve-tank-gear-best-in-slot,html_parse,pending,0,
+202,4,25,,raid,https://www.icy-veins.com/wow/frost-death-knight-pve-dps-gear-best-in-slot,html_parse,pending,0,
+203,4,26,,raid,https://www.icy-veins.com/wow/unholy-death-knight-pve-dps-gear-best-in-slot,html_parse,pending,0,
+204,4,41,,raid,https://www.icy-veins.com/wow/devourer-demon-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+205,4,24,,raid,https://www.icy-veins.com/wow/havoc-demon-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+206,4,5,,raid,https://www.icy-veins.com/wow/vengeance-demon-hunter-pve-tank-gear-best-in-slot,html_parse,pending,0,
+207,4,39,,raid,https://www.icy-veins.com/wow/balance-druid-pve-dps-gear-best-in-slot,html_parse,pending,0,
+208,4,23,,raid,https://www.icy-veins.com/wow/feral-druid-pve-dps-gear-best-in-slot,html_parse,pending,0,
+209,4,4,,raid,https://www.icy-veins.com/wow/guardian-druid-pve-tank-gear-best-in-slot,html_parse,pending,0,
+210,4,13,,raid,https://www.icy-veins.com/wow/restoration-druid-pve-healer-gear-best-in-slot,html_parse,pending,0,
+211,4,38,,raid,https://www.icy-veins.com/wow/augmentation-evoker-pve-dps-gear-best-in-slot,html_parse,pending,0,
+212,4,37,,raid,https://www.icy-veins.com/wow/devastation-evoker-pve-dps-gear-best-in-slot,html_parse,pending,0,
+213,4,12,,raid,https://www.icy-veins.com/wow/preservation-evoker-pve-healer-gear-best-in-slot,html_parse,pending,0,
+214,4,35,,raid,https://www.icy-veins.com/wow/beast-mastery-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+215,4,36,,raid,https://www.icy-veins.com/wow/marksmanship-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+216,4,22,,raid,https://www.icy-veins.com/wow/survival-hunter-pve-dps-gear-best-in-slot,html_parse,pending,0,
+217,4,32,,raid,https://www.icy-veins.com/wow/arcane-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+218,4,33,,raid,https://www.icy-veins.com/wow/fire-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+219,4,34,,raid,https://www.icy-veins.com/wow/frost-mage-pve-dps-gear-best-in-slot,html_parse,pending,0,
+220,4,3,,raid,https://www.icy-veins.com/wow/brewmaster-monk-pve-tank-gear-best-in-slot,html_parse,pending,0,
+221,4,11,,raid,https://www.icy-veins.com/wow/mistweaver-monk-pve-healer-gear-best-in-slot,html_parse,pending,0,
+222,4,21,,raid,https://www.icy-veins.com/wow/windwalker-monk-pve-dps-gear-best-in-slot,html_parse,pending,0,
+223,4,10,,raid,https://www.icy-veins.com/wow/holy-paladin-pve-healer-gear-best-in-slot,html_parse,pending,0,
+224,4,2,,raid,https://www.icy-veins.com/wow/protection-paladin-pve-tank-gear-best-in-slot,html_parse,pending,0,
+225,4,20,,raid,https://www.icy-veins.com/wow/retribution-paladin-pve-dps-gear-best-in-slot,html_parse,pending,0,
+226,4,8,,raid,https://www.icy-veins.com/wow/discipline-priest-pve-healer-gear-best-in-slot,html_parse,pending,0,
+227,4,9,,raid,https://www.icy-veins.com/wow/holy-priest-pve-healer-gear-best-in-slot,html_parse,pending,0,
+228,4,31,,raid,https://www.icy-veins.com/wow/shadow-priest-pve-dps-gear-best-in-slot,html_parse,pending,0,
+229,4,17,,raid,https://www.icy-veins.com/wow/assassination-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+230,4,18,,raid,https://www.icy-veins.com/wow/outlaw-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+231,4,19,,raid,https://www.icy-veins.com/wow/subtlety-rogue-pve-dps-gear-best-in-slot,html_parse,pending,0,
+232,4,30,,raid,https://www.icy-veins.com/wow/elemental-shaman-pve-dps-gear-best-in-slot,html_parse,pending,0,
+233,4,16,,raid,https://www.icy-veins.com/wow/enhancement-shaman-pve-dps-gear-best-in-slot,html_parse,pending,0,
+234,4,7,,raid,https://www.icy-veins.com/wow/restoration-shaman-pve-healer-gear-best-in-slot,html_parse,pending,0,
+235,4,27,,raid,https://www.icy-veins.com/wow/affliction-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+236,4,28,,raid,https://www.icy-veins.com/wow/demonology-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+237,4,29,,raid,https://www.icy-veins.com/wow/destruction-warlock-pve-dps-gear-best-in-slot,html_parse,pending,0,
+238,4,14,,raid,https://www.icy-veins.com/wow/arms-warrior-pve-dps-gear-best-in-slot,html_parse,pending,0,
+239,4,15,,raid,https://www.icy-veins.com/wow/fury-warrior-pve-dps-gear-best-in-slot,html_parse,pending,0,
+240,4,1,,raid,https://www.icy-veins.com/wow/protection-warrior-pve-tank-gear-best-in-slot,html_parse,pending,0,
+241,6,6,11,overall,https://u.gg/wow/blood/death_knight/gear?hero=deathbringer,json_embed,success,15,2026-04-12 06:16:34.167085+00
+242,6,6,12,overall,https://u.gg/wow/blood/death_knight/gear?hero=san_layn,json_embed,success,15,2026-04-12 06:16:36.878668+00
+243,6,25,49,overall,https://u.gg/wow/frost/death_knight/gear?hero=deathbringer,json_embed,success,15,2026-04-12 06:16:54.496741+00
+244,6,25,50,overall,https://u.gg/wow/frost/death_knight/gear?hero=rider_of_the_apocalypse,json_embed,success,15,2026-04-12 06:16:51.672893+00
+245,6,26,51,overall,https://u.gg/wow/unholy/death_knight/gear?hero=rider_of_the_apocalypse,json_embed,success,15,2026-04-12 06:17:11.196759+00
+246,6,26,52,overall,https://u.gg/wow/unholy/death_knight/gear?hero=san_layn,json_embed,success,15,2026-04-12 06:17:08.70681+00
+247,6,41,79,overall,https://u.gg/wow/devourer/demon_hunter/gear?hero=annihilator,json_embed,success,16,2026-04-12 06:27:58.625194+00
+248,6,41,80,overall,https://u.gg/wow/devourer/demon_hunter/gear?hero=scarred,json_embed,success,16,2026-04-12 06:27:55.718806+00
+249,6,24,48,overall,https://u.gg/wow/havoc/demon_hunter/gear?hero=aldrachi_reaver,json_embed,success,16,2026-04-12 06:28:14.130271+00
+250,6,24,47,overall,https://u.gg/wow/havoc/demon_hunter/gear?hero=scarred,json_embed,success,16,2026-04-12 06:28:16.732537+00
+251,6,5,10,overall,https://u.gg/wow/vengeance/demon_hunter/gear?hero=aldrachi_reaver,json_embed,success,16,2026-04-12 06:28:24.970511+00
+252,6,5,9,overall,https://u.gg/wow/vengeance/demon_hunter/gear?hero=annihilator,json_embed,success,16,2026-04-12 06:28:27.70595+00
+253,6,39,77,overall,https://u.gg/wow/balance/druid/gear?hero=keeper_of_the_grove,json_embed,success,15,2026-04-12 06:02:09.705617+00
+254,6,39,78,overall,https://u.gg/wow/balance/druid/gear?hero=elunes_chosen,json_embed,success,15,2026-04-12 06:02:13.482557+00
+255,6,23,45,overall,https://u.gg/wow/feral/druid/gear?hero=wildstalker,json_embed,success,15,2026-04-12 06:02:36.240094+00
+256,6,23,46,overall,https://u.gg/wow/feral/druid/gear?hero=druid_of_the_claw,json_embed,success,15,2026-04-12 06:02:40.221833+00
+257,6,4,7,overall,https://u.gg/wow/guardian/druid/gear?hero=elunes_chosen,json_embed,success,15,2026-04-12 06:03:05.779185+00
+258,6,4,8,overall,https://u.gg/wow/guardian/druid/gear?hero=druid_of_the_claw,json_embed,success,15,2026-04-12 06:03:10.111434+00
+259,6,13,25,overall,https://u.gg/wow/restoration/druid/gear?hero=wildstalker,json_embed,success,15,2026-04-12 06:03:31.850657+00
+260,6,13,26,overall,https://u.gg/wow/restoration/druid/gear?hero=keeper_of_the_grove,json_embed,success,15,2026-04-12 06:03:35.663686+00
+261,6,38,75,overall,https://u.gg/wow/augmentation/evoker/gear?hero=chronowarden,json_embed,success,15,2026-04-12 06:04:20.262313+00
+262,6,38,76,overall,https://u.gg/wow/augmentation/evoker/gear?hero=scalecommander,json_embed,success,15,2026-04-12 06:04:16.630089+00
+263,6,37,73,overall,https://u.gg/wow/devastation/evoker/gear?hero=flameshaper,json_embed,success,15,2026-04-12 06:04:26.580294+00
+264,6,37,74,overall,https://u.gg/wow/devastation/evoker/gear?hero=scalecommander,json_embed,success,15,2026-04-12 06:04:30.075935+00
+265,6,12,23,overall,https://u.gg/wow/preservation/evoker/gear?hero=flameshaper,json_embed,success,15,2026-04-12 06:04:52.432727+00
+266,6,12,24,overall,https://u.gg/wow/preservation/evoker/gear?hero=chronowarden,json_embed,success,15,2026-04-12 06:04:56.427515+00
+267,6,35,69,overall,https://u.gg/wow/beast_mastery/hunter/gear?hero=dark_ranger,json_embed,success,15,2026-04-12 06:05:16.339687+00
+268,6,35,70,overall,https://u.gg/wow/beast_mastery/hunter/gear?hero=pack_leader,json_embed,success,15,2026-04-12 06:05:19.73923+00
+269,6,36,71,overall,https://u.gg/wow/marksmanship/hunter/gear?hero=dark_ranger,json_embed,success,15,2026-04-12 06:05:42.485284+00
+270,6,36,72,overall,https://u.gg/wow/marksmanship/hunter/gear?hero=sentinel,json_embed,success,15,2026-04-12 06:06:00.435511+00
+271,6,22,43,overall,https://u.gg/wow/survival/hunter/gear?hero=sentinel,json_embed,success,15,2026-04-12 06:06:07.999075+00
+272,6,22,44,overall,https://u.gg/wow/survival/hunter/gear?hero=pack_leader,json_embed,success,15,2026-04-12 06:06:11.929172+00
+273,6,32,63,overall,https://u.gg/wow/arcane/mage/gear?hero=sunfury,json_embed,success,15,2026-04-12 06:06:33.524054+00
+274,6,32,64,overall,https://u.gg/wow/arcane/mage/gear?hero=spellslinger,json_embed,success,15,2026-04-12 06:06:37.476317+00
+275,6,33,65,overall,https://u.gg/wow/fire/mage/gear?hero=sunfury,json_embed,success,15,2026-04-12 06:07:00.269962+00
+276,6,33,66,overall,https://u.gg/wow/fire/mage/gear?hero=frostfire,json_embed,success,15,2026-04-12 06:28:41.601063+00
+277,6,34,67,overall,https://u.gg/wow/frost/mage/gear?hero=frostfire,json_embed,success,15,2026-04-12 06:28:58.136279+00
+278,6,34,68,overall,https://u.gg/wow/frost/mage/gear?hero=spellslinger,json_embed,success,15,2026-04-12 06:28:55.24073+00
+279,6,3,5,overall,https://u.gg/wow/brewmaster/monk/gear?hero=conduit_of_the_celestials,json_embed,success,15,2026-04-12 06:29:13.54727+00
+280,6,3,6,overall,https://u.gg/wow/brewmaster/monk/gear?hero=master_of_harmony,json_embed,success,15,2026-04-12 06:29:10.980723+00
+281,6,11,21,overall,https://u.gg/wow/mistweaver/monk/gear?hero=shado_pan,json_embed,success,15,2026-04-12 06:29:26.989499+00
+282,6,11,22,overall,https://u.gg/wow/mistweaver/monk/gear?hero=master_of_harmony,json_embed,success,15,2026-04-12 06:29:29.789353+00
+283,6,21,41,overall,https://u.gg/wow/windwalker/monk/gear?hero=shado_pan,json_embed,success,15,2026-04-12 06:17:40.580671+00
+284,6,21,42,overall,https://u.gg/wow/windwalker/monk/gear?hero=conduit_of_the_celestials,json_embed,success,15,2026-04-12 06:17:43.270798+00
+285,6,10,19,overall,https://u.gg/wow/holy/paladin/gear?hero=lightsmith,json_embed,success,16,2026-04-12 06:17:56.710069+00
+286,6,10,20,overall,https://u.gg/wow/holy/paladin/gear?hero=herald_of_the_sun,json_embed,success,16,2026-04-12 06:17:54.11829+00
+287,6,2,3,overall,https://u.gg/wow/protection/paladin/gear?hero=templar,json_embed,success,16,2026-04-12 06:08:10.757116+00
+288,6,2,4,overall,https://u.gg/wow/protection/paladin/gear?hero=lightsmith,json_embed,success,16,2026-04-12 06:08:14.910304+00
+289,6,20,39,overall,https://u.gg/wow/retribution/paladin/gear?hero=herald_of_the_sun,json_embed,success,15,2026-04-12 06:08:38.238375+00
+290,6,20,40,overall,https://u.gg/wow/retribution/paladin/gear?hero=templar,json_embed,success,15,2026-04-12 06:08:42.243865+00
+291,6,8,15,overall,https://u.gg/wow/discipline/priest/gear?hero=oracle,json_embed,success,15,2026-04-12 06:18:14.672041+00
+292,6,8,16,overall,https://u.gg/wow/discipline/priest/gear?hero=archon,json_embed,success,15,2026-04-12 06:18:12.173597+00
+293,6,9,17,overall,https://u.gg/wow/holy/priest/gear?hero=oracle,json_embed,success,15,2026-04-12 06:18:31.007616+00
+294,6,9,18,overall,https://u.gg/wow/holy/priest/gear?hero=archon,json_embed,success,15,2026-04-12 06:18:28.315015+00
+295,6,31,61,overall,https://u.gg/wow/shadow/priest/gear?hero=voidweaver,json_embed,success,15,2026-04-12 06:18:47.433668+00
+296,6,31,62,overall,https://u.gg/wow/shadow/priest/gear?hero=archon,json_embed,success,15,2026-04-12 06:18:44.611827+00
+297,6,17,33,overall,https://u.gg/wow/assassination/rogue/gear?hero=trickster,json_embed,success,16,2026-04-12 06:18:52.767254+00
+298,6,17,34,overall,https://u.gg/wow/assassination/rogue/gear?hero=fatebound,json_embed,success,16,2026-04-12 06:09:48.427212+00
+299,6,18,35,overall,https://u.gg/wow/outlaw/rogue/gear?hero=deathstalker,json_embed,success,16,2026-04-12 06:09:58.669329+00
+300,6,18,36,overall,https://u.gg/wow/outlaw/rogue/gear?hero=fatebound,json_embed,success,16,2026-04-12 06:10:02.24383+00
+301,6,19,37,overall,https://u.gg/wow/subtlety/rogue/gear?hero=deathstalker,json_embed,success,16,2026-04-12 06:10:24.234645+00
+302,6,19,38,overall,https://u.gg/wow/subtlety/rogue/gear?hero=trickster,json_embed,success,16,2026-04-12 06:10:27.860015+00
+303,6,30,59,overall,https://u.gg/wow/elemental/shaman/gear?hero=totemic,json_embed,success,15,2026-04-12 06:10:51.569182+00
+304,6,30,60,overall,https://u.gg/wow/elemental/shaman/gear?hero=farseer,json_embed,success,15,2026-04-12 06:10:55.761339+00
+305,6,16,31,overall,https://u.gg/wow/enhancement/shaman/gear?hero=totemic,json_embed,success,16,2026-04-12 06:11:17.806129+00
+306,6,16,32,overall,https://u.gg/wow/enhancement/shaman/gear?hero=stormbringer,json_embed,success,16,2026-04-12 06:11:21.453482+00
+307,6,7,13,overall,https://u.gg/wow/restoration/shaman/gear?hero=totemic,json_embed,success,15,2026-04-12 06:11:46.379573+00
+308,6,7,14,overall,https://u.gg/wow/restoration/shaman/gear?hero=farseer,json_embed,success,15,2026-04-12 06:11:42.344522+00
+309,6,27,53,overall,https://u.gg/wow/affliction/warlock/gear?hero=soul_harvester,json_embed,success,15,2026-04-12 06:12:08.024346+00
+310,6,27,54,overall,https://u.gg/wow/affliction/warlock/gear?hero=hellcaller,json_embed,success,15,2026-04-12 06:12:26.357776+00
+311,6,28,55,overall,https://u.gg/wow/demonology/warlock/gear?hero=soul_harvester,json_embed,success,15,2026-04-12 06:12:32.757978+00
+312,6,28,56,overall,https://u.gg/wow/demonology/warlock/gear?hero=diabolist,json_embed,success,15,2026-04-12 06:12:36.360924+00
+313,6,29,57,overall,https://u.gg/wow/destruction/warlock/gear?hero=diabolist,json_embed,success,15,2026-04-12 06:12:59.284778+00
+314,6,29,58,overall,https://u.gg/wow/destruction/warlock/gear?hero=hellcaller,json_embed,success,15,2026-04-12 06:13:03.254352+00
+315,6,14,27,overall,https://u.gg/wow/arms/warrior/gear?hero=mountain_thane,json_embed,success,15,2026-04-12 06:19:14.197785+00
+316,6,14,28,overall,https://u.gg/wow/arms/warrior/gear?hero=slayer,json_embed,success,15,2026-04-12 06:19:16.781926+00
+317,6,15,29,overall,https://u.gg/wow/fury/warrior/gear?hero=mountain_thane,json_embed,success,16,2026-04-12 06:13:29.866459+00
+318,6,15,30,overall,https://u.gg/wow/fury/warrior/gear?hero=slayer,json_embed,success,16,2026-04-12 06:13:41.408515+00
+319,6,1,1,overall,https://u.gg/wow/protection/warrior/gear?hero=mountain_thane,json_embed,success,16,2026-04-12 06:13:56.00117+00
+320,6,1,2,overall,https://u.gg/wow/protection/warrior/gear?hero=colossus,json_embed,success,16,2026-04-12 06:13:59.667152+00
+321,2,6,11,mythic_plus,https://u.gg/wow/blood/death_knight/gear?hero=deathbringer&role=mythicdungeon,json_embed,success,15,2026-04-12 06:16:28.705902+00
+322,2,6,12,mythic_plus,https://u.gg/wow/blood/death_knight/gear?hero=san_layn&role=mythicdungeon,json_embed,success,15,2026-04-12 06:16:31.482317+00
+323,2,25,49,mythic_plus,https://u.gg/wow/frost/death_knight/gear?hero=deathbringer&role=mythicdungeon,json_embed,success,15,2026-04-12 06:16:45.200021+00
+324,2,25,50,mythic_plus,https://u.gg/wow/frost/death_knight/gear?hero=rider_of_the_apocalypse&role=mythicdungeon,json_embed,success,15,2026-04-12 06:16:49.045274+00
+325,2,26,51,mythic_plus,https://u.gg/wow/unholy/death_knight/gear?hero=rider_of_the_apocalypse&role=mythicdungeon,json_embed,success,15,2026-04-12 06:17:02.873425+00
+326,2,26,52,mythic_plus,https://u.gg/wow/unholy/death_knight/gear?hero=san_layn&role=mythicdungeon,json_embed,success,15,2026-04-12 06:17:05.890671+00
+327,2,41,79,mythic_plus,https://u.gg/wow/devourer/demon_hunter/gear?hero=annihilator&role=mythicdungeon,json_embed,success,16,2026-04-12 06:17:18.99001+00
+328,2,41,80,mythic_plus,https://u.gg/wow/devourer/demon_hunter/gear?hero=scarred&role=mythicdungeon,json_embed,success,16,2026-04-12 06:17:21.552824+00
+329,2,24,48,mythic_plus,https://u.gg/wow/havoc/demon_hunter/gear?hero=aldrachi_reaver&role=mythicdungeon,json_embed,success,16,2026-04-12 06:28:08.714212+00
+330,2,24,47,mythic_plus,https://u.gg/wow/havoc/demon_hunter/gear?hero=scarred&role=mythicdungeon,json_embed,success,16,2026-04-12 06:28:11.423208+00
+331,2,5,10,mythic_plus,https://u.gg/wow/vengeance/demon_hunter/gear?hero=aldrachi_reaver&role=mythicdungeon,json_embed,success,16,2026-04-12 06:28:21.81015+00
+332,2,5,9,mythic_plus,https://u.gg/wow/vengeance/demon_hunter/gear?hero=annihilator&role=mythicdungeon,json_embed,success,16,2026-04-12 06:28:19.262336+00
+333,2,39,77,mythic_plus,https://u.gg/wow/balance/druid/gear?hero=keeper_of_the_grove&role=mythicdungeon,json_embed,success,15,2026-04-12 06:02:17.572051+00
+334,2,39,78,mythic_plus,https://u.gg/wow/balance/druid/gear?hero=elunes_chosen&role=mythicdungeon,json_embed,success,15,2026-04-12 06:02:21.426972+00
+335,2,23,45,mythic_plus,https://u.gg/wow/feral/druid/gear?hero=wildstalker&role=mythicdungeon,json_embed,success,15,2026-04-12 06:02:43.886583+00
+336,2,23,46,mythic_plus,https://u.gg/wow/feral/druid/gear?hero=druid_of_the_claw&role=mythicdungeon,json_embed,success,15,2026-04-12 06:02:48.467672+00
+337,2,4,7,mythic_plus,https://u.gg/wow/guardian/druid/gear?hero=elunes_chosen&role=mythicdungeon,json_embed,success,15,2026-04-12 06:03:14.098989+00
+338,2,4,8,mythic_plus,https://u.gg/wow/guardian/druid/gear?hero=druid_of_the_claw&role=mythicdungeon,json_embed,success,15,2026-04-12 06:03:17.764665+00
+339,2,13,25,mythic_plus,https://u.gg/wow/restoration/druid/gear?hero=wildstalker&role=mythicdungeon,json_embed,success,15,2026-04-12 06:03:39.662597+00
+340,2,13,26,mythic_plus,https://u.gg/wow/restoration/druid/gear?hero=keeper_of_the_grove&role=mythicdungeon,json_embed,success,15,2026-04-12 06:03:44.016161+00
+341,2,38,75,mythic_plus,https://u.gg/wow/augmentation/evoker/gear?hero=chronowarden&role=mythicdungeon,json_embed,success,15,2026-04-12 06:03:58.856201+00
+342,2,38,76,mythic_plus,https://u.gg/wow/augmentation/evoker/gear?hero=scalecommander&role=mythicdungeon,json_embed,success,15,2026-04-12 06:04:02.777174+00
+343,2,37,73,mythic_plus,https://u.gg/wow/devastation/evoker/gear?hero=flameshaper&role=mythicdungeon,json_embed,success,15,2026-04-12 06:04:33.555302+00
+344,2,37,74,mythic_plus,https://u.gg/wow/devastation/evoker/gear?hero=scalecommander&role=mythicdungeon,json_embed,success,15,2026-04-12 06:04:37.200655+00
+345,2,12,23,mythic_plus,https://u.gg/wow/preservation/evoker/gear?hero=flameshaper&role=mythicdungeon,json_embed,success,15,2026-04-12 06:04:59.86297+00
+346,2,12,24,mythic_plus,https://u.gg/wow/preservation/evoker/gear?hero=chronowarden&role=mythicdungeon,json_embed,success,15,2026-04-12 06:05:03.28236+00
+347,2,35,69,mythic_plus,https://u.gg/wow/beast_mastery/hunter/gear?hero=dark_ranger&role=mythicdungeon,json_embed,success,15,2026-04-12 06:05:23.328302+00
+348,2,35,70,mythic_plus,https://u.gg/wow/beast_mastery/hunter/gear?hero=pack_leader&role=mythicdungeon,json_embed,success,15,2026-04-12 06:05:27.421705+00
+349,2,36,71,mythic_plus,https://u.gg/wow/marksmanship/hunter/gear?hero=dark_ranger&role=mythicdungeon,json_embed,success,15,2026-04-12 06:05:46.070139+00
+350,2,36,72,mythic_plus,https://u.gg/wow/marksmanship/hunter/gear?hero=sentinel&role=mythicdungeon,json_embed,success,15,2026-04-12 06:05:49.590047+00
+351,2,22,43,mythic_plus,https://u.gg/wow/survival/hunter/gear?hero=sentinel&role=mythicdungeon,json_embed,success,16,2026-04-12 06:06:15.32323+00
+352,2,22,44,mythic_plus,https://u.gg/wow/survival/hunter/gear?hero=pack_leader&role=mythicdungeon,json_embed,success,16,2026-04-12 06:06:25.891853+00
+353,2,32,63,mythic_plus,https://u.gg/wow/arcane/mage/gear?hero=sunfury&role=mythicdungeon,json_embed,success,15,2026-04-12 06:06:40.914141+00
+354,2,32,64,mythic_plus,https://u.gg/wow/arcane/mage/gear?hero=spellslinger&role=mythicdungeon,json_embed,success,15,2026-04-12 06:06:44.468531+00
+355,2,33,65,mythic_plus,https://u.gg/wow/fire/mage/gear?hero=sunfury&role=mythicdungeon,json_embed,success,15,2026-04-12 06:28:38.576458+00
+356,2,33,66,mythic_plus,https://u.gg/wow/fire/mage/gear?hero=frostfire&role=mythicdungeon,json_embed,success,15,2026-04-12 06:28:35.909924+00
+357,2,34,67,mythic_plus,https://u.gg/wow/frost/mage/gear?hero=frostfire&role=mythicdungeon,json_embed,success,15,2026-04-12 06:28:49.658511+00
+358,2,34,68,mythic_plus,https://u.gg/wow/frost/mage/gear?hero=spellslinger&role=mythicdungeon,json_embed,success,15,2026-04-12 06:28:52.321934+00
+359,2,3,5,mythic_plus,https://u.gg/wow/brewmaster/monk/gear?hero=conduit_of_the_celestials&role=mythicdungeon,json_embed,success,15,2026-04-12 06:29:08.417182+00
+360,2,3,6,mythic_plus,https://u.gg/wow/brewmaster/monk/gear?hero=master_of_harmony&role=mythicdungeon,json_embed,success,15,2026-04-12 06:29:05.890431+00
+361,2,11,21,mythic_plus,https://u.gg/wow/mistweaver/monk/gear?hero=shado_pan&role=mythicdungeon,json_embed,success,15,2026-04-12 06:29:21.693577+00
+362,2,11,22,mythic_plus,https://u.gg/wow/mistweaver/monk/gear?hero=master_of_harmony&role=mythicdungeon,json_embed,success,15,2026-04-12 06:29:24.298168+00
+363,2,21,41,mythic_plus,https://u.gg/wow/windwalker/monk/gear?hero=shado_pan&role=mythicdungeon,json_embed,success,15,2026-04-12 06:17:37.793342+00
+364,2,21,42,mythic_plus,https://u.gg/wow/windwalker/monk/gear?hero=conduit_of_the_celestials&role=mythicdungeon,json_embed,success,15,2026-04-12 06:29:37.824285+00
+365,2,10,19,mythic_plus,https://u.gg/wow/holy/paladin/gear?hero=lightsmith&role=mythicdungeon,json_embed,success,16,2026-04-12 06:17:51.321683+00
+366,2,10,20,mythic_plus,https://u.gg/wow/holy/paladin/gear?hero=herald_of_the_sun&role=mythicdungeon,json_embed,success,16,2026-04-12 06:08:04.468454+00
+367,2,2,3,mythic_plus,https://u.gg/wow/protection/paladin/gear?hero=templar&role=mythicdungeon,json_embed,success,16,2026-04-12 06:08:18.721341+00
+368,2,2,4,mythic_plus,https://u.gg/wow/protection/paladin/gear?hero=lightsmith&role=mythicdungeon,json_embed,success,16,2026-04-12 06:08:22.186015+00
+369,2,20,39,mythic_plus,https://u.gg/wow/retribution/paladin/gear?hero=herald_of_the_sun&role=mythicdungeon,json_embed,success,15,2026-04-12 06:08:45.731306+00
+370,2,20,40,mythic_plus,https://u.gg/wow/retribution/paladin/gear?hero=templar&role=mythicdungeon,json_embed,success,15,2026-04-12 06:08:49.48027+00
+371,2,8,15,mythic_plus,https://u.gg/wow/discipline/priest/gear?hero=oracle&role=mythicdungeon,json_embed,success,15,2026-04-12 06:18:06.398373+00
+372,2,8,16,mythic_plus,https://u.gg/wow/discipline/priest/gear?hero=archon&role=mythicdungeon,json_embed,success,15,2026-04-12 06:18:09.345622+00
+373,2,9,17,mythic_plus,https://u.gg/wow/holy/priest/gear?hero=oracle&role=mythicdungeon,json_embed,success,15,2026-04-12 06:18:23.018128+00
+374,2,9,18,mythic_plus,https://u.gg/wow/holy/priest/gear?hero=archon&role=mythicdungeon,json_embed,success,15,2026-04-12 06:18:25.661032+00
+375,2,31,61,mythic_plus,https://u.gg/wow/shadow/priest/gear?hero=voidweaver&role=mythicdungeon,json_embed,success,15,2026-04-12 06:18:42.084904+00
+376,2,31,62,mythic_plus,https://u.gg/wow/shadow/priest/gear?hero=archon&role=mythicdungeon,json_embed,success,15,2026-04-12 06:18:39.456293+00
+377,2,17,33,mythic_plus,https://u.gg/wow/assassination/rogue/gear?hero=trickster&role=mythicdungeon,json_embed,success,16,2026-04-12 06:18:50.112083+00
+378,2,17,34,mythic_plus,https://u.gg/wow/assassination/rogue/gear?hero=fatebound&role=mythicdungeon,json_embed,success,16,2026-04-12 06:09:51.964366+00
+379,2,18,35,mythic_plus,https://u.gg/wow/outlaw/rogue/gear?hero=deathstalker&role=mythicdungeon,json_embed,success,16,2026-04-12 06:10:05.73241+00
+380,2,18,36,mythic_plus,https://u.gg/wow/outlaw/rogue/gear?hero=fatebound&role=mythicdungeon,json_embed,success,16,2026-04-12 06:10:09.756676+00
+381,2,19,37,mythic_plus,https://u.gg/wow/subtlety/rogue/gear?hero=deathstalker&role=mythicdungeon,json_embed,success,16,2026-04-12 06:10:31.387822+00
+382,2,19,38,mythic_plus,https://u.gg/wow/subtlety/rogue/gear?hero=trickster&role=mythicdungeon,json_embed,success,16,2026-04-12 06:10:34.864733+00
+383,2,30,59,mythic_plus,https://u.gg/wow/elemental/shaman/gear?hero=totemic&role=mythicdungeon,json_embed,success,15,2026-04-12 06:10:59.477023+00
+384,2,30,60,mythic_plus,https://u.gg/wow/elemental/shaman/gear?hero=farseer&role=mythicdungeon,json_embed,success,15,2026-04-12 06:11:03.089552+00
+385,2,16,31,mythic_plus,https://u.gg/wow/enhancement/shaman/gear?hero=totemic&role=mythicdungeon,json_embed,success,16,2026-04-12 06:11:25.033165+00
+386,2,16,32,mythic_plus,https://u.gg/wow/enhancement/shaman/gear?hero=stormbringer&role=mythicdungeon,json_embed,success,16,2026-04-12 06:11:28.637627+00
+387,2,7,13,mythic_plus,https://u.gg/wow/restoration/shaman/gear?hero=totemic&role=mythicdungeon,json_embed,success,15,2026-04-12 06:11:49.88544+00
+388,2,7,14,mythic_plus,https://u.gg/wow/restoration/shaman/gear?hero=farseer&role=mythicdungeon,json_embed,success,15,2026-04-12 06:11:53.457832+00
+389,2,27,53,mythic_plus,https://u.gg/wow/affliction/warlock/gear?hero=soul_harvester&role=mythicdungeon,json_embed,success,15,2026-04-12 06:12:11.745373+00
+390,2,27,54,mythic_plus,https://u.gg/wow/affliction/warlock/gear?hero=hellcaller&role=mythicdungeon,json_embed,success,15,2026-04-12 06:12:22.636676+00
+391,2,28,55,mythic_plus,https://u.gg/wow/demonology/warlock/gear?hero=soul_harvester&role=mythicdungeon,json_embed,success,15,2026-04-12 06:12:40.148863+00
+392,2,28,56,mythic_plus,https://u.gg/wow/demonology/warlock/gear?hero=diabolist&role=mythicdungeon,json_embed,success,15,2026-04-12 06:12:43.963958+00
+393,2,29,57,mythic_plus,https://u.gg/wow/destruction/warlock/gear?hero=diabolist&role=mythicdungeon,json_embed,success,15,2026-04-12 06:13:07.196101+00
+394,2,29,58,mythic_plus,https://u.gg/wow/destruction/warlock/gear?hero=hellcaller&role=mythicdungeon,json_embed,success,15,2026-04-12 06:19:00.728038+00
+395,2,14,27,mythic_plus,https://u.gg/wow/arms/warrior/gear?hero=mountain_thane&role=mythicdungeon,json_embed,success,15,2026-04-12 06:19:08.96447+00
+396,2,14,28,mythic_plus,https://u.gg/wow/arms/warrior/gear?hero=slayer&role=mythicdungeon,json_embed,success,15,2026-04-12 06:19:11.611785+00
+397,2,15,29,mythic_plus,https://u.gg/wow/fury/warrior/gear?hero=mountain_thane&role=mythicdungeon,json_embed,success,16,2026-04-12 06:13:33.645287+00
+398,2,15,30,mythic_plus,https://u.gg/wow/fury/warrior/gear?hero=slayer&role=mythicdungeon,json_embed,success,16,2026-04-12 06:13:37.516288+00
+399,2,1,1,mythic_plus,https://u.gg/wow/protection/warrior/gear?hero=mountain_thane&role=mythicdungeon,json_embed,success,16,2026-04-12 06:14:07.006824+00
+400,2,1,2,mythic_plus,https://u.gg/wow/protection/warrior/gear?hero=colossus&role=mythicdungeon,json_embed,success,16,2026-04-12 06:14:03.432608+00
+401,1,6,11,raid,https://u.gg/wow/blood/death_knight/gear?hero=deathbringer&role=raid,json_embed,success,15,2026-04-12 06:16:23.005131+00
+402,1,6,12,raid,https://u.gg/wow/blood/death_knight/gear?hero=san_layn&role=raid,json_embed,success,15,2026-04-12 06:16:25.922436+00
+403,1,25,49,raid,https://u.gg/wow/frost/death_knight/gear?hero=deathbringer&role=raid,json_embed,success,15,2026-04-12 06:16:42.369066+00
+404,1,25,50,raid,https://u.gg/wow/frost/death_knight/gear?hero=rider_of_the_apocalypse&role=raid,json_embed,success,15,2026-04-12 06:16:39.673412+00
+405,1,26,51,raid,https://u.gg/wow/unholy/death_knight/gear?hero=rider_of_the_apocalypse&role=raid,json_embed,success,15,2026-04-12 06:17:00.129232+00
+406,1,26,52,raid,https://u.gg/wow/unholy/death_knight/gear?hero=san_layn&role=raid,json_embed,success,15,2026-04-12 06:16:57.452498+00
+407,1,41,79,raid,https://u.gg/wow/devourer/demon_hunter/gear?hero=annihilator&role=raid,json_embed,success,16,2026-04-12 06:17:13.804869+00
+408,1,41,80,raid,https://u.gg/wow/devourer/demon_hunter/gear?hero=scarred&role=raid,json_embed,success,16,2026-04-12 06:17:16.396811+00
+409,1,24,48,raid,https://u.gg/wow/havoc/demon_hunter/gear?hero=aldrachi_reaver&role=raid,json_embed,success,16,2026-04-12 06:28:03.280745+00
+410,1,24,47,raid,https://u.gg/wow/havoc/demon_hunter/gear?hero=scarred&role=raid,json_embed,success,16,2026-04-12 06:28:05.993685+00
+411,1,5,10,raid,https://u.gg/wow/vengeance/demon_hunter/gear?hero=aldrachi_reaver&role=raid,json_embed,success,16,2026-04-12 06:01:57.542449+00
+412,1,5,9,raid,https://u.gg/wow/vengeance/demon_hunter/gear?hero=annihilator&role=raid,json_embed,success,16,2026-04-12 06:02:01.817235+00
+413,1,39,77,raid,https://u.gg/wow/balance/druid/gear?hero=keeper_of_the_grove&role=raid,json_embed,success,15,2026-04-12 06:02:25.061327+00
+414,1,39,78,raid,https://u.gg/wow/balance/druid/gear?hero=elunes_chosen&role=raid,json_embed,success,15,2026-04-12 06:02:29.214768+00
+415,1,23,45,raid,https://u.gg/wow/feral/druid/gear?hero=wildstalker&role=raid,json_embed,success,15,2026-04-12 06:02:52.853118+00
+416,1,23,46,raid,https://u.gg/wow/feral/druid/gear?hero=druid_of_the_claw&role=raid,json_embed,success,15,2026-04-12 06:02:56.704795+00
+417,1,4,7,raid,https://u.gg/wow/guardian/druid/gear?hero=elunes_chosen&role=raid,json_embed,success,15,2026-04-12 06:03:21.377587+00
+418,1,4,8,raid,https://u.gg/wow/guardian/druid/gear?hero=druid_of_the_claw&role=raid,json_embed,success,15,2026-04-12 06:03:24.998596+00
+419,1,13,25,raid,https://u.gg/wow/restoration/druid/gear?hero=wildstalker&role=raid,json_embed,success,15,2026-04-12 06:03:47.94974+00
+420,1,13,26,raid,https://u.gg/wow/restoration/druid/gear?hero=keeper_of_the_grove&role=raid,json_embed,success,15,2026-04-12 06:03:52.62221+00
+421,1,38,75,raid,https://u.gg/wow/augmentation/evoker/gear?hero=chronowarden&role=raid,json_embed,success,15,2026-04-12 06:04:06.321102+00
+422,1,38,76,raid,https://u.gg/wow/augmentation/evoker/gear?hero=scalecommander&role=raid,json_embed,success,15,2026-04-12 06:04:09.973656+00
+423,1,37,73,raid,https://u.gg/wow/devastation/evoker/gear?hero=flameshaper&role=raid,json_embed,success,15,2026-04-12 06:04:40.751839+00
+424,1,37,74,raid,https://u.gg/wow/devastation/evoker/gear?hero=scalecommander&role=raid,json_embed,success,15,2026-04-12 06:04:44.294717+00
+425,1,12,23,raid,https://u.gg/wow/preservation/evoker/gear?hero=flameshaper&role=raid,json_embed,success,15,2026-04-12 06:05:06.898114+00
+426,1,12,24,raid,https://u.gg/wow/preservation/evoker/gear?hero=chronowarden&role=raid,json_embed,success,15,2026-04-12 06:05:10.31304+00
+427,1,35,69,raid,https://u.gg/wow/beast_mastery/hunter/gear?hero=dark_ranger&role=raid,json_embed,success,15,2026-04-12 06:05:30.96995+00
+428,1,35,70,raid,https://u.gg/wow/beast_mastery/hunter/gear?hero=pack_leader&role=raid,json_embed,success,15,2026-04-12 06:05:34.435806+00
+429,1,36,71,raid,https://u.gg/wow/marksmanship/hunter/gear?hero=dark_ranger&role=raid,json_embed,success,15,2026-04-12 06:05:53.039586+00
+430,1,36,72,raid,https://u.gg/wow/marksmanship/hunter/gear?hero=sentinel&role=raid,json_embed,success,15,2026-04-12 06:05:56.976148+00
+431,1,22,43,raid,https://u.gg/wow/survival/hunter/gear?hero=sentinel&role=raid,json_embed,success,16,2026-04-12 06:06:18.941636+00
+432,1,22,44,raid,https://u.gg/wow/survival/hunter/gear?hero=pack_leader&role=raid,json_embed,success,16,2026-04-12 06:06:22.458742+00
+433,1,32,63,raid,https://u.gg/wow/arcane/mage/gear?hero=sunfury&role=raid,json_embed,success,15,2026-04-12 06:06:48.137479+00
+434,1,32,64,raid,https://u.gg/wow/arcane/mage/gear?hero=spellslinger&role=raid,json_embed,success,15,2026-04-12 06:06:51.652675+00
+435,1,33,65,raid,https://u.gg/wow/fire/mage/gear?hero=sunfury&role=raid,json_embed,success,15,2026-04-12 06:28:33.301378+00
+436,1,33,66,raid,https://u.gg/wow/fire/mage/gear?hero=frostfire&role=raid,json_embed,success,15,2026-04-12 06:28:30.541023+00
+437,1,34,67,raid,https://u.gg/wow/frost/mage/gear?hero=frostfire&role=raid,json_embed,success,15,2026-04-12 06:28:44.249272+00
+438,1,34,68,raid,https://u.gg/wow/frost/mage/gear?hero=spellslinger&role=raid,json_embed,success,15,2026-04-12 06:28:47.082569+00
+439,1,3,5,raid,https://u.gg/wow/brewmaster/monk/gear?hero=conduit_of_the_celestials&role=raid,json_embed,success,15,2026-04-12 06:29:00.704521+00
+440,1,3,6,raid,https://u.gg/wow/brewmaster/monk/gear?hero=master_of_harmony&role=raid,json_embed,success,15,2026-04-12 06:29:03.334821+00
+441,1,11,21,raid,https://u.gg/wow/mistweaver/monk/gear?hero=shado_pan&role=raid,json_embed,success,15,2026-04-12 06:29:16.308683+00
+442,1,11,22,raid,https://u.gg/wow/mistweaver/monk/gear?hero=master_of_harmony&role=raid,json_embed,success,15,2026-04-12 06:29:18.997638+00
+443,1,21,41,raid,https://u.gg/wow/windwalker/monk/gear?hero=shado_pan&role=raid,json_embed,success,15,2026-04-12 06:29:35.160356+00
+444,1,21,42,raid,https://u.gg/wow/windwalker/monk/gear?hero=conduit_of_the_celestials&role=raid,json_embed,success,15,2026-04-12 06:29:32.499869+00
+445,1,10,19,raid,https://u.gg/wow/holy/paladin/gear?hero=lightsmith&role=raid,json_embed,success,16,2026-04-12 06:17:45.757719+00
+446,1,10,20,raid,https://u.gg/wow/holy/paladin/gear?hero=herald_of_the_sun&role=raid,json_embed,success,16,2026-04-12 06:17:48.702906+00
+447,1,2,3,raid,https://u.gg/wow/protection/paladin/gear?hero=templar&role=raid,json_embed,success,16,2026-04-12 06:08:26.320352+00
+448,1,2,4,raid,https://u.gg/wow/protection/paladin/gear?hero=lightsmith&role=raid,json_embed,success,16,2026-04-12 06:08:29.799969+00
+449,1,20,39,raid,https://u.gg/wow/retribution/paladin/gear?hero=herald_of_the_sun&role=raid,json_embed,success,15,2026-04-12 06:08:56.839357+00
+450,1,20,40,raid,https://u.gg/wow/retribution/paladin/gear?hero=templar&role=raid,json_embed,success,15,2026-04-12 06:08:53.111606+00
+451,1,8,15,raid,https://u.gg/wow/discipline/priest/gear?hero=oracle&role=raid,json_embed,success,15,2026-04-12 06:18:03.786245+00
+452,1,8,16,raid,https://u.gg/wow/discipline/priest/gear?hero=archon&role=raid,json_embed,success,15,2026-04-12 06:18:00.574775+00
+453,1,9,17,raid,https://u.gg/wow/holy/priest/gear?hero=oracle&role=raid,json_embed,success,15,2026-04-12 06:18:17.408984+00
+454,1,9,18,raid,https://u.gg/wow/holy/priest/gear?hero=archon&role=raid,json_embed,success,15,2026-04-12 06:18:19.910992+00
+455,1,31,61,raid,https://u.gg/wow/shadow/priest/gear?hero=voidweaver&role=raid,json_embed,success,15,2026-04-12 06:18:33.705253+00
+456,1,31,62,raid,https://u.gg/wow/shadow/priest/gear?hero=archon&role=raid,json_embed,success,15,2026-04-12 06:18:36.379694+00
+457,1,17,33,raid,https://u.gg/wow/assassination/rogue/gear?hero=trickster&role=raid,json_embed,success,16,2026-04-12 06:09:41.159585+00
+458,1,17,34,raid,https://u.gg/wow/assassination/rogue/gear?hero=fatebound&role=raid,json_embed,success,16,2026-04-12 06:09:44.82416+00
+459,1,18,35,raid,https://u.gg/wow/outlaw/rogue/gear?hero=deathstalker&role=raid,json_embed,success,16,2026-04-12 06:10:13.56288+00
+460,1,18,36,raid,https://u.gg/wow/outlaw/rogue/gear?hero=fatebound&role=raid,json_embed,success,16,2026-04-12 06:10:17.923399+00
+461,1,19,37,raid,https://u.gg/wow/subtlety/rogue/gear?hero=deathstalker&role=raid,json_embed,success,16,2026-04-12 06:10:38.425758+00
+462,1,19,38,raid,https://u.gg/wow/subtlety/rogue/gear?hero=trickster&role=raid,json_embed,success,16,2026-04-12 06:10:41.851773+00
+463,1,30,59,raid,https://u.gg/wow/elemental/shaman/gear?hero=totemic&role=raid,json_embed,success,15,2026-04-12 06:11:06.729923+00
+464,1,30,60,raid,https://u.gg/wow/elemental/shaman/gear?hero=farseer&role=raid,json_embed,success,15,2026-04-12 06:11:10.971822+00
+465,1,16,31,raid,https://u.gg/wow/enhancement/shaman/gear?hero=totemic&role=raid,json_embed,success,16,2026-04-12 06:11:32.134631+00
+466,1,16,32,raid,https://u.gg/wow/enhancement/shaman/gear?hero=stormbringer&role=raid,json_embed,success,16,2026-04-12 06:11:35.878699+00
+467,1,7,13,raid,https://u.gg/wow/restoration/shaman/gear?hero=totemic&role=raid,json_embed,success,15,2026-04-12 06:11:57.132042+00
+468,1,7,14,raid,https://u.gg/wow/restoration/shaman/gear?hero=farseer&role=raid,json_embed,success,15,2026-04-12 06:12:00.654111+00
+469,1,27,53,raid,https://u.gg/wow/affliction/warlock/gear?hero=soul_harvester&role=raid,json_embed,success,15,2026-04-12 06:12:15.38926+00
+470,1,27,54,raid,https://u.gg/wow/affliction/warlock/gear?hero=hellcaller&role=raid,json_embed,success,15,2026-04-12 06:12:18.971257+00
+471,1,28,55,raid,https://u.gg/wow/demonology/warlock/gear?hero=soul_harvester&role=raid,json_embed,success,15,2026-04-12 06:12:48.735464+00
+472,1,28,56,raid,https://u.gg/wow/demonology/warlock/gear?hero=diabolist&role=raid,json_embed,success,15,2026-04-12 06:12:52.403752+00
+473,1,29,57,raid,https://u.gg/wow/destruction/warlock/gear?hero=diabolist&role=raid,json_embed,success,15,2026-04-12 06:18:57.965377+00
+474,1,29,58,raid,https://u.gg/wow/destruction/warlock/gear?hero=hellcaller&role=raid,json_embed,success,15,2026-04-12 06:18:55.317569+00
+475,1,14,27,raid,https://u.gg/wow/arms/warrior/gear?hero=mountain_thane&role=raid,json_embed,success,15,2026-04-12 06:19:06.381991+00
+476,1,14,28,raid,https://u.gg/wow/arms/warrior/gear?hero=slayer&role=raid,json_embed,success,15,2026-04-12 06:19:03.384777+00
+477,1,15,29,raid,https://u.gg/wow/fury/warrior/gear?hero=mountain_thane&role=raid,json_embed,success,16,2026-04-12 06:13:45.045808+00
+478,1,15,30,raid,https://u.gg/wow/fury/warrior/gear?hero=slayer&role=raid,json_embed,success,16,2026-04-12 06:13:48.614925+00
+479,1,1,1,raid,https://u.gg/wow/protection/warrior/gear?hero=mountain_thane&role=raid,json_embed,success,16,2026-04-12 06:14:14.094331+00
+480,1,1,2,raid,https://u.gg/wow/protection/warrior/gear?hero=colossus&role=raid,json_embed,success,16,2026-04-12 06:14:10.560961+00

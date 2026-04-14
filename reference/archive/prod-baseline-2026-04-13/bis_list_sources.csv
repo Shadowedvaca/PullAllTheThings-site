@@ -1,0 +1,10 @@
+id,name,short_label,origin,content_type,is_default,is_active,sort_order
+1,u.gg Raid,u.gg R,archon,raid,t,t,10
+2,u.gg M+,u.gg M+,archon,mythic_plus,f,t,20
+3,Wowhead Overall,Wowhead,wowhead,overall,f,t,30
+4,Icy Veins Raid,IV Raid,icy_veins,raid,f,t,40
+5,Icy Veins M+,IV M+,icy_veins,mythic_plus,f,t,50
+6,u.gg Overall,u.gg,archon,overall,f,t,25
+7,Wowhead Raid,WH Raid,wowhead,raid,f,t,28
+8,Wowhead M+,WH M+,wowhead,mythic_plus,f,t,29
+9,Icy Veins Overall,IV,icy_veins,overall,f,t,55

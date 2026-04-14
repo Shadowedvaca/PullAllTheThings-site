@@ -588,7 +588,8 @@ async def sync_target(
 
     # Run extraction
     content_type = _target_row.get("content_type") or "overall"
-    slots, trinket_ratings, error = await _extract(url, technique, content_type=content_type)
+    origin = _target_row.get("origin", "")
+    slots, trinket_ratings, error, raw_content = await _extract(url, technique, content_type=content_type)
 
     now = datetime.now(timezone.utc)
     items_upserted = 0
@@ -628,7 +629,7 @@ async def sync_target(
                 "Failed to upsert trinket ratings for target %d: %s", target_id, exc
             )
 
-    # Log and stamp
+    # Log and stamp; Phase A: dual-write raw content to landing schema
     async with pool.acquire() as conn:
         await conn.execute(
             """
@@ -646,6 +647,17 @@ async def sync_target(
             """,
             status, items_upserted, now, target_id,
         )
+        if raw_content:
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO landing.bis_scrape_raw (source, url, content)
+                    VALUES ($1, $2, $3)
+                    """,
+                    origin, url, raw_content,
+                )
+            except Exception:
+                pass  # landing write is best-effort
 
     return {
         "items_upserted": items_upserted,
@@ -662,35 +674,36 @@ async def sync_target(
 
 async def _extract(
     url: str, technique: str, content_type: str = "overall"
-) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str]]:
+) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str], Optional[str]]:
     """Dispatch to the appropriate extractor.
 
-    Returns (slots, trinket_ratings, error_message).
+    Returns (slots, trinket_ratings, error_message, raw_content).
     slots and trinket_ratings are empty lists on failure.
     trinket_ratings is only populated for wh_gatherer technique.
+    raw_content is the raw HTML/JSON fetched from the source (for landing schema).
     """
     try:
         if technique == "json_embed":
-            slots = await _extract_archon(url)
-            return slots, [], None
+            slots, raw_content = await _extract_archon(url)
+            return slots, [], None, raw_content
         elif technique == "wh_gatherer":
-            slots, trinket_ratings = await _extract_wowhead(url, content_type=content_type)
-            return slots, trinket_ratings, None
+            slots, trinket_ratings, raw_content = await _extract_wowhead(url, content_type=content_type)
+            return slots, trinket_ratings, None, raw_content
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
-            return slots, [], None
+            return slots, [], None, None
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
-            return [], [], "manual technique — use the API to enter items"
+            return [], [], "manual technique — use the API to enter items", None
         else:
-            return [], [], f"unknown technique: {technique}"
+            return [], [], f"unknown technique: {technique}", None
     except httpx.TimeoutException:
-        return [], [], "request timed out"
+        return [], [], "request timed out", None
     except httpx.HTTPStatusError as exc:
-        return [], [], f"HTTP {exc.response.status_code}"
+        return [], [], f"HTTP {exc.response.status_code}", None
     except Exception as exc:
         logger.warning("Extraction failed for %s (%s): %s", url, technique, exc)
-        return [], [], str(exc)
+        return [], [], str(exc), None
 
 
 # ---------------------------------------------------------------------------
@@ -698,11 +711,13 @@ async def _extract(
 # ---------------------------------------------------------------------------
 
 
-async def _extract_archon(url: str) -> list[SimcSlot]:
+async def _extract_archon(url: str) -> tuple[list[SimcSlot], Optional[str]]:
     """Fetch u.gg page and extract BIS items from embedded SSR JSON.
 
     u.gg embeds a large `window.__SSR_DATA__` JSON blob in the HTML which
     contains per-spec item data keyed by spec name (e.g. "DeathKnight-Blood").
+
+    Returns (slots, raw_html) — raw_html written to landing.bis_scrape_raw.
     """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
@@ -723,7 +738,7 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
             try:
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(html, obj_start)
-                return _parse_archon_ssr(data, url)
+                return _parse_archon_ssr(data, url), html
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
@@ -734,7 +749,7 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
     # Return [] so the caller marks the target as "failed" — that failure is visible
     # in the scrape log and prompts investigation rather than silent corruption.
     logger.warning("_extract_archon: SSR parse returned no items for %s", url)
-    return []
+    return [], html
 
 
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
@@ -1201,7 +1216,7 @@ async def _upsert_trinket_ratings(
 
 async def _extract_wowhead(
     url: str, content_type: str = "overall"
-) -> tuple[list[SimcSlot], list[ExtractedTrinketRating]]:
+) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str]]:
     """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls.
 
     content_type controls which page section is scanned:
@@ -1216,8 +1231,9 @@ async def _extract_wowhead(
     Wowhead-internal slot numbering.  Rings and trinkets share a single invtype
     each; first and second occurrences are assigned to _1 and _2 respectively.
 
-    Returns (slots, trinket_ratings).  Trinket ratings are always extracted from
-    the full page regardless of content_type — tier lists are not section-scoped.
+    Returns (slots, trinket_ratings, raw_html).  Trinket ratings are always
+    extracted from the full page regardless of content_type — tier lists are not
+    section-scoped.  raw_html is written to landing.bis_scrape_raw.
     """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
@@ -1242,7 +1258,7 @@ async def _extract_wowhead(
             continue
 
     if not item_meta:
-        return [], []
+        return [], [], html
 
     # Extract items from the requested content section, then backfill any
     # missing slots from the overall BiS section.  Raid and M+ sections only
@@ -1267,7 +1283,7 @@ async def _extract_wowhead(
     # section-scoped — they appear once on the page regardless of content_type).
     trinket_ratings = _extract_trinket_tiers(html, item_meta)
 
-    return section_slots, trinket_ratings
+    return section_slots, trinket_ratings, html
 
 
 def _wh_slots_from_section(
