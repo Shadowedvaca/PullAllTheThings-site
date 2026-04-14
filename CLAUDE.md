@@ -235,21 +235,25 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — Phase D** — `feature/gear-plan-schema-overhaul`, deployed to dev. Complete.
+- **Gear Plan Schema Overhaul — Phase E** — `feature/gear-plan-schema-overhaul`, deployed to dev. Complete.
   - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. `landing` has 5 tables. Dual-write added to all 5 ingest paths. Complete.
   - **Phase B** (migration 0105): enrichment schema tables + stored procedures. 5 tables, 2 helpers, 8 sprocs. Complete.
   - **Phase C** (migration 0106): viz schema views (`viz.slot_items`, `viz.tier_piece_sources`, `viz.crafters_by_item`, `viz.bis_recommendations`). 51 unit tests. Complete.
-  - **Phase D** (no migration): switched `gear_plan_service.py` to read from viz views + enrichment tables.
-    - `get_available_items()`: single `viz.slot_items` query replaces 4 guild_identity queries; `item_category` discriminates groups; `quality_tracks` pre-computed; no tooltip HTML parsing.
-    - `get_plan_detail()`: BIS from `viz.bis_recommendations`; crafters from `viz.crafters_by_item`; tier sources from `viz.tier_piece_sources`; sources from `enrichment.item_sources`; trinket badges from `enrichment.trinket_ratings`.
-    - `get_trinket_ratings()`: all queries from enrichment tables; keyed on `blizzard_item_id`.
-    - Net: −458 lines, zero heuristic detection, zero tooltip HTML parsing in service layer.
+  - **Phase D** (no migration): switched `gear_plan_service.py` to read from viz views + enrichment tables. Net: −458 lines, zero tooltip HTML parsing. Complete.
+  - **Phase E** (migration 0107): enrichment classification overhaul + item_seasons bridge. Complete.
+    - **`enrichment.item_seasons`** — new many-to-many bridge (item × season). Items not in active season are invisible (fixes Bug 3: legacy tier pieces showing).
+    - **`item_category`** updated: `('raid','dungeon','world_boss','crafted','tier','catalyst','unclassified')`. `drop`/`unknown` retired.
+    - **`sp_rebuild_item_seasons()`** — populates bridge: raid/dungeon via instance IDs, tier via token chain, catalyst via quality_track='C', crafted via active season.
+    - **`sp_update_item_categories()`** rewritten — tier detection uses `tier_token_attrs` NOT Wowhead tooltip HTML (fixes Bug 2: raid drops misclassified as tier).
+    - **`sp_rebuild_item_recipes()`** updated — promotes `unclassified→crafted` + season link. Called by crafting sync for incremental updates.
+    - **`viz.slot_items`** — adds `item_seasons` JOIN; Python no longer passes season instance IDs.
+    - **55 new unit tests** in `tests/unit/test_enrichment_classification.py`; 106 total pass.
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0106 (dev only — not yet on prod)
+- **Last migration:** 0107 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
 - **Active branch:** `feature/gear-plan-schema-overhaul`
-- **Next:** Phase E — remove legacy `guild_identity` gear plan tables once new stack validated on prod. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Next:** Validate Phase E on dev (run Rebuild Enrichment), then consider remaining Bug 1 (class_mask for tier piece class filtering) and eventual prod deploy. See `reference/gear-plan-1-schema-overhaul.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
