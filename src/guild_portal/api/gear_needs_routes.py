@@ -296,6 +296,7 @@ def _serialize_tracks(track_data: dict, allowed_tracks: list[str]) -> dict:
         entries = []
         for pid, pdata in td["players"].items():
             entries.append({**pdata, "items": td["items_by_player"].get(pid, [])})
+        entries.sort(key=lambda e: (e["player_name"], e["player_id"]))
         out[track] = {
             "player_count": len(td["player_ids"]),
             "item_count": len(td["need_keys"]),
