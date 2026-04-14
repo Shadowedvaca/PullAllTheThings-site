@@ -919,9 +919,13 @@ async def rebuild_enrichment(
                 (SELECT count(*) FROM enrichment.items
                   WHERE item_category = 'tier')                    AS tier,
                 (SELECT count(*) FROM enrichment.items
-                  WHERE item_category = 'drop')                    AS drop,
+                  WHERE item_category = 'raid')                    AS raid,
                 (SELECT count(*) FROM enrichment.items
-                  WHERE item_category = 'unknown')                 AS unknown
+                  WHERE item_category = 'dungeon')                 AS dungeon,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'world_boss')              AS world_boss,
+                (SELECT count(*) FROM enrichment.items
+                  WHERE item_category = 'unclassified')            AS unclassified
             """
         )
     return {

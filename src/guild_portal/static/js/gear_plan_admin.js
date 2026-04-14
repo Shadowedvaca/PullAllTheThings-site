@@ -2048,7 +2048,7 @@ async function rebuildEnrichment() {
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
         const c = d.counts;
-        const msg = `Enrichment rebuild complete — ${c.items} items (${c.drop} drop, ${c.tier} tier, ${c.crafted} crafted, ${c.catalyst} catalyst, ${c.unknown} unknown), ${c.item_sources} sources, ${c.bis_entries} BIS entries, ${c.trinket_ratings} trinket ratings.`;
+        const msg = `Enrichment rebuild complete — ${c.items} items (${c.raid} raid, ${c.dungeon} dungeon, ${c.world_boss} world boss, ${c.tier} tier, ${c.catalyst} catalyst, ${c.crafted} crafted, ${c.unclassified} unclassified), ${c.item_sources} sources, ${c.bis_entries} BIS entries, ${c.trinket_ratings} trinket ratings.`;
         setStatus(msg, 'success');
         if (result) result.textContent = msg;
     } catch (err) {
