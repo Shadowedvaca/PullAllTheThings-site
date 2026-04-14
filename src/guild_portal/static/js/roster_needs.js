@@ -134,7 +134,9 @@ function _gatherInstEntries(inst, track) {
             }
         }
     }
-    return Object.values(playerMap);
+    return Object.values(playerMap).sort(
+        (a, b) => a.player_name.localeCompare(b.player_name) || (a.player_id - b.player_id)
+    );
 }
 
 function _gatherDungEntries(dungName, track) {
@@ -290,8 +292,11 @@ function _renderByItem(entries) {
 function _renderByPlayer(entries) {
     if (!entries.length) return '<p class="rn-panel-empty">No players found.</p>';
 
+    const sorted = [...entries].sort(
+        (a, b) => a.player_name.localeCompare(b.player_name) || (a.player_id - b.player_id)
+    );
     let html = '';
-    for (const entry of entries) {
+    for (const entry of sorted) {
         const color  = _classColor(entry.class_name);
         const osBadge = entry.is_offspec ? '<span class="rn-os-badge">OS</span>' : '';
         html += `<div class="rn-hub" style="border-left:3px solid ${color}">`;
