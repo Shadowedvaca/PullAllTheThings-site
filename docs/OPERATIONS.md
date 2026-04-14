@@ -38,6 +38,60 @@
 | Guild Quotes | `/admin/quotes` | Per-person quote collections, Discord commands |
 | Bot Settings | `/admin/bot-settings` | DM feature toggles |
 | Site Config | `/admin/site-config` | Guild name, branding, feature flags (GL only) |
+| Gear Plan | `/admin/gear-plan` | BIS sync dashboard — loot tables, enrichment, BIS scraping (GL only) |
+| Blizzard API | `/admin/blizzard-api` | Blizzard API explorer proxy (GL only) |
+| Reference Tables | `/admin/reference-tables` | Ranks, guide sites, WoW rank mapping, season ilvl maps |
+
+---
+
+## Gear Plan Admin
+
+The gear plan feature tracks BIS item recommendations for each guild member. It requires running several sync steps to populate its item and source data. These steps live on **Admin → Gear Plan** (Guild Leader only).
+
+### Correct sync order
+
+Always run these steps in order. Each step depends on the previous.
+
+```
+1. Sync Loot Tables
+   Fetches raid and dungeon encounters + loot lists from Blizzard API.
+   Populates wow_items and item_sources for all current-season instances.
+   Also discovers crafted items via recipe links.
+
+2. Enrich Items
+   Fetches Wowhead tooltips for each item.
+   Fills in armor_type, weapon_type, class restrictions.
+   Also fetches Blizzard API metadata for Midnight tier pieces (armor_type for
+   items that lack a Wowhead tooltip).
+   Run this after every Sync Loot Tables.
+
+3. Process Tier Tokens
+   Classifies tier pieces and catalyst items.
+   Links tier tokens → boss encounters → tier slot items.
+   Run this after every Enrich Items.
+
+4. Sync BIS Lists
+   Scrapes Archon, Wowhead, and Icy Veins for per-spec BIS recommendations.
+   Only run after the item catalog (steps 1–3) is current.
+```
+
+### When to re-run
+
+| Trigger | Steps to re-run |
+|---------|----------------|
+| New patch adds items | 1 → 2 → 3 → 4 |
+| Wowhead indexed a new item | 2 only |
+| BIS lists changed (tier list update) | 4 only |
+| Tier sourcing looks wrong | 3 only |
+| Legacy M+ dungeons missing | Run "Sync Legacy Dungeons" once, then 2 → 3 |
+
+### Re-sync errors
+
+If the initial BIS sync hit rate limits (Archon/u.gg), use the **Re-sync Errors** button on Admin → Gear Plan to retry only failed targets. Do not re-run a full Sync BIS Lists unless you need all specs refreshed.
+
+### Catalyst items
+
+Back, Wrist, Waist, and Feet tier slots can be obtained via the Revival Catalyst from other slots' drops. These items have `item_sources.instance_type = 'catalyst'` and show in the "Tier / Catalyst" section of slot drawers — not in the Raid section. If they appear in the wrong section, re-run Process Tier Tokens (step 3).
 
 ---
 

@@ -469,6 +469,27 @@ This is a multi-phase migration. Nothing breaks until Phase 5. Each phase can sh
 
 ---
 
+## Phase F — Documentation Updates
+
+Final step. After Phase E is complete and the new stack is stable on prod, update the docs to match.
+
+### Files to update
+
+| File | What to change |
+|------|---------------|
+| `docs/ARCHITECTURE.md` | Section 4.1 data layer box: add `landing`, `enrichment`, `viz` schemas. Section 6.1 schema map: add all three new schemas below the existing table. Add "Gear Plan Data Pipeline" to section 2 process flows. |
+| `docs/SCHEMA.md` | Remove the stale "current through migration 0044" note. Add a section for each new schema (`landing`, `enrichment`, `viz`) with the table definitions from this plan. Update the `guild_identity` gear plan tables section to reflect what moved to enrichment. Add a "Migration note" at the top pointing to this file for migration history. |
+| `docs/OPERATIONS.md` | Add a **Gear Plan Admin** section covering: the correct order to run admin sync steps (Sync Loot Tables → Enrich Items → Process Tier Tokens → Sync BIS Lists), when each enrichment sproc needs to be rerun, and the new enrichment rebuild commands (`CALL enrichment.sp_rebuild_items()` etc.). |
+| `CLAUDE.md` | Update "Current Build Status", "Last migration", and "What Exists" to reflect the new schema architecture. Remove gear plan notes from "Known Gaps" once the overhaul is complete. |
+
+### What not to change
+- `docs/DESIGN.md` — design language is unaffected
+- `docs/DEPLOY.md` — deployment pipeline is unaffected
+- `docs/BACKUPS.md` — backup procedures are unaffected
+- `docs/DISCORD.md`, `docs/DISCORD-BOT-SETUP.md` — Discord bot is unaffected
+
+---
+
 ## What Is Out of Scope
 
 - `guild_identity.wow_characters`, `players`, `player_characters` — character/player identity

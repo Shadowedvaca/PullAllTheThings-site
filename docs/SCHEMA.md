@@ -1,11 +1,46 @@
 # PATT Database Schema
 
-> **Current schema through migration 0044.** Clean 3NF design with players as the core entity.
-> Reference tables normalize WoW classes, specializations, and combat roles.
-> Bridge table tracks character ownership with attribution metadata.
-> Direct 1:1 FKs for Discord and website accounts.
+> **This document covers the core identity, activity, and configuration schemas through
+> approximately migration 0044.** The actual database is current through migration 0103+.
+> Tables added after 0044 (gear plan, WCL parse, BIS pipeline, etc.) are documented in
+> `CLAUDE.md` (Database Schema section) and in the plan files under `reference/`.
+>
+> **Planned architectural overhaul:** The gear plan data pipeline is being redesigned into
+> three new schemas (`landing`, `enrichment`, `viz`). See
+> `reference/gear-plan-1-schema-overhaul.md` for the full plan.
 
-Three PostgreSQL schemas: `common` (shared infrastructure), `guild_identity` (guild sync + identity), `patt` (app features).
+Three operational PostgreSQL schemas: `common` (shared infrastructure), `guild_identity` (guild sync + identity), `patt` (app features).
+
+---
+
+## Gear Plan Tables (added migrations 0066–0103)
+
+The gear plan feature added the following tables to `guild_identity`. These are current as of migration 0103 and are candidates to migrate into the `enrichment`/`viz` schemas in a future overhaul.
+
+```
+guild_identity.wow_items          — item catalog (blizzard_item_id, name, icon_url, slot_type,
+                                     armor_type, wowhead_tooltip_html, quality_track)
+guild_identity.item_sources       — where items drop (instance_type, encounter_name,
+                                     instance_name, blizzard_encounter_id, is_suspected_junk)
+guild_identity.hero_talents       — spec hero talent trees (spec_id, name, slug)
+guild_identity.bis_list_sources   — BIS recommendation sources (Archon, Wowhead, Icy Veins)
+guild_identity.bis_list_entries   — per-spec BIS item recommendations (source, spec, slot, item)
+guild_identity.bis_scrape_targets — scrape job config (source, spec, url, status)
+guild_identity.bis_scrape_log     — scrape job history
+guild_identity.character_equipment — equipped items per character per slot
+guild_identity.gear_plans         — player gear plans (player, character, spec, BIS source)
+guild_identity.gear_plan_slots    — per-slot goal items and lock state
+guild_identity.item_recipe_links  — item → craftable recipe relationships
+guild_identity.trinket_tier_ratings — trinket tier ratings per spec/source
+```
+
+`item_sources.instance_type` CHECK: `('raid', 'dungeon', 'world_boss', 'catalyst')` — 'catalyst' added in migration 0103.
+
+`wow_items.quality_track VARCHAR(1)` — tags catalyst-only items with `'C'` (migration 0096).
+
+`patt.raid_seasons` gained `quality_ilvl_map JSONB` and `crafted_ilvl_map JSONB` in migration 0099 — season ilvl bands by quality track, seeded for Midnight S1.
+
+---
 
 ---
 
