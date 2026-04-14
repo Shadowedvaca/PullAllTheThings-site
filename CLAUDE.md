@@ -250,10 +250,13 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
     - **55 new unit tests** in `tests/unit/test_enrichment_classification.py`; 106 total pass.
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0107 (dev only — not yet on prod)
+- **Last migration:** 0109 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
 - **Active branch:** `feature/gear-plan-schema-overhaul`
-- **Next:** Validate Phase E on dev (run Rebuild Enrichment), then consider remaining Bug 1 (class_mask for tier piece class filtering) and eventual prod deploy. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Next:** Consider Bug 1 (class_mask for tier piece class filtering) and eventual prod deploy. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Post-Phase E patch migrations (dev only):**
+  - **0108** — `sp_rebuild_items()` fix: used `'unknown'` (0105 definition) instead of `'unclassified'`; caused CHECK constraint violation on first Rebuild Enrichment after 0107.
+  - **0109** — Tier classification fix: (1) removed `OR target_slot='any'` wildcard from `tier_token_attrs` join (was matching every item in a tier slot → 2394 tier items); (2) added `NOT EXISTS` guard to exclude items with a real raid/dungeon source row (regular boss drops in tier slots). Result after rebuild: tier=192, raid=129, dungeon=493, crafted=42, catalyst=28, unclassified=6000. Also updated `bis_routes.py` and `gear_plan_admin.js` to use new category names (raid/dungeon/world_boss/unclassified instead of drop/unknown).
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
