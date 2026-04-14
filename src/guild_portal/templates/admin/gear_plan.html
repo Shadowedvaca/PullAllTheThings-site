@@ -402,6 +402,22 @@ select.gp-select {
 .spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -0.1em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Tab switcher ─────────────────────────────────────────────────────── */
+.gp-tab-btn {
+    padding: 0.5rem 1.25rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+}
+.gp-tab-btn:hover { color: var(--color-text); }
+.gp-tab-btn.active { color: var(--color-gold); border-bottom-color: var(--color-gold); }
+
 /* ── Junk item source rows ────────────────────────────────────────────────── */
 .gp-junk-row { opacity: 0.5; }
 .gp-junk-row td { text-decoration: line-through; }
@@ -436,6 +452,17 @@ select.gp-select {
 
 {% block content %}
 <div class="gp-page">
+
+    {# ── Tab switcher ─────────────────────────────────────────────────────── #}
+    <div style="display:flex; gap:0; border-bottom:1px solid var(--color-border); margin-bottom:0.5rem;">
+        <button class="gp-tab-btn active" id="tab-btn-bis" onclick="switchTab('bis')">BIS Sync</button>
+        <button class="gp-tab-btn" id="tab-btn-gpa" onclick="switchTab('gpa')">Gear Plan Admin</button>
+    </div>
+
+    {# ══════════════════════════════════════════════════════════════════════ #}
+    {# TAB: BIS Sync (existing content — untouched)                          #}
+    {# ══════════════════════════════════════════════════════════════════════ #}
+    <div id="tab-bis">
 
     {# ── Page header ──────────────────────────────────────────────────────── #}
     <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
@@ -707,8 +734,8 @@ select.gp-select {
         </div>
     </div>
 
-    {# ── Item Sources ─────────────────────────────────────────────────────── #}
-    <div class="gp-log-wrap">
+    {# ── Item Sources (hidden — use DB Explorer instead) ─────────────────── #}
+    <div class="gp-log-wrap" style="display:none;">
         <h2 class="gp-log__title" onclick="toggleItemSources()">
             Item Sources — Loot Tables
             <span class="toggle-icon" id="item-sources-toggle-icon">▼</span>
@@ -767,7 +794,209 @@ select.gp-select {
         </div>
     </div>
 
-</div>
+</div> {# /tab-bis #}
+
+    {# ══════════════════════════════════════════════════════════════════════ #}
+    {# TAB: Gear Plan Admin (new pipeline)                                    #}
+    {# ══════════════════════════════════════════════════════════════════════ #}
+    <div id="tab-gpa" style="display:none; flex-direction:column; gap:1.25rem;">
+
+    {# ── Status bar (at top) ──────────────────────────────────────────────── #}
+    <div class="gp-status-bar" id="gpa-status">
+        <span class="gp-status-bar__msg" id="gpa-status-msg">Ready.</span>
+    </div>
+
+    {% if is_gl %}
+
+    {# ── A: Raw Data Refresh ──────────────────────────────────────────────── #}
+    <div class="gp-step">
+        <div class="gp-step__header">
+            <span class="gp-step__num">A</span>
+            <span class="gp-step__title">Raw Data Refresh</span>
+        </div>
+        <p class="gp-step__desc">
+            Pull core raw data into the landing tables from the Blizzard API and Wowhead.
+            Includes raid/dungeon loot tables, item metadata, Wowhead tooltips, and crafting
+            patterns known to guild crafters via the Recipe API.
+            <strong>Flush &amp; Fill</strong> wipes existing landing data first.
+            <strong>Catch Up</strong> adds only missing items without truncating.
+        </p>
+        <div class="gp-step__controls">
+            <button id="gpa-flush-btn" class="btn-sm btn-danger" onclick="gpaFlushAndFill()">
+                Flush &amp; Fill
+            </button>
+            <button id="gpa-catchup-btn" class="btn-sm btn-secondary" onclick="gpaCatchUp()">
+                Catch Up
+            </button>
+        </div>
+        <div class="gp-step__lastrun" id="gpa-landing-detail"></div>
+    </div>
+
+    {# ── B: BIS Scraping ──────────────────────────────────────────────────── #}
+    <div class="gp-step">
+        <div class="gp-step__header">
+            <span class="gp-step__num">B</span>
+            <span class="gp-step__title">BIS Scraping</span>
+        </div>
+        <p class="gp-step__desc">
+            Fetch BIS recommendations from guide sites. Discover URLs generates scrape targets
+            for all specs. Test Fetch validates scraping against Blood Death Knight before
+            running the full sync.
+        </p>
+        <div class="gp-step__controls">
+            <button id="gpa-discover-btn" class="btn-sm btn-secondary" onclick="gpaDiscoverUrls()">
+                Discover URLs
+            </button>
+            <button id="gpa-test-fetch-btn" class="btn-sm btn-secondary" onclick="gpaTestFetch()">
+                Test Fetch (Blood DK)
+            </button>
+            <button id="gpa-sync-all-btn" class="btn-sm btn-primary" onclick="gpaSyncAll()">
+                Sync All
+            </button>
+            <button id="gpa-resync-btn" class="btn-sm btn-secondary" onclick="gpaResyncErrors()">
+                Re-Sync Errors
+            </button>
+        </div>
+        <div class="gp-step__lastrun" id="gpa-bis-detail"></div>
+    </div>
+
+    {% endif %}
+
+    {# ── BIS Scrape matrix ────────────────────────────────────────────────── #}
+    <div class="gp-matrix-wrap">
+        <table class="gp-matrix" id="gpa-matrix-table">
+            <thead id="gpa-matrix-head">
+                <tr><th class="gp-th-spec">Spec</th></tr>
+            </thead>
+            <tbody id="gpa-matrix-body">
+                <tr><td colspan="10" style="padding:2rem; text-align:center; color:var(--color-text-muted);">
+                    Switch to this tab then refresh to load.
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if is_gl %}
+
+    {# ── C: Cleanup and Populate ──────────────────────────────────────────── #}
+    <div class="gp-step">
+        <div class="gp-step__header">
+            <span class="gp-step__num">C</span>
+            <span class="gp-step__title">Cleanup and Populate</span>
+        </div>
+        <p class="gp-step__desc">
+            <strong>Enrich</strong> fetches Wowhead tooltips, processes tier tokens, and
+            rebuilds all enrichment tables in one pass (replaces old Steps 2, 3, and 6).
+            <strong>Populate All Plans</strong> creates gear plans for all in-guild characters
+            and fills unlocked slots from Wowhead Overall BIS.
+        </p>
+        <div class="gp-step__controls">
+            <button id="gpa-enrich-btn" class="btn-sm btn-primary" onclick="gpaEnrich()">
+                Enrich
+            </button>
+            <button id="gpa-populate-btn" class="btn-sm btn-secondary" onclick="gpaPopulatePlans()">
+                Populate All Plans
+            </button>
+        </div>
+        <div class="gp-step__lastrun" id="gpa-enrich-detail"></div>
+    </div>
+
+    {% endif %}
+
+    {# ── Scrape Targets ───────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleGpaSection('gpa-targets-content','gpa-targets-icon')">
+            Scrape Targets <span class="toggle-icon" id="gpa-targets-icon">▼</span>
+        </h2>
+        <div id="gpa-targets-content" style="display:none;">
+            <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
+                <select class="gp-select" id="gpa-targets-filter-source" onchange="loadGpaTargets()">
+                    <option value="">All websites</option>
+                </select>
+                <select class="gp-select" id="gpa-targets-filter-status" onchange="loadGpaTargets()">
+                    <option value="">All statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="success">Success</option>
+                    <option value="partial">Partial</option>
+                    <option value="failed">Failed</option>
+                </select>
+                <button class="btn-sm btn-secondary" onclick="loadGpaTargets()">Refresh</button>
+                <span id="gpa-targets-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+            </div>
+            <div style="overflow:auto; max-height:55vh;">
+                <table class="gp-log-table" style="min-width:700px;">
+                    <thead>
+                        <tr>
+                            <th>Spec</th><th>Hero Talent</th><th>Source</th>
+                            <th>Type</th><th>URL</th><th>Status</th>
+                            <th>Items</th><th>Last Synced</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gpa-targets-body">
+                        <tr><td colspan="8" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# ── Cross-Reference ──────────────────────────────────────────────────── #}
+    <div class="gp-xref-wrap">
+        <h2 class="gp-xref__title">Cross-Reference</h2>
+        <div class="gp-xref__controls">
+            <span class="gp-controls__label">Spec:</span>
+            <select class="gp-select" id="gpa-xref-spec" onchange="loadGpaXref()">
+                <option value="">— select spec —</option>
+            </select>
+            <span class="gp-controls__label">Hero Talent:</span>
+            <select class="gp-select" id="gpa-xref-ht" onchange="loadGpaXref()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div id="gpa-xref-content" style="color:var(--color-text-muted); font-size:0.85rem;">
+            Select a spec above to compare sources.
+        </div>
+    </div>
+
+    {# ── Trinket Ratings ──────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleGpaSection('gpa-trinkets-content','gpa-trinkets-icon')">
+            Trinket Ratings <span class="toggle-icon" id="gpa-trinkets-icon">▼</span>
+        </h2>
+        <div id="gpa-trinkets-content" style="display:none;">
+            <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; align-items:center;">
+                <button class="btn-sm btn-secondary" onclick="loadGpaTrinkets()">Refresh</button>
+                <span id="gpa-trinkets-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+            </div>
+            <div style="overflow:auto; max-height:55vh;">
+                <table class="gp-log-table" style="min-width:600px;">
+                    <thead><tr><th>Spec</th><th>Source</th><th>Ratings</th><th>Last Updated</th></tr></thead>
+                    <tbody id="gpa-trinkets-body">
+                        <tr><td colspan="4" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# ── Recent Extraction Log ────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleGpaSection('gpa-log-content','gpa-log-icon')">
+            Recent Extraction Log <span class="toggle-icon" id="gpa-log-icon">▼</span>
+        </h2>
+        <div id="gpa-log-content" style="display:none;">
+            <table class="gp-log-table">
+                <thead>
+                    <tr><th>Time</th><th>Spec</th><th>Source</th><th>Technique</th><th>Status</th><th>Items</th><th>Error</th></tr>
+                </thead>
+                <tbody id="gpa-log-body">
+                    <tr><td colspan="7" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    </div> {# /tab-gpa #}
 
 {# ── SimC import modal ────────────────────────────────────────────────────── #}
 <div class="gp-modal-overlay" id="simc-modal" onclick="closeSimcModal(event)">
@@ -813,5 +1042,429 @@ select.gp-select {
         loadSources();
         loadLog();
     });
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab switching
+// ═══════════════════════════════════════════════════════════════════════════
+function switchTab(name) {
+    document.getElementById('tab-bis').style.display  = name === 'bis' ? 'block' : 'none';
+    document.getElementById('tab-gpa').style.display  = name === 'gpa' ? 'flex' : 'none';
+    document.getElementById('tab-btn-bis').classList.toggle('active', name === 'bis');
+    document.getElementById('tab-btn-gpa').classList.toggle('active', name === 'gpa');
+    if (name === 'gpa') gpaOnTabOpen();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Gear Plan Admin — shared utilities
+// ═══════════════════════════════════════════════════════════════════════════
+function gpaSetStatus(msg, cls) {
+    const el = document.getElementById('gpa-status');
+    const msgEl = document.getElementById('gpa-status-msg');
+    msgEl.innerHTML = msg;
+    el.className = 'gp-status-bar' + (cls ? ' gp-status-bar--' + cls : '');
+}
+
+function _setBtnDone(btn, label) {
+    btn.disabled = false;
+    if (label) btn.textContent = label;
+}
+
+function toggleGpaSection(contentId, iconId) {
+    const el = document.getElementById(contentId);
+    const icon = document.getElementById(iconId);
+    const open = el.style.display !== 'none';
+    el.style.display = open ? 'none' : '';
+    icon.textContent = open ? '▼' : '▲';
+    if (!open) {
+        if (contentId === 'gpa-targets-content') loadGpaTargets();
+        if (contentId === 'gpa-trinkets-content') loadGpaTrinkets();
+        if (contentId === 'gpa-log-content') loadGpaLog();
+    }
+}
+
+function gpaOnTabOpen() {
+    loadGpaMatrix();
+    loadGpaSourcesForFilters();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// A — Raw Data Refresh
+// ═══════════════════════════════════════════════════════════════════════════
+let _landingPollTimer = null;
+
+async function gpaFlushAndFill() {
+    if (!confirm('Flush & Fill will TRUNCATE all landing tables before refilling. Continue?')) return;
+    const btn = document.getElementById('gpa-flush-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running…';
+    gpaSetStatus('<span class="spinner"></span> Flushing landing tables and refilling from Blizzard API…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/landing-flush-fill', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    if (!r.ok) {
+        gpaSetStatus('Flush & Fill failed: ' + (r.error || 'Unknown error'), 'error');
+        _setBtnDone(btn, 'Flush & Fill');
+        return;
+    }
+    _pollLandingStatus(btn, 'Flush & Fill');
+}
+
+async function gpaCatchUp() {
+    const btn = document.getElementById('gpa-catchup-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running…';
+    gpaSetStatus('<span class="spinner"></span> Catching up landing tables from Blizzard API…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/landing-catch-up', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    if (!r.ok) {
+        gpaSetStatus('Catch Up failed: ' + (r.error || 'Unknown error'), 'error');
+        _setBtnDone(btn, 'Catch Up');
+        return;
+    }
+    _pollLandingStatus(btn, 'Catch Up');
+}
+
+function _pollLandingStatus(btn, btnLabel) {
+    clearInterval(_landingPollTimer);
+    _landingPollTimer = setInterval(async () => {
+        const s = await fetch('/api/v1/admin/bis/landing-status', {credentials:'include'})
+            .then(x => x.json()).catch(() => null);
+        if (!s) return;
+        if (s.running) {
+            const pct = s.total_steps > 0 ? Math.round((s.step / s.total_steps) * 100) : 0;
+            gpaSetStatus(
+                `<span class="spinner"></span> ${s.phase_label} (step ${s.step}/${s.total_steps} — ${pct}%)`,
+                'running'
+            );
+        } else {
+            clearInterval(_landingPollTimer);
+            _setBtnDone(btn, btnLabel);
+            if (s.error) {
+                gpaSetStatus('Error: ' + s.error, 'error');
+            } else {
+                gpaSetStatus(s.detail || 'Complete.', 'success');
+                document.getElementById('gpa-landing-detail').textContent = s.detail || '';
+            }
+        }
+    }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// B — BIS Scraping
+// ═══════════════════════════════════════════════════════════════════════════
+async function gpaDiscoverUrls() {
+    const btn = document.getElementById('gpa-discover-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    gpaSetStatus('<span class="spinner"></span> Discovering BIS scrape URLs…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/targets/discover', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    _setBtnDone(btn, 'Discover URLs');
+    if (r.ok) {
+        gpaSetStatus(
+            `URLs discovered — ${r.targets_created ?? 0} created, ${r.targets_existing ?? 0} existing.`,
+            'success'
+        );
+        document.getElementById('gpa-bis-detail').textContent =
+            `${r.targets_created ?? 0} new targets created.`;
+        if (document.getElementById('gpa-targets-content').style.display !== 'none') loadGpaTargets();
+    } else {
+        gpaSetStatus('Discover failed: ' + (r.error || 'Unknown'), 'error');
+    }
+}
+
+async function gpaTestFetch() {
+    const btn = document.getElementById('gpa-test-fetch-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Fetching…';
+    gpaSetStatus('<span class="spinner"></span> Test fetch — Blood Death Knight…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/sync/test-blood-dk', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    _setBtnDone(btn, 'Test Fetch (Blood DK)');
+    if (r.ok) {
+        const items = r.items_found ?? 0;
+        const errors = r.errors ?? 0;
+        gpaSetStatus(
+            `Blood DK test complete — ${items} items found${errors ? ', ' + errors + ' errors' : ''}.`,
+            items > 0 ? 'success' : 'error'
+        );
+        document.getElementById('gpa-bis-detail').textContent =
+            `Blood DK (spec ${r.spec_id}): ${items} items found, ${errors} errors.`;
+        loadGpaMatrix();
+    } else {
+        gpaSetStatus('Test fetch failed: ' + (r.error || 'Unknown'), 'error');
+    }
+}
+
+async function gpaSyncAll() {
+    const btn = document.getElementById('gpa-sync-all-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Syncing…';
+    gpaSetStatus('<span class="spinner"></span> BIS Sync All started in background…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/sync', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    _setBtnDone(btn, 'Sync All');
+    if (r.ok) {
+        gpaSetStatus('Full BIS sync running in background. Refresh matrix to track progress.', 'success');
+    } else {
+        gpaSetStatus('Sync All failed: ' + (r.error || 'Unknown'), 'error');
+    }
+}
+
+async function gpaResyncErrors() {
+    const btn = document.getElementById('gpa-resync-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running…';
+    gpaSetStatus('<span class="spinner"></span> Re-syncing failed BIS targets…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/resync-errors', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    _setBtnDone(btn, 'Re-Sync Errors');
+    if (r.ok) {
+        gpaSetStatus(
+            r.specs_resynced === 0
+                ? 'No failed targets found.'
+                : `Re-sync complete — ${r.specs_resynced} specs, ${r.total_items} items found.`,
+            'success'
+        );
+        loadGpaMatrix();
+    } else {
+        gpaSetStatus('Re-Sync Errors failed: ' + (r.error || 'Unknown'), 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GPA matrix (separate instance from BIS Sync tab)
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadGpaMatrix() {
+    // Reuse the existing matrix data endpoint and render into gpa-matrix-*
+    try {
+        const r = await fetch('/api/v1/admin/bis/matrix', {credentials:'include'}).then(x => x.json());
+        if (!r.ok || !r.sources) return;
+        // Delegate to the existing renderMatrix logic but target gpa- IDs
+        if (typeof renderMatrixInto === 'function') {
+            renderMatrixInto(r, 'gpa-matrix-head', 'gpa-matrix-body');
+        }
+    } catch(e) { console.warn('gpa matrix load failed', e); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// C — Cleanup and Populate
+// ═══════════════════════════════════════════════════════════════════════════
+let _enrichPollTimer = null;
+
+async function gpaEnrich() {
+    const btn = document.getElementById('gpa-enrich-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running…';
+    gpaSetStatus('<span class="spinner"></span> Starting Enrich & Classify…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/enrich-and-classify', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    if (!r.ok) {
+        gpaSetStatus('Enrich failed: ' + (r.error || 'Unknown'), 'error');
+        _setBtnDone(btn, 'Enrich');
+        return;
+    }
+    _pollEnrichStatus(btn);
+}
+
+function _pollEnrichStatus(btn) {
+    clearInterval(_enrichPollTimer);
+    _enrichPollTimer = setInterval(async () => {
+        const s = await fetch('/api/v1/admin/bis/enrich-classify-status', {credentials:'include'})
+            .then(x => x.json()).catch(() => null);
+        if (!s) return;
+        if (s.running) {
+            gpaSetStatus(
+                `<span class="spinner"></span> ${s.phase_label} (step ${s.step}/${s.total_steps})`,
+                'running'
+            );
+        } else {
+            clearInterval(_enrichPollTimer);
+            _setBtnDone(btn, 'Enrich');
+            if (s.error) {
+                gpaSetStatus('Enrich failed: ' + s.error, 'error');
+            } else {
+                gpaSetStatus(s.detail || 'Enrich & Classify complete.', 'success');
+                document.getElementById('gpa-enrich-detail').textContent = s.detail || '';
+            }
+        }
+    }, 3000);
+}
+
+async function gpaPopulatePlans() {
+    const btn = document.getElementById('gpa-populate-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running…';
+    gpaSetStatus('<span class="spinner"></span> Populating all player plans…', 'running');
+
+    const r = await fetch('/api/v1/admin/bis/bulk-populate-plans', {
+        method: 'POST', credentials: 'include',
+    }).then(x => x.json()).catch(e => ({ok: false, error: String(e)}));
+
+    _setBtnDone(btn, 'Populate All Plans');
+    if (r.ok) {
+        gpaSetStatus(
+            `Plans populated — ${r.characters_processed ?? 0} characters, ${r.slots_populated ?? 0} slots filled.`,
+            'success'
+        );
+    } else {
+        gpaSetStatus('Populate failed: ' + (r.error || 'Unknown'), 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GPA — Scrape Targets panel
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadGpaSourcesForFilters() {
+    // Populate the source filter dropdown (reuse existing sources data)
+    try {
+        const r = await fetch('/api/v1/admin/bis/sources', {credentials:'include'}).then(x => x.json());
+        if (!r.sources) return;
+        const sel = document.getElementById('gpa-targets-filter-source');
+        const existing = new Set([...sel.options].map(o => o.value));
+        r.sources.forEach(s => {
+            if (!existing.has(String(s.id))) {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                sel.appendChild(opt);
+            }
+        });
+        // Populate xref spec dropdown
+        const specSel = document.getElementById('gpa-xref-spec');
+        // reuse matrix data for specs
+    } catch(e) {}
+}
+
+async function loadGpaTargets() {
+    const source = document.getElementById('gpa-targets-filter-source').value;
+    const status = document.getElementById('gpa-targets-filter-status').value;
+    const params = new URLSearchParams();
+    if (source) params.set('source_id', source);
+    if (status) params.set('status', status);
+
+    const r = await fetch('/api/v1/admin/bis/targets?' + params, {credentials:'include'})
+        .then(x => x.json()).catch(() => null);
+    if (!r || !r.targets) return;
+
+    document.getElementById('gpa-targets-count').textContent = `${r.targets.length} targets`;
+    const tbody = document.getElementById('gpa-targets-body');
+    if (!r.targets.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted); padding:1rem;">No targets found.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = r.targets.map(t => `
+        <tr>
+            <td>${escHtml(t.spec_name || '')}</td>
+            <td style="color:var(--color-text-muted); font-size:0.78rem;">${escHtml(t.hero_talent_name || '—')}</td>
+            <td>${escHtml(t.source_name || '')}</td>
+            <td>${escHtml(t.content_type || '')}</td>
+            <td><a href="${escHtml(t.url || '')}" target="_blank" style="color:var(--color-gold); font-size:0.78rem;"
+               title="${escHtml(t.url || '')}">${escHtml((t.url || '').replace(/^https?:\/\/[^/]+/, ''))}</a></td>
+            <td class="gp-log-status-${t.status || 'pending'}">${escHtml(t.status || 'pending')}</td>
+            <td>${t.items_found ?? '—'}</td>
+            <td style="font-size:0.78rem; color:var(--color-text-muted);">${t.last_fetched ? new Date(t.last_fetched).toLocaleDateString() : '—'}</td>
+        </tr>
+    `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GPA — Cross-Reference
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadGpaXref() {
+    const specId = document.getElementById('gpa-xref-spec').value;
+    const htId   = document.getElementById('gpa-xref-ht').value;
+    const out = document.getElementById('gpa-xref-content');
+    if (!specId) { out.innerHTML = '<span style="color:var(--color-text-muted)">Select a spec above.</span>'; return; }
+
+    out.innerHTML = '<span class="spinner"></span> Loading…';
+    const params = new URLSearchParams({spec_id: specId});
+    if (htId) params.set('hero_talent_id', htId);
+
+    const r = await fetch('/api/v1/admin/bis/cross-reference?' + params, {credentials:'include'})
+        .then(x => x.json()).catch(() => null);
+    if (!r || !r.ok) { out.textContent = 'Failed to load.'; return; }
+    // Delegate to existing renderXref if available, or show raw JSON
+    if (typeof renderXrefInto === 'function') {
+        renderXrefInto(r, 'gpa-xref-content');
+    } else {
+        out.innerHTML = `<pre style="font-size:0.78rem; color:var(--color-text-muted); white-space:pre-wrap;">${escHtml(JSON.stringify(r, null, 2))}</pre>`;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GPA — Trinket Ratings
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadGpaTrinkets() {
+    const r = await fetch('/api/v1/admin/bis/trinket-ratings-status', {credentials:'include'})
+        .then(x => x.json()).catch(() => null);
+    if (!r || !r.data) return;
+
+    document.getElementById('gpa-trinkets-count').textContent = `${r.data.length} spec×source rows`;
+    const tbody = document.getElementById('gpa-trinkets-body');
+    if (!r.data.length) { tbody.innerHTML = '<tr><td colspan="4" style="color:var(--color-text-muted); padding:1rem;">No ratings found.</td></tr>'; return; }
+
+    tbody.innerHTML = r.data.map(row => `
+        <tr>
+            <td>${escHtml(row.class_name)} — ${escHtml(row.spec_name)}</td>
+            <td>${escHtml(row.source_name)}</td>
+            <td style="font-weight:${row.rating_count > 0 ? '700' : '400'}; color:${row.rating_count > 0 ? '#4ade80' : '#666'}">
+                ${row.rating_count}
+            </td>
+            <td style="color:var(--color-text-muted); font-size:0.78rem;">${row.last_updated ? new Date(row.last_updated).toLocaleDateString() : '—'}</td>
+        </tr>
+    `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GPA — Extraction Log
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadGpaLog() {
+    const r = await fetch('/api/v1/admin/bis/scrape-log', {credentials:'include'})
+        .then(x => x.json()).catch(() => null);
+    if (!r || !r.entries) return;
+    const tbody = document.getElementById('gpa-log-body');
+    if (!r.entries.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted); padding:1rem;">No log entries.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = r.entries.slice(0, 50).map(e => `
+        <tr>
+            <td style="font-size:0.78rem; white-space:nowrap;">${e.logged_at ? new Date(e.logged_at).toLocaleString() : '—'}</td>
+            <td>${escHtml(e.spec_name || '—')}</td>
+            <td>${escHtml(e.source_name || '—')}</td>
+            <td>${escHtml(e.technique || '—')}</td>
+            <td class="gp-log-status-${e.status}">${escHtml(e.status)}</td>
+            <td>${e.items_found ?? '—'}</td>
+            <td style="color:#f87171; font-size:0.78rem;">${escHtml(e.error_message || '')}</td>
+        </tr>
+    `).join('');
+}
+
+function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 {% endblock %}

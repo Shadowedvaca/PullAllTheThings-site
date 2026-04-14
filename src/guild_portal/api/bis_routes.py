@@ -1007,6 +1007,332 @@ async def bulk_populate_plans(
     })
 
 
+# ---------------------------------------------------------------------------
+# Gear Plan Admin — New pipeline endpoints
+# ---------------------------------------------------------------------------
+
+_landing_status: dict = {
+    "running": False,
+    "phase_label": "Idle",
+    "step": 0,
+    "total_steps": 4,
+    "detail": "",
+    "started_at": None,
+    "finished_at": None,
+    "error": None,
+}
+
+_enrich_classify_status: dict = {
+    "running": False,
+    "phase_label": "Idle",
+    "step": 0,
+    "total_steps": 3,
+    "detail": "",
+    "started_at": None,
+    "finished_at": None,
+    "error": None,
+}
+
+
+@router.get("/landing-status")
+async def landing_status():
+    """Poll the landing table fill status."""
+    s = _landing_status.copy()
+    s["started_at"] = s["started_at"].isoformat() if s["started_at"] else None
+    s["finished_at"] = s["finished_at"].isoformat() if s["finished_at"] else None
+    return {"ok": True, **s}
+
+
+async def _run_landing_fill(pool, blizzard_client, flush: bool):
+    """Background: populate landing tables from Blizzard API + Wowhead."""
+    global _landing_status
+    from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync_sources
+    from sv_common.guild_sync.item_recipe_link_sync import discover_and_link_crafted_items
+    from guild_portal.services.item_service import (
+        enrich_unenriched_items, enrich_null_icons, enrich_blizzard_metadata,
+    )
+
+    try:
+        if flush:
+            _landing_status.update(step=1, phase_label="Truncating landing tables", detail="")
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                    TRUNCATE landing.blizzard_items,
+                             landing.blizzard_journal_encounters,
+                             landing.blizzard_appearances,
+                             landing.wowhead_tooltips
+                """)
+            logger.info("landing-flush-fill: landing tables truncated")
+
+        _landing_status.update(step=2, phase_label="Syncing loot tables from Blizzard API", detail="")
+        result = await _sync_sources(pool, blizzard_client)
+        logger.info("landing-flush-fill: sync_item_sources complete — %s", result)
+
+        _landing_status.update(step=3, phase_label="Discovering crafted items", detail="")
+        craft_stats = await discover_and_link_crafted_items(pool, blizzard_client)
+        logger.info("landing-flush-fill: crafted items — %s", craft_stats)
+
+        _landing_status.update(step=4, phase_label="Enriching items (Wowhead + Blizzard metadata)", detail="")
+        wh_enriched, wh_errors = await enrich_unenriched_items(pool)
+        bl_enriched, bl_errors = await enrich_null_icons(pool, blizzard_client)
+        meta_enriched, meta_errors = await enrich_blizzard_metadata(pool, blizzard_client)
+        logger.info(
+            "landing-flush-fill: enrich complete — Wowhead:%d Icons:%d Meta:%d",
+            wh_enriched, bl_enriched, meta_enriched,
+        )
+
+        total_errors = len(wh_errors) + len(bl_errors) + len(meta_errors)
+        _landing_status.update({
+            "running": False,
+            "phase_label": "Complete",
+            "step": _landing_status["total_steps"],
+            "detail": (
+                f"Sources: {result.get('sources_added', 0)} added / {result.get('items_stubbed', 0)} items stubbed. "
+                f"Crafted: {craft_stats.get('phase_2b_linked', 0)} linked. "
+                f"Enriched: {wh_enriched} Wowhead, {bl_enriched} icons, {meta_enriched} metadata. "
+                f"Errors: {total_errors}"
+            ),
+            "finished_at": datetime.now(timezone.utc),
+            "error": None,
+        })
+
+    except Exception as exc:
+        logger.exception("landing fill failed")
+        _landing_status.update({
+            "running": False,
+            "phase_label": "Error",
+            "detail": str(exc),
+            "finished_at": datetime.now(timezone.utc),
+            "error": str(exc),
+        })
+
+
+@router.post("/landing-flush-fill")
+async def landing_flush_fill(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Truncate all landing tables then refill from Blizzard API + Wowhead (GL only).
+
+    Background task — poll GET /landing-status for progress.
+    Populates: landing.blizzard_journal_encounters, landing.blizzard_appearances,
+    landing.blizzard_items, landing.wowhead_tooltips.
+    """
+    import asyncio
+    global _landing_status
+
+    if _landing_status["running"]:
+        return {"ok": False, "error": "Landing fill already running — check status."}
+
+    pool = _pool(request)
+    blizzard_client = await _get_blizzard_client(request)
+
+    _landing_status = {
+        "running": True,
+        "phase_label": "Starting…",
+        "step": 0,
+        "total_steps": 4,
+        "detail": "",
+        "started_at": datetime.now(timezone.utc),
+        "finished_at": None,
+        "error": None,
+    }
+    asyncio.create_task(_run_landing_fill(pool, blizzard_client, flush=True))
+    return {"ok": True, "started": True}
+
+
+@router.post("/landing-catch-up")
+async def landing_catch_up(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Incremental landing table fill — pulls new data without truncating (GL only).
+
+    Background task — poll GET /landing-status for progress.
+    """
+    import asyncio
+    global _landing_status
+
+    if _landing_status["running"]:
+        return {"ok": False, "error": "Landing fill already running — check status."}
+
+    pool = _pool(request)
+    blizzard_client = await _get_blizzard_client(request)
+
+    _landing_status = {
+        "running": True,
+        "phase_label": "Starting…",
+        "step": 0,
+        "total_steps": 3,
+        "detail": "",
+        "started_at": datetime.now(timezone.utc),
+        "finished_at": None,
+        "error": None,
+    }
+    asyncio.create_task(_run_landing_fill(pool, blizzard_client, flush=False))
+    return {"ok": True, "started": True}
+
+
+@router.get("/enrich-classify-status")
+async def enrich_classify_status():
+    """Poll the enrich-and-classify job status."""
+    s = _enrich_classify_status.copy()
+    s["started_at"] = s["started_at"].isoformat() if s["started_at"] else None
+    s["finished_at"] = s["finished_at"].isoformat() if s["finished_at"] else None
+    return {"ok": True, **s}
+
+
+@router.post("/enrich-and-classify")
+async def enrich_and_classify(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Combined pipeline: Enrich Items → Process Tier Tokens → Rebuild Enrichment (GL only).
+
+    Replaces old Steps 2, 3, and 6 in one operation. Background task —
+    poll GET /enrich-classify-status for progress.
+    """
+    import asyncio
+    global _enrich_classify_status
+
+    if _enrich_classify_status["running"]:
+        return {"ok": False, "error": "Enrich & classify already running — check status."}
+
+    pool = _pool(request)
+    blizzard_client = await _get_blizzard_client(request)
+
+    _enrich_classify_status = {
+        "running": True,
+        "phase_label": "Starting…",
+        "step": 0,
+        "total_steps": 3,
+        "detail": "",
+        "started_at": datetime.now(timezone.utc),
+        "finished_at": None,
+        "error": None,
+    }
+
+    async def _run():
+        global _enrich_classify_status
+        from guild_portal.services.item_service import (
+            enrich_unenriched_items, enrich_null_icons, enrich_blizzard_metadata,
+        )
+        from sv_common.guild_sync.item_source_sync import process_tier_tokens as _process_tokens
+        from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
+
+        try:
+            _enrich_classify_status.update(step=1, phase_label="Enriching items (Wowhead + metadata)", detail="")
+            wh_enriched, wh_errors = await enrich_unenriched_items(pool)
+            bl_enriched, bl_errors = await enrich_null_icons(pool, blizzard_client)
+            meta_enriched, meta_errors = await enrich_blizzard_metadata(pool, blizzard_client)
+            recipe_stats = await build_item_recipe_links(pool)
+
+            _enrich_classify_status.update(step=2, phase_label="Processing tier tokens", detail="")
+            tier_result = await _process_tokens(pool)
+
+            _enrich_classify_status.update(step=3, phase_label="Rebuilding enrichment tables", detail="")
+            async with pool.acquire() as conn:
+                await conn.execute("CALL enrichment.sp_rebuild_all()")
+                counts = await conn.fetchrow("""
+                    SELECT
+                        (SELECT count(*) FROM enrichment.items)           AS items,
+                        (SELECT count(*) FROM enrichment.item_sources)    AS sources,
+                        (SELECT count(*) FROM enrichment.bis_entries)     AS bis,
+                        (SELECT count(*) FROM enrichment.trinket_ratings) AS trinkets
+                """)
+
+            total_errors = len(wh_errors) + len(bl_errors) + len(meta_errors)
+            _enrich_classify_status.update({
+                "running": False,
+                "phase_label": "Complete",
+                "step": 3,
+                "detail": (
+                    f"Enriched: {wh_enriched} Wowhead, {bl_enriched} icons, {meta_enriched} metadata. "
+                    f"Tier tokens: {tier_result.get('tokens_found', 0)} found. "
+                    f"Enrichment: {counts['items']} items, {counts['sources']} sources, "
+                    f"{counts['bis']} BIS entries. Errors: {total_errors}"
+                ),
+                "finished_at": datetime.now(timezone.utc),
+                "error": None,
+            })
+            logger.info("enrich-and-classify complete: %s", _enrich_classify_status["detail"])
+
+        except Exception as exc:
+            logger.exception("enrich-and-classify failed")
+            _enrich_classify_status.update({
+                "running": False,
+                "phase_label": "Error",
+                "detail": str(exc),
+                "finished_at": datetime.now(timezone.utc),
+                "error": str(exc),
+            })
+
+    asyncio.create_task(_run())
+    return {"ok": True, "started": True}
+
+
+@router.post("/sync/test-blood-dk")
+async def sync_test_blood_dk(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Test BIS fetch for Blood Death Knight (GL only).
+
+    Looks up the Blood DK spec_id from the database, then runs a full
+    single-spec BIS sync. Use this to verify scraping is working before
+    running Sync All.
+    """
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        spec = await conn.fetchrow(
+            """SELECT s.id FROM guild_identity.specializations s
+               JOIN guild_identity.classes c ON c.id = s.class_id
+               WHERE c.name = 'Death Knight' AND s.name = 'Blood'
+               LIMIT 1"""
+        )
+    if not spec:
+        return {"ok": False, "error": "Blood Death Knight spec not found in database"}
+
+    from sv_common.guild_sync.bis_sync import sync_spec as _sync_spec
+    result = await _sync_spec(pool, spec["id"])
+    return {"ok": True, "spec": "Blood Death Knight", "spec_id": spec["id"], **result}
+
+
+@router.post("/resync-errors")
+async def resync_errors(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Re-sync only failed/errored BIS scrape targets (GL only).
+
+    Runs synchronously spec by spec, returning when complete.
+    """
+    import asyncio
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        failed_specs = await conn.fetch(
+            """SELECT DISTINCT spec_id FROM guild_identity.bis_scrape_targets
+               WHERE status IN ('failed', 'partial')
+               ORDER BY spec_id"""
+        )
+    if not failed_specs:
+        return {"ok": True, "message": "No failed targets found.", "specs_resynced": 0}
+
+    from sv_common.guild_sync.bis_sync import sync_spec as _sync_spec
+    results = []
+    for row in failed_specs:
+        r = await _sync_spec(pool, row["spec_id"])
+        results.append(r)
+        await asyncio.sleep(0.2)
+
+    total_items = sum(r.get("items_found", 0) for r in results)
+    return {
+        "ok": True,
+        "specs_resynced": len(results),
+        "total_items": total_items,
+    }
+
+
 @router.get("/trinket-ratings-status")
 async def trinket_ratings_status(request: Request):
     """Return trinket rating counts per spec × source combination (Officer+ read-only).
