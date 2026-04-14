@@ -235,26 +235,18 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete.
-  - **No migration.** Pure sort fix: Roster Needs drill panel now displays players alphabetically.
-  - `_serialize_tracks()` in `gear_needs_routes.py` — sort entries by `player_name` + `player_id` before response.
-  - `_gatherInstEntries()` and `_renderByPlayer()` in `roster_needs.js` — sort merged per-player lists alphabetically.
-  - `roster_needs.js?v=1.1.1` cache buster.
-- **Previous: Phase 1F — Trinket Rankings** — `prod-v0.19.0`, merged to main. Complete.
-  - **Migration 0100**: `guild_identity.trinket_tier_ratings` — tier (S/A/B/C/D) per item per spec per source; FK to `wow_items`, `specializations`, `hero_talents`, `bis_list_sources`.
-  - **Migrations 0101–0103**: junk source purges (catalyst, crafted) + `item_sources.instance_type` constraint updated to include `'catalyst'`.
-  - **Wowhead trinket scraper** (`bis_sync.py`) — scrapes per-spec trinket tier lists; deduplicates by (source, spec, item); admin "Sync Trinket Rankings" button on `/admin/gear-plan`.
-  - **`get_trinket_ratings()`** in `gear_plan_service.py` — returns full-spec tier list with `sources` (instance · encounter), `content_types`, `is_equipped`, `is_bis` (paired-slot aware), `target_ilvl`; `GET /api/v1/me/gear-plan/{char_id}/trinket-ratings/{slot}`.
-  - **Paperdoll**: trinket tier badge stacked below ilvl number on paperdoll slots.
-  - **Gear table**: tier badge in equipped meta row for trinket slots.
-  - **Drawer**: tier badge next to quality pill in Equipped section; tier badge on BIS recs + Available items lists for trinket slots; Trinket Rankings section (flat sorted table, Raid/M+/Crafted filter tabs, real instance · encounter source, `?ilvl=N` Wowhead links).
-  - **EQUIPPED / BIS badges** on all item lists in all slot drawers (not just trinkets).
-  - **Paired-slot BIS**: ring_1↔ring_2 and trinket_1↔trinket_2 — both desired items marked BIS across all lists and all three service functions.
-  - JS v2.8.3, CSS v2.2.3.
-- **Last migration:** 0103
+- **Gear Plan Schema Overhaul — Phase A** — `feature/gear-plan-schema-overhaul`, deployed to dev. In progress.
+  - **Migration 0104**: create `landing`, `enrichment`, and `viz` schemas. `landing` has 5 tables (blizzard_journal_encounters, blizzard_items, wowhead_tooltips, blizzard_appearances, bis_scrape_raw). `enrichment` and `viz` created empty.
+  - **Dual-write** added to all 5 ingest paths in `item_source_sync.py`, `item_service.py`, `bis_sync.py` — raw API payloads now flow into landing alongside existing guild_identity writes. Landing writes are best-effort (won't break enrichment on failure).
+  - `_extract_archon()` and `_extract_wowhead()` now return `(slots, ..., raw_html)` — raw content passed up to `sync_target()` for landing insert.
+  - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Key findings: `quality_track` NULL on all 9171 prod `wow_items`; no `catalyst` instance_type rows in `item_sources`; `trinket_tier_ratings` empty on prod. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
+  - Trinket Rankings scrape run on prod after deploy — `trinket_tier_ratings` now populated; data flowing to `landing.bis_scrape_raw`.
+  - **Next:** Phase B — write enrichment sprocs that read from landing and populate `enrichment.*` tables.
+- **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
+- **Last migration:** 0104 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
-- **Active branch:** `main`
-- **Next:** Gear Plan Schema Overhaul Phase A. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Active branch:** `feature/gear-plan-schema-overhaul`
+- **Next:** Phase B. See `reference/gear-plan-1-schema-overhaul.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
