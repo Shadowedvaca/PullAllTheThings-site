@@ -46,6 +46,14 @@
 
 ## Recent Changes
 
+### Gear Plan Schema Overhaul — Phase C (2026-04-14, migration 0106, dev only)
+- **Migration 0106:** 4 views in the `viz` schema (schema created empty in 0104).
+- **`viz.slot_items`** — LEFT JOIN of `enrichment.items` + `enrichment.item_sources`, filters `NOT COALESCE(is_junk, FALSE)`. Exposes all columns Phase D needs: `blizzard_item_id`, `name`, `icon_url`, `slot_type`, `armor_type`, `primary_stat`, `item_category`, `tier_set_suffix`, `quality_track`, `instance_type`, `encounter_name`, `instance_name`, `blizzard_instance_id`, `quality_tracks`.
+- **`viz.tier_piece_sources`** — ports `guild_identity.v_tier_piece_sources` to use `enrichment.items` (filter `item_category = 'tier'`) and `enrichment.item_sources` for boss data. Still bridges token items via `guild_identity.tier_token_attrs` + `guild_identity.wow_items` (legacy bridge removed in Phase E). Columns: `tier_piece_blizzard_id`, `tier_piece_name`, `slot_type`, `token_blizzard_id`, `token_name`, `instance_type`, `boss_name`, `instance_name`, `blizzard_encounter_id`, `blizzard_instance_id`.
+- **`viz.crafters_by_item`** — joins `enrichment.item_recipes` to `guild_identity.{recipes, professions, character_recipes, wow_characters, player_characters, players}` + `common.guild_ranks`. Filters `wc.in_guild = TRUE`. Ordered by rank level DESC, character_name ASC.
+- **`viz.bis_recommendations`** — joins `enrichment.bis_entries` + `enrichment.items` + `guild_identity.bis_list_sources`. Aggregates `quality_tracks` via `ARRAY(SELECT DISTINCT UNNEST(...) FROM enrichment.item_sources WHERE NOT is_junk)`.
+- **51 unit tests** in `tests/unit/test_viz_views.py` — structural coverage of all 4 views (columns, table refs, filter conditions) + downgrade.
+
 ### Gear Plan Schema Overhaul — Phase B (2026-04-14, migration 0105, dev only)
 - **Migration 0105:** 5 enrichment tables (`enrichment.items`, `item_sources`, `item_recipes`, `bis_entries`, `trinket_ratings`), 2 helper functions (`_quality_tracks`, `_tooltip_slot`), 8 stored procedures (`sp_rebuild_items`, `sp_rebuild_item_sources`, `sp_rebuild_item_recipes`, `sp_rebuild_bis_entries`, `sp_rebuild_trinket_ratings`, `sp_update_item_categories`, `sp_flag_junk_sources`, `sp_rebuild_all`).
 - `sp_update_item_categories()` classifies items in priority order: crafted (has recipe link) → catalyst (quality_track='C') → tier (/item-set= in tooltip + tier slot) → drop (non-junk source row) → unknown.

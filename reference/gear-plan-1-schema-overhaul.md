@@ -483,9 +483,14 @@ Files:
 - **Parity validated on dev:** enrichment counts match guild_identity exactly — 6884 items, 8481 sources, 5524 BIS entries, 2517 trinket ratings, 43 recipe links
 - Transitional note: sprocs read from guild_identity.* (Phase B); full landing-based reads in Phase D+
 
-### Phase C — Build viz views
-- Write viz views on top of enrichment tables
-- Verify view output matches current API response shapes
+### Phase C — Build viz views ✓ complete (2026-04-14, migration 0106)
+- Created 4 views in the viz schema:
+  - **`viz.slot_items`** — items + all non-junk source rows; Phase D read target for `get_available_items()`
+  - **`viz.tier_piece_sources`** — tier piece → token → boss chain; uses `enrichment.items` (item_category='tier') + `enrichment.item_sources`, bridges token items via `guild_identity.tier_token_attrs` (legacy bridge, removed in Phase E)
+  - **`viz.crafters_by_item`** — craftable item → in-guild crafters, sorted by rank level DESC; joins `enrichment.item_recipes` → `guild_identity` recipe/character/player/rank tables
+  - **`viz.bis_recommendations`** — BIS entries with source metadata and aggregated quality_tracks (UNNEST dedup from non-junk item_sources)
+- 51 unit tests in `tests/unit/test_viz_views.py` covering all 4 views + downgrade
+- Deployed to dev — migration ran cleanly
 
 ### Phase D — Switch Python to read from viz
 - Update `gear_plan_service.py` to query viz views
