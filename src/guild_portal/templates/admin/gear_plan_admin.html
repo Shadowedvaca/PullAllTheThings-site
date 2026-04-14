@@ -413,13 +413,16 @@
         </div>
     </div>
 
-{# ── Hidden selects required by gear_plan_admin.js (null-checked, but keeps JS clean) #}
+{# ── Hidden selects required by gear_plan_admin.js — some are NOT null-checked #}
 <select id="sync-origin-select" style="display:none;"></select>
 <select id="sync-plan-type-select" style="display:none;">
     <option value="raid">Raid Only</option>
     <option value="mythic_plus">M+ Only</option>
     <option value="overall">Overall</option>
 </select>
+<select id="simc-spec-select" style="display:none;"></select>
+<select id="simc-source-select" style="display:none;"></select>
+<select id="simc-ht-select" style="display:none;"></select>
 
 <script src="/static/js/gear_plan_admin.js?v=1.2.0"></script>
 <script>
