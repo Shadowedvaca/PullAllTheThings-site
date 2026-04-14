@@ -477,7 +477,7 @@ function renderObjectList() {
 
     list.innerHTML = filtered.map(o => `
         <button class="dbx-obj-item ${_currentObj && _currentObj.name === o.name && _currentObj.type === o.type ? 'active' : ''}"
-                onclick="selectObject(${JSON.stringify(o.name)}, ${JSON.stringify(o.type)})">
+                onclick="selectObject(${escHtml(JSON.stringify(o.name))}, ${escHtml(JSON.stringify(o.type))})">
             <span class="dbx-obj-badge ${escHtml(o.type)}">${escHtml(o.type.substring(0,4))}</span>
             <span class="dbx-obj-name">${escHtml(o.name)}</span>
         </button>
