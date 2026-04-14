@@ -441,6 +441,33 @@ to enrichment.
 
 This is a multi-phase migration. Nothing breaks until Phase 5. Each phase can ship independently.
 
+### Phase 0 — Quick Fixes (no schema change, ship immediately)
+
+**Roster Needs — duplicated / out-of-order raid list**
+
+Symptoms: the Roster Needs raid section on `/roster` shows entries in arbitrary order; the
+drill panel for an instance appears to duplicate players across bosses.
+
+Root causes:
+
+1. **Server-side** — `_serialize_tracks()` in `gear_needs_routes.py` iterates a Python dict in
+   insertion order (i.e. whatever order DB rows arrived). No sort is applied before the response
+   is returned, so entry order is effectively random.
+
+2. **Client-side** — `_gatherInstEntries()` in `roster_needs.js` merges per-boss entries into a
+   plain JS object keyed by `player_id`, then returns `Object.values(playerMap)`. JS object
+   property order is insertion order (first boss the player appeared under), not alphabetical.
+   Combined with the unsorted server response, this produces a visually scrambled list that
+   can look like duplicates.
+
+Fix: sort by `player_name` (with `player_id` as a stable tiebreaker) in both locations.  
+No migration, no schema change, no API contract change.
+
+Files:
+- `src/guild_portal/api/gear_needs_routes.py` — `_serialize_tracks()` (~line 297)
+- `src/guild_portal/static/js/roster_needs.js` — `_gatherInstEntries()` (~line 137) and
+  `_renderByPlayer()` (~line 290)
+
 ### Phase A — Create schemas and landing tables
 - Create `landing`, `enrichment`, `viz` schemas
 - Create landing tables with JSONB payload columns
