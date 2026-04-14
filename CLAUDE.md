@@ -235,18 +235,21 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — Phase A** — `feature/gear-plan-schema-overhaul`, deployed to dev. In progress.
-  - **Migration 0104**: create `landing`, `enrichment`, and `viz` schemas. `landing` has 5 tables (blizzard_journal_encounters, blizzard_items, wowhead_tooltips, blizzard_appearances, bis_scrape_raw). `enrichment` and `viz` created empty.
-  - **Dual-write** added to all 5 ingest paths in `item_source_sync.py`, `item_service.py`, `bis_sync.py` — raw API payloads now flow into landing alongside existing guild_identity writes. Landing writes are best-effort (won't break enrichment on failure).
-  - `_extract_archon()` and `_extract_wowhead()` now return `(slots, ..., raw_html)` — raw content passed up to `sync_target()` for landing insert.
-  - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Key findings: `quality_track` NULL on all 9171 prod `wow_items`; no `catalyst` instance_type rows in `item_sources`; `trinket_tier_ratings` empty on prod. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
-  - Trinket Rankings scrape run on prod after deploy — `trinket_tier_ratings` now populated; data flowing to `landing.bis_scrape_raw`.
-  - **Next:** Phase B — write enrichment sprocs that read from landing and populate `enrichment.*` tables.
+- **Gear Plan Schema Overhaul — Phase B** — `feature/gear-plan-schema-overhaul`, deployed to dev. In progress.
+  - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. `landing` has 5 tables. Dual-write added to all 5 ingest paths. Complete.
+  - **Phase B** (migration 0105): enrichment schema tables + stored procedures.
+    - **5 tables**: `enrichment.items`, `item_sources`, `item_recipes`, `bis_entries`, `trinket_ratings`
+    - **2 helper functions**: `enrichment._quality_tracks(TEXT)`, `enrichment._tooltip_slot(TEXT)`
+    - **8 sprocs**: `sp_rebuild_items`, `sp_rebuild_item_sources`, `sp_rebuild_item_recipes`, `sp_rebuild_bis_entries`, `sp_rebuild_trinket_ratings`, `sp_update_item_categories`, `sp_flag_junk_sources`, `sp_rebuild_all`
+    - **Admin UI**: Step 6 "Rebuild Enrichment" button on `/admin/gear-plan`; `POST /api/v1/admin/bis/rebuild-enrichment` returns per-table row counts
+    - **Transitional note**: sprocs read from `guild_identity.*` for full coverage (Phase B); full landing-based reads in Phase D+ once landing has complete data
+  - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
+  - **Next:** Phase C — build `viz.*` views on top of enrichment tables. Verify view output matches current API response shapes.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0104 (dev only — not yet on prod)
+- **Last migration:** 0105 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
 - **Active branch:** `feature/gear-plan-schema-overhaul`
-- **Next:** Phase B. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Next:** Phase C. See `reference/gear-plan-1-schema-overhaul.md`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
