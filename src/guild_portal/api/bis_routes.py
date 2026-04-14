@@ -1015,7 +1015,7 @@ _landing_status: dict = {
     "running": False,
     "phase_label": "Idle",
     "step": 0,
-    "total_steps": 4,
+    "total_steps": 3,
     "detail": "",
     "started_at": None,
     "finished_at": None,
@@ -1044,17 +1044,25 @@ async def landing_status():
 
 
 async def _run_landing_fill(pool, blizzard_client, flush: bool):
-    """Background: populate landing tables from Blizzard API + Wowhead."""
+    """Background: populate landing tables from Blizzard API (raw data only).
+
+    Steps:
+      1. Truncate landing tables (flush=True only)
+      2. Sync loot tables from Blizzard Journal API
+      3. Discover crafted items via Blizzard Recipe API
+
+    Enrichment (Wowhead tooltips, Blizzard metadata) is a separate step — use
+    Section C → Enrich & Classify after raw data is collected.
+    """
     global _landing_status
     from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync_sources
     from sv_common.guild_sync.item_recipe_link_sync import discover_and_link_crafted_items
-    from guild_portal.services.item_service import (
-        enrich_unenriched_items, enrich_null_icons, enrich_blizzard_metadata,
-    )
 
     try:
+        step = 0
         if flush:
-            _landing_status.update(step=1, phase_label="Truncating landing tables", detail="")
+            step = 1
+            _landing_status.update(step=step, phase_label="Truncating landing tables", detail="")
             async with pool.acquire() as conn:
                 await conn.execute("""
                     TRUNCATE landing.blizzard_items,
@@ -1064,33 +1072,25 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                 """)
             logger.info("landing-flush-fill: landing tables truncated")
 
-        _landing_status.update(step=2, phase_label="Syncing loot tables from Blizzard API", detail="")
+        _landing_status.update(step=step + 1, phase_label="Syncing loot tables from Blizzard API", detail="")
         result = await _sync_sources(pool, blizzard_client)
         logger.info("landing-flush-fill: sync_item_sources complete — %s", result)
 
-        _landing_status.update(step=3, phase_label="Discovering crafted items", detail="")
+        _landing_status.update(step=step + 2, phase_label="Discovering crafted items via Blizzard Recipe API", detail="")
         craft_stats = await discover_and_link_crafted_items(pool, blizzard_client)
         logger.info("landing-flush-fill: crafted items — %s", craft_stats)
 
-        _landing_status.update(step=4, phase_label="Enriching items (Wowhead + Blizzard metadata)", detail="")
-        wh_enriched, wh_errors = await enrich_unenriched_items(pool)
-        bl_enriched, bl_errors = await enrich_null_icons(pool, blizzard_client)
-        meta_enriched, meta_errors = await enrich_blizzard_metadata(pool, blizzard_client)
-        logger.info(
-            "landing-flush-fill: enrich complete — Wowhead:%d Icons:%d Meta:%d",
-            wh_enriched, bl_enriched, meta_enriched,
-        )
-
-        total_errors = len(wh_errors) + len(bl_errors) + len(meta_errors)
+        sources_added = result.get('sources_added', 0)
+        items_stubbed = result.get('items_stubbed', 0)
+        crafted_linked = craft_stats.get('phase_2b_linked', 0)
         _landing_status.update({
             "running": False,
             "phase_label": "Complete",
             "step": _landing_status["total_steps"],
             "detail": (
-                f"Sources: {result.get('sources_added', 0)} added / {result.get('items_stubbed', 0)} items stubbed. "
-                f"Crafted: {craft_stats.get('phase_2b_linked', 0)} linked. "
-                f"Enriched: {wh_enriched} Wowhead, {bl_enriched} icons, {meta_enriched} metadata. "
-                f"Errors: {total_errors}"
+                f"Loot tables: {sources_added} sources added, {items_stubbed} items stubbed. "
+                f"Crafted items: {crafted_linked} linked. "
+                f"Run Enrich & Classify next."
             ),
             "finished_at": datetime.now(timezone.utc),
             "error": None,
@@ -1112,43 +1112,11 @@ async def landing_flush_fill(
     request: Request,
     player: Player = Depends(require_rank(5)),
 ):
-    """Truncate all landing tables then refill from Blizzard API + Wowhead (GL only).
+    """Truncate landing tables then refill from Blizzard API (raw data only, GL only).
 
     Background task — poll GET /landing-status for progress.
-    Populates: landing.blizzard_journal_encounters, landing.blizzard_appearances,
-    landing.blizzard_items, landing.wowhead_tooltips.
-    """
-    import asyncio
-    global _landing_status
-
-    if _landing_status["running"]:
-        return {"ok": False, "error": "Landing fill already running — check status."}
-
-    pool = _pool(request)
-    blizzard_client = await _get_blizzard_client(request)
-
-    _landing_status = {
-        "running": True,
-        "phase_label": "Starting…",
-        "step": 0,
-        "total_steps": 4,
-        "detail": "",
-        "started_at": datetime.now(timezone.utc),
-        "finished_at": None,
-        "error": None,
-    }
-    asyncio.create_task(_run_landing_fill(pool, blizzard_client, flush=True))
-    return {"ok": True, "started": True}
-
-
-@router.post("/landing-catch-up")
-async def landing_catch_up(
-    request: Request,
-    player: Player = Depends(require_rank(5)),
-):
-    """Incremental landing table fill — pulls new data without truncating (GL only).
-
-    Background task — poll GET /landing-status for progress.
+    Steps: truncate → sync loot tables (Blizzard Journal API) → discover crafted items.
+    Run Section C → Enrich & Classify afterward.
     """
     import asyncio
     global _landing_status
@@ -1164,6 +1132,40 @@ async def landing_catch_up(
         "phase_label": "Starting…",
         "step": 0,
         "total_steps": 3,
+        "detail": "",
+        "started_at": datetime.now(timezone.utc),
+        "finished_at": None,
+        "error": None,
+    }
+    asyncio.create_task(_run_landing_fill(pool, blizzard_client, flush=True))
+    return {"ok": True, "started": True}
+
+
+@router.post("/landing-catch-up")
+async def landing_catch_up(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Incremental landing table fill — pulls new/missing data without truncating (GL only).
+
+    Background task — poll GET /landing-status for progress.
+    Steps: sync loot tables (Blizzard Journal API) → discover crafted items.
+    Run Section C → Enrich & Classify afterward.
+    """
+    import asyncio
+    global _landing_status
+
+    if _landing_status["running"]:
+        return {"ok": False, "error": "Landing fill already running — check status."}
+
+    pool = _pool(request)
+    blizzard_client = await _get_blizzard_client(request)
+
+    _landing_status = {
+        "running": True,
+        "phase_label": "Starting…",
+        "step": 0,
+        "total_steps": 2,
         "detail": "",
         "started_at": datetime.now(timezone.utc),
         "finished_at": None,
