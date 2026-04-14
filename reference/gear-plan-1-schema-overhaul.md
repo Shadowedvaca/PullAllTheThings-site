@@ -492,10 +492,13 @@ Files:
 - 51 unit tests in `tests/unit/test_viz_views.py` covering all 4 views + downgrade
 - Deployed to dev — migration ran cleanly
 
-### Phase D — Switch Python to read from viz
-- Update `gear_plan_service.py` to query viz views
-- Remove heuristic detection, anchor-finding, tooltip parsing from service
-- Run both old and new code paths in parallel for a dev/test cycle
+### Phase D — Switch Python to read from viz ✓ complete (2026-04-14, migration none)
+- `get_available_items()`: replaced 4 separate guild_identity queries (Q1 drops, Q2 crafted, Q2b trinket ratings, Q3 tier/catalyst) with a single `viz.slot_items` query. `item_category` discriminates groups; `quality_tracks` pre-computed in enrichment; armor type from direct column not tooltip HTML; tier/catalyst from `item_category` not anchor query heuristic.
+- `get_plan_detail()`: BIS recs from `viz.bis_recommendations`; crafters from `viz.crafters_by_item`; tier sources from `viz.tier_piece_sources`; sources lookup from `enrichment.item_sources` (quality_tracks pre-computed); trinket badges from `enrichment.trinket_ratings`; craftable/tier detection from `enrichment.item_recipes` / `enrichment.items.item_category`; ht_source_ids from `enrichment.bis_entries`.
+- `get_trinket_ratings()`: all 5 queries from enrichment tables; keyed on `blizzard_item_id` throughout (no internal item_id).
+- `_filter_by_primary_stat()`: uses `primary_stat` column not tooltip HTML.
+- Net: -458 lines, zero heuristic detection, zero tooltip HTML parsing in the service layer.
+- Deployed to dev — all 1376 unit tests pass.
 
 ### Phase E — Remove legacy mixed columns
 - Once new stack is stable on prod, remove the enriched columns from `guild_identity.wow_items`
