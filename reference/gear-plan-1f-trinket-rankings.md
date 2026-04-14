@@ -1,9 +1,9 @@
 # Gear Plan Phase 1F — Trinket Rankings
 
-> **Status:** In Progress — Steps 1–8 complete and verified on `feature/gear-plan-phase-1f` (dev deployed)  
+> **Status:** Complete — merged to `main`, tagged `prod-v0.19.0`  
 > **Depends on:** Phase 1A–1E (complete), Phase 1C item_sources data  
 > **Follows:** Current prod work (tier/catalyst hotfixes, Blizzard API Explorer)  
-> **Precedes:** Phase 2 (Enchants, Gems, Crafting)
+> **Precedes:** Gear Plan Schema Overhaul (`reference/gear-plan-1-schema-overhaul.md`)
 
 ---
 
