@@ -60,10 +60,17 @@ depends_on = None
 
 def upgrade():
     # ─────────────────────────────────────────────────────────────────────────
-    # STEP 1: Migrate existing data before altering the CHECK constraint
+    # STEP 1: Drop old CHECK constraint first, then migrate data, then add new
+    # constraint.  Order matters: the data migration sets 'unclassified' which
+    # is not valid under the old constraint, so the old constraint must go first.
     # ─────────────────────────────────────────────────────────────────────────
 
-    # Convert old category values to new equivalents.
+    op.execute("""
+        ALTER TABLE enrichment.items
+            DROP CONSTRAINT items_item_category_check
+    """)
+
+    # Convert old category values to new equivalents (no constraint in effect).
     # 'unknown' → 'unclassified' (name change only)
     # 'drop'    → 'unclassified' (will be reclassified as 'raid'/'dungeon' by sproc)
     op.execute("""
@@ -72,13 +79,9 @@ def upgrade():
          WHERE item_category IN ('unknown', 'drop')
     """)
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 2: Update enrichment.items CHECK constraint and default
-    # ─────────────────────────────────────────────────────────────────────────
-
+    # Add new constraint and update default
     op.execute("""
         ALTER TABLE enrichment.items
-            DROP CONSTRAINT items_item_category_check,
             ADD CONSTRAINT items_item_category_check
                 CHECK (item_category IN
                        ('raid','dungeon','world_boss','crafted','tier','catalyst','unclassified')),
