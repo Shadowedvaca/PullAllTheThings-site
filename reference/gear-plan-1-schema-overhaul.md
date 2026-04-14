@@ -468,16 +468,20 @@ Files:
 - `src/guild_portal/static/js/roster_needs.js` — `_gatherInstEntries()` (~line 137) and
   `_renderByPlayer()` (~line 290)
 
-### Phase A — Create schemas and landing tables
-- Create `landing`, `enrichment`, `viz` schemas
-- Create landing tables with JSONB payload columns
-- Update Python ingest code to write raw JSON to landing (in addition to current tables — dual-write)
+### Phase A — Create schemas and landing tables ✓ complete (2026-04-13, migration 0104)
+- Created `landing`, `enrichment`, `viz` schemas
+- Created 5 landing tables with JSONB payload columns (blizzard_journal_encounters, blizzard_items, wowhead_tooltips, blizzard_appearances, bis_scrape_raw)
+- Added dual-write to all 5 ingest paths (item_source_sync.py, item_service.py, bis_sync.py)
+- `_extract_archon()` and `_extract_wowhead()` return raw HTML for landing insert
 - No UI changes, no existing functionality affected
 
-### Phase B — Build enrichment sprocs
-- Write sprocs reading from landing, populating enrichment tables
-- Run against current data to validate parity with existing `guild_identity.*` tables
-- Fix classification logic in sproc until enrichment.items matches expected categorization
+### Phase B — Build enrichment sprocs ✓ complete (2026-04-14, migration 0105)
+- Created 5 enrichment tables (items, item_sources, item_recipes, bis_entries, trinket_ratings)
+- Created 2 helper functions: `_quality_tracks(TEXT)`, `_tooltip_slot(TEXT)`
+- Created 8 stored procedures: sp_rebuild_items, sp_rebuild_item_sources, sp_rebuild_item_recipes, sp_rebuild_bis_entries, sp_rebuild_trinket_ratings, sp_update_item_categories, sp_flag_junk_sources, sp_rebuild_all
+- Admin UI: Step 6 "Rebuild Enrichment" on `/admin/gear-plan`; `POST /api/v1/admin/bis/rebuild-enrichment`
+- **Parity validated on dev:** enrichment counts match guild_identity exactly — 6884 items, 8481 sources, 5524 BIS entries, 2517 trinket ratings, 43 recipe links
+- Transitional note: sprocs read from guild_identity.* (Phase B); full landing-based reads in Phase D+
 
 ### Phase C — Build viz views
 - Write viz views on top of enrichment tables
