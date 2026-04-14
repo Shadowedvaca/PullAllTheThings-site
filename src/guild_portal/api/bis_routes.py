@@ -28,6 +28,7 @@ Endpoints:
   POST /api/v1/admin/bis/enrich-items        (start job)
   GET  /api/v1/admin/bis/sync-crafted-items  (poll status)
   POST /api/v1/admin/bis/sync-crafted-items  (start job)
+  GET  /api/v1/admin/bis/trinket-ratings-status
 """
 
 import logging
@@ -957,4 +958,49 @@ async def bulk_populate_plans(
             "characters_processed": characters_processed,
             "slots_populated": slots_populated,
         },
+    })
+
+
+@router.get("/trinket-ratings-status")
+async def trinket_ratings_status(request: Request):
+    """Return trinket rating counts per spec × source combination (Officer+ read-only).
+
+    Used by the Admin → Gear Plan → Trinket Ratings section to show scrape coverage.
+    """
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                sp.name          AS spec_name,
+                c.name           AS class_name,
+                bls.name         AS source_name,
+                bls.origin       AS source_origin,
+                COUNT(ttr.id)    AS rating_count,
+                MAX(ttr.updated_at) AS last_updated
+              FROM guild_identity.specializations sp
+              JOIN guild_identity.classes c ON c.id = sp.class_id
+              CROSS JOIN guild_identity.bis_list_sources bls
+              LEFT JOIN guild_identity.trinket_tier_ratings ttr
+                     ON ttr.spec_id = sp.id AND ttr.source_id = bls.id
+             WHERE bls.is_active = TRUE
+               AND bls.origin != 'icy_veins'
+             GROUP BY sp.id, sp.name, c.name, bls.id, bls.name, bls.origin
+             ORDER BY c.name, sp.name, bls.sort_order
+            """
+        )
+
+    return JSONResponse({
+        "ok": True,
+        "data": [
+            {
+                "spec_name": r["spec_name"],
+                "class_name": r["class_name"],
+                "source_name": r["source_name"],
+                "source_origin": r["source_origin"],
+                "rating_count": r["rating_count"],
+                "last_updated": r["last_updated"].isoformat() if r["last_updated"] else None,
+            }
+            for r in rows
+        ],
     })

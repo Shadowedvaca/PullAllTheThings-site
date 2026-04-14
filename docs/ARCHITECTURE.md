@@ -454,11 +454,17 @@ The logical architecture describes how concerns are separated in code, independe
 │                                                                    │
 │   sv_common/db/                                                    │
 │   ├─ engine.py             (SQLAlchemy async engine factory)       │
-│   ├─ models.py             (100+ ORM models, 3 schemas)            │
+│   ├─ models.py             (100+ ORM models, 3 operational schemas)│
 │   └─ seed.py               (default ranks, guide sites)           │
 │                                                                    │
-│   alembic/versions/        (migrations 0001–0063)                 │
+│   alembic/versions/        (migrations 0001–0103+)                │
 │   PostgreSQL 16             (schemas: common, patt, guild_identity)│
+│                                                                    │
+│   PLANNED — Gear plan data pipeline (see                          │
+│   reference/gear-plan-1-schema-overhaul.md):                      │
+│   ├─ landing    — raw API JSONB blobs (one table per source)       │
+│   ├─ enrichment — structured facts owned by stored procedures      │
+│   └─ viz        — read-only views; the only layer Python queries   │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
@@ -613,7 +619,7 @@ Developer
 
 ### 6.1 Schema Map
 
-Three PostgreSQL schemas with clear ownership:
+Five PostgreSQL schemas. The first three are operational; the last two are the planned gear-plan data pipeline (see `reference/gear-plan-1-schema-overhaul.md`).
 
 ```
 common                  patt                    guild_identity
@@ -637,6 +643,13 @@ guide_sites             raid_events             raid_reports
                                                 discord_channels
                                                 progression_snapshots
                                                 tracked_items / prices
+                                                wow_items / item_sources
+                                                bis_list_entries
+                                                gear_plans / gear_plan_slots
+                                                hero_talents
+                                                item_recipe_links
+                                                trinket_tier_ratings
+                                                character_equipment
 ```
 
 **`common`** — Shared primitives. Could be used by a different guild's portal with no changes.
@@ -644,6 +657,22 @@ guide_sites             raid_events             raid_reports
 **`patt`** — Platform features. Campaign voting and raid activity belong here. Coupled to the guild's schedule and culture.
 
 **`guild_identity`** — The identity graph. The most complex schema. `players` is the hub; everything else links to it.
+
+```
+landing  (PLANNED)            enrichment  (PLANNED)       viz  (PLANNED)
+─────────────────             ───────────────────         ──────────────
+blizzard_journal_encounters   items                       slot_items
+blizzard_items                item_sources                tier_piece_sources
+wowhead_tooltips              bis_entries                 crafters_by_item
+blizzard_appearances          item_recipes                bis_recommendations
+bis_scrape_raw                trinket_ratings
+```
+
+**`landing`** — Raw API JSONB blobs; one table per API source. Python's only write target. Never modified after insert. The most stable layer — API changes can't break ingest.
+
+**`enrichment`** — Structured, categorized facts fully derived from `landing`. Owned entirely by stored procedures. Safe to truncate and rebuild at any time.
+
+**`viz`** — Read-only views over `enrichment`. The only layer Python queries for gear plan data. No tables, no sprocs, no transform logic.
 
 ### 6.2 Identity Graph
 

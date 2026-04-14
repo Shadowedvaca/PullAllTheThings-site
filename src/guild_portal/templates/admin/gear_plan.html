@@ -664,6 +664,36 @@ select.gp-select {
         </div>
     </div>
 
+    {# ── Trinket Ratings ──────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleTrinketRatings()">
+            Trinket Ratings
+            <span class="toggle-icon" id="trinket-ratings-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-trinket-ratings-content" style="display:none;">
+            <p style="color:var(--color-text-muted); font-size:0.85rem; margin:0 0 0.75rem;">
+                Trinket tier ratings (S/A/B/C/D) scraped from BIS guide sources during Step 4 — Sync BIS Lists.
+                Populated automatically; no separate sync required.
+            </p>
+            <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
+                <button class="btn-sm btn-secondary" onclick="loadTrinketRatings()">Refresh</button>
+                <span id="trinket-ratings-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+            </div>
+            <div style="overflow:auto; max-height:55vh;">
+                <table class="gp-log-table" id="gp-trinket-ratings-table" style="min-width:700px;">
+                    <thead id="gp-trinket-ratings-head">
+                        <tr><th>Spec</th><th>Source</th><th>Ratings</th><th>Last Updated</th></tr>
+                    </thead>
+                    <tbody id="gp-trinket-ratings-body">
+                        <tr><td colspan="4" style="color:var(--color-text-muted); padding:1rem;">
+                            Click header to expand.
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     {# ── Item Sources ─────────────────────────────────────────────────────── #}
     <div class="gp-log-wrap">
         <h2 class="gp-log__title" onclick="toggleItemSources()">
@@ -759,7 +789,7 @@ select.gp-select {
     </div>
 </div>
 
-<script src="/static/js/gear_plan_admin.js?v=1.1.0"></script>
+<script src="/static/js/gear_plan_admin.js?v=1.2.0"></script>
 <script>
     // Expose GL flag to JS
     window._isGl = {{ 'true' if is_gl else 'false' }};

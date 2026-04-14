@@ -28,6 +28,7 @@ import json
 import logging
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -38,6 +39,14 @@ from .simc_parser import SimcSlot, parse_gear_slots
 from .quality_track import SLOT_ORDER
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExtractedTrinketRating:
+    blizzard_item_id: int
+    item_name: str
+    tier: str        # 'S', 'A', 'B', 'C', 'D', 'F'
+    sort_order: int  # position within tier group, 0-indexed
 
 # ---------------------------------------------------------------------------
 # Slug maps — (class_name, spec_name) → URL slugs per source
@@ -579,10 +588,11 @@ async def sync_target(
 
     # Run extraction
     content_type = _target_row.get("content_type") or "overall"
-    slots, error = await _extract(url, technique, content_type=content_type)
+    slots, trinket_ratings, error = await _extract(url, technique, content_type=content_type)
 
     now = datetime.now(timezone.utc)
     items_upserted = 0
+    trinkets_upserted = 0
 
     if slots:
         items_upserted = await _upsert_bis_entries(
@@ -599,6 +609,24 @@ async def sync_target(
             status = "partial"
     else:
         status = "failed"
+
+    # Upsert trinket tier ratings if we got any (wowhead only).
+    # For non-overall content_type targets sharing the same URL, trinket ratings
+    # are extracted from every fetch but we still upsert — the ON CONFLICT DO UPDATE
+    # is idempotent, so duplicate upserts are harmless.
+    if trinket_ratings:
+        try:
+            trinkets_upserted = await _upsert_trinket_ratings(
+                pool, source_id, spec_id, None, trinket_ratings
+            )
+            logger.debug(
+                "Upserted %d trinket ratings for spec_id=%d source_id=%d",
+                trinkets_upserted, spec_id, source_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to upsert trinket ratings for target %d: %s", target_id, exc
+            )
 
     # Log and stamp
     async with pool.acquire() as conn:
@@ -619,7 +647,12 @@ async def sync_target(
             status, items_upserted, now, target_id,
         )
 
-    return {"items_upserted": items_upserted, "technique": technique, "status": status}
+    return {
+        "items_upserted": items_upserted,
+        "trinkets_upserted": trinkets_upserted,
+        "technique": technique,
+        "status": status,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -629,31 +662,35 @@ async def sync_target(
 
 async def _extract(
     url: str, technique: str, content_type: str = "overall"
-) -> tuple[list[SimcSlot], Optional[str]]:
+) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str]]:
     """Dispatch to the appropriate extractor.
 
-    Returns (slots, error_message) — slots is empty list on failure.
+    Returns (slots, trinket_ratings, error_message).
+    slots and trinket_ratings are empty lists on failure.
+    trinket_ratings is only populated for wh_gatherer technique.
     """
     try:
         if technique == "json_embed":
             slots = await _extract_archon(url)
+            return slots, [], None
         elif technique == "wh_gatherer":
-            slots = await _extract_wowhead(url, content_type=content_type)
+            slots, trinket_ratings = await _extract_wowhead(url, content_type=content_type)
+            return slots, trinket_ratings, None
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
+            return slots, [], None
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
-            return [], "manual technique — use the API to enter items"
+            return [], [], "manual technique — use the API to enter items"
         else:
-            return [], f"unknown technique: {technique}"
-        return slots, None
+            return [], [], f"unknown technique: {technique}"
     except httpx.TimeoutException:
-        return [], "request timed out"
+        return [], [], "request timed out"
     except httpx.HTTPStatusError as exc:
-        return [], f"HTTP {exc.response.status_code}"
+        return [], [], f"HTTP {exc.response.status_code}"
     except Exception as exc:
         logger.warning("Extraction failed for %s (%s): %s", url, technique, exc)
-        return [], str(exc)
+        return [], [], str(exc)
 
 
 # ---------------------------------------------------------------------------
@@ -951,6 +988,14 @@ _ITEM_MARKUP_RE = re.compile(r"\[item=(\d+)[^\]]*\]")
 # Raid/M+ "highlight" sections use [icon-badge=N] instead of [item=N]
 _ICON_BADGE_RE = re.compile(r"\[icon-badge=(\d+)")
 
+# Trinket tier list block patterns — match Wowhead BBCode tier-list markup.
+# Note: raw_html is pre-normalised in _extract_trinket_tiers() to replace [\/ with [/,
+# so these patterns use plain [/tag] form without any backslash escaping.
+_TIER_LIST_BLOCK_RE = re.compile(r'\[tier-list[^\]]*\](.*?)\[/tier-list\]', re.DOTALL)
+_TIER_BLOCK_RE = re.compile(r'\[tier\](.*?)\[/tier\]', re.DOTALL)
+_TIER_LABEL_RE = re.compile(r'\[tier-label[^\]]*\]([SABCDF])\[/tier-label\]')
+_TIER_BADGE_ITEM_RE = re.compile(r'\[icon-badge=(\d+)')
+
 # slotbak inside jsonequip uses Blizzard API invtype IDs — NOT the old
 # Wowhead-internal slot numbering.  The two systems agree for slots 1–12
 # but diverge at 13+.
@@ -1051,7 +1096,112 @@ def _wh_section_for_content_type(html: str, content_type: str) -> str:
     return html[target_start:]
 
 
-async def _extract_wowhead(url: str, content_type: str = "overall") -> list[SimcSlot]:
+def _extract_trinket_tiers(raw_html: str, item_meta: dict[int, dict]) -> list[ExtractedTrinketRating]:
+    """Parse Wowhead BBCode tier-list blocks and return trinket tier ratings.
+
+    Wowhead embeds tier lists as BBCode in the static HTML:
+      [tier-list=rows grid]
+        [tier][tier-label bg=q5]S[/tier-label][tier-content]
+          [icon-badge=249346 quality=4 ...] ...
+        [/tier-content][/tier]
+        ...
+      [/tier-list]
+
+    Item names are resolved from item_meta (built from WH.Gatherer.addData()).
+    If an item is not in item_meta, item_name is left as "" — it will be filled
+    in by the item enrichment pipeline.
+
+    Returns one ExtractedTrinketRating per (tier, item_id) pair found.
+    """
+    # Wowhead escapes closing-tag slashes as [\/ in the raw HTML (e.g. [\/tier-list]).
+    # Normalise to standard [/ form before applying regexes.
+    raw_html = raw_html.replace("[\\/", "[/")
+
+    ratings: list[ExtractedTrinketRating] = []
+    for tier_list_match in _TIER_LIST_BLOCK_RE.finditer(raw_html):
+        block = tier_list_match.group(1)
+        for tier_match in _TIER_BLOCK_RE.finditer(block):
+            tier_block = tier_match.group(1)
+            label_match = _TIER_LABEL_RE.search(tier_block)
+            if not label_match:
+                continue
+            tier_letter = label_match.group(1)
+            for pos, badge_match in enumerate(_TIER_BADGE_ITEM_RE.finditer(tier_block)):
+                item_id = int(badge_match.group(1))
+                meta = item_meta.get(item_id, {})
+                item_name = meta.get("name", "")
+                ratings.append(ExtractedTrinketRating(
+                    blizzard_item_id=item_id,
+                    item_name=item_name,
+                    tier=tier_letter,
+                    sort_order=pos,
+                ))
+    return ratings
+
+
+async def _upsert_trinket_ratings(
+    pool: asyncpg.Pool,
+    source_id: int,
+    spec_id: int,
+    hero_talent_id: Optional[int],
+    ratings: list[ExtractedTrinketRating],
+) -> int:
+    """Upsert extracted trinket tier ratings into trinket_tier_ratings.
+
+    Ensures each item exists in wow_items (lazy-creates a stub if not),
+    then upserts the tier rating row.  Returns the number of rows upserted.
+
+    All Wowhead ratings are inserted with hero_talent_id=NULL because Wowhead
+    BIS pages are spec-level, not hero-talent-specific.
+    """
+    if not ratings:
+        return 0
+
+    upserted = 0
+    async with pool.acquire() as conn:
+        for rating in ratings:
+            # Ensure wow_items row exists
+            await conn.execute(
+                """
+                INSERT INTO guild_identity.wow_items
+                    (blizzard_item_id, name, slot_type)
+                VALUES ($1, $2, 'trinket')
+                ON CONFLICT (blizzard_item_id) DO NOTHING
+                """,
+                rating.blizzard_item_id,
+                rating.item_name or "",
+            )
+
+            item_row = await conn.fetchrow(
+                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
+                rating.blizzard_item_id,
+            )
+            if item_row is None:
+                continue
+            item_id = item_row["id"]
+
+            await conn.execute(
+                """
+                INSERT INTO guild_identity.trinket_tier_ratings
+                    (source_id, spec_id, hero_talent_id, item_id, tier, sort_order, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                ON CONFLICT (source_id, spec_id, hero_talent_id, item_id)
+                    DO UPDATE SET
+                        tier = EXCLUDED.tier,
+                        sort_order = EXCLUDED.sort_order,
+                        updated_at = NOW()
+                """,
+                source_id, spec_id, hero_talent_id, item_id,
+                rating.tier, rating.sort_order,
+            )
+            upserted += 1
+
+    return upserted
+
+
+async def _extract_wowhead(
+    url: str, content_type: str = "overall"
+) -> tuple[list[SimcSlot], list[ExtractedTrinketRating]]:
     """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls.
 
     content_type controls which page section is scanned:
@@ -1065,6 +1215,9 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
     slotbak values inside jsonequip use Blizzard API invtype IDs, not the old
     Wowhead-internal slot numbering.  Rings and trinkets share a single invtype
     each; first and second occurrences are assigned to _1 and _2 respectively.
+
+    Returns (slots, trinket_ratings).  Trinket ratings are always extracted from
+    the full page regardless of content_type — tier lists are not section-scoped.
     """
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
@@ -1089,7 +1242,7 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
             continue
 
     if not item_meta:
-        return []
+        return [], []
 
     # Extract items from the requested content section, then backfill any
     # missing slots from the overall BiS section.  Raid and M+ sections only
@@ -1110,7 +1263,11 @@ async def _extract_wowhead(url: str, content_type: str = "overall") -> list[Simc
             for slot, iid in filled.items()
         ]
 
-    return section_slots
+    # Extract trinket tier ratings from the full page (tier-list blocks are not
+    # section-scoped — they appear once on the page regardless of content_type).
+    trinket_ratings = _extract_trinket_tiers(html, item_meta)
+
+    return section_slots, trinket_ratings
 
 
 def _wh_slots_from_section(

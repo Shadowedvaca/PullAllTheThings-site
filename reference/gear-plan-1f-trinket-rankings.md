@@ -1,6 +1,6 @@
 # Gear Plan Phase 1F — Trinket Rankings
 
-> **Status:** Planning  
+> **Status:** In Progress — Steps 1–8 complete and verified on `feature/gear-plan-phase-1f` (dev deployed)  
 > **Depends on:** Phase 1A–1E (complete), Phase 1C item_sources data  
 > **Follows:** Current prod work (tier/catalyst hotfixes, Blizzard API Explorer)  
 > **Precedes:** Phase 2 (Enchants, Gems, Crafting)
@@ -447,23 +447,90 @@ See `docs/BACKUPS.md` — "Recovering from a Bad Delete" for the full procedure 
 
 ## Implementation Order
 
-| Step | Scope | Size |
-|------|-------|------|
-| 1 | Migration — `trinket_tier_ratings` table + index | Tiny |
-| 2 | `bis_sync.py` — `_extract_trinket_tiers()` + `_upsert_trinket_ratings()` | Small |
-| 3 | Admin gear plan — Trinket Ratings status tab | Small |
-| 4 | Static assets — source icon PNGs in `static/img/sources/` | Tiny |
-| 5 | API — new `GET /trinket-ratings` endpoint | Small |
-| 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small |
-| 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small |
-| 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small |
-| 9 | UI — paperdoll trinket slot tier overlay + unranked upgrade pill | Small |
-| 10 | UI — slot table tier badge on trinket rows | Small |
-| 11 | UI — Trinket Rankings drawer section (tabs, list, source switcher) | Medium |
-| 12 | UI — EQUIPPED / BIS badges across all three list sections | Medium |
-| **Total** | | **Medium — 1-2 dev sessions** |
+| Step | Scope | Size | Status |
+|------|-------|------|--------|
+| 1 | Migration — `trinket_tier_ratings` table + index | Tiny | ✅ migration 0100 |
+| 2 | `bis_sync.py` — `_extract_trinket_tiers()` + `_upsert_trinket_ratings()` | Small | ✅ verified — Balance Druid data confirmed correct in dev |
+| 3 | Admin gear plan — Trinket Ratings status tab + per-row Sync button with inline result | Small | ✅ |
+| 4 | Static assets — source icon SVGs in `static/img/sources/` | Tiny | ✅ (SVG placeholders; replace w/ real favicons when available) |
+| 5 | API — new `GET /trinket-ratings` endpoint | Small | ✅ `get_trinket_ratings()` in `gear_plan_service.py`; route in `gear_plan_routes.py` |
+| 6 | API — extend equipment endpoint with `tier_badge` for trinket slots | Small | ✅ `get_plan_detail()` attaches `tier_badge` (source_ratings) to equipped trinket items |
+| 7 | API — extend `available-items` + BIS query with `is_equipped`, `is_bis` | Small | ✅ All item groups get `is_equipped`/`is_bis`; trinket slots also get `source_ratings`; BIS recs stamped |
+| 8 | JS — `renderTierBadge()` + `renderItemBadges()` utilities | Small | ✅ `GP_SOURCE_ICONS`, `_gpRenderTierBadge()`, `_gpRenderItemBadges()`, `_gpTrinketCache`; CSS v2.1.0 |
+| 9 | UI — paperdoll trinket slot tier overlay + unranked upgrade pill | Small | ✅ |
+| 10 | UI — slot table tier badge on trinket rows | Small | ✅ |
+| 11 | UI — Trinket Rankings drawer section (tabs, list, source switcher) | Medium | ✅ |
+| 12 | UI — EQUIPPED / BIS badges across all three list sections | Medium | ✅ |
+| **Total** | | **Medium — 1-2 dev sessions** | |
 
 Steps 1–4 are backend setup. Steps 5–8 are API + shared JS utilities. Steps 9–12 are the visible UI work. Each step is independently deployable behind the existing gear plan feature gate (GL only for the admin side; character-owned gating for the member side).
+
+---
+
+## Implementation Notes (from Steps 1–4)
+
+### Wowhead closing tag normalisation
+Wowhead's raw HTML escapes BBCode closing tags as `[\/tag]` (backslash before slash). The regex approach (`\\?` to make the backslash optional) failed silently in practice. Fix: `_extract_trinket_tiers()` pre-normalises with `raw_html.replace("[\\/", "[/")` before applying regexes. Patterns use plain `[/tag]` form.
+
+### All three Wowhead sources return identical trinket data
+Wowhead has one trinket tier list per spec page — not separate per content-type. All three source rows (Raid/M+/Overall) produce identical `trinket_tier_ratings` rows. Expected. The `source_id` distinction becomes meaningful when Icy Veins data lands.
+
+### Items with empty names
+Some scraped items land with empty `item_name` — not in `WH.Gatherer.addData()` at scrape time. Stubs are in `wow_items` with the correct `blizzard_item_id`. Running Enrich Items fills the names.
+
+### Admin per-row Sync button (added to Step 3 scope)
+Each Scrape Targets row has an inline Sync button: fires `POST /api/v1/admin/bis/sync/target/{id}`, shows spinner on the button, then updates the row's status/items cells in place and displays `X BIS · Y trinkets` inline. Function: `resyncSingleTarget()` in `gear_plan_admin.js` (v1.2.0).
+
+---
+
+## Implementation Notes (from Steps 5–8)
+
+### `get_available_items()` char_row query extended
+Added `gp.spec_id, gp.hero_talent_id` to the existing char_row query so trinket rating lookups don't need a separate plan fetch. Both fields land in `avail_spec_id` / `avail_ht_id` and are used by Query 2b.
+
+### Query 2b — trinket ratings pre-fetch inside the conn block
+Runs only for `trinket_1` / `trinket_2` slots. Fetches all `trinket_tier_ratings` rows for the spec and deduplicates by `(blizzard_item_id, source_origin, tier)` in Python (not SQL). Result stored in `trinket_ratings_by_bid`, which is then stamped onto every item at return time. Non-trinket slots pay zero query cost.
+
+### Source-rating deduplication by (origin, tier)
+All 3 Wowhead sources produce identical rows. Rather than DISTINCT ON in SQL (ordering dependency), dedup happens with a Python `seen` set keyed on `(item_id, source_origin, tier)`. This pattern is used consistently in all three places: `get_available_items()`, `get_plan_detail()`, and `get_trinket_ratings()`.
+
+### `tier_badge` placement in plan detail
+Added inside the conn block, immediately before the "Build bid → equipment data lookup" comment. Uses `_trinket_bids_pd` / `_tb_rows` / `_tb_map` / `_tb_seen` naming (prefixed with `_` and `_pd` suffix) to avoid shadowing the broader scope variables.
+
+### `is_equipped` / `is_bis` on BIS recs
+Stamped in the per-slot loop in `get_plan_detail()`, right after the `target_ilvl` assignment. Uses `equipped_bid` (already in scope) and `desired_bid` (also already in scope for that slot). No extra queries.
+
+### JS cache buster
+`my_characters.js` → v2.7.0, `my_characters.css` → v2.1.0.
+
+### `_gpTrinketCache`
+Declared alongside `_gpAvailCache` for the upcoming Trinket Rankings drawer section (step 11). Shape: `"charId:slot"` → `{status:'loading'|'done'|'error', data:{...}}`.
+
+---
+
+## Implementation Notes (from Steps 9–12)
+
+### Paperdoll tier badge (Step 9)
+Added inline to the `.mcn-slot-card__ilvl` div — appended after the ilvl number for `trinket_1`/`trinket_2` slots when `eq.tier_badge` has entries. Uses the existing `.gp-tier-badge` CSS with a scoped `.mcn-slot-card__ilvl .gp-tier-badge` override to shrink the badge to fit the compact card. No unranked pill in the paperdoll card — card is already clickable to open the drawer where the Trinket Rankings section gives full detail.
+
+### Gear table tier badge (Step 10)
+Added `_gpRenderTierBadge(eq.tier_badge)` to the `.mcn-gt__meta` div in the Equipped cell for trinket rows. Sits inline alongside the ilvl number and track pill.
+
+### Trinket Rankings drawer section (Step 11)
+Added below BIS Recommendations and Available from Content, before Excluded Items. Structure:
+- `<details class="mcn-avail-section" open>` with DOM id `mcn-trinket-ratings-body-{slot}`
+- Async loaded by `_gpLoadTrinketRatings(charId, dbSlot)` — no-op if already loading/loaded
+- `_gpTrinketFilter` dict (`dbSlot → 'all'|'raid_boss'|'dungeon'|'crafted'`) drives filter state
+- `mcnGpSetTrinketFilter(dbSlot, filter)` — window global for onclick attrs; updates filter + re-renders body in-place
+- Tier groups rendered with a horizontal rule divider (`gp-trinket-tier-rule`) and a full-size tier badge as the group header
+
+### EQUIPPED / BIS badges (Step 12)
+- **BIS grid**: `is_equipped`/`is_bis` now stored in `itemMap` (taken from first rec per item). Badges rendered as `_gpRenderItemBadges(item.is_equipped, item.is_bis)` inline after the item name.
+- **Available from Content**: `_gpRenderItemBadges(item.is_equipped, item.is_bis)` added inline after item name in `_gpRenderAvailTable`.
+- **Trinket Rankings**: badges rendered per item inside `_gpRenderTrinketRankings`.
+
+### JS/CSS versions
+`my_characters.js` → v2.8.0, `my_characters.css` → v2.2.0.
 
 ---
 
@@ -481,15 +548,16 @@ When Icy Veins scraping ships (Phase Z), IV trinket ratings slot in cleanly:
 
 | File | Change |
 |------|--------|
-| `alembic/versions/NNNN_trinket_tier_ratings.py` | New migration |
-| `src/sv_common/guild_sync/bis_sync.py` | `_extract_trinket_tiers()`, `_upsert_trinket_ratings()`, extend `_extract_wowhead()` |
-| `src/guild_portal/api/bis_routes.py` | New `GET /trinket-ratings` endpoint |
-| `src/guild_portal/api/member_routes.py` | Extend equipment + available-items endpoints |
-| `src/guild_portal/templates/admin/gear_plan.html` | Trinket Ratings tab |
-| `src/guild_portal/templates/member/my_characters.html` | Paperdoll trinket badges, drawer section |
-| `src/guild_portal/static/js/my_characters.js` | `renderTierBadge()`, `renderItemBadges()`, drawer section renderer |
-| `src/guild_portal/static/css/my_characters.css` | Tier badge colors, EQUIPPED/BIS pill styles |
-| `src/guild_portal/static/img/sources/` | `wowhead.png`, `icy-veins.png`, `archon.png` |
+| `alembic/versions/0100_trinket_tier_ratings.py` | Migration (complete) |
+| `src/sv_common/guild_sync/bis_sync.py` | `_extract_trinket_tiers()`, `_upsert_trinket_ratings()`, extend `_extract_wowhead()` (complete) |
+| `src/guild_portal/api/bis_routes.py` | `GET /admin/bis/trinket-ratings-status` (complete) |
+| `src/guild_portal/api/gear_plan_routes.py` | `GET /trinket-ratings` endpoint (complete — step 5) |
+| `src/guild_portal/services/gear_plan_service.py` | `get_trinket_ratings()`, extended `get_plan_detail()` + `get_available_items()` (complete — steps 5–7) |
+| `src/guild_portal/templates/admin/gear_plan.html` | Trinket Ratings status tab (complete — step 3) |
+| `src/guild_portal/templates/member/my_characters.html` | Paperdoll trinket badges, drawer section (steps 9–11, next) |
+| `src/guild_portal/static/js/my_characters.js` | `_gpRenderTierBadge()`, `_gpRenderItemBadges()`, drawer renderer (steps 8 done; 9–12 next) |
+| `src/guild_portal/static/css/my_characters.css` | Tier badge + EQUIPPED/BIS pill styles (complete — step 8) |
+| `src/guild_portal/static/img/sources/` | `wowhead.svg`, `icy-veins.svg`, `archon.svg` (complete — step 4) |
 
 ---
 
@@ -497,6 +565,6 @@ When Icy Veins scraping ships (Phase Z), IV trinket ratings slot in cleanly:
 
 1. **Tier F?** — Some Wowhead tier lists include an F tier for actively harmful or trap choices. The `CHECK` constraint currently allows `'F'`. If Wowhead doesn't use it for trinkets in practice, it's a no-op. If it does, the display logic should handle it (muted red, below D in sort order).
 
-2. **Multi-slot trinket handling** — When both trinket slots are the same item (e.g., duplicate crafted trinkets), how does the EQUIPPED badge behave? Most players won't have this. For now: mark EQUIPPED if `blizzard_item_id` appears in *either* trinket slot's equipment row.
+2. **Multi-slot trinket handling** — When both trinket slots are the same item (e.g., duplicate crafted trinkets), how does the EQUIPPED badge behave? Most players won't have this. For now: mark EQUIPPED if `blizzard_item_id` appears in *either* trinket slot's equipment row. ✅ Implemented this way.
 
 3. **Archon trinket tier data** — u.gg provides ranked item popularity data (count of top players using each trinket) but not explicit S/A/B/C/D tier labels. Their data could be used to derive a popularity-based tier proxy, but that's a different data shape than Wowhead's curated editorial tiers. Defer to a later pass if desired.
