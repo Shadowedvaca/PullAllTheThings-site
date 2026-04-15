@@ -2,7 +2,7 @@
 
 Architecture (4 steps):
   1. URL Discovery  — auto-generate scrape targets for all spec × source × hero talent combos
-  2. Extraction     — try multiple techniques per URL (Archon → Wowhead → Icy Veins → SimC)
+  2. Extraction     — try multiple techniques per URL (u.gg → Wowhead → Icy Veins → SimC)
   3. Auto-publish   — upsert extracted items into bis_list_entries immediately (no draft state)
   4. Cross-reference— compare sources per spec to surface disagreements for review
 
@@ -58,8 +58,8 @@ def _slug(name: str, sep: str = "-") -> str:
     """Convert a display name to a lowercase URL slug."""
     return name.lower().replace(" ", sep)
 
-# Archon slot names → our normalised internal keys
-_ARCHON_SLOT_MAP: dict[str, str] = {
+# u.gg slot names → our normalised internal keys
+_UGG_SLOT_MAP: dict[str, str] = {
     "head":      "head",
     "neck":      "neck",
     "shoulder":  "shoulder",
@@ -124,7 +124,7 @@ _HEADERS = {
 async def discover_targets(pool: asyncpg.Pool) -> dict:
     """Auto-generate scrape targets for all active spec × source combos.
 
-    Archon: one target per spec × hero talent (URLs embed the HT slug).
+    u.gg: one target per spec × hero talent (URLs embed the HT slug).
     Wowhead + Icy Veins: one target per spec with hero_talent_id=NULL.
       Wowhead's BIS page is not HT-specific — the same page/URL covers all builds.
       IV pages are also not HT-specific and are JS-rendered (extraction stubbed).
@@ -684,7 +684,7 @@ async def _extract(
     """
     try:
         if technique == "json_embed":
-            slots, raw_content = await _extract_archon(url)
+            slots, raw_content = await _extract_ugg(url)
             return slots, [], None, raw_content
         elif technique == "wh_gatherer":
             slots, trinket_ratings, raw_content = await _extract_wowhead(url, content_type=content_type)
@@ -707,11 +707,11 @@ async def _extract(
 
 
 # ---------------------------------------------------------------------------
-# Archon / u.gg extractor  (json_embed)
+# u.gg extractor  (json_embed)
 # ---------------------------------------------------------------------------
 
 
-async def _extract_archon(url: str) -> tuple[list[SimcSlot], Optional[str]]:
+async def _extract_ugg(url: str) -> tuple[list[SimcSlot], Optional[str]]:
     """Fetch u.gg page and extract BIS items from embedded SSR JSON.
 
     u.gg embeds a large `window.__SSR_DATA__` JSON blob in the HTML which
@@ -738,7 +738,7 @@ async def _extract_archon(url: str) -> tuple[list[SimcSlot], Optional[str]]:
             try:
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(html, obj_start)
-                return _parse_archon_ssr(data, url), html
+                return _parse_ugg_ssr(data, url), html
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
@@ -748,7 +748,7 @@ async def _extract_archon(url: str) -> tuple[list[SimcSlot], Optional[str]]:
     # SSR blob failed to parse, silently contaminating BIS data with old items.
     # Return [] so the caller marks the target as "failed" — that failure is visible
     # in the scrape log and prompts investigation rather than silent corruption.
-    logger.warning("_extract_archon: SSR parse returned no items for %s", url)
+    logger.warning("_extract_ugg: SSR parse returned no items for %s", url)
     return [], html
 
 
@@ -804,7 +804,7 @@ def _slug_to_pascal(slug: str) -> str:
     return "".join(word.capitalize() for word in re.split(r"[-_]", slug))
 
 
-def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
+def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
     """Parse items from the window.__SSR_DATA__ blob.
 
     u.gg SSR format: the top-level dict is keyed by a stats2 URL.  Its value
@@ -832,7 +832,7 @@ def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
             # Legacy items_table at top level (older u.gg format)
             items_by_slot = inner.get("items_table", {}).get("items", {})
             if items_by_slot:
-                return _archon_items_to_slots(items_by_slot)
+                return _ugg_items_to_slots(items_by_slot)
 
             # Current format: section["all"][spec_key]["items_table"]["items"]
             sec = inner.get(section)
@@ -844,26 +844,26 @@ def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
                         items_table = spec_data.get("items_table", {}).get("items", {})
                         if items_table:
                             logger.debug(
-                                "_parse_archon_ssr: using %s[all][%s][items_table] for %s",
+                                "_parse_ugg_ssr: using %s[all][%s][items_table] for %s",
                                 section, spec_key, url,
                             )
-                            return _archon_items_to_slots(items_table)
+                            return _ugg_items_to_slots(items_table)
 
             # Fallback: affixes (M+ data — mixes specs and may surface stale items)
             affixes = inner.get("affixes", {})
             if affixes:
                 logger.warning(
-                    "_parse_archon_ssr: falling back to affixes for %s "
+                    "_parse_ugg_ssr: falling back to affixes for %s "
                     "(section=%s spec_key=%s not found)",
                     url, section, spec_key,
                 )
-                return _parse_archon_combo_data(affixes)
+                return _parse_ugg_combo_data(affixes)
     except (AttributeError, TypeError):
         pass
     return []
 
 
-def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
+def _parse_ugg_combo_data(affixes: dict) -> list[SimcSlot]:
     """Extract most popular item per slot from u.gg's affixes data structure.
 
     Handles both the current format (items → slot → dps_item → {item_id})
@@ -933,14 +933,14 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
                         slot_counts[sk][iid] = slot_counts[sk].get(iid, 0) + 1
 
     slots: list[SimcSlot] = []
-    for archon_slot, id_counts in slot_counts.items():
-        normalised = _ARCHON_SLOT_MAP.get(archon_slot.lower())
+    for ugg_slot, id_counts in slot_counts.items():
+        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
         if not normalised:
             continue
         best_id = max(id_counts, key=lambda k: id_counts[k])
         best_votes = id_counts[best_id]
         logger.debug(
-            "Archon extraction: slot '%s' → item %d (%d votes)",
+            "u.gg extraction: slot '%s' → item %d (%d votes)",
             normalised, best_id, best_votes,
         )
         slots.append(SimcSlot(
@@ -954,20 +954,20 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
     return slots
 
 
-def _parse_archon_items_table(data: dict) -> list[SimcSlot]:
+def _parse_ugg_items_table(data: dict) -> list[SimcSlot]:
     """Parse items from the stats2.u.gg direct JSON response (legacy format)."""
     try:
         items_by_slot = data.get("items_table", {}).get("items", {})
-        return _archon_items_to_slots(items_by_slot)
+        return _ugg_items_to_slots(items_by_slot)
     except (AttributeError, TypeError):
         return []
 
 
-def _archon_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
-    """Convert Archon's per-slot items dict into SimcSlot list."""
+def _ugg_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
+    """Convert u.gg's per-slot items dict into SimcSlot list."""
     slots: list[SimcSlot] = []
-    for archon_slot, slot_data in items_by_slot.items():
-        normalised = _ARCHON_SLOT_MAP.get(archon_slot.lower())
+    for ugg_slot, slot_data in items_by_slot.items():
+        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
         if normalised is None:
             continue
         items = slot_data.get("items") or []
