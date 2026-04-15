@@ -1160,7 +1160,11 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                 if not enc_id:
                     continue
 
-                enc_data = await blizzard_client.get_journal_encounter(enc_id)
+                try:
+                    enc_data = await blizzard_client.get_journal_encounter(enc_id)
+                except Exception as enc_exc:
+                    logger.warning("landing fill: skipping encounter %d — %s", enc_id, enc_exc)
+                    continue
                 if not enc_data:
                     logger.warning("landing fill: no data for encounter %d", enc_id)
                     continue
@@ -1203,7 +1207,13 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         items_stored  = 0
         items_skipped = 0
         for item_id in sorted(all_item_ids):
-            item_data = await blizzard_client.get_item(item_id)
+            try:
+                item_data = await blizzard_client.get_item(item_id)
+            except Exception as item_exc:
+                logger.warning("landing fill: skipping item %d — %s", item_id, item_exc)
+                items_skipped += 1
+                continue
+
             if not item_data:
                 items_skipped += 1
                 continue
