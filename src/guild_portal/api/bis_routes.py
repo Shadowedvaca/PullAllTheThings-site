@@ -1461,7 +1461,7 @@ async def enrich_and_classify(
     return {"ok": True, "started": True}
 
 
-@router.post("/sync/test-blood-dk")
+@router.post("/test-blood-dk")
 async def sync_test_blood_dk(
     request: Request,
     player: Player = Depends(require_rank(5)),

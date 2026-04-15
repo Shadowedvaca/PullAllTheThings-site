@@ -591,7 +591,7 @@ async function testBloodDk() {
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
     setStatus('Fetching Blood DK BIS data…', 'running');
     try {
-        const res = await fetch('/api/v1/admin/bis/sync/test-blood-dk', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const res = await fetch('/api/v1/admin/bis/test-blood-dk', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await res.json();
         if (!res.ok) {
             setStatus(`Blood DK test failed: HTTP ${res.status} — ${d.detail || d.error || 'unknown'}`, 'error');
