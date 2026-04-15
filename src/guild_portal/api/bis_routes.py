@@ -1132,7 +1132,11 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                 )
             instances_stored += 1
 
-            enc_list = (inst_data.get("encounters") or {}).get("encounters", [])
+            enc_section = inst_data.get("encounters", {})
+            if isinstance(enc_section, dict):
+                enc_list = enc_section.get("encounters", [])
+            else:
+                enc_list = enc_section if isinstance(enc_section, list) else []
             for enc_ref in enc_list:
                 enc_id = enc_ref.get("id")
                 if not enc_id:
