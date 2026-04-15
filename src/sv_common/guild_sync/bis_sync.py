@@ -85,7 +85,7 @@ _ARCHON_SLOT_MAP: dict[str, str] = {
 
 # Technique priority order for each BIS source origin
 _TECHNIQUE_ORDER: dict[str, list[str]] = {
-    "archon":    ["json_embed"],
+    "ugg":       ["json_embed"],
     "wowhead":   ["wh_gatherer"],
     "icy_veins": ["html_parse"],  # STUB — html_parse returns [] for IV; see _extract_icy_veins
     "manual":    ["manual"],
@@ -370,7 +370,7 @@ def _build_url(
     cls  = _slug(class_name, slug_sep)
     spec = _slug(spec_name,  slug_sep)
 
-    if origin == "archon":
+    if origin == "ugg":
         base = f"https://u.gg/wow/{spec}/{cls}/gear?hero={hero_slug}"
         if content_type == "raid":
             return base + "&role=raid"
