@@ -1026,7 +1026,7 @@ _enrich_classify_status: dict = {
     "running": False,
     "phase_label": "Idle",
     "step": 0,
-    "total_steps": 3,
+    "total_steps": 2,
     "detail": "",
     "started_at": None,
     "finished_at": None,
@@ -1044,22 +1044,24 @@ async def landing_status():
 
 
 async def _run_landing_fill(pool, blizzard_client, flush: bool):
-    """Background: populate landing tables from Blizzard API (raw data only).
+    """New pipeline: store raw Blizzard API payloads in landing tables only.
+
+    No guild_identity writes.  No enrichment.  Pure raw data collection.
 
     Steps:
-      1. Truncate landing tables (flush=True only)
-      2. Sync loot tables from Blizzard Journal API
-      3. Discover crafted items via Blizzard Recipe API
+      1. (flush only) TRUNCATE all landing tables
+      2. Fetch expansion → instances → encounters → store raw payloads
+      3. Fetch item records for every item found in encounter loot tables
 
-    Enrichment (Wowhead tooltips, Blizzard metadata) is a separate step — use
-    Section C → Enrich & Classify after raw data is collected.
+    Run Section C → Enrich & Classify after this completes.
     """
+    import json as _json
     global _landing_status
-    from sv_common.guild_sync.item_source_sync import sync_item_sources as _sync_sources
-    from sv_common.guild_sync.item_recipe_link_sync import discover_and_link_crafted_items
 
     try:
         step = 0
+
+        # ── Step 1 (flush only): truncate ──────────────────────────────────────
         if flush:
             step = 1
             _landing_status.update(step=step, phase_label="Truncating landing tables", detail="")
@@ -1067,34 +1069,152 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                 await conn.execute("""
                     TRUNCATE landing.blizzard_items,
                              landing.blizzard_journal_encounters,
+                             landing.blizzard_journal_instances,
                              landing.blizzard_appearances,
                              landing.wowhead_tooltips
                 """)
-            logger.info("landing-flush-fill: landing tables truncated")
+            logger.info("landing fill: landing tables truncated")
 
-        _landing_status.update(step=step + 1, phase_label="Syncing loot tables from Blizzard API", detail="")
-        result = await _sync_sources(pool, blizzard_client)
-        logger.info("landing-flush-fill: sync_item_sources complete — %s", result)
+        # ── Step 2: expansion → instances → encounters ─────────────────────────
+        step += 1
+        _landing_status.update(
+            step=step,
+            phase_label="Fetching expansion instances and encounters from Blizzard API",
+            detail="",
+        )
 
-        _landing_status.update(step=step + 2, phase_label="Discovering crafted items via Blizzard Recipe API", detail="")
-        craft_stats = await discover_and_link_crafted_items(pool, blizzard_client)
-        logger.info("landing-flush-fill: crafted items — %s", craft_stats)
+        tiers = await blizzard_client.get_journal_expansion_index()
+        if not tiers:
+            raise RuntimeError("Could not fetch expansion index from Blizzard API")
 
-        sources_added = result.get('sources_added', 0)
-        items_stubbed = result.get('items_stubbed', 0)
-        crafted_linked = craft_stats.get('phase_2b_linked', 0)
+        expansion = max(tiers, key=lambda t: t.get("id", 0))
+        expansion_id   = expansion["id"]
+        expansion_name = expansion.get("name", f"Expansion {expansion_id}")
+
+        exp_data = await blizzard_client.get_journal_expansion(expansion_id)
+        if not exp_data:
+            raise RuntimeError(f"Could not fetch expansion {expansion_id} from Blizzard API")
+        expansion_name = exp_data.get("name", expansion_name)
+
+        instances: list[dict] = []
+        for inst in exp_data.get("dungeons", []):
+            instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "dungeon"})
+        for inst in exp_data.get("raids", []):
+            inst_name = inst.get("name", "")
+            inst_type = "world_boss" if inst_name == expansion_name else "raid"
+            instances.append({"id": inst["id"], "name": inst_name, "type": inst_type})
+
+        if not instances:
+            raise RuntimeError("No instances found for expansion — Blizzard API may be unavailable")
+
+        all_item_ids: set[int] = set()
+        instances_stored  = 0
+        encounters_stored = 0
+
+        for inst in instances:
+            inst_id   = inst["id"]
+            inst_name = inst["name"]
+            inst_type = inst["type"]
+
+            inst_data = await blizzard_client.get_journal_instance(inst_id)
+            if not inst_data:
+                logger.warning("landing fill: no data for instance %d (%s)", inst_id, inst_name)
+                continue
+
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO landing.blizzard_journal_instances
+                        (instance_id, instance_name, instance_type, expansion_id)
+                    VALUES ($1, $2, $3, $4)
+                    """,
+                    inst_id, inst_name, inst_type, expansion_id,
+                )
+            instances_stored += 1
+
+            enc_list = (inst_data.get("encounters") or {}).get("encounters", [])
+            for enc_ref in enc_list:
+                enc_id = enc_ref.get("id")
+                if not enc_id:
+                    continue
+
+                enc_data = await blizzard_client.get_journal_encounter(enc_id)
+                if not enc_data:
+                    logger.warning("landing fill: no data for encounter %d", enc_id)
+                    continue
+
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO landing.blizzard_journal_encounters
+                            (encounter_id, instance_id, payload)
+                        VALUES ($1, $2, $3::jsonb)
+                        """,
+                        enc_id, inst_id, _json.dumps(enc_data),
+                    )
+                encounters_stored += 1
+
+                for item_entry in enc_data.get("items", []):
+                    item_id = (item_entry.get("item") or {}).get("id")
+                    if item_id:
+                        all_item_ids.add(item_id)
+
+            _landing_status.update(
+                detail=(
+                    f"{instances_stored} instances, {encounters_stored} encounters, "
+                    f"{len(all_item_ids)} unique items found"
+                )
+            )
+            logger.info(
+                "landing fill: %s — %d encounters, %d items cumulative",
+                inst_name, encounters_stored, len(all_item_ids),
+            )
+
+        # ── Step 3: fetch item records ─────────────────────────────────────────
+        step += 1
+        _landing_status.update(
+            step=step,
+            phase_label=f"Fetching {len(all_item_ids)} item records from Blizzard API",
+            detail="",
+        )
+
+        items_stored  = 0
+        items_skipped = 0
+        for item_id in sorted(all_item_ids):
+            item_data = await blizzard_client.get_item(item_id)
+            if not item_data:
+                items_skipped += 1
+                continue
+
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO landing.blizzard_items (blizzard_item_id, payload)
+                    VALUES ($1, $2::jsonb)
+                    """,
+                    item_id, _json.dumps(item_data),
+                )
+            items_stored += 1
+
+            if items_stored % 50 == 0:
+                _landing_status.update(
+                    detail=f"{items_stored}/{len(all_item_ids)} items stored"
+                )
+
+        skip_note = f" ({items_skipped} skipped)" if items_skipped else ""
+        detail = (
+            f"{instances_stored} instances, {encounters_stored} encounters, "
+            f"{items_stored} items stored{skip_note}. Run Enrich & Classify next."
+        )
         _landing_status.update({
             "running": False,
             "phase_label": "Complete",
             "step": _landing_status["total_steps"],
-            "detail": (
-                f"Loot tables: {sources_added} sources added, {items_stubbed} items stubbed. "
-                f"Crafted items: {crafted_linked} linked. "
-                f"Run Enrich & Classify next."
-            ),
+            "detail": detail,
             "finished_at": datetime.now(timezone.utc),
             "error": None,
         })
+        logger.info("landing fill complete: %s", detail)
 
     except Exception as exc:
         logger.exception("landing fill failed")
@@ -1189,10 +1309,16 @@ async def enrich_and_classify(
     request: Request,
     player: Player = Depends(require_rank(5)),
 ):
-    """Combined pipeline: Enrich Items → Process Tier Tokens → Rebuild Enrichment (GL only).
+    """New pipeline: rebuild enrichment schema from landing tables (GL only).
 
-    Replaces old Steps 2, 3, and 6 in one operation. Background task —
-    poll GET /enrich-classify-status for progress.
+    Step 1 — sp_rebuild_all(): reads from landing.blizzard_items +
+              landing.blizzard_journal_encounters + landing.blizzard_journal_instances
+              to populate enrichment.items, enrichment.item_sources, enrichment.bis_entries,
+              enrichment.trinket_ratings, enrichment.item_seasons. Runs classification.
+    Step 2 — Fetch icon URLs: calls Blizzard media API for items in enrichment.items
+              where icon_url IS NULL.
+
+    Background task — poll GET /enrich-classify-status for progress.
     """
     import asyncio
     global _enrich_classify_status
@@ -1207,7 +1333,7 @@ async def enrich_and_classify(
         "running": True,
         "phase_label": "Starting…",
         "step": 0,
-        "total_steps": 3,
+        "total_steps": 2,
         "detail": "",
         "started_at": datetime.now(timezone.utc),
         "finished_at": None,
@@ -1216,23 +1342,14 @@ async def enrich_and_classify(
 
     async def _run():
         global _enrich_classify_status
-        from guild_portal.services.item_service import (
-            enrich_unenriched_items, enrich_null_icons, enrich_blizzard_metadata,
-        )
-        from sv_common.guild_sync.item_source_sync import process_tier_tokens as _process_tokens
-        from sv_common.guild_sync.item_recipe_link_sync import build_item_recipe_links
 
         try:
-            _enrich_classify_status.update(step=1, phase_label="Enriching items (Wowhead + metadata)", detail="")
-            wh_enriched, wh_errors = await enrich_unenriched_items(pool)
-            bl_enriched, bl_errors = await enrich_null_icons(pool, blizzard_client)
-            meta_enriched, meta_errors = await enrich_blizzard_metadata(pool, blizzard_client)
-            recipe_stats = await build_item_recipe_links(pool)
-
-            _enrich_classify_status.update(step=2, phase_label="Processing tier tokens", detail="")
-            tier_result = await _process_tokens(pool)
-
-            _enrich_classify_status.update(step=3, phase_label="Rebuilding enrichment tables", detail="")
+            # ── Step 1: rebuild enrichment schema from landing tables ───────────
+            _enrich_classify_status.update(
+                step=1,
+                phase_label="Rebuilding enrichment schema from landing tables",
+                detail="",
+            )
             async with pool.acquire() as conn:
                 await conn.execute("CALL enrichment.sp_rebuild_all()")
                 counts = await conn.fetchrow("""
@@ -1240,24 +1357,63 @@ async def enrich_and_classify(
                         (SELECT count(*) FROM enrichment.items)           AS items,
                         (SELECT count(*) FROM enrichment.item_sources)    AS sources,
                         (SELECT count(*) FROM enrichment.bis_entries)     AS bis,
-                        (SELECT count(*) FROM enrichment.trinket_ratings) AS trinkets
+                        (SELECT count(*) FROM enrichment.trinket_ratings) AS trinkets,
+                        (SELECT count(*) FROM enrichment.items
+                          WHERE icon_url IS NULL)                         AS missing_icons
                 """)
+            logger.info(
+                "enrich-and-classify: sp_rebuild_all complete — %d items, %d sources, %d BIS",
+                counts["items"], counts["sources"], counts["bis"],
+            )
 
-            total_errors = len(wh_errors) + len(bl_errors) + len(meta_errors)
+            # ── Step 2: fetch icon URLs for items missing them ─────────────────
+            missing = counts["missing_icons"] or 0
+            _enrich_classify_status.update(
+                step=2,
+                phase_label=f"Fetching icon URLs for {missing} items from Blizzard media API",
+                detail="",
+            )
+            icons_filled  = 0
+            icons_skipped = 0
+            if missing > 0:
+                async with pool.acquire() as conn:
+                    rows = await conn.fetch(
+                        "SELECT blizzard_item_id FROM enrichment.items WHERE icon_url IS NULL"
+                    )
+                item_ids = [r["blizzard_item_id"] for r in rows]
+                for item_id in item_ids:
+                    icon_url = await blizzard_client.get_item_media(item_id)
+                    if icon_url:
+                        async with pool.acquire() as conn:
+                            await conn.execute(
+                                "UPDATE enrichment.items SET icon_url = $1 WHERE blizzard_item_id = $2",
+                                icon_url, item_id,
+                            )
+                        icons_filled += 1
+                    else:
+                        icons_skipped += 1
+
+                    if (icons_filled + icons_skipped) % 50 == 0:
+                        _enrich_classify_status.update(
+                            detail=f"{icons_filled + icons_skipped}/{missing} processed"
+                        )
+
+            detail = (
+                f"{counts['items']} items, {counts['sources']} sources, "
+                f"{counts['bis']} BIS entries, {counts['trinkets']} trinket ratings. "
+                f"Icons: {icons_filled} fetched"
+                + (f", {icons_skipped} unavailable" if icons_skipped else "")
+                + "."
+            )
             _enrich_classify_status.update({
                 "running": False,
                 "phase_label": "Complete",
-                "step": 3,
-                "detail": (
-                    f"Enriched: {wh_enriched} Wowhead, {bl_enriched} icons, {meta_enriched} metadata. "
-                    f"Tier tokens: {tier_result.get('tokens_found', 0)} found. "
-                    f"Enrichment: {counts['items']} items, {counts['sources']} sources, "
-                    f"{counts['bis']} BIS entries. Errors: {total_errors}"
-                ),
+                "step": 2,
+                "detail": detail,
                 "finished_at": datetime.now(timezone.utc),
                 "error": None,
             })
-            logger.info("enrich-and-classify complete: %s", _enrich_classify_status["detail"])
+            logger.info("enrich-and-classify complete: %s", detail)
 
         except Exception as exc:
             logger.exception("enrich-and-classify failed")
