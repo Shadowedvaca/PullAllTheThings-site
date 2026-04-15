@@ -12,7 +12,7 @@ from sv_common.guild_sync.bis_sync import (
     _categorize_iv_area,
     _iv_base_url,
     _iv_bis_role,
-    _parse_archon_ssr,
+    _parse_ugg_ssr,
     _slug,
     _slug_to_pascal,
     _ugg_url_to_section,
@@ -111,25 +111,25 @@ class TestIvBaseUrl:
 
 
 # ---------------------------------------------------------------------------
-# _build_url — Archon
+# _build_url — u.gg (origin='ugg')
 # ---------------------------------------------------------------------------
 
 
 class TestBuildUrlArchon:
     def test_archon_overall(self):
-        url = _build_url("archon", "Death Knight", "Blood", "san-layn", "overall", "_")
+        url = _build_url("ugg", "Death Knight", "Blood", "san-layn", "overall", "_")
         assert url == "https://u.gg/wow/blood/death_knight/gear?hero=san-layn"
 
     def test_archon_raid(self):
-        url = _build_url("archon", "Death Knight", "Blood", "san-layn", "raid", "_")
+        url = _build_url("ugg", "Death Knight", "Blood", "san-layn", "raid", "_")
         assert url == "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=raid"
 
     def test_archon_mythic_plus(self):
-        url = _build_url("archon", "Death Knight", "Blood", "san-layn", "mythic_plus", "_")
+        url = _build_url("ugg", "Death Knight", "Blood", "san-layn", "mythic_plus", "_")
         assert url == "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=mythicdungeon"
 
     def test_archon_slug_separator_applied(self):
-        url = _build_url("archon", "Demon Hunter", "Havoc", "aldrachi-reaver", "overall", "_")
+        url = _build_url("ugg", "Demon Hunter", "Havoc", "aldrachi-reaver", "overall", "_")
         assert "demon_hunter" in url
         assert "havoc" in url
 
@@ -265,7 +265,7 @@ class TestUggUrlToSection:
 
 
 # ---------------------------------------------------------------------------
-# _parse_archon_ssr — section[all][spec_key][items_table] routing
+# _parse_ugg_ssr — section[all][spec_key][items_table] routing
 # ---------------------------------------------------------------------------
 
 
@@ -310,7 +310,7 @@ class TestParseArchonSsr:
             affixes_weapon_id=193716,
         )
         url = "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=raid"
-        slots = _parse_archon_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("main_hand") == 237846, "Should use raid[all] items_table, not affixes"
 
@@ -320,7 +320,7 @@ class TestParseArchonSsr:
             {"head": _make_items_table_entry(249970)},
         )
         url = "https://u.gg/wow/frost/mage/gear?role=mythicdungeon"
-        slots = _parse_archon_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("head") == 249970
 
@@ -330,7 +330,7 @@ class TestParseArchonSsr:
             {"head": _make_items_table_entry(249970)},
         )
         url = "https://u.gg/wow/arcane/mage/gear?hero=x"
-        slots = _parse_archon_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("head") == 249970
 
@@ -342,7 +342,7 @@ class TestParseArchonSsr:
             affixes_weapon_id=237846,
         )
         url = "https://u.gg/wow/arms/warrior/gear?role=raid"  # looks for "raid" section
-        slots = _parse_archon_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("main_hand") == 237846, "Should fall back to affixes"
 
@@ -352,7 +352,7 @@ class TestParseArchonSsr:
             {"weapon2": _make_items_table_entry(0)},
         )
         url = "https://u.gg/wow/blood/death_knight/gear?role=raid"
-        slots = _parse_archon_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url)
         assert not any(s.slot == "off_hand" for s in slots)
 
 

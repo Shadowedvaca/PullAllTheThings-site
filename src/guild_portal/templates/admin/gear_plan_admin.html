@@ -596,7 +596,7 @@ async function testBloodDk() {
         if (!res.ok) {
             setStatus(`Blood DK test failed: HTTP ${res.status} — ${d.detail || d.error || 'unknown'}`, 'error');
         } else if (d.ok) {
-            const stats = `${d.targets_run ?? '?'} targets, ${d.items_upserted ?? '?'} items, ${d.errors ?? '?'} errors`;
+            const stats = `${d.targets_run ?? '?'} targets, ${d.items_found ?? '?'} items found, ${d.errors ?? '?'} errors`;
             setStatus('Blood DK test complete — ' + stats, 'success');
         } else {
             setStatus('Blood DK test failed: ' + (d.error || 'unknown'), 'error');

@@ -1797,10 +1797,10 @@ class BisScrapeTarget(Base):
     __tablename__ = "bis_scrape_targets"
     __table_args__ = (
         UniqueConstraint(
-            "source_id", "spec_id", "hero_talent_id", "content_type",
+            "source_id", "spec_id", "url",
             name="uq_scrape_target",
         ),
-        {"schema": "guild_identity"},
+        {"schema": "config"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -1830,11 +1830,11 @@ class BisScrapeLog(Base):
     """Extraction attempt history for a BIS scrape target."""
 
     __tablename__ = "bis_scrape_log"
-    __table_args__ = {"schema": "guild_identity"}
+    __table_args__ = {"schema": "log"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     target_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.bis_scrape_targets.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("config.bis_scrape_targets.id", ondelete="CASCADE"), nullable=False
     )
     technique: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
