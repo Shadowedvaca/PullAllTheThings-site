@@ -1109,19 +1109,17 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
             inst_type = "world_boss" if inst_name == expansion_name else "raid"
             instances.append({"id": inst["id"], "name": inst_name, "type": inst_type, "exp_id": expansion_id})
 
-        # Previous expansion only: dungeons only (raids don't drop current-season gear).
-        # M+ seasons include dungeons from the immediately prior expansion, not all history.
-        if legacy_tiers:
-            prev_tier    = legacy_tiers[-1]
-            leg_exp_id   = prev_tier["id"]
+        # Prior expansions: dungeons only (raids don't drop current-season gear)
+        for tier in legacy_tiers:
+            leg_exp_id = tier["id"]
             leg_exp_data = await blizzard_client.get_journal_expansion(leg_exp_id)
-            if leg_exp_data:
-                for inst in leg_exp_data.get("dungeons", []):
-                    inst_id = inst.get("id")
-                    if inst_id:
-                        instances.append({"id": inst_id, "name": inst.get("name", ""), "type": "dungeon", "exp_id": leg_exp_id})
-            else:
-                logger.warning("landing fill: could not fetch previous expansion %d", leg_exp_id)
+            if not leg_exp_data:
+                logger.warning("landing fill: could not fetch legacy expansion %d", leg_exp_id)
+                continue
+            for inst in leg_exp_data.get("dungeons", []):
+                inst_id = inst.get("id")
+                if inst_id:
+                    instances.append({"id": inst_id, "name": inst.get("name", ""), "type": "dungeon", "exp_id": leg_exp_id})
 
         if not instances:
             raise RuntimeError("No instances found — Blizzard API may be unavailable")
