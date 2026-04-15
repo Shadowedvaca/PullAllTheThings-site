@@ -241,12 +241,15 @@
             Scrape u.gg and Wowhead BIS recommendations for all specs.
             <strong>Discover URLs</strong> finds scrape targets for the current season.
             <strong>Test Fetch</strong> runs a single Blood DK scrape for quick verification.
-            <strong>Sync All</strong> scrapes every active target. <strong>Re-Sync Errors</strong> retries only failed targets.
+            <strong>Sync All</strong> scrapes every active target.
+            <strong>Gap Fill</strong> scrapes only targets with no raw data or last fetched &gt;7 days ago.
+            <strong>Re-Sync Errors</strong> retries only failed targets.
         </p>
         <div class="gpa-section__controls">
             <button id="discover-btn" class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
             <button id="test-blood-dk-btn" class="btn-sm btn-secondary" onclick="testBloodDk()">Test Fetch (Blood DK)</button>
             <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
+            <button id="sync-gaps-btn" class="btn-sm btn-secondary" onclick="syncGaps()">Gap Fill</button>
             <button id="resync-errors-btn" class="btn-sm btn-secondary" onclick="resyncErrors()">Re-Sync Errors</button>
         </div>
     </div>

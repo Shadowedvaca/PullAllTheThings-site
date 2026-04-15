@@ -371,6 +371,20 @@ async def sync_spec(
     return {"ok": True, **result}
 
 
+@router.post("/sync-gaps")
+async def sync_gaps(request: Request, player: Player = Depends(require_rank(5))):
+    """Sync only BIS targets missing from or stale in landing.bis_scrape_raw (GL only).
+
+    A target is eligible if it has no raw row or its last fetch is older than
+    7 days.  Useful for keeping the landing layer fresh without a full re-scrape.
+    Runs synchronously and returns when complete.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.bis_sync import sync_gaps as _sync_gaps
+    result = await _sync_gaps(pool)
+    return {"ok": True, **result}
+
+
 @router.post("/sync/{source_id}")
 async def sync_source(
     source_id: int, request: Request, player: Player = Depends(require_rank(5))

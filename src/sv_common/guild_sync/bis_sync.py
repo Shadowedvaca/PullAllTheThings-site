@@ -548,6 +548,66 @@ async def sync_source(
     return stats
 
 
+async def sync_gaps(
+    pool: asyncpg.Pool,
+    stale_days: int = 7,
+) -> dict:
+    """Sync only BIS targets that are missing from or stale in landing.bis_scrape_raw.
+
+    A target is eligible if:
+      - it has no row at all in landing.bis_scrape_raw, OR
+      - its most recent fetched_at is older than stale_days
+
+    Targets are processed oldest-first (missing first, then by fetched_at ASC)
+    so the biggest gaps are filled first.  Skips Icy Veins targets.
+
+    Returns {targets_run, items_found, errors}.
+    """
+    from datetime import timedelta
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
+
+    async with pool.acquire() as conn:
+        targets = await conn.fetch(
+            """
+            SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
+                   t.content_type, t.url, t.preferred_technique, s.origin,
+                   latest.latest_at
+              FROM config.bis_scrape_targets t
+              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+              LEFT JOIN (
+                  SELECT target_id, MAX(fetched_at) AS latest_at
+                    FROM landing.bis_scrape_raw
+                   WHERE target_id IS NOT NULL
+                   GROUP BY target_id
+              ) latest ON latest.target_id = t.id
+             WHERE s.is_active = TRUE
+               AND s.origin != 'icy_veins'
+               AND t.url IS NOT NULL
+               AND (latest.latest_at IS NULL OR latest.latest_at < $1)
+             ORDER BY latest.latest_at ASC NULLS FIRST
+            """,
+            stale_cutoff,
+        )
+
+    stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0}
+
+    for target in targets:
+        target_dict = dict(target)
+        try:
+            result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
+            stats["targets_run"] += 1
+            stats["items_found"] += result.get("items_found", 0)
+            if result.get("status") == "failed":
+                stats["errors"] += 1
+        except Exception as exc:
+            logger.error("sync_gaps: error on target %d: %s", target_dict["id"], exc, exc_info=True)
+            stats["errors"] += 1
+        await asyncio.sleep(1.5)
+
+    return stats
+
+
 async def sync_target(
     pool: asyncpg.Pool,
     target_id: int,
@@ -1240,13 +1300,21 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT DISTINCT ON (bsr.target_id)
-                   bsr.content, bsr.url, bsr.source,
-                   t.source_id, t.spec_id, t.hero_talent_id, t.content_type
-              FROM landing.bis_scrape_raw bsr
-              JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
-             WHERE bsr.target_id IS NOT NULL
-             ORDER BY bsr.target_id, bsr.fetched_at DESC
+            WITH latest AS (
+                SELECT
+                    bsr.content, bsr.url, bsr.source,
+                    t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY bsr.target_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                 WHERE bsr.target_id IS NOT NULL
+            )
+            SELECT content, url, source, source_id, spec_id, hero_talent_id, content_type
+              FROM latest
+             WHERE rn = 1
         """)
         # TRUNCATE first — clean-slate rebuild.  enrichment.bis_entries has no
         # dependents so CASCADE is not needed.
@@ -1306,25 +1374,49 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
     Re-parses Wowhead HTML for trinket tier lists and writes to
     enrichment.trinket_ratings.  Only inserts items that exist in enrichment.items.
 
-    One HTML row per spec×source — deduplication ensures at most one trinket rating
-    set per (source_id, spec_id) pair.
+    Deduplication is driven by bis_list_sources.trinket_ratings_by_content_type:
+
+      FALSE (e.g. Wowhead) — ratings are identical across all content types,
+            so we collapse Overall/Raid/M+ to one row per spec, picking the
+            most-recently-fetched page regardless of which content type it was.
+            Partition key: (spec_id, origin).
+
+      TRUE  (e.g. u.gg if it publishes distinct lists per content type) — keep
+            one row per (spec_id, source_id) so each content type is rebuilt
+            independently.  Partition key: (spec_id, source_id).
+
+    This is a per-source config decision, not a global style.  Adding a new
+    trinket-ranking source requires setting trinket_ratings_by_content_type
+    explicitly rather than assuming the Wowhead model.
 
     Called by enrich-and-classify in bis_routes after sp_rebuild_all().
 
     Returns {trinket_ratings_inserted}.
     """
     async with pool.acquire() as conn:
-        # DISTINCT ON (spec_id, source_id) — one raw per spec×source is enough
-        # since trinket ratings are section-independent (same for overall/raid/m+).
         rows = await conn.fetch("""
-            SELECT DISTINCT ON (t.spec_id, t.source_id)
-                   bsr.content, bsr.url,
-                   t.source_id, t.spec_id, t.hero_talent_id
-              FROM landing.bis_scrape_raw bsr
-              JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
-             WHERE bsr.target_id IS NOT NULL
-               AND bsr.source = 'wowhead'
-             ORDER BY t.spec_id, t.source_id, bsr.fetched_at DESC
+            WITH ranked AS (
+                SELECT
+                    bsr.content, bsr.url,
+                    t.source_id, t.spec_id, t.hero_talent_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            t.spec_id,
+                            CASE WHEN sc.trinket_ratings_by_content_type
+                                 THEN t.source_id::text
+                                 ELSE sc.origin
+                            END
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                  JOIN guild_identity.bis_list_sources sc ON sc.id = t.source_id
+                 WHERE bsr.target_id IS NOT NULL
+                   AND bsr.source = 'wowhead'
+            )
+            SELECT content, url, source_id, spec_id, hero_talent_id
+              FROM ranked
+             WHERE rn = 1
         """)
         await conn.execute("TRUNCATE enrichment.trinket_ratings")
 
