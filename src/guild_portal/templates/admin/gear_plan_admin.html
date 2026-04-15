@@ -593,9 +593,11 @@ async function testBloodDk() {
     try {
         const res = await fetch('/api/v1/admin/bis/sync/test-blood-dk', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await res.json();
-        if (d.ok) {
-            const msg = d.spec_id ? `spec_id=${d.spec_id}` : 'Done';
-            setStatus('Blood DK test complete — ' + msg, 'success');
+        if (!res.ok) {
+            setStatus(`Blood DK test failed: HTTP ${res.status} — ${d.detail || d.error || 'unknown'}`, 'error');
+        } else if (d.ok) {
+            const stats = `${d.targets_run ?? '?'} targets, ${d.items_upserted ?? '?'} items, ${d.errors ?? '?'} errors`;
+            setStatus('Blood DK test complete — ' + stats, 'success');
         } else {
             setStatus('Blood DK test failed: ' + (d.error || 'unknown'), 'error');
         }
