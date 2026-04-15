@@ -1076,6 +1076,8 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
             logger.info("landing fill: landing tables truncated")
 
         # ── Step 2: expansion → instances → encounters ─────────────────────────
+        # Covers current expansion (raids + dungeons + world boss) PLUS dungeons
+        # from all prior expansions (M+ seasons routinely include legacy dungeons).
         step += 1
         _landing_status.update(
             step=step,
@@ -1087,25 +1089,40 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         if not tiers:
             raise RuntimeError("Could not fetch expansion index from Blizzard API")
 
-        expansion = max(tiers, key=lambda t: t.get("id", 0))
-        expansion_id   = expansion["id"]
-        expansion_name = expansion.get("name", f"Expansion {expansion_id}")
+        sorted_tiers  = sorted(tiers, key=lambda t: t.get("id", 0))
+        current_tier  = sorted_tiers[-1]
+        legacy_tiers  = sorted_tiers[:-1]
+        expansion_id  = current_tier["id"]
+        expansion_name = current_tier.get("name", f"Expansion {expansion_id}")
 
         exp_data = await blizzard_client.get_journal_expansion(expansion_id)
         if not exp_data:
             raise RuntimeError(f"Could not fetch expansion {expansion_id} from Blizzard API")
         expansion_name = exp_data.get("name", expansion_name)
 
+        # Current expansion: raids + dungeons + world boss
         instances: list[dict] = []
         for inst in exp_data.get("dungeons", []):
-            instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "dungeon"})
+            instances.append({"id": inst["id"], "name": inst.get("name", ""), "type": "dungeon", "exp_id": expansion_id})
         for inst in exp_data.get("raids", []):
             inst_name = inst.get("name", "")
             inst_type = "world_boss" if inst_name == expansion_name else "raid"
-            instances.append({"id": inst["id"], "name": inst_name, "type": inst_type})
+            instances.append({"id": inst["id"], "name": inst_name, "type": inst_type, "exp_id": expansion_id})
+
+        # Prior expansions: dungeons only (raids don't drop current-season gear)
+        for tier in legacy_tiers:
+            leg_exp_id = tier["id"]
+            leg_exp_data = await blizzard_client.get_journal_expansion(leg_exp_id)
+            if not leg_exp_data:
+                logger.warning("landing fill: could not fetch legacy expansion %d", leg_exp_id)
+                continue
+            for inst in leg_exp_data.get("dungeons", []):
+                inst_id = inst.get("id")
+                if inst_id:
+                    instances.append({"id": inst_id, "name": inst.get("name", ""), "type": "dungeon", "exp_id": leg_exp_id})
 
         if not instances:
-            raise RuntimeError("No instances found for expansion — Blizzard API may be unavailable")
+            raise RuntimeError("No instances found — Blizzard API may be unavailable")
 
         all_item_ids: set[int] = set()
         instances_stored  = 0
@@ -1115,6 +1132,7 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
             inst_id   = inst["id"]
             inst_name = inst["name"]
             inst_type = inst["type"]
+            inst_exp  = inst["exp_id"]
 
             inst_data = await blizzard_client.get_journal_instance(inst_id)
             if not inst_data:
@@ -1128,7 +1146,7 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                         (instance_id, instance_name, instance_type, expansion_id)
                     VALUES ($1, $2, $3, $4)
                     """,
-                    inst_id, inst_name, inst_type, expansion_id,
+                    inst_id, inst_name, inst_type, inst_exp,
                 )
             instances_stored += 1
 
