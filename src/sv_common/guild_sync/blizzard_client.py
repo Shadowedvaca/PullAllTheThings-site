@@ -254,6 +254,10 @@ class BlizzardClient:
             logger.warning("Blizzard API 404: %s", path)
             return None
 
+        if response.status_code >= 500:
+            logger.warning("Blizzard API %d on %s — skipping", response.status_code, path)
+            return None
+
         response.raise_for_status()
         return response.json()
 
