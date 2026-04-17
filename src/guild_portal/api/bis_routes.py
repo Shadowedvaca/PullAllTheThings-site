@@ -289,7 +289,7 @@ async def list_targets(
               FROM config.bis_scrape_targets t
               JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
               JOIN guild_identity.specializations sp ON sp.id = t.spec_id
-              JOIN guild_identity.classes c ON c.id = sp.class_id
+              JOIN ref.classes c ON c.id = sp.class_id
               LEFT JOIN guild_identity.hero_talents ht ON ht.id = t.hero_talent_id
              WHERE {where}
              ORDER BY c.name, sp.name, s.sort_order
@@ -444,7 +444,7 @@ async def get_scrape_log(
               JOIN config.bis_scrape_targets t ON t.id = l.target_id
               JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
               JOIN guild_identity.specializations sp ON sp.id = t.spec_id
-              JOIN guild_identity.classes c ON c.id = sp.class_id
+              JOIN ref.classes c ON c.id = sp.class_id
              WHERE {where}
              ORDER BY l.created_at DESC
              LIMIT ${len(args)}
@@ -1673,7 +1673,7 @@ async def sync_test_blood_dk(
     async with pool.acquire() as conn:
         spec = await conn.fetchrow(
             """SELECT s.id FROM guild_identity.specializations s
-               JOIN guild_identity.classes c ON c.id = s.class_id
+               JOIN ref.classes c ON c.id = s.class_id
                WHERE c.name = 'Death Knight' AND s.name = 'Blood'
                LIMIT 1"""
         )
@@ -1738,7 +1738,7 @@ async def trinket_ratings_status(request: Request):
                 COUNT(ttr.id)    AS rating_count,
                 MAX(ttr.updated_at) AS last_updated
               FROM guild_identity.specializations sp
-              JOIN guild_identity.classes c ON c.id = sp.class_id
+              JOIN ref.classes c ON c.id = sp.class_id
               CROSS JOIN guild_identity.bis_list_sources bls
               LEFT JOIN guild_identity.trinket_tier_ratings ttr
                      ON ttr.spec_id = sp.id AND ttr.source_id = bls.id

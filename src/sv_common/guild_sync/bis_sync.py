@@ -160,7 +160,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             SELECT s.id AS spec_id, s.name AS spec_name, c.name AS class_name,
                    r.name AS role_name
               FROM guild_identity.specializations s
-              JOIN guild_identity.classes c ON c.id = s.class_id
+              JOIN ref.classes c ON c.id = s.class_id
               LEFT JOIN guild_identity.roles r ON r.id = s.default_role_id
             ORDER BY c.name, s.name
             """
@@ -423,7 +423,7 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
               FROM config.bis_scrape_targets t
               JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
               JOIN guild_identity.specializations sp ON sp.id = t.spec_id
-              JOIN guild_identity.classes c ON c.id = sp.class_id
+              JOIN ref.classes c ON c.id = sp.class_id
              WHERE s.is_active = TRUE
                AND s.origin != 'icy_veins'
                AND t.url IS NOT NULL
@@ -2021,7 +2021,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
             """
             SELECT s.id, s.name AS spec_name, c.name AS class_name
               FROM guild_identity.specializations s
-              JOIN guild_identity.classes c ON c.id = s.class_id
+              JOIN ref.classes c ON c.id = s.class_id
              ORDER BY c.name, s.name
             """
         )

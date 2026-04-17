@@ -232,7 +232,7 @@ async def sync_bnet_characters(pool, player_id: int, access_token: str) -> dict:
                 class_id = None
                 if class_name:
                     class_row = await conn.fetchrow(
-                        "SELECT id FROM guild_identity.classes WHERE LOWER(name) = LOWER($1)",
+                        "SELECT id FROM ref.classes WHERE LOWER(name) = LOWER($1)",
                         class_name,
                     )
                     class_id = class_row["id"] if class_row else None

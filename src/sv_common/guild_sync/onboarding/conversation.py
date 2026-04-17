@@ -520,7 +520,7 @@ class OnboardingConversation:
                 """SELECT wc.id, wc.character_name, wc.realm_slug,
                           c.name as class_name
                    FROM guild_identity.wow_characters wc
-                   LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+                   LEFT JOIN ref.classes c ON c.id = wc.class_id
                    WHERE LOWER(wc.character_name) = $1 AND wc.removed_at IS NULL""",
                 name.lower(),
             )

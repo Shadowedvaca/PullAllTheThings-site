@@ -702,7 +702,7 @@ async def admin_players_data(
         FROM guild_identity.wow_characters wc
         LEFT JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
         LEFT JOIN guild_identity.players p ON p.id = pc.player_id
-        LEFT JOIN guild_identity.classes cl ON cl.id = wc.class_id
+        LEFT JOIN ref.classes cl ON cl.id = wc.class_id
         LEFT JOIN guild_identity.specializations sp ON sp.id = wc.active_spec_id
         LEFT JOIN guild_identity.roles ro ON ro.id = sp.default_role_id
         LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id

@@ -734,11 +734,12 @@ class WowClass(Base):
     """WoW class reference: Death Knight, Druid, etc."""
 
     __tablename__ = "classes"
-    __table_args__ = {"schema": "guild_identity"}
+    __table_args__ = {"schema": "ref"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(30), nullable=False, unique=True)
     color_hex: Mapped[Optional[str]] = mapped_column(String(7))
+    blizzard_class_id: Mapped[Optional[int]] = mapped_column(Integer)
 
     specializations: Mapped[list["Specialization"]] = relationship(
         back_populates="wow_class"
@@ -759,7 +760,7 @@ class Specialization(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     class_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.classes.id"), nullable=False
+        Integer, ForeignKey("ref.classes.id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     default_role_id: Mapped[int] = mapped_column(
@@ -815,7 +816,7 @@ class WowCharacter(Base):
     realm_slug: Mapped[str] = mapped_column(String(50), nullable=False)
     realm_name: Mapped[Optional[str]] = mapped_column(String(100))
     class_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.classes.id")
+        Integer, ForeignKey("ref.classes.id")
     )
     active_spec_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("guild_identity.specializations.id")

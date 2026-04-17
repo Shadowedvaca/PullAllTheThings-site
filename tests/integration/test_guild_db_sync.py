@@ -47,7 +47,7 @@ def _make_char(
 async def _seed_reference_data(conn):
     """Seed minimum reference data (Druid/Balance, Warrior/Arms) for sync tests."""
     # Check if already seeded
-    count = await conn.fetchval("SELECT COUNT(*) FROM guild_identity.classes")
+    count = await conn.fetchval("SELECT COUNT(*) FROM ref.classes")
     if count > 0:
         return
 
@@ -67,19 +67,19 @@ async def _seed_reference_data(conn):
 
     # Classes
     druid_id = await conn.fetchval(
-        "INSERT INTO guild_identity.classes (name) VALUES ('Druid') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
+        "INSERT INTO ref.classes (name) VALUES ('Druid') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
     )
     warrior_id = await conn.fetchval(
-        "INSERT INTO guild_identity.classes (name) VALUES ('Warrior') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
+        "INSERT INTO ref.classes (name) VALUES ('Warrior') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
     )
     mage_id = await conn.fetchval(
-        "INSERT INTO guild_identity.classes (name) VALUES ('Mage') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
+        "INSERT INTO ref.classes (name) VALUES ('Mage') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
     )
     priest_id = await conn.fetchval(
-        "INSERT INTO guild_identity.classes (name) VALUES ('Priest') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
+        "INSERT INTO ref.classes (name) VALUES ('Priest') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
     )
     rogue_id = await conn.fetchval(
-        "INSERT INTO guild_identity.classes (name) VALUES ('Rogue') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
+        "INSERT INTO ref.classes (name) VALUES ('Rogue') ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id"
     )
 
     # Specs

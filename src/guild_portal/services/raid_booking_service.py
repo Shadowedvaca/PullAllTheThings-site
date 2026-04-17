@@ -178,7 +178,7 @@ async def _build_signups(conn: asyncpg.Connection, event_date: date) -> list[dic
         LEFT JOIN guild_identity.discord_users du ON p.discord_user_id = du.id
         LEFT JOIN guild_identity.wow_characters wc ON p.main_character_id = wc.id
         LEFT JOIN guild_identity.specializations s ON p.main_spec_id = s.id
-        LEFT JOIN guild_identity.classes c ON s.class_id = c.id
+        LEFT JOIN ref.classes c ON s.class_id = c.id
         WHERE p.is_active = TRUE AND p.main_character_id IS NOT NULL
         """
     )

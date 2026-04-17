@@ -99,7 +99,7 @@ async def get_recipe_crafters(pool: asyncpg.Pool, recipe_id: int) -> dict:
                    COALESCE(p.crafting_notifications_enabled, false) AS crafting_notifications_enabled
                FROM guild_identity.character_recipes cr
                JOIN guild_identity.wow_characters wc ON wc.id = cr.character_id
-               LEFT JOIN guild_identity.classes cl ON cl.id = wc.class_id
+               LEFT JOIN ref.classes cl ON cl.id = wc.class_id
                LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
                LEFT JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
                LEFT JOIN guild_identity.players p ON p.id = pc.player_id

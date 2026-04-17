@@ -70,7 +70,7 @@ async def sync_blizzard_roster(
 
                 # Resolve class_id and active_spec_id from reference tables
                 class_row = await conn.fetchrow(
-                    "SELECT id FROM guild_identity.classes WHERE LOWER(name) = LOWER($1)",
+                    "SELECT id FROM ref.classes WHERE LOWER(name) = LOWER($1)",
                     char.character_class or "",
                 )
                 class_id = class_row["id"] if class_row else None

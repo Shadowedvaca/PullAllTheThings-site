@@ -897,7 +897,7 @@ async def export_simc(
               FROM guild_identity.gear_plans gp
               JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
               LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id=$1 AND gp.character_id=$2
             """,
             player_id, character_id,
@@ -960,7 +960,7 @@ async def export_equipped_simc(
               FROM guild_identity.gear_plans gp
               JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
               LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id=$1 AND gp.character_id=$2
             """,
             player_id, character_id,
@@ -1028,7 +1028,7 @@ async def get_plan_detail(
               LEFT JOIN guild_identity.hero_talents ht ON ht.id = gp.hero_talent_id
               LEFT JOIN guild_identity.bis_list_sources bls ON bls.id = gp.bis_source_id
               LEFT JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id = $1 AND gp.character_id = $2
             """,
             player_id, character_id,
@@ -1673,9 +1673,9 @@ async def get_available_items(
         char_row = await conn.fetchrow(
             """
             SELECT c.name AS class_name, s.name AS spec_name,
-                   wc.class_id, gp.spec_id, gp.hero_talent_id
+                   c.blizzard_class_id, gp.spec_id, gp.hero_talent_id
               FROM guild_identity.wow_characters wc
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
               LEFT JOIN guild_identity.gear_plans gp
                      ON gp.character_id = wc.id AND gp.player_id = $2
               LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
@@ -1688,7 +1688,7 @@ async def get_available_items(
 
         class_name     = char_row["class_name"] or ""
         spec_name      = char_row["spec_name"] or ""
-        char_class_id: Optional[int] = char_row["class_id"]
+        char_class_id: Optional[int] = char_row["blizzard_class_id"]
         avail_spec_id: Optional[int] = char_row["spec_id"]
         avail_ht_id:   Optional[int] = char_row["hero_talent_id"]
 
