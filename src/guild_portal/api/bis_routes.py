@@ -1073,7 +1073,8 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
       1. (flush only) TRUNCATE landing tables
       2. Fetch expansion → instances → encounters; use ON CONFLICT DO NOTHING
          so gap-fill mode adds only new instances/encounters
-      3. Fetch item records — missing always; stale (>30d) refreshed in catch-up
+      3. Fetch item sets (index + each set) → store item IDs for tier pieces
+      4. Fetch item records — missing always; stale (>30d) refreshed in catch-up
 
     Run Enrich & Classify after this completes.
     """
@@ -1096,6 +1097,7 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                     TRUNCATE landing.blizzard_items,
                              landing.blizzard_journal_encounters,
                              landing.blizzard_journal_instances,
+                             landing.blizzard_item_sets,
                              landing.blizzard_appearances,
                              landing.wowhead_tooltips
                 """)
@@ -1244,22 +1246,74 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         all_item_ids.update(crafted_ids)
         logger.info("landing fill: added %d crafted item IDs to fetch queue", len(crafted_ids))
 
-        # Add any remaining wow_items not covered above — tier pieces and BIS list
-        # items enriched via the old pipeline that aren't journal drops or crafted.
-        async with pool.acquire() as conn:
-            extra_rows = await conn.fetch(
-                "SELECT DISTINCT blizzard_item_id FROM guild_identity.wow_items"
-                " WHERE blizzard_item_id IS NOT NULL"
-            )
-        extra_ids = {r["blizzard_item_id"] for r in extra_rows} - all_item_ids
-        all_item_ids.update(extra_ids)
-        logger.info("landing fill: added %d extra item IDs (tier/BIS) to fetch queue", len(extra_ids))
-
-        # ── Step 3: fetch item records ─────────────────────────────────────────
+        # ── Step 3: item sets (tier piece item IDs) ────────────────────────────
+        # Tier pieces don't drop directly from encounters — they come from token
+        # exchanges.  The Blizzard Item Set API gives us the exact item IDs for
+        # every tier set across all expansions.
         step += 1
         _landing_status.update(
             step=step,
-            phase_label=f"Fetching item records from Blizzard API",
+            phase_label="Fetching item sets from Blizzard API",
+            detail="",
+        )
+
+        set_index = await blizzard_client.get_item_set_index()
+        set_refs = (set_index or {}).get("item_sets", [])
+        sets_stored  = 0
+        sets_skipped = 0
+
+        for set_ref in set_refs:
+            set_id = set_ref.get("id")
+            if not set_id:
+                continue
+            try:
+                set_data = await blizzard_client.get_item_set(set_id)
+            except Exception as set_exc:
+                logger.warning("landing fill: skipping item set %d — %s", set_id, set_exc)
+                continue
+            if not set_data:
+                continue
+
+            set_name = set_data.get("name") or set_ref.get("name") or f"Set {set_id}"
+            item_ids = [
+                entry["id"]
+                for entry in set_data.get("items", [])
+                if entry.get("id")
+            ]
+            all_item_ids.update(item_ids)
+
+            async with pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    INSERT INTO landing.blizzard_item_sets
+                        (set_id, set_name, item_ids, payload, fetched_at)
+                    VALUES ($1, $2, $3, $4::jsonb, NOW())
+                    ON CONFLICT (set_id) DO UPDATE SET
+                        set_name   = EXCLUDED.set_name,
+                        item_ids   = EXCLUDED.item_ids,
+                        payload    = EXCLUDED.payload,
+                        fetched_at = EXCLUDED.fetched_at
+                    """,
+                    set_id, set_name, item_ids, _json.dumps(set_data),
+                )
+            if result.startswith("INSERT"):
+                sets_stored += 1
+            else:
+                sets_skipped += 1
+
+        logger.info(
+            "landing fill: %d item sets stored, %d updated, %d total item IDs queued",
+            sets_stored, sets_skipped, len(all_item_ids),
+        )
+        _landing_status.update(
+            detail=f"{sets_stored + sets_skipped} item sets processed, "
+                   f"{len(all_item_ids)} unique item IDs queued"
+        )
+
+        step += 1
+        _landing_status.update(
+            step=step,
+            phase_label="Fetching item records from Blizzard API",
             detail="",
         )
 
@@ -1356,7 +1410,7 @@ async def landing_flush_fill(
     """Truncate landing tables then refill from Blizzard API (raw data only, GL only).
 
     Background task — poll GET /landing-status for progress.
-    Steps: truncate → sync loot tables (Blizzard Journal API) → discover crafted items.
+    Steps: truncate → instances/encounters → item sets → item records.
     Run Section C → Enrich & Classify afterward.
     """
     import asyncio
@@ -1372,7 +1426,7 @@ async def landing_flush_fill(
         "running": True,
         "phase_label": "Starting…",
         "step": 0,
-        "total_steps": 3,
+        "total_steps": 4,
         "detail": "",
         "started_at": datetime.now(timezone.utc),
         "finished_at": None,
@@ -1390,7 +1444,7 @@ async def landing_catch_up(
     """Incremental landing table fill — pulls new/missing data without truncating (GL only).
 
     Background task — poll GET /landing-status for progress.
-    Steps: sync loot tables (Blizzard Journal API) → discover crafted items.
+    Steps: instances/encounters → item sets → item records.
     Run Section C → Enrich & Classify afterward.
     """
     import asyncio
@@ -1406,7 +1460,7 @@ async def landing_catch_up(
         "running": True,
         "phase_label": "Starting…",
         "step": 0,
-        "total_steps": 2,
+        "total_steps": 3,
         "detail": "",
         "started_at": datetime.now(timezone.utc),
         "finished_at": None,

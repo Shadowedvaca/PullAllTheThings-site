@@ -633,6 +633,13 @@ class BlizzardClient:
             params={"namespace": "static-us", "locale": self.locale},
         )
 
+    async def get_item_set_index(self) -> Optional[dict]:
+        """GET /data/wow/item-set/index — list of all item sets (id + name)."""
+        return await self._api_get(
+            "/data/wow/item-set/index",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
     async def get_item_set(self, set_id: int) -> Optional[dict]:
         """GET /data/wow/item-set/{id} — all items in a tier set.
 
