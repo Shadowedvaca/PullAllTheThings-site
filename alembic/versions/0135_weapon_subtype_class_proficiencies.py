@@ -214,8 +214,10 @@ def upgrade():
 
 
     # ── 4. Add weapon_subtype to viz.slot_items ───────────────────────────────
+    # Must DROP+CREATE — CREATE OR REPLACE can't insert a column mid-list.
+    op.execute("DROP VIEW IF EXISTS viz.slot_items")
     op.execute("""
-        CREATE OR REPLACE VIEW viz.slot_items AS
+        CREATE VIEW viz.slot_items AS
         SELECT
             i.blizzard_item_id,
             i.name,
@@ -254,9 +256,9 @@ def upgrade():
 def downgrade():
     op.execute("DROP TABLE IF EXISTS ref.class_weapon_proficiencies")
 
-    # Restore viz.slot_items without weapon_subtype
+    op.execute("DROP VIEW IF EXISTS viz.slot_items")
     op.execute("""
-        CREATE OR REPLACE VIEW viz.slot_items AS
+        CREATE VIEW viz.slot_items AS
         SELECT
             i.blizzard_item_id, i.name, i.icon_url, i.slot_type, i.armor_type,
             i.primary_stat, i.item_category, i.tier_set_suffix, i.quality_track,
