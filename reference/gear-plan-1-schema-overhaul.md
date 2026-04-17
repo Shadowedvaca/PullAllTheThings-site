@@ -522,20 +522,18 @@ Migration uses `ALTER TABLE ... SET SCHEMA ref` (3×); recreates `viz.bis_recomm
 
 ---
 
-### Phase G — Retire `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings`
+### Phase G — Retire `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings` ✓ complete (2026-04-17, migration 0131)
 
-Both tables have enrichment equivalents (`enrichment.bis_entries`, `enrichment.trinket_ratings`) that are already populated. Phase G cuts all remaining reads and writes to the guild_identity versions.
+Both tables retired — enrichment equivalents (`enrichment.bis_entries`, `enrichment.trinket_ratings`) are now the sole source of truth.
 
-**Write-path changes:**
-- `bis_sync.py` — remove dual-write to `guild_identity.bis_list_entries`; remove write to `guild_identity.trinket_tier_ratings`. Both already write to enrichment equivalents.
-
-**Read-path changes:**
-- `item_source_sync.py` — replace 4 `guild_identity.bis_list_entries` filter subqueries with `enrichment.bis_entries` (uses `blizzard_item_id` directly — no `wow_items` join needed)
-- `bis_routes.py` — switch admin BIS list reads/writes to `enrichment.bis_entries`; switch trinket rating reads to `enrichment.trinket_ratings`
-- `gear_plan_auto_setup.py` — switch to `enrichment.bis_entries`
-- `gear_plan_service.py` — remove dead direct-read path against `guild_identity.bis_list_entries` (line ~597; superseded by Phase D's viz.bis_recommendations path)
-
-**Cleanup migration:** After all reads/writes are removed, drop `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings`.
+- `bis_sync.py` — removed dead `_upsert_bis_entries()` and `_upsert_trinket_ratings()`; `cross_reference()` reads `enrichment.bis_entries + enrichment.items`
+- `item_source_sync.py` — three EXISTS/JOIN subqueries switched to `enrichment.bis_entries`
+- `bis_routes.py` — `/entries` CRUD, `/trinket-ratings-status`, and `p3_total` count use enrichment tables; `import_simc` docstring updated
+- `gear_plan_auto_setup.py` — auto-plan slot population reads `enrichment.bis_entries`
+- `gear_plan_service.py` — `populate_from_bis()` reads `enrichment.bis_entries`
+- `item_service.py` — `enrich_blizzard_metadata()` filter uses `enrichment.bis_entries`
+- `models.py` — `BisListEntry` ORM class removed
+- Migration 0131 — `DROP guild_identity.bis_list_entries CASCADE`, `DROP guild_identity.trinket_tier_ratings CASCADE`; deployed to dev, tables confirmed absent.
 
 ---
 
