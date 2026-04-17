@@ -510,19 +510,15 @@ Files:
 
 ---
 
-### Phase F — Complete `ref` schema (3 tables)
+### Phase F — Complete `ref` schema (3 tables) ✓ complete (2026-04-17, migration 0130)
 
-Move the remaining pure reference / game config tables out of `guild_identity` into `ref`. Same approach as Phase E's class migration: `ALTER TABLE ... SET SCHEMA ref` + Python/SQL find/replace. No data changes, no enrichment re-run needed.
+Moved the remaining pure reference / game config tables from `guild_identity` to `ref`.
 
-**Tables to move:**
-- `guild_identity.bis_list_sources` → `ref.bis_list_sources`
 - `guild_identity.specializations` → `ref.specializations`
 - `guild_identity.hero_talents` → `ref.hero_talents`
+- `guild_identity.bis_list_sources` → `ref.bis_list_sources`
 
-**Files affected:**
-- Migration: 3 × `ALTER TABLE ... SET SCHEMA ref`; update `viz.bis_recommendations` to join `ref.bis_list_sources`; update FK string in `models.py` (Specialization → ref)
-- Python find/replace: `guild_identity.bis_list_sources`, `guild_identity.specializations`, `guild_identity.hero_talents` across all source files
-- `models.py`: update `Specialization.__table_args__`, `HeroTalent.__table_args__` (if ORM model exists), FK strings
+Migration uses `ALTER TABLE ... SET SCHEMA ref` (3×); recreates `viz.bis_recommendations` to JOIN `ref.bis_list_sources`. All ForeignKey strings in `models.py` (13 occurrences) and raw SQL in 10 source files updated. FK constraints on other tables survive automatically (Postgres stores table OID in constraint, not schema-qualified name).
 
 ---
 
