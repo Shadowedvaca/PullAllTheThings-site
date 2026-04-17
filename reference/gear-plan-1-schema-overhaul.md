@@ -500,15 +500,70 @@ Files:
 - Net: -458 lines, zero heuristic detection, zero tooltip HTML parsing in the service layer.
 - Deployed to dev — all 1376 unit tests pass.
 
-### Phase E — Remove legacy mixed columns
-- Once new stack is stable on prod, remove the enriched columns from `guild_identity.wow_items`
-  (armor_type, quality_track, slot_type, wowhead_tooltip_html move to enrichment)
-- `guild_identity.wow_items` becomes a thin stub or is dropped in favor of enrichment.items
-- Remove `guild_identity.item_sources`, `guild_identity.bis_list_entries`, etc.
+### Phase E — Enrichment classification overhaul + item_seasons bridge ✓ complete (migration 0107 + patches 0108–0129)
+- **`enrichment.item_seasons`** — many-to-many bridge (item × season). Items not in active season are invisible.
+- **`item_category`** updated: `('raid','dungeon','world_boss','crafted','tier','catalyst','unclassified')`.
+- **`sp_rebuild_item_seasons()`**, **`sp_update_item_categories()`** rewritten. Tier detection uses token chain, not Wowhead HTML.
+- **`viz.slot_items`** adds `item_seasons` JOIN; source filter restricted to active season instance IDs.
+- **`ref` schema created** — `guild_identity.classes` moved to `ref.classes` + `blizzard_class_id` added. All 12 source files updated.
+- **Key bug fixes in patches:** Evoker mail armor type (0124); tier_set_ids on raid_seasons (0125); ROBE→chest + playable_class_ids + quality (0125–0126); source instance filter in viz.slot_items (0128); CLOAK→back slot + BIS hero_talent null-safe filter (0129).
 
 ---
 
-## Phase F — Documentation Updates
+### Phase F — Complete `ref` schema (3 tables)
+
+Move the remaining pure reference / game config tables out of `guild_identity` into `ref`. Same approach as Phase E's class migration: `ALTER TABLE ... SET SCHEMA ref` + Python/SQL find/replace. No data changes, no enrichment re-run needed.
+
+**Tables to move:**
+- `guild_identity.bis_list_sources` → `ref.bis_list_sources`
+- `guild_identity.specializations` → `ref.specializations`
+- `guild_identity.hero_talents` → `ref.hero_talents`
+
+**Files affected:**
+- Migration: 3 × `ALTER TABLE ... SET SCHEMA ref`; update `viz.bis_recommendations` to join `ref.bis_list_sources`; update FK string in `models.py` (Specialization → ref)
+- Python find/replace: `guild_identity.bis_list_sources`, `guild_identity.specializations`, `guild_identity.hero_talents` across all source files
+- `models.py`: update `Specialization.__table_args__`, `HeroTalent.__table_args__` (if ORM model exists), FK strings
+
+---
+
+### Phase G — Retire `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings`
+
+Both tables have enrichment equivalents (`enrichment.bis_entries`, `enrichment.trinket_ratings`) that are already populated. Phase G cuts all remaining reads and writes to the guild_identity versions.
+
+**Write-path changes:**
+- `bis_sync.py` — remove dual-write to `guild_identity.bis_list_entries`; remove write to `guild_identity.trinket_tier_ratings`. Both already write to enrichment equivalents.
+
+**Read-path changes:**
+- `item_source_sync.py` — replace 4 `guild_identity.bis_list_entries` filter subqueries with `enrichment.bis_entries` (uses `blizzard_item_id` directly — no `wow_items` join needed)
+- `bis_routes.py` — switch admin BIS list reads/writes to `enrichment.bis_entries`; switch trinket rating reads to `enrichment.trinket_ratings`
+- `gear_plan_auto_setup.py` — switch to `enrichment.bis_entries`
+- `gear_plan_service.py` — remove dead direct-read path against `guild_identity.bis_list_entries` (line ~597; superseded by Phase D's viz.bis_recommendations path)
+
+**Cleanup migration:** After all reads/writes are removed, drop `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings`.
+
+---
+
+### Phase H — Retire `guild_identity.wow_items` from the enrichment/viz process
+
+`wow_items` is used in two ways: as a data source (item facts) and as an ID translation layer (`item_recipe_links.item_id` → `blizzard_item_id`). Both are eliminated here.
+
+**Track 1 — Fix the recipe bridge:**
+- Add `blizzard_item_id INTEGER` to `guild_identity.item_recipe_links`
+- Update `crafting_service.py` to populate `blizzard_item_id` on insert alongside the existing `item_id` FK
+- Update `sp_rebuild_item_recipes` to use `irl.blizzard_item_id` directly — eliminates `JOIN guild_identity.wow_items`
+- `item_recipe_links` stays (accepted bridge table); `wow_items` is no longer needed by enrichment
+
+**Track 2 — Replace `wow_items` reads everywhere else:**
+- `item_source_sync.py` — ~6 queries that use `guild_identity.wow_items` as item source switch to `enrichment.items` (same `blizzard_item_id` PK, same columns: `name`, `slot_type`, `armor_type`). This is the largest chunk.
+- `bis_sync.py` — 2 queries that join `bis_list_entries → wow_items` are eliminated by Phase G removing `bis_list_entries`; no separate action needed here.
+- `bis_routes.py` — small `wow_items` reads switch to `enrichment.items`
+- `gear_plan_auto_setup.py` — small `wow_items` reads switch to `enrichment.items`
+
+**Out of scope:** `guild_identity.wow_items` may still be used by non-enrichment code (admin tooltip fetching, wowhead enrichment ingest). Those are not affected — this phase only removes it from the enrichment/viz process.
+
+---
+
+## Phase I — Documentation Updates
 
 Final step. After Phase E is complete and the new stack is stable on prod, update the docs to match.
 

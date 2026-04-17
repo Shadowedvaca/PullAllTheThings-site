@@ -49,8 +49,10 @@ Prod Server
 │   ├── patt.*           (campaigns, votes, entries, results, contest_agent_log,
 │   │                     guild_quotes, guild_quote_titles, player_availability,
 │   │                     raid_seasons, raid_events, raid_attendance, recurring_events)
+│   ├── ref.*            (classes [+blizzard_class_id], specializations*, hero_talents*,
+│   │                     bis_list_sources* — * = planned Phase F move, classes done)
 │   └── guild_identity.* (players, wow_characters, discord_users, player_characters,
-│                          roles, classes, specializations, audit_issues, sync_log,
+│                          roles, specializations, audit_issues, sync_log,
 │                          onboarding_sessions, professions, profession_tiers, recipes,
 │                          character_recipes, crafting_sync_config, discord_channels,
 │                          raiderio_profiles, battlenet_accounts, wcl_config,
@@ -250,13 +252,21 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
     - **55 new unit tests** in `tests/unit/test_enrichment_classification.py`; 106 total pass.
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0109 (dev only — not yet on prod)
+- **Last migration:** 0129 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
 - **Active branch:** `feature/gear-plan-schema-overhaul`
-- **Next:** Consider Bug 1 (class_mask for tier piece class filtering) and eventual prod deploy. See `reference/gear-plan-1-schema-overhaul.md`.
-- **Post-Phase E patch migrations (dev only):**
-  - **0108** — `sp_rebuild_items()` fix: used `'unknown'` (0105 definition) instead of `'unclassified'`; caused CHECK constraint violation on first Rebuild Enrichment after 0107.
-  - **0109** — Tier classification fix: (1) removed `OR target_slot='any'` wildcard from `tier_token_attrs` join (was matching every item in a tier slot → 2394 tier items); (2) added `NOT EXISTS` guard to exclude items with a real raid/dungeon source row (regular boss drops in tier slots). Result after rebuild: tier=192, raid=129, dungeon=493, crafted=42, catalyst=28, unclassified=6000. Also updated `bis_routes.py` and `gear_plan_admin.js` to use new category names (raid/dungeon/world_boss/unclassified instead of drop/unknown).
+- **Next:** Phase F — move `bis_list_sources`, `specializations`, `hero_talents` to `ref` schema. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Post-Phase E patch migrations (dev only, 0108–0129):**
+  - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
+  - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows. Result: tier=192, raid=129, dungeon=493, crafted=42, catalyst=28, unclassified~6000.
+  - **0110–0122** — Various enrichment pipeline fixes (see git log).
+  - **0123** — `sp_rebuild_item_seasons` fix: strict `tt.target_slot = ei.slot_type` match; `sp_update_item_categories` strict slot match.
+  - **0124** — Evoker armor type fix: moved class ID 13 from leather to mail group in `sp_rebuild_tier_tokens`.
+  - **0125** — `tier_set_ids INTEGER[]` on `patt.raid_seasons` (seeded {1978–1990} for Midnight S1); ROBE→chest in `sp_rebuild_items`.
+  - **0126** — `playable_class_ids INTEGER[]` + `quality VARCHAR(20)` on `enrichment.items`; epic-only filter for crafted in `viz.slot_items`.
+  - **0127** — `ref` schema created; `guild_identity.classes` → `ref.classes`; `blizzard_class_id` added and seeded; tier class filter uses Blizzard IDs. All 12 source files updated.
+  - **0128** — `viz.slot_items` source JOIN restricted to active season instance IDs (fixes multi-expansion dungeon drop locations).
+  - **0129** — `CLOAK` inventory_type → `back` slot in `sp_rebuild_items`; BIS hero_talent null-safe filter in `gear_plan_service.py`.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)
