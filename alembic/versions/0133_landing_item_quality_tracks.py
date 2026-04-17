@@ -49,18 +49,7 @@ def upgrade():
         )
     """)
 
-    # ── 2. Backfill from guild_identity.wow_items ─────────────────────────────
-    op.execute("""
-        INSERT INTO landing.blizzard_item_quality_tracks
-               (blizzard_item_id, quality_track)
-        SELECT blizzard_item_id, quality_track
-          FROM guild_identity.wow_items
-         WHERE quality_track IS NOT NULL
-           AND blizzard_item_id IS NOT NULL
-        ON CONFLICT (blizzard_item_id) DO NOTHING
-    """)
-
-    # ── 3. Update sp_rebuild_items() to read quality_track from landing ───────
+    # ── 2. Update sp_rebuild_items() to read quality_track from landing ───────
     op.execute("""
         CREATE OR REPLACE PROCEDURE enrichment.sp_rebuild_items()
         LANGUAGE plpgsql AS $$

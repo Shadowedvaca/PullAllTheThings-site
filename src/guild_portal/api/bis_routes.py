@@ -32,6 +32,7 @@ Endpoints:
   POST /api/v1/admin/bis/rebuild-enrichment
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -1097,6 +1098,7 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                              landing.blizzard_item_sets,
                              landing.blizzard_item_icons,
                              landing.blizzard_appearances,
+                             landing.blizzard_item_quality_tracks,
                              landing.wowhead_tooltips
                 """)
             logger.info("landing fill: landing tables truncated")
@@ -1317,6 +1319,135 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                    f"{len(all_item_ids)} unique item IDs queued"
         )
 
+        # ── Step 4: appearance crawl (catalyst quality tracks) ─────────────────
+        # Discovers back/wrist/waist/feet catalyst tier pieces via the Blizzard
+        # Item Appearance API.  Derives tier set name suffixes from enrichment.items,
+        # matches appearance sets, and writes quality_track mappings to
+        # landing.blizzard_item_quality_tracks.  Item IDs are added to all_item_ids
+        # so they are fetched in Step 5.
+        step += 1
+        _landing_status.update(
+            step=step,
+            phase_label="Crawling appearance sets for catalyst items",
+            detail="",
+        )
+
+        _TIER_SLOTS = ("head", "shoulder", "chest", "hands", "legs")
+        _CATALYST_SLOTS = ("back", "wrist", "waist", "feet")
+
+        async with pool.acquire() as conn:
+            tier_name_rows = await conn.fetch("""
+                SELECT DISTINCT ei.name
+                  FROM enrichment.items ei
+                  JOIN enrichment.item_sources es
+                    ON es.blizzard_item_id = ei.blizzard_item_id
+                 WHERE ei.slot_type = ANY($1::text[])
+                   AND ei.name LIKE '%% of %%'
+                   AND es.instance_type = 'raid'
+                   AND EXISTS (
+                       SELECT 1 FROM enrichment.bis_entries be
+                        WHERE be.blizzard_item_id = ei.blizzard_item_id
+                   )
+            """, list(_TIER_SLOTS))
+
+        tier_suffixes: set[str] = set()
+        for row in tier_name_rows:
+            name = row["name"] or ""
+            idx = name.find(" of ")
+            if idx >= 0:
+                tier_suffixes.add(name[idx:])
+
+        qt_registered = 0
+        if not tier_suffixes:
+            logger.info("landing fill: no tier suffixes found — skipping appearance crawl")
+        else:
+            logger.info(
+                "landing fill: appearance crawl — %d suffix(es): %s",
+                len(tier_suffixes), sorted(tier_suffixes),
+            )
+            all_app_sets = await blizzard_client.get_item_appearance_set_index()
+            if not all_app_sets:
+                logger.warning("landing fill: appearance set index unavailable — skipping crawl")
+            else:
+                # Inline quality-track derivation (avoids cross-package import)
+                def _qt(name: str):
+                    lower = name.strip().lower()
+                    if lower.endswith("(mythic)"):    return "M"
+                    if lower.endswith("(heroic)"):    return "H"
+                    if "(raid finder)" in lower or "(lfr)" in lower: return "V"
+                    return "C"
+
+                matching_sets: list[tuple[int, str]] = []
+                for app_set in all_app_sets:
+                    set_name = app_set.get("name", "")
+                    set_id   = app_set.get("id")
+                    if not set_id:
+                        continue
+                    for suffix in tier_suffixes:
+                        if suffix.strip().lower() in set_name.lower():
+                            matching_sets.append((set_id, set_name))
+                            break
+
+                logger.info(
+                    "landing fill: appearance crawl — %d matching set(s)", len(matching_sets)
+                )
+
+                for set_id, set_name in matching_sets:
+                    quality_track = _qt(set_name)
+                    set_data = await blizzard_client.get_item_appearance_set(set_id)
+                    if not set_data:
+                        logger.warning(
+                            "landing fill: could not fetch appearance set %d", set_id
+                        )
+                        continue
+
+                    appearances = set_data.get("appearances", [])
+                    app_ids = [a.get("id") for a in appearances if a.get("id")]
+
+                    app_results = await asyncio.gather(
+                        *[blizzard_client.get_item_appearance(aid) for aid in app_ids],
+                        return_exceptions=True,
+                    )
+
+                    async with pool.acquire() as conn:
+                        for app_id, app_data in zip(app_ids, app_results):
+                            if isinstance(app_data, Exception) or not app_data:
+                                continue
+                            await conn.execute(
+                                """
+                                INSERT INTO landing.blizzard_appearances
+                                       (appearance_id, payload)
+                                VALUES ($1, $2::jsonb)
+                                ON CONFLICT DO NOTHING
+                                """,
+                                app_id, _json.dumps(app_data),
+                            )
+                            for item in app_data.get("items", []):
+                                item_id = item.get("id")
+                                if not item_id:
+                                    continue
+                                await conn.execute(
+                                    """
+                                    INSERT INTO landing.blizzard_item_quality_tracks
+                                           (blizzard_item_id, quality_track)
+                                    VALUES ($1, $2)
+                                    ON CONFLICT (blizzard_item_id) DO UPDATE SET
+                                        quality_track = EXCLUDED.quality_track,
+                                        fetched_at    = NOW()
+                                    """,
+                                    item_id, quality_track,
+                                )
+                                all_item_ids.add(item_id)
+                                qt_registered += 1
+
+        logger.info(
+            "landing fill: appearance crawl complete — %d quality-track item(s) registered",
+            qt_registered,
+        )
+        _landing_status.update(
+            detail=f"{qt_registered} catalyst item(s) registered from appearance sets"
+        )
+
         step += 1
         _landing_status.update(
             step=step,
@@ -1433,7 +1564,7 @@ async def landing_flush_fill(
         "running": True,
         "phase_label": "Starting…",
         "step": 0,
-        "total_steps": 4,
+        "total_steps": 5,
         "detail": "",
         "started_at": datetime.now(timezone.utc),
         "finished_at": None,
@@ -1518,7 +1649,7 @@ async def enrich_and_classify(
         "running": True,
         "phase_label": "Starting…",
         "step": 0,
-        "total_steps": 4,
+        "total_steps": 5,
         "detail": "",
         "started_at": datetime.now(timezone.utc),
         "finished_at": None,
