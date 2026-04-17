@@ -1673,7 +1673,7 @@ async def get_available_items(
         char_row = await conn.fetchrow(
             """
             SELECT c.name AS class_name, s.name AS spec_name,
-                   gp.spec_id, gp.hero_talent_id
+                   wc.class_id, gp.spec_id, gp.hero_talent_id
               FROM guild_identity.wow_characters wc
               LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
               LEFT JOIN guild_identity.gear_plans gp
@@ -1688,6 +1688,7 @@ async def get_available_items(
 
         class_name     = char_row["class_name"] or ""
         spec_name      = char_row["spec_name"] or ""
+        char_class_id: Optional[int] = char_row["class_id"]
         avail_spec_id: Optional[int] = char_row["spec_id"]
         avail_ht_id:   Optional[int] = char_row["hero_talent_id"]
 
@@ -1784,10 +1785,15 @@ async def get_available_items(
                AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
                AND item_category IN ('raid', 'dungeon', 'crafted', 'tier', 'catalyst')
                AND NOT (blizzard_item_id = ANY($3::int[]))
+               AND (item_category != 'tier'
+                    OR $4::int IS NULL
+                    OR playable_class_ids IS NULL
+                    OR $4 = ANY(playable_class_ids))
             """,
             slot_type,
             armor_filter,
             excluded_blizzard_ids,
+            char_class_id,
         )
 
         # ── Trinket tier badge data (Phase 1F) ────────────────────────────────
