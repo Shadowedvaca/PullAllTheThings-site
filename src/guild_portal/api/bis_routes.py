@@ -1098,6 +1098,7 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                              landing.blizzard_journal_encounters,
                              landing.blizzard_journal_instances,
                              landing.blizzard_item_sets,
+                             landing.blizzard_item_icons,
                              landing.blizzard_appearances,
                              landing.wowhead_tooltips
                 """)
@@ -1580,15 +1581,38 @@ async def enrich_and_classify(
             icons_filled  = 0
             icons_skipped = 0
             if missing > 0:
+                # Only fetch items not already in the landing icon cache
                 async with pool.acquire() as conn:
                     rows = await conn.fetch(
-                        "SELECT blizzard_item_id FROM enrichment.items WHERE icon_url IS NULL"
+                        """
+                        SELECT ei.blizzard_item_id
+                          FROM enrichment.items ei
+                         WHERE ei.icon_url IS NULL
+                           AND NOT EXISTS (
+                                 SELECT 1 FROM landing.blizzard_item_icons lii
+                                  WHERE lii.blizzard_item_id = ei.blizzard_item_id
+                               )
+                        """
                     )
                 item_ids = [r["blizzard_item_id"] for r in rows]
+                missing = len(item_ids)
                 for item_id in item_ids:
                     icon_url = await blizzard_client.get_item_media(item_id)
                     if icon_url:
                         async with pool.acquire() as conn:
+                            # Write to landing cache (survives rebuilds)
+                            await conn.execute(
+                                """
+                                INSERT INTO landing.blizzard_item_icons
+                                    (blizzard_item_id, icon_url, fetched_at)
+                                VALUES ($1, $2, NOW())
+                                ON CONFLICT (blizzard_item_id) DO UPDATE
+                                    SET icon_url = EXCLUDED.icon_url,
+                                        fetched_at = EXCLUDED.fetched_at
+                                """,
+                                item_id, icon_url,
+                            )
+                            # Also update current enrichment row for this run
                             await conn.execute(
                                 "UPDATE enrichment.items SET icon_url = $1 WHERE blizzard_item_id = $2",
                                 icon_url, item_id,
