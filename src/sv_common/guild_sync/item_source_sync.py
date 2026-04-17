@@ -900,15 +900,15 @@ async def enrich_catalyst_tier_items(
         # source status.
         suffix_seed_rows = await conn.fetch(
             """
-            SELECT DISTINCT wi.name
-              FROM guild_identity.wow_items wi
-              JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
-             WHERE wi.slot_type = ANY($1::text[])
-               AND wi.name LIKE '% of %'
-               AND wi.armor_type IS NOT NULL
+            SELECT DISTINCT ei.name
+              FROM enrichment.items ei
+              JOIN enrichment.bis_entries be ON be.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type = ANY($1::text[])
+               AND ei.name LIKE '% of %'
+               AND ei.armor_type IS NOT NULL
                AND NOT EXISTS (
                        SELECT 1 FROM guild_identity.item_recipe_links irl
-                        WHERE irl.blizzard_item_id = wi.blizzard_item_id
+                        WHERE irl.blizzard_item_id = ei.blizzard_item_id
                    )
             """,
             list(_TIER_SLOTS),
