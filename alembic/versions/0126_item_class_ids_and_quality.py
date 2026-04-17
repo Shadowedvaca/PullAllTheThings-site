@@ -236,7 +236,8 @@ def upgrade():
         $$
     """)
 
-    # ── viz.slot_items: expose playable_class_ids ─────────────────────────────
+    # ── viz.slot_items: expose playable_class_ids (appended — PG requires new
+    #    columns at end of list for CREATE OR REPLACE VIEW) ────────────────────
     op.execute("""
         CREATE OR REPLACE VIEW viz.slot_items AS
         SELECT i.blizzard_item_id,
@@ -248,7 +249,6 @@ def upgrade():
                i.item_category,
                i.tier_set_suffix,
                i.quality_track,
-               i.playable_class_ids,
                s.id               AS source_id,
                s.instance_type,
                s.encounter_name,
@@ -256,7 +256,8 @@ def upgrade():
                s.blizzard_instance_id,
                s.blizzard_encounter_id,
                s.quality_tracks,
-               s.is_junk
+               s.is_junk,
+               i.playable_class_ids
           FROM enrichment.items i
           JOIN enrichment.item_seasons ise ON ise.blizzard_item_id = i.blizzard_item_id
           JOIN patt.raid_seasons rs        ON rs.id = ise.season_id AND rs.is_active = TRUE
