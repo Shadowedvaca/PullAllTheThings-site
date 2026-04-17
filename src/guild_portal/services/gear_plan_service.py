@@ -1786,7 +1786,7 @@ async def get_available_items(
                AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
                AND item_category IN ('raid', 'dungeon', 'crafted', 'tier', 'catalyst')
                AND NOT (blizzard_item_id = ANY($3::int[]))
-               AND (item_category != 'tier'
+               AND (item_category NOT IN ('tier', 'catalyst')
                     OR $4::int IS NULL
                     OR playable_class_ids IS NULL
                     OR $4 = ANY(playable_class_ids))
