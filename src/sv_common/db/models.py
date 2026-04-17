@@ -1654,38 +1654,6 @@ class BisListSource(Base):
     last_synced: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
 
 
-class BisListEntry(Base):
-    """BIS item recommendation per spec × hero talent × slot from one source."""
-
-    __tablename__ = "bis_list_entries"
-    __table_args__ = (
-        UniqueConstraint(
-            "source_id", "spec_id", "hero_talent_id", "slot", "item_id",
-            name="uq_bis_entry",
-        ),
-        {"schema": "guild_identity"},
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("ref.bis_list_sources.id", ondelete="CASCADE"), nullable=False
-    )
-    spec_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("ref.specializations.id", ondelete="CASCADE"), nullable=False
-    )
-    hero_talent_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("ref.hero_talents.id", ondelete="SET NULL")
-    )
-    slot: Mapped[str] = mapped_column(String(20), nullable=False)
-    item_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"), nullable=False
-    )
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
-    notes: Mapped[Optional[str]] = mapped_column(Text)
-
-    source: Mapped["BisListSource"] = relationship()
-    item: Mapped["WowItem"] = relationship()
-
 
 class CharacterEquipment(Base):
     """Current equipped gear per slot for a WoW character."""

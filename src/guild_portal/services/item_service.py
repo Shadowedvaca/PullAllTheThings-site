@@ -230,7 +230,7 @@ async def enrich_blizzard_metadata(
             """
             SELECT DISTINCT wi.blizzard_item_id, wi.slot_type, wi.armor_type
               FROM guild_identity.wow_items wi
-              JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+              JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
              WHERE wi.wowhead_tooltip_html IS NULL
                AND (
                      wi.slot_type IN ('head','shoulder','chest','hands','legs')

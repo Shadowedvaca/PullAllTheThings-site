@@ -387,8 +387,8 @@ async def sync_tier_set_completions(
                             WHERE s.item_id = wi.id
                        )
                    AND EXISTS (
-                           SELECT 1 FROM guild_identity.bis_list_entries ble
-                            WHERE ble.item_id = wi.id
+                           SELECT 1 FROM enrichment.bis_entries be
+                            WHERE be.blizzard_item_id = wi.blizzard_item_id
                        )
                  LIMIT 30
                 """
@@ -528,8 +528,8 @@ async def sync_catalyst_items_via_appearance(
                AND wi.name LIKE '% of %'
                AND src.instance_type = 'raid'
                AND EXISTS (
-                   SELECT 1 FROM guild_identity.bis_list_entries ble
-                    WHERE ble.item_id = wi.id
+                   SELECT 1 FROM enrichment.bis_entries be
+                    WHERE be.blizzard_item_id = wi.blizzard_item_id
                )
              ORDER BY wi.name
             """
@@ -768,10 +768,10 @@ async def enrich_catalyst_tier_items(
         tier_items = await conn.fetch(
             """
             SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
-                   COALESCE(NULLIF(wi.slot_type, 'other'), ble.slot) AS eff_slot
-              FROM guild_identity.bis_list_entries ble
-              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-             WHERE ble.slot = ANY($1::text[])
+                   COALESCE(NULLIF(wi.slot_type, 'other'), be.slot) AS eff_slot
+              FROM enrichment.bis_entries be
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
+             WHERE be.slot = ANY($1::text[])
                -- Exclude catalyst items (quality_track='C') — they are handled by
                -- Pass 2 with instance_type='catalyst', never by boss source rows.
                AND wi.quality_track IS DISTINCT FROM 'C'

@@ -193,10 +193,10 @@ async def list_entries(
         rows = await conn.fetch(
             f"""
             SELECT e.id, e.source_id, e.spec_id, e.hero_talent_id, e.slot,
-                   e.item_id, e.priority, e.notes,
-                   wi.blizzard_item_id, wi.name AS item_name, wi.icon_url
-              FROM guild_identity.bis_list_entries e
-              JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                   e.blizzard_item_id, e.priority,
+                   i.name AS item_name, i.icon_url
+              FROM enrichment.bis_entries e
+              LEFT JOIN enrichment.items i ON i.blizzard_item_id = e.blizzard_item_id
              {where}
              ORDER BY e.slot, e.priority
             """,
@@ -210,34 +210,31 @@ async def create_entry(body: EntryCreate, request: Request):
     """Add or update a single BIS entry (manual override)."""
     pool = _pool(request)
     async with pool.acquire() as conn:
-        # Ensure item exists in wow_items
+        # Upsert into enrichment.bis_entries — hero_talent_id NULL handled via DELETE+INSERT
+        # because PostgreSQL UNIQUE treats NULLs as distinct (no ON CONFLICT match).
         await conn.execute(
             """
-            INSERT INTO guild_identity.wow_items (blizzard_item_id, name, slot_type)
-            VALUES ($1, '', $2)
-            ON CONFLICT (blizzard_item_id) DO NOTHING
+            DELETE FROM enrichment.bis_entries
+             WHERE source_id = $1
+               AND spec_id = $2
+               AND slot = $3
+               AND blizzard_item_id = $4
+               AND (
+                   ($5::int IS NULL AND hero_talent_id IS NULL)
+                   OR hero_talent_id = $5
+               )
             """,
-            body.blizzard_item_id, body.slot,
+            body.source_id, body.spec_id, body.slot, body.blizzard_item_id, body.hero_talent_id,
         )
-        item_row = await conn.fetchrow(
-            "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-            body.blizzard_item_id,
-        )
-        if item_row is None:
-            raise HTTPException(status_code=500, detail="Failed to create item")
-
-        item_id = item_row["id"]
         row = await conn.fetchrow(
             """
-            INSERT INTO guild_identity.bis_list_entries
-                (source_id, spec_id, hero_talent_id, slot, item_id, priority, notes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (source_id, spec_id, hero_talent_id, slot, item_id)
-            DO UPDATE SET priority = EXCLUDED.priority, notes = EXCLUDED.notes
+            INSERT INTO enrichment.bis_entries
+                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
             body.source_id, body.spec_id, body.hero_talent_id,
-            body.slot, item_id, body.priority, body.notes,
+            body.slot, body.blizzard_item_id, body.priority,
         )
     return {"ok": True, "id": row["id"]}
 
@@ -247,7 +244,7 @@ async def delete_entry(entry_id: int, request: Request):
     pool = _pool(request)
     async with pool.acquire() as conn:
         result = await conn.execute(
-            "DELETE FROM guild_identity.bis_list_entries WHERE id = $1",
+            "DELETE FROM enrichment.bis_entries WHERE id = $1",
             entry_id,
         )
     deleted = result.split()[-1] if result else "0"
@@ -481,7 +478,7 @@ async def cross_reference(
 async def import_simc(
     body: SimcImport, request: Request, player: Player = Depends(require_rank(5))
 ):
-    """Import a SimC BIS profile as bis_list_entries for a spec (GL only)."""
+    """Import a SimC BIS profile as enrichment.bis_entries for a spec (GL only)."""
     pool = _pool(request)
     from sv_common.guild_sync.bis_sync import import_simc as _import
     result = await _import(
@@ -822,7 +819,7 @@ async def enrich_items(
                     """
                     SELECT COUNT(DISTINCT wi.blizzard_item_id)
                       FROM guild_identity.wow_items wi
-                      JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+                      JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
                      WHERE wi.wowhead_tooltip_html IS NULL
                        AND (wi.slot_type IN ('head','shoulder','chest','hands','legs')
                             OR wi.slot_type = 'other' OR wi.armor_type IS NULL)
@@ -1736,11 +1733,11 @@ async def trinket_ratings_status(request: Request):
                 bls.name         AS source_name,
                 bls.origin       AS source_origin,
                 COUNT(ttr.id)    AS rating_count,
-                MAX(ttr.updated_at) AS last_updated
+                NULL::timestamptz AS last_updated
               FROM ref.specializations sp
               JOIN ref.classes c ON c.id = sp.class_id
               CROSS JOIN ref.bis_list_sources bls
-              LEFT JOIN guild_identity.trinket_tier_ratings ttr
+              LEFT JOIN enrichment.trinket_ratings ttr
                      ON ttr.spec_id = sp.id AND ttr.source_id = bls.id
              WHERE bls.is_active = TRUE
                AND bls.origin != 'icy_veins'

@@ -595,14 +595,15 @@ async def populate_from_bis(
         # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
-            SELECT ble.slot, ble.item_id, ble.priority,
-                   wi.blizzard_item_id, wi.name AS item_name
-              FROM guild_identity.bis_list_entries ble
-              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-             WHERE ble.source_id = $1
-               AND ble.spec_id = $2
-               AND (ble.hero_talent_id = $3 OR ble.hero_talent_id IS NULL)
-             ORDER BY ble.slot, ble.priority
+            SELECT be.slot, wi.id AS item_id, be.priority,
+                   be.blizzard_item_id, i.name AS item_name
+              FROM enrichment.bis_entries be
+              LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
+              LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
+             WHERE be.source_id = $1
+               AND be.spec_id = $2
+               AND (be.hero_talent_id = $3 OR be.hero_talent_id IS NULL)
+             ORDER BY be.slot, be.priority
             """,
             use_source, spec_id, use_ht,
         )

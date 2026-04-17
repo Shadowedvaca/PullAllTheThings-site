@@ -94,14 +94,16 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
             if spec_id:
                 bis_rows = await conn.fetch(
                     """
-                    SELECT DISTINCT ON (ble.slot)
-                           ble.slot, ble.item_id, wi.blizzard_item_id, wi.name AS item_name
-                      FROM guild_identity.bis_list_entries ble
-                      JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-                     WHERE ble.source_id = $1
-                       AND ble.spec_id = $2
-                       AND ble.hero_talent_id IS NULL
-                     ORDER BY ble.slot, ble.priority
+                    SELECT DISTINCT ON (be.slot)
+                           be.slot, wi.id AS item_id, be.blizzard_item_id,
+                           i.name AS item_name
+                      FROM enrichment.bis_entries be
+                      LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
+                      LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
+                     WHERE be.source_id = $1
+                       AND be.spec_id = $2
+                       AND be.hero_talent_id IS NULL
+                     ORDER BY be.slot, be.priority
                     """,
                     source_id, spec_id,
                 )

@@ -1221,65 +1221,6 @@ def _extract_trinket_tiers(raw_html: str, item_meta: dict[int, dict]) -> list[Ex
     return ratings
 
 
-async def _upsert_trinket_ratings(
-    pool: asyncpg.Pool,
-    source_id: int,
-    spec_id: int,
-    hero_talent_id: Optional[int],
-    ratings: list[ExtractedTrinketRating],
-) -> int:
-    """Upsert extracted trinket tier ratings into trinket_tier_ratings.
-
-    Ensures each item exists in wow_items (lazy-creates a stub if not),
-    then upserts the tier rating row.  Returns the number of rows upserted.
-
-    All Wowhead ratings are inserted with hero_talent_id=NULL because Wowhead
-    BIS pages are spec-level, not hero-talent-specific.
-    """
-    if not ratings:
-        return 0
-
-    upserted = 0
-    async with pool.acquire() as conn:
-        for rating in ratings:
-            # Ensure wow_items row exists
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.wow_items
-                    (blizzard_item_id, name, slot_type)
-                VALUES ($1, $2, 'trinket')
-                ON CONFLICT (blizzard_item_id) DO NOTHING
-                """,
-                rating.blizzard_item_id,
-                rating.item_name or "",
-            )
-
-            item_row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                rating.blizzard_item_id,
-            )
-            if item_row is None:
-                continue
-            item_id = item_row["id"]
-
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.trinket_tier_ratings
-                    (source_id, spec_id, hero_talent_id, item_id, tier, sort_order, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                ON CONFLICT (source_id, spec_id, hero_talent_id, item_id)
-                    DO UPDATE SET
-                        tier = EXCLUDED.tier,
-                        sort_order = EXCLUDED.sort_order,
-                        updated_at = NOW()
-                """,
-                source_id, spec_id, hero_talent_id, item_id,
-                rating.tier, rating.sort_order,
-            )
-            upserted += 1
-
-    return upserted
-
 
 # ---------------------------------------------------------------------------
 # Enrichment rebuild from landing
@@ -1793,74 +1734,6 @@ async def import_simc(
 # ---------------------------------------------------------------------------
 
 
-# ---------------------------------------------------------------------------
-# BIS entry upsert
-# ---------------------------------------------------------------------------
-
-
-async def _upsert_bis_entries(
-    pool: asyncpg.Pool,
-    source_id: int,
-    spec_id: int,
-    hero_talent_id: Optional[int],
-    slots: list[SimcSlot],
-) -> int:
-    """Upsert extracted BIS items into bis_list_entries.
-
-    Ensures each item exists in wow_items (lazy-creates a stub if not) then
-    upserts into bis_list_entries.  Returns the number of slots upserted.
-    """
-    upserted = 0
-    async with pool.acquire() as conn:
-        # Clear all existing entries for this (source, spec, hero_talent) before
-        # inserting the new set.  Per-slot deletes miss slots that are absent from
-        # the new extraction (e.g. off_hand for 2H specs), leaving stale rows behind.
-        await conn.execute(
-            """
-            DELETE FROM guild_identity.bis_list_entries
-             WHERE source_id = $1
-               AND spec_id = $2
-               AND (
-                   ($3::int IS NULL AND hero_talent_id IS NULL)
-                   OR hero_talent_id = $3
-               )
-            """,
-            source_id, spec_id, hero_talent_id,
-        )
-
-        for slot_data in slots:
-            # Ensure wow_items row exists (stub — full metadata fetched by item_service)
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.wow_items
-                    (blizzard_item_id, name, slot_type)
-                VALUES ($1, '', $2)
-                ON CONFLICT (blizzard_item_id) DO NOTHING
-                """,
-                slot_data.blizzard_item_id,
-                slot_data.slot,
-            )
-
-            item_row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                slot_data.blizzard_item_id,
-            )
-            if item_row is None:
-                continue
-            item_id = item_row["id"]
-
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.bis_list_entries
-                    (source_id, spec_id, hero_talent_id, slot, item_id, priority)
-                VALUES ($1, $2, $3, $4, $5, 1)
-                """,
-                source_id, spec_id, hero_talent_id, slot_data.slot, item_id,
-            )
-            upserted += 1
-
-    return upserted
-
 
 # ---------------------------------------------------------------------------
 # Cross-reference
@@ -1904,14 +1777,14 @@ async def cross_reference(
                 """
                 SELECT e.slot,
                        s.id AS source_id, s.name AS source_name, s.sort_order,
-                       wi.blizzard_item_id, wi.name AS item_name,
+                       e.blizzard_item_id, i.name AS item_name,
                        COUNT(*) AS vote_count
-                  FROM guild_identity.bis_list_entries e
+                  FROM enrichment.bis_entries e
                   JOIN ref.bis_list_sources s ON s.id = e.source_id
-                  JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                  LEFT JOIN enrichment.items i ON i.blizzard_item_id = e.blizzard_item_id
                  WHERE e.spec_id = $1 AND s.is_active = TRUE
                  GROUP BY e.slot, s.id, s.name, s.sort_order,
-                          wi.blizzard_item_id, wi.name
+                          e.blizzard_item_id, i.name
                  ORDER BY e.slot, s.sort_order, vote_count DESC
                 """,
                 spec_id,
@@ -1935,10 +1808,10 @@ async def cross_reference(
                 """
                 SELECT e.slot,
                        s.id AS source_id, s.name AS source_name,
-                       wi.blizzard_item_id, wi.name AS item_name
-                  FROM guild_identity.bis_list_entries e
+                       e.blizzard_item_id, i.name AS item_name
+                  FROM enrichment.bis_entries e
                   JOIN ref.bis_list_sources s ON s.id = e.source_id
-                  JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                  LEFT JOIN enrichment.items i ON i.blizzard_item_id = e.blizzard_item_id
                  WHERE e.spec_id = $1
                    AND (e.hero_talent_id = $2 OR e.hero_talent_id IS NULL)
                    AND s.is_active = TRUE
