@@ -1321,10 +1321,10 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
 
         # ── Step 4: appearance crawl (catalyst quality tracks) ─────────────────
         # Discovers back/wrist/waist/feet catalyst tier pieces via the Blizzard
-        # Item Appearance API.  Derives tier set name suffixes from enrichment.items,
-        # matches appearance sets, and writes quality_track mappings to
-        # landing.blizzard_item_quality_tracks.  Item IDs are added to all_item_ids
-        # so they are fetched in Step 5.
+        # Item Appearance API.  Derives tier set names from landing.blizzard_item_sets
+        # (populated in Step 3) joined to patt.raid_seasons.tier_set_ids — no
+        # dependency on enrichment.items so this works on first Flush & Fill.
+        # Appearance set names are the item set name plus " (Quality)" qualifier.
         step += 1
         _landing_status.update(
             step=step,
@@ -1332,38 +1332,23 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
             detail="",
         )
 
-        _TIER_SLOTS = ("head", "shoulder", "chest", "hands", "legs")
-        _CATALYST_SLOTS = ("back", "wrist", "waist", "feet")
-
         async with pool.acquire() as conn:
-            tier_name_rows = await conn.fetch("""
-                SELECT DISTINCT ei.name
-                  FROM enrichment.items ei
-                  JOIN enrichment.item_sources es
-                    ON es.blizzard_item_id = ei.blizzard_item_id
-                 WHERE ei.slot_type = ANY($1::text[])
-                   AND ei.name LIKE '%% of %%'
-                   AND es.instance_type = 'raid'
-                   AND EXISTS (
-                       SELECT 1 FROM enrichment.bis_entries be
-                        WHERE be.blizzard_item_id = ei.blizzard_item_id
-                   )
-            """, list(_TIER_SLOTS))
+            tier_set_rows = await conn.fetch("""
+                SELECT bis.set_id, bis.set_name
+                  FROM landing.blizzard_item_sets bis
+                  JOIN patt.raid_seasons rs ON bis.set_id = ANY(rs.tier_set_ids)
+                 WHERE rs.is_active = TRUE
+            """)
 
-        tier_suffixes: set[str] = set()
-        for row in tier_name_rows:
-            name = row["name"] or ""
-            idx = name.find(" of ")
-            if idx >= 0:
-                tier_suffixes.add(name[idx:])
+        tier_set_names: list[str] = [r["set_name"] for r in tier_set_rows]
 
         qt_registered = 0
-        if not tier_suffixes:
-            logger.info("landing fill: no tier suffixes found — skipping appearance crawl")
+        if not tier_set_names:
+            logger.info("landing fill: no active tier sets in landing — skipping appearance crawl")
         else:
             logger.info(
-                "landing fill: appearance crawl — %d suffix(es): %s",
-                len(tier_suffixes), sorted(tier_suffixes),
+                "landing fill: appearance crawl — %d tier set(s): %s",
+                len(tier_set_names), tier_set_names,
             )
             all_app_sets = await blizzard_client.get_item_appearance_set_index()
             if not all_app_sets:
@@ -1377,14 +1362,16 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                     if "(raid finder)" in lower or "(lfr)" in lower: return "V"
                     return "C"
 
+                # Appearance set names are the item set name + " (Quality)" suffix.
+                # e.g. "Elden Throne Cloth Regalia" → "Elden Throne Cloth Regalia (Heroic)"
                 matching_sets: list[tuple[int, str]] = []
                 for app_set in all_app_sets:
                     set_name = app_set.get("name", "")
                     set_id   = app_set.get("id")
                     if not set_id:
                         continue
-                    for suffix in tier_suffixes:
-                        if suffix.strip().lower() in set_name.lower():
+                    for tier_set_name in tier_set_names:
+                        if tier_set_name.lower() in set_name.lower():
                             matching_sets.append((set_id, set_name))
                             break
 
