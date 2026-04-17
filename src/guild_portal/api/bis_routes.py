@@ -1334,6 +1334,9 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         )
 
         async with pool.acquire() as conn:
+            # Always rebuild quality_tracks from scratch — stale rows from prior
+            # runs would survive the name filter and mis-classify non-tier items.
+            await conn.execute("DELETE FROM landing.blizzard_item_quality_tracks")
             tier_set_rows = await conn.fetch("""
                 SELECT bis.set_id, bis.set_name
                   FROM landing.blizzard_item_sets bis
