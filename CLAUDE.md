@@ -238,26 +238,22 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — Phase E** — `feature/gear-plan-schema-overhaul`, deployed to dev. Complete.
+- **Gear Plan Schema Overhaul — Phase H** — `feature/gear-plan-schema-overhaul`, deployed to dev. Complete.
   - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. `landing` has 5 tables. Dual-write added to all 5 ingest paths. Complete.
   - **Phase B** (migration 0105): enrichment schema tables + stored procedures. 5 tables, 2 helpers, 8 sprocs. Complete.
   - **Phase C** (migration 0106): viz schema views (`viz.slot_items`, `viz.tier_piece_sources`, `viz.crafters_by_item`, `viz.bis_recommendations`). 51 unit tests. Complete.
   - **Phase D** (no migration): switched `gear_plan_service.py` to read from viz views + enrichment tables. Net: −458 lines, zero tooltip HTML parsing. Complete.
   - **Phase E** (migration 0107): enrichment classification overhaul + item_seasons bridge. Complete.
-    - **`enrichment.item_seasons`** — new many-to-many bridge (item × season). Items not in active season are invisible (fixes Bug 3: legacy tier pieces showing).
-    - **`item_category`** updated: `('raid','dungeon','world_boss','crafted','tier','catalyst','unclassified')`. `drop`/`unknown` retired.
-    - **`sp_rebuild_item_seasons()`** — populates bridge: raid/dungeon via instance IDs, tier via token chain, catalyst via quality_track='C', crafted via active season.
-    - **`sp_update_item_categories()`** rewritten — tier detection uses `tier_token_attrs` NOT Wowhead tooltip HTML (fixes Bug 2: raid drops misclassified as tier).
-    - **`sp_rebuild_item_recipes()`** updated — promotes `unclassified→crafted` + season link. Called by crafting sync for incremental updates.
-    - **`viz.slot_items`** — adds `item_seasons` JOIN; Python no longer passes season instance IDs.
-    - **55 new unit tests** in `tests/unit/test_enrichment_classification.py`; 106 total pass.
+  - **Phase F** (migration 0130): `guild_identity.specializations`, `hero_talents`, `bis_list_sources` → `ref` schema. All 10 Python source files updated.
+  - **Phase G** (migration 0131): `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings` dropped. 8 source files updated.
+  - **Phase H** (migration 0132): `blizzard_item_id` added to `guild_identity.item_recipe_links`; `sp_rebuild_item_recipes` rewrote to eliminate `JOIN wow_items`; `item_source_sync.py` BUG FIX (suffix_seed_rows was still JOINing dropped `bis_list_entries`); `item_recipe_links` NOT EXISTS checks switched to `blizzard_item_id`; `all_catalyst_bis` switched to `enrichment.items`; `flag_junk_sources` tier piece check uses `enrichment.items.item_category='tier'`; `bis_routes.py` landing fill no longer JOINs `wow_items`. 8 new tests. 1439 unit tests pass.
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0131 (dev only — not yet on prod)
+- **Last migration:** 0132 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
 - **Active branch:** `feature/gear-plan-schema-overhaul`
-- **Next:** Phase H — retire `guild_identity.wow_items` from the enrichment/viz process. See `reference/gear-plan-1-schema-overhaul.md`.
-- **Post-Phase E patch migrations (dev only, 0108–0131):**
+- **Next:** Phase I — documentation updates (ARCHITECTURE.md, SCHEMA.md, OPERATIONS.md). Or merge feature branch and ship as prod-v0.20.0.
+- **Post-Phase E patch migrations (dev only, 0108–0132):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows. Result: tier=192, raid=129, dungeon=493, crafted=42, catalyst=28, unclassified~6000.
   - **0110–0122** — Various enrichment pipeline fixes (see git log).
@@ -270,6 +266,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **0129** — `CLOAK` inventory_type → `back` slot in `sp_rebuild_items`; BIS hero_talent null-safe filter in `gear_plan_service.py`.
   - **0130** — Phase F: `guild_identity.specializations`, `hero_talents`, `bis_list_sources` → `ref` schema. `viz.bis_recommendations` recreated to JOIN `ref.bis_list_sources`. All 10 Python source files updated.
   - **0131** — Phase G: `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings` dropped. 8 source files updated to read/write enrichment equivalents. `BisListEntry` ORM model removed.
+  - **0132** — Phase H: `blizzard_item_id` added to `item_recipe_links` + backfill; `sp_rebuild_item_recipes` rewritten (no `wow_items` JOIN). 4 Python files updated.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

@@ -537,23 +537,22 @@ Both tables retired — enrichment equivalents (`enrichment.bis_entries`, `enric
 
 ---
 
-### Phase H — Retire `guild_identity.wow_items` from the enrichment/viz process
-
-`wow_items` is used in two ways: as a data source (item facts) and as an ID translation layer (`item_recipe_links.item_id` → `blizzard_item_id`). Both are eliminated here.
+### Phase H — Retire `guild_identity.wow_items` from the enrichment/viz process ✓ complete (2026-04-17, migration 0132)
 
 **Track 1 — Fix the recipe bridge:**
-- Add `blizzard_item_id INTEGER` to `guild_identity.item_recipe_links`
-- Update `crafting_service.py` to populate `blizzard_item_id` on insert alongside the existing `item_id` FK
-- Update `sp_rebuild_item_recipes` to use `irl.blizzard_item_id` directly — eliminates `JOIN guild_identity.wow_items`
-- `item_recipe_links` stays (accepted bridge table); `wow_items` is no longer needed by enrichment
+- Added `blizzard_item_id INTEGER` to `guild_identity.item_recipe_links`; backfilled from wow_items via item_id FK.
+- `item_recipe_link_sync.py` — all 3 INSERT paths (`build_item_recipe_links`, `_stub_and_link`, discover phase 2a) now write `blizzard_item_id` alongside `item_id`.
+- `sp_rebuild_item_recipes` rewritten — uses `irl.blizzard_item_id` directly; `JOIN guild_identity.wow_items` eliminated.
 
-**Track 2 — Replace `wow_items` reads everywhere else:**
-- `item_source_sync.py` — ~6 queries that use `guild_identity.wow_items` as item source switch to `enrichment.items` (same `blizzard_item_id` PK, same columns: `name`, `slot_type`, `armor_type`). This is the largest chunk.
-- `bis_sync.py` — 2 queries that join `bis_list_entries → wow_items` are eliminated by Phase G removing `bis_list_entries`; no separate action needed here.
-- `bis_routes.py` — small `wow_items` reads switch to `enrichment.items`
-- `gear_plan_auto_setup.py` — small `wow_items` reads switch to `enrichment.items`
+**Track 2 — Replace `wow_items` reads in the enrichment/viz process:**
+- `item_source_sync.py`:
+  - **BUG FIX**: `enrich_catalyst_tier_items()` suffix_seed_rows was still JOINing `guild_identity.bis_list_entries` (dropped in Phase G) — switched to `enrichment.bis_entries`.
+  - `tier_items` NOT EXISTS clauses: `irl.item_id = wi.id` → `irl.blizzard_item_id = wi.blizzard_item_id`.
+  - `all_catalyst_bis` query: `enrichment.items` is now the primary source for `name`/`slot_type`; `wow_items` JOIN kept only for `item_id` FK resolution (needed for `item_sources` INSERT).
+  - `flag_junk_sources` tier piece check: `wowhead_tooltip_html LIKE '%/item-set=%'` → `enrichment.items.item_category = 'tier'`.
+- `bis_routes.py` — landing fill crafted items: eliminated `JOIN guild_identity.wow_items`; reads `irl.blizzard_item_id` directly.
 
-**Out of scope:** `guild_identity.wow_items` may still be used by non-enrichment code (admin tooltip fetching, wowhead enrichment ingest). Those are not affected — this phase only removes it from the enrichment/viz process.
+**Out of scope:** `guild_identity.wow_items` is still used by non-enrichment code (admin tooltip fetching, Wowhead enrichment ingest, `process_tier_tokens`, `item_sources` FK writes). Those are not affected.
 
 ---
 
