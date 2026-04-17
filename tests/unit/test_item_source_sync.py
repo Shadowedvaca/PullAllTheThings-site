@@ -420,13 +420,14 @@ class TestFlagJunkSources:
         assert conn.execute.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_tier_piece_criteria_uses_item_set_link_and_tier_slots(self):
-        """Tier piece UPDATE must filter /item-set= and restrict to tier slot types."""
+    async def test_tier_piece_criteria_uses_enrichment_category_and_tier_slots(self):
+        """Tier piece UPDATE must use enrichment.items.item_category='tier' and tier slot filter."""
         pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
         await flag_junk_sources(pool, flag_tier_pieces=True)
         tp_sql = conn.execute.call_args_list[2].args[0]
-        assert "wow_items" in tp_sql
-        assert "/item-set=" in tp_sql
+        assert "wow_items" in tp_sql  # still needed for item_id FK resolution
+        assert "enrichment.items" in tp_sql
+        assert "item_category" in tp_sql
         assert "slot_type" in tp_sql
 
     @pytest.mark.asyncio

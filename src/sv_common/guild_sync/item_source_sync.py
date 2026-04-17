@@ -781,7 +781,7 @@ async def enrich_catalyst_tier_items(
                -- below and result in spurious boss source rows.
                AND NOT EXISTS (
                        SELECT 1 FROM guild_identity.item_recipe_links irl
-                        WHERE irl.item_id = wi.id
+                        WHERE irl.blizzard_item_id = wi.blizzard_item_id
                    )
                AND (
                    -- PRIMARY: Wowhead tooltip confirms tier set membership.
@@ -802,7 +802,7 @@ async def enrich_catalyst_tier_items(
                         )
                     AND NOT EXISTS (
                             SELECT 1 FROM guild_identity.item_recipe_links irl
-                             WHERE irl.item_id = wi.id
+                             WHERE irl.blizzard_item_id = wi.blizzard_item_id
                         )
                    )
                )
@@ -902,13 +902,13 @@ async def enrich_catalyst_tier_items(
             """
             SELECT DISTINCT wi.name
               FROM guild_identity.wow_items wi
-              JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+              JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
              WHERE wi.slot_type = ANY($1::text[])
                AND wi.name LIKE '% of %'
                AND wi.armor_type IS NOT NULL
                AND NOT EXISTS (
                        SELECT 1 FROM guild_identity.item_recipe_links irl
-                        WHERE irl.item_id = wi.id
+                        WHERE irl.blizzard_item_id = wi.blizzard_item_id
                    )
             """,
             list(_TIER_SLOTS),
@@ -927,16 +927,18 @@ async def enrich_catalyst_tier_items(
             )
             return added, errors
 
-        # Load catalyst-slot items directly from wow_items whose name ends with a known
-        # tier suffix.  No BIS JOIN — catalyst items from the appearance crawl may not
-        # have BIS entries (e.g. leather cloaks are never recommended by BIS scrapers).
+        # Load catalyst-slot items directly by name suffix.  No BIS JOIN — catalyst
+        # items from the appearance crawl may not have BIS entries (e.g. leather
+        # cloaks are never recommended by BIS scrapers).  Read name/slot_type from
+        # enrichment.items; JOIN wow_items only to resolve item_id for item_sources.
         suffix_patterns = [f"%{s}" for s in tier_suffixes]
         all_catalyst_bis = await conn.fetch(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name
-              FROM guild_identity.wow_items wi
-             WHERE wi.slot_type = ANY($1::text[])
-               AND wi.name LIKE ANY($2::text[])
+            SELECT DISTINCT wi.id AS wow_item_id, ei.blizzard_item_id, ei.name
+              FROM enrichment.items ei
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type = ANY($1::text[])
+               AND ei.name LIKE ANY($2::text[])
             """,
             list(_CATALYST_SLOTS),
             suffix_patterns,
@@ -1130,8 +1132,12 @@ async def flag_junk_sources(
                    SET is_suspected_junk = TRUE
                   FROM guild_identity.wow_items wi
                  WHERE wi.id = s.item_id
-                   AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
                    AND wi.slot_type IN ('head', 'shoulder', 'chest', 'hands', 'legs')
+                   AND EXISTS (
+                         SELECT 1 FROM enrichment.items ei
+                          WHERE ei.blizzard_item_id = wi.blizzard_item_id
+                            AND ei.item_category = 'tier'
+                       )
                 """
             )
             flagged_tp = int(tp_result.split()[-1])

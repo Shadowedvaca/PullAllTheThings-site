@@ -1234,10 +1234,9 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         async with pool.acquire() as conn:
             crafted_rows = await conn.fetch(
                 """
-                SELECT DISTINCT wi.blizzard_item_id
+                SELECT DISTINCT irl.blizzard_item_id
                   FROM guild_identity.item_recipe_links irl
-                  JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
-                 WHERE wi.blizzard_item_id IS NOT NULL
+                 WHERE irl.blizzard_item_id IS NOT NULL
                 """
             )
         crafted_ids = {r["blizzard_item_id"] for r in crafted_rows}
