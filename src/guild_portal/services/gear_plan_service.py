@@ -1790,6 +1790,16 @@ async def get_available_items(
                     OR $4::int IS NULL
                     OR playable_class_ids IS NULL
                     OR $4 = ANY(playable_class_ids))
+               AND (
+                   slot_type NOT IN ('one_hand', 'two_hand', 'ranged', 'off_hand')
+                   OR $4::int IS NULL
+                   OR weapon_subtype IS NULL
+                   OR EXISTS (
+                       SELECT 1 FROM ref.class_weapon_proficiencies cwp
+                        WHERE cwp.blizzard_class_id = $4
+                          AND cwp.weapon_subtype = viz.slot_items.weapon_subtype
+                   )
+               )
             """,
             slot_type,
             armor_filter,
