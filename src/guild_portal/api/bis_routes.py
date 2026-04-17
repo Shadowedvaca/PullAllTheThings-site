@@ -1230,9 +1230,7 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                 )
             )
 
-        # Add crafted item IDs from item_recipe_links — they are not in journal
-        # encounter loot tables, so they would never reach landing.blizzard_items
-        # (and thus enrichment.items) without this fetch.
+        # Add crafted item IDs from item_recipe_links — not in journal encounter tables.
         async with pool.acquire() as conn:
             crafted_rows = await conn.fetch(
                 """
@@ -1245,6 +1243,17 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         crafted_ids = {r["blizzard_item_id"] for r in crafted_rows}
         all_item_ids.update(crafted_ids)
         logger.info("landing fill: added %d crafted item IDs to fetch queue", len(crafted_ids))
+
+        # Add any remaining wow_items not covered above — tier pieces and BIS list
+        # items enriched via the old pipeline that aren't journal drops or crafted.
+        async with pool.acquire() as conn:
+            extra_rows = await conn.fetch(
+                "SELECT DISTINCT blizzard_item_id FROM guild_identity.wow_items"
+                " WHERE blizzard_item_id IS NOT NULL"
+            )
+        extra_ids = {r["blizzard_item_id"] for r in extra_rows} - all_item_ids
+        all_item_ids.update(extra_ids)
+        logger.info("landing fill: added %d extra item IDs (tier/BIS) to fetch queue", len(extra_ids))
 
         # ── Step 3: fetch item records ─────────────────────────────────────────
         step += 1
