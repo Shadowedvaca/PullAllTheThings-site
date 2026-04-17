@@ -521,17 +521,17 @@ async def sync_catalyst_items_via_appearance(
     async with pool.acquire() as conn:
         tier_rows = await conn.fetch(
             """
-            SELECT DISTINCT wi.blizzard_item_id, wi.name
-              FROM guild_identity.wow_items wi
-              JOIN guild_identity.item_sources src ON src.item_id = wi.id
-             WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
-               AND wi.name LIKE '% of %'
-               AND src.instance_type = 'raid'
+            SELECT DISTINCT ei.blizzard_item_id, ei.name
+              FROM enrichment.items ei
+              JOIN enrichment.item_sources es ON es.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type IN ('head','shoulder','chest','hands','legs')
+               AND ei.name LIKE '% of %'
+               AND es.instance_type = 'raid'
                AND EXISTS (
                    SELECT 1 FROM enrichment.bis_entries be
-                    WHERE be.blizzard_item_id = wi.blizzard_item_id
+                    WHERE be.blizzard_item_id = ei.blizzard_item_id
                )
-             ORDER BY wi.name
+             ORDER BY ei.name
             """
         )
 
@@ -653,31 +653,46 @@ async def sync_catalyst_items_via_appearance(
                         continue
 
                     try:
-                        result = await conn.execute(
+                        # Write quality_track to landing so sp_rebuild_items() picks it up.
+                        qt_result = await conn.execute(
                             """
-                            INSERT INTO guild_identity.wow_items
-                                   (blizzard_item_id, name, slot_type, quality_track)
-                            VALUES ($1, $2, 'other', $3)
+                            INSERT INTO landing.blizzard_item_quality_tracks
+                                   (blizzard_item_id, quality_track)
+                            VALUES ($1, $2)
                             ON CONFLICT (blizzard_item_id) DO UPDATE SET
                                 quality_track = COALESCE(
-                                    guild_identity.wow_items.quality_track,
+                                    landing.blizzard_item_quality_tracks.quality_track,
                                     EXCLUDED.quality_track
-                                )
+                                ),
+                                fetched_at = NOW()
                             """,
                             blizzard_item_id,
-                            item_name,
                             quality_track,
                         )
-                        if result == "INSERT 0 1":
+
+                        # Fetch full item data from Blizzard API and write to landing.
+                        item_data = await client.get_item(blizzard_item_id)
+                        if item_data:
+                            await conn.execute(
+                                """
+                                INSERT INTO landing.blizzard_items
+                                       (blizzard_item_id, payload)
+                                VALUES ($1, $2::jsonb)
+                                """,
+                                blizzard_item_id,
+                                json.dumps(item_data),
+                            )
+
+                        if qt_result == "INSERT 0 1":
                             stubbed += 1
                             logger.info(
-                                "sync_catalyst_items: stubbed item %d "
+                                "sync_catalyst_items: registered item %d "
                                 "from appearance %d (set %d, track=%s)",
                                 blizzard_item_id, app_id, set_id, quality_track,
                             )
                     except Exception as exc:
                         msg = (
-                            f"sync_catalyst_items: DB error stubbing item "
+                            f"sync_catalyst_items: DB error registering item "
                             f"{blizzard_item_id}: {exc}"
                         )
                         logger.error(msg)
@@ -736,8 +751,11 @@ async def enrich_catalyst_tier_items(
             DELETE FROM guild_identity.item_sources
              WHERE instance_type IN ('raid', 'world_boss')
                AND item_id IN (
-                   SELECT id FROM guild_identity.wow_items
-                    WHERE quality_track = 'C'
+                   SELECT wi.id
+                     FROM guild_identity.wow_items wi
+                     JOIN landing.blizzard_item_quality_tracks qt
+                       ON qt.blizzard_item_id = wi.blizzard_item_id
+                    WHERE qt.quality_track = 'C'
                )
             """
         )

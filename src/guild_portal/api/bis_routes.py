@@ -1243,6 +1243,16 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
         all_item_ids.update(crafted_ids)
         logger.info("landing fill: added %d crafted item IDs to fetch queue", len(crafted_ids))
 
+        # Add catalyst item IDs from quality_tracks table — populated by the
+        # appearance crawl (Sync Loot Tables); not in journal encounter data.
+        async with pool.acquire() as conn:
+            qt_rows = await conn.fetch(
+                "SELECT blizzard_item_id FROM landing.blizzard_item_quality_tracks"
+            )
+        qt_ids = {r["blizzard_item_id"] for r in qt_rows}
+        all_item_ids.update(qt_ids)
+        logger.info("landing fill: added %d quality-track item IDs to fetch queue", len(qt_ids))
+
         # ── Step 3: item sets (tier piece item IDs) ────────────────────────────
         # Tier pieces don't drop directly from encounters — they come from token
         # exchanges.  The Blizzard Item Set API gives us the exact item IDs for
