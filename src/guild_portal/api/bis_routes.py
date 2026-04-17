@@ -34,6 +34,7 @@ Endpoints:
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -1362,9 +1363,24 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                     if "(raid finder)" in lower or "(lfr)" in lower: return "V"
                     return "C"
 
+                def _tier_key(tier_set_name: str) -> str:
+                    """Extract the distinctive phrase from a tier set name.
+
+                    "Sprouts of the Luminous Bloom" → "Luminous Bloom"
+                    "Relentless Rider's Lament"     → "Relentless Rider's"
+                    "Way of Ra-den's Chosen"        → "Ra-den's Chosen"
+                    """
+                    m = re.search(r" of (?:the )?(.+)", tier_set_name)
+                    if m:
+                        return m.group(1).strip()
+                    m = re.search(r"^(\w[\w\-]*(?: \w[\w\-]*)?'s)", tier_set_name)
+                    if m:
+                        return m.group(1)
+                    return tier_set_name
+
                 # Appearance set names are the item set name + " (Quality)" suffix.
-                # e.g. "Elden Throne Cloth Regalia" → "Elden Throne Cloth Regalia (Heroic)"
-                matching_sets: list[tuple[int, str]] = []
+                # Store the matched tier_set_name so we can filter items by name later.
+                matching_sets: list[tuple[int, str, str]] = []  # (set_id, app_set_name, tier_set_name)
                 for app_set in all_app_sets:
                     set_name = app_set.get("name", "")
                     set_id   = app_set.get("id")
@@ -1372,15 +1388,16 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                         continue
                     for tier_set_name in tier_set_names:
                         if tier_set_name.lower() in set_name.lower():
-                            matching_sets.append((set_id, set_name))
+                            matching_sets.append((set_id, set_name, tier_set_name))
                             break
 
                 logger.info(
                     "landing fill: appearance crawl — %d matching set(s)", len(matching_sets)
                 )
 
-                for set_id, set_name in matching_sets:
-                    quality_track = _qt(set_name)
+                for set_id, app_set_name, tier_set_name in matching_sets:
+                    quality_track = _qt(app_set_name)
+                    key_phrase = _tier_key(tier_set_name).lower()
                     set_data = await blizzard_client.get_item_appearance_set(set_id)
                     if not set_data:
                         logger.warning(
@@ -1410,8 +1427,13 @@ async def _run_landing_fill(pool, blizzard_client, flush: bool):
                                 app_id, _json.dumps(app_data),
                             )
                             for item in app_data.get("items", []):
-                                item_id = item.get("id")
+                                item_id   = item.get("id")
+                                item_name = (item.get("name") or "").lower()
                                 if not item_id:
+                                    continue
+                                # Skip non-tier items that merely share an appearance
+                                # (e.g. a raid-drop back piece with the same visual).
+                                if key_phrase and key_phrase not in item_name:
                                     continue
                                 await conn.execute(
                                     """
