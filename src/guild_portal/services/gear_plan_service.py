@@ -1261,7 +1261,7 @@ async def get_plan_detail(
                   FROM viz.bis_recommendations vbr
                   JOIN guild_identity.bis_list_sources bls ON bls.id = vbr.source_id
                  WHERE vbr.spec_id = $1
-                   AND (vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
+                   AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
                  ORDER BY bls.sort_order, vbr.slot, vbr.priority
                 """,
