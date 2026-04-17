@@ -1746,7 +1746,11 @@ async def enrich_and_classify(
                 item_ids = [r["blizzard_item_id"] for r in rows]
                 missing = len(item_ids)
                 for item_id in item_ids:
-                    icon_url = await blizzard_client.get_item_media(item_id)
+                    try:
+                        icon_url = await blizzard_client.get_item_media(item_id)
+                    except Exception:
+                        icons_skipped += 1
+                        continue
                     if icon_url:
                         async with pool.acquire() as conn:
                             # Write to landing cache (survives rebuilds)
