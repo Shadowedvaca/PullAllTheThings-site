@@ -66,7 +66,7 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
         spec_id = char_row["active_spec_id"] if char_row else None
 
         src_row = await conn.fetchrow(
-            "SELECT id FROM guild_identity.bis_list_sources WHERE name = 'Wowhead Overall' LIMIT 1"
+            "SELECT id FROM ref.bis_list_sources WHERE name = 'Wowhead Overall' LIMIT 1"
         )
         if not src_row:
             logger.warning(

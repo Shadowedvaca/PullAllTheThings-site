@@ -138,7 +138,7 @@ async def list_sources(request: Request):
             """
             SELECT id, name, short_label, origin, content_type,
                    is_default, is_active, sort_order, last_synced
-              FROM guild_identity.bis_list_sources
+              FROM ref.bis_list_sources
              ORDER BY sort_order, id
             """
         )
@@ -155,7 +155,7 @@ async def update_source(source_id: int, body: SourceUpdate, request: Request):
     values = list(updates.values())
     async with pool.acquire() as conn:
         await conn.execute(
-            f"UPDATE guild_identity.bis_list_sources SET {set_clauses} WHERE id = $1",
+            f"UPDATE ref.bis_list_sources SET {set_clauses} WHERE id = $1",
             source_id, *values,
         )
     return {"ok": True}
@@ -287,10 +287,10 @@ async def list_targets(
                    ht.name AS hero_talent_name, ht.slug AS hero_talent_slug,
                    sp.name AS spec_name, c.name AS class_name
               FROM config.bis_scrape_targets t
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
-              JOIN guild_identity.specializations sp ON sp.id = t.spec_id
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+              JOIN ref.specializations sp ON sp.id = t.spec_id
               JOIN ref.classes c ON c.id = sp.class_id
-              LEFT JOIN guild_identity.hero_talents ht ON ht.id = t.hero_talent_id
+              LEFT JOIN ref.hero_talents ht ON ht.id = t.hero_talent_id
              WHERE {where}
              ORDER BY c.name, sp.name, s.sort_order
             """,
@@ -442,8 +442,8 @@ async def get_scrape_log(
                    s.name AS source_name
               FROM log.bis_scrape_log l
               JOIN config.bis_scrape_targets t ON t.id = l.target_id
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
-              JOIN guild_identity.specializations sp ON sp.id = t.spec_id
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+              JOIN ref.specializations sp ON sp.id = t.spec_id
               JOIN ref.classes c ON c.id = sp.class_id
              WHERE {where}
              ORDER BY l.created_at DESC
@@ -985,7 +985,7 @@ async def bulk_populate_plans(
 
     async with pool.acquire() as conn:
         wowhead_src = await conn.fetchrow(
-            "SELECT id FROM guild_identity.bis_list_sources WHERE name = 'Wowhead Overall' LIMIT 1"
+            "SELECT id FROM ref.bis_list_sources WHERE name = 'Wowhead Overall' LIMIT 1"
         )
         wowhead_source_id = wowhead_src["id"] if wowhead_src else None
 
@@ -1672,7 +1672,7 @@ async def sync_test_blood_dk(
     pool = _pool(request)
     async with pool.acquire() as conn:
         spec = await conn.fetchrow(
-            """SELECT s.id FROM guild_identity.specializations s
+            """SELECT s.id FROM ref.specializations s
                JOIN ref.classes c ON c.id = s.class_id
                WHERE c.name = 'Death Knight' AND s.name = 'Blood'
                LIMIT 1"""
@@ -1737,9 +1737,9 @@ async def trinket_ratings_status(request: Request):
                 bls.origin       AS source_origin,
                 COUNT(ttr.id)    AS rating_count,
                 MAX(ttr.updated_at) AS last_updated
-              FROM guild_identity.specializations sp
+              FROM ref.specializations sp
               JOIN ref.classes c ON c.id = sp.class_id
-              CROSS JOIN guild_identity.bis_list_sources bls
+              CROSS JOIN ref.bis_list_sources bls
               LEFT JOIN guild_identity.trinket_tier_ratings ttr
                      ON ttr.spec_id = sp.id AND ttr.source_id = bls.id
              WHERE bls.is_active = TRUE

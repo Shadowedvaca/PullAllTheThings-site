@@ -148,7 +148,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             """
             SELECT s.id, s.name, s.origin, s.content_type, s.is_active,
                    COALESCE(gs.slug_separator, '-') AS slug_separator
-              FROM guild_identity.bis_list_sources s
+              FROM ref.bis_list_sources s
               LEFT JOIN common.guide_sites gs ON gs.id = s.guide_site_id
              WHERE s.is_active = TRUE
             """
@@ -159,7 +159,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             """
             SELECT s.id AS spec_id, s.name AS spec_name, c.name AS class_name,
                    r.name AS role_name
-              FROM guild_identity.specializations s
+              FROM ref.specializations s
               JOIN ref.classes c ON c.id = s.class_id
               LEFT JOIN guild_identity.roles r ON r.id = s.default_role_id
             ORDER BY c.name, s.name
@@ -168,7 +168,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
 
         # Load all hero talents per spec
         hero_talents = await conn.fetch(
-            "SELECT id, spec_id, name, slug FROM guild_identity.hero_talents"
+            "SELECT id, spec_id, name, slug FROM ref.hero_talents"
         )
 
     ht_by_spec: dict[int, list[dict]] = {}
@@ -421,8 +421,8 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
                    t.url, t.preferred_technique, s.origin
               FROM config.bis_scrape_targets t
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
-              JOIN guild_identity.specializations sp ON sp.id = t.spec_id
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+              JOIN ref.specializations sp ON sp.id = t.spec_id
               JOIN ref.classes c ON c.id = sp.class_id
              WHERE s.is_active = TRUE
                AND s.origin != 'icy_veins'
@@ -470,7 +470,7 @@ async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
                    t.url, t.preferred_technique, s.origin
               FROM config.bis_scrape_targets t
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
              WHERE t.spec_id = $1
                AND s.is_active = TRUE
                AND s.origin != 'icy_veins'
@@ -509,7 +509,7 @@ async def sync_source(
     async with pool.acquire() as conn:
         # Check if this source is IV — skip if so
         origin_row = await conn.fetchrow(
-            "SELECT origin FROM guild_identity.bis_list_sources WHERE id = $1", source_id
+            "SELECT origin FROM ref.bis_list_sources WHERE id = $1", source_id
         )
         if origin_row and origin_row["origin"] == "icy_veins":
             logger.info("sync_source skipping IV source %d", source_id)
@@ -574,7 +574,7 @@ async def sync_gaps(
                    t.content_type, t.url, t.preferred_technique, s.origin,
                    latest.latest_at
               FROM config.bis_scrape_targets t
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
               LEFT JOIN (
                   SELECT target_id, MAX(fetched_at) AS latest_at
                     FROM landing.bis_scrape_raw
@@ -630,7 +630,7 @@ async def sync_target(
                        t.spec_id, t.hero_talent_id, t.content_type,
                        s.origin
                   FROM config.bis_scrape_targets t
-                  JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+                  JOIN ref.bis_list_sources s ON s.id = t.source_id
                  WHERE t.id = $1
                 """,
                 target_id,
@@ -641,7 +641,7 @@ async def sync_target(
         else:
             # Need source origin
             origin_row = await conn.fetchrow(
-                "SELECT origin FROM guild_identity.bis_list_sources WHERE id = $1",
+                "SELECT origin FROM ref.bis_list_sources WHERE id = $1",
                 _target_row["source_id"],
             )
             _target_row = {**_target_row, "origin": origin_row["origin"] if origin_row else ""}
@@ -1410,7 +1410,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
                     ) AS rn
                   FROM landing.bis_scrape_raw bsr
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
-                  JOIN guild_identity.bis_list_sources sc ON sc.id = t.source_id
+                  JOIN ref.bis_list_sources sc ON sc.id = t.source_id
                  WHERE bsr.target_id IS NOT NULL
                    AND bsr.source = 'wowhead'
             )
@@ -1907,7 +1907,7 @@ async def cross_reference(
                        wi.blizzard_item_id, wi.name AS item_name,
                        COUNT(*) AS vote_count
                   FROM guild_identity.bis_list_entries e
-                  JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
+                  JOIN ref.bis_list_sources s ON s.id = e.source_id
                   JOIN guild_identity.wow_items wi ON wi.id = e.item_id
                  WHERE e.spec_id = $1 AND s.is_active = TRUE
                  GROUP BY e.slot, s.id, s.name, s.sort_order,
@@ -1937,7 +1937,7 @@ async def cross_reference(
                        s.id AS source_id, s.name AS source_name,
                        wi.blizzard_item_id, wi.name AS item_name
                   FROM guild_identity.bis_list_entries e
-                  JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
+                  JOIN ref.bis_list_sources s ON s.id = e.source_id
                   JOIN guild_identity.wow_items wi ON wi.id = e.item_id
                  WHERE e.spec_id = $1
                    AND (e.hero_talent_id = $2 OR e.hero_talent_id IS NULL)
@@ -2011,7 +2011,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         sources = await conn.fetch(
             """
             SELECT id, name, short_label, origin, content_type, is_active, sort_order
-              FROM guild_identity.bis_list_sources
+              FROM ref.bis_list_sources
              WHERE is_active = TRUE
              ORDER BY sort_order
             """
@@ -2020,7 +2020,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         specs = await conn.fetch(
             """
             SELECT s.id, s.name AS spec_name, c.name AS class_name
-              FROM guild_identity.specializations s
+              FROM ref.specializations s
               JOIN ref.classes c ON c.id = s.class_id
              ORDER BY c.name, s.name
             """
@@ -2036,7 +2036,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         )
 
         hero_talents = await conn.fetch(
-            "SELECT id, spec_id, name, slug FROM guild_identity.hero_talents ORDER BY id"
+            "SELECT id, spec_id, name, slug FROM ref.hero_talents ORDER BY id"
         )
 
     ht_by_spec: dict[int, list[dict]] = {}

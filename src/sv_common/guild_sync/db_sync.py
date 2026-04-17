@@ -78,7 +78,7 @@ async def sync_blizzard_roster(
                 spec_id = None
                 if class_id and char.active_spec:
                     spec_row = await conn.fetchrow(
-                        """SELECT id FROM guild_identity.specializations
+                        """SELECT id FROM ref.specializations
                            WHERE class_id = $1 AND LOWER(name) = LOWER($2)""",
                         class_id, char.active_spec,
                     )

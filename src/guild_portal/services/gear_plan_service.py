@@ -426,7 +426,7 @@ async def get_or_create_plan(
         if bis_source_id is None:
             src_row = await conn.fetchrow(
                 """
-                SELECT id FROM guild_identity.bis_list_sources
+                SELECT id FROM ref.bis_list_sources
                  WHERE is_active = TRUE
                  ORDER BY is_default DESC, sort_order
                  LIMIT 1
@@ -896,7 +896,7 @@ async def export_simc(
                    c.name AS class_name
               FROM guild_identity.gear_plans gp
               JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
               LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id=$1 AND gp.character_id=$2
             """,
@@ -959,7 +959,7 @@ async def export_equipped_simc(
                    c.name AS class_name
               FROM guild_identity.gear_plans gp
               JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
               LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id=$1 AND gp.character_id=$2
             """,
@@ -1024,9 +1024,9 @@ async def get_plan_detail(
                    c.name AS class_name,
                    s.name AS spec_name_for_stat
               FROM guild_identity.gear_plans gp
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
-              LEFT JOIN guild_identity.hero_talents ht ON ht.id = gp.hero_talent_id
-              LEFT JOIN guild_identity.bis_list_sources bls ON bls.id = gp.bis_source_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.hero_talents ht ON ht.id = gp.hero_talent_id
+              LEFT JOIN ref.bis_list_sources bls ON bls.id = gp.bis_source_id
               LEFT JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
               LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id = $1 AND gp.character_id = $2
@@ -1154,7 +1154,7 @@ async def get_plan_detail(
                 SELECT tr.tier, tr.source_id, bls.origin AS source_origin,
                        tr.blizzard_item_id
                   FROM enrichment.trinket_ratings tr
-                  JOIN guild_identity.bis_list_sources bls ON bls.id = tr.source_id
+                  JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
                  WHERE tr.spec_id = $1
                    AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
@@ -1259,7 +1259,7 @@ async def get_plan_detail(
                        vbr.source_name, vbr.source_short_label AS short_label,
                        vbr.source_origin AS origin, vbr.content_type
                   FROM viz.bis_recommendations vbr
-                  JOIN guild_identity.bis_list_sources bls ON bls.id = vbr.source_id
+                  JOIN ref.bis_list_sources bls ON bls.id = vbr.source_id
                  WHERE vbr.spec_id = $1
                    AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
@@ -1383,7 +1383,7 @@ async def get_plan_detail(
         source_list = await conn.fetch(
             """
             SELECT id, name, short_label, content_type, origin, is_default, sort_order
-              FROM guild_identity.bis_list_sources
+              FROM ref.bis_list_sources
              WHERE is_active = TRUE
              ORDER BY sort_order
             """
@@ -1398,7 +1398,7 @@ async def get_plan_detail(
         ht_list = []
         if spec_id:
             ht_rows = await conn.fetch(
-                "SELECT id, name, slug FROM guild_identity.hero_talents WHERE spec_id=$1 ORDER BY name",
+                "SELECT id, name, slug FROM ref.hero_talents WHERE spec_id=$1 ORDER BY name",
                 spec_id,
             )
             ht_list = [dict(r) for r in ht_rows]
@@ -1678,7 +1678,7 @@ async def get_available_items(
               LEFT JOIN ref.classes c ON c.id = wc.class_id
               LEFT JOIN guild_identity.gear_plans gp
                      ON gp.character_id = wc.id AND gp.player_id = $2
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
              WHERE wc.id = $1
             """,
             character_id, player_id,
@@ -1805,7 +1805,7 @@ async def get_available_items(
                 SELECT tr.tier, tr.source_id, bls.origin AS source_origin,
                        tr.blizzard_item_id
                   FROM enrichment.trinket_ratings tr
-                  JOIN guild_identity.bis_list_sources bls ON bls.id = tr.source_id
+                  JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
                  WHERE tr.spec_id = $1
                    AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
@@ -2139,7 +2139,7 @@ async def get_trinket_ratings(
                    bls.origin AS source_origin,
                    ei.name, ei.icon_url
               FROM enrichment.trinket_ratings tr
-              JOIN guild_identity.bis_list_sources bls ON bls.id = tr.source_id
+              JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
               JOIN enrichment.items ei ON ei.blizzard_item_id = tr.blizzard_item_id
              WHERE tr.spec_id = $1
                AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)

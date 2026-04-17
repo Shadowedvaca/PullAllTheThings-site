@@ -755,7 +755,7 @@ class Specialization(Base):
     __tablename__ = "specializations"
     __table_args__ = (
         UniqueConstraint("class_id", "name"),
-        {"schema": "guild_identity"},
+        {"schema": "ref"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -819,7 +819,7 @@ class WowCharacter(Base):
         Integer, ForeignKey("ref.classes.id")
     )
     active_spec_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id")
+        Integer, ForeignKey("ref.specializations.id")
     )
     level: Mapped[Optional[int]] = mapped_column(Integer)
     item_level: Mapped[Optional[int]] = mapped_column(Integer)
@@ -904,13 +904,13 @@ class Player(Base):
         Integer, ForeignKey("guild_identity.wow_characters.id")
     )
     main_spec_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id")
+        Integer, ForeignKey("ref.specializations.id")
     )
     offspec_character_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("guild_identity.wow_characters.id")
     )
     offspec_spec_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id")
+        Integer, ForeignKey("ref.specializations.id")
     )
     timezone: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="America/Chicago"
@@ -1624,12 +1624,12 @@ class HeroTalent(Base):
     __tablename__ = "hero_talents"
     __table_args__ = (
         UniqueConstraint("spec_id", "name", name="uq_hero_talent_spec_name"),
-        {"schema": "guild_identity"},
+        {"schema": "ref"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     spec_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("ref.specializations.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     slug: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -1641,7 +1641,7 @@ class BisListSource(Base):
     """Named BIS list provider (Archon Raid, Wowhead Overall, etc.)."""
 
     __tablename__ = "bis_list_sources"
-    __table_args__ = {"schema": "guild_identity"}
+    __table_args__ = {"schema": "ref"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
@@ -1668,13 +1668,13 @@ class BisListEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("ref.bis_list_sources.id", ondelete="CASCADE"), nullable=False
     )
     spec_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("ref.specializations.id", ondelete="CASCADE"), nullable=False
     )
     hero_talent_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.hero_talents.id", ondelete="SET NULL")
+        Integer, ForeignKey("ref.hero_talents.id", ondelete="SET NULL")
     )
     slot: Mapped[str] = mapped_column(String(20), nullable=False)
     item_id: Mapped[int] = mapped_column(
@@ -1736,13 +1736,13 @@ class GearPlan(Base):
         Integer, ForeignKey("guild_identity.wow_characters.id", ondelete="CASCADE"), nullable=False
     )
     spec_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id", ondelete="SET NULL")
+        Integer, ForeignKey("ref.specializations.id", ondelete="SET NULL")
     )
     hero_talent_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.hero_talents.id", ondelete="SET NULL")
+        Integer, ForeignKey("ref.hero_talents.id", ondelete="SET NULL")
     )
     bis_source_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="SET NULL")
+        Integer, ForeignKey("ref.bis_list_sources.id", ondelete="SET NULL")
     )
     simc_profile: Mapped[Optional[str]] = mapped_column(Text)
     simc_imported_at: Mapped[Optional[datetime]] = mapped_column(
@@ -1806,13 +1806,13 @@ class BisScrapeTarget(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.bis_list_sources.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("ref.bis_list_sources.id", ondelete="CASCADE"), nullable=False
     )
     spec_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.specializations.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("ref.specializations.id", ondelete="CASCADE"), nullable=False
     )
     hero_talent_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.hero_talents.id", ondelete="SET NULL")
+        Integer, ForeignKey("ref.hero_talents.id", ondelete="SET NULL")
     )
     content_type: Mapped[Optional[str]] = mapped_column(String(20))
     url: Mapped[Optional[str]] = mapped_column(Text)
