@@ -833,7 +833,8 @@ async def enrich_catalyst_tier_items(
         boss_rows = await conn.fetch(
             """
             SELECT DISTINCT is2.encounter_name, is2.instance_name,
-                            is2.instance_type, is2.blizzard_instance_id, wi.slot_type
+                            is2.instance_type, is2.blizzard_encounter_id,
+                            is2.blizzard_instance_id, wi.slot_type
               FROM guild_identity.item_sources is2
               JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
              WHERE is2.instance_type IN ('raid', 'world_boss')
@@ -842,17 +843,18 @@ async def enrich_catalyst_tier_items(
             list(_TIER_SLOTS),
         )
 
-        slot_to_bosses: dict[str, list[tuple[str, str, str, Optional[int]]]] = {}
+        slot_to_bosses: dict[str, list[tuple[str, str, str, Optional[int], Optional[int]]]] = {}
         for r in boss_rows:
             st = r["slot_type"]
             if st:
                 slot_to_bosses.setdefault(st, []).append(
-                    (r["encounter_name"], r["instance_name"], r["instance_type"], r["blizzard_instance_id"])
+                    (r["encounter_name"], r["instance_name"], r["instance_type"],
+                     r["blizzard_encounter_id"], r["blizzard_instance_id"])
                 )
 
         # All bosses from all main-5 slots combined — used as fallback for
         # catalyst-slot items whose slot_type has no direct boss mapping yet.
-        all_main_bosses: list[tuple[str, str, str, Optional[int]]] = []
+        all_main_bosses: list[tuple[str, str, str, Optional[int], Optional[int]]] = []
         seen_enc: set[str] = set()
         for boss_list in slot_to_bosses.values():
             for entry in boss_list:
@@ -873,28 +875,33 @@ async def enrich_catalyst_tier_items(
                 if not bosses:
                     # Catalyst slot: use all main-5 bosses (all bosses drop tier
                     # tokens), or fall back to a Revival Catalyst placeholder.
-                    bosses = all_main_bosses or [("Revival Catalyst", "Revival Catalyst", "raid", None)]
+                    bosses = all_main_bosses or [("Revival Catalyst", "Revival Catalyst", "raid", None, None)]
 
-                for enc_name, inst_name, inst_type, blizzard_inst_id in bosses:
+                for enc_name, inst_name, inst_type, blizzard_enc_id, blizzard_inst_id in bosses:
                     try:
                         await conn.execute(
                             """
                             INSERT INTO guild_identity.item_sources
                                    (item_id, instance_type, encounter_name, instance_name,
-                                    blizzard_instance_id)
-                            VALUES ($1, $2, $3, $4, $5)
+                                    blizzard_encounter_id, blizzard_instance_id)
+                            VALUES ($1, $2, $3, $4, $5, $6)
                             ON CONFLICT (item_id, instance_type, encounter_name)
                             DO UPDATE SET
-                                instance_name        = EXCLUDED.instance_name,
-                                blizzard_instance_id = COALESCE(
-                                                           EXCLUDED.blizzard_instance_id,
-                                                           guild_identity.item_sources.blizzard_instance_id
-                                                       )
+                                instance_name         = EXCLUDED.instance_name,
+                                blizzard_encounter_id = COALESCE(
+                                                            EXCLUDED.blizzard_encounter_id,
+                                                            guild_identity.item_sources.blizzard_encounter_id
+                                                        ),
+                                blizzard_instance_id  = COALESCE(
+                                                            EXCLUDED.blizzard_instance_id,
+                                                            guild_identity.item_sources.blizzard_instance_id
+                                                        )
                             """,
                             tier["wow_item_id"],
                             inst_type,
                             enc_name,
                             inst_name,
+                            blizzard_enc_id,
                             blizzard_inst_id,
                         )
                         added += 1
