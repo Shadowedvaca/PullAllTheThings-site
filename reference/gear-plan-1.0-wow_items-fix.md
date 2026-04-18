@@ -1,10 +1,10 @@
 # Removing `guild_identity.wow_items` — Phased Retirement Plan
 
-> **Status:** Phase D complete — deployed to dev, on branch `feature/gear-plan-1.0-wow_items-fix`
+> **Status:** Phase E complete — ALL PHASES DONE. Deployed to dev. Ready for PR → main → prod-v0.21.0.
 > **Branch:** `feature/gear-plan-1.0-wow_items-fix` (off `main` after `prod-v0.20.2`)
-> **Migration sequence:** 0141 → 0145 (0141 = Phase A, 0142 = Phase B, 0143 = Phase C, 0144 = Phase D)
+> **Migration sequence:** 0141 → 0146 (0141=A, 0142=B, 0143=C, 0144=D, 0145=E-drop-FKs, 0146=E-drop-table)
 > **Last updated:** 2026-04-18
-> **Rollback point:** `patt_db_pre_v020_20260417_213540.dump` on prod server at `/opt/guild-portal/backups/`
+> **Rollback point (prod):** `patt_db_pre_phase_e_20260418_141749.dump` at `/opt/guild-portal/backups/` (142MB)
 
 ---
 
@@ -920,7 +920,7 @@ concern about locking on a large table.
 | B ✓ | 0142 | item_source_sync.py | Backfill landing.wowhead_tooltips; migrate tooltip reads off wow_items |
 | C ✓ | 0143 | equipment_sync.py, item_source_sync.py, item_recipe_link_sync.py, item_service.py | Swap unique constraints on item_sources + item_recipe_links |
 | D ✓ | 0144 | gear_plan_service.py, gear_plan_auto_setup.py, gear_needs_routes.py, gear_plan_routes.py, item_source_sync.py | Convert excluded_item_ids from wow_items.id to blizzard_item_id |
-| E | 0145 + 0146 | models.py | DROP item_id FKs; DROP tier_token_attrs PK; DROP wow_items |
+| E ✓ | 0145 + 0146 | models.py, item_source_sync.py, gear_plan_service.py, gear_plan_auto_setup.py, admin_routes.py, admin_pages.py, reference_tables.html | DROP item_id FKs; DROP v_tier_piece_sources; DROP tier_token_attrs PK; DROP wow_items |
 
 ---
 
