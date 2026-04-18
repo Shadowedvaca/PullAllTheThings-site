@@ -26,6 +26,13 @@ from alembic import op
 
 def upgrade():
     # ── item_sources ──────────────────────────────────────────────────────────
+    # Drop the legacy v_tier_piece_sources view that still depends on item_id.
+    # This view was replaced by viz.tier_piece_sources in migration 0106;
+    # gear_needs_routes.py has read from viz.tier_piece_sources since prod-v0.20.2.
+    op.execute("""
+        DROP VIEW IF EXISTS guild_identity.v_tier_piece_sources
+    """)
+
     # Safety: mark any rows that somehow still have NULL blizzard_item_id as junk
     # so they are filtered out before we enforce NOT NULL.
     op.execute("""
