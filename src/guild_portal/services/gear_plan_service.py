@@ -178,10 +178,14 @@ _MAIN_TIER_SLOTS: frozenset[str] = frozenset({"head", "shoulder", "chest", "hand
 # therefore no item_sources rows.  They are found via name-suffix matching
 # against the current season's main tier anchor.
 
-# Map from plan slot → wow_items.slot_type for paired slots
+# Map from plan slot → enrichment.items slot_type (viz.slot_items).
+# Paired slots (ring_1/ring_2, trinket_1/trinket_2) share one slot_type in the view.
 _SLOT_TYPE_QUERY_MAP: dict[str, str] = {
-    "ring_2":    "ring_1",
-    "trinket_2": "trinket_1",
+    "ring_1":    "finger",
+    "ring_2":    "finger",
+    "trinket_1": "trinket",
+    "trinket_2": "trinket",
+    "main_hand": "one_hand",
 }
 
 # Wowhead tooltip HTML armor-type marker: <!--scstart4:{subclass_id}-->
