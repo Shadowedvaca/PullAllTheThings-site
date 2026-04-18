@@ -475,13 +475,15 @@ async def update_slot(
             )
             return True
 
-        # Resolve desired_item_id from wow_items if available
-        item_row = await conn.fetchrow(
-            "SELECT id, name FROM guild_identity.wow_items WHERE blizzard_item_id=$1",
-            blizzard_item_id,
-        )
-        desired_item_id = item_row["id"] if item_row else None
-        resolved_name = item_name or (item_row["name"] if item_row else None)
+        # Resolve name from enrichment.items if not provided by caller
+        if not item_name:
+            name_row = await conn.fetchrow(
+                "SELECT name FROM enrichment.items WHERE blizzard_item_id=$1",
+                blizzard_item_id,
+            )
+            item_name = name_row["name"] if name_row else None
+        resolved_name = item_name
+        desired_item_id = None  # column retained until Phase E drop; no longer populated
 
         # Determine is_locked
         locked_val: bool
@@ -563,11 +565,10 @@ async def populate_from_bis(
         # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
-            SELECT be.slot, wi.id AS item_id, be.priority,
+            SELECT be.slot, be.priority,
                    be.blizzard_item_id, i.name AS item_name
               FROM enrichment.bis_entries be
               LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
-              LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
              WHERE be.source_id = $1
                AND be.spec_id = $2
                AND (be.hero_talent_id = $3 OR be.hero_talent_id IS NULL)
@@ -588,7 +589,7 @@ async def populate_from_bis(
             # Skip excluded items, pick first non-excluded candidate
             excluded = excluded_by_slot.get(slot, set())
             chosen = next(
-                (r for r in candidates if r["item_id"] not in excluded), None
+                (r for r in candidates if r["blizzard_item_id"] not in excluded), None
             )
             if not chosen:
                 continue
@@ -597,14 +598,14 @@ async def populate_from_bis(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
                     (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, $3, $4, $5, FALSE)
+                VALUES ($1, $2, NULL, $3, $4, FALSE)
                 ON CONFLICT (plan_id, slot) DO UPDATE
                     SET desired_item_id = EXCLUDED.desired_item_id,
                         blizzard_item_id = EXCLUDED.blizzard_item_id,
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
-                plan_id, slot, chosen["item_id"], chosen["blizzard_item_id"], chosen["item_name"],
+                plan_id, slot, chosen["blizzard_item_id"], chosen["item_name"],
             )
             populated += 1
 
@@ -708,26 +709,24 @@ async def import_simc_goals(
 
             bid = simc_slot.blizzard_item_id
 
-            # Resolve wow_items row
-            item_row = await conn.fetchrow(
-                "SELECT id, name FROM guild_identity.wow_items WHERE blizzard_item_id=$1",
+            name_row = await conn.fetchrow(
+                "SELECT name FROM enrichment.items WHERE blizzard_item_id=$1",
                 bid,
             )
-            desired_item_id = item_row["id"] if item_row else None
-            item_name = item_row["name"] if item_row else f"Item {bid}"
+            item_name = (name_row["name"] if name_row else None) or f"Item {bid}"
 
             await conn.execute(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
                     (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, $3, $4, $5, FALSE)
+                VALUES ($1, $2, NULL, $3, $4, FALSE)
                 ON CONFLICT (plan_id, slot) DO UPDATE
                     SET desired_item_id = EXCLUDED.desired_item_id,
                         blizzard_item_id = EXCLUDED.blizzard_item_id,
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
-                plan_id, slot, desired_item_id, bid, item_name,
+                plan_id, slot, bid, item_name,
             )
             populated += 1
 
@@ -763,11 +762,8 @@ async def set_goals_from_equipped(
 
         equip_rows = await conn.fetch(
             """
-            SELECT ce.slot, ce.blizzard_item_id, ce.item_name,
-                   wi.id AS wow_item_id
+            SELECT ce.slot, ce.blizzard_item_id, ce.item_name
               FROM guild_identity.character_equipment ce
-              LEFT JOIN guild_identity.wow_items wi
-                     ON wi.blizzard_item_id = ce.blizzard_item_id
              WHERE ce.character_id = $1
             """,
             character_id,
@@ -789,20 +785,19 @@ async def set_goals_from_equipped(
                 continue
 
             item_name = row["item_name"] or f"Item {bid}"
-            desired_item_id = row["wow_item_id"]  # may be None if not yet in wow_items
 
             await conn.execute(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
                     (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, $3, $4, $5, FALSE)
+                VALUES ($1, $2, NULL, $3, $4, FALSE)
                 ON CONFLICT (plan_id, slot) DO UPDATE
                     SET desired_item_id = EXCLUDED.desired_item_id,
                         blizzard_item_id = EXCLUDED.blizzard_item_id,
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
-                plan_id, slot, desired_item_id, bid, item_name,
+                plan_id, slot, bid, item_name,
             )
             populated += 1
 
@@ -880,10 +875,10 @@ async def export_simc(
         slots_rows = await conn.fetch(
             """
             SELECT gps.slot, gps.blizzard_item_id,
-                   COALESCE(wi.name, gps.item_name) AS item_name,
+                   COALESCE(ei.name, gps.item_name) AS item_name,
                    ce.bonus_ids, ce.enchant_id, ce.gem_ids
               FROM guild_identity.gear_plan_slots gps
-              LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
+              LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = gps.blizzard_item_id
               LEFT JOIN guild_identity.character_equipment ce
                      ON ce.character_id = $2 AND ce.slot = gps.slot
              WHERE gps.plan_id = $1
@@ -947,10 +942,10 @@ async def export_equipped_simc(
         equip_rows = await conn.fetch(
             """
             SELECT ce.slot, ce.blizzard_item_id,
-                   COALESCE(wi.name, ce.item_name) AS item_name,
+                   COALESCE(ei.name, ce.item_name) AS item_name,
                    ce.bonus_ids, ce.enchant_id, ce.gem_ids
               FROM guild_identity.character_equipment ce
-              LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ce.blizzard_item_id
+              LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = ce.blizzard_item_id
              WHERE ce.character_id = $1
             """,
             character_id,
@@ -1018,10 +1013,9 @@ async def get_plan_detail(
             """
             SELECT ce.slot, ce.blizzard_item_id, ce.item_name, ce.item_level,
                    ce.quality_track, ce.enchant_id, ce.gem_ids, ce.bonus_ids,
-                   wi.icon_url
+                   ei.icon_url
               FROM guild_identity.character_equipment ce
-              LEFT JOIN guild_identity.wow_items wi
-                     ON wi.blizzard_item_id = ce.blizzard_item_id
+              LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = ce.blizzard_item_id
              WHERE ce.character_id = $1
             """,
             character_id,
@@ -1047,7 +1041,7 @@ async def get_plan_detail(
                     simc_item_rows = await conn.fetch(
                         """
                         SELECT blizzard_item_id, name, icon_url
-                          FROM guild_identity.wow_items
+                          FROM enrichment.items
                          WHERE blizzard_item_id = ANY($1::int[])
                         """,
                         simc_bids,
@@ -1170,12 +1164,12 @@ async def get_plan_detail(
         desired_rows = await conn.fetch(
             """
             SELECT gps.slot, gps.blizzard_item_id,
-                   COALESCE(wi.name, gps.item_name) AS item_name,
+                   COALESCE(ei.name, gps.item_name) AS item_name,
                    gps.is_locked,
                    gps.excluded_item_ids,
-                   wi.icon_url
+                   ei.icon_url
               FROM guild_identity.gear_plan_slots gps
-              LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
+              LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = gps.blizzard_item_id
              WHERE gps.plan_id = $1
             """,
             plan_id,
@@ -1194,32 +1188,27 @@ async def get_plan_detail(
             desired_by_slot[r["slot"]] = dict(r)
             excluded_ids_by_slot[r["slot"]] = list(r["excluded_item_ids"] or [])
 
-        # Batch-fetch info for all excluded wow_items so the drawer can show names/icons
-        all_excluded_ids: list[int] = [
-            id_ for ids in excluded_ids_by_slot.values() for id_ in ids
+        # Batch-fetch names/icons for excluded items so drawers can display them.
+        # excluded_item_ids now stores blizzard_item_id values (migrated in 0144).
+        all_excluded_bids: list[int] = [
+            bid for bids in excluded_ids_by_slot.values() for bid in bids
         ]
         excluded_item_info: dict[int, dict] = {}
-        if all_excluded_ids:
+        if all_excluded_bids:
             ex_rows = await conn.fetch(
                 """
-                SELECT id, blizzard_item_id, name, icon_url
-                  FROM guild_identity.wow_items
-                 WHERE id = ANY($1::int[])
+                SELECT blizzard_item_id, name, icon_url
+                  FROM enrichment.items
+                 WHERE blizzard_item_id = ANY($1::int[])
                 """,
-                all_excluded_ids,
+                all_excluded_bids,
             )
-            excluded_item_info = {r["id"]: dict(r) for r in ex_rows}
+            excluded_item_info = {r["blizzard_item_id"]: dict(r) for r in ex_rows}
 
-        # Build blizzard_item_id-based exclusion sets per slot for BIS filtering
-        # (viz.bis_recommendations has no internal item_id column)
-        excluded_bids_by_slot: dict[str, set[int]] = {}
-        for _sl, _ids in excluded_ids_by_slot.items():
-            _bids: set[int] = set()
-            for _id in _ids:
-                _info = excluded_item_info.get(_id)
-                if _info and _info.get("blizzard_item_id"):
-                    _bids.add(_info["blizzard_item_id"])
-            excluded_bids_by_slot[_sl] = _bids
+        # exclusions are already blizzard_item_ids — no translation needed
+        excluded_bids_by_slot: dict[str, set[int]] = {
+            _sl: set(_ids) for _sl, _ids in excluded_ids_by_slot.items()
+        }
 
         # BIS recommendations for this spec + hero_talent
         bis_by_slot: dict[str, list[dict]] = {}
@@ -1734,14 +1723,8 @@ async def get_available_items(
             CLASS_ARMOR_TYPE.get(class_name) if _SLOT_META[slot]["is_armor_slot"] else None
         )
 
-        # Resolve excluded internal IDs → blizzard_item_ids for viz query filtering
-        excluded_blizzard_ids: list[int] = []
-        if excluded_ids:
-            _excl_rows = await conn.fetch(
-                "SELECT blizzard_item_id FROM guild_identity.wow_items WHERE id = ANY($1::int[])",
-                excluded_ids,
-            )
-            excluded_blizzard_ids = [r["blizzard_item_id"] for r in _excl_rows]
+        # excluded_item_ids stores blizzard_item_ids directly (migrated in 0144)
+        excluded_blizzard_ids: list[int] = list(excluded_ids)
 
         # ── viz.slot_items: single query for all item categories (Phase E) ─────
         # The view's item_seasons JOIN already limits results to the active season,
@@ -1927,8 +1910,7 @@ async def add_exclusion(
 ) -> bool:
     """Append an item to the excluded_item_ids list for a gear plan slot.
 
-    Resolves blizzard_item_id → wow_items.id (internal FK).
-    Creates the slot row if it doesn't exist (desired_item_id=NULL).
+    Creates the slot row if it doesn't exist.
     No-ops if the item is already excluded.
     Returns True on success, False if plan not found.
     """
@@ -1944,16 +1926,7 @@ async def add_exclusion(
             return False
         plan_id = plan_row["id"]
 
-        # Resolve to internal wow_items.id
-        item_row = await conn.fetchrow(
-            "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-            blizzard_item_id,
-        )
-        if not item_row:
-            return False
-        item_id = item_row["id"]
-
-        # Upsert slot row and append item_id if not already present
+        # excluded_item_ids now stores blizzard_item_id values directly (migrated in 0144)
         await conn.execute(
             """
             INSERT INTO guild_identity.gear_plan_slots
@@ -1967,7 +1940,7 @@ async def add_exclusion(
                          ELSE array_append(gear_plan_slots.excluded_item_ids, $3)
                     END
             """,
-            plan_id, slot, item_id,
+            plan_id, slot, blizzard_item_id,
         )
         return True
 
@@ -1996,21 +1969,14 @@ async def remove_exclusion(
             return False
         plan_id = plan_row["id"]
 
-        item_row = await conn.fetchrow(
-            "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-            blizzard_item_id,
-        )
-        if not item_row:
-            return True  # Nothing to remove
-        item_id = item_row["id"]
-
+        # excluded_item_ids stores blizzard_item_id values directly (migrated in 0144)
         await conn.execute(
             """
             UPDATE guild_identity.gear_plan_slots
                SET excluded_item_ids = array_remove(excluded_item_ids, $3)
              WHERE plan_id = $1 AND slot = $2
             """,
-            plan_id, slot, item_id,
+            plan_id, slot, blizzard_item_id,
         )
         return True
 

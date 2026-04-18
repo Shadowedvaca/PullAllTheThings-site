@@ -777,8 +777,9 @@ async def search_items(
         rows = await conn.fetch(
             """
             SELECT blizzard_item_id, name, icon_url, slot_type
-              FROM guild_identity.wow_items
+              FROM enrichment.items
              WHERE name ILIKE $1
+               AND name != 'Unknown Item'
              ORDER BY name
              LIMIT 10
             """,

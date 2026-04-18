@@ -91,10 +91,9 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
             cl.id                                   AS class_id,
             cl.name                                 AS class_name,
             gps.slot,
-            wi_d.blizzard_item_id                   AS desired_bid,
-            wi_d.name                               AS desired_item_name,
-            wi_d.icon_url                           AS desired_icon_url,
-            wi_d.wowhead_tooltip_html               AS desired_tooltip,
+            gps.blizzard_item_id                    AS desired_bid,
+            COALESCE(ei_d.name, gps.item_name)      AS desired_item_name,
+            ei_d.icon_url                           AS desired_icon_url,
             ce.blizzard_item_id                     AS equipped_bid,
             ce.quality_track                        AS equipped_track,
             FALSE                                   AS is_offspec
@@ -106,8 +105,8 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
         LEFT JOIN ref.specializations sp ON sp.id = gp.spec_id
         LEFT JOIN ref.classes cl ON cl.id = sp.class_id
         JOIN guild_identity.gear_plan_slots gps
-            ON gps.plan_id = gp.id AND gps.desired_item_id IS NOT NULL
-        JOIN guild_identity.wow_items wi_d ON wi_d.id = gps.desired_item_id
+            ON gps.plan_id = gp.id AND gps.blizzard_item_id IS NOT NULL
+        LEFT JOIN enrichment.items ei_d ON ei_d.blizzard_item_id = gps.blizzard_item_id
         LEFT JOIN guild_identity.character_equipment ce
             ON ce.character_id = p.main_character_id AND ce.slot = gps.slot
         WHERE p.main_character_id IS NOT NULL
@@ -126,10 +125,9 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
                 cl.id                                   AS class_id,
                 cl.name                                 AS class_name,
                 gps.slot,
-                wi_d.blizzard_item_id                   AS desired_bid,
-                wi_d.name                               AS desired_item_name,
-                wi_d.icon_url                           AS desired_icon_url,
-                wi_d.wowhead_tooltip_html               AS desired_tooltip,
+                gps.blizzard_item_id                    AS desired_bid,
+                COALESCE(ei_d.name, gps.item_name)      AS desired_item_name,
+                ei_d.icon_url                           AS desired_icon_url,
                 ce.blizzard_item_id                     AS equipped_bid,
                 ce.quality_track                        AS equipped_track,
                 TRUE                                    AS is_offspec
@@ -141,8 +139,8 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
             LEFT JOIN ref.specializations sp ON sp.id = gp.spec_id
             LEFT JOIN ref.classes cl ON cl.id = sp.class_id
             JOIN guild_identity.gear_plan_slots gps
-                ON gps.plan_id = gp.id AND gps.desired_item_id IS NOT NULL
-            JOIN guild_identity.wow_items wi_d ON wi_d.id = gps.desired_item_id
+                ON gps.plan_id = gp.id AND gps.blizzard_item_id IS NOT NULL
+            LEFT JOIN enrichment.items ei_d ON ei_d.blizzard_item_id = gps.blizzard_item_id
             LEFT JOIN guild_identity.character_equipment ce
                 ON ce.character_id = p.offspec_character_id AND ce.slot = gps.slot
             WHERE p.offspec_character_id IS NOT NULL

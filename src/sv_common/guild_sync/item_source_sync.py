@@ -1404,12 +1404,12 @@ async def get_item_sources(
             SELECT s.id, s.instance_type, s.encounter_name, s.instance_name,
                    s.blizzard_encounter_id, s.blizzard_instance_id,
                    s.is_suspected_junk,
-                   wi.blizzard_item_id, wi.name AS item_name,
-                   wi.slot_type, wi.icon_url
+                   s.blizzard_item_id, ei.name AS item_name,
+                   ei.slot_type, ei.icon_url
               FROM guild_identity.item_sources s
-              JOIN guild_identity.wow_items wi ON wi.id = s.item_id
+              LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = s.blizzard_item_id
              WHERE {where}
-             ORDER BY s.instance_name, s.encounter_name, wi.slot_type, wi.name
+             ORDER BY s.instance_name, s.encounter_name, ei.slot_type, ei.name
              LIMIT ${len(args)}
             """,
             *args,
