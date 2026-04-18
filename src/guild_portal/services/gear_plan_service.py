@@ -483,7 +483,6 @@ async def update_slot(
             )
             item_name = name_row["name"] if name_row else None
         resolved_name = item_name
-        desired_item_id = None  # column retained until Phase E drop; no longer populated
 
         # Determine is_locked
         locked_val: bool
@@ -500,15 +499,14 @@ async def update_slot(
         await conn.execute(
             """
             INSERT INTO guild_identity.gear_plan_slots
-                (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-            VALUES ($1, $2, $3, $4, $5, $6)
+                (plan_id, slot, blizzard_item_id, item_name, is_locked)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (plan_id, slot) DO UPDATE
-                SET desired_item_id = EXCLUDED.desired_item_id,
-                    blizzard_item_id = EXCLUDED.blizzard_item_id,
+                SET blizzard_item_id = EXCLUDED.blizzard_item_id,
                     item_name        = EXCLUDED.item_name,
                     is_locked        = EXCLUDED.is_locked
             """,
-            plan_id, slot, desired_item_id, blizzard_item_id, resolved_name, locked_val,
+            plan_id, slot, blizzard_item_id, resolved_name, locked_val,
         )
         return True
 
@@ -597,11 +595,10 @@ async def populate_from_bis(
             await conn.execute(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
-                    (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, NULL, $3, $4, FALSE)
+                    (plan_id, slot, blizzard_item_id, item_name, is_locked)
+                VALUES ($1, $2, $3, $4, FALSE)
                 ON CONFLICT (plan_id, slot) DO UPDATE
-                    SET desired_item_id = EXCLUDED.desired_item_id,
-                        blizzard_item_id = EXCLUDED.blizzard_item_id,
+                    SET blizzard_item_id = EXCLUDED.blizzard_item_id,
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
@@ -718,11 +715,10 @@ async def import_simc_goals(
             await conn.execute(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
-                    (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, NULL, $3, $4, FALSE)
+                    (plan_id, slot, blizzard_item_id, item_name, is_locked)
+                VALUES ($1, $2, $3, $4, FALSE)
                 ON CONFLICT (plan_id, slot) DO UPDATE
-                    SET desired_item_id = EXCLUDED.desired_item_id,
-                        blizzard_item_id = EXCLUDED.blizzard_item_id,
+                    SET blizzard_item_id = EXCLUDED.blizzard_item_id,
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
@@ -789,11 +785,10 @@ async def set_goals_from_equipped(
             await conn.execute(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
-                    (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, NULL, $3, $4, FALSE)
+                    (plan_id, slot, blizzard_item_id, item_name, is_locked)
+                VALUES ($1, $2, $3, $4, FALSE)
                 ON CONFLICT (plan_id, slot) DO UPDATE
-                    SET desired_item_id = EXCLUDED.desired_item_id,
-                        blizzard_item_id = EXCLUDED.blizzard_item_id,
+                    SET blizzard_item_id = EXCLUDED.blizzard_item_id,
                         item_name        = EXCLUDED.item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
@@ -1930,9 +1925,8 @@ async def add_exclusion(
         await conn.execute(
             """
             INSERT INTO guild_identity.gear_plan_slots
-                (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked,
-                 excluded_item_ids)
-            VALUES ($1, $2, NULL, NULL, NULL, FALSE, ARRAY[$3::int])
+                (plan_id, slot, blizzard_item_id, item_name, is_locked, excluded_item_ids)
+            VALUES ($1, $2, NULL, NULL, FALSE, ARRAY[$3::int])
             ON CONFLICT (plan_id, slot) DO UPDATE
                 SET excluded_item_ids =
                     CASE WHEN $3 = ANY(gear_plan_slots.excluded_item_ids)

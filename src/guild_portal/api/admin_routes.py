@@ -1295,9 +1295,9 @@ class TierTokenAttrsUpdate(BaseModel):
     override_notes: Optional[str] = None
 
 
-@router.patch("/tier-token-attrs/{token_item_id}")
+@router.patch("/tier-token-attrs/{blizzard_item_id}")
 async def update_tier_token_attrs(
-    token_item_id: int,
+    blizzard_item_id: int,
     body: TierTokenAttrsUpdate,
     db: AsyncSession = Depends(get_db),
 ):
@@ -1309,7 +1309,7 @@ async def update_tier_token_attrs(
     from sv_common.db.models import TierTokenAttrs
 
     result = await db.execute(
-        select(TierTokenAttrs).where(TierTokenAttrs.token_item_id == token_item_id)
+        select(TierTokenAttrs).where(TierTokenAttrs.blizzard_item_id == blizzard_item_id)
     )
     attrs = result.scalar_one_or_none()
     if not attrs:
@@ -1327,7 +1327,7 @@ async def update_tier_token_attrs(
     return {
         "ok": True,
         "data": {
-            "token_item_id": attrs.token_item_id,
+            "blizzard_item_id": attrs.blizzard_item_id,
             "target_slot": attrs.target_slot,
             "armor_type": attrs.armor_type,
             "override_notes": attrs.override_notes,

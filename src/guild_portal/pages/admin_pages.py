@@ -1278,7 +1278,7 @@ async def admin_reference_tables(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from sv_common.db.models import CharacterRaidProgress, GuideSite, ItemSource, Role, TierTokenAttrs, WowClass, WowItem, Specialization
+    from sv_common.db.models import CharacterRaidProgress, GuideSite, ItemSource, Role, TierTokenAttrs, WowClass, Specialization
     from sv_common.identity import ranks as rank_service
     from guild_portal.services import season_service
     from sqlalchemy.orm import selectinload
@@ -1343,10 +1343,20 @@ async def admin_reference_tables(
     # Tier token attrs (Phase 1D.6)
     tier_tokens_result = await db.execute(
         select(TierTokenAttrs)
-        .options(selectinload(TierTokenAttrs.item))
         .order_by(TierTokenAttrs.target_slot, TierTokenAttrs.armor_type)
     )
     tier_tokens = list(tier_tokens_result.scalars().all())
+
+    # Fetch item names from enrichment.items for display in the table
+    if tier_tokens:
+        _bids = [tok.blizzard_item_id for tok in tier_tokens]
+        _bid_csv = ", ".join(str(b) for b in _bids)
+        _name_result = await db.execute(
+            text(f"SELECT blizzard_item_id, name FROM enrichment.items WHERE blizzard_item_id IN ({_bid_csv})")
+        )
+        tier_token_names: dict[int, str] = {row[0]: row[1] for row in _name_result}
+    else:
+        tier_token_names = {}
 
     # class_id → name map for displaying eligible_class_ids
     class_id_to_name: dict[int, str] = {c.id: c.name for c in classes}
@@ -1363,6 +1373,7 @@ async def admin_reference_tables(
         "all_assigned_raid_ids": all_assigned_raid_ids,
         "known_instances": known_instances,
         "tier_tokens": tier_tokens,
+        "tier_token_names": tier_token_names,
         "class_id_to_name": class_id_to_name,
     })
     return templates.TemplateResponse("admin/reference_tables.html", ctx)

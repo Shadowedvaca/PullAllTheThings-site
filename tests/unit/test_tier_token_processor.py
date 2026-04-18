@@ -250,7 +250,6 @@ class TestProcessTierTokens:
     async def test_processes_tier_token(self):
         """A token item gets upserted into tier_token_attrs."""
         token_row = {
-            "wow_item_id": 42,
             "blizzard_item_id": 12345,
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": self._TOKEN_HTML,
@@ -280,7 +279,6 @@ class TestProcessTierTokens:
     async def test_skips_manual_override(self):
         """Tokens with is_manual_override=TRUE are not reprocessed."""
         token_row = {
-            "wow_item_id": 42,
             "blizzard_item_id": 12345,
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": self._TOKEN_HTML,
@@ -310,7 +308,6 @@ class TestProcessTierTokens:
     async def test_ignores_non_token_items(self):
         """Items with slot_type='other' but no tier token text are ignored."""
         non_token_row = {
-            "wow_item_id": 99,
             "blizzard_item_id": 99999,
             "name": "Some Other Item",
             "wowhead_tooltip_html": self._NON_TOKEN_HTML,
@@ -371,7 +368,7 @@ class TestProcessTierTokens:
         fetch_sql = conn.fetch.call_args_list[0].args[0]
         assert "enrichment.items" in fetch_sql
         assert "landing.wowhead_tooltips" in fetch_sql
-        assert "wow_item_id" in fetch_sql  # still fetched for token_item_id dual-write
+        assert "guild_identity.wow_items" not in fetch_sql  # Phase E: wow_items fully retired
 
     @pytest.mark.asyncio
     async def test_slot_and_armor_type_parsed_correctly(self):
@@ -386,7 +383,6 @@ class TestProcessTierTokens:
             '</div>'
         )
         token_row = {
-            "wow_item_id": 10,
             "blizzard_item_id": 11111,
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": plate_chest_html,
@@ -414,7 +410,8 @@ class TestProcessTierTokens:
         ]
         assert len(upsert_calls) == 1
         call_args = upsert_calls[0].args
-        # Args: (sql, item_id, blizzard_item_id, target_slot, armor_type, class_ids, now)
-        assert call_args[3] == "chest"   # target_slot
-        assert call_args[4] == "plate"   # armor_type
-        assert set(call_args[5]) == {1, 2, 6}  # eligible_class_ids
+        # Args: (sql, blizzard_item_id, target_slot, armor_type, class_ids, now)
+        assert call_args[1] == 11111     # blizzard_item_id (now the PK)
+        assert call_args[2] == "chest"   # target_slot
+        assert call_args[3] == "plate"   # armor_type
+        assert set(call_args[4]) == {1, 2, 6}  # eligible_class_ids

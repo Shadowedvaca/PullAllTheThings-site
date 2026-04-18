@@ -111,8 +111,8 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
                     await conn.execute(
                         """
                         INSERT INTO guild_identity.gear_plan_slots
-                            (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                        VALUES ($1, $2, NULL, $3, $4, FALSE)
+                            (plan_id, slot, blizzard_item_id, item_name, is_locked)
+                        VALUES ($1, $2, $3, $4, FALSE)
                         ON CONFLICT (plan_id, slot) DO NOTHING
                         """,
                         plan_id, row["slot"],

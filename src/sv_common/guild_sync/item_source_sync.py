@@ -1274,16 +1274,13 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
         # ── 1. Find candidate tier token items ────────────────────────────
         # Read from enrichment.items + landing.wowhead_tooltips.
-        # JOIN wow_items to get token_item_id (still the PK on tier_token_attrs
-        # until Phase E drops the old FK column).
         candidates = await conn.fetch(
             """
             SELECT DISTINCT ON (ei.blizzard_item_id)
-                   wi.id AS wow_item_id, ei.blizzard_item_id, ei.name,
+                   ei.blizzard_item_id, ei.name,
                    wt.payload->>'tooltip' AS wowhead_tooltip_html
               FROM enrichment.items ei
               JOIN landing.wowhead_tooltips wt ON wt.blizzard_item_id = ei.blizzard_item_id
-              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
              WHERE ei.slot_type = 'other'
              ORDER BY ei.blizzard_item_id, wt.id DESC
             """
@@ -1299,24 +1296,24 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
             if not _is_tier_token(html):
                 continue
 
-            item_id = row["wow_item_id"]
-            token_ids_found.append(item_id)
+            bid = row["blizzard_item_id"]
+            token_ids_found.append(bid)
 
             # Check for manual override — never clobber admin edits
             existing = await conn.fetchrow(
-                "SELECT is_manual_override FROM guild_identity.tier_token_attrs WHERE token_item_id = $1",
-                item_id,
+                "SELECT is_manual_override FROM guild_identity.tier_token_attrs WHERE blizzard_item_id = $1",
+                bid,
             )
             if existing and existing["is_manual_override"]:
                 tokens_skipped_override += 1
                 logger.info(
                     "process_tier_tokens: skipping item %d (%s) — manual override set",
-                    row["blizzard_item_id"], row["name"],
+                    bid, row["name"],
                 )
                 # Still update last_processed timestamp so the admin can see it was checked
                 await conn.execute(
-                    "UPDATE guild_identity.tier_token_attrs SET last_processed = $1 WHERE token_item_id = $2",
-                    now, item_id,
+                    "UPDATE guild_identity.tier_token_attrs SET last_processed = $1 WHERE blizzard_item_id = $2",
+                    now, bid,
                 )
                 continue
 
@@ -1327,24 +1324,23 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
             await conn.execute(
                 """
                 INSERT INTO guild_identity.tier_token_attrs
-                       (token_item_id, blizzard_item_id, target_slot, armor_type,
+                       (blizzard_item_id, target_slot, armor_type,
                         eligible_class_ids, is_auto_detected, is_manual_override,
                         last_processed)
-                VALUES ($1, $2, $3, $4, $5, TRUE, FALSE, $6)
-                ON CONFLICT (token_item_id) DO UPDATE SET
-                    blizzard_item_id   = EXCLUDED.blizzard_item_id,
+                VALUES ($1, $2, $3, $4, TRUE, FALSE, $5)
+                ON CONFLICT (blizzard_item_id) DO UPDATE SET
                     target_slot        = EXCLUDED.target_slot,
                     armor_type         = EXCLUDED.armor_type,
                     eligible_class_ids = EXCLUDED.eligible_class_ids,
                     is_auto_detected   = TRUE,
                     last_processed     = EXCLUDED.last_processed
                 """,
-                item_id, row["blizzard_item_id"], target_slot, armor_type, class_ids, now,
+                bid, target_slot, armor_type, class_ids, now,
             )
             tokens_processed += 1
             logger.info(
                 "process_tier_tokens: upserted item %d (%s) slot=%s armor=%s classes=%s",
-                row["blizzard_item_id"], row["name"], target_slot, armor_type, class_ids,
+                bid, row["name"], target_slot, armor_type, class_ids,
             )
 
     logger.info(
