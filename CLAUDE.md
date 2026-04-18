@@ -259,10 +259,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0140 (on prod); **0143 on dev** (feature branch)
+- **Last migration:** 0140 (on prod); **0144 on dev** (feature branch)
 - **Last prod tag:** `prod-v0.20.2`
 - **Active branch:** `feature/gear-plan-1.0-wow_items-fix`
-- **In progress:** `wow_items` retirement — plan at `reference/gear-plan-1.0-wow_items-fix.md`. Phases A–C (migrations 0141–0143) deployed to dev. Phase C stopped all Python writes to `wow_items`; swapped unique constraints on `item_sources` and `item_recipe_links` to `blizzard_item_id`-based; deleted dead `backfill_armor_type_from_tooltip()`. Next: Phase D (stop all reads from `wow_items`).
+- **In progress:** `wow_items` retirement — plan at `reference/gear-plan-1.0-wow_items-fix.md`. Phases A–D (migrations 0141–0144) deployed to dev. Phase D stopped all Python reads from `wow_items`; converted `gear_plan_slots.excluded_item_ids` from `wow_items.id` to `blizzard_item_id` values (migration 0144); all gear plan service/routes/sync reads now target `enrichment.items`. One intentional exception: `process_tier_tokens()` still JOINs `wow_items` for `tier_token_attrs.token_item_id` PK — removed in Phase E. Next: Phase E (drop FK columns + drop `wow_items`).
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
