@@ -173,17 +173,16 @@ async def _fetch_sources_for_instance_type(
 
     src_rows = await conn.fetch(
         """
-        SELECT wi.blizzard_item_id,
+        SELECT is2.blizzard_item_id,
                is2.instance_type,
                is2.encounter_name,
                is2.instance_name,
                is2.blizzard_encounter_id,
                is2.blizzard_instance_id
-          FROM guild_identity.item_sources is2
-          JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
-         WHERE wi.blizzard_item_id = ANY($1::int[])
+          FROM enrichment.item_sources is2
+         WHERE is2.blizzard_item_id = ANY($1::int[])
            AND is2.instance_type = $2
-           AND NOT is2.is_suspected_junk
+           AND NOT is2.is_junk
         """,
         desired_bids,
         instance_type,
@@ -210,7 +209,7 @@ async def _fetch_sources_for_instance_type(
                        v.instance_name,
                        v.blizzard_encounter_id,
                        v.blizzard_instance_id
-                  FROM guild_identity.v_tier_piece_sources v
+                  FROM viz.tier_piece_sources v
                  WHERE v.tier_piece_blizzard_id = ANY($1::int[])
                 """,
                 desired_bids,
@@ -235,7 +234,7 @@ async def _fetch_sources_for_instance_type(
                 ):
                     sources.setdefault(bid, []).append(entry)
         except Exception as exc:
-            logger.warning("v_tier_piece_sources lookup failed: %s", exc)
+            logger.warning("viz.tier_piece_sources lookup failed: %s", exc)
 
     return sources
 
