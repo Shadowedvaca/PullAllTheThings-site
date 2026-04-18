@@ -259,10 +259,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0140 (on prod); **0142 on dev** (feature branch)
+- **Last migration:** 0140 (on prod); **0143 on dev** (feature branch)
 - **Last prod tag:** `prod-v0.20.2`
 - **Active branch:** `feature/gear-plan-1.0-wow_items-fix`
-- **In progress:** `wow_items` retirement — plan at `reference/gear-plan-1.0-wow_items-fix.md`. Phase A+B (migrations 0141–0142) deployed to dev. Phase B backfilled `landing.wowhead_tooltips` from `wow_items` (6,976 rows, 0 uncovered). Migrated all tooltip reads in `item_source_sync.py` off `wow_items` onto `enrichment.items` + `landing.wowhead_tooltips`. Dual-write added to `item_sources` and `tier_token_attrs` INSERTs. Next: Phase C.
+- **In progress:** `wow_items` retirement — plan at `reference/gear-plan-1.0-wow_items-fix.md`. Phases A–C (migrations 0141–0143) deployed to dev. Phase C stopped all Python writes to `wow_items`; swapped unique constraints on `item_sources` and `item_recipe_links` to `blizzard_item_id`-based; deleted dead `backfill_armor_type_from_tooltip()`. Next: Phase D (stop all reads from `wow_items`).
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.

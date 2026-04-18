@@ -1,8 +1,8 @@
 # Removing `guild_identity.wow_items` — Phased Retirement Plan
 
-> **Status:** Phase B complete — deployed to dev, on branch `feature/gear-plan-1.0-wow_items-fix`
+> **Status:** Phase C complete — deployed to dev, on branch `feature/gear-plan-1.0-wow_items-fix`
 > **Branch:** `feature/gear-plan-1.0-wow_items-fix` (off `main` after `prod-v0.20.2`)
-> **Migration sequence:** 0141 → 0145 (0141 = Phase A, 0142 = Phase B)
+> **Migration sequence:** 0141 → 0145 (0141 = Phase A, 0142 = Phase B, 0143 = Phase C)
 > **Last updated:** 2026-04-18
 > **Rollback point:** `patt_db_pre_v020_20260417_213540.dump` on prod server at `/opt/guild-portal/backups/`
 
@@ -478,7 +478,7 @@ SELECT instance_type, is_suspected_junk, COUNT(*)
 
 ---
 
-### Phase C — Migration 0142: Rewrite write paths — stop writing to `wow_items`
+### Phase C — Migration 0143: Rewrite write paths — stop writing to `wow_items` ✓ COMPLETE (dev)
 
 **Goal:** Stop all Python code from INSERTing or UPDATEing `wow_items`.
 Instead, write directly to `landing.blizzard_items` (for Blizzard API data)
@@ -710,7 +710,7 @@ High — this is the most invasive phase. Key risks:
 
 ---
 
-### Phase D — Migration 0143: Rewrite all reads from `wow_items` to use `enrichment.items`
+### Phase D — Migration 0144: Rewrite all reads from `wow_items` to use `enrichment.items`
 
 **Goal:** Eliminate all SELECT queries against `guild_identity.wow_items` from
 Python code. After this phase, `wow_items` is dead weight in the DB — no code
@@ -803,7 +803,7 @@ Run this after Phase D code changes and verify zero results.
 
 #### Files changed
 
-- `alembic/versions/0143_audit_reads_prep.py` (minimal migration if needed —
+- `alembic/versions/0144_audit_reads_prep.py` (minimal migration if needed —
   may just be a code-only phase)
 - `src/sv_common/guild_sync/equipment_sync.py`
 - `src/sv_common/guild_sync/item_source_sync.py`
@@ -819,7 +819,7 @@ the `id` column. Trace all call sites before merging.
 
 ---
 
-### Phase E — Migration 0144/0145: Drop integer id FKs; drop `wow_items`
+### Phase E — Migration 0145/0146: Drop integer id FKs; drop `wow_items`
 
 **Goal:** Physically remove the old FK columns, the `WowItem` ORM model, and
 finally the `guild_identity.wow_items` table itself.
@@ -899,8 +899,8 @@ ORM models:
 
 #### Files changed
 
-- `alembic/versions/0144_drop_fk_columns.py`
-- `alembic/versions/0145_drop_wow_items.py`
+- `alembic/versions/0145_drop_fk_columns.py`
+- `alembic/versions/0146_drop_wow_items.py`
 - `src/sv_common/db/models.py` — remove `WowItem` and all FK references
 
 #### Risk
@@ -918,9 +918,9 @@ concern about locking on a large table.
 |-------|-----------|--------------|-------------|
 | A ✓ | 0141 | None | ADD COLUMN blizzard_item_id + backfill (item_sources, tier_token_attrs) |
 | B ✓ | 0142 | item_source_sync.py | Backfill landing.wowhead_tooltips; migrate tooltip reads off wow_items |
-| C | 0142 | equipment_sync.py, item_source_sync.py, item_recipe_link_sync.py, item_service.py | Swap unique constraints on item_sources + item_recipe_links |
-| D | 0143 | All files with SELECT … wow_items | Minimal or none |
-| E | 0144 + 0145 | models.py | DROP item_id FKs; DROP tier_token_attrs PK; DROP wow_items |
+| C ✓ | 0143 | equipment_sync.py, item_source_sync.py, item_recipe_link_sync.py, item_service.py | Swap unique constraints on item_sources + item_recipe_links |
+| D | 0144 | All files with SELECT … wow_items | Minimal or none |
+| E | 0145 + 0146 | models.py | DROP item_id FKs; DROP tier_token_attrs PK; DROP wow_items |
 
 ---
 
