@@ -45,15 +45,14 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
     Returns a stats dict: {scanned, linked, updated, skipped}.
     """
     async with pool.acquire() as conn:
-        # Scan all items with a name — the name match against recipes is
-        # specific enough to avoid false positives, and we can't rely on
-        # the Wowhead "Random Stat" tooltip marker for new expansion items
-        # where Wowhead has not yet indexed the tooltip HTML.
+        # Scan all enriched items with a name — enrichment.items is rebuilt
+        # from landing.blizzard_items + Wowhead tooltips and is the canonical
+        # item store after Phase C of the wow_items retirement.
         craftable_rows = await conn.fetch(
             """
-            SELECT id, blizzard_item_id, name
-              FROM guild_identity.wow_items
-             WHERE name IS NOT NULL AND name != ''
+            SELECT blizzard_item_id, name
+              FROM enrichment.items
+             WHERE name IS NOT NULL AND name != 'Unknown Item'
             """
         )
 
@@ -86,7 +85,6 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
 
     async with pool.acquire() as conn:
         for item in craftable_rows:
-            item_id = item["id"]
             item_blizzard_id = item["blizzard_item_id"]
             item_name_lower = item["name"].lower()
 
@@ -109,25 +107,21 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
                 result = await conn.execute(
                     """
                     INSERT INTO guild_identity.item_recipe_links
-                        (item_id, blizzard_item_id, recipe_id, confidence, match_type)
-                    VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (item_id, recipe_id) DO UPDATE
-                        SET confidence       = GREATEST(
+                        (blizzard_item_id, recipe_id, confidence, match_type)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (blizzard_item_id, recipe_id) DO UPDATE
+                        SET confidence  = GREATEST(
                                 guild_identity.item_recipe_links.confidence,
                                 EXCLUDED.confidence
                             ),
-                            match_type       = CASE
+                            match_type  = CASE
                                 WHEN EXCLUDED.confidence
                                      > guild_identity.item_recipe_links.confidence
                                 THEN EXCLUDED.match_type
                                 ELSE guild_identity.item_recipe_links.match_type
-                            END,
-                            blizzard_item_id = COALESCE(
-                                guild_identity.item_recipe_links.blizzard_item_id,
-                                EXCLUDED.blizzard_item_id
-                            )
+                            END
                     """,
-                    item_id, item_blizzard_id, recipe_id, confidence, match_type,
+                    item_blizzard_id, recipe_id, confidence, match_type,
                 )
                 # asyncpg returns "INSERT 0 1" or "UPDATE 1"
                 if result.startswith("INSERT"):
@@ -214,36 +208,37 @@ async def _stub_and_link(
     recipe_db_id: int,
     match_type: str,
 ) -> tuple[bool, bool]:
-    """Stub wow_items (if new) and insert item_recipe_links (if new).
+    """Stub item in landing.blizzard_items (if new) and insert item_recipe_links (if new).
 
     Returns (stubbed: bool, linked: bool).
     """
+    import json as _json
+
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO guild_identity.wow_items
-                (blizzard_item_id, name, slot_type, armor_type)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (blizzard_item_id) DO UPDATE
-                SET armor_type = COALESCE(
-                    guild_identity.wow_items.armor_type,
-                    EXCLUDED.armor_type
-                )
-            RETURNING id, (xmax = 0) AS inserted
-            """,
-            blizzard_item_id, item_name, slot_type, armor_type,
+        existing = await conn.fetchval(
+            "SELECT 1 FROM landing.blizzard_items WHERE blizzard_item_id = $1 LIMIT 1",
+            blizzard_item_id,
         )
-        stubbed = bool(row["inserted"])
-        item_db_id = row["id"]
+        stubbed = False
+        if not existing:
+            await conn.execute(
+                """
+                INSERT INTO landing.blizzard_items (blizzard_item_id, payload)
+                VALUES ($1, $2::jsonb)
+                """,
+                blizzard_item_id,
+                _json.dumps({"name": item_name}),
+            )
+            stubbed = True
 
         result = await conn.execute(
             """
             INSERT INTO guild_identity.item_recipe_links
-                (item_id, blizzard_item_id, recipe_id, confidence, match_type)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (item_id, recipe_id) DO NOTHING
+                (blizzard_item_id, recipe_id, confidence, match_type)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (blizzard_item_id, recipe_id) DO NOTHING
             """,
-            item_db_id, blizzard_item_id, recipe_db_id, 100, match_type,
+            blizzard_item_id, recipe_db_id, 100, match_type,
         )
         linked = result == "INSERT 0 1"
 
@@ -279,10 +274,10 @@ async def _get_unlinked_recipes(
                    OR EXISTS (
                        SELECT 1
                          FROM guild_identity.item_recipe_links irl
-                         JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
+                         JOIN enrichment.items ei ON ei.blizzard_item_id = irl.blizzard_item_id
                         WHERE irl.recipe_id = rec.id
-                          AND wi.armor_type IS NULL
-                          AND wi.slot_type NOT IN (
+                          AND ei.armor_type IS NULL
+                          AND ei.slot_type NOT IN (
                               'neck', 'ring_1', 'trinket_1', 'main_hand', 'off_hand', 'back'
                           )
                    )
@@ -330,42 +325,24 @@ async def discover_and_link_crafted_items(
     # ── Phase 2a: character_equipment name match ───────────────────────────────
     logger.info("discover_and_link_crafted_items: phase 2a — equipment match (%s)", expansion_name)
     async with pool.acquire() as conn:
-        # Stub any wow_items not yet in the table
-        stub_result = await conn.execute(
-            """
-            INSERT INTO guild_identity.wow_items (blizzard_item_id, name, slot_type)
-            SELECT DISTINCT ON (ce.blizzard_item_id) ce.blizzard_item_id, ce.item_name, ce.slot
-              FROM guild_identity.character_equipment ce
-              JOIN guild_identity.recipes rec ON LOWER(rec.name) = LOWER(ce.item_name)
-              JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
-             WHERE pt.expansion_name = $1
-               AND ce.blizzard_item_id IS NOT NULL
-               AND NOT EXISTS (
-                   SELECT 1 FROM guild_identity.item_recipe_links irl
-                    WHERE irl.recipe_id = rec.id
-               )
-            ON CONFLICT (blizzard_item_id) DO NOTHING
-            """,
-            expansion_name,
-        )
-        phase_2a_stubbed = int(stub_result.split()[-1])
-
-        # Create links for all matching recipe↔item pairs
+        # Create links for all matching recipe↔item pairs using blizzard_item_id directly.
+        # No wow_items stub needed — landing.blizzard_items will be populated by
+        # the next Blizzard sync / Enrich Items run.
         link_result = await conn.execute(
             """
             INSERT INTO guild_identity.item_recipe_links
-                (item_id, blizzard_item_id, recipe_id, confidence, match_type)
-            SELECT DISTINCT wi.id, ce.blizzard_item_id, rec.id, 100, 'equipment_name_match'
+                (blizzard_item_id, recipe_id, confidence, match_type)
+            SELECT DISTINCT ce.blizzard_item_id, rec.id, 100, 'equipment_name_match'
               FROM guild_identity.character_equipment ce
               JOIN guild_identity.recipes rec ON LOWER(rec.name) = LOWER(ce.item_name)
               JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
-              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ce.blizzard_item_id
              WHERE pt.expansion_name = $1
                AND ce.blizzard_item_id IS NOT NULL
-            ON CONFLICT (item_id, recipe_id) DO NOTHING
+            ON CONFLICT (blizzard_item_id, recipe_id) DO NOTHING
             """,
             expansion_name,
         )
+        phase_2a_stubbed = 0  # no longer stubs wow_items rows
         phase_2a_linked = int(link_result.split()[-1])
 
     logger.info(

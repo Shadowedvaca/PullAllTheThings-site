@@ -277,45 +277,20 @@ async def _sync_encounter(
 
             item_name = item_obj.get("name", "")
 
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.wow_items
-                       (blizzard_item_id, name, slot_type)
-                VALUES ($1, $2, 'other')
-                ON CONFLICT (blizzard_item_id) DO UPDATE SET
-                    name = CASE
-                        WHEN guild_identity.wow_items.name = '' OR
-                             guild_identity.wow_items.name IS NULL
-                        THEN EXCLUDED.name
-                        ELSE guild_identity.wow_items.name
-                    END
-                """,
-                blizzard_item_id,
-                item_name,
-            )
-
-            row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                blizzard_item_id,
-            )
-            if row is None:
-                continue
-            wow_item_id = row["id"]
-
             try:
                 await conn.execute(
                     """
                     INSERT INTO guild_identity.item_sources
-                           (item_id, instance_type, encounter_name, instance_name,
+                           (blizzard_item_id, instance_type, encounter_name, instance_name,
                             blizzard_encounter_id, blizzard_instance_id)
                     VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (item_id, instance_type, encounter_name)
+                    ON CONFLICT (blizzard_item_id, instance_type, encounter_name)
                     DO UPDATE SET
                         instance_name         = EXCLUDED.instance_name,
                         blizzard_encounter_id = EXCLUDED.blizzard_encounter_id,
                         blizzard_instance_id  = EXCLUDED.blizzard_instance_id
                     """,
-                    wow_item_id,
+                    blizzard_item_id,
                     instance_type,
                     encounter_name,
                     instance_name,
@@ -447,39 +422,43 @@ async def sync_tier_set_completions(
                 if not blizzard_item_id:
                     continue
 
-                # Check if already in wow_items
+                # Skip if already in enrichment.items (rebuilt from landing).
                 existing = await conn.fetchval(
-                    "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
+                    "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
                     blizzard_item_id,
                 )
                 if existing:
-                    continue  # Already present — nothing to do
+                    continue
 
-                # Stub the row; Enrich Items will fill name/slot_type/tooltip
+                # Stub into landing.blizzard_items so sp_rebuild_items picks it up.
+                # Enrich Items will fetch full Blizzard/Wowhead data on next run.
                 item_name = item_entry.get("name", "")
-                try:
-                    await conn.execute(
-                        """
-                        INSERT INTO guild_identity.wow_items
-                               (blizzard_item_id, name, slot_type)
-                        VALUES ($1, $2, 'other')
-                        ON CONFLICT (blizzard_item_id) DO NOTHING
-                        """,
-                        blizzard_item_id,
-                        item_name,
-                    )
-                    stubbed += 1
-                    logger.info(
-                        "sync_tier_set_completions: stubbed item %d (%s) from set %d",
-                        blizzard_item_id, item_name, set_id,
-                    )
-                except Exception as exc:
-                    msg = (
-                        f"sync_tier_set_completions: DB error stubbing item "
-                        f"{blizzard_item_id}: {exc}"
-                    )
-                    logger.error(msg)
-                    errors.append(msg)
+                already_landing = await conn.fetchval(
+                    "SELECT 1 FROM landing.blizzard_items WHERE blizzard_item_id = $1 LIMIT 1",
+                    blizzard_item_id,
+                )
+                if not already_landing:
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO landing.blizzard_items (blizzard_item_id, payload)
+                            VALUES ($1, $2::jsonb)
+                            """,
+                            blizzard_item_id,
+                            json.dumps({"name": item_name}),
+                        )
+                        stubbed += 1
+                        logger.info(
+                            "sync_tier_set_completions: stubbed item %d (%s) from set %d",
+                            blizzard_item_id, item_name, set_id,
+                        )
+                    except Exception as exc:
+                        msg = (
+                            f"sync_tier_set_completions: DB error stubbing item "
+                            f"{blizzard_item_id}: {exc}"
+                        )
+                        logger.error(msg)
+                        errors.append(msg)
 
     logger.info(
         "sync_tier_set_completions: stubbed %d new items across %d sets",
@@ -788,11 +767,10 @@ async def enrich_catalyst_tier_items(
         all_tier_slots = list(_TIER_SLOTS | _CATALYST_SLOTS)
         tier_items = await conn.fetch(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, ei.blizzard_item_id, ei.name,
+            SELECT DISTINCT ei.blizzard_item_id, ei.name,
                    COALESCE(NULLIF(ei.slot_type, 'other'), be.slot) AS eff_slot
               FROM enrichment.bis_entries be
               JOIN enrichment.items ei ON ei.blizzard_item_id = be.blizzard_item_id
-              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
              WHERE be.slot = ANY($1::text[])
                -- Exclude catalyst items (quality_track='C') — they are handled by
                -- Pass 2 with instance_type='catalyst', never by boss source rows.
@@ -888,19 +866,17 @@ async def enrich_catalyst_tier_items(
                         await conn.execute(
                             """
                             INSERT INTO guild_identity.item_sources
-                                   (item_id, blizzard_item_id, instance_type, encounter_name,
+                                   (blizzard_item_id, instance_type, encounter_name,
                                     instance_name, blizzard_instance_id)
-                            VALUES ($1, $2, $3, $4, $5, $6)
-                            ON CONFLICT (item_id, instance_type, encounter_name)
+                            VALUES ($1, $2, $3, $4, $5)
+                            ON CONFLICT (blizzard_item_id, instance_type, encounter_name)
                             DO UPDATE SET
-                                blizzard_item_id     = EXCLUDED.blizzard_item_id,
                                 instance_name        = EXCLUDED.instance_name,
                                 blizzard_instance_id = COALESCE(
                                                            EXCLUDED.blizzard_instance_id,
                                                            guild_identity.item_sources.blizzard_instance_id
                                                        )
                             """,
-                            tier["wow_item_id"],
                             tier["blizzard_item_id"],
                             inst_type,
                             enc_name,
@@ -957,14 +933,12 @@ async def enrich_catalyst_tier_items(
 
         # Load catalyst-slot items directly by name suffix.  No BIS JOIN — catalyst
         # items from the appearance crawl may not have BIS entries (e.g. leather
-        # cloaks are never recommended by BIS scrapers).  JOIN wow_items to get
-        # item_id for the existing unique constraint (dual-write until Phase C).
+        # cloaks are never recommended by BIS scrapers).
         suffix_patterns = [f"%{s}" for s in tier_suffixes]
         all_catalyst_bis = await conn.fetch(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, ei.blizzard_item_id, ei.name
+            SELECT DISTINCT ei.blizzard_item_id, ei.name
               FROM enrichment.items ei
-              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
              WHERE ei.slot_type = ANY($1::text[])
                AND ei.name LIKE ANY($2::text[])
             """,
@@ -992,12 +966,10 @@ async def enrich_catalyst_tier_items(
                 await conn.execute(
                     """
                     INSERT INTO guild_identity.item_sources
-                           (item_id, blizzard_item_id, instance_type, encounter_name, instance_name)
-                    VALUES ($1, $2, 'catalyst', 'Revival Catalyst', 'Revival Catalyst')
-                    ON CONFLICT (item_id, instance_type, encounter_name) DO UPDATE SET
-                        blizzard_item_id = EXCLUDED.blizzard_item_id
+                           (blizzard_item_id, instance_type, encounter_name, instance_name)
+                    VALUES ($1, 'catalyst', 'Revival Catalyst', 'Revival Catalyst')
+                    ON CONFLICT (blizzard_item_id, instance_type, encounter_name) DO NOTHING
                     """,
-                    tier["wow_item_id"],
                     tier["blizzard_item_id"],
                 )
                 added += 1
