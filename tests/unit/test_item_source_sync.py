@@ -425,10 +425,10 @@ class TestFlagJunkSources:
         pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
         await flag_junk_sources(pool, flag_tier_pieces=True)
         tp_sql = conn.execute.call_args_list[2].args[0]
-        assert "wow_items" in tp_sql  # still needed for item_id FK resolution
         assert "enrichment.items" in tp_sql
         assert "item_category" in tp_sql
         assert "slot_type" in tp_sql
+        assert "blizzard_item_id" in tp_sql
 
     @pytest.mark.asyncio
     async def test_returns_zero_counts_when_nothing_flagged(self):

@@ -26,14 +26,14 @@ def _make_pool(fetch_side_effect=None, fetchrow_returns=None, execute_return="UP
     """Build a minimal asyncpg pool mock.
 
     fetch_side_effect: list of return values for successive conn.fetch calls.
-                       First call = token candidates, second call = tier piece rows.
+                       Single call = token candidates (tier piece backfill removed in Phase B).
                        Defaults to returning [] for all calls.
     fetchrow_returns: list of side-effect values for conn.fetchrow calls
     execute_return: string returned by conn.execute (mimics asyncpg 'UPDATE N' etc.)
     """
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=execute_return)
-    conn.fetch = AsyncMock(side_effect=fetch_side_effect or [[], []])
+    conn.fetch = AsyncMock(side_effect=fetch_side_effect or [[]])
     if fetchrow_returns is not None:
         conn.fetchrow = AsyncMock(side_effect=fetchrow_returns)
     else:
@@ -250,14 +250,13 @@ class TestProcessTierTokens:
     async def test_processes_tier_token(self):
         """A token item gets upserted into tier_token_attrs."""
         token_row = {
-            "id": 42,
+            "wow_item_id": 42,
             "blizzard_item_id": 12345,
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": self._TOKEN_HTML,
         }
-        # fetch call 1: token candidates; fetch call 2: tier piece armor_type backfill (empty)
         pool, conn = _make_pool(
-            fetch_side_effect=[[token_row], []],
+            fetch_side_effect=[[token_row]],
             fetchrow_returns=[None],  # no existing tier_token_attrs row
             execute_return="UPDATE 0",
         )
@@ -281,14 +280,14 @@ class TestProcessTierTokens:
     async def test_skips_manual_override(self):
         """Tokens with is_manual_override=TRUE are not reprocessed."""
         token_row = {
-            "id": 42,
+            "wow_item_id": 42,
             "blizzard_item_id": 12345,
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": self._TOKEN_HTML,
         }
         override_row = {"is_manual_override": True}
         pool, conn = _make_pool(
-            fetch_side_effect=[[token_row], []],
+            fetch_side_effect=[[token_row]],
             fetchrow_returns=[override_row],
             execute_return="UPDATE 1",
         )
@@ -311,13 +310,13 @@ class TestProcessTierTokens:
     async def test_ignores_non_token_items(self):
         """Items with slot_type='other' but no tier token text are ignored."""
         non_token_row = {
-            "id": 99,
+            "wow_item_id": 99,
             "blizzard_item_id": 99999,
             "name": "Some Other Item",
             "wowhead_tooltip_html": self._NON_TOKEN_HTML,
         }
         pool, conn = _make_pool(
-            fetch_side_effect=[[non_token_row], []],
+            fetch_side_effect=[[non_token_row]],
             fetchrow_returns=[None],
             execute_return="UPDATE 0",
         )
@@ -337,8 +336,8 @@ class TestProcessTierTokens:
 
     @pytest.mark.asyncio
     async def test_empty_wow_items_returns_zero_counts(self):
-        """When no wow_items with slot_type='other' exist, returns all zeros."""
-        pool, conn = _make_pool(fetch_side_effect=[[], []], execute_return="UPDATE 0")
+        """When no enrichment.items with slot_type='other' and tooltip exist, returns all zeros."""
+        pool, conn = _make_pool(fetch_side_effect=[[]], execute_return="UPDATE 0")
 
         with patch(
             "sv_common.guild_sync.item_source_sync.flag_junk_sources",
@@ -355,19 +354,9 @@ class TestProcessTierTokens:
         assert result["junk_flagged"] == 0
 
     @pytest.mark.asyncio
-    async def test_backfills_armor_type_on_tier_pieces(self):
-        """Tier pieces with NULL armor_type get it populated from tooltip HTML."""
-        tier_piece_row = {
-            "id": 500,
-            "blizzard_item_id": 249952,
-            "name": "Night Ender's Tusks",
-            "wowhead_tooltip_html": ">Plate< Armor</span>",
-        }
-        # fetch call 1: no token candidates; fetch call 2: tier piece needing armor_type
-        pool, conn = _make_pool(
-            fetch_side_effect=[[], [tier_piece_row]],
-            execute_return="UPDATE 1",
-        )
+    async def test_candidates_query_uses_enrichment_and_landing(self):
+        """Candidates fetch must read from enrichment.items and landing.wowhead_tooltips."""
+        pool, conn = _make_pool(fetch_side_effect=[[]], execute_return="UPDATE 0")
 
         with patch(
             "sv_common.guild_sync.item_source_sync.flag_junk_sources",
@@ -377,16 +366,12 @@ class TestProcessTierTokens:
                 "total_flagged": 0,
             }),
         ):
-            result = await process_tier_tokens(pool)
+            await process_tier_tokens(pool)
 
-        assert result["tier_pieces_armor_type_updated"] == 1
-        # Verify the UPDATE was called with the correct armor_type
-        update_calls = [
-            call for call in conn.execute.call_args_list
-            if "armor_type" in str(call) and "wow_items" in str(call)
-        ]
-        assert len(update_calls) == 1
-        assert update_calls[0].args[1] == "plate"
+        fetch_sql = conn.fetch.call_args_list[0].args[0]
+        assert "enrichment.items" in fetch_sql
+        assert "landing.wowhead_tooltips" in fetch_sql
+        assert "wow_item_id" in fetch_sql  # still fetched for token_item_id dual-write
 
     @pytest.mark.asyncio
     async def test_slot_and_armor_type_parsed_correctly(self):
@@ -401,13 +386,13 @@ class TestProcessTierTokens:
             '</div>'
         )
         token_row = {
-            "id": 10,
+            "wow_item_id": 10,
             "blizzard_item_id": 11111,
             "name": "Alnforged Riftbloom",
             "wowhead_tooltip_html": plate_chest_html,
         }
         pool, conn = _make_pool(
-            fetch_side_effect=[[token_row], []],
+            fetch_side_effect=[[token_row]],
             fetchrow_returns=[None],
             execute_return="UPDATE 0",
         )
@@ -429,7 +414,7 @@ class TestProcessTierTokens:
         ]
         assert len(upsert_calls) == 1
         call_args = upsert_calls[0].args
-        # Args: (sql, item_id, target_slot, armor_type, class_ids, now)
-        assert call_args[2] == "chest"   # target_slot
-        assert call_args[3] == "plate"   # armor_type
-        assert set(call_args[4]) == {1, 2, 6}  # eligible_class_ids
+        # Args: (sql, item_id, blizzard_item_id, target_slot, armor_type, class_ids, now)
+        assert call_args[3] == "chest"   # target_slot
+        assert call_args[4] == "plate"   # armor_type
+        assert set(call_args[5]) == {1, 2, 6}  # eligible_class_ids

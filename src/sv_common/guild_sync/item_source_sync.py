@@ -364,9 +364,9 @@ async def sync_tier_set_completions(
         rows = await conn.fetch(
             """
             SELECT DISTINCT
-                   (regexp_match(wowhead_tooltip_html, '/item-set=([0-9]+)/'))[1]::int AS set_id
-              FROM guild_identity.wow_items
-             WHERE wowhead_tooltip_html LIKE '%/item-set=%'
+                   (regexp_match(wt.payload->>'tooltip', '/item-set=([0-9]+)/'))[1]::int AS set_id
+              FROM landing.wowhead_tooltips wt
+             WHERE wt.payload->>'tooltip' LIKE '%/item-set=%'
             """
         )
         set_ids = [r["set_id"] for r in rows if r["set_id"]]
@@ -377,18 +377,21 @@ async def sync_tier_set_completions(
         if not set_ids:
             candidates = await conn.fetch(
                 """
-                SELECT DISTINCT wi.blizzard_item_id
-                  FROM guild_identity.wow_items wi
-                 WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
-                   AND wi.armor_type IS NOT NULL
-                   AND wi.wowhead_tooltip_html IS NULL
+                SELECT DISTINCT ei.blizzard_item_id
+                  FROM enrichment.items ei
+                 WHERE ei.slot_type IN ('head','shoulder','chest','hands','legs')
+                   AND ei.armor_type IS NOT NULL
+                   AND NOT EXISTS (
+                           SELECT 1 FROM landing.wowhead_tooltips wt
+                            WHERE wt.blizzard_item_id = ei.blizzard_item_id
+                       )
                    AND NOT EXISTS (
                            SELECT 1 FROM guild_identity.item_sources s
-                            WHERE s.item_id = wi.id
+                            WHERE s.blizzard_item_id = ei.blizzard_item_id
                        )
                    AND EXISTS (
                            SELECT 1 FROM enrichment.bis_entries be
-                            WHERE be.blizzard_item_id = wi.blizzard_item_id
+                            WHERE be.blizzard_item_id = ei.blizzard_item_id
                        )
                  LIMIT 30
                 """
@@ -735,9 +738,10 @@ async def enrich_catalyst_tier_items(
             """
             DELETE FROM guild_identity.item_sources
              WHERE encounter_name = 'Revival Catalyst'
-               AND item_id IN (
-                   SELECT wi.id FROM guild_identity.wow_items wi
-                    WHERE wi.wowhead_tooltip_html LIKE '%/item-set=%'
+               AND blizzard_item_id IN (
+                   SELECT wt.blizzard_item_id
+                     FROM landing.wowhead_tooltips wt
+                    WHERE wt.payload->>'tooltip' LIKE '%/item-set=%'
                )
             """
         )
@@ -750,11 +754,9 @@ async def enrich_catalyst_tier_items(
             """
             DELETE FROM guild_identity.item_sources
              WHERE instance_type IN ('raid', 'world_boss')
-               AND item_id IN (
-                   SELECT wi.id
-                     FROM guild_identity.wow_items wi
-                     JOIN landing.blizzard_item_quality_tracks qt
-                       ON qt.blizzard_item_id = wi.blizzard_item_id
+               AND blizzard_item_id IN (
+                   SELECT qt.blizzard_item_id
+                     FROM landing.blizzard_item_quality_tracks qt
                     WHERE qt.quality_track = 'C'
                )
             """
@@ -769,8 +771,9 @@ async def enrich_catalyst_tier_items(
             """
             DELETE FROM guild_identity.item_sources
              WHERE instance_type IN ('raid', 'world_boss')
-               AND item_id IN (
-                   SELECT item_id FROM guild_identity.item_recipe_links
+               AND blizzard_item_id IN (
+                   SELECT blizzard_item_id FROM guild_identity.item_recipe_links
+                    WHERE blizzard_item_id IS NOT NULL
                )
             """
         )
@@ -785,25 +788,30 @@ async def enrich_catalyst_tier_items(
         all_tier_slots = list(_TIER_SLOTS | _CATALYST_SLOTS)
         tier_items = await conn.fetch(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
-                   COALESCE(NULLIF(wi.slot_type, 'other'), be.slot) AS eff_slot
+            SELECT DISTINCT wi.id AS wow_item_id, ei.blizzard_item_id, ei.name,
+                   COALESCE(NULLIF(ei.slot_type, 'other'), be.slot) AS eff_slot
               FROM enrichment.bis_entries be
-              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
+              JOIN enrichment.items ei ON ei.blizzard_item_id = be.blizzard_item_id
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
              WHERE be.slot = ANY($1::text[])
                -- Exclude catalyst items (quality_track='C') — they are handled by
                -- Pass 2 with instance_type='catalyst', never by boss source rows.
-               AND wi.quality_track IS DISTINCT FROM 'C'
+               AND ei.quality_track IS DISTINCT FROM 'C'
                -- Exclude craftable items — crafted gear never drops from bosses.
                -- Crafted gear sets in Midnight also have /item-set= links in their
                -- Wowhead tooltips, which would otherwise match the PRIMARY condition
                -- below and result in spurious boss source rows.
                AND NOT EXISTS (
                        SELECT 1 FROM guild_identity.item_recipe_links irl
-                        WHERE irl.blizzard_item_id = wi.blizzard_item_id
+                        WHERE irl.blizzard_item_id = ei.blizzard_item_id
                    )
                AND (
                    -- PRIMARY: Wowhead tooltip confirms tier set membership.
-                   wi.wowhead_tooltip_html LIKE '%/item-set=%'
+                   EXISTS (
+                       SELECT 1 FROM landing.wowhead_tooltips wt
+                        WHERE wt.blizzard_item_id = ei.blizzard_item_id
+                          AND wt.payload->>'tooltip' LIKE '%/item-set=%'
+                   )
                    OR
                    -- FALLBACK: No Wowhead page yet (new expansion).
                    --   Restricted to items with "of the X" suffix naming — the
@@ -812,15 +820,15 @@ async def enrich_catalyst_tier_items(
                    --   pages, so they're caught by PRIMARY above.
                    --   Also excludes crafted items (item_recipe_links) and items
                    --   that already have boss sources.
-                   (    wi.armor_type IS NOT NULL
-                    AND wi.name LIKE '% of %'
+                   (    ei.armor_type IS NOT NULL
+                    AND ei.name LIKE '% of %'
                     AND NOT EXISTS (
                             SELECT 1 FROM guild_identity.item_sources s
-                             WHERE s.item_id = wi.id
+                             WHERE s.blizzard_item_id = ei.blizzard_item_id
                         )
                     AND NOT EXISTS (
                             SELECT 1 FROM guild_identity.item_recipe_links irl
-                             WHERE irl.blizzard_item_id = wi.blizzard_item_id
+                             WHERE irl.blizzard_item_id = ei.blizzard_item_id
                         )
                    )
                )
@@ -833,11 +841,11 @@ async def enrich_catalyst_tier_items(
         boss_rows = await conn.fetch(
             """
             SELECT DISTINCT is2.encounter_name, is2.instance_name,
-                            is2.instance_type, is2.blizzard_instance_id, wi.slot_type
+                            is2.instance_type, is2.blizzard_instance_id, ei.slot_type
               FROM guild_identity.item_sources is2
-              JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
+              JOIN enrichment.items ei ON ei.blizzard_item_id = is2.blizzard_item_id
              WHERE is2.instance_type IN ('raid', 'world_boss')
-               AND wi.slot_type = ANY($1::text[])
+               AND ei.slot_type = ANY($1::text[])
             """,
             list(_TIER_SLOTS),
         )
@@ -880,11 +888,12 @@ async def enrich_catalyst_tier_items(
                         await conn.execute(
                             """
                             INSERT INTO guild_identity.item_sources
-                                   (item_id, instance_type, encounter_name, instance_name,
-                                    blizzard_instance_id)
-                            VALUES ($1, $2, $3, $4, $5)
+                                   (item_id, blizzard_item_id, instance_type, encounter_name,
+                                    instance_name, blizzard_instance_id)
+                            VALUES ($1, $2, $3, $4, $5, $6)
                             ON CONFLICT (item_id, instance_type, encounter_name)
                             DO UPDATE SET
+                                blizzard_item_id     = EXCLUDED.blizzard_item_id,
                                 instance_name        = EXCLUDED.instance_name,
                                 blizzard_instance_id = COALESCE(
                                                            EXCLUDED.blizzard_instance_id,
@@ -892,6 +901,7 @@ async def enrich_catalyst_tier_items(
                                                        )
                             """,
                             tier["wow_item_id"],
+                            tier["blizzard_item_id"],
                             inst_type,
                             enc_name,
                             inst_name,
@@ -947,8 +957,8 @@ async def enrich_catalyst_tier_items(
 
         # Load catalyst-slot items directly by name suffix.  No BIS JOIN — catalyst
         # items from the appearance crawl may not have BIS entries (e.g. leather
-        # cloaks are never recommended by BIS scrapers).  Read name/slot_type from
-        # enrichment.items; JOIN wow_items only to resolve item_id for item_sources.
+        # cloaks are never recommended by BIS scrapers).  JOIN wow_items to get
+        # item_id for the existing unique constraint (dual-write until Phase C).
         suffix_patterns = [f"%{s}" for s in tier_suffixes]
         all_catalyst_bis = await conn.fetch(
             """
@@ -982,11 +992,13 @@ async def enrich_catalyst_tier_items(
                 await conn.execute(
                     """
                     INSERT INTO guild_identity.item_sources
-                           (item_id, instance_type, encounter_name, instance_name)
-                    VALUES ($1, 'catalyst', 'Revival Catalyst', 'Revival Catalyst')
-                    ON CONFLICT (item_id, instance_type, encounter_name) DO NOTHING
+                           (item_id, blizzard_item_id, instance_type, encounter_name, instance_name)
+                    VALUES ($1, $2, 'catalyst', 'Revival Catalyst', 'Revival Catalyst')
+                    ON CONFLICT (item_id, instance_type, encounter_name) DO UPDATE SET
+                        blizzard_item_id = EXCLUDED.blizzard_item_id
                     """,
                     tier["wow_item_id"],
+                    tier["blizzard_item_id"],
                 )
                 added += 1
             except Exception as exc:
@@ -1148,14 +1160,10 @@ async def flag_junk_sources(
                 """
                 UPDATE guild_identity.item_sources s
                    SET is_suspected_junk = TRUE
-                  FROM guild_identity.wow_items wi
-                 WHERE wi.id = s.item_id
-                   AND wi.slot_type IN ('head', 'shoulder', 'chest', 'hands', 'legs')
-                   AND EXISTS (
-                         SELECT 1 FROM enrichment.items ei
-                          WHERE ei.blizzard_item_id = wi.blizzard_item_id
-                            AND ei.item_category = 'tier'
-                       )
+                  FROM enrichment.items ei
+                 WHERE ei.blizzard_item_id = s.blizzard_item_id
+                   AND ei.slot_type IN ('head', 'shoulder', 'chest', 'hands', 'legs')
+                   AND ei.item_category = 'tier'
                 """
             )
             flagged_tp = int(tp_result.split()[-1])
@@ -1280,26 +1288,32 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
     """Detect tier token items, populate tier_token_attrs, then flag junk sources.
 
     Steps:
-    1. Find wow_items with slot_type='other' whose tooltip HTML indicates a
-       tier token (contains 'Synthesize a soulbound set' or equivalent).
+    1. Find items with slot_type='other' in enrichment.items whose Wowhead tooltip
+       HTML in landing.wowhead_tooltips indicates a tier token.
     2. For each token, parse target_slot, eligible_class_ids, armor_type
        from the Wowhead tooltip HTML.
     3. Upsert into tier_token_attrs — skips rows where is_manual_override=TRUE.
     4. Call flag_junk_sources(flag_tier_pieces=True) to suppress stale
-       direct-drop rows for tier pieces now that v_tier_piece_sources exists.
+       direct-drop rows for tier pieces now that viz.tier_piece_sources exists.
     5. Return a summary dict.
     """
     now = datetime.now(tz=timezone.utc)
 
     async with pool.acquire() as conn:
         # ── 1. Find candidate tier token items ────────────────────────────
+        # Read from enrichment.items + landing.wowhead_tooltips.
+        # JOIN wow_items to get token_item_id (still the PK on tier_token_attrs
+        # until Phase E drops the old FK column).
         candidates = await conn.fetch(
             """
-            SELECT id, blizzard_item_id, name, wowhead_tooltip_html
-              FROM guild_identity.wow_items
-             WHERE slot_type = 'other'
-               AND wowhead_tooltip_html IS NOT NULL
-               AND wowhead_tooltip_html != ''
+            SELECT DISTINCT ON (ei.blizzard_item_id)
+                   wi.id AS wow_item_id, ei.blizzard_item_id, ei.name,
+                   wt.payload->>'tooltip' AS wowhead_tooltip_html
+              FROM enrichment.items ei
+              JOIN landing.wowhead_tooltips wt ON wt.blizzard_item_id = ei.blizzard_item_id
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type = 'other'
+             ORDER BY ei.blizzard_item_id, wt.id DESC
             """
         )
 
@@ -1313,7 +1327,7 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
             if not _is_tier_token(html):
                 continue
 
-            item_id = row["id"]
+            item_id = row["wow_item_id"]
             token_ids_found.append(item_id)
 
             # Check for manual override — never clobber admin edits
@@ -1341,17 +1355,19 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
             await conn.execute(
                 """
                 INSERT INTO guild_identity.tier_token_attrs
-                       (token_item_id, target_slot, armor_type, eligible_class_ids,
-                        is_auto_detected, is_manual_override, last_processed)
-                VALUES ($1, $2, $3, $4, TRUE, FALSE, $5)
+                       (token_item_id, blizzard_item_id, target_slot, armor_type,
+                        eligible_class_ids, is_auto_detected, is_manual_override,
+                        last_processed)
+                VALUES ($1, $2, $3, $4, $5, TRUE, FALSE, $6)
                 ON CONFLICT (token_item_id) DO UPDATE SET
+                    blizzard_item_id   = EXCLUDED.blizzard_item_id,
                     target_slot        = EXCLUDED.target_slot,
                     armor_type         = EXCLUDED.armor_type,
                     eligible_class_ids = EXCLUDED.eligible_class_ids,
                     is_auto_detected   = TRUE,
                     last_processed     = EXCLUDED.last_processed
                 """,
-                item_id, target_slot, armor_type, class_ids, now,
+                item_id, row["blizzard_item_id"], target_slot, armor_type, class_ids, now,
             )
             tokens_processed += 1
             logger.info(
@@ -1364,50 +1380,13 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
         tokens_processed, tokens_skipped_override, len(token_ids_found),
     )
 
-    # ── Step 2: Backfill armor_type on tier piece wow_items ───────────────
-    # The Wowhead tooltip HTML contains the armor type as ">Cloth<", ">Leather<",
-    # etc.  Parse and write back to wow_items.armor_type so that the view join
-    # (tp.armor_type = tta.armor_type) resolves correctly.
-    # Only updates rows where armor_type is currently NULL — already-correct rows
-    # are left untouched.
-    tier_pieces_updated = 0
-    async with pool.acquire() as conn:
-        tier_piece_rows = await conn.fetch(
-            """
-            SELECT id, blizzard_item_id, name, wowhead_tooltip_html
-              FROM guild_identity.wow_items
-             WHERE slot_type = ANY($1::text[])
-               AND wowhead_tooltip_html LIKE '%/item-set=%'
-               AND (armor_type IS NULL OR armor_type = '')
-            """,
-            list(_TIER_SLOTS),
-        )
-        for tp_row in tier_piece_rows:
-            at = _armor_type_from_tooltip(tp_row["wowhead_tooltip_html"] or "")
-            if at:
-                await conn.execute(
-                    "UPDATE guild_identity.wow_items SET armor_type = $1 WHERE id = $2",
-                    at, tp_row["id"],
-                )
-                tier_pieces_updated += 1
-                logger.debug(
-                    "process_tier_tokens: set armor_type=%s on item %d (%s)",
-                    at, tp_row["blizzard_item_id"], tp_row["name"],
-                )
-
-    logger.info(
-        "process_tier_tokens: backfilled armor_type on %d tier piece items",
-        tier_pieces_updated,
-    )
-
-    # ── Step 3: Flag junk sources now that view is in place ───────────────
+    # ── Step 2: Flag junk sources now that viz.tier_piece_sources is in place ─
     junk_result = await flag_junk_sources(pool, flag_tier_pieces=True)
 
     return {
         "tokens_found": len(token_ids_found),
         "tokens_processed": tokens_processed,
         "tokens_skipped_override": tokens_skipped_override,
-        "tier_pieces_armor_type_updated": tier_pieces_updated,
         "junk_flagged": junk_result["total_flagged"],
         "junk_world_boss": junk_result["flagged_world_boss"],
         "junk_tier_piece": junk_result["flagged_tier_piece"],
