@@ -29,31 +29,11 @@ from sv_common.guild_sync.source_config import (
 logger = logging.getLogger(__name__)
 
 # Canonical WoW slot order (16 slots)
-WOW_SLOTS = [
-    "head", "neck", "shoulder", "back", "chest", "wrist",
-    "hands", "waist", "legs", "feet",
-    "ring_1", "ring_2", "trinket_1", "trinket_2",
-    "main_hand", "off_hand",
-]
-
-SLOT_DISPLAY = {
-    "head": "Head",
-    "neck": "Neck",
-    "shoulder": "Shoulder",
-    "back": "Back",
-    "chest": "Chest",
-    "wrist": "Wrist",
-    "hands": "Hands",
-    "waist": "Waist",
-    "legs": "Legs",
-    "feet": "Feet",
-    "ring_1": "Ring 1",
-    "ring_2": "Ring 2",
-    "trinket_1": "Trinket 1",
-    "trinket_2": "Trinket 2",
-    "main_hand": "Main Hand",
-    "off_hand": "Off Hand",
-}
+# ── Slot metadata — loaded from ref.gear_plan_slots at startup ────────────────
+# WOW_SLOTS kept as exported name so existing route guards work without changes.
+WOW_SLOTS:      set[str]        = set()   # valid plan_slot keys
+_SLOT_META:     dict[str, dict] = {}      # plan_slot → row dict
+_SLOTS_ORDERED: list[str]       = []      # plan_slots in canonical slot_order sequence
 
 # Quality track ranking (lowest to highest)
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
@@ -156,37 +136,37 @@ SPEC_PRIMARY_STAT: dict[tuple[str, str], str] = {
     ("Evoker", "Devastation"): "int", ("Evoker", "Preservation"): "int", ("Evoker", "Augmentation"): "int",
 }
 
-# Slots that filter by armor_type; weapons use primary-stat check; accessories have no restriction
-_ARMOR_FILTER_SLOTS: frozenset[str] = frozenset(
-    {"head", "shoulder", "chest", "wrist", "hands", "waist", "legs", "feet"}
-)
-_WEAPON_SLOTS: frozenset[str] = frozenset({"main_hand", "off_hand"})
-# Paired slots — rings and trinkets share merged BIS pools; is_bis fires for either slot
-_PAIRED_SLOT_MAP: dict[str, str] = {
-    "ring_1": "ring_2", "ring_2": "ring_1",
-    "trinket_1": "trinket_2", "trinket_2": "trinket_1",
-}
+# ── Slot metadata helpers ─────────────────────────────────────────────────────
 
-# Slots that can have a tier/catalyst class set piece.
-_TIER_CATALYST_SLOTS: frozenset[str] = frozenset(
-    {"head", "shoulder", "chest", "hands", "legs", "back", "wrist", "waist", "feet"}
-)
-# The 5 main tier slots have Blizzard Journal source rows and a Wowhead
-# /item-set= link in their tooltip HTML — used as the reliable tier anchor.
-_MAIN_TIER_SLOTS: frozenset[str] = frozenset({"head", "shoulder", "chest", "hands", "legs"})
+async def _ensure_slot_meta(conn: asyncpg.Connection) -> None:
+    """Load ref.gear_plan_slots into the module-level cache if not already loaded."""
+    if _SLOT_META:
+        return
+    rows = await conn.fetch(
+        """SELECT plan_slot, display_name, slot_order, enrichment_slot_type,
+                  paired_slot, is_armor_slot, is_weapon_slot,
+                  is_tier_catalyst_slot, is_main_tier_slot
+             FROM ref.gear_plan_slots ORDER BY slot_order"""
+    )
+    _SLOT_META.update({r["plan_slot"]: dict(r) for r in rows})
+    _SLOTS_ORDERED.extend(r["plan_slot"] for r in rows)
+    WOW_SLOTS.update(_SLOT_META)
+
+
+async def load_slot_meta(pool: asyncpg.Pool) -> None:
+    """Pre-warm the slot metadata cache. Idempotent — safe to call repeatedly."""
+    async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
+
+
+def is_valid_slot(slot: str) -> bool:
+    """True when slot is a known plan slot (requires cache to be loaded)."""
+    return slot in _SLOT_META
+
+
 # The 4 catalyst slots (back/wrist/waist/feet) have no Journal encounter and
 # therefore no item_sources rows.  They are found via name-suffix matching
 # against the current season's main tier anchor.
-
-# Map from plan slot → enrichment.items slot_type (viz.slot_items).
-# Paired slots (ring_1/ring_2, trinket_1/trinket_2) share one slot_type in the view.
-_SLOT_TYPE_QUERY_MAP: dict[str, str] = {
-    "ring_1":    "finger",
-    "ring_2":    "finger",
-    "trinket_1": "trinket",
-    "trinket_2": "trinket",
-    "main_hand": "one_hand",
-}
 
 # Wowhead tooltip HTML armor-type marker: <!--scstart4:{subclass_id}-->
 # Used when wow_items.armor_type is NULL (items seeded via Journal API don't
@@ -562,6 +542,7 @@ async def populate_from_bis(
     slots populated.
     """
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             """
             SELECT id, spec_id, hero_talent_id, bis_source_id
@@ -619,7 +600,7 @@ async def populate_from_bis(
 
         populated = 0
         for slot, candidates in by_slot.items():
-            if slot not in WOW_SLOTS or slot in locked_slots:
+            if not is_valid_slot(slot) or slot in locked_slots:
                 continue
             # Skip excluded items, pick first non-excluded candidate
             excluded = excluded_by_slot.get(slot, set())
@@ -714,6 +695,7 @@ async def import_simc_goals(
         return {"populated": 0, "skipped_locked": 0, "unrecognised": 0}
 
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
@@ -734,7 +716,7 @@ async def import_simc_goals(
 
         for simc_slot in slots:
             slot = simc_slot.slot
-            if slot not in WOW_SLOTS:
+            if not is_valid_slot(slot):
                 unrecognised += 1
                 continue
             if slot in locked_slots:
@@ -781,6 +763,7 @@ async def set_goals_from_equipped(
     Returns {"populated": N, "skipped_locked": M}.
     """
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
@@ -812,7 +795,7 @@ async def set_goals_from_equipped(
 
         for row in equip_rows:
             slot = row["slot"]
-            if slot not in WOW_SLOTS:
+            if not is_valid_slot(slot):
                 continue
             if slot in locked_slots:
                 skipped_locked += 1
@@ -1017,6 +1000,7 @@ async def get_plan_detail(
     Returns None if no plan exists.  Call get_or_create_plan first.
     """
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             """
             SELECT gp.id, gp.player_id, gp.character_id, gp.spec_id,
@@ -1462,7 +1446,7 @@ async def get_plan_detail(
 
     # Build per-slot data
     slots_data: dict[str, dict] = {}
-    for slot in WOW_SLOTS:
+    for slot in _SLOTS_ORDERED:
         equipped = equipped_by_slot.get(slot)
         desired = desired_by_slot.get(slot)
 
@@ -1524,7 +1508,7 @@ async def get_plan_detail(
         )
 
         # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS
-        _paired_slot = _PAIRED_SLOT_MAP.get(slot)
+        _paired_slot = _SLOT_META[slot]["paired_slot"]
         _paired_desired_bid: Optional[int] = None
         if _paired_slot:
             _pd = desired_by_slot.get(_paired_slot)
@@ -1597,7 +1581,7 @@ async def get_plan_detail(
         slots_data[slot] = {
             "slot": slot,
             "canonical_slot": slot_remapping.get(slot, slot),
-            "display_name": SLOT_DISPLAY.get(slot, slot.replace("_", " ").title()),
+            "display_name": _SLOT_META[slot]["display_name"],
             "equipped": equipped,
             "desired": desired,
             "desired_blizzard_item_id": desired_bid,
@@ -1671,10 +1655,11 @@ async def get_available_items(
     directly. item_category discriminates drop/crafted/tier/catalyst.
     """
     empty: dict = {"tier": None, "raid": [], "dungeon": [], "crafted": []}
-    if slot not in WOW_SLOTS:
+    if not is_valid_slot(slot):
         return empty
 
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         char_row = await conn.fetchrow(
             """
             SELECT c.name AS class_name, s.name AS spec_name,
@@ -1737,7 +1722,7 @@ async def get_available_items(
         desired_bid_for_slot: Optional[int] = None
         all_desired_bids: set[int] = set()
         if plan_row:
-            _av_paired = _PAIRED_SLOT_MAP.get(slot)
+            _av_paired = _SLOT_META[slot]["paired_slot"]
             _av_slots = [slot] + ([_av_paired] if _av_paired else [])
             slot_rows = await conn.fetch(
                 """
@@ -1758,11 +1743,11 @@ async def get_available_items(
         is_bis: bool = bool(equipped_bid and all_desired_bids and equipped_bid in all_desired_bids)
 
         # Normalize paired slots to canonical enrichment.items slot_type
-        slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
+        slot_type = _SLOT_META[slot]["enrichment_slot_type"]
 
         # Armor type filter — None for accessories/weapons (no class restriction)
         armor_filter: Optional[str] = (
-            CLASS_ARMOR_TYPE.get(class_name) if slot in _ARMOR_FILTER_SLOTS else None
+            CLASS_ARMOR_TYPE.get(class_name) if _SLOT_META[slot]["is_armor_slot"] else None
         )
 
         # Resolve excluded internal IDs → blizzard_item_ids for viz query filtering
@@ -1896,7 +1881,7 @@ async def get_available_items(
     dungeon_items = list(dungeon_map.values())
 
     # Apply primary-stat filter for weapon slots
-    if slot in _WEAPON_SLOTS:
+    if _SLOT_META[slot]["is_weapon_slot"]:
         primary_stat_filter = SPEC_PRIMARY_STAT.get((class_name, spec_name))
         if primary_stat_filter:
             raid_items    = _filter_by_primary_stat(raid_items, primary_stat_filter)
@@ -1920,7 +1905,7 @@ async def get_available_items(
     # ── Tier / Catalyst items ──────────────────────────────────────────────────
     # None means "this slot has no tier piece" — frontend hides the section.
     tier_items: Optional[list[dict]] = None
-    if slot in _TIER_CATALYST_SLOTS:
+    if _SLOT_META[slot]["is_tier_catalyst_slot"]:
         tier_target: Optional[int] = noncrafted_ilvl
         tier_items = [
             {
@@ -1964,7 +1949,7 @@ async def add_exclusion(
     No-ops if the item is already excluded.
     Returns True on success, False if plan not found.
     """
-    if slot not in WOW_SLOTS:
+    if not is_valid_slot(slot):
         return False
 
     async with pool.acquire() as conn:
@@ -2016,7 +2001,7 @@ async def remove_exclusion(
     No-ops gracefully if the slot row or item doesn't exist.
     Returns True on success, False if plan not found.
     """
-    if slot not in WOW_SLOTS:
+    if not is_valid_slot(slot):
         return False
 
     async with pool.acquire() as conn:
@@ -2074,6 +2059,7 @@ async def get_trinket_ratings(
         return None
 
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         # Plan spec
         plan_row = await conn.fetchrow(
             """
@@ -2113,7 +2099,7 @@ async def get_trinket_ratings(
         )
 
         # Desired items for this slot and its pair (trinkets share BIS pools)
-        _tr_paired = _PAIRED_SLOT_MAP.get(slot)
+        _tr_paired = _SLOT_META[slot]["paired_slot"]
         _tr_slots = [slot] + ([_tr_paired] if _tr_paired else [])
         gps_rows = await conn.fetch(
             """

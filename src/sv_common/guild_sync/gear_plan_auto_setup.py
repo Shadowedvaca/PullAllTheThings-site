@@ -10,13 +10,6 @@ import asyncpg
 
 logger = logging.getLogger(__name__)
 
-# Mirrors WOW_SLOTS in guild_portal/services/gear_plan_service.py
-_WOW_SLOTS = frozenset([
-    "head", "neck", "shoulder", "back", "chest", "wrist",
-    "hands", "waist", "legs", "feet",
-    "ring_1", "ring_2", "trinket_1", "trinket_2",
-    "main_hand", "off_hand",
-])
 
 
 async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
@@ -31,6 +24,11 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
     Returns True if a new plan was created and populated, False otherwise.
     """
     async with pool.acquire() as conn:
+        valid_slots = frozenset(
+            r["plan_slot"]
+            for r in await conn.fetch("SELECT plan_slot FROM ref.gear_plan_slots")
+        )
+
         # Step 1: resolve player_id from player_characters bridge
         pc_row = await conn.fetchrow(
             """
@@ -109,7 +107,7 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
                 )
 
                 for row in bis_rows:
-                    if row["slot"] not in _WOW_SLOTS:
+                    if row["slot"] not in valid_slots:
                         continue
                     await conn.execute(
                         """
