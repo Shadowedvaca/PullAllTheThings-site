@@ -443,6 +443,18 @@ async def run_crafting_sync(
             len(characters), chars_processed, duration, now, now,
         )
 
+        # Rebuild enrichment recipe list so newly-craftable 'unclassified' items
+        # are promoted to 'crafted' and linked to the active season automatically.
+        try:
+            await conn.execute("CALL enrichment.sp_rebuild_item_recipes()")
+            logger.info("Crafting sync: enrichment.sp_rebuild_item_recipes() complete")
+        except Exception:
+            logger.warning(
+                "Crafting sync: enrichment.sp_rebuild_item_recipes() failed — "
+                "run Rebuild Enrichment from the gear plan admin page to update item categories",
+                exc_info=True,
+            )
+
     logger.info(
         "Crafting sync complete: %d characters processed, %d recipes found, %.1fs "
         "(%d skipped — no login change)",

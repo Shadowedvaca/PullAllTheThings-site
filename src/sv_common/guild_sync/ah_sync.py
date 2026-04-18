@@ -246,7 +246,7 @@ async def cleanup_old_prices(pool: asyncpg.Pool, days_hourly: int = 30, days_dai
     """
     async with pool.acquire() as conn:
         # Delete hourly data older than 30 days, keeping one row per item per day
-        deleted_hourly = await conn.fetchval(
+        deleted_hourly = await conn.fetch(
             """
             WITH to_delete AS (
                 SELECT id FROM guild_identity.item_price_history
@@ -266,7 +266,7 @@ async def cleanup_old_prices(pool: asyncpg.Pool, days_hourly: int = 30, days_dai
         )
 
         # Delete everything older than 180 days
-        deleted_old = await conn.fetchval(
+        deleted_old = await conn.fetch(
             """
             WITH to_delete AS (
                 SELECT id FROM guild_identity.item_price_history

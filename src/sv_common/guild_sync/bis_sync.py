@@ -1,22 +1,30 @@
 """BIS list discovery + extraction pipeline.
 
-Architecture (4 steps):
+Architecture:
   1. URL Discovery  — auto-generate scrape targets for all spec × source × hero talent combos
-  2. Extraction     — try multiple techniques per URL (Archon → Wowhead → Icy Veins → SimC)
-  3. Auto-publish   — upsert extracted items into bis_list_entries immediately (no draft state)
-  4. Cross-reference— compare sources per spec to surface disagreements for review
+                      (config.bis_scrape_targets)
+  2. Extraction     — fetch raw HTML/JSON per target; store in landing.bis_scrape_raw
+  3. Enrichment     — rebuild_bis_from_landing() / rebuild_trinket_ratings_from_landing()
+                      parse landing content and write to enrichment.bis_entries /
+                      enrichment.trinket_ratings. Called by enrich-and-classify in bis_routes.
+  4. Cross-reference— compare enrichment.bis_entries per spec to surface disagreements.
 
-BIS data is centralised game data managed by Mike for the whole network.
-All guild portals read from the same bis_list_entries table.
+Schema separation:
+  config.*          pipeline configuration (bis_scrape_targets)
+  log.*             operational logs (bis_scrape_log)
+  landing.*         raw API/scrape payloads (bis_scrape_raw)
+  enrichment.*      parsed, structured BIS data (bis_entries, trinket_ratings)
 
 Public functions
 ----------------
-discover_targets(pool)                  — generate missing scrape_targets rows for all specs
+discover_targets(pool)                  — generate missing config.bis_scrape_targets rows
 sync_source(pool, source_id, spec_ids)  — run extraction for one source (optionally filtered)
 sync_all(pool)                          — run extraction for every active source
 sync_target(pool, target_id)            — re-sync a single scrape target
+rebuild_bis_from_landing(pool)          — rebuild enrichment.bis_entries from landing HTML
+rebuild_trinket_ratings_from_landing(pool) — rebuild enrichment.trinket_ratings from landing HTML
 cross_reference(pool, spec_id, ht_id)  — compare all sources per slot for one spec+hero
-import_simc(pool, text, source_id,      — import a SimC BIS profile as bis_list_entries
+import_simc(pool, text, source_id,      — import a SimC BIS profile as enrichment.bis_entries
             spec_id, hero_talent_id)
 """
 
@@ -58,8 +66,8 @@ def _slug(name: str, sep: str = "-") -> str:
     """Convert a display name to a lowercase URL slug."""
     return name.lower().replace(" ", sep)
 
-# Archon slot names → our normalised internal keys
-_ARCHON_SLOT_MAP: dict[str, str] = {
+# u.gg slot names → our normalised internal keys
+_UGG_SLOT_MAP: dict[str, str] = {
     "head":      "head",
     "neck":      "neck",
     "shoulder":  "shoulder",
@@ -85,7 +93,7 @@ _ARCHON_SLOT_MAP: dict[str, str] = {
 
 # Technique priority order for each BIS source origin
 _TECHNIQUE_ORDER: dict[str, list[str]] = {
-    "archon":    ["json_embed"],
+    "ugg":       ["json_embed"],
     "wowhead":   ["wh_gatherer"],
     "icy_veins": ["html_parse"],  # STUB — html_parse returns [] for IV; see _extract_icy_veins
     "manual":    ["manual"],
@@ -124,7 +132,7 @@ _HEADERS = {
 async def discover_targets(pool: asyncpg.Pool) -> dict:
     """Auto-generate scrape targets for all active spec × source combos.
 
-    Archon: one target per spec × hero talent (URLs embed the HT slug).
+    u.gg: one target per spec × hero talent (URLs embed the HT slug).
     Wowhead + Icy Veins: one target per spec with hero_talent_id=NULL.
       Wowhead's BIS page is not HT-specific — the same page/URL covers all builds.
       IV pages are also not HT-specific and are JS-rendered (extraction stubbed).
@@ -140,7 +148,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             """
             SELECT s.id, s.name, s.origin, s.content_type, s.is_active,
                    COALESCE(gs.slug_separator, '-') AS slug_separator
-              FROM guild_identity.bis_list_sources s
+              FROM ref.bis_list_sources s
               LEFT JOIN common.guide_sites gs ON gs.id = s.guide_site_id
              WHERE s.is_active = TRUE
             """
@@ -151,8 +159,8 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
             """
             SELECT s.id AS spec_id, s.name AS spec_name, c.name AS class_name,
                    r.name AS role_name
-              FROM guild_identity.specializations s
-              JOIN guild_identity.classes c ON c.id = s.class_id
+              FROM ref.specializations s
+              JOIN ref.classes c ON c.id = s.class_id
               LEFT JOIN guild_identity.roles r ON r.id = s.default_role_id
             ORDER BY c.name, s.name
             """
@@ -160,7 +168,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
 
         # Load all hero talents per spec
         hero_talents = await conn.fetch(
-            "SELECT id, spec_id, name, slug FROM guild_identity.hero_talents"
+            "SELECT id, spec_id, name, slug FROM ref.hero_talents"
         )
 
     ht_by_spec: dict[int, list[dict]] = {}
@@ -199,7 +207,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                     expected += 1
                     result = await conn.fetchrow(
                         """
-                        INSERT INTO guild_identity.bis_scrape_targets
+                        INSERT INTO config.bis_scrape_targets
                             (source_id, spec_id, hero_talent_id, content_type,
                              url, preferred_technique, status)
                         VALUES ($1, $2, NULL, $3, $4, $5, 'pending')
@@ -232,7 +240,7 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
 
                         result = await conn.fetchrow(
                             """
-                            INSERT INTO guild_identity.bis_scrape_targets
+                            INSERT INTO config.bis_scrape_targets
                                 (source_id, spec_id, hero_talent_id, content_type,
                                  url, preferred_technique, status)
                             VALUES ($1, $2, $3, $4, $5, $6, 'pending')
@@ -370,7 +378,7 @@ def _build_url(
     cls  = _slug(class_name, slug_sep)
     spec = _slug(spec_name,  slug_sep)
 
-    if origin == "archon":
+    if origin == "ugg":
         base = f"https://u.gg/wow/{spec}/{cls}/gear?hero={hero_slug}"
         if content_type == "raid":
             return base + "&role=raid"
@@ -412,10 +420,10 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
             """
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
                    t.url, t.preferred_technique, s.origin
-              FROM guild_identity.bis_scrape_targets t
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
-              JOIN guild_identity.specializations sp ON sp.id = t.spec_id
-              JOIN guild_identity.classes c ON c.id = sp.class_id
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+              JOIN ref.specializations sp ON sp.id = t.spec_id
+              JOIN ref.classes c ON c.id = sp.class_id
              WHERE s.is_active = TRUE
                AND s.origin != 'icy_veins'
                AND t.url IS NOT NULL
@@ -428,14 +436,14 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
     for t in targets:
         spec_targets.setdefault(t["spec_id"], []).append(dict(t))
 
-    total_stats: dict = {"targets_run": 0, "items_upserted": 0, "errors": 0}
+    total_stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0}
 
     for spec_id, spec_target_list in spec_targets.items():
         for target in spec_target_list:
             try:
                 result = await sync_target(pool, target["id"], _target_row=target)
                 total_stats["targets_run"] += 1
-                total_stats["items_upserted"] += result.get("items_upserted", 0)
+                total_stats["items_found"] += result.get("items_found", 0)
                 if result.get("status") == "failed":
                     total_stats["errors"] += 1
             except Exception as exc:
@@ -461,8 +469,8 @@ async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
             """
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
                    t.url, t.preferred_technique, s.origin
-              FROM guild_identity.bis_scrape_targets t
-              JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
              WHERE t.spec_id = $1
                AND s.is_active = TRUE
                AND s.origin != 'icy_veins'
@@ -471,13 +479,13 @@ async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
             spec_id,
         )
 
-    stats = {"targets_run": 0, "items_upserted": 0, "errors": 0}
+    stats = {"targets_run": 0, "items_found": 0, "errors": 0}
     for target in targets:
         target_dict = dict(target)
         try:
             result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
             stats["targets_run"] += 1
-            stats["items_upserted"] += result.get("items_upserted", 0)
+            stats["items_found"] += result.get("items_found", 0)
             if result.get("status") == "failed":
                 stats["errors"] += 1
         except Exception as exc:
@@ -501,17 +509,17 @@ async def sync_source(
     async with pool.acquire() as conn:
         # Check if this source is IV — skip if so
         origin_row = await conn.fetchrow(
-            "SELECT origin FROM guild_identity.bis_list_sources WHERE id = $1", source_id
+            "SELECT origin FROM ref.bis_list_sources WHERE id = $1", source_id
         )
         if origin_row and origin_row["origin"] == "icy_veins":
             logger.info("sync_source skipping IV source %d", source_id)
-            return {"targets_run": 0, "items_upserted": 0, "errors": 0,
+            return {"targets_run": 0, "items_found": 0, "errors": 0,
                     "skipped": "icy_veins extraction not yet implemented"}
 
         query = """
             SELECT t.id, t.source_id, t.url, t.preferred_technique,
                    t.spec_id, t.hero_talent_id, t.content_type
-              FROM guild_identity.bis_scrape_targets t
+              FROM config.bis_scrape_targets t
              WHERE t.source_id = $1
                AND t.url IS NOT NULL
         """
@@ -522,14 +530,14 @@ async def sync_source(
 
         targets = await conn.fetch(query, *args)
 
-    stats = {"targets_run": 0, "items_upserted": 0, "errors": 0}
+    stats = {"targets_run": 0, "items_found": 0, "errors": 0}
 
     for target in targets:
         target_dict = dict(target)
         try:
             result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
             stats["targets_run"] += 1
-            stats["items_upserted"] += result.get("items_upserted", 0)
+            stats["items_found"] += result.get("items_found", 0)
         except Exception as exc:
             logger.error("Error syncing target %d: %s", target_dict["id"], exc, exc_info=True)
             stats["errors"] += 1
@@ -540,12 +548,80 @@ async def sync_source(
     return stats
 
 
+async def sync_gaps(
+    pool: asyncpg.Pool,
+    stale_days: int = 7,
+) -> dict:
+    """Sync only BIS targets that are missing from or stale in landing.bis_scrape_raw.
+
+    A target is eligible if:
+      - it has no row at all in landing.bis_scrape_raw, OR
+      - its most recent fetched_at is older than stale_days
+
+    Targets are processed oldest-first (missing first, then by fetched_at ASC)
+    so the biggest gaps are filled first.  Skips Icy Veins targets.
+
+    Returns {targets_run, items_found, errors}.
+    """
+    from datetime import timedelta
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
+
+    async with pool.acquire() as conn:
+        targets = await conn.fetch(
+            """
+            SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
+                   t.content_type, t.url, t.preferred_technique, s.origin,
+                   latest.latest_at
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+              LEFT JOIN (
+                  SELECT target_id, MAX(fetched_at) AS latest_at
+                    FROM landing.bis_scrape_raw
+                   WHERE target_id IS NOT NULL
+                   GROUP BY target_id
+              ) latest ON latest.target_id = t.id
+             WHERE s.is_active = TRUE
+               AND s.origin != 'icy_veins'
+               AND t.url IS NOT NULL
+               AND (latest.latest_at IS NULL OR latest.latest_at < $1)
+             ORDER BY latest.latest_at ASC NULLS FIRST
+            """,
+            stale_cutoff,
+        )
+
+    stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0}
+
+    for target in targets:
+        target_dict = dict(target)
+        try:
+            result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
+            stats["targets_run"] += 1
+            stats["items_found"] += result.get("items_found", 0)
+            if result.get("status") == "failed":
+                stats["errors"] += 1
+        except Exception as exc:
+            logger.error("sync_gaps: error on target %d: %s", target_dict["id"], exc, exc_info=True)
+            stats["errors"] += 1
+        await asyncio.sleep(1.5)
+
+    return stats
+
+
 async def sync_target(
     pool: asyncpg.Pool,
     target_id: int,
     _target_row: Optional[dict] = None,
 ) -> dict:
-    """Re-sync a single scrape target.  Returns {items_upserted, technique, status}."""
+    """Re-sync a single scrape target.
+
+    Fetches raw content from the BIS source and stores it in landing.bis_scrape_raw.
+    Does NOT write to guild_identity.bis_list_entries or trinket_tier_ratings.
+    Call rebuild_bis_from_landing() / rebuild_trinket_ratings_from_landing() after
+    syncing all targets to populate enrichment.bis_entries and enrichment.trinket_ratings.
+
+    Returns {items_found, technique, status}.
+    """
     async with pool.acquire() as conn:
         if _target_row is None:
             row = await conn.fetchrow(
@@ -553,8 +629,8 @@ async def sync_target(
                 SELECT t.id, t.url, t.preferred_technique, t.source_id,
                        t.spec_id, t.hero_talent_id, t.content_type,
                        s.origin
-                  FROM guild_identity.bis_scrape_targets t
-                  JOIN guild_identity.bis_list_sources s ON s.id = t.source_id
+                  FROM config.bis_scrape_targets t
+                  JOIN ref.bis_list_sources s ON s.id = t.source_id
                  WHERE t.id = $1
                 """,
                 target_id,
@@ -565,14 +641,14 @@ async def sync_target(
         else:
             # Need source origin
             origin_row = await conn.fetchrow(
-                "SELECT origin FROM guild_identity.bis_list_sources WHERE id = $1",
+                "SELECT origin FROM ref.bis_list_sources WHERE id = $1",
                 _target_row["source_id"],
             )
             _target_row = {**_target_row, "origin": origin_row["origin"] if origin_row else ""}
 
     # Skip IV targets — extraction not yet implemented; do not mark as failed
     if _target_row.get("origin") == "icy_veins":
-        return {"items_upserted": 0, "technique": "html_parse", "status": "pending",
+        return {"items_found": 0, "technique": "html_parse", "status": "pending",
                 "skipped": "icy_veins extraction not yet implemented"}
 
     url = _target_row.get("url")
@@ -584,72 +660,63 @@ async def sync_target(
     source_id = _target_row["source_id"]
 
     if not url:
-        return {"items_upserted": 0, "technique": technique, "status": "failed", "error": "No URL"}
+        return {"items_found": 0, "technique": technique, "status": "failed", "error": "No URL"}
 
-    # Run extraction
+    # Run extraction — fetches raw content, parses to determine status
     content_type = _target_row.get("content_type") or "overall"
-    slots, trinket_ratings, error = await _extract(url, technique, content_type=content_type)
+    origin = _target_row.get("origin", "")
+    slots, _trinket_ratings, error, raw_content = await _extract(url, technique, content_type=content_type)
 
     now = datetime.now(timezone.utc)
-    items_upserted = 0
-    trinkets_upserted = 0
 
+    # Determine status from slot coverage (no guild_identity writes — enrichment layer handles that)
     if slots:
-        items_upserted = await _upsert_bis_entries(
-            pool, source_id, spec_id, hero_talent_id, slots
-        )
-        # Determine status from the unique slots that were extracted.
-        # A spec that uses a 2H weapon will never have an off_hand item —
-        # treat off_hand as the only missing slot → success (green), not partial.
+        items_found = len(slots)
         extracted_slots = {s.slot for s in slots}
         missing = set(SLOT_ORDER) - extracted_slots
+        # A spec using a 2H weapon never has off_hand — treat off_hand as the only
+        # missing slot → success (green), not partial.
         if not missing or missing == {"off_hand"}:
             status = "success"
         else:
             status = "partial"
     else:
+        items_found = 0
         status = "failed"
 
-    # Upsert trinket tier ratings if we got any (wowhead only).
-    # For non-overall content_type targets sharing the same URL, trinket ratings
-    # are extracted from every fetch but we still upsert — the ON CONFLICT DO UPDATE
-    # is idempotent, so duplicate upserts are harmless.
-    if trinket_ratings:
-        try:
-            trinkets_upserted = await _upsert_trinket_ratings(
-                pool, source_id, spec_id, None, trinket_ratings
-            )
-            logger.debug(
-                "Upserted %d trinket ratings for spec_id=%d source_id=%d",
-                trinkets_upserted, spec_id, source_id,
-            )
-        except Exception as exc:
-            logger.warning(
-                "Failed to upsert trinket ratings for target %d: %s", target_id, exc
-            )
-
-    # Log and stamp
+    # Log to log schema, stamp status on config.bis_scrape_targets,
+    # and store raw content in landing for downstream enrichment rebuild.
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO guild_identity.bis_scrape_log
+            INSERT INTO log.bis_scrape_log
                 (target_id, technique, status, items_found, error_message, created_at)
             VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            target_id, technique, status, items_upserted, error, now,
+            target_id, technique, status, items_found, error, now,
         )
         await conn.execute(
             """
-            UPDATE guild_identity.bis_scrape_targets
+            UPDATE config.bis_scrape_targets
                SET status = $1, items_found = $2, last_fetched = $3
              WHERE id = $4
             """,
-            status, items_upserted, now, target_id,
+            status, items_found, now, target_id,
         )
+        if raw_content:
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO landing.bis_scrape_raw (source, url, content, target_id)
+                    VALUES ($1, $2, $3, $4)
+                    """,
+                    origin, url, raw_content, target_id,
+                )
+            except Exception:
+                pass  # landing write is best-effort
 
     return {
-        "items_upserted": items_upserted,
-        "trinkets_upserted": trinkets_upserted,
+        "items_found": items_found,
         "technique": technique,
         "status": status,
     }
@@ -662,55 +729,54 @@ async def sync_target(
 
 async def _extract(
     url: str, technique: str, content_type: str = "overall"
-) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str]]:
+) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str], Optional[str]]:
     """Dispatch to the appropriate extractor.
 
-    Returns (slots, trinket_ratings, error_message).
+    Returns (slots, trinket_ratings, error_message, raw_content).
     slots and trinket_ratings are empty lists on failure.
     trinket_ratings is only populated for wh_gatherer technique.
+    raw_content is the raw HTML/JSON fetched from the source (for landing schema).
     """
     try:
         if technique == "json_embed":
-            slots = await _extract_archon(url)
-            return slots, [], None
+            slots, raw_content = await _extract_ugg(url)
+            return slots, [], None, raw_content
         elif technique == "wh_gatherer":
-            slots, trinket_ratings = await _extract_wowhead(url, content_type=content_type)
-            return slots, trinket_ratings, None
+            slots, trinket_ratings, raw_content = await _extract_wowhead(url, content_type=content_type)
+            return slots, trinket_ratings, None, raw_content
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
-            return slots, [], None
+            return slots, [], None, None
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
-            return [], [], "manual technique — use the API to enter items"
+            return [], [], "manual technique — use the API to enter items", None
         else:
-            return [], [], f"unknown technique: {technique}"
+            return [], [], f"unknown technique: {technique}", None
     except httpx.TimeoutException:
-        return [], [], "request timed out"
+        return [], [], "request timed out", None
     except httpx.HTTPStatusError as exc:
-        return [], [], f"HTTP {exc.response.status_code}"
+        return [], [], f"HTTP {exc.response.status_code}", None
     except Exception as exc:
         logger.warning("Extraction failed for %s (%s): %s", url, technique, exc)
-        return [], [], str(exc)
+        return [], [], str(exc), None
 
 
 # ---------------------------------------------------------------------------
-# Archon / u.gg extractor  (json_embed)
+# u.gg extractor  (json_embed)
 # ---------------------------------------------------------------------------
 
 
-async def _extract_archon(url: str) -> list[SimcSlot]:
-    """Fetch u.gg page and extract BIS items from embedded SSR JSON.
+def _parse_ugg_html(html: str, url: str) -> list[SimcSlot]:
+    """Parse u.gg page HTML and extract BIS items from embedded SSR JSON.
+
+    Pure function — no network calls.  Called by _extract_ugg() during live
+    scraping and by rebuild_bis_from_landing() to re-parse stored HTML.
 
     u.gg embeds a large `window.__SSR_DATA__` JSON blob in the HTML which
     contains per-spec item data keyed by spec name (e.g. "DeathKnight-Blood").
-    """
-    async with httpx.AsyncClient(
-        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
-    ) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        html = response.text
 
+    Returns a list of SimcSlot (empty list on parse failure).
+    """
     # Extract window.__SSR_DATA__ using raw_decode so the nested JSON object is
     # parsed correctly regardless of size.  A regex with (\{.+?\}) is non-greedy
     # and stops at the first "}" in a 5 MB blob — it will never capture the full
@@ -723,7 +789,7 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
             try:
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(html, obj_start)
-                return _parse_archon_ssr(data, url)
+                return _parse_ugg_ssr(data, url)
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
@@ -733,8 +799,24 @@ async def _extract_archon(url: str) -> list[SimcSlot]:
     # SSR blob failed to parse, silently contaminating BIS data with old items.
     # Return [] so the caller marks the target as "failed" — that failure is visible
     # in the scrape log and prompts investigation rather than silent corruption.
-    logger.warning("_extract_archon: SSR parse returned no items for %s", url)
+    logger.warning("_parse_ugg_html: SSR parse returned no items for %s", url)
     return []
+
+
+async def _extract_ugg(url: str) -> tuple[list[SimcSlot], Optional[str]]:
+    """Fetch u.gg page and extract BIS items.
+
+    Returns (slots, raw_html) — raw_html written to landing.bis_scrape_raw.
+    Parsing is delegated to _parse_ugg_html() for reuse in rebuild_bis_from_landing().
+    """
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
+    ) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        html = response.text
+
+    return _parse_ugg_html(html, url), html
 
 
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
@@ -789,7 +871,7 @@ def _slug_to_pascal(slug: str) -> str:
     return "".join(word.capitalize() for word in re.split(r"[-_]", slug))
 
 
-def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
+def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
     """Parse items from the window.__SSR_DATA__ blob.
 
     u.gg SSR format: the top-level dict is keyed by a stats2 URL.  Its value
@@ -817,7 +899,7 @@ def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
             # Legacy items_table at top level (older u.gg format)
             items_by_slot = inner.get("items_table", {}).get("items", {})
             if items_by_slot:
-                return _archon_items_to_slots(items_by_slot)
+                return _ugg_items_to_slots(items_by_slot)
 
             # Current format: section["all"][spec_key]["items_table"]["items"]
             sec = inner.get(section)
@@ -829,26 +911,26 @@ def _parse_archon_ssr(data: dict, url: str = "") -> list[SimcSlot]:
                         items_table = spec_data.get("items_table", {}).get("items", {})
                         if items_table:
                             logger.debug(
-                                "_parse_archon_ssr: using %s[all][%s][items_table] for %s",
+                                "_parse_ugg_ssr: using %s[all][%s][items_table] for %s",
                                 section, spec_key, url,
                             )
-                            return _archon_items_to_slots(items_table)
+                            return _ugg_items_to_slots(items_table)
 
             # Fallback: affixes (M+ data — mixes specs and may surface stale items)
             affixes = inner.get("affixes", {})
             if affixes:
                 logger.warning(
-                    "_parse_archon_ssr: falling back to affixes for %s "
+                    "_parse_ugg_ssr: falling back to affixes for %s "
                     "(section=%s spec_key=%s not found)",
                     url, section, spec_key,
                 )
-                return _parse_archon_combo_data(affixes)
+                return _parse_ugg_combo_data(affixes)
     except (AttributeError, TypeError):
         pass
     return []
 
 
-def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
+def _parse_ugg_combo_data(affixes: dict) -> list[SimcSlot]:
     """Extract most popular item per slot from u.gg's affixes data structure.
 
     Handles both the current format (items → slot → dps_item → {item_id})
@@ -918,14 +1000,14 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
                         slot_counts[sk][iid] = slot_counts[sk].get(iid, 0) + 1
 
     slots: list[SimcSlot] = []
-    for archon_slot, id_counts in slot_counts.items():
-        normalised = _ARCHON_SLOT_MAP.get(archon_slot.lower())
+    for ugg_slot, id_counts in slot_counts.items():
+        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
         if not normalised:
             continue
         best_id = max(id_counts, key=lambda k: id_counts[k])
         best_votes = id_counts[best_id]
         logger.debug(
-            "Archon extraction: slot '%s' → item %d (%d votes)",
+            "u.gg extraction: slot '%s' → item %d (%d votes)",
             normalised, best_id, best_votes,
         )
         slots.append(SimcSlot(
@@ -939,20 +1021,20 @@ def _parse_archon_combo_data(affixes: dict) -> list[SimcSlot]:
     return slots
 
 
-def _parse_archon_items_table(data: dict) -> list[SimcSlot]:
+def _parse_ugg_items_table(data: dict) -> list[SimcSlot]:
     """Parse items from the stats2.u.gg direct JSON response (legacy format)."""
     try:
         items_by_slot = data.get("items_table", {}).get("items", {})
-        return _archon_items_to_slots(items_by_slot)
+        return _ugg_items_to_slots(items_by_slot)
     except (AttributeError, TypeError):
         return []
 
 
-def _archon_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
-    """Convert Archon's per-slot items dict into SimcSlot list."""
+def _ugg_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
+    """Convert u.gg's per-slot items dict into SimcSlot list."""
     slots: list[SimcSlot] = []
-    for archon_slot, slot_data in items_by_slot.items():
-        normalised = _ARCHON_SLOT_MAP.get(archon_slot.lower())
+    for ugg_slot, slot_data in items_by_slot.items():
+        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
         if normalised is None:
             continue
         items = slot_data.get("items") or []
@@ -1139,70 +1221,196 @@ def _extract_trinket_tiers(raw_html: str, item_meta: dict[int, dict]) -> list[Ex
     return ratings
 
 
-async def _upsert_trinket_ratings(
-    pool: asyncpg.Pool,
-    source_id: int,
-    spec_id: int,
-    hero_talent_id: Optional[int],
-    ratings: list[ExtractedTrinketRating],
-) -> int:
-    """Upsert extracted trinket tier ratings into trinket_tier_ratings.
 
-    Ensures each item exists in wow_items (lazy-creates a stub if not),
-    then upserts the tier rating row.  Returns the number of rows upserted.
+# ---------------------------------------------------------------------------
+# Enrichment rebuild from landing
+# ---------------------------------------------------------------------------
 
-    All Wowhead ratings are inserted with hero_talent_id=NULL because Wowhead
-    BIS pages are spec-level, not hero-talent-specific.
+
+async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
+    """Rebuild enrichment.bis_entries by re-parsing landing.bis_scrape_raw.
+
+    For each target, takes the most recent raw HTML and parses it using
+    _parse_ugg_html() or _parse_wowhead_html() — whichever matches the source.
+    Only inserts items that already exist in enrichment.items (the FK requires it).
+
+    Called by enrich-and-classify in bis_routes after sp_rebuild_all() so that
+    enrichment.items is populated before we try to insert BIS references.
+
+    Returns {bis_entries_inserted}.
     """
-    if not ratings:
-        return 0
-
-    upserted = 0
     async with pool.acquire() as conn:
-        for rating in ratings:
-            # Ensure wow_items row exists
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.wow_items
-                    (blizzard_item_id, name, slot_type)
-                VALUES ($1, $2, 'trinket')
-                ON CONFLICT (blizzard_item_id) DO NOTHING
-                """,
-                rating.blizzard_item_id,
-                rating.item_name or "",
+        rows = await conn.fetch("""
+            WITH latest AS (
+                SELECT
+                    bsr.content, bsr.url, bsr.source,
+                    t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY bsr.target_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                 WHERE bsr.target_id IS NOT NULL
             )
+            SELECT content, url, source, source_id, spec_id, hero_talent_id, content_type
+              FROM latest
+             WHERE rn = 1
+        """)
+        # TRUNCATE first — clean-slate rebuild.  enrichment.bis_entries has no
+        # dependents so CASCADE is not needed.
+        await conn.execute("TRUNCATE enrichment.bis_entries")
 
-            item_row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                rating.blizzard_item_id,
+    total_inserted = 0
+    for row in rows:
+        html = row["content"]
+        url = row["url"]
+        source = row["source"]
+        source_id = row["source_id"]
+        spec_id = row["spec_id"]
+        hero_talent_id = row["hero_talent_id"]
+        content_type = row["content_type"] or "overall"
+
+        if source == "ugg":
+            slots = _parse_ugg_html(html, url)
+        elif source == "wowhead":
+            slots, _ = _parse_wowhead_html(html, url, content_type)
+        else:
+            continue  # icy_veins and others not yet parseable
+
+        if not slots:
+            continue
+
+        async with pool.acquire() as conn:
+            for slot_data in slots:
+                # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
+                # skip items not yet in the enrichment layer.
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
+                    slot_data.blizzard_item_id,
+                )
+                if not exists:
+                    continue
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO enrichment.bis_entries
+                            (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+                        VALUES ($1, $2, $3, $4, $5, 1)
+                        """,
+                        source_id, spec_id, hero_talent_id,
+                        slot_data.slot, slot_data.blizzard_item_id,
+                    )
+                    total_inserted += 1
+                except Exception:
+                    pass  # duplicate within this rebuild — silently skip
+
+    logger.info("rebuild_bis_from_landing: %d bis_entries inserted", total_inserted)
+    return {"bis_entries_inserted": total_inserted}
+
+
+async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
+    """Rebuild enrichment.trinket_ratings by re-parsing landing.bis_scrape_raw.
+
+    Re-parses Wowhead HTML for trinket tier lists and writes to
+    enrichment.trinket_ratings.  Only inserts items that exist in enrichment.items.
+
+    Deduplication is driven by bis_list_sources.trinket_ratings_by_content_type:
+
+      FALSE (e.g. Wowhead) — ratings are identical across all content types,
+            so we collapse Overall/Raid/M+ to one row per spec, picking the
+            most-recently-fetched page regardless of which content type it was.
+            Partition key: (spec_id, origin).
+
+      TRUE  (e.g. u.gg if it publishes distinct lists per content type) — keep
+            one row per (spec_id, source_id) so each content type is rebuilt
+            independently.  Partition key: (spec_id, source_id).
+
+    This is a per-source config decision, not a global style.  Adding a new
+    trinket-ranking source requires setting trinket_ratings_by_content_type
+    explicitly rather than assuming the Wowhead model.
+
+    Called by enrich-and-classify in bis_routes after sp_rebuild_all().
+
+    Returns {trinket_ratings_inserted}.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            WITH ranked AS (
+                SELECT
+                    bsr.content, bsr.url,
+                    t.source_id, t.spec_id, t.hero_talent_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY
+                            t.spec_id,
+                            CASE WHEN sc.trinket_ratings_by_content_type
+                                 THEN t.source_id::text
+                                 ELSE sc.origin
+                            END
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                  JOIN ref.bis_list_sources sc ON sc.id = t.source_id
+                 WHERE bsr.target_id IS NOT NULL
+                   AND bsr.source = 'wowhead'
             )
-            if item_row is None:
-                continue
-            item_id = item_row["id"]
+            SELECT content, url, source_id, spec_id, hero_talent_id
+              FROM ranked
+             WHERE rn = 1
+        """)
+        await conn.execute("TRUNCATE enrichment.trinket_ratings")
 
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.trinket_tier_ratings
-                    (source_id, spec_id, hero_talent_id, item_id, tier, sort_order, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                ON CONFLICT (source_id, spec_id, hero_talent_id, item_id)
-                    DO UPDATE SET
-                        tier = EXCLUDED.tier,
-                        sort_order = EXCLUDED.sort_order,
-                        updated_at = NOW()
-                """,
-                source_id, spec_id, hero_talent_id, item_id,
-                rating.tier, rating.sort_order,
-            )
-            upserted += 1
+    total_inserted = 0
+    for row in rows:
+        html = row["content"]
+        url = row["url"]
+        source_id = row["source_id"]
+        spec_id = row["spec_id"]
+        hero_talent_id = row["hero_talent_id"]
 
-    return upserted
+        _, trinket_ratings = _parse_wowhead_html(html, url)
+
+        if not trinket_ratings:
+            continue
+
+        async with pool.acquire() as conn:
+            for rating in trinket_ratings:
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
+                    rating.blizzard_item_id,
+                )
+                if not exists:
+                    continue
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO enrichment.trinket_ratings
+                            (source_id, spec_id, hero_talent_id, blizzard_item_id,
+                             tier, sort_order)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        """,
+                        source_id, spec_id, hero_talent_id,
+                        rating.blizzard_item_id, rating.tier, rating.sort_order,
+                    )
+                    total_inserted += 1
+                except Exception:
+                    pass  # duplicate — silently skip
+
+    logger.info(
+        "rebuild_trinket_ratings_from_landing: %d ratings inserted", total_inserted
+    )
+    return {"trinket_ratings_inserted": total_inserted}
 
 
-async def _extract_wowhead(
-    url: str, content_type: str = "overall"
+def _parse_wowhead_html(
+    html: str, url: str = "", content_type: str = "overall"
 ) -> tuple[list[SimcSlot], list[ExtractedTrinketRating]]:
-    """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls.
+    """Parse Wowhead BIS guide HTML and extract items + trinket ratings.
+
+    Pure function — no network calls.  Called by _extract_wowhead() during live
+    scraping and by rebuild_bis_from_landing() / rebuild_trinket_ratings_from_landing()
+    to re-parse stored HTML.
 
     content_type controls which page section is scanned:
       - "overall"     → Overall BiS section (default)
@@ -1212,20 +1420,11 @@ async def _extract_wowhead(
     Wowhead uses a single combined URL for all three; sections are delimited
     by [h2 type=bar] BBCode headers in the static HTML.
 
-    slotbak values inside jsonequip use Blizzard API invtype IDs, not the old
-    Wowhead-internal slot numbering.  Rings and trinkets share a single invtype
-    each; first and second occurrences are assigned to _1 and _2 respectively.
+    Trinket ratings are always extracted from the full page regardless of
+    content_type — tier lists are not section-scoped.
 
-    Returns (slots, trinket_ratings).  Trinket ratings are always extracted from
-    the full page regardless of content_type — tier lists are not section-scoped.
+    Returns (slots, trinket_ratings).
     """
-    async with httpx.AsyncClient(
-        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
-    ) as client:
-        response = await client.get(url)
-        response.raise_for_status()
-        html = response.text
-
     # Build item metadata map from ALL WH.Gatherer.addData() calls in the page.
     # Metadata is declared globally (not per-section), so we always scan the
     # full HTML for this step.
@@ -1268,6 +1467,25 @@ async def _extract_wowhead(
     trinket_ratings = _extract_trinket_tiers(html, item_meta)
 
     return section_slots, trinket_ratings
+
+
+async def _extract_wowhead(
+    url: str, content_type: str = "overall"
+) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str]]:
+    """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls.
+
+    Returns (slots, trinket_ratings, raw_html).  raw_html written to landing.bis_scrape_raw.
+    Parsing is delegated to _parse_wowhead_html() for reuse in rebuild_*_from_landing().
+    """
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
+    ) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        html = response.text
+
+    slots, trinket_ratings = _parse_wowhead_html(html, url, content_type)
+    return slots, trinket_ratings, html
 
 
 def _wh_slots_from_section(
@@ -1404,11 +1622,15 @@ async def import_simc(
     spec_id: int,
     hero_talent_id: Optional[int],
 ) -> dict:
-    """Import a SimC BIS profile as bis_list_entries for a spec.
+    """Import a SimC BIS profile directly into enrichment.bis_entries for a spec.
 
-    Creates/updates a bis_scrape_targets row with technique='simc' and
-    appends a row to bis_scrape_log.  Manual SimC imports are treated as
+    Creates/updates a config.bis_scrape_targets row with technique='simc' and
+    appends a row to log.bis_scrape_log.  Manual SimC imports are treated as
     'locked' — logged with status='success' so the matrix shows them clearly.
+
+    Writes directly to enrichment.bis_entries (not guild_identity.bis_list_entries).
+    Items that do not yet exist in enrichment.items are lazy-stubbed so they can be
+    referenced — they will be enriched on the next Enrich & Classify run.
 
     Returns {items_upserted, status}.
     """
@@ -1417,18 +1639,52 @@ async def import_simc(
     now = datetime.now(timezone.utc)
 
     if slots:
-        items_upserted = await _upsert_bis_entries(
-            pool, source_id, spec_id, hero_talent_id, slots
-        )
+        async with pool.acquire() as conn:
+            # Clear existing SimC entries for this (source, spec, hero_talent)
+            await conn.execute(
+                """
+                DELETE FROM enrichment.bis_entries
+                 WHERE source_id = $1
+                   AND spec_id = $2
+                   AND (
+                       ($3::int IS NULL AND hero_talent_id IS NULL)
+                       OR hero_talent_id = $3
+                   )
+                """,
+                source_id, spec_id, hero_talent_id,
+            )
+            for slot_data in slots:
+                # Lazy-stub item in enrichment.items if it doesn't exist yet.
+                # enrichment.items.blizzard_item_id is the PK so ON CONFLICT DO NOTHING is safe.
+                await conn.execute(
+                    """
+                    INSERT INTO enrichment.items
+                        (blizzard_item_id, name, slot_type, item_category, enriched_at)
+                    VALUES ($1, '', $2, 'unclassified', NOW())
+                    ON CONFLICT (blizzard_item_id) DO NOTHING
+                    """,
+                    slot_data.blizzard_item_id,
+                    slot_data.slot,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO enrichment.bis_entries
+                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+                    VALUES ($1, $2, $3, $4, $5, 1)
+                    """,
+                    source_id, spec_id, hero_talent_id,
+                    slot_data.slot, slot_data.blizzard_item_id,
+                )
+                items_upserted += 1
 
     status = "success" if slots else "failed"
     error_message = None if slots else "No gear slots found in SimC text"
 
-    # Upsert scrape target (simc technique, no URL — find existing by technique)
+    # Upsert config.bis_scrape_targets row + log entry
     async with pool.acquire() as conn:
         existing = await conn.fetchrow(
             """
-            SELECT id FROM guild_identity.bis_scrape_targets
+            SELECT id FROM config.bis_scrape_targets
              WHERE source_id = $1
                AND spec_id = $2
                AND ($3::int IS NULL AND hero_talent_id IS NULL
@@ -1441,7 +1697,7 @@ async def import_simc(
         if existing:
             await conn.execute(
                 """
-                UPDATE guild_identity.bis_scrape_targets
+                UPDATE config.bis_scrape_targets
                    SET status = $1, items_found = $2, last_fetched = $3
                  WHERE id = $4
                 """,
@@ -1451,7 +1707,7 @@ async def import_simc(
         else:
             target_row = await conn.fetchrow(
                 """
-                INSERT INTO guild_identity.bis_scrape_targets
+                INSERT INTO config.bis_scrape_targets
                     (source_id, spec_id, hero_talent_id, content_type,
                      url, preferred_technique, status, items_found, last_fetched)
                 VALUES ($1, $2, $3, 'overall', NULL, 'simc', $4, $5, $6)
@@ -1463,7 +1719,7 @@ async def import_simc(
 
         await conn.execute(
             """
-            INSERT INTO guild_identity.bis_scrape_log
+            INSERT INTO log.bis_scrape_log
                 (target_id, technique, status, items_found, error_message, created_at)
             VALUES ($1, 'simc', $2, $3, $4, $5)
             """,
@@ -1477,74 +1733,6 @@ async def import_simc(
 # Expansion mismatch detection
 # ---------------------------------------------------------------------------
 
-
-# ---------------------------------------------------------------------------
-# BIS entry upsert
-# ---------------------------------------------------------------------------
-
-
-async def _upsert_bis_entries(
-    pool: asyncpg.Pool,
-    source_id: int,
-    spec_id: int,
-    hero_talent_id: Optional[int],
-    slots: list[SimcSlot],
-) -> int:
-    """Upsert extracted BIS items into bis_list_entries.
-
-    Ensures each item exists in wow_items (lazy-creates a stub if not) then
-    upserts into bis_list_entries.  Returns the number of slots upserted.
-    """
-    upserted = 0
-    async with pool.acquire() as conn:
-        # Clear all existing entries for this (source, spec, hero_talent) before
-        # inserting the new set.  Per-slot deletes miss slots that are absent from
-        # the new extraction (e.g. off_hand for 2H specs), leaving stale rows behind.
-        await conn.execute(
-            """
-            DELETE FROM guild_identity.bis_list_entries
-             WHERE source_id = $1
-               AND spec_id = $2
-               AND (
-                   ($3::int IS NULL AND hero_talent_id IS NULL)
-                   OR hero_talent_id = $3
-               )
-            """,
-            source_id, spec_id, hero_talent_id,
-        )
-
-        for slot_data in slots:
-            # Ensure wow_items row exists (stub — full metadata fetched by item_service)
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.wow_items
-                    (blizzard_item_id, name, slot_type)
-                VALUES ($1, '', $2)
-                ON CONFLICT (blizzard_item_id) DO NOTHING
-                """,
-                slot_data.blizzard_item_id,
-                slot_data.slot,
-            )
-
-            item_row = await conn.fetchrow(
-                "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                slot_data.blizzard_item_id,
-            )
-            if item_row is None:
-                continue
-            item_id = item_row["id"]
-
-            await conn.execute(
-                """
-                INSERT INTO guild_identity.bis_list_entries
-                    (source_id, spec_id, hero_talent_id, slot, item_id, priority)
-                VALUES ($1, $2, $3, $4, $5, 1)
-                """,
-                source_id, spec_id, hero_talent_id, slot_data.slot, item_id,
-            )
-            upserted += 1
-
-    return upserted
 
 
 # ---------------------------------------------------------------------------
@@ -1589,14 +1777,14 @@ async def cross_reference(
                 """
                 SELECT e.slot,
                        s.id AS source_id, s.name AS source_name, s.sort_order,
-                       wi.blizzard_item_id, wi.name AS item_name,
+                       e.blizzard_item_id, i.name AS item_name,
                        COUNT(*) AS vote_count
-                  FROM guild_identity.bis_list_entries e
-                  JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
-                  JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                  FROM enrichment.bis_entries e
+                  JOIN ref.bis_list_sources s ON s.id = e.source_id
+                  LEFT JOIN enrichment.items i ON i.blizzard_item_id = e.blizzard_item_id
                  WHERE e.spec_id = $1 AND s.is_active = TRUE
                  GROUP BY e.slot, s.id, s.name, s.sort_order,
-                          wi.blizzard_item_id, wi.name
+                          e.blizzard_item_id, i.name
                  ORDER BY e.slot, s.sort_order, vote_count DESC
                 """,
                 spec_id,
@@ -1620,10 +1808,10 @@ async def cross_reference(
                 """
                 SELECT e.slot,
                        s.id AS source_id, s.name AS source_name,
-                       wi.blizzard_item_id, wi.name AS item_name
-                  FROM guild_identity.bis_list_entries e
-                  JOIN guild_identity.bis_list_sources s ON s.id = e.source_id
-                  JOIN guild_identity.wow_items wi ON wi.id = e.item_id
+                       e.blizzard_item_id, i.name AS item_name
+                  FROM enrichment.bis_entries e
+                  JOIN ref.bis_list_sources s ON s.id = e.source_id
+                  LEFT JOIN enrichment.items i ON i.blizzard_item_id = e.blizzard_item_id
                  WHERE e.spec_id = $1
                    AND (e.hero_talent_id = $2 OR e.hero_talent_id IS NULL)
                    AND s.is_active = TRUE
@@ -1696,7 +1884,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         sources = await conn.fetch(
             """
             SELECT id, name, short_label, origin, content_type, is_active, sort_order
-              FROM guild_identity.bis_list_sources
+              FROM ref.bis_list_sources
              WHERE is_active = TRUE
              ORDER BY sort_order
             """
@@ -1705,8 +1893,8 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         specs = await conn.fetch(
             """
             SELECT s.id, s.name AS spec_name, c.name AS class_name
-              FROM guild_identity.specializations s
-              JOIN guild_identity.classes c ON c.id = s.class_id
+              FROM ref.specializations s
+              JOIN ref.classes c ON c.id = s.class_id
              ORDER BY c.name, s.name
             """
         )
@@ -1716,12 +1904,12 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
             SELECT t.source_id, t.spec_id, t.hero_talent_id,
                    t.status, t.items_found, t.last_fetched, t.preferred_technique,
                    t.content_type, t.id AS target_id
-              FROM guild_identity.bis_scrape_targets t
+              FROM config.bis_scrape_targets t
             """
         )
 
         hero_talents = await conn.fetch(
-            "SELECT id, spec_id, name, slug FROM guild_identity.hero_talents ORDER BY id"
+            "SELECT id, spec_id, name, slug FROM ref.hero_talents ORDER BY id"
         )
 
     ht_by_spec: dict[int, list[dict]] = {}

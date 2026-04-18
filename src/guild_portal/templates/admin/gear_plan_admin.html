@@ -1,0 +1,629 @@
+{% extends "base_admin.html" %}
+{% block title %}Gear Plan Admin{% endblock %}
+{% block head %}
+<style>
+/* ── Workflow sections ───────────────────────────────────────────────────── */
+.gpa-section {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.gpa-section__header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.gpa-section__letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--color-gold);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+.gpa-section__title {
+    font-family: 'Cinzel', serif;
+    color: var(--color-gold);
+    font-size: 1rem;
+    margin: 0;
+}
+.gpa-section__desc {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin: 0;
+    line-height: 1.5;
+}
+.gpa-section__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.gpa-section__result {
+    color: var(--color-text-muted);
+    font-size: 0.82rem;
+    min-height: 1.2em;
+}
+
+/* ── Status bar ──────────────────────────────────────────────────────────── */
+.gp-status-bar {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    min-height: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.gp-status-bar__msg { flex: 1; }
+.gp-status-bar--running { border-color: var(--color-gold); color: var(--color-gold); }
+.gp-status-bar--success { border-color: #4ade80; color: #4ade80; }
+.gp-status-bar--error   { border-color: #f87171; color: #f87171; }
+
+/* ── Progress bar inside status ──────────────────────────────────────────── */
+.gpa-progress {
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+}
+.gpa-progress__fill {
+    height: 100%;
+    background: var(--color-gold);
+    transition: width 0.3s ease;
+}
+
+/* ── Matrix (reuse from gear_plan.html) ──────────────────────────────────── */
+.gp-matrix-wrap {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: auto;
+    max-height: 70vh;
+}
+.gp-matrix {
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    width: 100%;
+    min-width: 700px;
+}
+.gp-matrix th {
+    position: sticky; top: 0; z-index: 2;
+    background: #1a1a1e;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    color: var(--color-text-muted);
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+.gp-matrix th.gp-th-spec { position: sticky; left: 0; z-index: 3; min-width: 100px; background: #1a1a1e; }
+.gp-matrix td {
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid #2a2a2e;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.gp-matrix td.gp-td-spec {
+    position: sticky; left: 0; z-index: 1;
+    background: var(--color-card);
+    color: var(--color-text);
+    font-weight: 500;
+    min-width: 100px;
+}
+.gp-matrix tr:hover td { background: #1e1e22; }
+.gp-matrix tr:hover td.gp-td-spec { background: #1e1e22; }
+.gp-matrix th.gp-th-ht { min-width: 110px; white-space: nowrap; }
+.gp-matrix td.gp-td-ht { color: var(--color-text-muted); font-size: 0.78rem; font-style: italic; min-width: 110px; white-space: nowrap; }
+.gp-cell { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; transition: opacity 0.15s; font-size: 0.8rem; }
+.gp-cell:hover { opacity: 0.8; }
+.gp-cell--success  { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); }
+.gp-cell--partial  { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+.gp-cell--failed   { background: rgba(248,113,113,0.15); color: #f87171; border: 1px solid rgba(248,113,113,0.3); }
+.gp-cell--pending  { background: rgba(100,100,110,0.15); color: #6b7280; border: 1px solid rgba(100,100,110,0.3); }
+.gp-cell--empty    { color: #444; font-style: italic; }
+.gp-cell__count    { font-weight: 700; }
+.gp-cell__tech     { font-size: 0.7rem; opacity: 0.7; }
+.gp-sum { display: inline-block; min-width: 1.5em; text-align: right; font-weight: 700; }
+.gp-sum--t { color: #555; font-weight: 400; }
+.gp-col-summary-row { background: #111114; border-top: 2px solid #333; }
+.gp-col-summary-row td { text-align: center; }
+.gp-col-summary-label { text-align: left !important; padding: 0.3rem 0.75rem; color: var(--color-text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ── Detail / drill-down panel ────────────────────────────────────────────── */
+.gp-detail-wrap { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 8px; padding: 1.25rem 1.5rem; display: none; }
+.gp-detail-wrap.visible { display: block; }
+.gp-detail__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 1rem; margin: 0 0 1rem 0; }
+.gp-slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem; }
+.gp-slot-row { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: #0e0e10; border-radius: 5px; border: 1px solid var(--color-border); gap: 0.5rem; }
+.gp-slot-row__label { font-size: 0.78rem; color: var(--color-text-muted); min-width: 70px; }
+.gp-slot-row__item  { font-size: 0.82rem; color: var(--color-text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-slot-row__item a { color: var(--color-gold); text-decoration: none; }
+.gp-slot-row__item a:hover { text-decoration: underline; }
+.gp-slot-row__missing { color: #444; font-style: italic; font-size: 0.8rem; }
+
+/* ── Cross-reference panel ───────────────────────────────────────────────── */
+.gp-xref-wrap { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 8px; padding: 1.25rem 1.5rem; }
+.gp-xref__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 1rem; margin: 0 0 0.75rem 0; }
+.gp-xref__controls { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+.gp-xref-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.gp-xref-table th { text-align: left; padding: 0.4rem 0.6rem; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); font-size: 0.75rem; text-transform: uppercase; white-space: nowrap; }
+.gp-xref-table td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #2a2a2e; vertical-align: middle; }
+.gp-xref-slot-label { color: var(--color-text-muted); font-size: 0.78rem; min-width: 80px; }
+.gp-xref-row--agree    td { background: rgba(74,222,128,0.04); }
+.gp-xref-row--partial  td { background: rgba(251,191,36,0.04); }
+.gp-xref-cell--match    { color: #4ade80; }
+.gp-xref-cell--mismatch { color: #f87171; opacity: 0.85; }
+.gp-xref-cell--missing  { color: #444; font-style: italic; }
+.gp-item-name   { display: block; font-size: 0.82rem; color: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.gp-item-name:hover { text-decoration: underline; }
+.gp-item-id     { display: block; font-size: 0.7rem; color: var(--color-text-muted); margin-top: 1px; }
+.gp-xref-agreement { font-size: 0.78rem; }
+.gp-xref-agreement--unanimous { color: #4ade80; font-weight: 600; }
+
+/* ── Log/targets/trinket panels ──────────────────────────────────────────── */
+.gp-log-wrap { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+.gp-log__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 1rem; margin: 0; padding: 1rem 1.5rem; cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.gp-log__title:hover { background: rgba(255,255,255,0.02); }
+.gp-log-inner { padding: 0 1.5rem 1.25rem; }
+.gp-log-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.gp-log-table th { text-align: left; padding: 0.4rem 0.6rem; color: var(--color-text-muted); border-bottom: 1px solid var(--color-border); font-size: 0.75rem; text-transform: uppercase; white-space: nowrap; }
+.gp-log-table td { padding: 0.35rem 0.6rem; border-bottom: 1px solid #2a2a2e; vertical-align: middle; }
+.gp-select { background: #1a1a1e; border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text); padding: 0.3rem 0.5rem; font-size: 0.82rem; }
+.gp-controls__label { font-size: 0.82rem; color: var(--color-text-muted); white-space: nowrap; }
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+.toggle-icon { font-size: 0.75rem; opacity: 0.6; }
+</style>
+{% endblock %}
+{% block content %}
+
+    {# ── Page header ─────────────────────────────────────────────────────────── #}
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+        <h1 style="font-family:'Cinzel',serif; color:var(--color-gold); margin:0; font-size:1.4rem; flex:1;">
+            Gear Plan Admin
+        </h1>
+        <button class="btn-sm btn-secondary" onclick="loadMatrix()">Refresh Matrix</button>
+    </div>
+    <p style="color:var(--color-text-muted); margin:0; font-size:0.88rem;">
+        New pipeline — runs via enrichment schema. Use these controls after new content launches.
+    </p>
+
+    {# ── Status bar ───────────────────────────────────────────────────────────── #}
+    <div class="gp-status-bar" id="gp-status">
+        <span class="gp-status-bar__msg">Ready.</span>
+    </div>
+
+    {# ── Section A — Raw Data Refresh ─────────────────────────────────────────── #}
+    <div class="gpa-section">
+        <div class="gpa-section__header">
+            <span class="gpa-section__letter">A</span>
+            <h2 class="gpa-section__title">Raw Data Refresh</h2>
+        </div>
+        <p class="gpa-section__desc">
+            Populate the landing tables from the Blizzard API and Wowhead.
+            <strong>Flush &amp; Fill</strong> truncates all landing tables before refilling — use at season start.
+            <strong>Catch Up</strong> skips the truncate and only pulls new/missing items.
+        </p>
+        <div class="gpa-section__controls">
+            <button id="flush-fill-btn" class="btn-sm btn-primary" onclick="landingFlushFill()">Flush &amp; Fill</button>
+            <button id="catch-up-btn" class="btn-sm btn-secondary" onclick="landingCatchUp()">Catch Up</button>
+        </div>
+        <div id="landing-progress-wrap" style="display:none;">
+            <div class="gpa-progress"><div class="gpa-progress__fill" id="landing-progress-fill" style="width:0%"></div></div>
+        </div>
+        <div class="gpa-section__result" id="landing-result"></div>
+    </div>
+
+    {# ── Section B — BIS Scraping ─────────────────────────────────────────────── #}
+    <div class="gpa-section">
+        <div class="gpa-section__header">
+            <span class="gpa-section__letter">B</span>
+            <h2 class="gpa-section__title">BIS Scraping</h2>
+        </div>
+        <p class="gpa-section__desc">
+            Scrape u.gg and Wowhead BIS recommendations for all specs.
+            <strong>Discover URLs</strong> finds scrape targets for the current season.
+            <strong>Test Fetch</strong> runs a single Blood DK scrape for quick verification.
+            <strong>Sync All</strong> scrapes every active target.
+            <strong>Gap Fill</strong> scrapes only targets with no raw data or last fetched &gt;7 days ago.
+            <strong>Re-Sync Errors</strong> retries only failed targets.
+        </p>
+        <div class="gpa-section__controls">
+            <button id="discover-btn" class="btn-sm btn-secondary" onclick="discoverTargets()">Discover URLs</button>
+            <button id="test-blood-dk-btn" class="btn-sm btn-secondary" onclick="testBloodDk()">Test Fetch (Blood DK)</button>
+            <button id="sync-all-btn" class="btn-sm btn-primary" onclick="syncAll()">Sync All</button>
+            <button id="sync-gaps-btn" class="btn-sm btn-secondary" onclick="syncGaps()">Gap Fill</button>
+            <button id="resync-errors-btn" class="btn-sm btn-secondary" onclick="resyncErrors()">Re-Sync Errors</button>
+        </div>
+    </div>
+
+    {# ── BIS Scrape matrix ────────────────────────────────────────────────────── #}
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+        <span style="font-size:0.85rem; color:var(--color-text-muted);">
+            BIS Scrape Status — click a cell to view entries
+        </span>
+    </div>
+    <div class="gp-matrix-wrap">
+        <table class="gp-matrix" id="gp-matrix-table">
+            <thead id="gp-matrix-head">
+                <tr><th class="gp-th-spec">Spec</th></tr>
+            </thead>
+            <tbody id="gp-matrix-body">
+                <tr><td colspan="10" style="padding:2rem; text-align:center; color:var(--color-text-muted);">Loading…</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    {# ── Drill-down panel ─────────────────────────────────────────────────────── #}
+    <div class="gp-detail-wrap" id="gp-detail-panel">
+        <h2 class="gp-detail__title" id="gp-detail-title">BIS Entries</h2>
+        <div class="gp-slots-grid" id="gp-detail-slots"></div>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;" id="gp-detail-actions"></div>
+    </div>
+
+    {# ── Section C — Cleanup and Populate ─────────────────────────────────────── #}
+    <div class="gpa-section">
+        <div class="gpa-section__header">
+            <span class="gpa-section__letter">C</span>
+            <h2 class="gpa-section__title">Cleanup and Populate</h2>
+        </div>
+        <p class="gpa-section__desc">
+            <strong>Enrich &amp; Classify</strong> fetches Wowhead tooltips for any unenriched items, runs tier token
+            processing, then rebuilds the full enrichment schema (items → sources → BIS entries → trinket ratings →
+            category classification). Safe to re-run at any time.
+            <strong>Populate All Plans</strong> creates gear plans for all in-guild characters that don't have one
+            and fills unlocked slots from Wowhead Overall.
+        </p>
+        <div class="gpa-section__controls">
+            <button id="enrich-classify-btn" class="btn-sm btn-primary" onclick="enrichAndClassify()">Enrich &amp; Classify</button>
+            <button id="bulk-populate-btn" class="btn-sm btn-secondary" onclick="bulkPopulatePlans()">Populate All Plans</button>
+        </div>
+        <div id="enrich-classify-progress-wrap" style="display:none;">
+            <div class="gpa-progress"><div class="gpa-progress__fill" id="enrich-classify-progress-fill" style="width:0%"></div></div>
+        </div>
+        <div class="gpa-section__result" id="enrich-classify-result"></div>
+        <div class="gpa-section__result" id="bulk-populate-result"></div>
+    </div>
+
+    {# ── Scrape Targets panel ─────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleTargets()">
+            Scrape Targets <span class="toggle-icon" id="targets-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-targets-content" style="display:none;">
+            <div class="gp-log-inner">
+                <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
+                    <select class="gp-select" id="targets-filter-source" onchange="loadTargets()">
+                        <option value="">All websites</option>
+                    </select>
+                    <select class="gp-select" id="targets-filter-status" onchange="loadTargets()">
+                        <option value="">All statuses</option>
+                        <option value="pending">Pending</option>
+                        <option value="success">Success</option>
+                        <option value="partial">Partial</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    <button class="btn-sm btn-secondary" onclick="loadTargets()">Refresh</button>
+                    <span id="targets-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+                </div>
+                <div style="overflow:auto; max-height:55vh;">
+                    <table class="gp-log-table" style="min-width:900px;">
+                        <thead>
+                            <tr>
+                                <th>Spec</th>
+                                <th>Hero Talent</th>
+                                <th>Source</th>
+                                <th>Plan Type</th>
+                                <th>Status</th>
+                                <th>Items</th>
+                                <th>Last Fetched</th>
+                                <th>URL</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="gp-targets-body">
+                            <tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Cross-Reference panel ────────────────────────────────────────────────── #}
+    <div class="gp-xref-wrap">
+        <h2 class="gp-xref__title">Cross-Reference</h2>
+        <div class="gp-xref__controls">
+            <span class="gp-controls__label">Spec:</span>
+            <select class="gp-select" id="xref-spec-select" onchange="loadXref()">
+                <option value="">— select spec —</option>
+            </select>
+            <span class="gp-controls__label">Hero Talent:</span>
+            <select class="gp-select" id="xref-ht-select" onchange="loadXref()">
+                <option value="">All</option>
+            </select>
+        </div>
+        <div id="gp-xref-content" style="color:var(--color-text-muted); font-size:0.85rem;">
+            Select a spec above to compare sources.
+        </div>
+    </div>
+
+    {# ── Trinket Ratings panel ────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleTrinketRatings()">
+            Trinket Ratings <span class="toggle-icon" id="trinket-ratings-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-trinket-ratings-content" style="display:none;">
+            <div class="gp-log-inner">
+                <p style="color:var(--color-text-muted); font-size:0.85rem; margin:0 0 0.75rem;">
+                    Trinket tier ratings (S/A/B/C/D) scraped from BIS guide sources during Sync All.
+                    Populated automatically; no separate sync required.
+                </p>
+                <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
+                    <button class="btn-sm btn-secondary" onclick="loadTrinketRatings()">Refresh</button>
+                    <span id="trinket-ratings-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+                </div>
+                <div style="overflow:auto; max-height:55vh;">
+                    <table class="gp-log-table" id="gp-trinket-ratings-table" style="min-width:700px;">
+                        <thead id="gp-trinket-ratings-head">
+                            <tr><th>Spec</th><th>Source</th><th>Ratings</th><th>Last Updated</th></tr>
+                        </thead>
+                        <tbody id="gp-trinket-ratings-body">
+                            <tr><td colspan="4" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Recent Extraction Log panel ──────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleLog()">
+            Recent Extraction Log <span class="toggle-icon" id="log-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-log-content" style="display:none;">
+            <div class="gp-log-inner">
+                <table class="gp-log-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th><th>Spec</th><th>Source</th>
+                            <th>Technique</th><th>Status</th><th>Items</th><th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gp-log-body">
+                        <tr><td colspan="7" style="color:var(--color-text-muted); padding:1rem;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+{# ── Hidden selects required by gear_plan_admin.js — some are NOT null-checked #}
+<select id="sync-origin-select" style="display:none;"></select>
+<select id="sync-plan-type-select" style="display:none;">
+    <option value="raid">Raid Only</option>
+    <option value="mythic_plus">M+ Only</option>
+    <option value="overall">Overall</option>
+</select>
+<select id="simc-spec-select" style="display:none;"></select>
+<select id="simc-source-select" style="display:none;"></select>
+<select id="simc-ht-select" style="display:none;"></select>
+
+<script src="/static/js/gear_plan_admin.js?v=1.2.0"></script>
+<script>
+window._isGl = true;
+
+// ── Landing table fill ────────────────────────────────────────────────────────
+let _landingPollInterval = null;
+
+function _landingSetBtn(running) {
+    const ff = document.getElementById('flush-fill-btn');
+    const cu = document.getElementById('catch-up-btn');
+    if (ff) { ff.disabled = running; if (running) ff.dataset.origText = ff.textContent; }
+    if (cu) { cu.disabled = running; }
+}
+
+function _landingShowProgress(pct) {
+    const wrap = document.getElementById('landing-progress-wrap');
+    const fill = document.getElementById('landing-progress-fill');
+    if (wrap) wrap.style.display = 'block';
+    if (fill) fill.style.width = Math.round(pct) + '%';
+}
+
+function _landingHideProgress() {
+    const wrap = document.getElementById('landing-progress-wrap');
+    if (wrap) wrap.style.display = 'none';
+}
+
+async function _landingPost(endpoint) {
+    _landingSetBtn(true);
+    _landingShowProgress(0);
+    setStatus('Starting…', 'running');
+    try {
+        const res = await fetch('/api/v1/admin/bis/' + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const d = await res.json();
+        if (!d.ok) {
+            setStatus('Error: ' + (d.error || 'unknown'), 'error');
+            _landingSetBtn(false);
+            _landingHideProgress();
+            return;
+        }
+        _startLandingPoll();
+    } catch (e) {
+        setStatus('Request failed: ' + e.message, 'error');
+        _landingSetBtn(false);
+        _landingHideProgress();
+    }
+}
+
+function landingFlushFill() { _landingPost('landing-flush-fill'); }
+function landingCatchUp()   { _landingPost('landing-catch-up'); }
+
+function _startLandingPoll() {
+    if (_landingPollInterval) return;
+    _landingPollInterval = setInterval(_pollLanding, 2000);
+}
+
+async function _pollLanding() {
+    try {
+        const res = await fetch('/api/v1/admin/bis/landing-status');
+        const d = await res.json();
+        if (!d.ok) return;
+        const s = d;  // status fields are at top level, not nested
+        const pct = s.total_steps > 0 ? (s.step / s.total_steps) * 100 : 0;
+        _landingShowProgress(pct);
+        const label = s.phase_label + (s.detail ? ' — ' + s.detail : '');
+        if (s.running) {
+            setStatus(`[${s.step}/${s.total_steps}] ${label}`, 'running');
+        } else if (s.error) {
+            setStatus('Error: ' + s.error, 'error');
+            const el = document.getElementById('landing-result');
+            if (el) el.textContent = 'Failed: ' + s.error;
+            clearInterval(_landingPollInterval); _landingPollInterval = null;
+            _landingSetBtn(false);
+            _landingHideProgress();
+        } else if (s.finished_at) {
+            setStatus(label, 'success');
+            const el = document.getElementById('landing-result');
+            if (el) el.textContent = 'Completed at ' + new Date(s.finished_at).toLocaleTimeString();
+            clearInterval(_landingPollInterval); _landingPollInterval = null;
+            _landingSetBtn(false);
+            setTimeout(_landingHideProgress, 2000);
+        }
+    } catch (_) { /* ignore transient errors */ }
+}
+
+// ── Enrich & Classify ─────────────────────────────────────────────────────────
+let _ecPollInterval = null;
+
+function _ecSetBtn(running) {
+    const btn = document.getElementById('enrich-classify-btn');
+    if (btn) btn.disabled = running;
+}
+
+function _ecShowProgress(pct) {
+    const wrap = document.getElementById('enrich-classify-progress-wrap');
+    const fill = document.getElementById('enrich-classify-progress-fill');
+    if (wrap) wrap.style.display = 'block';
+    if (fill) fill.style.width = Math.round(pct) + '%';
+}
+
+function _ecHideProgress() {
+    const wrap = document.getElementById('enrich-classify-progress-wrap');
+    if (wrap) wrap.style.display = 'none';
+}
+
+async function enrichAndClassify() {
+    _ecSetBtn(true);
+    _ecShowProgress(0);
+    setStatus('Starting Enrich & Classify…', 'running');
+    const el = document.getElementById('enrich-classify-result');
+    if (el) el.textContent = '';
+    try {
+        const res = await fetch('/api/v1/admin/bis/enrich-and-classify', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const d = await res.json();
+        if (!d.ok) {
+            setStatus('Error: ' + (d.error || 'unknown'), 'error');
+            _ecSetBtn(false);
+            _ecHideProgress();
+            return;
+        }
+        _startEcPoll();
+    } catch (e) {
+        setStatus('Request failed: ' + e.message, 'error');
+        _ecSetBtn(false);
+        _ecHideProgress();
+    }
+}
+
+function _startEcPoll() {
+    if (_ecPollInterval) return;
+    _ecPollInterval = setInterval(_pollEc, 2000);
+}
+
+async function _pollEc() {
+    try {
+        const res = await fetch('/api/v1/admin/bis/enrich-classify-status');
+        const d = await res.json();
+        if (!d.ok) return;
+        const s = d;  // status fields are at top level, not nested
+        const pct = s.total_steps > 0 ? (s.step / s.total_steps) * 100 : 0;
+        _ecShowProgress(pct);
+        const label = s.phase_label + (s.detail ? ' — ' + s.detail : '');
+        if (s.running) {
+            setStatus(`[${s.step}/${s.total_steps}] ${label}`, 'running');
+        } else if (s.error) {
+            setStatus('Error: ' + s.error, 'error');
+            const el = document.getElementById('enrich-classify-result');
+            if (el) el.textContent = 'Failed: ' + s.error;
+            clearInterval(_ecPollInterval); _ecPollInterval = null;
+            _ecSetBtn(false);
+            _ecHideProgress();
+        } else if (s.finished_at) {
+            setStatus(label, 'success');
+            const el = document.getElementById('enrich-classify-result');
+            if (el) el.textContent = 'Completed at ' + new Date(s.finished_at).toLocaleTimeString();
+            clearInterval(_ecPollInterval); _ecPollInterval = null;
+            _ecSetBtn(false);
+            setTimeout(_ecHideProgress, 2000);
+        }
+    } catch (_) { /* ignore transient errors */ }
+}
+
+// ── Test Fetch (Blood DK) ─────────────────────────────────────────────────────
+async function testBloodDk() {
+    const btn = document.getElementById('test-blood-dk-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+    setStatus('Fetching Blood DK BIS data…', 'running');
+    try {
+        const res = await fetch('/api/v1/admin/bis/test-blood-dk', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const d = await res.json();
+        if (!res.ok) {
+            setStatus(`Blood DK test failed: HTTP ${res.status} — ${d.detail || d.error || 'unknown'}`, 'error');
+        } else if (d.ok) {
+            const stats = `${d.targets_run ?? '?'} targets, ${d.items_found ?? '?'} items found, ${d.errors ?? '?'} errors`;
+            setStatus('Blood DK test complete — ' + stats, 'success');
+        } else {
+            setStatus('Blood DK test failed: ' + (d.error || 'unknown'), 'error');
+        }
+    } catch (e) {
+        setStatus('Request failed: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Test Fetch (Blood DK)'; }
+    }
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+    loadMatrix();
+    loadSources();
+    loadLog();
+
+    // If a background task was already running before page load, reconnect polls
+    fetch('/api/v1/admin/bis/landing-status').then(r => r.json()).then(d => {
+        if (d.ok && d.running) { _landingSetBtn(true); _startLandingPoll(); }
+    }).catch(() => {});
+    fetch('/api/v1/admin/bis/enrich-classify-status').then(r => r.json()).then(d => {
+        if (d.ok && d.running) { _ecSetBtn(true); _startEcPoll(); }
+    }).catch(() => {});
+});
+</script>
+{% endblock %}

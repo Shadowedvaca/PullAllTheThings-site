@@ -8,6 +8,7 @@ subsequent lookups.  No auth required — the endpoint is publicly accessible.
 """
 
 import asyncio
+import json
 import logging
 import re
 from typing import Optional
@@ -96,6 +97,16 @@ async def get_or_fetch_item(
     data = await _fetch_wowhead_tooltip(blizzard_item_id, http_client)
     if not data:
         return None
+
+    # Phase A: dual-write raw Wowhead payload to landing schema
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO landing.wowhead_tooltips (blizzard_item_id, payload)
+            VALUES ($1, $2::jsonb)
+            """,
+            blizzard_item_id, json.dumps(data),
+        )
 
     name = data.get("name", "")
     icon_name = data.get("icon", "")
@@ -219,7 +230,7 @@ async def enrich_blizzard_metadata(
             """
             SELECT DISTINCT wi.blizzard_item_id, wi.slot_type, wi.armor_type
               FROM guild_identity.wow_items wi
-              JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
+              JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
              WHERE wi.wowhead_tooltip_html IS NULL
                AND (
                      wi.slot_type IN ('head','shoulder','chest','hands','legs')
@@ -255,6 +266,19 @@ async def enrich_blizzard_metadata(
                             progress_cb(updated, len(errors))
                     await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
                     return
+
+                # Phase A: dual-write raw Blizzard item payload to landing schema
+                try:
+                    async with pool.acquire() as _lconn:
+                        await _lconn.execute(
+                            """
+                            INSERT INTO landing.blizzard_items (blizzard_item_id, payload)
+                            VALUES ($1, $2::jsonb)
+                            """,
+                            blizzard_item_id, json.dumps(data),
+                        )
+                except Exception:
+                    pass  # landing write is best-effort; don't fail enrichment
 
                 # armor_type: from item_subclass name if item_class is Armor (id=4)
                 armor_type = None
@@ -487,6 +511,19 @@ async def enrich_unenriched_items(
                         progress_cb(enriched, len(errors))
                 await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
                 return
+
+            # Phase A: dual-write raw Wowhead payload to landing schema
+            try:
+                async with pool.acquire() as _lconn:
+                    await _lconn.execute(
+                        """
+                        INSERT INTO landing.wowhead_tooltips (blizzard_item_id, payload)
+                        VALUES ($1, $2::jsonb)
+                        """,
+                        blizzard_item_id, json.dumps(data),
+                    )
+            except Exception:
+                pass  # landing write is best-effort; don't fail enrichment
 
             name = data.get("name", "")
             icon_name = data.get("icon", "")

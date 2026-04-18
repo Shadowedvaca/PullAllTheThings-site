@@ -402,6 +402,7 @@ select.gp-select {
 .spinner { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -0.1em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+
 /* ── Junk item source rows ────────────────────────────────────────────────── */
 .gp-junk-row { opacity: 0.5; }
 .gp-junk-row td { text-decoration: line-through; }
@@ -550,6 +551,19 @@ select.gp-select {
                 <button id="bulk-populate-btn" class="btn-sm btn-primary" onclick="bulkPopulatePlans()">Populate All Plans</button>
             </div>
             <div class="gp-step__lastrun" id="bulk-populate-result"></div>
+        </div>
+
+        {# Step 6 — Rebuild Enrichment (Phase B) #}
+        <div class="gp-step">
+            <div class="gp-step__header">
+                <span class="gp-step__num">Step 6</span>
+                <span class="gp-step__title">Rebuild Enrichment</span>
+            </div>
+            <p class="gp-step__desc">Populate the <code>enrichment.*</code> tables from guild_identity data. Runs all enrichment sprocs in order: items &rarr; sources &rarr; recipes &rarr; BIS entries &rarr; trinket ratings &rarr; category classification &rarr; junk flagging. Safe to re-run after any of Steps 1–4.</p>
+            <div class="gp-step__controls">
+                <button id="rebuild-enrichment-btn" class="btn-sm btn-secondary" onclick="rebuildEnrichment()">Rebuild Enrichment</button>
+            </div>
+            <div class="gp-step__lastrun" id="rebuild-enrichment-result"></div>
         </div>
 
     </div>
@@ -753,8 +767,6 @@ select.gp-select {
             </div>
         </div>
     </div>
-
-</div>
 
 {# ── SimC import modal ────────────────────────────────────────────────────── #}
 <div class="gp-modal-overlay" id="simc-modal" onclick="closeSimcModal(event)">

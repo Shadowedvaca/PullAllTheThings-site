@@ -254,6 +254,10 @@ class BlizzardClient:
             logger.warning("Blizzard API 404: %s", path)
             return None
 
+        if response.status_code >= 500:
+            logger.warning("Blizzard API %d on %s — skipping", response.status_code, path)
+            return None
+
         response.raise_for_status()
         return response.json()
 
@@ -626,6 +630,13 @@ class BlizzardClient:
         """GET /data/wow/item/{id} — static item metadata (name, item_set, etc.)."""
         return await self._api_get(
             f"/data/wow/item/{item_id}",
+            params={"namespace": "static-us", "locale": self.locale},
+        )
+
+    async def get_item_set_index(self) -> Optional[dict]:
+        """GET /data/wow/item-set/index — list of all item sets (id + name)."""
+        return await self._api_get(
+            "/data/wow/item-set/index",
             params={"namespace": "static-us", "locale": self.locale},
         )
 

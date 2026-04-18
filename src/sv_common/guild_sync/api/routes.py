@@ -402,7 +402,7 @@ async def orphan_wow_characters(
                       cl.name AS class_name
                FROM guild_identity.wow_characters wc
                LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
-               LEFT JOIN guild_identity.classes cl ON cl.id = wc.class_id
+               LEFT JOIN ref.classes cl ON cl.id = wc.class_id
                WHERE wc.removed_at IS NULL
                  AND wc.id NOT IN (
                      SELECT character_id FROM guild_identity.player_characters

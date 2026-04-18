@@ -14,6 +14,7 @@ Display/track rule changes only require a code deploy — no re-sync.
 """
 
 import asyncio
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -250,6 +251,17 @@ async def _sync_encounter(
     if not enc_data:
         return 0, [f"Could not fetch encounter {encounter_id} from Blizzard API"]
 
+    # Phase A: dual-write raw payload to landing schema
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO landing.blizzard_journal_encounters
+                (encounter_id, instance_id, payload)
+            VALUES ($1, $2, $3::jsonb)
+            """,
+            encounter_id, instance_id, json.dumps(enc_data),
+        )
+
     items = enc_data.get("items", [])
     if not items:
         return 0, []
@@ -375,8 +387,8 @@ async def sync_tier_set_completions(
                             WHERE s.item_id = wi.id
                        )
                    AND EXISTS (
-                           SELECT 1 FROM guild_identity.bis_list_entries ble
-                            WHERE ble.item_id = wi.id
+                           SELECT 1 FROM enrichment.bis_entries be
+                            WHERE be.blizzard_item_id = wi.blizzard_item_id
                        )
                  LIMIT 30
                 """
@@ -509,17 +521,17 @@ async def sync_catalyst_items_via_appearance(
     async with pool.acquire() as conn:
         tier_rows = await conn.fetch(
             """
-            SELECT DISTINCT wi.blizzard_item_id, wi.name
-              FROM guild_identity.wow_items wi
-              JOIN guild_identity.item_sources src ON src.item_id = wi.id
-             WHERE wi.slot_type IN ('head','shoulder','chest','hands','legs')
-               AND wi.name LIKE '% of %'
-               AND src.instance_type = 'raid'
+            SELECT DISTINCT ei.blizzard_item_id, ei.name
+              FROM enrichment.items ei
+              JOIN enrichment.item_sources es ON es.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type IN ('head','shoulder','chest','hands','legs')
+               AND ei.name LIKE '% of %'
+               AND es.instance_type = 'raid'
                AND EXISTS (
-                   SELECT 1 FROM guild_identity.bis_list_entries ble
-                    WHERE ble.item_id = wi.id
+                   SELECT 1 FROM enrichment.bis_entries be
+                    WHERE be.blizzard_item_id = ei.blizzard_item_id
                )
-             ORDER BY wi.name
+             ORDER BY ei.name
             """
         )
 
@@ -609,6 +621,18 @@ async def sync_catalyst_items_via_appearance(
                 return_exceptions=True,
             )
 
+            # Phase A: dual-write raw appearance payloads to landing schema
+            for app_id, app_data in zip(app_ids, app_results):
+                if isinstance(app_data, Exception) or not app_data:
+                    continue
+                await conn.execute(
+                    """
+                    INSERT INTO landing.blizzard_appearances (appearance_id, payload)
+                    VALUES ($1, $2::jsonb)
+                    """,
+                    app_id, json.dumps(app_data),
+                )
+
             for app_id, app_data in zip(app_ids, app_results):
                 if isinstance(app_data, Exception) or not app_data:
                     continue
@@ -629,31 +653,46 @@ async def sync_catalyst_items_via_appearance(
                         continue
 
                     try:
-                        result = await conn.execute(
+                        # Write quality_track to landing so sp_rebuild_items() picks it up.
+                        qt_result = await conn.execute(
                             """
-                            INSERT INTO guild_identity.wow_items
-                                   (blizzard_item_id, name, slot_type, quality_track)
-                            VALUES ($1, $2, 'other', $3)
+                            INSERT INTO landing.blizzard_item_quality_tracks
+                                   (blizzard_item_id, quality_track)
+                            VALUES ($1, $2)
                             ON CONFLICT (blizzard_item_id) DO UPDATE SET
                                 quality_track = COALESCE(
-                                    guild_identity.wow_items.quality_track,
+                                    landing.blizzard_item_quality_tracks.quality_track,
                                     EXCLUDED.quality_track
-                                )
+                                ),
+                                fetched_at = NOW()
                             """,
                             blizzard_item_id,
-                            item_name,
                             quality_track,
                         )
-                        if result == "INSERT 0 1":
+
+                        # Fetch full item data from Blizzard API and write to landing.
+                        item_data = await client.get_item(blizzard_item_id)
+                        if item_data:
+                            await conn.execute(
+                                """
+                                INSERT INTO landing.blizzard_items
+                                       (blizzard_item_id, payload)
+                                VALUES ($1, $2::jsonb)
+                                """,
+                                blizzard_item_id,
+                                json.dumps(item_data),
+                            )
+
+                        if qt_result == "INSERT 0 1":
                             stubbed += 1
                             logger.info(
-                                "sync_catalyst_items: stubbed item %d "
+                                "sync_catalyst_items: registered item %d "
                                 "from appearance %d (set %d, track=%s)",
                                 blizzard_item_id, app_id, set_id, quality_track,
                             )
                     except Exception as exc:
                         msg = (
-                            f"sync_catalyst_items: DB error stubbing item "
+                            f"sync_catalyst_items: DB error registering item "
                             f"{blizzard_item_id}: {exc}"
                         )
                         logger.error(msg)
@@ -712,8 +751,11 @@ async def enrich_catalyst_tier_items(
             DELETE FROM guild_identity.item_sources
              WHERE instance_type IN ('raid', 'world_boss')
                AND item_id IN (
-                   SELECT id FROM guild_identity.wow_items
-                    WHERE quality_track = 'C'
+                   SELECT wi.id
+                     FROM guild_identity.wow_items wi
+                     JOIN landing.blizzard_item_quality_tracks qt
+                       ON qt.blizzard_item_id = wi.blizzard_item_id
+                    WHERE qt.quality_track = 'C'
                )
             """
         )
@@ -744,10 +786,10 @@ async def enrich_catalyst_tier_items(
         tier_items = await conn.fetch(
             """
             SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name,
-                   COALESCE(NULLIF(wi.slot_type, 'other'), ble.slot) AS eff_slot
-              FROM guild_identity.bis_list_entries ble
-              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-             WHERE ble.slot = ANY($1::text[])
+                   COALESCE(NULLIF(wi.slot_type, 'other'), be.slot) AS eff_slot
+              FROM enrichment.bis_entries be
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
+             WHERE be.slot = ANY($1::text[])
                -- Exclude catalyst items (quality_track='C') — they are handled by
                -- Pass 2 with instance_type='catalyst', never by boss source rows.
                AND wi.quality_track IS DISTINCT FROM 'C'
@@ -757,7 +799,7 @@ async def enrich_catalyst_tier_items(
                -- below and result in spurious boss source rows.
                AND NOT EXISTS (
                        SELECT 1 FROM guild_identity.item_recipe_links irl
-                        WHERE irl.item_id = wi.id
+                        WHERE irl.blizzard_item_id = wi.blizzard_item_id
                    )
                AND (
                    -- PRIMARY: Wowhead tooltip confirms tier set membership.
@@ -778,7 +820,7 @@ async def enrich_catalyst_tier_items(
                         )
                     AND NOT EXISTS (
                             SELECT 1 FROM guild_identity.item_recipe_links irl
-                             WHERE irl.item_id = wi.id
+                             WHERE irl.blizzard_item_id = wi.blizzard_item_id
                         )
                    )
                )
@@ -876,15 +918,15 @@ async def enrich_catalyst_tier_items(
         # source status.
         suffix_seed_rows = await conn.fetch(
             """
-            SELECT DISTINCT wi.name
-              FROM guild_identity.wow_items wi
-              JOIN guild_identity.bis_list_entries ble ON ble.item_id = wi.id
-             WHERE wi.slot_type = ANY($1::text[])
-               AND wi.name LIKE '% of %'
-               AND wi.armor_type IS NOT NULL
+            SELECT DISTINCT ei.name
+              FROM enrichment.items ei
+              JOIN enrichment.bis_entries be ON be.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type = ANY($1::text[])
+               AND ei.name LIKE '% of %'
+               AND ei.armor_type IS NOT NULL
                AND NOT EXISTS (
                        SELECT 1 FROM guild_identity.item_recipe_links irl
-                        WHERE irl.item_id = wi.id
+                        WHERE irl.blizzard_item_id = ei.blizzard_item_id
                    )
             """,
             list(_TIER_SLOTS),
@@ -903,16 +945,18 @@ async def enrich_catalyst_tier_items(
             )
             return added, errors
 
-        # Load catalyst-slot items directly from wow_items whose name ends with a known
-        # tier suffix.  No BIS JOIN — catalyst items from the appearance crawl may not
-        # have BIS entries (e.g. leather cloaks are never recommended by BIS scrapers).
+        # Load catalyst-slot items directly by name suffix.  No BIS JOIN — catalyst
+        # items from the appearance crawl may not have BIS entries (e.g. leather
+        # cloaks are never recommended by BIS scrapers).  Read name/slot_type from
+        # enrichment.items; JOIN wow_items only to resolve item_id for item_sources.
         suffix_patterns = [f"%{s}" for s in tier_suffixes]
         all_catalyst_bis = await conn.fetch(
             """
-            SELECT DISTINCT wi.id AS wow_item_id, wi.blizzard_item_id, wi.name
-              FROM guild_identity.wow_items wi
-             WHERE wi.slot_type = ANY($1::text[])
-               AND wi.name LIKE ANY($2::text[])
+            SELECT DISTINCT wi.id AS wow_item_id, ei.blizzard_item_id, ei.name
+              FROM enrichment.items ei
+              JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = ei.blizzard_item_id
+             WHERE ei.slot_type = ANY($1::text[])
+               AND ei.name LIKE ANY($2::text[])
             """,
             list(_CATALYST_SLOTS),
             suffix_patterns,
@@ -1106,8 +1150,12 @@ async def flag_junk_sources(
                    SET is_suspected_junk = TRUE
                   FROM guild_identity.wow_items wi
                  WHERE wi.id = s.item_id
-                   AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
                    AND wi.slot_type IN ('head', 'shoulder', 'chest', 'hands', 'legs')
+                   AND EXISTS (
+                         SELECT 1 FROM enrichment.items ei
+                          WHERE ei.blizzard_item_id = wi.blizzard_item_id
+                            AND ei.item_category = 'tier'
+                       )
                 """
             )
             flagged_tp = int(tp_result.split()[-1])

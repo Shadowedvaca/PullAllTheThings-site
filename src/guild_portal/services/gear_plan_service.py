@@ -29,31 +29,11 @@ from sv_common.guild_sync.source_config import (
 logger = logging.getLogger(__name__)
 
 # Canonical WoW slot order (16 slots)
-WOW_SLOTS = [
-    "head", "neck", "shoulder", "back", "chest", "wrist",
-    "hands", "waist", "legs", "feet",
-    "ring_1", "ring_2", "trinket_1", "trinket_2",
-    "main_hand", "off_hand",
-]
-
-SLOT_DISPLAY = {
-    "head": "Head",
-    "neck": "Neck",
-    "shoulder": "Shoulder",
-    "back": "Back",
-    "chest": "Chest",
-    "wrist": "Wrist",
-    "hands": "Hands",
-    "waist": "Waist",
-    "legs": "Legs",
-    "feet": "Feet",
-    "ring_1": "Ring 1",
-    "ring_2": "Ring 2",
-    "trinket_1": "Trinket 1",
-    "trinket_2": "Trinket 2",
-    "main_hand": "Main Hand",
-    "off_hand": "Off Hand",
-}
+# ── Slot metadata — loaded from ref.gear_plan_slots at startup ────────────────
+# WOW_SLOTS kept as exported name so existing route guards work without changes.
+WOW_SLOTS:      set[str]        = set()   # valid plan_slot keys
+_SLOT_META:     dict[str, dict] = {}      # plan_slot → row dict
+_SLOTS_ORDERED: list[str]       = []      # plan_slots in canonical slot_order sequence
 
 # Quality track ranking (lowest to highest)
 TRACK_ORDER: dict[str, int] = {"V": 0, "C": 1, "H": 2, "M": 3}
@@ -138,51 +118,38 @@ CLASS_ARMOR_TYPE: dict[str, str] = {
     "Warrior":      "plate",
 }
 
-# (class_name, spec_name) → primary stat for weapon item filtering
-SPEC_PRIMARY_STAT: dict[tuple[str, str], str] = {
-    ("Mage", "Arcane"): "int", ("Mage", "Fire"): "int", ("Mage", "Frost"): "int",
-    ("Warlock", "Affliction"): "int", ("Warlock", "Demonology"): "int", ("Warlock", "Destruction"): "int",
-    ("Priest", "Discipline"): "int", ("Priest", "Holy"): "int", ("Priest", "Shadow"): "int",
-    ("Death Knight", "Blood"): "str", ("Death Knight", "Frost"): "str", ("Death Knight", "Unholy"): "str",
-    ("Warrior", "Arms"): "str", ("Warrior", "Fury"): "str", ("Warrior", "Protection"): "str",
-    ("Paladin", "Holy"): "int", ("Paladin", "Protection"): "str", ("Paladin", "Retribution"): "str",
-    ("Druid", "Balance"): "int", ("Druid", "Feral"): "agi", ("Druid", "Guardian"): "agi",
-    ("Druid", "Restoration"): "int",
-    ("Monk", "Brewmaster"): "agi", ("Monk", "Mistweaver"): "int", ("Monk", "Windwalker"): "agi",
-    ("Rogue", "Assassination"): "agi", ("Rogue", "Outlaw"): "agi", ("Rogue", "Subtlety"): "agi",
-    ("Demon Hunter", "Havoc"): "agi", ("Demon Hunter", "Vengeance"): "agi",
-    ("Hunter", "Beast Mastery"): "agi", ("Hunter", "Marksmanship"): "agi", ("Hunter", "Survival"): "agi",
-    ("Shaman", "Elemental"): "int", ("Shaman", "Enhancement"): "agi", ("Shaman", "Restoration"): "int",
-    ("Evoker", "Devastation"): "int", ("Evoker", "Preservation"): "int", ("Evoker", "Augmentation"): "int",
-}
 
-# Slots that filter by armor_type; weapons use primary-stat check; accessories have no restriction
-_ARMOR_FILTER_SLOTS: frozenset[str] = frozenset(
-    {"head", "shoulder", "chest", "wrist", "hands", "waist", "legs", "feet"}
-)
-_WEAPON_SLOTS: frozenset[str] = frozenset({"main_hand", "off_hand"})
-# Paired slots — rings and trinkets share merged BIS pools; is_bis fires for either slot
-_PAIRED_SLOT_MAP: dict[str, str] = {
-    "ring_1": "ring_2", "ring_2": "ring_1",
-    "trinket_1": "trinket_2", "trinket_2": "trinket_1",
-}
+# ── Slot metadata helpers ─────────────────────────────────────────────────────
 
-# Slots that can have a tier/catalyst class set piece.
-_TIER_CATALYST_SLOTS: frozenset[str] = frozenset(
-    {"head", "shoulder", "chest", "hands", "legs", "back", "wrist", "waist", "feet"}
-)
-# The 5 main tier slots have Blizzard Journal source rows and a Wowhead
-# /item-set= link in their tooltip HTML — used as the reliable tier anchor.
-_MAIN_TIER_SLOTS: frozenset[str] = frozenset({"head", "shoulder", "chest", "hands", "legs"})
+async def _ensure_slot_meta(conn: asyncpg.Connection) -> None:
+    """Load ref.gear_plan_slots into the module-level cache if not already loaded."""
+    if _SLOT_META:
+        return
+    rows = await conn.fetch(
+        """SELECT plan_slot, display_name, slot_order, enrichment_slot_type,
+                  paired_slot, is_armor_slot, is_weapon_slot,
+                  is_tier_catalyst_slot, is_main_tier_slot
+             FROM ref.gear_plan_slots ORDER BY slot_order"""
+    )
+    _SLOT_META.update({r["plan_slot"]: dict(r) for r in rows})
+    _SLOTS_ORDERED.extend(r["plan_slot"] for r in rows)
+    WOW_SLOTS.update(_SLOT_META)
+
+
+async def load_slot_meta(pool: asyncpg.Pool) -> None:
+    """Pre-warm the slot metadata cache. Idempotent — safe to call repeatedly."""
+    async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
+
+
+def is_valid_slot(slot: str) -> bool:
+    """True when slot is a known plan slot (requires cache to be loaded)."""
+    return slot in _SLOT_META
+
+
 # The 4 catalyst slots (back/wrist/waist/feet) have no Journal encounter and
 # therefore no item_sources rows.  They are found via name-suffix matching
 # against the current season's main tier anchor.
-
-# Map from plan slot → wow_items.slot_type for paired slots
-_SLOT_TYPE_QUERY_MAP: dict[str, str] = {
-    "ring_2":    "ring_1",
-    "trinket_2": "trinket_1",
-}
 
 # Wowhead tooltip HTML armor-type marker: <!--scstart4:{subclass_id}-->
 # Used when wow_items.armor_type is NULL (items seeded via Journal API don't
@@ -426,7 +393,7 @@ async def get_or_create_plan(
         if bis_source_id is None:
             src_row = await conn.fetchrow(
                 """
-                SELECT id FROM guild_identity.bis_list_sources
+                SELECT id FROM ref.bis_list_sources
                  WHERE is_active = TRUE
                  ORDER BY is_default DESC, sort_order
                  LIMIT 1
@@ -558,6 +525,7 @@ async def populate_from_bis(
     slots populated.
     """
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             """
             SELECT id, spec_id, hero_talent_id, bis_source_id
@@ -595,14 +563,15 @@ async def populate_from_bis(
         # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
-            SELECT ble.slot, ble.item_id, ble.priority,
-                   wi.blizzard_item_id, wi.name AS item_name
-              FROM guild_identity.bis_list_entries ble
-              JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-             WHERE ble.source_id = $1
-               AND ble.spec_id = $2
-               AND (ble.hero_talent_id = $3 OR ble.hero_talent_id IS NULL)
-             ORDER BY ble.slot, ble.priority
+            SELECT be.slot, wi.id AS item_id, be.priority,
+                   be.blizzard_item_id, i.name AS item_name
+              FROM enrichment.bis_entries be
+              LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
+              LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
+             WHERE be.source_id = $1
+               AND be.spec_id = $2
+               AND (be.hero_talent_id = $3 OR be.hero_talent_id IS NULL)
+             ORDER BY be.slot, be.priority
             """,
             use_source, spec_id, use_ht,
         )
@@ -614,7 +583,7 @@ async def populate_from_bis(
 
         populated = 0
         for slot, candidates in by_slot.items():
-            if slot not in WOW_SLOTS or slot in locked_slots:
+            if not is_valid_slot(slot) or slot in locked_slots:
                 continue
             # Skip excluded items, pick first non-excluded candidate
             excluded = excluded_by_slot.get(slot, set())
@@ -709,6 +678,7 @@ async def import_simc_goals(
         return {"populated": 0, "skipped_locked": 0, "unrecognised": 0}
 
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
@@ -729,7 +699,7 @@ async def import_simc_goals(
 
         for simc_slot in slots:
             slot = simc_slot.slot
-            if slot not in WOW_SLOTS:
+            if not is_valid_slot(slot):
                 unrecognised += 1
                 continue
             if slot in locked_slots:
@@ -776,6 +746,7 @@ async def set_goals_from_equipped(
     Returns {"populated": N, "skipped_locked": M}.
     """
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
@@ -807,7 +778,7 @@ async def set_goals_from_equipped(
 
         for row in equip_rows:
             slot = row["slot"]
-            if slot not in WOW_SLOTS:
+            if not is_valid_slot(slot):
                 continue
             if slot in locked_slots:
                 skipped_locked += 1
@@ -896,8 +867,8 @@ async def export_simc(
                    c.name AS class_name
               FROM guild_identity.gear_plans gp
               JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id=$1 AND gp.character_id=$2
             """,
             player_id, character_id,
@@ -959,8 +930,8 @@ async def export_equipped_simc(
                    c.name AS class_name
               FROM guild_identity.gear_plans gp
               JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id=$1 AND gp.character_id=$2
             """,
             player_id, character_id,
@@ -1012,6 +983,7 @@ async def get_plan_detail(
     Returns None if no plan exists.  Call get_or_create_plan first.
     """
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         plan_row = await conn.fetchrow(
             """
             SELECT gp.id, gp.player_id, gp.character_id, gp.spec_id,
@@ -1024,11 +996,11 @@ async def get_plan_detail(
                    c.name AS class_name,
                    s.name AS spec_name_for_stat
               FROM guild_identity.gear_plans gp
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
-              LEFT JOIN guild_identity.hero_talents ht ON ht.id = gp.hero_talent_id
-              LEFT JOIN guild_identity.bis_list_sources bls ON bls.id = gp.bis_source_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.hero_talents ht ON ht.id = gp.hero_talent_id
+              LEFT JOIN ref.bis_list_sources bls ON bls.id = gp.bis_source_id
               LEFT JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id = $1 AND gp.character_id = $2
             """,
             player_id, character_id,
@@ -1151,15 +1123,14 @@ async def get_plan_detail(
         if spec_id:
             _tb_rows = await conn.fetch(
                 """
-                SELECT ttr.tier, ttr.source_id, bls.origin AS source_origin,
-                       wi.blizzard_item_id
-                  FROM guild_identity.trinket_tier_ratings ttr
-                  JOIN guild_identity.bis_list_sources bls ON bls.id = ttr.source_id
-                  JOIN guild_identity.wow_items wi ON wi.id = ttr.item_id
-                 WHERE ttr.spec_id = $1
-                   AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
+                SELECT tr.tier, tr.source_id, bls.origin AS source_origin,
+                       tr.blizzard_item_id
+                  FROM enrichment.trinket_ratings tr
+                  JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
+                 WHERE tr.spec_id = $1
+                   AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
-                 ORDER BY ttr.sort_order
+                 ORDER BY tr.sort_order
                 """,
                 spec_id, hero_talent_id,
             )
@@ -1202,7 +1173,7 @@ async def get_plan_detail(
                    COALESCE(wi.name, gps.item_name) AS item_name,
                    gps.is_locked,
                    gps.excluded_item_ids,
-                   wi.icon_url, wi.wowhead_tooltip_html
+                   wi.icon_url
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN guild_identity.wow_items wi ON wi.id = gps.desired_item_id
              WHERE gps.plan_id = $1
@@ -1220,14 +1191,7 @@ async def get_plan_detail(
         desired_by_slot: dict[str, dict] = {}
         excluded_ids_by_slot: dict[str, list[int]] = {}
         for r in desired_rows:
-            bid = r["blizzard_item_id"]
-            tooltip = r["wowhead_tooltip_html"] or ""
-            if bid and "Random Stat" in tooltip:
-                craftable_desired_bids.add(bid)
-            if bid and "/item-set=" in tooltip:
-                tier_piece_desired_bids.add(bid)
-            row_dict = {k: v for k, v in dict(r).items() if k != "wowhead_tooltip_html"}
-            desired_by_slot[r["slot"]] = row_dict
+            desired_by_slot[r["slot"]] = dict(r)
             excluded_ids_by_slot[r["slot"]] = list(r["excluded_item_ids"] or [])
 
         # Batch-fetch info for all excluded wow_items so the drawer can show names/icons
@@ -1246,22 +1210,32 @@ async def get_plan_detail(
             )
             excluded_item_info = {r["id"]: dict(r) for r in ex_rows}
 
+        # Build blizzard_item_id-based exclusion sets per slot for BIS filtering
+        # (viz.bis_recommendations has no internal item_id column)
+        excluded_bids_by_slot: dict[str, set[int]] = {}
+        for _sl, _ids in excluded_ids_by_slot.items():
+            _bids: set[int] = set()
+            for _id in _ids:
+                _info = excluded_item_info.get(_id)
+                if _info and _info.get("blizzard_item_id"):
+                    _bids.add(_info["blizzard_item_id"])
+            excluded_bids_by_slot[_sl] = _bids
+
         # BIS recommendations for this spec + hero_talent
         bis_by_slot: dict[str, list[dict]] = {}
         if spec_id:
             bis_rows = await conn.fetch(
                 """
-                SELECT ble.slot, ble.item_id, ble.source_id, ble.hero_talent_id,
-                       ble.priority,
-                       wi.blizzard_item_id, wi.name AS item_name, wi.icon_url,
-                       bls.name AS source_name, bls.short_label, bls.origin, bls.content_type
-                  FROM guild_identity.bis_list_entries ble
-                  JOIN guild_identity.wow_items wi ON wi.id = ble.item_id
-                  JOIN guild_identity.bis_list_sources bls ON bls.id = ble.source_id
-                 WHERE ble.spec_id = $1
-                   AND (ble.hero_talent_id = $2 OR ble.hero_talent_id IS NULL)
+                SELECT vbr.slot, vbr.source_id, vbr.hero_talent_id, vbr.priority,
+                       vbr.blizzard_item_id, vbr.name AS item_name, vbr.icon_url,
+                       vbr.source_name, vbr.source_short_label AS short_label,
+                       vbr.source_origin AS origin, vbr.content_type
+                  FROM viz.bis_recommendations vbr
+                  JOIN ref.bis_list_sources bls ON bls.id = vbr.source_id
+                 WHERE vbr.spec_id = $1
+                   AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
-                 ORDER BY bls.sort_order, ble.slot, ble.priority
+                 ORDER BY bls.sort_order, vbr.slot, vbr.priority
                 """,
                 spec_id, hero_talent_id,
             )
@@ -1287,29 +1261,14 @@ async def get_plan_detail(
         if desired_bids_list:
             # Craftable: any desired item that has a row in item_recipe_links
             link_rows = await conn.fetch(
-                """
-                SELECT DISTINCT wi.blizzard_item_id
-                  FROM guild_identity.item_recipe_links irl
-                  JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
-                 WHERE wi.blizzard_item_id = ANY($1::int[])
-                """,
+                "SELECT DISTINCT blizzard_item_id FROM enrichment.item_recipes WHERE blizzard_item_id = ANY($1::int[])",
                 desired_bids_list,
             )
             craftable_desired_bids |= {r["blizzard_item_id"] for r in link_rows}
 
-            # Tier piece: desired item is in a tier slot AND has no direct
-            # non-junk sources (meaning it's only obtainable via tier token).
+            # Tier piece: desired item has item_category='tier' in enrichment
             tier_candidate_rows = await conn.fetch(
-                """
-                SELECT wi.blizzard_item_id
-                  FROM guild_identity.wow_items wi
-                 WHERE wi.blizzard_item_id = ANY($1::int[])
-                   AND wi.slot_type IN ('head','shoulder','chest','hands','legs')
-                   AND NOT EXISTS (
-                       SELECT 1 FROM guild_identity.item_sources s
-                        WHERE s.item_id = wi.id AND NOT s.is_suspected_junk
-                   )
-                """,
+                "SELECT blizzard_item_id FROM enrichment.items WHERE blizzard_item_id = ANY($1::int[]) AND item_category = 'tier'",
                 desired_bids_list,
             )
             tier_piece_desired_bids |= {r["blizzard_item_id"] for r in tier_candidate_rows}
@@ -1321,21 +1280,19 @@ async def get_plan_detail(
         if all_bids:
             src_rows = await conn.fetch(
                 """
-                SELECT wi.blizzard_item_id, is2.instance_type,
-                       is2.encounter_name, is2.instance_name
-                  FROM guild_identity.item_sources is2
-                  JOIN guild_identity.wow_items wi ON wi.id = is2.item_id
-                 WHERE wi.blizzard_item_id = ANY($1::int[])
-                   AND NOT is2.is_suspected_junk
+                SELECT blizzard_item_id, instance_type, encounter_name,
+                       instance_name, quality_tracks
+                  FROM enrichment.item_sources
+                 WHERE blizzard_item_id = ANY($1::int[])
+                   AND NOT is_junk
                 """,
                 list(all_bids),
             )
             for r in src_rows:
                 bid = r["blizzard_item_id"]
                 inst_type = r["instance_type"]
-                tracks = _get_tracks(inst_type)
+                tracks = list(r["quality_tracks"] or [])
                 existing_tracks = tracks_by_item.get(bid, [])
-                # Merge + deduplicate, preserving order V<C<H<M
                 merged = sorted(
                     set(existing_tracks) | set(tracks),
                     key=lambda t: TRACK_ORDER.get(t, 99),
@@ -1359,12 +1316,12 @@ async def get_plan_detail(
             try:
                 tier_src_rows = await conn.fetch(
                     """
-                    SELECT v.tier_piece_blizzard_id AS blizzard_item_id,
-                           v.instance_type,
-                           v.boss_name AS encounter_name,
-                           v.instance_name
-                      FROM guild_identity.v_tier_piece_sources v
-                     WHERE v.tier_piece_blizzard_id = ANY($1::int[])
+                    SELECT tier_piece_blizzard_id AS blizzard_item_id,
+                           instance_type,
+                           boss_name AS encounter_name,
+                           instance_name
+                      FROM viz.tier_piece_sources
+                     WHERE tier_piece_blizzard_id = ANY($1::int[])
                     """,
                     list(tier_piece_desired_bids),
                 )
@@ -1392,13 +1349,13 @@ async def get_plan_detail(
                         sources_by_item.setdefault(bid, []).append(src_entry)
             except Exception as exc:
                 # View may not exist if migration hasn't run yet — degrade gracefully.
-                logger.warning("v_tier_piece_sources lookup failed: %s", exc)
+                logger.warning("viz.tier_piece_sources lookup failed: %s", exc)
 
         # Available BIS sources (for UI dropdowns)
         source_list = await conn.fetch(
             """
             SELECT id, name, short_label, content_type, origin, is_default, sort_order
-              FROM guild_identity.bis_list_sources
+              FROM ref.bis_list_sources
              WHERE is_active = TRUE
              ORDER BY sort_order
             """
@@ -1406,18 +1363,14 @@ async def get_plan_detail(
 
         # Which sources have hero-talent-specific BIS entries
         ht_source_ids = await conn.fetchval(
-            """
-            SELECT array_agg(DISTINCT source_id)
-              FROM guild_identity.bis_list_entries
-             WHERE hero_talent_id IS NOT NULL
-            """
+            "SELECT array_agg(DISTINCT source_id) FROM enrichment.bis_entries WHERE hero_talent_id IS NOT NULL"
         ) or []
 
         # Hero talents for the plan's spec (for UI dropdown)
         ht_list = []
         if spec_id:
             ht_rows = await conn.fetch(
-                "SELECT id, name, slug FROM guild_identity.hero_talents WHERE spec_id=$1 ORDER BY name",
+                "SELECT id, name, slug FROM ref.hero_talents WHERE spec_id=$1 ORDER BY name",
                 spec_id,
             )
             ht_list = [dict(r) for r in ht_rows]
@@ -1432,34 +1385,10 @@ async def get_plan_detail(
         if craftable_desired_bids:
             crafter_rows = await conn.fetch(
                 """
-                WITH crafters AS (
-                    SELECT DISTINCT
-                        wi.blizzard_item_id,
-                        pr.name AS profession_name,
-                        wc.id AS character_id,
-                        wc.character_name,
-                        gr.level AS rank_level
-                    FROM guild_identity.item_recipe_links irl
-                    JOIN guild_identity.wow_items wi ON wi.id = irl.item_id
-                    JOIN guild_identity.recipes r ON r.id = irl.recipe_id
-                    JOIN guild_identity.professions pr ON pr.id = r.profession_id
-                    JOIN guild_identity.character_recipes cr ON cr.recipe_id = r.id
-                    JOIN guild_identity.wow_characters wc ON wc.id = cr.character_id
-                    JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
-                    JOIN guild_identity.players pl ON pl.id = pc.player_id
-                    JOIN common.guild_ranks gr ON gr.id = pl.guild_rank_id
-                    WHERE wi.blizzard_item_id = ANY($1::int[])
-                      AND wc.in_guild = TRUE
-                      AND wc.removed_at IS NULL
-                )
-                SELECT
-                    blizzard_item_id,
-                    profession_name,
-                    character_name,
-                    rank_level,
-                    COUNT(*) OVER (PARTITION BY blizzard_item_id) AS total_crafters
-                FROM crafters
-                ORDER BY blizzard_item_id, rank_level DESC, character_name ASC
+                SELECT blizzard_item_id, profession_name, character_name, rank_level,
+                       COUNT(*) OVER (PARTITION BY blizzard_item_id) AS total_crafters
+                  FROM viz.crafters_by_item
+                 WHERE blizzard_item_id = ANY($1::int[])
                 """,
                 list(craftable_desired_bids),
             )
@@ -1500,13 +1429,12 @@ async def get_plan_detail(
 
     # Build per-slot data
     slots_data: dict[str, dict] = {}
-    for slot in WOW_SLOTS:
+    for slot in _SLOTS_ORDERED:
         equipped = equipped_by_slot.get(slot)
         desired = desired_by_slot.get(slot)
 
         # Phase 1E.5: per-slot exclusions filter BIS recommendations
         excluded_ids = excluded_ids_by_slot.get(slot, [])
-        excluded_set = set(excluded_ids)
         excluded_items = [
             excluded_item_info[id_]
             for id_ in excluded_ids
@@ -1514,7 +1442,7 @@ async def get_plan_detail(
         ]
         bis_recs = [
             r for r in bis_by_slot.get(slot, [])
-            if r["item_id"] not in excluded_set
+            if r["blizzard_item_id"] not in excluded_bids_by_slot.get(slot, set())
         ]
 
         # Effective desired blizzard_item_id — only from explicit gear_plan_slots.
@@ -1563,7 +1491,7 @@ async def get_plan_detail(
         )
 
         # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS
-        _paired_slot = _PAIRED_SLOT_MAP.get(slot)
+        _paired_slot = _SLOT_META[slot]["paired_slot"]
         _paired_desired_bid: Optional[int] = None
         if _paired_slot:
             _pd = desired_by_slot.get(_paired_slot)
@@ -1636,7 +1564,7 @@ async def get_plan_detail(
         slots_data[slot] = {
             "slot": slot,
             "canonical_slot": slot_remapping.get(slot, slot),
-            "display_name": SLOT_DISPLAY.get(slot, slot.replace("_", " ").title()),
+            "display_name": _SLOT_META[slot]["display_name"],
             "equipped": equipped,
             "desired": desired,
             "desired_blizzard_item_id": desired_bid,
@@ -1670,28 +1598,15 @@ async def get_plan_detail(
 # ── Available items (Phase 1E.4) ──────────────────────────────────────────────
 
 def _filter_by_primary_stat(items: list[dict], primary_stat: str) -> list[dict]:
-    """Filter weapon items by primary stat via tooltip HTML substring checks.
+    """Filter weapon items by primary stat using the pre-computed primary_stat column.
 
-    Includes the item when uncertain (no tooltip or no recognisable stat text).
-    Simple substring matching as described in the Phase 1E.4 spec.
+    Includes the item when uncertain (primary_stat is None).
     """
     result = []
     for item in items:
-        tooltip = item.get("wowhead_tooltip_html") or ""
-        if not tooltip:
-            # No tooltip data — include (uncertain → include per spec)
+        ps = item.get("primary_stat")
+        if not ps or ps == primary_stat:
             result.append(item)
-            continue
-        has_str = "Strength" in tooltip
-        has_agi = "Agility" in tooltip
-        has_int = "Intellect" in tooltip
-        if primary_stat == "int" and (has_str or has_agi):
-            continue
-        if primary_stat == "str" and (has_int or has_agi):
-            continue
-        if primary_stat == "agi" and (has_int or has_str):
-            continue
-        result.append(item)
     return result
 
 
@@ -1710,29 +1625,34 @@ async def get_available_items(
     Season filtering:
       - raid:    items from instances in patt.raid_seasons.current_raid_ids
       - dungeon: items from instances in patt.raid_seasons.current_instance_ids
-      - crafted: items linked via item_recipe_links (inherently current content)
+      - crafted: items linked via enrichment.item_recipes (inherently current content)
 
     Excluded items (Phase 1E.5) are omitted from all groups.
 
     Eligibility rules:
       - Armor slots: filter by character's class armor type (cloth/leather/mail/plate)
-      - Weapon slots: filter by primary stat derived from (class, spec); tooltip HTML check
-      - Accessories (neck/back/rings/trinkets): no armor restriction
+      - All slots: filter by spec primary_stat (int/agi/str); items with NULL pass through
+      - Accessories (neck/rings): almost all universal (NULL primary_stat), rarely filtered
+
+    Phase D: reads from viz.slot_items (enrichment-backed) instead of guild_identity.*
+    directly. item_category discriminates drop/crafted/tier/catalyst.
     """
     empty: dict = {"tier": None, "raid": [], "dungeon": [], "crafted": []}
-    if slot not in WOW_SLOTS:
+    if not is_valid_slot(slot):
         return empty
 
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         char_row = await conn.fetchrow(
             """
             SELECT c.name AS class_name, s.name AS spec_name,
-                   gp.spec_id, gp.hero_talent_id
+                   c.blizzard_class_id, gp.spec_id, gp.hero_talent_id,
+                   s.primary_stat AS spec_primary_stat
               FROM guild_identity.wow_characters wc
-              LEFT JOIN guild_identity.classes c ON c.id = wc.class_id
+              LEFT JOIN ref.classes c ON c.id = wc.class_id
               LEFT JOIN guild_identity.gear_plans gp
                      ON gp.character_id = wc.id AND gp.player_id = $2
-              LEFT JOIN guild_identity.specializations s ON s.id = gp.spec_id
+              LEFT JOIN ref.specializations s ON s.id = gp.spec_id
              WHERE wc.id = $1
             """,
             character_id, player_id,
@@ -1742,6 +1662,7 @@ async def get_available_items(
 
         class_name     = char_row["class_name"] or ""
         spec_name      = char_row["spec_name"] or ""
+        char_class_id: Optional[int] = char_row["blizzard_class_id"]
         avail_spec_id: Optional[int] = char_row["spec_id"]
         avail_ht_id:   Optional[int] = char_row["hero_talent_id"]
 
@@ -1775,7 +1696,6 @@ async def get_available_items(
         equipped_ilvl: Optional[int]  = equip_row["item_level"]       if equip_row else None
         equipped_track: Optional[str] = equip_row["quality_track"]    if equip_row else None
         equipped_bid:   Optional[int] = equip_row["blizzard_item_id"] if equip_row else None
-        all_season_ids = raid_ids + dungeon_ids
 
         # Phase 1E.5: fetch per-slot exclusions so we can hide excluded items
         excluded_ids: list[int] = []
@@ -1786,7 +1706,7 @@ async def get_available_items(
         desired_bid_for_slot: Optional[int] = None
         all_desired_bids: set[int] = set()
         if plan_row:
-            _av_paired = _PAIRED_SLOT_MAP.get(slot)
+            _av_paired = _SLOT_META[slot]["paired_slot"]
             _av_slots = [slot] + ([_av_paired] if _av_paired else [])
             slot_rows = await conn.fetch(
                 """
@@ -1806,102 +1726,74 @@ async def get_available_items(
         # BIS = wearing any desired item from this slot's paired pool.
         is_bis: bool = bool(equipped_bid and all_desired_bids and equipped_bid in all_desired_bids)
 
-        # Normalize paired slots to canonical wow_items.slot_type
-        slot_type = _SLOT_TYPE_QUERY_MAP.get(slot, slot)
+        # Normalize paired slots to canonical enrichment.items slot_type
+        slot_type = _SLOT_META[slot]["enrichment_slot_type"]
 
-        # Build shared WHERE clause fragments (indices relative to base params)
-        params: list = [slot_type]
-        armor_clause = ""
-        if slot in _ARMOR_FILTER_SLOTS:
-            armor_type = CLASS_ARMOR_TYPE.get(class_name)
-            if armor_type:
-                tooltip_marker = _ARMOR_TYPE_MARKER.get(armor_type, "")
-                params.append(armor_type)        # $2 — direct column match
-                params.append(tooltip_marker)    # $3 — tooltip HTML fallback
-                armor_clause = (
-                    f"AND (wi.armor_type = ${len(params) - 1} "
-                    f"OR (wi.armor_type IS NULL AND wi.wowhead_tooltip_html LIKE ${len(params)}))"
-                )
-
-        # Exclusion filter: hide items the player has permanently excluded (Phase 1E.5)
-        exclude_clause = ""
-        if excluded_ids:
-            params.append(excluded_ids)
-            exclude_clause = f"AND wi.id != ALL(${len(params)}::int[])"
-
-        # Only fetch tooltip HTML when needed for weapon stat filtering
-        need_tooltip = slot in _WEAPON_SLOTS
-        tooltip_col  = "wi.wowhead_tooltip_html," if need_tooltip else ""
-
-        # ── Query 1: raid + dungeon drops ─────────────────────────────────────
-        # Single query for both; split by instance_type in Python.
-        drop_rows: list = []
-        if all_season_ids:
-            drop_params = list(params)
-            drop_params.append(all_season_ids)
-            season_clause = f"AND is2.blizzard_instance_id = ANY(${len(drop_params)})"
-
-            drop_rows = await conn.fetch(
-                f"""
-                SELECT wi.blizzard_item_id, wi.name, wi.icon_url,
-                       {tooltip_col}
-                       is2.encounter_name, is2.instance_name, is2.instance_type
-                  FROM guild_identity.wow_items wi
-                  JOIN guild_identity.item_sources is2
-                       ON is2.item_id = wi.id AND NOT is2.is_suspected_junk
-                 WHERE wi.slot_type = $1
-                   AND is2.instance_type IN ('raid', 'dungeon')
-                   AND wi.quality_track IS DISTINCT FROM 'C'
-                   {armor_clause}
-                   {season_clause}
-                   {exclude_clause}
-                 ORDER BY wi.name, is2.instance_name, is2.encounter_name
-                """,
-                *drop_params,
-            )
-
-        # ── Query 2: crafted items via item_recipe_links ──────────────────────
-        # Scoped to the active raid season's expansion (via profession_tiers) so
-        # prior-expansion crafted gear doesn't appear.  Only confirmed-epic items
-        # (class="q4" in Wowhead tooltip) are shown — blue/green crafted gear is
-        # never BIS and must never appear regardless of tooltip state.
-        craft_select = f"wi.blizzard_item_id, wi.name, wi.icon_url{', wi.wowhead_tooltip_html' if need_tooltip else ''}"
-        craft_rows = await conn.fetch(
-            f"""
-            SELECT DISTINCT {craft_select}
-              FROM guild_identity.wow_items wi
-              JOIN guild_identity.item_recipe_links irl ON irl.item_id = wi.id
-              JOIN guild_identity.recipes rec ON rec.id = irl.recipe_id
-              JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id
-             WHERE wi.slot_type = $1
-               AND pt.expansion_name = (
-                       SELECT expansion_name FROM patt.raid_seasons
-                        WHERE is_active = TRUE LIMIT 1
-                   )
-               AND wi.wowhead_tooltip_html LIKE '%class="q4"%'
-               {armor_clause}
-               {exclude_clause}
-             ORDER BY wi.name
-            """,
-            *params,
+        # Armor type filter — None for accessories/weapons (no class restriction)
+        armor_filter: Optional[str] = (
+            CLASS_ARMOR_TYPE.get(class_name) if _SLOT_META[slot]["is_armor_slot"] else None
         )
 
-        # ── Query 2b: trinket tier badge data (Phase 1F) ─────────────────────
-        # Only for trinket slots; fetches all rated trinkets for this spec so
-        # is_equipped / is_bis / tier badge can be added to every item row.
+        # Resolve excluded internal IDs → blizzard_item_ids for viz query filtering
+        excluded_blizzard_ids: list[int] = []
+        if excluded_ids:
+            _excl_rows = await conn.fetch(
+                "SELECT blizzard_item_id FROM guild_identity.wow_items WHERE id = ANY($1::int[])",
+                excluded_ids,
+            )
+            excluded_blizzard_ids = [r["blizzard_item_id"] for r in _excl_rows]
+
+        # ── viz.slot_items: single query for all item categories (Phase E) ─────
+        # The view's item_seasons JOIN already limits results to the active season,
+        # so no Python-side season instance ID filter is needed.
+        # item_category discriminates: 'raid'/'dungeon', 'crafted',
+        # 'tier' (5-slot tier token pieces), 'catalyst' (back/wrist/waist/feet set pieces).
+        # quality_tracks is pre-computed by the enrichment sproc.
+        viz_rows = await conn.fetch(
+            """
+            SELECT blizzard_item_id, name, icon_url, item_category,
+                   tier_set_suffix, instance_type, encounter_name, instance_name,
+                   blizzard_instance_id, quality_tracks, primary_stat, armor_type
+              FROM viz.slot_items
+             WHERE slot_type = $1
+               AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
+               AND item_category IN ('raid', 'dungeon', 'crafted', 'tier', 'catalyst')
+               AND NOT (blizzard_item_id = ANY($3::int[]))
+               AND (item_category NOT IN ('tier', 'catalyst')
+                    OR $4::int IS NULL
+                    OR playable_class_ids IS NULL
+                    OR $4 = ANY(playable_class_ids))
+               AND (
+                   slot_type NOT IN ('one_hand', 'two_hand', 'ranged', 'off_hand')
+                   OR $4::int IS NULL
+                   OR weapon_subtype IS NULL
+                   OR EXISTS (
+                       SELECT 1 FROM ref.class_weapon_proficiencies cwp
+                        WHERE cwp.blizzard_class_id = $4
+                          AND cwp.weapon_subtype = viz.slot_items.weapon_subtype
+                   )
+               )
+            """,
+            slot_type,
+            armor_filter,
+            excluded_blizzard_ids,
+            char_class_id,
+        )
+
+        # ── Trinket tier badge data (Phase 1F) ────────────────────────────────
+        # Fetch ratings from enrichment.trinket_ratings (replaces guild_identity.trinket_tier_ratings)
         trinket_ratings_by_bid: dict[int, list[dict]] = {}
         if slot in ("trinket_1", "trinket_2") and avail_spec_id:
             t_rows = await conn.fetch(
                 """
-                SELECT ttr.tier, ttr.source_id, bls.origin AS source_origin,
-                       wi.blizzard_item_id
-                  FROM guild_identity.trinket_tier_ratings ttr
-                  JOIN guild_identity.bis_list_sources bls ON bls.id = ttr.source_id
-                  JOIN guild_identity.wow_items wi ON wi.id = ttr.item_id
-                 WHERE ttr.spec_id = $1
-                   AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
+                SELECT tr.tier, tr.source_id, bls.origin AS source_origin,
+                       tr.blizzard_item_id
+                  FROM enrichment.trinket_ratings tr
+                  JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
+                 WHERE tr.spec_id = $1
+                   AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
-                 ORDER BY ttr.sort_order
+                 ORDER BY tr.sort_order
                 """,
                 avail_spec_id, avail_ht_id,
             )
@@ -1917,226 +1809,71 @@ async def get_available_items(
                         "tier": r["tier"],
                     })
 
-        # ── Query 3: tier / catalyst class set piece ──────────────────────────
-        # Two distinct paths:
-        #
-        # MAIN TIER SLOTS (head/shoulder/chest/hands/legs):
-        #   These have Blizzard Journal source rows AND a Wowhead /item-set= link
-        #   in their tooltip HTML.  We require both to avoid matching old expansion
-        #   tier pieces (which have item-set links but no current-raid source rows)
-        #   or non-tier items from the current raid (which have source rows but no
-        #   item-set link).  Class is discriminated by class name in the tooltip.
-        #
-        # CATALYST SLOTS (back/wrist/waist/feet):
-        #   Catalyst items have NO Journal source rows and NO item-set link.
-        #   We find them by name-suffix matching against any main tier anchor for
-        #   this class+season (e.g., anchor "Branches of the Luminous Bloom" →
-        #   suffix " of the Luminous Bloom" → find "Leafdrape of the Luminous Bloom").
-        #   If no anchor is found (e.g., tooltips not yet enriched), we return
-        #   nothing rather than guessing — prevents junk from appearing.
-        #
-        # Returns None for non-tier slots so the frontend hides the section.
-        tier_rows: list = []
-        if slot in _TIER_CATALYST_SLOTS and class_name and raid_ids:
-            t_armor = CLASS_ARMOR_TYPE.get(class_name, "")
+    # ── Group viz rows by item_category ───────────────────────────────────────
+    raid_map:      dict[int, dict] = {}
+    dungeon_map:   dict[int, dict] = {}
+    crafted_seen:  set[int] = set()
+    crafted_items: list[dict] = []
+    tier_seen:     set[int] = set()
+    tier_rows:     list[dict] = []
 
-            excl_params: list = [excluded_ids] if excluded_ids else []
-
-            # Derive the tier set name suffix once, used by both main and catalyst
-            # slot queries.  Looks for any main-tier piece for this class that has
-            # " of " in its name (e.g. "Branches of the Luminous Bloom" →
-            # " of the Luminous Bloom").  Works via PRIMARY (tooltip) or FALLBACK
-            # (armor_type + BIS) so it functions before and after Enrich Items runs.
-            anchor_row = await conn.fetchrow(
-                """
-                SELECT wi.name
-                  FROM guild_identity.wow_items wi
-                 WHERE wi.slot_type = ANY(ARRAY['head','shoulder','chest','hands','legs'])
-                   AND wi.name LIKE '% of %'
-                   AND (
-                       -- PRIMARY: Wowhead has indexed the item set link.  Any raid
-                       -- source qualifies — not gated on current_raid_ids so the
-                       -- anchor works even if the raid season config is incomplete.
-                       (    wi.wowhead_tooltip_html LIKE $1
-                        AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
-                        AND EXISTS (
-                                SELECT 1 FROM guild_identity.item_sources is2
-                                 WHERE is2.item_id = wi.id
-                                   AND is2.instance_type = 'raid'
-                            )
-                       )
-                       OR
-                       -- FALLBACK: Wowhead hasn't indexed the set yet.  Restrict to
-                       -- items with no tooltip (not yet enriched) so enriched non-tier
-                       -- boss drops with "of" in the name are excluded.
-                       (    wi.armor_type = $2
-                        AND wi.wowhead_tooltip_html IS NULL
-                        AND EXISTS (
-                                SELECT 1 FROM guild_identity.bis_list_entries ble
-                                  JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
-                                  JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                 WHERE ble.item_id = wi.id AND cl.name = $3
-                            )
-                       )
-                   )
-                 LIMIT 1
-                """,
-                f"%{class_name}%", t_armor or "leather", class_name,
-            )
-            set_suffix: Optional[str] = None
-            if anchor_row:
-                anchor_name: str = anchor_row["name"]
-                of_idx = anchor_name.find(" of ")
-                if of_idx >= 0:
-                    set_suffix = anchor_name[of_idx:]  # e.g. " of the Luminous Bloom"
-
-            if slot in _MAIN_TIER_SLOTS:
-                # $1=slot_type  $2='%ClassName%'  $3=raid_ids  $4=class_name(exact)
-                # [$5=armor_type]  [$6=set_suffix]  [$N=excluded_ids]
-                params: list = [slot_type, f"%{class_name}%", raid_ids, class_name]
-                if t_armor:
-                    params.append(t_armor)
-                    fallback_armor_sql = f"AND wi.armor_type = ${len(params)}"
-                else:
-                    fallback_armor_sql = ""
-                # If we know the tier set suffix, restrict the fallback to items
-                # whose name matches it.  This prevents non-tier BIS items (e.g. a
-                # raid drop with no sources yet) from appearing in the tier section.
-                fallback_suffix_sql = ""
-                if set_suffix:
-                    params.append(f"%{set_suffix}")
-                    fallback_suffix_sql = f"AND wi.name LIKE ${len(params)}"
-                excl_sql = ""
-                if excl_params:
-                    params += excl_params
-                    excl_sql = f"AND wi.id != ALL(${len(params)}::int[])"
-
-                tier_rows = await conn.fetch(
-                    f"""
-                    SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
-                      FROM guild_identity.wow_items wi
-                     WHERE wi.slot_type = $1
-                       AND (
-                           -- PRIMARY: Wowhead tooltip has class name + /item-set= link
-                           --          + encounter source in current raid.
-                           (    wi.wowhead_tooltip_html LIKE $2
-                            AND wi.wowhead_tooltip_html LIKE '%/item-set=%'
-                            AND EXISTS (
-                                    SELECT 1 FROM guild_identity.item_sources is2
-                                     WHERE is2.item_id = wi.id
-                                       AND is2.instance_name IN (
-                                           SELECT DISTINCT is3.instance_name
-                                             FROM guild_identity.item_sources is3
-                                            WHERE is3.blizzard_instance_id = ANY($3)
-                                       )
-                                )
-                           )
-                           OR
-                           -- FALLBACK: items not yet in Wowhead item-set (e.g. new
-                           --   expansion tier before Wowhead indexes the set).  Armor
-                           --   type + BIS entry + set suffix prevents non-tier items
-                           --   from appearing.  NOT gated on sources — items may have
-                           --   sources already (sources added on a prior sync).
-                           (    {fallback_armor_sql.lstrip("AND ") if fallback_armor_sql else "TRUE"}
-                            AND EXISTS (
-                                    SELECT 1 FROM guild_identity.bis_list_entries ble
-                                      JOIN guild_identity.specializations sp ON sp.id = ble.spec_id
-                                      JOIN guild_identity.classes cl ON cl.id = sp.class_id
-                                     WHERE ble.item_id = wi.id AND cl.name = $4
-                                )
-                            {fallback_suffix_sql}
-                           )
-                       )
-                       {excl_sql}
-                     ORDER BY wi.name
-                    """,
-                    *params,
-                )
-
-            else:
-                # Catalyst slot — suffix is class-discriminated (each armor class has a
-                # unique tier set name), so suffix + slot is enough.  No class filter
-                # needed — cloaks have armor_type='cloth' regardless of wearer class,
-                # and catalyst items may not have BIS entries or enriched tooltips.
-                if set_suffix:
-                    params = [slot_type, f"%{set_suffix}"] + excl_params
-                    excl_sql = f"AND wi.id != ALL(${len(params)}::int[])" if excl_params else ""
-                    tier_rows = await conn.fetch(
-                        f"""
-                        SELECT DISTINCT wi.blizzard_item_id, wi.name, wi.icon_url
-                          FROM guild_identity.wow_items wi
-                         WHERE wi.slot_type = $1
-                           AND wi.name LIKE $2
-                           {excl_sql}
-                         ORDER BY wi.name
-                        """,
-                        *params,
-                    )
-
-    # ── Split drop rows by instance_type ──────────────────────────────────────
-    raid_map:    dict[int, dict] = {}
-    dungeon_map: dict[int, dict] = {}
-    # Phase 2C: collect actual quality_tracks per bid for target_ilvl computation.
-    bid_tracks: dict[int, set] = {}
-
-    for r in drop_rows:
+    for r in viz_rows:
         bid   = r["blizzard_item_id"]
+        cat   = r["item_category"]
         itype = r["instance_type"]
-        target = raid_map if itype == "raid" else dungeon_map
 
-        if bid not in target:
-            entry: dict = {
-                "blizzard_item_id": bid,
-                "name": r["name"],
-                "icon_url": r["icon_url"],
-                "sources": [],
+        if cat in ("raid", "dungeon"):
+            target = raid_map if cat == "raid" else dungeon_map
+            if bid not in target:
+                target[bid] = {
+                    "blizzard_item_id": bid,
+                    "name": r["name"],
+                    "icon_url": r["icon_url"],
+                    "primary_stat": r["primary_stat"],
+                    "sources": [],
+                }
+            tracks = list(r["quality_tracks"] or [])
+            src = {
+                "source_name":     r["encounter_name"],
+                "source_instance": r["instance_name"],
+                "instance_type":   itype,
+                "quality_tracks":  tracks,
             }
-            if need_tooltip:
-                entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
-            target[bid] = entry
+            if src not in target[bid]["sources"]:
+                target[bid]["sources"].append(src)
 
-        # Derive quality tracks from instance type (item_sources has no per-item
-        # quality_tracks column) and accumulate for target_ilvl computation.
-        if bid not in bid_tracks:
-            bid_tracks[bid] = set()
-        bid_tracks[bid].update(_get_tracks(itype))
+        elif cat == "crafted":
+            if bid not in crafted_seen:
+                crafted_seen.add(bid)
+                crafted_items.append({
+                    "blizzard_item_id": bid,
+                    "name": r["name"],
+                    "icon_url": r["icon_url"],
+                    "primary_stat": r["primary_stat"],
+                })
 
-        tracks = _get_tracks(itype)
-        src = {
-            "source_name":     r["encounter_name"],
-            "source_instance": r["instance_name"],
-            "instance_type":   itype,
-            "quality_tracks":  tracks,
-        }
-        if src not in target[bid]["sources"]:
-            target[bid]["sources"].append(src)
+        elif cat in ("tier", "catalyst"):
+            if bid not in tier_seen:
+                tier_seen.add(bid)
+                tier_rows.append({
+                    "blizzard_item_id": bid,
+                    "name": r["name"],
+                    "icon_url": r["icon_url"],
+                })
 
     raid_items    = list(raid_map.values())
     dungeon_items = list(dungeon_map.values())
 
-    # ── Crafted items ──────────────────────────────────────────────────────────
-    crafted_items: list[dict] = []
-    for r in craft_rows:
-        entry = {
-            "blizzard_item_id": r["blizzard_item_id"],
-            "name": r["name"],
-            "icon_url": r["icon_url"],
-        }
-        if need_tooltip:
-            entry["wowhead_tooltip_html"] = r["wowhead_tooltip_html"] or ""
-        crafted_items.append(entry)
+    # Apply primary-stat filter — items with NULL primary_stat always pass through
+    primary_stat_filter: Optional[str] = char_row["spec_primary_stat"]
+    if primary_stat_filter:
+        raid_items    = _filter_by_primary_stat(raid_items, primary_stat_filter)
+        dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat_filter)
+        crafted_items = _filter_by_primary_stat(crafted_items, primary_stat_filter)
 
-    # Apply primary-stat filter for weapon slots (in Python to keep SQL simple)
-    if slot in _WEAPON_SLOTS:
-        primary_stat = SPEC_PRIMARY_STAT.get((class_name, spec_name))
-        if primary_stat:
-            raid_items    = _filter_by_primary_stat(raid_items, primary_stat)
-            dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat)
-            crafted_items = _filter_by_primary_stat(crafted_items, primary_stat)
-
-    # Strip tooltip HTML before returning (only needed for in-process filtering)
+    # Strip primary_stat from items before returning (internal filter field)
     for item in raid_items + dungeon_items + crafted_items:
-        item.pop("wowhead_tooltip_html", None)
+        item.pop("primary_stat", None)
 
     # ── Phase 2C: compute target_ilvl per item ─────────────────────────────────
     noncrafted_ilvl = _noncrafted_target_ilvl(is_bis, equipped_ilvl, equipped_track, quality_ilvl_map)
@@ -2151,8 +1888,7 @@ async def get_available_items(
     # ── Tier / Catalyst items ──────────────────────────────────────────────────
     # None means "this slot has no tier piece" — frontend hides the section.
     tier_items: Optional[list[dict]] = None
-    if slot in _TIER_CATALYST_SLOTS:
-        # Tier/catalyst items follow the same rule as raid drops.
+    if _SLOT_META[slot]["is_tier_catalyst_slot"]:
         tier_target: Optional[int] = noncrafted_ilvl
         tier_items = [
             {
@@ -2196,7 +1932,7 @@ async def add_exclusion(
     No-ops if the item is already excluded.
     Returns True on success, False if plan not found.
     """
-    if slot not in WOW_SLOTS:
+    if not is_valid_slot(slot):
         return False
 
     async with pool.acquire() as conn:
@@ -2248,7 +1984,7 @@ async def remove_exclusion(
     No-ops gracefully if the slot row or item doesn't exist.
     Returns True on success, False if plan not found.
     """
-    if slot not in WOW_SLOTS:
+    if not is_valid_slot(slot):
         return False
 
     async with pool.acquire() as conn:
@@ -2306,6 +2042,7 @@ async def get_trinket_ratings(
         return None
 
     async with pool.acquire() as conn:
+        await _ensure_slot_meta(conn)
         # Plan spec
         plan_row = await conn.fetchrow(
             """
@@ -2345,7 +2082,7 @@ async def get_trinket_ratings(
         )
 
         # Desired items for this slot and its pair (trinkets share BIS pools)
-        _tr_paired = _PAIRED_SLOT_MAP.get(slot)
+        _tr_paired = _SLOT_META[slot]["paired_slot"]
         _tr_slots = [slot] + ([_tr_paired] if _tr_paired else [])
         gps_rows = await conn.fetch(
             """
@@ -2382,76 +2119,76 @@ async def get_trinket_ratings(
         # Tier ratings for this spec
         rows = await conn.fetch(
             """
-            SELECT ttr.item_id, ttr.tier, ttr.sort_order, ttr.source_id,
+            SELECT tr.blizzard_item_id, tr.tier, tr.sort_order, tr.source_id,
                    bls.origin AS source_origin,
-                   wi.blizzard_item_id, wi.name, wi.icon_url
-              FROM guild_identity.trinket_tier_ratings ttr
-              JOIN guild_identity.bis_list_sources bls ON bls.id = ttr.source_id
-              JOIN guild_identity.wow_items wi ON wi.id = ttr.item_id
-             WHERE ttr.spec_id = $1
-               AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
+                   ei.name, ei.icon_url
+              FROM enrichment.trinket_ratings tr
+              JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
+              JOIN enrichment.items ei ON ei.blizzard_item_id = tr.blizzard_item_id
+             WHERE tr.spec_id = $1
+               AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                AND bls.is_active = TRUE
-             ORDER BY ttr.sort_order, ttr.id
+             ORDER BY tr.sort_order, tr.id
             """,
             spec_id, hero_talent_id,
         )
 
         # Available items: have a source in the current season's instances
-        available_item_ids: set[int] = set()
+        available_bids: set[int] = set()
         if all_season_ids:
             avail_rows = await conn.fetch(
                 """
-                SELECT DISTINCT ttr.item_id
-                  FROM guild_identity.trinket_tier_ratings ttr
-                  JOIN guild_identity.item_sources isrc ON isrc.item_id = ttr.item_id
-                 WHERE ttr.spec_id = $1
-                   AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
-                   AND isrc.blizzard_instance_id = ANY($3)
-                   AND NOT isrc.is_suspected_junk
+                SELECT DISTINCT tr.blizzard_item_id
+                  FROM enrichment.trinket_ratings tr
+                  JOIN enrichment.item_sources es ON es.blizzard_item_id = tr.blizzard_item_id
+                 WHERE tr.spec_id = $1
+                   AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
+                   AND es.blizzard_instance_id = ANY($3)
+                   AND NOT es.is_junk
                 """,
                 spec_id, hero_talent_id, all_season_ids,
             )
-            available_item_ids = {r["item_id"] for r in avail_rows}
+            available_bids = {r["blizzard_item_id"] for r in avail_rows}
 
         # Content types and source locations per item from item_sources
         content_rows = await conn.fetch(
             """
-            SELECT ttr.item_id, isrc.instance_type, isrc.instance_name, isrc.encounter_name
-              FROM guild_identity.trinket_tier_ratings ttr
-              JOIN guild_identity.item_sources isrc ON isrc.item_id = ttr.item_id
-                   AND NOT isrc.is_suspected_junk
-             WHERE ttr.spec_id = $1
-               AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
+            SELECT tr.blizzard_item_id, es.instance_type, es.instance_name, es.encounter_name
+              FROM enrichment.trinket_ratings tr
+              JOIN enrichment.item_sources es
+                   ON es.blizzard_item_id = tr.blizzard_item_id AND NOT es.is_junk
+             WHERE tr.spec_id = $1
+               AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
             """,
             spec_id, hero_talent_id,
         )
-        content_by_item: dict[int, set[str]] = {}
-        sources_by_item: dict[int, list[dict]] = {}
+        content_by_bid: dict[int, set[str]] = {}
+        sources_by_bid: dict[int, list[dict]] = {}
         for r in content_rows:
-            item_id = r["item_id"]
-            content_by_item.setdefault(item_id, set()).add(r["instance_type"])
+            bid = r["blizzard_item_id"]
+            content_by_bid.setdefault(bid, set()).add(r["instance_type"])
             src_entry = {
                 "instance_type":  r["instance_type"],
                 "instance_name":  r["instance_name"]  or "",
                 "encounter_name": r["encounter_name"] or "",
             }
-            existing = sources_by_item.setdefault(item_id, [])
+            existing = sources_by_bid.setdefault(bid, [])
             if src_entry not in existing:
                 existing.append(src_entry)
 
         # Mark crafted trinkets
         crafted_rows_tr = await conn.fetch(
             """
-            SELECT DISTINCT ttr.item_id
-              FROM guild_identity.trinket_tier_ratings ttr
-              JOIN guild_identity.item_recipe_links irl ON irl.item_id = ttr.item_id
-             WHERE ttr.spec_id = $1
-               AND (ttr.hero_talent_id = $2 OR ttr.hero_talent_id IS NULL)
+            SELECT DISTINCT tr.blizzard_item_id
+              FROM enrichment.trinket_ratings tr
+              JOIN enrichment.item_recipes ir ON ir.blizzard_item_id = tr.blizzard_item_id
+             WHERE tr.spec_id = $1
+               AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
             """,
             spec_id, hero_talent_id,
         )
         for r in crafted_rows_tr:
-            content_by_item.setdefault(r["item_id"], set()).add("crafted")
+            content_by_bid.setdefault(r["blizzard_item_id"], set()).add("crafted")
 
     # ── Build item map, deduplicating source_ratings by (origin, tier) ────────
     # All 3 Wowhead source rows (Raid/M+/Overall) produce identical tiers —
@@ -2459,38 +2196,36 @@ async def get_trinket_ratings(
     item_map: dict[int, dict] = {}
     seen_sr: set = set()
     for r in rows:
-        item_id = r["item_id"]
         bid = r["blizzard_item_id"]
-        if item_id not in item_map:
-            item_map[item_id] = {
+        if bid not in item_map:
+            item_map[bid] = {
                 "blizzard_item_id": bid,
-                "item_id": item_id,
                 "name": r["name"] or "",
                 "icon_url": r["icon_url"] or "",
                 "sort_order": r["sort_order"],
                 "tier": r["tier"],
                 "source_ratings": [],
             }
-        key = (item_id, r["source_origin"], r["tier"])
+        key = (bid, r["source_origin"], r["tier"])
         if key not in seen_sr:
             seen_sr.add(key)
-            item_map[item_id]["source_ratings"].append({
+            item_map[bid]["source_ratings"].append({
                 "source_id": r["source_id"],
                 "source_origin": r["source_origin"],
                 "tier": r["tier"],
             })
 
-    rated_bids: set[int] = {v["blizzard_item_id"] for v in item_map.values()}
+    rated_bids: set[int] = set(item_map.keys())
     equipped_is_unranked = bool(equipped_bid_for_slot and equipped_bid_for_slot not in rated_bids)
-    crafted_item_ids: set[int] = {r["item_id"] for r in crafted_rows_tr}
+    crafted_bids: set[int] = {r["blizzard_item_id"] for r in crafted_rows_tr}
 
     # ── Group into tier buckets ────────────────────────────────────────────────
     tier_bucket: dict[str, list[dict]] = {}
-    for item_id, entry in item_map.items():
+    for bid, entry in item_map.items():
         tier = entry["tier"]
-        is_bis_item = bool(desired_bids and entry["blizzard_item_id"] in desired_bids)
-        is_crafted_item = item_id in crafted_item_ids
-        if is_crafted_item:
+        is_bis_item = bool(desired_bids and bid in desired_bids)
+        is_crafted_item_v = bid in crafted_bids
+        if is_crafted_item_v:
             t_ilvl = _crafted_target_ilvl(
                 is_bis_item, equipped_track_for_slot, plan_crafted_ilvl_map
             )
@@ -2499,17 +2234,16 @@ async def get_trinket_ratings(
                 is_bis_item, equipped_ilvl_for_slot, equipped_track_for_slot, plan_quality_ilvl_map
             )
         tier_bucket.setdefault(tier, []).append({
-            "blizzard_item_id": entry["blizzard_item_id"],
-            "item_id": item_id,
+            "blizzard_item_id": bid,
             "name": entry["name"],
             "icon_url": entry["icon_url"],
             "sort_order": entry["sort_order"],
             "source_ratings": entry["source_ratings"],
-            "content_types": list(content_by_item.get(item_id, set())),
-            "sources": sources_by_item.get(item_id, []),
-            "is_equipped": entry["blizzard_item_id"] in equipped_bids,
+            "content_types": list(content_by_bid.get(bid, set())),
+            "sources": sources_by_bid.get(bid, []),
+            "is_equipped": bid in equipped_bids,
             "is_bis": is_bis_item,
-            "is_available_this_season": item_id in available_item_ids,
+            "is_available_this_season": bid in available_bids,
             "target_ilvl": t_ilvl,
         })
 

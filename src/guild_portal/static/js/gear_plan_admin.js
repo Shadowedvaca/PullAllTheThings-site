@@ -693,7 +693,7 @@ async function syncSource() {
                 const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.ok) {
-                    totalItems  += d.items_upserted || 0;
+                    totalItems  += d.items_found || 0;
                     totalErrors += d.errors || 0;
                 } else {
                     totalErrors++;
@@ -707,7 +707,7 @@ async function syncSource() {
     }
 
     await loadMatrix();
-    const msg = `${src.name} sync complete — ${totalItems} items upserted, ${totalErrors} errors.`;
+    const msg = `${src.name} sync complete — ${totalItems} items found, ${totalErrors} errors.`;
     setStatus(msg, totalErrors > 0 ? 'error' : 'success');
     if (_targetsVisible) loadTargets();
 }
@@ -737,7 +737,7 @@ async function syncAll() {
                 const r = await fetch(`/api/v1/admin/bis/sync/spec/${sp.id}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.ok) {
-                    totalItems  += d.items_upserted || 0;
+                    totalItems  += d.items_found || 0;
                     totalErrors += d.errors || 0;
                 } else {
                     totalErrors++;
@@ -751,9 +751,35 @@ async function syncAll() {
     }
 
     await loadMatrix();
-    const msg = `Full sync complete — ${totalItems} items upserted, ${totalErrors} errors.`;
+    const msg = `Full sync complete — ${totalItems} items found, ${totalErrors} errors.`;
     setStatus(msg, totalErrors > 0 ? 'error' : 'success');
     if (_targetsVisible) loadTargets();
+}
+
+async function syncGaps() {
+    if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
+
+    const btn = document.getElementById('sync-gaps-btn');
+    _setBtnRunning(btn);
+    _syncInProgress = true;
+    _updateButtonStates();
+    setStatusHtml('<span class="spinner"></span> Gap fill — fetching missing/stale targets…', 'running');
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/sync-gaps', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const msg = `Gap fill complete — ${d.targets_run} targets synced, ${d.items_found} items found, ${d.errors} errors.`;
+        setStatus(msg, d.errors > 0 ? 'error' : 'success');
+        await loadMatrix();
+        if (_targetsVisible) loadTargets();
+    } catch (err) {
+        setStatus('Gap fill failed: ' + err.message, 'error');
+    } finally {
+        _syncInProgress = false;
+        _updateButtonStates();
+        _setBtnDone(btn);
+    }
 }
 
 async function resyncErrors() {
@@ -792,7 +818,7 @@ async function resyncErrors() {
                 const r = await fetch(`/api/v1/admin/bis/sync/target/${t.id}`, { method: 'POST' });
                 const d = await r.json();
                 if (d.ok) {
-                    totalItems  += d.items_upserted || 0;
+                    totalItems  += d.items_found || 0;
                     if (d.status === 'failed') totalErrors++;
                 } else {
                     totalErrors++;
@@ -806,7 +832,7 @@ async function resyncErrors() {
     }
 
     await loadMatrix();
-    const msg = `Re-sync errors complete — ${totalItems} items upserted, ${totalErrors} still failing.`;
+    const msg = `Re-sync errors complete — ${totalItems} items found, ${totalErrors} still failing.`;
     setStatus(msg, totalErrors > 0 ? 'error' : 'success');
     if (_targetsVisible) loadTargets();
 }
@@ -972,7 +998,7 @@ async function resyncSingleTarget(targetId, tr, btn, statusTd, itemsTd) {
         // Update status + items cells inline
         statusTd.className = `gp-log-status-${d.status || 'pending'}`;
         statusTd.textContent = d.status || 'pending';
-        itemsTd.textContent = d.items_upserted || 0;
+        itemsTd.textContent = d.items_found || 0;
 
         // Show result summary next to button
         const trinketPart = d.trinkets_upserted != null
@@ -2031,6 +2057,28 @@ async function bulkPopulatePlans() {
         if (result) result.textContent = msg;
     } catch (err) {
         setStatus('Bulk populate failed: ' + err.message, 'error');
+        if (result) result.textContent = 'Error: ' + err.message;
+    } finally {
+        _setBtnDone(btn);
+    }
+}
+
+async function rebuildEnrichment() {
+    const btn = document.getElementById('rebuild-enrichment-btn');
+    const result = document.getElementById('rebuild-enrichment-result');
+    _setBtnRunning(btn);
+    if (result) result.textContent = '';
+    setStatusHtml('<span class="spinner"></span> Rebuilding enrichment tables…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/rebuild-enrichment', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const c = d.counts;
+        const msg = `Enrichment rebuild complete — ${c.items} items (${c.raid} raid, ${c.dungeon} dungeon, ${c.world_boss} world boss, ${c.tier} tier, ${c.catalyst} catalyst, ${c.crafted} crafted, ${c.unclassified} unclassified), ${c.item_sources} sources, ${c.bis_entries} BIS entries, ${c.trinket_ratings} trinket ratings.`;
+        setStatus(msg, 'success');
+        if (result) result.textContent = msg;
+    } catch (err) {
+        setStatus('Rebuild enrichment failed: ' + err.message, 'error');
         if (result) result.textContent = 'Error: ' + err.message;
     } finally {
         _setBtnDone(btn);

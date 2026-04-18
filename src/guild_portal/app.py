@@ -192,6 +192,15 @@ def create_app() -> FastAPI:
             except Exception as exc:
                 logger.warning("Failed to load site_config (table may not exist yet): %s", exc)
 
+        # Pre-warm gear plan slot metadata cache from ref.gear_plan_slots
+        if guild_sync_pool is not None:
+            try:
+                from guild_portal.services.gear_plan_service import load_slot_meta
+                await load_slot_meta(guild_sync_pool)
+                logger.info("Gear plan slot metadata loaded")
+            except Exception as exc:
+                logger.warning("Failed to load gear plan slot metadata: %s", exc)
+
         # Inject site config accessor into Jinja2 template globals
         from guild_portal.templating import templates as _tmpl
         _tmpl.env.globals["site"] = get_site_config

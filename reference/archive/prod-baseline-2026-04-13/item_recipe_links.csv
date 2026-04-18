@@ -1,0 +1,223 @@
+id,item_id,blizzard_item_id,item_name,recipe_id,match_type,confidence
+1,7,237834,Spellbreaker's Bracers,544269,exact_name,100
+2,284,237840,Spellbreaker's Warglaive,517111,exact_name,100
+3,50,239656,Adherent's Silken Shroud,988920,exact_name,100
+4,144,244573,Silvermoon Agent's Utility Belt,1058600,exact_name,100
+5,188,244576,Silvermoon Agent's Deflectors,909359,exact_name,100
+6,857,244584,Farstrider's Plated Bracers,514283,exact_name,100
+7,464,244575,Silvermoon Agent's Handwraps,909356,exact_name,100
+8,380,245770,Aln'hara Cane,560655,exact_name,100
+9,320,245769,Aln'hara Lantern,560656,exact_name,100
+10,28,251513,Loa Worshiper's Band,859255,exact_name,100
+11,2473,237831,Spellbreaker's Rebuke,544270,exact_name,100
+12,2334,237845,Bloomforged Claw,866020,exact_name,100
+13,2616,237839,Spellbreaker's Blade,527175,exact_name,100
+14,2812,239664,Arcanoweave Cord,1113840,exact_name,100
+15,16423,244748,Aetherlume Bands,534212,exact_name,100
+16,1602,239660,Arcanoweave Bracers,1163224,exact_name,100
+17,1602,239660,Arcanoweave Bracers,85952,exact_name,100
+18,2005,240950,Masterwork Sin'dorei Amulet,542213,exact_name,100
+19,1466,244577,Farstrider's Razor Talons,856502,exact_name,100
+20,3680,244582,Farstrider's Reinforced Faulds,938728,exact_name,100
+21,515,245771,Aln'hara Pikestaff,560654,exact_name,100
+22,1514,237837,Farstrider's Mercy,527176,exact_name,100
+23,2472,237843,Magister's Mana Sword,527173,exact_name,100
+24,2757,237846,Blood Knight's Warblade,527171,exact_name,100
+25,3687,237850,Farstrider's Chopper,583532,exact_name,100
+26,1600,239661,Arcanoweave Cloak,941463,exact_name,100
+27,3221,240949,Masterwork Sin'dorei Band,535030,exact_name,100
+28,3219,244569,Silvermoon Agent's Sneakers,856493,exact_name,100
+57,20229,45853,Rituals of the New Moon,73115,exact_name,100
+58,18154,77530,Ghost Iron Dragonling,76708,exact_name,100
+59,19939,190516,Obsidian Seared Crusher,12387,exact_name,100
+60,19027,210816,Algari Alchemist Stone,10846,exact_name,100
+61,17162,208237,Verdant Combatant's Jeweled Signet,22547,exact_name,100
+62,16607,215137,Algari Competitor's Signet,3227,exact_name,100
+63,17881,219331,Rune-Branded Waistband,124,exact_name,100
+64,17499,215135,Ring of Earthen Craftsmanship,3225,exact_name,100
+65,17482,215136,Amulet of Earthen Craftsmanship,2628,exact_name,100
+66,18117,215134,Fractured Gemstone Locket,3224,exact_name,100
+67,18745,215131,Malleable Pendant,470,exact_name,100
+68,18754,215130,Malleable Band,469,exact_name,100
+69,18092,219329,Rune-Branded Hood,121,exact_name,100
+70,20276,222451,Charged Slicer,2021,exact_name,100
+71,17506,222441,Everforged Warglaive,11881,exact_name,100
+72,18573,222475,Dredger's Developed Helm,1829,exact_name,100
+73,16671,219342,Glyph-Etched Vambraces,10314,exact_name,100
+74,21123,222834,Pioneer's Perfected Cord,673,exact_name,100
+75,18096,219330,Rune-Branded Mantle,123,exact_name,100
+76,18675,219337,Glyph-Etched Guise,10310,exact_name,100
+77,18102,219332,Rune-Branded Legwraps,122,exact_name,100
+78,17492,219334,Rune-Branded Armbands,125,exact_name,100
+79,16673,219333,Rune-Branded Grasps,120,exact_name,100
+80,17590,222566,Vagabond's Torch,32408,exact_name,100
+81,20599,219511,Rook Feather Wristwraps,42560,exact_name,100
+82,20601,219513,Roiling Thunderstrike Talons,10333,exact_name,100
+83,19874,219339,Glyph-Etched Binding,10313,exact_name,100
+84,21111,222839,Pioneer's Perfected Mantle,678,exact_name,100
+85,17534,222435,Everforged Vambraces,2017,exact_name,100
+86,16587,222438,Everforged Stabber,13520,exact_name,100
+87,16575,222443,Everforged Greataxe,1817,exact_name,100
+88,17807,222440,Everforged Longsword,11880,exact_name,100
+89,17879,222819,Consecrated Robe,9545,exact_name,100
+90,20512,222821,Consecrated Mantle,9547,exact_name,100
+91,20259,222429,Everforged Sabatons,2015,exact_name,100
+92,17481,222447,Charged Claymore,13528,exact_name,100
+93,16702,222439,Everforged Dagger,13521,exact_name,100
+94,16714,221969,P.0.W. x2,30547,exact_name,100
+95,16586,222463,Siphoning Stiletto,1128,exact_name,100
+96,18723,222432,Everforged Defender,2016,exact_name,100
+97,16534,222815,Consecrated Cuffs,9541,exact_name,100
+98,16737,222448,Charged Halberd,2020,exact_name,100
+99,16533,222568,Vagabond's Bounding Baton,23078,exact_name,100
+100,17240,222814,Consecrated Slippers,9540,exact_name,100
+101,21101,222836,Pioneer's Perfected Hood,675,exact_name,100
+102,16479,222816,Consecrated Cord,9542,exact_name,100
+103,16573,222817,Consecrated Cloak,9543,exact_name,100
+104,17371,222840,Pioneer's Perfected Gloves,679,exact_name,100
+105,18581,222479,Dredger's Developed Gauntlets,1833,exact_name,100
+106,18575,222478,Dredger's Developed Pauldrons,1832,exact_name,100
+107,21128,222838,Pioneer's Perfected Leggings,677,exact_name,100
+108,20794,222822,Consecrated Gloves,9548,exact_name,100
+109,21116,222837,Pioneer's Cloth Robe,676,exact_name,100
+110,17509,224405,Scepter of Radiant Magics,642,exact_name,100
+111,17781,237836,Spellbreaker's Resolve,544268,exact_name,100
+112,20759,237830,Spellbreaker's Girdle,544271,exact_name,100
+113,20917,237844,Magister's Cleaver,583533,exact_name,100
+114,21338,237917,Blood-Tempered Greaves,510760,exact_name,100
+115,21126,237922,Blood-Tempered Leggings,517105,exact_name,100
+116,20434,237829,Spellbreaker's Shelter,833323,exact_name,100
+117,21115,237918,Blood-Tempered Chestplate,510759,exact_name,100
+118,20642,237921,Blood-Tempered Basinet,517106,exact_name,100
+119,21121,237919,Blood-Tempered Greatbelt,517108,exact_name,100
+120,21521,239653,Martyr's Gloves,565182,exact_name,100
+121,16948,239669,Courtly Gloves,507920,exact_name,100
+122,21177,241291,Primal Philosopher's Stone,521213,exact_name,100
+123,22493,237923,Blood-Tempered Bracers,517104,exact_name,100
+124,20646,237924,Blood-Tempered Pauldrons,517103,exact_name,100
+125,20655,237925,Blood-Tempered Gauntlets,517102,exact_name,100
+126,18999,237920,Blood-Tempered Bulwark,517107,exact_name,100
+127,21145,239671,Courtly Wrists,507922,exact_name,100
+128,21127,239670,Courtly Belt,507921,exact_name,100
+129,16938,239672,Courtly Robes,507923,exact_name,100
+130,16953,239674,Courtly Cloak,507926,exact_name,100
+131,16936,239675,Courtly Shoulders,507927,exact_name,100
+132,21139,239673,Courtly Slippers,507925,exact_name,100
+133,17075,239668,Courtly Helm,507919,exact_name,100
+134,16942,239676,Courtly Pants,507924,exact_name,100
+135,23594,240947,Gleaming Copper Band,512930,exact_name,100
+136,17204,240948,Nocturnal Charm,512931,exact_name,100
+137,23586,244586,Smuggler's Leather Wristbands,510255,exact_name,100
+138,23582,244585,Smuggler's Leather Footpads,510254,exact_name,100
+139,17040,244588,Scout's Scaled Boots,510257,exact_name,100
+140,21606,244589,Scout's Scaled Bracers,510258,exact_name,100
+141,21634,245772,Floratender's Crutch,507998,exact_name,100
+142,20975,244566,Thalassian Competitor's Chain Leggings,1214729,exact_name,100
+143,23572,244587,Smuggler's Leather Tunic,510253,exact_name,100
+144,21207,244592,Smuggler's Reinforced Shoulderguards,514271,exact_name,100
+145,21215,244593,Smuggler's Reinforced Gloves,514270,exact_name,100
+146,20737,244679,Murder Row Fishhook,891394,exact_name,100
+147,21380,244602,Ranger-General's Grips,531227,exact_name,100
+148,21234,265337,Aln'hara Sprigshot,1179797,exact_name,100
+284,30061,244590,Scout's Scaled Vest,510256,exact_name,100
+285,30435,241140,Signet of Azerothian Blessings,1170062,exact_name,100
+286,30446,245339,Evercore Turbochains,510707,exact_name,100
+287,30447,245343,Evercore Chainguards,510696,exact_name,100
+889,31103,239644,Bright Linen Fishing Hat,507932,item_search,100
+890,31104,245773,Faunatender's Baton,507997,item_search,100
+891,31105,245768,Rootwarden's Lamp,507999,item_search,100
+892,31106,265336,Faunatender's Trust,508000,item_search,100
+893,31107,244751,Evercore Zoomshroud,510690,item_search,100
+894,31108,244752,Evercore Shade,510691,item_search,100
+895,31109,244754,Evercore Vision Guard,510693,item_search,100
+896,31110,245341,Evercore Wrist Latch,510694,item_search,100
+897,31111,245342,Evercore Binding,510695,item_search,100
+898,31112,245344,Evercore Gear Weight,510697,item_search,100
+899,31113,245337,Evercore Swiftfeet,510705,item_search,100
+900,31114,245338,Evercore Stichwraps,510706,item_search,100
+901,31115,245340,Evercore Greaseplates,510708,item_search,100
+964,31116,244595,Smuggler's Reinforced Binding,514272,item_search,100
+965,31117,244598,Scout's Polished Gauntlets,514276,item_search,100
+966,31118,244597,Scout's Polished Spaulders,514277,item_search,100
+967,31119,244600,Scout's Polished Wrap,514278,item_search,100
+968,31120,244578,Farstrider's Scouting Vest,514280,item_search,100
+969,31121,244579,Farstrider's Unwavering Visage,514281,item_search,100
+970,31122,244580,Farstrider's Brilliant Plumes,514282,item_search,100
+971,31123,244759,Quel'dorei Cloth Goggles,514666,item_search,100
+972,31124,244760,Quel'dorei Leather Optics,514667,item_search,100
+973,31125,244761,Quel'dorei Mail Shroud,514668,item_search,100
+974,31126,244762,Quel'dorei Visor,514669,item_search,100
+975,31127,244755,Quel'dorei Silken Cuffs,514670,item_search,100
+976,31128,244756,Quel'dorei Bands,514671,item_search,100
+977,31129,244757,Quel'dorei Bracelets,514672,item_search,100
+978,31130,244758,Quel'dorei Guards,514673,item_search,100
+979,31131,244767,Quel'dorei Softsteppers,514674,item_search,100
+980,31132,244768,Quel'dorei Runners,514675,item_search,100
+981,31133,244769,Quel'dorei Clonkers,514676,item_search,100
+982,31134,244770,Quel'dorei Stompers,514677,item_search,100
+983,31135,237932,Primalforged Heavy Axe,517095,item_search,100
+984,31136,237931,Dawnforged Splitter,517096,item_search,100
+985,31137,237930,Dawnforged War Mace,517097,item_search,100
+986,31138,237929,Primalforged Knuckles,517098,item_search,100
+987,31139,237928,Dawnforged Long Blade,517099,item_search,100
+988,31140,237927,Dawnforged Edge,517100,item_search,100
+989,31141,237926,Dawnforged Ritual Knife,517101,item_search,100
+991,31143,237838,Magister's Ritual Knife,527172,item_search,100
+993,31145,244591,Smuggler's Reinforced Hood,527964,item_search,100
+995,31147,244594,Smuggler's Reinforced Pants,527965,item_search,100
+997,31149,244596,Scout's Polished Skullcap,527972,item_search,100
+999,31151,244599,Scout's Polished Legguards,527973,item_search,100
+1002,31154,244743,Aetherlume Eye Wrap,534208,item_search,100
+1003,31155,244744,Aetherlume Optics,534209,item_search,100
+1004,31156,244745,Aetherlume Vision Shroud,534210,item_search,100
+1005,31157,244747,Aetherlume Silken Cuffs,534211,item_search,100
+1006,31158,244749,Aetherlume Bracelets,534213,item_search,100
+1007,31159,237848,Blood Knight's Mercy,535894,item_search,100
+1008,31160,237828,Spellbreaker's March,544272,item_search,100
+1009,31161,244750,Aetherlume Guards,545250,item_search,100
+1010,31162,239657,Sunfire Bracers,551992,item_search,100
+1023,31175,244771,Aetherlume Softsteppers,563290,item_search,100
+1024,31176,244772,Aetherlume Runners,563291,item_search,100
+1025,31177,239638,Elegant Artisan's Fishing Hat,564005,item_search,100
+1033,31185,239652,Martyr's Crown,565181,item_search,100
+1034,31186,239654,Martyr's Slippers,565183,item_search,100
+1035,31187,244581,Farstrider's Trophy Belt,687049,item_search,100
+1036,31188,244612,Row Walker's Deflectors,802986,item_search,100
+1042,31194,237841,Spellbreaker's Ultimatum,872567,item_search,100
+1043,31195,237849,Magister's Valediction,873863,item_search,100
+1052,31204,244570,Silvermoon Agent's Coat,909354,item_search,100
+1053,31205,244571,Silvermoon Agent's Cover,909357,item_search,100
+1054,31206,244572,Silvermoon Agent's Mantle,909358,item_search,100
+1056,31208,246304,Darkmoon Dominion: Hunt,937254,item_search,100
+1057,31209,245870,Thalassian Competitor's Lamp,987418,item_search,100
+1058,31210,244574,Silvermoon Agent's Leggings,1058598,item_search,100
+1060,31212,237901,Thalassian Competitor's Plate Breastplate,1061597,item_search,100
+1063,31215,244555,Thalassian Competitor's Leather Mask,1093700,item_search,100
+1064,31216,245753,Thalassian Competitor's Emblem,1112240,item_search,100
+1065,31217,237833,Spellbreaker's Legguards,1143479,item_search,100
+1066,31218,237842,Bloomforged Greataxe,1151680,item_search,100
+1067,31219,244773,Aetherlume Clonkers,1155459,item_search,100
+1068,31220,244472,Knight-Commander's Palisade,1157180,item_search,100
+1069,31221,237847,Blood Knight's Impetus,1161262,item_search,100
+1072,31224,246305,Darkmoon Dominion: Blood,1163375,item_search,100
+1074,31226,246306,Darkmoon Dominion: Rot,1163376,item_search,100
+1075,31227,251073,Voidstone Shielding Array,1166405,item_search,100
+1077,31229,244559,Thalassian Competitor's Leather Gloves,1179888,item_search,100
+1078,31230,244774,Aetherlume Stompers,1186994,item_search,100
+1081,31233,246307,Darkmoon Dominion: Void,1199592,item_search,100
+1082,31234,241340,Magister's Alchemist Stone,1204637,item_search,100
+1083,31235,244763,Thalassian Competitor's Cloth Tip-Toes,1213187,item_search,100
+1084,31236,244764,Thalassian Competitor's Leather Sliders,1213188,item_search,100
+1085,31237,244765,Thalassian Competitor's Mail Footlinks,1213189,item_search,100
+1086,31238,244766,Thalassian Competitor's Plate Dunkers,1213190,item_search,100
+1087,31239,244735,Thalassian Competitor's Cloth Goggles,1213237,item_search,100
+1088,31240,244736,Thalassian Competitor's Leather Optics,1213238,item_search,100
+1089,31241,244739,Thalassian Competitor's Cloth Cuffs,1213239,item_search,100
+1090,31242,244741,Thalassian Competitor's Mail Links,1213240,item_search,100
+1091,31243,244742,Thalassian Competitor's Plate Bindings,1213241,item_search,100
+1092,31244,244564,Thalassian Competitor's Chain Epaulets,1214730,item_search,100
+1093,31245,244583,Farstrider's Sharpened Claws,1241742,item_search,100
+1094,31246,244613,Row Walker's Insurance,1274227,item_search,100
+1095,31247,244606,Hexwoven Strand,1274228,item_search,100
+2115,31795,239658,Sunfire Cloak,530792,exact_name,100
+2116,31776,219512,Weathered Stormfront Vest,17635,exact_name,100

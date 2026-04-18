@@ -49,8 +49,10 @@ Prod Server
 │   ├── patt.*           (campaigns, votes, entries, results, contest_agent_log,
 │   │                     guild_quotes, guild_quote_titles, player_availability,
 │   │                     raid_seasons, raid_events, raid_attendance, recurring_events)
+│   ├── ref.*            (classes [+blizzard_class_id], specializations*, hero_talents*,
+│   │                     bis_list_sources* — * = planned Phase F move, classes done)
 │   └── guild_identity.* (players, wow_characters, discord_users, player_characters,
-│                          roles, classes, specializations, audit_issues, sync_log,
+│                          roles, specializations, audit_issues, sync_log,
 │                          onboarding_sessions, professions, profession_tiers, recipes,
 │                          character_recipes, crafting_sync_config, discord_channels,
 │                          raiderio_profiles, battlenet_accounts, wcl_config,
@@ -169,7 +171,8 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 | Schema | Key tables |
 |--------|-----------|
 | `common` | `guild_ranks`, `users`, `discord_config` (+`bot_token_encrypted`, +7 attendance columns, +`attendance_excuse_if_unavailable`, +`attendance_excuse_if_discord_absent`), `invite_codes`, `screen_permissions`, `site_config` (+`blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`, +`active_connected_realm_ids`), `rank_wow_mapping` |
-| `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`, +**`in_guild`**, +**`last_equipment_sync`** — 0066, +**`race VARCHAR(40)`** — 0080), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `classes`, `specializations`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history`, **`wow_items`** (+**`quality_track VARCHAR(1)`** — 0096, tags catalyst items), **`item_sources`**, **`hero_talents`**, **`bis_list_sources`** (5 seed rows; display names updated to "u.gg Raid/M+/Overall" — 0075; `origin='archon'` stays as code id), **`bis_list_entries`** (`hero_talent_id=NULL` for Wowhead entries — 0076), **`character_equipment`**, **`gear_plans`** (+`simc_imported_at TIMESTAMPTZ`, +`equipped_source VARCHAR(10) DEFAULT 'blizzard'` — 0094), **`gear_plan_slots`**, **`bis_scrape_targets`** (Wowhead targets use `hero_talent_id=NULL` — 0076), **`bis_scrape_log`** (all 0066), **`item_recipe_links`** (item_id FK→wow_items, recipe_id FK→recipes, confidence INT CHECK 0–100, match_type VARCHAR(50), UNIQUE(item_id,recipe_id) — 0085), **`trinket_tier_ratings`** (source_id FK→bis_list_sources, spec_id FK→specializations, hero_talent_id FK→hero_talents NULL OK, item_id FK→wow_items, tier VARCHAR(2) CHECK S/A/B/C/D, sort_order INT — UNIQUE source+spec+ht+item — 0100) |
+| `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`, +**`in_guild`**, +**`last_equipment_sync`** — 0066, +**`race VARCHAR(40)`** — 0080), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history`, **`wow_items`** (+**`quality_track VARCHAR(1)`** — 0096, tags catalyst items), **`item_sources`**, **`character_equipment`**, **`gear_plans`** (+`simc_imported_at TIMESTAMPTZ`, +`equipped_source VARCHAR(10) DEFAULT 'blizzard'` — 0094), **`gear_plan_slots`**, **`item_recipe_links`** (item_id FK→wow_items, recipe_id FK→recipes, confidence INT CHECK 0–100, match_type VARCHAR(50), UNIQUE(item_id,recipe_id) — 0085) |
+| `ref` | `classes` (+`blizzard_class_id` — 0127), **`specializations`** (moved from guild_identity — 0130), **`hero_talents`** (moved from guild_identity — 0130), **`bis_list_sources`** (5 seed rows; display names "u.gg Raid/M+/Overall" — 0075; moved from guild_identity — 0130) |
 | `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`, +**`quality_ilvl_map JSONB`**, +**`crafted_ilvl_map JSONB`** — 0099), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`, +`is_deleted` BOOLEAN — 0062, +`signup_snapshot_at` — 0063), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`, +`was_available` BOOLEAN, +`raid_helper_status` VARCHAR(20) — 0063), `recurring_events`, `voice_attendance_log`, **`attendance_rules`** (id, name, group_label, group_type CHECK('promotion'/'warning'/'info'), is_active, target_rank_ids INTEGER[], result_rank_id FK→guild_ranks, conditions JSONB, sort_order, created_at — 0064) |
 
 **Key design notes:**
@@ -235,26 +238,35 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete.
-  - **No migration.** Pure sort fix: Roster Needs drill panel now displays players alphabetically.
-  - `_serialize_tracks()` in `gear_needs_routes.py` — sort entries by `player_name` + `player_id` before response.
-  - `_gatherInstEntries()` and `_renderByPlayer()` in `roster_needs.js` — sort merged per-player lists alphabetically.
-  - `roster_needs.js?v=1.1.1` cache buster.
-- **Previous: Phase 1F — Trinket Rankings** — `prod-v0.19.0`, merged to main. Complete.
-  - **Migration 0100**: `guild_identity.trinket_tier_ratings` — tier (S/A/B/C/D) per item per spec per source; FK to `wow_items`, `specializations`, `hero_talents`, `bis_list_sources`.
-  - **Migrations 0101–0103**: junk source purges (catalyst, crafted) + `item_sources.instance_type` constraint updated to include `'catalyst'`.
-  - **Wowhead trinket scraper** (`bis_sync.py`) — scrapes per-spec trinket tier lists; deduplicates by (source, spec, item); admin "Sync Trinket Rankings" button on `/admin/gear-plan`.
-  - **`get_trinket_ratings()`** in `gear_plan_service.py` — returns full-spec tier list with `sources` (instance · encounter), `content_types`, `is_equipped`, `is_bis` (paired-slot aware), `target_ilvl`; `GET /api/v1/me/gear-plan/{char_id}/trinket-ratings/{slot}`.
-  - **Paperdoll**: trinket tier badge stacked below ilvl number on paperdoll slots.
-  - **Gear table**: tier badge in equipped meta row for trinket slots.
-  - **Drawer**: tier badge next to quality pill in Equipped section; tier badge on BIS recs + Available items lists for trinket slots; Trinket Rankings section (flat sorted table, Raid/M+/Crafted filter tabs, real instance · encounter source, `?ilvl=N` Wowhead links).
-  - **EQUIPPED / BIS badges** on all item lists in all slot drawers (not just trinkets).
-  - **Paired-slot BIS**: ring_1↔ring_2 and trinket_1↔trinket_2 — both desired items marked BIS across all lists and all three service functions.
-  - JS v2.8.3, CSS v2.2.3.
-- **Last migration:** 0103
+- **Gear Plan Schema Overhaul — Phase H** — `feature/gear-plan-schema-overhaul`, deployed to dev. Complete.
+  - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. `landing` has 5 tables. Dual-write added to all 5 ingest paths. Complete.
+  - **Phase B** (migration 0105): enrichment schema tables + stored procedures. 5 tables, 2 helpers, 8 sprocs. Complete.
+  - **Phase C** (migration 0106): viz schema views (`viz.slot_items`, `viz.tier_piece_sources`, `viz.crafters_by_item`, `viz.bis_recommendations`). 51 unit tests. Complete.
+  - **Phase D** (no migration): switched `gear_plan_service.py` to read from viz views + enrichment tables. Net: −458 lines, zero tooltip HTML parsing. Complete.
+  - **Phase E** (migration 0107): enrichment classification overhaul + item_seasons bridge. Complete.
+  - **Phase F** (migration 0130): `guild_identity.specializations`, `hero_talents`, `bis_list_sources` → `ref` schema. All 10 Python source files updated.
+  - **Phase G** (migration 0131): `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings` dropped. 8 source files updated.
+  - **Phase H** (migration 0132): `blizzard_item_id` added to `guild_identity.item_recipe_links`; `sp_rebuild_item_recipes` rewrote to eliminate `JOIN wow_items`; `item_source_sync.py` BUG FIX (suffix_seed_rows was still JOINing dropped `bis_list_entries`); `item_recipe_links` NOT EXISTS checks switched to `blizzard_item_id`; `all_catalyst_bis` switched to `enrichment.items`; `flag_junk_sources` tier piece check uses `enrichment.items.item_category='tier'`; `bis_routes.py` landing fill no longer JOINs `wow_items`. 8 new tests. 1439 unit tests pass.
+  - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
+- **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`, merged to main. Complete. Pure sort fix for Roster Needs drill panel.
+- **Last migration:** 0132 (dev only — not yet on prod)
 - **Last prod tag:** `prod-v0.19.1`
-- **Active branch:** `main`
-- **Next:** Gear Plan Schema Overhaul Phase A. See `reference/gear-plan-1-schema-overhaul.md`.
+- **Active branch:** `feature/gear-plan-schema-overhaul`
+- **Next:** Phase I — documentation updates (ARCHITECTURE.md, SCHEMA.md, OPERATIONS.md). Or merge feature branch and ship as prod-v0.20.0.
+- **Post-Phase E patch migrations (dev only, 0108–0132):**
+  - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
+  - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows. Result: tier=192, raid=129, dungeon=493, crafted=42, catalyst=28, unclassified~6000.
+  - **0110–0122** — Various enrichment pipeline fixes (see git log).
+  - **0123** — `sp_rebuild_item_seasons` fix: strict `tt.target_slot = ei.slot_type` match; `sp_update_item_categories` strict slot match.
+  - **0124** — Evoker armor type fix: moved class ID 13 from leather to mail group in `sp_rebuild_tier_tokens`.
+  - **0125** — `tier_set_ids INTEGER[]` on `patt.raid_seasons` (seeded {1978–1990} for Midnight S1); ROBE→chest in `sp_rebuild_items`.
+  - **0126** — `playable_class_ids INTEGER[]` + `quality VARCHAR(20)` on `enrichment.items`; epic-only filter for crafted in `viz.slot_items`.
+  - **0127** — `ref` schema created; `guild_identity.classes` → `ref.classes`; `blizzard_class_id` added and seeded; tier class filter uses Blizzard IDs. All 12 source files updated.
+  - **0128** — `viz.slot_items` source JOIN restricted to active season instance IDs (fixes multi-expansion dungeon drop locations).
+  - **0129** — `CLOAK` inventory_type → `back` slot in `sp_rebuild_items`; BIS hero_talent null-safe filter in `gear_plan_service.py`.
+  - **0130** — Phase F: `guild_identity.specializations`, `hero_talents`, `bis_list_sources` → `ref` schema. `viz.bis_recommendations` recreated to JOIN `ref.bis_list_sources`. All 10 Python source files updated.
+  - **0131** — Phase G: `guild_identity.bis_list_entries` and `guild_identity.trinket_tier_ratings` dropped. 8 source files updated to read/write enrichment equivalents. `BisListEntry` ORM model removed.
+  - **0132** — Phase H: `blizzard_item_id` added to `item_recipe_links` + backfill; `sp_rebuild_item_recipes` rewritten (no `wow_items` JOIN). 4 Python files updated.
 
 ### What Exists
 - **sv_common packages:** identity (ranks, players, chars), auth (bcrypt, JWT, invite codes), discord (bot, role sync, DM, channels, voice_attendance), guild_sync (Blizzard API, scheduler, crafting, onboarding, progression, Raider.IO, WCL, bnet character sync, drift scanner, raid booking, AH pricing, attendance_processor), **errors** (report_error, resolve_issue, get_unresolved — Phase 6.1), **feedback** (submit_feedback() — Phase F.2; stores local record + syncs de-identified payload to Hub at shadowedvaca.com), **guide_links** (pure URL builder — Phase G)

@@ -51,7 +51,7 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
         # where Wowhead has not yet indexed the tooltip HTML.
         craftable_rows = await conn.fetch(
             """
-            SELECT id, name
+            SELECT id, blizzard_item_id, name
               FROM guild_identity.wow_items
              WHERE name IS NOT NULL AND name != ''
             """
@@ -87,6 +87,7 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
         for item in craftable_rows:
             item_id = item["id"]
+            item_blizzard_id = item["blizzard_item_id"]
             item_name_lower = item["name"].lower()
 
             candidates: list[tuple[int, int, str]] = []  # (recipe_id, confidence, match_type)
@@ -108,21 +109,25 @@ async def build_item_recipe_links(pool: asyncpg.Pool) -> dict:
                 result = await conn.execute(
                     """
                     INSERT INTO guild_identity.item_recipe_links
-                        (item_id, recipe_id, confidence, match_type)
-                    VALUES ($1, $2, $3, $4)
+                        (item_id, blizzard_item_id, recipe_id, confidence, match_type)
+                    VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (item_id, recipe_id) DO UPDATE
-                        SET confidence  = GREATEST(
+                        SET confidence       = GREATEST(
                                 guild_identity.item_recipe_links.confidence,
                                 EXCLUDED.confidence
                             ),
-                            match_type  = CASE
+                            match_type       = CASE
                                 WHEN EXCLUDED.confidence
                                      > guild_identity.item_recipe_links.confidence
                                 THEN EXCLUDED.match_type
                                 ELSE guild_identity.item_recipe_links.match_type
-                            END
+                            END,
+                            blizzard_item_id = COALESCE(
+                                guild_identity.item_recipe_links.blizzard_item_id,
+                                EXCLUDED.blizzard_item_id
+                            )
                     """,
-                    item_id, recipe_id, confidence, match_type,
+                    item_id, item_blizzard_id, recipe_id, confidence, match_type,
                 )
                 # asyncpg returns "INSERT 0 1" or "UPDATE 1"
                 if result.startswith("INSERT"):
@@ -234,11 +239,11 @@ async def _stub_and_link(
         result = await conn.execute(
             """
             INSERT INTO guild_identity.item_recipe_links
-                (item_id, recipe_id, confidence, match_type)
-            VALUES ($1, $2, $3, $4)
+                (item_id, blizzard_item_id, recipe_id, confidence, match_type)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (item_id, recipe_id) DO NOTHING
             """,
-            item_db_id, recipe_db_id, 100, match_type,
+            item_db_id, blizzard_item_id, recipe_db_id, 100, match_type,
         )
         linked = result == "INSERT 0 1"
 
@@ -348,8 +353,9 @@ async def discover_and_link_crafted_items(
         # Create links for all matching recipe↔item pairs
         link_result = await conn.execute(
             """
-            INSERT INTO guild_identity.item_recipe_links (item_id, recipe_id, confidence, match_type)
-            SELECT DISTINCT wi.id, rec.id, 100, 'equipment_name_match'
+            INSERT INTO guild_identity.item_recipe_links
+                (item_id, blizzard_item_id, recipe_id, confidence, match_type)
+            SELECT DISTINCT wi.id, ce.blizzard_item_id, rec.id, 100, 'equipment_name_match'
               FROM guild_identity.character_equipment ce
               JOIN guild_identity.recipes rec ON LOWER(rec.name) = LOWER(ce.item_name)
               JOIN guild_identity.profession_tiers pt ON pt.id = rec.tier_id

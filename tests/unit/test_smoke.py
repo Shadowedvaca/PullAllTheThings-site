@@ -89,7 +89,7 @@ def test_model_schemas():
     assert Player.__table_args__["schema"] == "guild_identity"
     assert WowCharacter.__table_args__[1]["schema"] == "guild_identity"
     assert Role.__table_args__["schema"] == "guild_identity"
-    assert WowClass.__table_args__["schema"] == "guild_identity"
+    assert WowClass.__table_args__["schema"] == "ref"
     assert PlayerAvailability.__table_args__[3]["schema"] == "patt"
     assert RaidSeason.__table_args__["schema"] == "patt"
     assert RaidEvent.__table_args__["schema"] == "patt"

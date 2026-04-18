@@ -71,7 +71,7 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/attendance",      "attendance_report"),
     ("/admin/quotes",          "quotes"),
     ("/admin/error-routing",   "error_routing"),
-    ("/admin/gear-plan",       "gear_plan"),
+    ("/admin/gear-plan-admin", "gear_plan_admin"),
 ]
 
 
@@ -701,8 +701,8 @@ async def admin_players_data(
         FROM guild_identity.wow_characters wc
         LEFT JOIN guild_identity.player_characters pc ON pc.character_id = wc.id
         LEFT JOIN guild_identity.players p ON p.id = pc.player_id
-        LEFT JOIN guild_identity.classes cl ON cl.id = wc.class_id
-        LEFT JOIN guild_identity.specializations sp ON sp.id = wc.active_spec_id
+        LEFT JOIN ref.classes cl ON cl.id = wc.class_id
+        LEFT JOIN ref.specializations sp ON sp.id = wc.active_spec_id
         LEFT JOIN guild_identity.roles ro ON ro.id = sp.default_role_id
         LEFT JOIN common.guild_ranks gr ON gr.id = wc.guild_rank_id
         WHERE wc.removed_at IS NULL AND wc.in_guild = TRUE
@@ -3706,3 +3706,379 @@ async def admin_blizzard_probe(
     finally:
         if owned:
             await blizzard_client.close()
+
+
+# ---------------------------------------------------------------------------
+# DB Explorer  (GL only — screen_key "db_explorer")
+# ---------------------------------------------------------------------------
+
+import csv as _csv
+import io as _io
+
+_DBX_IDENT_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_$]*$')
+
+
+def _dbx_safe_ident(name: str) -> bool:
+    """Return True if name is a safe, non-system SQL identifier."""
+    return bool(_DBX_IDENT_RE.match(name)) and not name.startswith("pg_temp")
+
+
+@router.get("/db-explorer", response_class=HTMLResponse)
+async def admin_db_explorer_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """DB Schema/Data Explorer — GL only."""
+    player = await _require_screen("db_explorer", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/db-explorer")
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/db_explorer.html", ctx)
+
+
+@router.get("/db-explorer/schemas")
+async def db_explorer_schemas(request: Request, db: AsyncSession = Depends(get_db)):
+    """Return list of non-system schema names."""
+    player = await _require_screen("db_explorer", request, db)
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    result = await db.execute(text("""
+        SELECT schema_name
+        FROM information_schema.schemata
+        WHERE schema_name NOT IN (
+            'information_schema', 'pg_catalog', 'pg_toast'
+        )
+          AND schema_name NOT LIKE 'pg_temp_%'
+          AND schema_name NOT LIKE 'pg_toast_temp_%'
+        ORDER BY schema_name
+    """))
+    schemas = [row[0] for row in result.fetchall()]
+    return JSONResponse({"ok": True, "schemas": schemas})
+
+
+@router.get("/db-explorer/objects")
+async def db_explorer_objects(
+    schema: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return tables, views, and routines in the given schema."""
+    player = await _require_screen("db_explorer", request, db)
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    if not _dbx_safe_ident(schema):
+        return JSONResponse({"ok": False, "error": "Invalid schema name"}, status_code=400)
+
+    result = await db.execute(text("""
+        SELECT table_name AS name, 'TABLE' AS type
+          FROM information_schema.tables
+         WHERE table_schema = :schema AND table_type = 'BASE TABLE'
+        UNION ALL
+        SELECT table_name, 'VIEW'
+          FROM information_schema.views
+         WHERE table_schema = :schema
+        UNION ALL
+        SELECT DISTINCT routine_name, routine_type
+          FROM information_schema.routines
+         WHERE routine_schema = :schema
+        ORDER BY type, name
+    """), {"schema": schema})
+
+    objects = [{"name": row[0], "type": row[1]} for row in result.fetchall()]
+    return JSONResponse({"ok": True, "objects": objects})
+
+
+@router.get("/db-explorer/definition")
+async def db_explorer_definition(
+    schema: str,
+    name: str,
+    obj_type: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the DDL / definition for a schema object."""
+    player = await _require_screen("db_explorer", request, db)
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    if not _dbx_safe_ident(schema) or not _dbx_safe_ident(name):
+        return JSONResponse({"ok": False, "error": "Invalid identifier"}, status_code=400)
+
+    otype = obj_type.upper()
+
+    try:
+        if otype == "VIEW":
+            result = await db.execute(
+                text("SELECT pg_get_viewdef(to_regclass(:fqn), true)"),
+                {"fqn": f"{schema}.{name}"},
+            )
+            viewdef = result.scalar()
+            if not viewdef:
+                return JSONResponse({"ok": False, "error": "View not found"}, status_code=404)
+            code = f"CREATE OR REPLACE VIEW {schema}.{name} AS\n{viewdef.strip()}"
+
+        elif otype in ("PROCEDURE", "FUNCTION"):
+            result = await db.execute(text("""
+                SELECT pg_get_functiondef(p.oid)
+                FROM pg_catalog.pg_proc p
+                JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname = :schema AND p.proname = :name
+                ORDER BY p.oid
+                LIMIT 1
+            """), {"schema": schema, "name": name})
+            funcdef = result.scalar()
+            if not funcdef:
+                return JSONResponse({"ok": False, "error": "Routine not found"}, status_code=404)
+            code = funcdef
+
+        else:  # TABLE
+            cols_result = await db.execute(text("""
+                SELECT column_name, data_type, udt_name,
+                       character_maximum_length, numeric_precision, numeric_scale,
+                       is_nullable, column_default
+                FROM information_schema.columns
+                WHERE table_schema = :schema AND table_name = :name
+                ORDER BY ordinal_position
+            """), {"schema": schema, "name": name})
+            cols = cols_result.fetchall()
+            if not cols:
+                return JSONResponse({"ok": False, "error": "Table not found"}, status_code=404)
+
+            pk_result = await db.execute(text("""
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                   AND tc.table_schema = kcu.table_schema
+                WHERE tc.table_schema = :schema AND tc.table_name = :name
+                  AND tc.constraint_type = 'PRIMARY KEY'
+                ORDER BY kcu.ordinal_position
+            """), {"schema": schema, "name": name})
+            pk_cols = [r[0] for r in pk_result.fetchall()]
+
+            uq_result = await db.execute(text("""
+                SELECT tc.constraint_name, kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                   AND tc.table_schema = kcu.table_schema
+                WHERE tc.table_schema = :schema AND tc.table_name = :name
+                  AND tc.constraint_type = 'UNIQUE'
+                ORDER BY tc.constraint_name, kcu.ordinal_position
+            """), {"schema": schema, "name": name})
+            uq_map: dict = {}
+            for cname, col in uq_result.fetchall():
+                uq_map.setdefault(cname, []).append(col)
+
+            fk_result = await db.execute(text("""
+                SELECT kcu.column_name,
+                       ccu.table_schema AS ref_schema,
+                       ccu.table_name AS ref_table,
+                       ccu.column_name AS ref_col,
+                       rc.delete_rule
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                   AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.referential_constraints rc
+                    ON tc.constraint_name = rc.constraint_name
+                JOIN information_schema.key_column_usage ccu
+                    ON rc.unique_constraint_name = ccu.constraint_name
+                   AND ccu.ordinal_position = kcu.ordinal_position
+                WHERE tc.table_schema = :schema AND tc.table_name = :name
+                  AND tc.constraint_type = 'FOREIGN KEY'
+                ORDER BY kcu.column_name
+            """), {"schema": schema, "name": name})
+            fk_rows = fk_result.fetchall()
+
+            chk_result = await db.execute(text("""
+                SELECT tc.constraint_name, cc.check_clause
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.check_constraints cc
+                    ON tc.constraint_name = cc.constraint_name
+                   AND tc.constraint_schema = cc.constraint_schema
+                WHERE tc.table_schema = :schema AND tc.table_name = :name
+                  AND tc.constraint_type = 'CHECK'
+                  AND cc.check_clause NOT LIKE '(% IS NOT NULL)'
+                ORDER BY tc.constraint_name
+            """), {"schema": schema, "name": name})
+            chk_rows = chk_result.fetchall()
+
+            def _fmt_type(data_type, udt_name, char_max, num_prec, num_scale, col_default):
+                if data_type == "character varying":
+                    return f"VARCHAR({char_max})" if char_max else "VARCHAR"
+                if data_type == "character":
+                    return f"CHAR({char_max})" if char_max else "CHAR"
+                if data_type == "numeric" and num_prec:
+                    return f"NUMERIC({num_prec},{num_scale or 0})"
+                if data_type == "ARRAY":
+                    base = udt_name.lstrip("_").upper()
+                    return f"{base}[]"
+                if data_type == "USER-DEFINED":
+                    return udt_name
+                if col_default and "nextval(" in col_default:
+                    return "BIGSERIAL" if data_type == "bigint" else "SERIAL"
+                return data_type.upper()
+
+            col_lines = []
+            for col_name, data_type, udt_name, char_max, num_prec, num_scale, is_nullable, col_default in cols:
+                t = _fmt_type(data_type, udt_name, char_max, num_prec, num_scale, col_default)
+                null_part = "" if is_nullable == "YES" else " NOT NULL"
+                if col_default and "nextval(" in col_default:
+                    default_part = ""
+                elif col_default:
+                    default_part = f" DEFAULT {col_default}"
+                else:
+                    default_part = ""
+                col_lines.append(f"    {col_name:<35} {t}{null_part}{default_part}")
+
+            constraint_lines = []
+            if pk_cols:
+                constraint_lines.append(f"    PRIMARY KEY ({', '.join(pk_cols)})")
+            for cname, ucols in uq_map.items():
+                constraint_lines.append(f"    CONSTRAINT {cname} UNIQUE ({', '.join(ucols)})")
+            for fk_col, ref_schema, ref_table, ref_col, del_rule in fk_rows:
+                del_clause = f" ON DELETE {del_rule}" if del_rule != "NO ACTION" else ""
+                constraint_lines.append(
+                    f"    FOREIGN KEY ({fk_col}) REFERENCES "
+                    f"{ref_schema}.{ref_table} ({ref_col}){del_clause}"
+                )
+            for chk_name, chk_clause in chk_rows:
+                constraint_lines.append(f"    CONSTRAINT {chk_name} CHECK {chk_clause}")
+
+            all_lines = col_lines + constraint_lines
+            code = (
+                f"CREATE TABLE {schema}.{name} (\n"
+                + ",\n".join(all_lines)
+                + "\n);"
+            )
+
+        return JSONResponse({"ok": True, "code": code})
+
+    except Exception as exc:
+        logger.exception("db_explorer definition error for %s.%s", schema, name)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+@router.get("/db-explorer/data")
+async def db_explorer_data(
+    schema: str,
+    name: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    sort: str = "",
+    direction: str = "asc",
+    search: str = "",
+    limit: int = 200,
+    offset: int = 0,
+    fmt: str = "json",
+):
+    """Return paginated, searchable data for a table or view."""
+    player = await _require_screen("db_explorer", request, db)
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Unauthorized"}, status_code=401)
+
+    if not _dbx_safe_ident(schema) or not _dbx_safe_ident(name):
+        return JSONResponse({"ok": False, "error": "Invalid identifier"}, status_code=400)
+
+    exists = await db.execute(text("""
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = :schema AND table_name = :name
+        LIMIT 1
+    """), {"schema": schema, "name": name})
+    if not exists.scalar():
+        return JSONResponse({"ok": False, "error": "Object not found"}, status_code=404)
+
+    cols_result = await db.execute(text("""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = :schema AND table_name = :name
+        ORDER BY ordinal_position
+    """), {"schema": schema, "name": name})
+    col_names = [r[0] for r in cols_result.fetchall()]
+    if not col_names:
+        return JSONResponse({"ok": False, "error": "No columns found"}, status_code=404)
+
+    sort_col = sort if sort and sort in col_names else None
+    sort_dir = "DESC" if direction.lower() == "desc" else "ASC"
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+
+    params: dict = {}
+    if search:
+        parts = [f'CAST("{cn}" AS TEXT) ILIKE :search' for cn in col_names]
+        where_clause = f"WHERE ({' OR '.join(parts)})"
+        params["search"] = f"%{search}%"
+    else:
+        where_clause = ""
+
+    order_clause = f'ORDER BY "{sort_col}" {sort_dir}' if sort_col else ""
+    fqn = f'"{schema}"."{name}"'
+
+    try:
+        count_result = await db.execute(
+            text(f"SELECT count(*) FROM {fqn} {where_clause}"),
+            params,
+        )
+        total = count_result.scalar()
+
+        params["limit"] = limit
+        params["offset"] = offset
+        data_result = await db.execute(
+            text(f"SELECT * FROM {fqn} {where_clause} {order_clause} LIMIT :limit OFFSET :offset"),
+            params,
+        )
+        rows = data_result.fetchall()
+
+        def _serialize(v):
+            if v is None:
+                return None
+            if isinstance(v, (str, int, float, bool)):
+                return v
+            return str(v)
+
+        row_data = [[_serialize(c) for c in row] for row in rows]
+
+        if fmt == "csv":
+            buf = _io.StringIO()
+            writer = _csv.writer(buf)
+            writer.writerow(col_names)
+            writer.writerows(
+                [[str(c) if c is not None else "" for c in row] for row in row_data]
+            )
+            from fastapi.responses import Response as _FResponse
+            return _FResponse(
+                content=buf.getvalue(),
+                media_type="text/csv",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{schema}_{name}.csv"'
+                },
+            )
+
+        return JSONResponse({
+            "ok": True,
+            "columns": col_names,
+            "rows": row_data,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+        })
+
+    except Exception as exc:
+        logger.exception("db_explorer data error for %s.%s", schema, name)
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# Gear Plan Admin  (GL only — screen_key "gear_plan_admin")
+# ---------------------------------------------------------------------------
+
+
+@router.get("/gear-plan-admin", response_class=HTMLResponse)
+async def admin_gear_plan_admin_page(
+    request: Request, db: AsyncSession = Depends(get_db)
+):
+    player = await _require_screen("gear_plan_admin", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/gear-plan-admin")
+    ctx = await _base_ctx(request, player, db)
+    return templates.TemplateResponse("admin/gear_plan_admin.html", ctx)

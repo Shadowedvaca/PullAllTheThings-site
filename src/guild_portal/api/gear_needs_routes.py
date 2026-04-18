@@ -103,8 +103,8 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
         JOIN guild_identity.wow_characters wc ON wc.id = p.main_character_id
         JOIN guild_identity.gear_plans gp
             ON gp.character_id = p.main_character_id AND gp.is_active = TRUE
-        LEFT JOIN guild_identity.specializations sp ON sp.id = gp.spec_id
-        LEFT JOIN guild_identity.classes cl ON cl.id = sp.class_id
+        LEFT JOIN ref.specializations sp ON sp.id = gp.spec_id
+        LEFT JOIN ref.classes cl ON cl.id = sp.class_id
         JOIN guild_identity.gear_plan_slots gps
             ON gps.plan_id = gp.id AND gps.desired_item_id IS NOT NULL
         JOIN guild_identity.wow_items wi_d ON wi_d.id = gps.desired_item_id
@@ -138,8 +138,8 @@ async def _fetch_needs_rows(conn, include_initiates: bool, include_offspec: bool
             JOIN guild_identity.wow_characters wc ON wc.id = p.offspec_character_id
             JOIN guild_identity.gear_plans gp
                 ON gp.character_id = p.offspec_character_id AND gp.is_active = TRUE
-            LEFT JOIN guild_identity.specializations sp ON sp.id = gp.spec_id
-            LEFT JOIN guild_identity.classes cl ON cl.id = sp.class_id
+            LEFT JOIN ref.specializations sp ON sp.id = gp.spec_id
+            LEFT JOIN ref.classes cl ON cl.id = sp.class_id
             JOIN guild_identity.gear_plan_slots gps
                 ON gps.plan_id = gp.id AND gps.desired_item_id IS NOT NULL
             JOIN guild_identity.wow_items wi_d ON wi_d.id = gps.desired_item_id

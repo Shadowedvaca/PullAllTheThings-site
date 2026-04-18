@@ -46,6 +46,29 @@
 
 ## Recent Changes
 
+### Gear Plan Schema Overhaul — Phase C (2026-04-14, migration 0106, dev only)
+- **Migration 0106:** 4 views in the `viz` schema (schema created empty in 0104).
+- **`viz.slot_items`** — LEFT JOIN of `enrichment.items` + `enrichment.item_sources`, filters `NOT COALESCE(is_junk, FALSE)`. Exposes all columns Phase D needs: `blizzard_item_id`, `name`, `icon_url`, `slot_type`, `armor_type`, `primary_stat`, `item_category`, `tier_set_suffix`, `quality_track`, `instance_type`, `encounter_name`, `instance_name`, `blizzard_instance_id`, `quality_tracks`.
+- **`viz.tier_piece_sources`** — ports `guild_identity.v_tier_piece_sources` to use `enrichment.items` (filter `item_category = 'tier'`) and `enrichment.item_sources` for boss data. Still bridges token items via `guild_identity.tier_token_attrs` + `guild_identity.wow_items` (legacy bridge removed in Phase E). Columns: `tier_piece_blizzard_id`, `tier_piece_name`, `slot_type`, `token_blizzard_id`, `token_name`, `instance_type`, `boss_name`, `instance_name`, `blizzard_encounter_id`, `blizzard_instance_id`.
+- **`viz.crafters_by_item`** — joins `enrichment.item_recipes` to `guild_identity.{recipes, professions, character_recipes, wow_characters, player_characters, players}` + `common.guild_ranks`. Filters `wc.in_guild = TRUE`. Ordered by rank level DESC, character_name ASC.
+- **`viz.bis_recommendations`** — joins `enrichment.bis_entries` + `enrichment.items` + `guild_identity.bis_list_sources`. Aggregates `quality_tracks` via `ARRAY(SELECT DISTINCT UNNEST(...) FROM enrichment.item_sources WHERE NOT is_junk)`.
+- **51 unit tests** in `tests/unit/test_viz_views.py` — structural coverage of all 4 views (columns, table refs, filter conditions) + downgrade.
+
+### Gear Plan Schema Overhaul — Phase B (2026-04-14, migration 0105, dev only)
+- **Migration 0105:** 5 enrichment tables (`enrichment.items`, `item_sources`, `item_recipes`, `bis_entries`, `trinket_ratings`), 2 helper functions (`_quality_tracks`, `_tooltip_slot`), 8 stored procedures (`sp_rebuild_items`, `sp_rebuild_item_sources`, `sp_rebuild_item_recipes`, `sp_rebuild_bis_entries`, `sp_rebuild_trinket_ratings`, `sp_update_item_categories`, `sp_flag_junk_sources`, `sp_rebuild_all`).
+- `sp_update_item_categories()` classifies items in priority order: crafted (has recipe link) → catalyst (quality_track='C') → tier (/item-set= in tooltip + tier slot) → drop (non-junk source row) → unknown.
+- `sp_flag_junk_sources()` marks world_boss null-ID rows and tier piece direct drop sources as `is_junk=TRUE`.
+- `sp_rebuild_all()` calls all sprocs in the correct dependency order.
+- Admin UI: Step 6 "Rebuild Enrichment" button on `/admin/gear-plan`; `POST /api/v1/admin/bis/rebuild-enrichment` returns per-table counts.
+- **Parity validated:** enrichment counts match guild_identity exactly (6884 items, 8481 sources, 5524 BIS, 2517 trinket ratings, 43 recipes).
+- Transitional: sprocs read from `guild_identity.*`; full landing-based reads follow in Phase D+.
+
+### Gear Plan Schema Overhaul — Phase A (2026-04-13, migration 0104, dev only)
+- **Migration 0104:** created `landing`, `enrichment`, and `viz` schemas. `landing` has 5 insert-only tables with JSONB payloads (blizzard_journal_encounters, blizzard_items, wowhead_tooltips, blizzard_appearances, bis_scrape_raw). `enrichment` and `viz` created as empty schemas.
+- Dual-write added to all 5 ingest paths: `item_source_sync.py` (journal encounters + appearances), `item_service.py` (Wowhead tooltips + Blizzard item metadata), `bis_sync.py` (BIS scrape content). Landing writes are best-effort (won't break enrichment on failure).
+- `_extract_archon()` and `_extract_wowhead()` updated to return `(slots, ..., raw_html)` — raw content passed up to `sync_target()` for landing insert.
+- Prod baseline captured: `reference/archive/prod-baseline-2026-04-13/` (9 CSVs). Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
+
 ### Phase 2B + 2C — Quality Track Mapping + Quality-Aware Ilvl Display (2026-04-13, migrations 0096 + 0099, prod-v0.18.0)
 - **Migration 0096:** `wow_items.quality_track VARCHAR(1) CHECK (IN 'V','C','H','M')` — tags catalyst items with quality track derived from Blizzard appearance set name suffix. All 64 Midnight catalyst items tagged `quality_track='C'` (appearance sets contain armor-type variants, not quality-tier variants). Migrations 0097+0098 (scrapped approach) ran on dev and cancelled out; net effect is 0096 only.
 - **Migration 0099:** `patt.raid_seasons.quality_ilvl_map JSONB` + `crafted_ilvl_map JSONB` — season-specific ilvl bands per quality track. Seeded for Midnight S1: quality `V{233-250} C{246-263} H{259-276} M{272-289}`, crafted `A{220-233} V{233-246} H{259-272} M{272-285}`. `RaidSeason` ORM model updated. Editable via Admin → Reference Tables → Raid Season Ilvl Maps (`PATCH /api/v1/admin/seasons/{id}`).
