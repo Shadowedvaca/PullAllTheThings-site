@@ -1,8 +1,8 @@
 # Removing `guild_identity.wow_items` — Phased Retirement Plan
 
-> **Status:** Phase A complete — deployed to dev, on branch `feature/gear-plan-1.0-wow_items-fix`
+> **Status:** Phase B complete — deployed to dev, on branch `feature/gear-plan-1.0-wow_items-fix`
 > **Branch:** `feature/gear-plan-1.0-wow_items-fix` (off `main` after `prod-v0.20.2`)
-> **Migration sequence:** 0141 → 0145 (one per phase; 0141 = Phase A)
+> **Migration sequence:** 0141 → 0145 (0141 = Phase A, 0142 = Phase B)
 > **Last updated:** 2026-04-18
 > **Rollback point:** `patt_db_pre_v020_20260417_213540.dump` on prod server at `/opt/guild-portal/backups/`
 
@@ -164,6 +164,7 @@ However, several Python functions in `item_source_sync.py` execute ad-hoc SQL ag
 
 ### Phase A — Migration 0141: Add `blizzard_item_id` to the four FK tables + backfill ✓ COMPLETE (dev)
 
+
 **Goal:** Give each table a stable natural key column so Phase C (code rewrite)
 can write `blizzard_item_id` without needing the `wow_items` integer id lookup.
 The old `item_id` / `desired_item_id` / `token_item_id` columns are NOT dropped in
@@ -233,7 +234,7 @@ Phase A — catch this with the verification queries above before proceeding.
 
 ---
 
-### Phase B — Migration 0141: Backfill `landing.wowhead_tooltips` from `wow_items`
+### Phase B — Migration 0142: Backfill `landing.wowhead_tooltips` from `wow_items` ✓ COMPLETE (dev)
 
 **Goal:** Ensure `landing.wowhead_tooltips` is the complete source of tooltip HTML
 so Python code can stop reading from `wow_items.wowhead_tooltip_html`.
@@ -916,7 +917,7 @@ concern about locking on a large table.
 | Phase | Migration | Python files | SQL changes |
 |-------|-----------|--------------|-------------|
 | A ✓ | 0141 | None | ADD COLUMN blizzard_item_id + backfill (item_sources, tier_token_attrs) |
-| B | 0141 | item_source_sync.py, item_service.py | Backfill landing.wowhead_tooltips from wow_items |
+| B ✓ | 0142 | item_source_sync.py | Backfill landing.wowhead_tooltips; migrate tooltip reads off wow_items |
 | C | 0142 | equipment_sync.py, item_source_sync.py, item_recipe_link_sync.py, item_service.py | Swap unique constraints on item_sources + item_recipe_links |
 | D | 0143 | All files with SELECT … wow_items | Minimal or none |
 | E | 0144 + 0145 | models.py | DROP item_id FKs; DROP tier_token_attrs PK; DROP wow_items |
