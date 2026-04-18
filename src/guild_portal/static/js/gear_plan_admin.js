@@ -824,6 +824,7 @@ async function resyncErrors() {
                     totalErrors++;
                 }
             } catch (_) { totalErrors++; }
+            await new Promise(res => setTimeout(res, 2000));
         }
     } finally {
         _syncInProgress = false;
