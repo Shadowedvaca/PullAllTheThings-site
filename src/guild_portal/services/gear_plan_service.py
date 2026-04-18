@@ -118,23 +118,6 @@ CLASS_ARMOR_TYPE: dict[str, str] = {
     "Warrior":      "plate",
 }
 
-# (class_name, spec_name) → primary stat for weapon item filtering
-SPEC_PRIMARY_STAT: dict[tuple[str, str], str] = {
-    ("Mage", "Arcane"): "int", ("Mage", "Fire"): "int", ("Mage", "Frost"): "int",
-    ("Warlock", "Affliction"): "int", ("Warlock", "Demonology"): "int", ("Warlock", "Destruction"): "int",
-    ("Priest", "Discipline"): "int", ("Priest", "Holy"): "int", ("Priest", "Shadow"): "int",
-    ("Death Knight", "Blood"): "str", ("Death Knight", "Frost"): "str", ("Death Knight", "Unholy"): "str",
-    ("Warrior", "Arms"): "str", ("Warrior", "Fury"): "str", ("Warrior", "Protection"): "str",
-    ("Paladin", "Holy"): "int", ("Paladin", "Protection"): "str", ("Paladin", "Retribution"): "str",
-    ("Druid", "Balance"): "int", ("Druid", "Feral"): "agi", ("Druid", "Guardian"): "agi",
-    ("Druid", "Restoration"): "int",
-    ("Monk", "Brewmaster"): "agi", ("Monk", "Mistweaver"): "int", ("Monk", "Windwalker"): "agi",
-    ("Rogue", "Assassination"): "agi", ("Rogue", "Outlaw"): "agi", ("Rogue", "Subtlety"): "agi",
-    ("Demon Hunter", "Havoc"): "agi", ("Demon Hunter", "Vengeance"): "agi",
-    ("Hunter", "Beast Mastery"): "agi", ("Hunter", "Marksmanship"): "agi", ("Hunter", "Survival"): "agi",
-    ("Shaman", "Elemental"): "int", ("Shaman", "Enhancement"): "agi", ("Shaman", "Restoration"): "int",
-    ("Evoker", "Devastation"): "int", ("Evoker", "Preservation"): "int", ("Evoker", "Augmentation"): "int",
-}
 
 # ── Slot metadata helpers ─────────────────────────────────────────────────────
 
@@ -1648,8 +1631,8 @@ async def get_available_items(
 
     Eligibility rules:
       - Armor slots: filter by character's class armor type (cloth/leather/mail/plate)
-      - Weapon slots: filter by primary_stat column in viz.slot_items; include when NULL
-      - Accessories (neck/back/rings/trinkets): no armor restriction
+      - All slots: filter by spec primary_stat (int/agi/str); items with NULL pass through
+      - Accessories (neck/rings): almost all universal (NULL primary_stat), rarely filtered
 
     Phase D: reads from viz.slot_items (enrichment-backed) instead of guild_identity.*
     directly. item_category discriminates drop/crafted/tier/catalyst.
@@ -1663,7 +1646,8 @@ async def get_available_items(
         char_row = await conn.fetchrow(
             """
             SELECT c.name AS class_name, s.name AS spec_name,
-                   c.blizzard_class_id, gp.spec_id, gp.hero_talent_id
+                   c.blizzard_class_id, gp.spec_id, gp.hero_talent_id,
+                   s.primary_stat AS spec_primary_stat
               FROM guild_identity.wow_characters wc
               LEFT JOIN ref.classes c ON c.id = wc.class_id
               LEFT JOIN guild_identity.gear_plans gp
@@ -1880,13 +1864,12 @@ async def get_available_items(
     raid_items    = list(raid_map.values())
     dungeon_items = list(dungeon_map.values())
 
-    # Apply primary-stat filter for weapon slots
-    if _SLOT_META[slot]["is_weapon_slot"]:
-        primary_stat_filter = SPEC_PRIMARY_STAT.get((class_name, spec_name))
-        if primary_stat_filter:
-            raid_items    = _filter_by_primary_stat(raid_items, primary_stat_filter)
-            dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat_filter)
-            crafted_items = _filter_by_primary_stat(crafted_items, primary_stat_filter)
+    # Apply primary-stat filter — items with NULL primary_stat always pass through
+    primary_stat_filter: Optional[str] = char_row["spec_primary_stat"]
+    if primary_stat_filter:
+        raid_items    = _filter_by_primary_stat(raid_items, primary_stat_filter)
+        dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat_filter)
+        crafted_items = _filter_by_primary_stat(crafted_items, primary_stat_filter)
 
     # Strip primary_stat from items before returning (internal filter field)
     for item in raid_items + dungeon_items + crafted_items:
