@@ -1,9 +1,10 @@
 # Removing `guild_identity.wow_items` — Phased Retirement Plan
 
 > **Status:** Planning — not yet started.
-> **Branch target:** `feature/gear-plan-schema-overhaul` (or a new branch off `main`)
+> **Branch target:** new `feature/` branch off `main` after `prod-v0.20.0` ships
 > **Migration sequence:** 0140 → 0145 (estimated; one per phase)
 > **Last updated:** 2026-04-17
+> **Rollback point:** `patt_db_pre_v020_20260417_213540.dump` on prod server at `/opt/guild-portal/backups/`
 
 ---
 
@@ -36,131 +37,81 @@ constraint, matching the pattern already in place on `item_recipe_links.blizzard
 
 ---
 
-## Decision Points
+## Rollback Procedure
 
-> These must be resolved before implementation of any phase begins.
-> Sections marked **DECISION NEEDED** require Mike's input.
+If any phase goes sideways on prod:
 
----
+**DB restore:**
+```bash
+ssh hetzner
+docker exec guild-portal-db-prod-1 psql -U patt_user -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='patt_db' AND pid <> pg_backend_pid();"
+docker exec -i guild-portal-db-prod-1 pg_restore -U patt_user -d patt_db --clean --if-exists /tmp/backup.dump
+# (copy the backup into the container first)
+docker cp /opt/guild-portal/backups/patt_db_pre_v020_20260417_213540.dump guild-portal-db-prod-1:/tmp/backup.dump
+```
 
-### DECISION NEEDED — D1: FK Strategy (Option A vs B)
+**App rollback** (roll back to prod-v0.20.0 before wow_items work starts):
+```bash
+git tag prod-v0.20.1-rollback prod-v0.20.0
+git push origin prod-v0.20.1-rollback  # triggers prod deploy of old code
+```
 
-**Option A — Plain `blizzard_item_id` columns, no FK constraint**
-
-Each FK table gets a `blizzard_item_id INTEGER` column (already done on
-`item_recipe_links`). The existing integer `item_id` column is dropped after
-backfill. No foreign key constraint is added against `enrichment.items`.
-`enrichment.items` can be freely TRUNCATEd + rebuilt with no cascade risk.
-Code that needs item metadata JOINs `enrichment.items` on `blizzard_item_id`.
-
-Pros: zero risk of accidental cascades on `sp_rebuild_items` runs; simpler.
-Cons: referential integrity is not enforced at the DB level (application must
-maintain consistency).
-
-**Option B — Upsert `enrichment.items` instead of TRUNCATE; add FK**
-
-Change `sp_rebuild_items()` from TRUNCATE+INSERT to a merge/upsert pattern.
-Add a real FK from the four tables to `enrichment.items.blizzard_item_id`.
-This preserves referential integrity but makes `sp_rebuild_items` more complex
-and risks partial rebuilds if the upsert logic has gaps.
-
-Pros: enforced referential integrity; self-documenting schema.
-Cons: `sp_rebuild_items` complexity increases significantly; a rebuild bug
-could leave `enrichment.items` with stale rows that are still FK-referenced.
-
-**Recommendation:** Option A. The `landing → enrichment` pipeline is already
-trusted to produce consistent data. Enforcing FKs against a table that is
-intentionally rebuilt from scratch adds operational fragility without meaningful
-protection.
+The backup at `/opt/guild-portal/backups/patt_db_pre_v020_20260417_213540.dump`
+is the clean restore point captured before migrations 0133–0139 went to prod.
+It is in PostgreSQL custom format; restore with `pg_restore`, not `psql`.
 
 ---
 
-### DECISION NEEDED — D2: What Happens to `wowhead_tooltip_html`?
+## Decision Points — All Resolved
 
-`wow_items.wowhead_tooltip_html` is used in four places:
-
-1. `item_source_sync.enrich_catalyst_tier_items` — Pass 1 checks tooltip for
-   `/item-set=` pattern; Pass 2 falls back to armor_type (already in `enrichment.items`).
-2. `item_source_sync.process_tier_tokens` — scans `wow_items` for `slot_type='other'`
-   with tooltip that contains 'Synthesize a soulbound set'.
-3. `item_service.enrich_unenriched_items` — writes tooltip HTML to `wow_items`.
-4. `item_service.enrich_blizzard_metadata` — writes a synthetic `/item-set=N` marker
-   to `wow_items.wowhead_tooltip_html` when no real tooltip exists.
-5. `item_service.backfill_armor_type_from_tooltip` — parses `wow_items.wowhead_tooltip_html`
-   regex for armor type.
-
-`landing.wowhead_tooltips` exists (created migration 0104) and is written to
-by both `get_or_fetch_item()` and `enrich_unenriched_items()` already — but
-only as a "dual-write" alongside the primary write to `wow_items`. The table
-holds raw JSON payloads (`payload JSONB`); the HTML is `payload->>'tooltip'`.
-
-Three sub-options:
-
-**D2-A — Promote `landing.wowhead_tooltips` to primary; extend `enrichment.items`
-with a `wowhead_tooltip_html TEXT` column.**
-The sproc `sp_rebuild_items` would JOIN `landing.wowhead_tooltips` and include
-the tooltip in `enrichment.items`. All Python reads of tooltip data shift to
-`enrichment.items.wowhead_tooltip_html`. This is the cleanest long-term design
-but requires a schema change to `enrichment.items` and an update to `sp_rebuild_items`.
-
-**D2-B — Keep tooltip HTML in `landing.wowhead_tooltips`; read it directly
-from landing when needed.**
-`process_tier_tokens` and `flag_junk_sources` JOIN `landing.wowhead_tooltips`
-instead of `wow_items`. The enrichment pipeline does not carry the HTML forward.
-This avoids bloating `enrichment.items` with raw HTML.
-
-**D2-C — Drop functions that rely on `wowhead_tooltip_html` (not recommended).**
-`process_tier_tokens` is still needed for tier token detection. Not viable.
-
-**Recommendation:** D2-B. Keep tooltip HTML in landing. `enrichment.items.item_category='tier'`
-already identifies tier pieces (set by `sp_update_item_categories`), making the
-`/item-set=` tooltip pattern check in `enrich_catalyst_tier_items` partially
-redundant for items already classified. Python code that currently reads
-`wow_items.wowhead_tooltip_html` gets rewritten to query `landing.wowhead_tooltips`.
+These were discussed and settled before Phase A work began.
 
 ---
 
-### DECISION NEEDED — D3: Does `item_sources` Need a Real FK?
+### D1: FK Strategy — **RESOLVED: Option A (plain `blizzard_item_id` column, no FK constraint)**
 
-`guild_identity.item_sources` currently has `item_id INTEGER NOT NULL` FK with
-`CASCADE DELETE` into `wow_items`. If `item_id` is replaced by `blizzard_item_id`
-with no FK, orphan rows can accumulate (items deleted from `enrichment.items` by
-a rebuild but still referenced in `item_sources`). This is mitigated by the fact
-that `enrichment.sp_rebuild_item_sources()` already TRUNCATEs `enrichment.item_sources`
-before rebuilding it — the guild_identity `item_sources` table is the write target
-for Python sync code, while `enrichment.item_sources` is the read target for the
-viz layer. Keeping them separate avoids the cascade problem.
+`blizzard_item_id` is a stable, consistent natural key — Blizzard never recycles
+item IDs. Each FK table gets a plain `INTEGER blizzard_item_id` column with no
+foreign key constraint pointing at `enrichment.items`. This matches the pattern
+already in place on `item_recipe_links` (migration 0132).
 
-The only cleanup concern: if a loot table sync removes an item from
-`guild_identity.item_sources`, the row is deleted by the ON CONFLICT upsert logic.
-If the item FK is replaced by a plain `blizzard_item_id`, orphan detection must
-be done manually or via a periodic cleanup query.
-
-**Recommendation:** Accept Option A (no FK). Add a note to the admin runbook
-to re-run "Sync Loot Tables → Enrich Items → Process Tier Tokens" as the cleanup
-mechanism. This matches the existing operational workflow.
+The only con is that the DB won't enforce referential integrity automatically.
+This is acceptable because `enrichment.items` is a TRUNCATE-and-rebuild table —
+a FK pointing at it would cascade-delete all downstream rows on every sproc run.
+Application-layer integrity (the sync pipeline) is the right enforcement point.
 
 ---
 
-### DECISION NEEDED — D4: What Replaces `weapon_type`?
+### D2: Wowhead Tooltip HTML — **RESOLVED: D2-B — keep in `landing.wowhead_tooltips`, read from there**
 
-`wow_items.weapon_type` (e.g. `"Sword"`, `"Axe"`) is a short label from Wowhead.
-`enrichment.items.weapon_subtype` is a richer version from Blizzard API (e.g.
-`"One-Handed Axe"`, `"Two-Handed Sword"`, `"Shield"`). It was added in migration
-0135.
+`landing.wowhead_tooltips` was created in migration 0104 but is currently **empty**
+— `item_service.py` was never updated to write there; it still writes exclusively
+to `wow_items.wowhead_tooltip_html`. This is the primary task of Phase B:
 
-Check: does any gear plan UI code read `weapon_type` from `wow_items` and display
-it to users? If not, `weapon_subtype` from `enrichment.items` is a strict superset
-and no migration of display logic is needed.
+1. Migration backfills `landing.wowhead_tooltips` from `wow_items.wowhead_tooltip_html`
+2. `item_service.py` write path is updated to write to `landing.wowhead_tooltips`
+3. All Python code that reads tooltip HTML switches from `wow_items` to `landing.wowhead_tooltips`
+4. `enrichment.items` does NOT get a `wowhead_tooltip_html` column — raw HTML stays in landing
 
-**If the answer is "no, nothing reads weapon_type for display":** drop it quietly.
-**If the answer is "yes":** map `weapon_subtype` values to the old short labels in
-the code that reads them.
+---
 
-**Recommendation:** Audit reads of `weapon_type` from `wow_items` before Phase D.
-The grep result `SELECT id, blizzard_item_id, name, icon_url, slot_type, armor_type, weapon_type`
-in `item_service.get_or_fetch_item()` returns it from the cache, but whether the
-caller uses it in a visible field must be confirmed.
+### D3: `item_sources` referential integrity — **RESOLVED: no FK, plain `blizzard_item_id` column**
+
+`guild_identity.item_sources` is the write target for loot table sync; it is a
+separate table from `enrichment.item_sources` (the read target rebuilt by sproc).
+A plain `blizzard_item_id INTEGER NOT NULL` column replaces `item_id`. No FK needed.
+The existing "Sync Loot Tables → Enrich & Classify" workflow is the cleanup mechanism.
+
+---
+
+### D4: `weapon_type` — **RESOLVED: drop it, nothing uses it**
+
+`wow_items.weapon_type` (e.g. `"Sword"`, `"Axe"`) is only read inside
+`item_service.py` itself — written during Wowhead fetch, read back in
+`get_or_fetch_item()`, but never consumed by any gear plan route, template,
+or other service. `enrichment.items.weapon_subtype` ("One-Handed Sword",
+"Two-Handed Axe") is a richer superset already in use. `weapon_type` drops
+silently with `wow_items`.
 
 ---
 
@@ -1034,33 +985,20 @@ concern about locking on a large table.
 
 ## Open Questions
 
-1. **D1 confirmed?** — Is Option A (plain blizzard_item_id, no FK constraint)
-   acceptable, or does Mike prefer Option B (upsert enrichment.items, enforced FK)?
-
-2. **D2 confirmed?** — Keep tooltip HTML in `landing.wowhead_tooltips` (D2-B),
-   or add `wowhead_tooltip_html` to `enrichment.items` (D2-A)?
-
-3. **Does anything read `weapon_type` from `wow_items` for display?** — Run
-   `grep -rn "weapon_type" src/` to confirm. If no UI displays it, it's safe to
-   drop without mapping to `weapon_subtype`.
-
-4. **Does `get_or_fetch_item()` need to survive Phase C?** — After Phase C, item
+1. **Does `get_or_fetch_item()` need to survive Phase C?** — After Phase C, item
    data lives only in `enrichment.items` (after rebuild). `get_or_fetch_item()`
-   currently provides a live cache-or-fetch path. Does any code path require
-   on-demand item resolution (bypassing the batch enrichment cycle)? If yes,
-   Phase C must include a rewrite of this function to call Wowhead/Blizzard,
-   write to landing, and trigger a mini-rebuild for that single item.
+   currently provides a live cache-or-fetch path. If a brand-new item appears in
+   a player's equipped gear before the next enrichment run, it returns None.
+   Decide: is "run Enrich & Classify after each sync" an acceptable operational
+   requirement, or does Phase C need an on-demand enrichment fallback?
 
-5. **"Enrich & Classify" admin button already calls sp_rebuild_items?** — Confirm
-   whether the admin pipeline (Steps 1–4 in gear plan admin) currently calls
-   `CALL enrichment.sp_rebuild_items()` as part of Step 2 (Enrich Items). If not,
-   Phase C must add this call to prevent gear plan drawers from going dark after
-   new items are synced.
+2. **"Enrich & Classify" calls `sp_rebuild_items()`?** — Confirm that Step 2
+   of the admin pipeline ("Enrich Items") calls `CALL enrichment.sp_rebuild_items()`
+   at the end. If not, Phase C must add this to prevent gear plan drawers going
+   dark after new items are synced.
 
-6. **Migration numbering** — Migrations 0140–0145 assumes no other migrations
-   are queued between now and Phase A start. Confirm the next available migration
-   number before writing Phase A.
+3. **Migration numbering** — 0140–0145 assumed. Confirm next available number
+   before writing Phase A; other feature branches may add migrations in between.
 
-7. **What timeline?** — Each phase should have at least one full sync cycle on dev
-   to verify before the next phase starts. Is this planned to land in
-   `prod-v0.21.0`, or is there urgency?
+4. **Timeline** — each phase needs at least one full sync cycle on dev before
+   proceeding. No urgency assumed; this is a `prod-v0.21.0` candidate.
