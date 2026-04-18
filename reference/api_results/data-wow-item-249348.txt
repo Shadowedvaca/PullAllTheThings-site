@@ -1,0 +1,142 @@
+{
+  "_links": {
+    "self": {
+      "href": "https://us.api.blizzard.com/data/wow/item/249348?namespace=static-12.0.1_65617-us"
+    }
+  },
+  "id": 249348,
+  "name": "Alncured Riftbloom",
+  "quality": {
+    "type": "EPIC",
+    "name": "Epic"
+  },
+  "level": 219,
+  "required_level": 90,
+  "media": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/media/item/249348?namespace=static-12.0.1_65617-us"
+    },
+    "id": 249348
+  },
+  "item_class": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/item-class/15?namespace=static-12.0.1_65617-us"
+    },
+    "name": "Miscellaneous",
+    "id": 15
+  },
+  "item_subclass": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/item-class/15/item-subclass/0?namespace=static-12.0.1_65617-us"
+    },
+    "name": "Junk",
+    "id": 0
+  },
+  "inventory_type": {
+    "type": "NON_EQUIP",
+    "name": "Non-equippable"
+  },
+  "purchase_price": 0,
+  "sell_price": 0,
+  "max_count": 0,
+  "is_equippable": false,
+  "is_stackable": false,
+  "preview_item": {
+    "item": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/249348?namespace=static-12.0.1_65617-us"
+      },
+      "id": 249348
+    },
+    "quality": {
+      "type": "EPIC",
+      "name": "Epic"
+    },
+    "name": "Alncured Riftbloom",
+    "media": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/item/249348?namespace=static-12.0.1_65617-us"
+      },
+      "id": 249348
+    },
+    "item_class": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-class/15?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Miscellaneous",
+      "id": 15
+    },
+    "item_subclass": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-class/15/item-subclass/0?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Junk",
+      "id": 0
+    },
+    "inventory_type": {
+      "type": "NON_EQUIP",
+      "name": "Non-equippable"
+    },
+    "binding": {
+      "type": "ON_ACQUIRE",
+      "name": "Binds when picked up"
+    },
+    "spells": [
+      {
+        "spell": {
+          "key": {
+            "href": "https://us.api.blizzard.com/data/wow/spell/1261839?namespace=static-12.0.1_65617-us"
+          },
+          "name": "Riftbloom",
+          "id": 1261839
+        },
+        "description": "Use: Synthesize a soulbound set chest item appropriate for your class."
+      }
+    ],
+    "requirements": {
+      "level": {
+        "value": 90,
+        "display_string": "Requires Level 90"
+      },
+      "playable_classes": {
+        "links": [
+          {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/playable-class/11?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Druid",
+            "id": 11
+          },
+          {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/playable-class/12?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Demon Hunter",
+            "id": 12
+          },
+          {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/playable-class/10?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Monk",
+            "id": 10
+          },
+          {
+            "key": {
+              "href": "https://us.api.blizzard.com/data/wow/playable-class/4?namespace=static-12.0.1_65617-us"
+            },
+            "name": "Rogue",
+            "id": 4
+          }
+        ],
+        "display_string": "Classes: Druid, Demon Hunter, Monk, Rogue"
+      }
+    },
+    "level": {
+      "value": 48,
+      "display_string": "Item Level 48"
+    },
+    "is_subclass_hidden": true
+  },
+  "purchase_quantity": 1
+}

@@ -1,0 +1,99 @@
+{
+  "_links": {
+    "self": {
+      "href": "https://us.api.blizzard.com/data/wow/item/249367?namespace=static-12.0.1_65617-us"
+    }
+  },
+  "id": 249367,
+  "name": "Chiming Void Curio",
+  "quality": {
+    "type": "EPIC",
+    "name": "Epic"
+  },
+  "level": 219,
+  "required_level": 90,
+  "media": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/media/item/249367?namespace=static-12.0.1_65617-us"
+    },
+    "id": 249367
+  },
+  "item_class": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/item-class/5?namespace=static-12.0.1_65617-us"
+    },
+    "name": "Reagent",
+    "id": 5
+  },
+  "item_subclass": {
+    "key": {
+      "href": "https://us.api.blizzard.com/data/wow/item-class/5/item-subclass/2?namespace=static-12.0.1_65617-us"
+    },
+    "name": "Context Token",
+    "id": 2
+  },
+  "inventory_type": {
+    "type": "NON_EQUIP",
+    "name": "Non-equippable"
+  },
+  "purchase_price": 0,
+  "sell_price": 0,
+  "max_count": 0,
+  "is_equippable": false,
+  "is_stackable": false,
+  "description": "Find Kirana near the entrance to the March on Quel'Danas to trade this for powerful class set armor.",
+  "preview_item": {
+    "item": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item/249367?namespace=static-12.0.1_65617-us"
+      },
+      "id": 249367
+    },
+    "quality": {
+      "type": "EPIC",
+      "name": "Epic"
+    },
+    "name": "Chiming Void Curio",
+    "media": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/media/item/249367?namespace=static-12.0.1_65617-us"
+      },
+      "id": 249367
+    },
+    "item_class": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-class/5?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Reagent",
+      "id": 5
+    },
+    "item_subclass": {
+      "key": {
+        "href": "https://us.api.blizzard.com/data/wow/item-class/5/item-subclass/2?namespace=static-12.0.1_65617-us"
+      },
+      "name": "Context Token",
+      "id": 2
+    },
+    "inventory_type": {
+      "type": "NON_EQUIP",
+      "name": "Non-equippable"
+    },
+    "binding": {
+      "type": "ON_ACQUIRE",
+      "name": "Binds when picked up"
+    },
+    "requirements": {
+      "level": {
+        "value": 90,
+        "display_string": "Requires Level 90"
+      }
+    },
+    "description": "Find Kirana near the entrance to the March on Quel'Danas to trade this for powerful class set armor.",
+    "level": {
+      "value": 48,
+      "display_string": "Item Level 48"
+    },
+    "is_subclass_hidden": true
+  },
+  "purchase_quantity": 1
+}

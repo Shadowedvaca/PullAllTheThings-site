@@ -1,0 +1,17 @@
+﻿Weapon,Death Knight,Demon Hunter,Druid,Evoker,Hunter,Mage,Monk,Paladin,Priest,Rogue,Shaman,Warlock,Warrior
+Bow,,,,,X,,,,,X,,,X
+Crossbow,,,,,X,,,,,X,,,X
+Dagger,,,X,X,,X,,,X,X,X,X,X
+Fist Weapon,,X,X,X,X,,X,,,X,X,,X
+Gun,,,,,X,,,,,X,,,X
+One-Handed Axe,X,X,,X,X,,X,X,,X,X,,X
+One-Handed Mace,X,,X,X,,,X,X,X,X,X,,X
+One-Handed Sword,X,X,,X,X,X,X,X,,X,,X,X
+Polearm,X,,X,X,X,,X,X,,,,,X
+Shield,,,,,,,,X,,,X,,X
+Staff,,,X,X,X,X,X,,X,,X,X,X
+Two-Handed Axe,X,,,X,X,,,X,,,X,,X
+Two-Handed Mace,X,,X,X,,,,X,,,X,,X
+Two-Handed Sword,X,,,X,X,,,X,,,,, X
+Wand,,,,,,X,,,X,,,X,
+Warglaives,,X,,,,,,,,,,,
