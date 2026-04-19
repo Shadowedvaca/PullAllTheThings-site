@@ -23,6 +23,7 @@ sync_all(pool)                          — run extraction for every active sour
 sync_target(pool, target_id)            — re-sync a single scrape target
 rebuild_bis_from_landing(pool)          — rebuild enrichment.bis_entries from landing HTML
 rebuild_trinket_ratings_from_landing(pool) — rebuild enrichment.trinket_ratings from landing HTML
+rebuild_item_popularity_from_landing(pool) — rebuild enrichment.item_popularity from u.gg landing HTML
 cross_reference(pool, spec_id, ht_id)  — compare all sources per slot for one spec+hero
 import_simc(pool, text, source_id,      — import a SimC BIS profile as enrichment.bis_entries
             spec_id, hero_talent_id)
@@ -55,6 +56,14 @@ class ExtractedTrinketRating:
     item_name: str
     tier: str        # 'S', 'A', 'B', 'C', 'D', 'F'
     sort_order: int  # position within tier group, 0-indexed
+
+
+@dataclass
+class UggPopularityItem:
+    slot: str
+    blizzard_item_id: int
+    count: int   # players using this item in this slot
+    total: int   # total players sampled for this source × spec × slot
 
 # ---------------------------------------------------------------------------
 # Slug maps — (class_name, spec_name) → URL slugs per source
@@ -132,7 +141,7 @@ _HEADERS = {
 async def discover_targets(pool: asyncpg.Pool) -> dict:
     """Auto-generate scrape targets for all active spec × source combos.
 
-    u.gg: one target per spec × hero talent (URLs embed the HT slug).
+    u.gg: one target per spec with hero_talent_id=NULL (raid + M+ path-based URLs).
     Wowhead + Icy Veins: one target per spec with hero_talent_id=NULL.
       Wowhead's BIS page is not HT-specific — the same page/URL covers all builds.
       IV pages are also not HT-specific and are JS-rendered (extraction stubbed).
@@ -191,7 +200,35 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                 spec_name = spec["spec_name"]
                 role_name = spec["role_name"] or "dps"
 
-                if origin in ("icy_veins", "wowhead"):
+                if origin == "ugg":
+                    # u.gg: one target per spec, no hero talent split.
+                    # Path-based URLs (/gear/raid, /gear) — no overall content type.
+                    if content_type == "overall":
+                        continue
+                    url = _build_url(origin, class_name, spec_name, "", content_type,
+                                     source["slug_separator"])
+                    if not url:
+                        continue
+                    technique = _TECHNIQUE_ORDER.get(origin, ["json_embed"])[0]
+                    expected += 1
+                    result = await conn.fetchrow(
+                        """
+                        INSERT INTO config.bis_scrape_targets
+                            (source_id, spec_id, hero_talent_id, content_type,
+                             url, preferred_technique, status)
+                        VALUES ($1, $2, NULL, $3, $4, $5, 'pending')
+                        ON CONFLICT (source_id, spec_id, url)
+                        DO NOTHING
+                        RETURNING id
+                        """,
+                        source_id, spec_id, content_type, url, technique,
+                    )
+                    if result:
+                        inserted += 1
+                    else:
+                        skipped += 1
+
+                elif origin in ("icy_veins", "wowhead"):
                     # These sources have one page per spec — no HT variation in the URL.
                     # Wowhead: one combined BIS page per spec; sections toggle raid/M+/overall.
                     # IV: one page per spec, all content toggled client-side (extraction stubbed).
@@ -200,7 +237,6 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                         url = _iv_base_url(class_name, spec_name, role_name)
                         technique = "html_parse"
                     else:
-                        # Wowhead URL ignores ht_slug entirely
                         url = _build_url(origin, class_name, spec_name, "", content_type,
                                          source["slug_separator"])
                         technique = "wh_gatherer"
@@ -379,13 +415,12 @@ def _build_url(
     spec = _slug(spec_name,  slug_sep)
 
     if origin == "ugg":
-        base = f"https://u.gg/wow/{spec}/{cls}/gear?hero={hero_slug}"
         if content_type == "raid":
-            return base + "&role=raid"
+            return f"https://u.gg/wow/{spec}/{cls}/gear/raid"
         elif content_type == "mythic_plus":
-            return base + "&role=mythicdungeon"
+            return f"https://u.gg/wow/{spec}/{cls}/gear"
         else:
-            return base
+            return None  # u.gg has no overall page
 
     elif origin == "wowhead":
         # Wowhead always uses hyphens regardless of guide_sites separator.
@@ -822,7 +857,7 @@ async def _extract_ugg(url: str) -> tuple[list[SimcSlot], Optional[str]]:
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
     """Attempt to derive a stats2.u.gg JSON URL from a u.gg page URL.
 
-    Pattern: https://u.gg/wow/{spec}/{class}/gear?hero={hero}&role={role}
+    Pattern: https://u.gg/wow/{spec}/{class}/gear[/raid]
     → https://stats2.u.gg/wow/builds/v29/all/{Class}/{Class}_{spec}_itemsTable.json
 
     u.gg uses underscore slugs (demon_hunter), stats2 expects PascalCase (DemonHunter).
@@ -838,8 +873,8 @@ def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
 def _ugg_url_to_spec_key(url: str) -> str:
     """Derive u.gg's internal spec key from the page URL.
 
-    https://u.gg/wow/blood/death_knight/gear → "DeathKnight-Blood"
-    https://u.gg/wow/frost/mage/gear          → "Mage-Frost"
+    https://u.gg/wow/blood/death_knight/gear/raid → "DeathKnight-Blood"
+    https://u.gg/wow/frost/mage/gear              → "Mage-Frost"
     """
     m = re.search(r"u\.gg/wow/([^/]+)/([^/]+)/gear", url)
     if not m:
@@ -850,17 +885,14 @@ def _ugg_url_to_spec_key(url: str) -> str:
 
 
 def _ugg_url_to_section(url: str) -> str:
-    """Map the role= query param to the correct SSR data section.
+    """Map the u.gg URL path to the correct SSR data section.
 
-    role=raid         → "raid"
-    role=mythicdungeon→ "mythic"
-    (no role)         → "single_target"
+    /gear/raid → "raid"
+    /gear      → "mythic"  (base gear page is M+)
     """
-    if "role=raid" in url:
+    if "/gear/raid" in url:
         return "raid"
-    if "role=mythicdungeon" in url:
-        return "mythic"
-    return "single_target"
+    return "mythic"
 
 
 def _slug_to_pascal(slug: str) -> str:
@@ -1056,6 +1088,185 @@ def _ugg_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
             quality_track=None,
         ))
     return slots
+
+
+def _ugg_items_to_popularity(items_by_slot: dict) -> list[UggPopularityItem]:
+    """Extract per-item count/total from u.gg's items_table dict.
+
+    Returns one UggPopularityItem per (slot, item_id) pair that has non-zero count.
+    total is derived from the slot_data or per-item fields; falls back to
+    count/perc derivation if neither is directly available.
+    """
+    result: list[UggPopularityItem] = []
+    for ugg_slot, slot_data in items_by_slot.items():
+        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
+        if normalised is None:
+            continue
+        items = slot_data.get("items") or []
+        if not items:
+            continue
+
+        # Derive slot-level total (same for all items in this slot)
+        slot_total: int = int(slot_data.get("total") or 0)
+        if not slot_total:
+            # Try per-item total (take first non-zero value)
+            for item in items:
+                t = item.get("total") or 0
+                if t:
+                    slot_total = int(t)
+                    break
+        if not slot_total:
+            # Last resort: derive from count + perc of the first item
+            for item in items:
+                count = int(item.get("count") or 0)
+                perc = float(item.get("perc") or 0)
+                if count and perc > 0:
+                    slot_total = round(count / perc)
+                    break
+        if not slot_total:
+            continue
+
+        for item in items:
+            item_id = item.get("item_id")
+            if not item_id:
+                continue
+            try:
+                iid = int(item_id)
+            except (ValueError, TypeError):
+                continue
+            if iid == 0:
+                continue
+            count = int(item.get("count") or 0)
+            if count == 0:
+                # No count field — derive from perc × total
+                perc = float(item.get("perc") or 0)
+                if perc > 0:
+                    count = round(perc * slot_total)
+            if count == 0:
+                continue
+            result.append(UggPopularityItem(
+                slot=normalised,
+                blizzard_item_id=iid,
+                count=count,
+                total=slot_total,
+            ))
+    return result
+
+
+def _parse_ugg_popularity(html: str, url: str) -> list[UggPopularityItem]:
+    """Parse u.gg SSR HTML and return per-item popularity data for all slots.
+
+    Pure function — no network calls.  Extracts the full items list (all items,
+    not just the top one) with count and total from the SSR JSON blob.
+    """
+    marker = "window.__SSR_DATA__"
+    ssr_idx = html.find(marker)
+    if ssr_idx < 0:
+        return []
+    obj_start = html.find("{", ssr_idx)
+    if obj_start < 0:
+        return []
+    try:
+        decoder = json.JSONDecoder()
+        data, _ = decoder.raw_decode(html, obj_start)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    spec_key = _ugg_url_to_spec_key(url)
+    section  = _ugg_url_to_section(url)
+
+    try:
+        for _url_key, table_data in data.items():
+            if not isinstance(table_data, dict):
+                continue
+            inner = table_data.get("data") or table_data
+            sec = inner.get(section)
+            if not isinstance(sec, dict):
+                continue
+            all_data = sec.get("all")
+            if not isinstance(all_data, dict) or not spec_key:
+                continue
+            spec_data = all_data.get(spec_key)
+            if not isinstance(spec_data, dict):
+                continue
+            items_by_slot = spec_data.get("items_table", {}).get("items", {})
+            if items_by_slot:
+                return _ugg_items_to_popularity(items_by_slot)
+    except (AttributeError, TypeError):
+        pass
+
+    return []
+
+
+async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
+    """Rebuild enrichment.item_popularity by re-parsing u.gg landing HTML.
+
+    Reads the most recent u.gg HTML for each scrape target (one per spec ×
+    content_type), extracts all items with count/total from the SSR items_table,
+    and TRUNCATE-rebuilds enrichment.item_popularity.
+
+    Called by enrich-and-classify after rebuild_bis_from_landing so the
+    popularity table reflects the same set of scraped pages.
+
+    Returns {rows_inserted, specs_processed}.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            WITH latest AS (
+                SELECT
+                    bsr.content, bsr.url,
+                    t.source_id, t.spec_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY bsr.target_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                 WHERE bsr.target_id IS NOT NULL
+                   AND bsr.source = 'ugg'
+            )
+            SELECT content, url, source_id, spec_id
+              FROM latest
+             WHERE rn = 1
+        """)
+        await conn.execute("TRUNCATE enrichment.item_popularity")
+
+    total_inserted = 0
+    specs_processed = 0
+
+    for row in rows:
+        items = _parse_ugg_popularity(row["content"], row["url"])
+        if not items:
+            continue
+
+        specs_processed += 1
+        async with pool.acquire() as conn:
+            for item in items:
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO enrichment.item_popularity
+                            (source_id, spec_id, slot, blizzard_item_id, count, total)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (source_id, spec_id, slot, blizzard_item_id)
+                        DO UPDATE SET
+                            count      = EXCLUDED.count,
+                            total      = EXCLUDED.total,
+                            scraped_at = NOW()
+                        """,
+                        row["source_id"], row["spec_id"],
+                        item.slot, item.blizzard_item_id,
+                        item.count, item.total,
+                    )
+                    total_inserted += 1
+                except Exception:
+                    pass
+
+    logger.info(
+        "rebuild_item_popularity_from_landing: %d rows inserted from %d targets",
+        total_inserted, specs_processed,
+    )
+    return {"rows_inserted": total_inserted, "specs_processed": specs_processed}
 
 
 # ---------------------------------------------------------------------------

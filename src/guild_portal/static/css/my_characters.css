@@ -808,6 +808,80 @@
 }
 .mcn-drawer__close:hover { color: var(--color-text); }
 
+/* ── Guide Mode bar ────────────────────────────────────────────────────── */
+.mcn-guide-mode-bar {
+  display: flex;
+  gap: 2px;
+  background: #1a1a1c;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px;
+}
+.mcn-guide-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mcn-guide-mode-btn:hover {
+  background: #2a2a2e;
+  color: var(--color-text);
+}
+.mcn-guide-mode-btn.is-active {
+  background: var(--color-accent);
+  color: #0a0a0b;
+}
+
+/* Guide Mode bar — centered in the Gear Plan heading line */
+.mcn-gp-mode-bar-inline {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ── Source links inside item lists ───────────────────────────────────── */
+.gp-source-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.gp-source-link:hover { color: var(--color-accent); text-decoration: underline; }
+
+/* ── Action buttons — standardized width ─────────────────────────────── */
+.gp-action-use, .gp-action-ignore {
+  padding: 0.09rem 0.38rem;
+  font-size: 0.7rem;
+  min-width: 34px;
+  text-align: center;
+}
+
+/* ── Trinket Guide Mode row highlight ────────────────────────────────── */
+.gp-trank__row--highlight {
+  background: rgba(var(--color-accent-rgb, 212, 168, 75), 0.06);
+}
+.gp-trank__row--dim { opacity: 0.5; }
+
+/* ── Grade column (trinket slots) ────────────────────────────────────── */
+.gp-grade-cell {
+  text-align: center;
+  white-space: nowrap;
+  width: 46px;
+}
+.gp-grade-th {
+  font-size: 0.63rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  width: 46px;
+}
+
 .mcn-drawer__body {
   padding: 1rem;
   display: grid;
@@ -2608,4 +2682,85 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   font-size: 0.75rem;
   color: var(--color-text-muted);
   line-height: 1.5;
+}
+
+/* ── Unified item table ───────────────────────────────────────────────── */
+.mcn-unified-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+.mcn-unified-table thead th {
+  font-size: 0.63rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding: 0.25rem 0.4rem;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  white-space: nowrap;
+}
+.mcn-unified-table .mcn-ut__item-col  { text-align: left; min-width: 160px; }
+.mcn-unified-table .mcn-ut__guide-col { text-align: center; width: 52px; }
+.mcn-unified-table .mcn-ut__action-col{ width: 56px; }
+
+/* Group header rows */
+.mcn-ut__group-hdr td {
+  padding: 0.32rem 0.5rem;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  background: rgba(255,255,255,0.03);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  cursor: pointer;
+  user-select: none;
+}
+.mcn-ut__group-hdr--empty td { cursor: default; }
+.mcn-ut__chevron {
+  display: inline-block;
+  margin-right: 0.25rem;
+  transition: transform 0.15s;
+  font-size: 0.6rem;
+}
+.mcn-ut__group-hdr:not(.is-open) .mcn-ut__chevron { transform: rotate(-90deg); }
+.mcn-ut__count {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+/* Item rows */
+.mcn-ut__item-row td {
+  padding: 0.3rem 0.4rem;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255,255,255,0.035);
+}
+.mcn-ut__item-cell { min-width: 0; }
+
+/* Guide check cells — reuse mcn-bis-grid__check styles */
+.mcn-unified-table .mcn-bis-grid__check { width: 52px; text-align: center; }
+.mcn-bis-check {
+  display: inline-block;
+  color: #4ade80;
+  font-size: 0.8rem;
+}
+
+/* Trinket guide cell — letter + check aligned in columns */
+.gp-guide-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.gp-guide-letter {
+  display: inline-block;
+  min-width: 1.5rem;
+  text-align: center;
+}
+.gp-guide-check {
+  display: inline-block;
+  min-width: 1rem;
+  text-align: center;
 }

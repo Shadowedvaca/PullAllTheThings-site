@@ -1226,6 +1226,31 @@ async def get_plan_detail(
             for r in bis_rows:
                 bis_by_slot.setdefault(r["slot"], []).append(dict(r))
 
+        # Fetch item sources (instance/boss) for BIS items — shown in drawer list rows
+        bis_sources_by_bid: dict[int, list[dict]] = {}
+        all_bis_bids = list({r["blizzard_item_id"] for rlist in bis_by_slot.values() for r in rlist})
+        if all_bis_bids:
+            bsr = await conn.fetch(
+                """
+                SELECT es.blizzard_item_id, es.instance_type,
+                       es.instance_name, es.encounter_name
+                  FROM enrichment.item_sources es
+                 WHERE es.blizzard_item_id = ANY($1::int[])
+                   AND NOT es.is_junk
+                """,
+                all_bis_bids,
+            )
+            for r in bsr:
+                bid = r["blizzard_item_id"]
+                entry = {
+                    "instance_type": r["instance_type"],
+                    "instance_name": r["instance_name"] or "",
+                    "encounter_name": r["encounter_name"] or "",
+                }
+                lst = bis_sources_by_bid.setdefault(bid, [])
+                if entry not in lst:
+                    lst.append(entry)
+
         # Collect all blizzard item IDs for source/track lookup
         all_bids: set[int] = set()
         for rows in bis_by_slot.values():
@@ -1494,6 +1519,8 @@ async def get_plan_detail(
             # Phase 1F: trinket tier badge on BIS recs (full-spec map fetched above)
             if slot in _TRINKET_SLOTS:
                 rec["source_ratings"] = _tb_map.get(bid, [])
+            # Item drop sources for drawer list display
+            rec["sources"] = bis_sources_by_bid.get(bid, [])
 
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
@@ -1731,7 +1758,16 @@ async def get_available_items(
             """
             SELECT blizzard_item_id, name, icon_url, item_category,
                    tier_set_suffix, instance_type, encounter_name, instance_name,
-                   blizzard_instance_id, quality_tracks, primary_stat, armor_type
+                   blizzard_instance_id, quality_tracks, primary_stat, armor_type,
+                   CASE WHEN item_category = 'crafted' THEN (
+                       SELECT p.name
+                         FROM enrichment.item_recipes ir
+                         JOIN guild_identity.recipes r ON r.id = ir.recipe_id
+                         JOIN guild_identity.professions p ON p.id = r.profession_id
+                        WHERE ir.blizzard_item_id = viz.slot_items.blizzard_item_id
+                        ORDER BY ir.confidence DESC NULLS LAST
+                        LIMIT 1
+                   ) END AS profession_name
               FROM viz.slot_items
              WHERE slot_type = $1
                AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
@@ -1828,6 +1864,7 @@ async def get_available_items(
                     "name": r["name"],
                     "icon_url": r["icon_url"],
                     "primary_stat": r["primary_stat"],
+                    "profession_name": r["profession_name"],
                 })
 
         elif cat in ("tier", "catalyst"):
@@ -2080,7 +2117,7 @@ async def get_trinket_ratings(
         rows = await conn.fetch(
             """
             SELECT tr.blizzard_item_id, tr.tier, tr.sort_order, tr.source_id,
-                   bls.origin AS source_origin,
+                   bls.origin AS source_origin, bls.content_type AS source_ct,
                    ei.name, ei.icon_url
               FROM enrichment.trinket_ratings tr
               JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
@@ -2150,39 +2187,38 @@ async def get_trinket_ratings(
         for r in crafted_rows_tr:
             content_by_bid.setdefault(r["blizzard_item_id"], set()).add("crafted")
 
-    # ── Build item map, deduplicating source_ratings by (origin, tier) ────────
-    # All 3 Wowhead source rows (Raid/M+/Overall) produce identical tiers —
-    # collapse them to one entry per origin so the badge shows one WH icon.
-    item_map: dict[int, dict] = {}
-    seen_sr: set = set()
+    # ── Build flat item map with per-origin, per-content-type ratings ─────────
+    # ratings shape: {origin: {content_type: {tier, position}}}
+    # position = sort_order from the source list (lower = better rank)
+    _tier_order_map: dict[str, int] = {t: i for i, t in enumerate(_TIER_ORDER)}
+
+    item_meta: dict[int, dict] = {}   # bid → name/icon
+    item_ratings: dict[int, dict] = {}  # bid → {origin: {ct: {tier, position}}}
+
     for r in rows:
         bid = r["blizzard_item_id"]
-        if bid not in item_map:
-            item_map[bid] = {
-                "blizzard_item_id": bid,
-                "name": r["name"] or "",
-                "icon_url": r["icon_url"] or "",
-                "sort_order": r["sort_order"],
-                "tier": r["tier"],
-                "source_ratings": [],
-            }
-        key = (bid, r["source_origin"], r["tier"])
-        if key not in seen_sr:
-            seen_sr.add(key)
-            item_map[bid]["source_ratings"].append({
-                "source_id": r["source_id"],
-                "source_origin": r["source_origin"],
-                "tier": r["tier"],
-            })
+        if bid not in item_meta:
+            item_meta[bid] = {"name": r["name"] or "", "icon_url": r["icon_url"] or ""}
+        origin = r["source_origin"]
+        ct = r["source_ct"] or "overall"
+        tier = r["tier"]
+        pos = r["sort_order"]
+        by_origin = item_ratings.setdefault(bid, {})
+        by_ct = by_origin.setdefault(origin, {})
+        existing = by_ct.get(ct)
+        if existing is None or (
+            _tier_order_map.get(tier, 99) < _tier_order_map.get(existing["tier"], 99)
+            or (tier == existing["tier"] and pos < existing["position"])
+        ):
+            by_ct[ct] = {"tier": tier, "position": pos}
 
-    rated_bids: set[int] = set(item_map.keys())
+    rated_bids: set[int] = set(item_meta.keys())
     equipped_is_unranked = bool(equipped_bid_for_slot and equipped_bid_for_slot not in rated_bids)
     crafted_bids: set[int] = {r["blizzard_item_id"] for r in crafted_rows_tr}
 
-    # ── Group into tier buckets ────────────────────────────────────────────────
-    tier_bucket: dict[str, list[dict]] = {}
-    for bid, entry in item_map.items():
-        tier = entry["tier"]
+    # ── Build flat items list ──────────────────────────────────────────────────
+    items_list: list[dict] = []
+    for bid, meta in item_meta.items():
         is_bis_item = bool(desired_bids and bid in desired_bids)
         is_crafted_item_v = bid in crafted_bids
         if is_crafted_item_v:
@@ -2193,12 +2229,11 @@ async def get_trinket_ratings(
             t_ilvl = _noncrafted_target_ilvl(
                 is_bis_item, equipped_ilvl_for_slot, equipped_track_for_slot, plan_quality_ilvl_map
             )
-        tier_bucket.setdefault(tier, []).append({
+        items_list.append({
             "blizzard_item_id": bid,
-            "name": entry["name"],
-            "icon_url": entry["icon_url"],
-            "sort_order": entry["sort_order"],
-            "source_ratings": entry["source_ratings"],
+            "name": meta["name"],
+            "icon_url": meta["icon_url"],
+            "ratings": item_ratings.get(bid, {}),
             "content_types": list(content_by_bid.get(bid, set())),
             "sources": sources_by_bid.get(bid, []),
             "is_equipped": bid in equipped_bids,
@@ -2207,17 +2242,9 @@ async def get_trinket_ratings(
             "target_ilvl": t_ilvl,
         })
 
-    for tier_items_list in tier_bucket.values():
-        tier_items_list.sort(key=lambda x: x["sort_order"])
-
-    tiers_list = [
-        {"tier": t, "items": tier_bucket[t]}
-        for t in _TIER_ORDER if t in tier_bucket
-    ]
-
     return {
         "spec_id": spec_id,
         "slot": slot,
-        "tiers": tiers_list,
+        "items": items_list,
         "equipped_is_unranked": equipped_is_unranked,
     }
