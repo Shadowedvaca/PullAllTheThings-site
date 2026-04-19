@@ -3,7 +3,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="/static/css/vendor/shepherd.css">
-<link rel="stylesheet" href="/static/css/my_characters.css?v=2.2.3">
+<link rel="stylesheet" href="/static/css/my_characters.css?v=2.3.0">
 {% endblock %}
 
 {% block content %}
@@ -115,10 +115,15 @@
 
   </div>{# end #mcn-body #}
 
-  {# ── Slot detail drawer — Phase UI-1C ─────────────────────────────────── #}
+  {# ── Slot detail drawer ────────────────────────────────────────────────── #}
   <div id="mcn-gp-drawer" class="mcn-drawer" hidden>
     <div class="mcn-drawer__header">
       <span id="mcn-gp-drawer-title" class="mcn-drawer__title"></span>
+      <div class="mcn-guide-mode-bar" id="mcn-guide-mode-bar">
+        <button class="mcn-guide-mode-btn is-active" type="button" data-mode="overall"    onclick="mcnGpSetGuideMode('overall')">Overall</button>
+        <button class="mcn-guide-mode-btn"            type="button" data-mode="raid"       onclick="mcnGpSetGuideMode('raid')">Raid</button>
+        <button class="mcn-guide-mode-btn"            type="button" data-mode="mythic_plus" onclick="mcnGpSetGuideMode('mythic_plus')">M+</button>
+      </div>
       <button id="mcn-gp-drawer-close" class="mcn-drawer__close" type="button">&times;</button>
     </div>
     <div id="mcn-gp-drawer-body" class="mcn-drawer__body"></div>
@@ -132,5 +137,5 @@
 <script>var whTooltips = {colorLinks: true, iconizeLinks: false, renameLinks: false, hide: {sellprice: true, ilvl: false, reqlevel: false, power: false}};</script>
 <script src="https://wow.zamimg.com/widgets/power.js"></script>
 <script src="/static/js/vendor/shepherd.min.js"></script>
-<script src="/static/js/my_characters.js?v=2.8.4"></script>
+<script src="/static/js/my_characters.js?v=2.9.0"></script>
 {% endblock %}
