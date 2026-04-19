@@ -2300,7 +2300,7 @@ window.mcnGpSetGuideMode = function(mode) {
   document.querySelectorAll('.mcn-guide-mode-btn').forEach(btn => {
     btn.classList.toggle('is-active', btn.dataset.mode === mode);
   });
-  if (_gpOpenSlot) _gpOpenDrawer(_gpOpenSlot);
+  _gpRefreshUnifiedTable();
 };
 
 function _gpRenderDrawerBody(slotKey, sd, tc) {
@@ -2343,9 +2343,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     equippedHtml = '<div class="mcn-drawer-empty">Nothing equipped</div>';
   }
 
-  // 2 — BIS grid
-  const PAIRED = new Set(['ring_1','ring_2','trinket_1','trinket_2']);
-  const bisHtml = _gpRenderBisGrid(slotKey, bis, tc, PAIRED.has(slotKey) ? null : (sd.desired_blizzard_item_id || null), dbSlot);
+  // 2 — Unified item table (BIS + available items + trinket rankings for trinket slots)
 
   // 3 — Your goal
   let goalHtml;
@@ -2431,56 +2429,325 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
     dropHtml = '<div class="mcn-drawer-empty">No drop source data</div>';
   }
 
-  // 5 — Available from Content — raid, M+, crafted (lazy-loaded; uses cache if already fetched)
-  const charId5  = _selectedChar?.id;
-  const cacheKey = charId5 ? `${charId5}:${dbSlot}` : null;
-  const avCached = cacheKey ? _gpAvailCache[cacheKey] : null;
-  const availBodyHtml = avCached
-    ? _gpRenderAvailSections(dbSlot, avCached.groups, tc, avCached.status)
-    : '<div class="mcn-drawer-empty">Loading\u2026</div>';
-  const availHtml = `<div id="mcn-avail-body-${_gpEsc(dbSlot)}">${availBodyHtml}</div>`;
-
-  // Phase 1E.5: excluded items section
-  const excludedItems = sd.excluded_items || [];
-  const excludedHtml = excludedItems.length > 0
-    ? `<details class="mcn-avail-section">
-        <summary class="mcn-avail-section__toggle">Excluded items (${excludedItems.length})</summary>
-        <div>${_gpRenderExcludedItems(dbSlot, excludedItems)}</div>
-       </details>`
-    : '';
-
-  // Step 11: Trinket Rankings section — trinket slots only
+  // 5 — Unified table (lazy-loaded sections fill in as caches populate)
+  const charIdUT  = _selectedChar?.id;
+  const avKey     = charIdUT ? `${charIdUT}:${dbSlot}` : null;
+  const avCached  = avKey ? _gpAvailCache[avKey] : null;
+  const availState = avCached || { status: 'loading', groups: {} };
   const isTrinketSlot = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
-  const charIdTR  = _selectedChar?.id;
-  let trinketRatingsHtml = '';
-  if (isTrinketSlot) {
-    const trKey    = charIdTR ? `${charIdTR}:${dbSlot}` : null;
-    const trCached = trKey ? _gpTrinketCache[trKey] : null;
-    const trBodyHtml = trCached && trCached.status === 'done'
-      ? _gpRenderTrinketRankings(dbSlot, trCached.data, tc)
-      : (trCached?.status === 'error'
-          ? '<div class="mcn-drawer-empty">Could not load rankings</div>'
-          : '<div class="mcn-drawer-empty">Loading\u2026</div>');
-    trinketRatingsHtml = `<div class="mcn-drawer__bis-section">
-      <details class="mcn-avail-section" open>
-        <summary class="mcn-avail-section__toggle">Trinket Rankings</summary>
-        <div id="mcn-trinket-ratings-body-${_gpEsc(dbSlot)}">${trBodyHtml}</div>
-      </details>
-    </div>`;
-    // Kick off async load (no-op if already cached/loading)
-    if (charIdTR) _gpLoadTrinketRatings(charIdTR, dbSlot);
-  }
+  const trCached = avKey && isTrinketSlot ? _gpTrinketCache[avKey] : null;
+  const trinketState = trCached || (isTrinketSlot ? { status: 'loading', data: null } : null);
+  const unifiedHtml = _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState);
+
+  // Kick off lazy loads
+  if (charIdUT) _gpLoadAvailableItems(charIdUT, dbSlot);
+  if (charIdUT && isTrinketSlot) _gpLoadTrinketRatings(charIdUT, dbSlot);
 
   return `
     <div><div class="mcn-drawer-section__title">Equipped</div>${equippedHtml}</div>
     <div><div class="mcn-drawer-section__title">Your Goal</div>${goalHtml}${manualHtml}</div>
     <div><div class="mcn-drawer-section__title">Drop Location</div>${dropHtml}</div>
-    <div class="mcn-drawer__bis-section"><div class="mcn-drawer-section__title">BIS Recommendations</div>${bisHtml}</div>
-    <div class="mcn-drawer__bis-section">${availHtml}</div>
-    ${trinketRatingsHtml}
-    ${excludedItems.length > 0 ? `<div class="mcn-drawer__bis-section">${excludedHtml}</div>` : ''}`;
+    <div class="mcn-drawer__bis-section" id="mcn-ut-body-${_gpEsc(dbSlot)}">${unifiedHtml}</div>`;
 }
 
+// ── Guide-aware unified table rendering ──────────────────────────────────────
+
+const _GP_ORIGIN_LABELS = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+const _GP_ORIGIN_ORDER  = ['archon', 'icy_veins', 'wowhead'];
+const _GP_TIER_VAL      = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
+
+// Ordered guide columns derived from BIS data origins (+ trinket ratings origins for trinket slots)
+function _gpComputeGuideColumns(bis, trinketItems) {
+  const seen = new Set();
+  const ordered = [];
+  const add = o => { if (o && !seen.has(o)) { seen.add(o); ordered.push(o); } };
+  for (const r of (bis || [])) add(r.origin);
+  for (const it of (trinketItems || [])) for (const o of Object.keys(it.ratings || {})) add(o);
+  return _GP_ORIGIN_ORDER.filter(o => seen.has(o))
+    .concat(ordered.filter(o => !_GP_ORIGIN_ORDER.includes(o)))
+    .map(o => ({ origin: o, label: _GP_ORIGIN_LABELS[o] || o }));
+}
+
+// True if item should show ✓ for this guide in current Guide Mode.
+// itemCts: {origin: Set<content_type>} — CTs this item IS BIS in for each guide.
+// guideCts: {origin: Set<content_type>} — CTs this guide HAS sources for at all.
+function _gpBisCheck(itemCts, guideCts, origin) {
+  const iCts = itemCts[origin] || new Set();
+  const gCts = guideCts[origin] || new Set();
+  if (_gpGuideMode === 'overall')
+    return gCts.has('overall') ? iCts.has('overall') : iCts.has('raid') || iCts.has('mythic_plus');
+  if (_gpGuideMode === 'raid')
+    return iCts.has('raid') || (!gCts.has('raid') && iCts.has('overall'));
+  if (_gpGuideMode === 'mythic_plus')
+    return iCts.has('mythic_plus') || (!gCts.has('mythic_plus') && iCts.has('overall'));
+  return false;
+}
+
+// Best trinket rating for an origin in current Guide Mode. Returns {tier,position} or null.
+function _gpTrinketRating(ratings, origin) {
+  const bo = ratings?.[origin];
+  if (!bo) return null;
+  if (_gpGuideMode === 'overall')   return bo.overall || bo.raid || bo.mythic_plus || null;
+  if (_gpGuideMode === 'raid')      return bo.raid    || bo.overall || null;
+  if (_gpGuideMode === 'mythic_plus') return bo.mythic_plus || bo.overall || null;
+  return null;
+}
+
+// Source sub-line HTML: clickable Wowhead search links, or plain "Catalyst" text.
+function _gpRenderSourceSub(sources) {
+  if (!sources || !sources.length) return '';
+  const seen = new Set();
+  const lines = [];
+  for (const s of sources) {
+    const itype = s.instance_type || '';
+    if (itype === 'catalyst') {
+      if (!seen.has('__catalyst')) { seen.add('__catalyst'); lines.push('Catalyst'); }
+      continue;
+    }
+    const inst = s.instance_name || s.source_instance || '';
+    const boss = s.encounter_name || s.source_name || '';
+    if (!inst && !boss) continue;
+    const key = `${inst}|${boss}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const parts = [];
+    if (inst) parts.push(`<a href="https://www.wowhead.com/search?q=${encodeURIComponent(inst)}" class="gp-source-link" target="_blank" rel="noopener noreferrer">${_gpEsc(inst)}</a>`);
+    if (boss) parts.push(`<a href="https://www.wowhead.com/search?q=${encodeURIComponent(boss)}" class="gp-source-link" target="_blank" rel="noopener noreferrer">${_gpEsc(boss)}</a>`);
+    lines.push(parts.join(' \u00b7 '));
+  }
+  return lines.length ? `<div class="mcn-avail-item__inst">${lines.join('<br>')}</div>` : '';
+}
+
+// Merge BIS items + all rated trinkets into one synthesis-sorted flat list.
+function _gpMergeTrinketBis(bis, trinketItems) {
+  const itemMap = new Map();
+  for (const it of (trinketItems || []))
+    itemMap.set(it.blizzard_item_id, { ...it });
+  const seenBis = new Set();
+  for (const r of (bis || [])) {
+    const bid = r.blizzard_item_id;
+    if (seenBis.has(bid)) continue;
+    seenBis.add(bid);
+    if (itemMap.has(bid)) {
+      const ex = itemMap.get(bid);
+      if (r.is_bis) ex.is_bis = true;
+      if (r.is_equipped) ex.is_equipped = true;
+      if (!ex.target_ilvl && r.target_ilvl) ex.target_ilvl = r.target_ilvl;
+    } else {
+      itemMap.set(bid, {
+        blizzard_item_id: bid, name: r.item_name || '', icon_url: r.icon_url || '',
+        ratings: {}, content_types: [], sources: r.sources || [],
+        is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
+        target_ilvl: r.target_ilvl || null,
+      });
+    }
+  }
+  const items = [...itemMap.values()];
+  const bestTier = it => {
+    let b = 99;
+    for (const byCt of Object.values(it.ratings || {}))
+      for (const r of Object.values(byCt)) { const v = _GP_TIER_VAL[r.tier] ?? 99; if (v < b) b = v; }
+    return b;
+  };
+  const bestPos = it => {
+    let b = 999999;
+    for (const byCt of Object.values(it.ratings || {}))
+      for (const r of Object.values(byCt)) { if ((r.position ?? 999999) < b) b = r.position ?? 999999; }
+    return b;
+  };
+  items.sort((a, b) => {
+    const td = bestTier(a) - bestTier(b); if (td) return td;
+    const pd = bestPos(a) - bestPos(b);   if (pd) return pd;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  return items;
+}
+
+// Render one group: header row + item rows for the unified table tbody.
+function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginCts, guideCts, isTrinket, colCount) {
+  const chevron = `<span class="mcn-ut__chevron">&#9660;</span>`;
+  if (!items.length) {
+    return `<tr class="mcn-ut__group-hdr mcn-ut__group-hdr--empty is-open" data-group="${_gpEsc(groupKey)}">
+      <td colspan="${colCount}">${chevron} ${_gpEsc(label)} <span class="mcn-ut__count">0</span></td></tr>`;
+  }
+  const hdrRow = `<tr class="mcn-ut__group-hdr is-open" data-group="${_gpEsc(groupKey)}"
+    onclick="_gpToggleGroup('${_gpEsc(groupKey)}',this.closest('table'))">
+    <td colspan="${colCount}">${chevron} ${_gpEsc(label)} <span class="mcn-ut__count">${items.length}</span></td></tr>`;
+
+  const itemRows = items.map(item => {
+    const bid      = item.blizzard_item_id;
+    const name     = item.name || item.item_name || '';
+    const iconUrl  = item.icon_url || '';
+    const ilvlP    = item.target_ilvl ? `?ilvl=${item.target_ilvl}` : '';
+    const icon     = iconUrl
+      ? `<a href="https://www.wowhead.com/item=${bid}${ilvlP}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-bis-grid__icon" src="${_gpEsc(iconUrl)}" alt="" loading="lazy"></a>`
+      : `<span class="mcn-bis-grid__icon-ph"></span>`;
+    const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
+    const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
+    const srcSub   = _gpRenderSourceSub(item.sources || []);
+    const itemBisCts = itemOriginCts[bid] || {};
+
+    const guideCells = guideCols.map(gc => {
+      const hasCheck = _gpBisCheck(itemBisCts, guideCts, gc.origin);
+      if (isTrinket) {
+        const rating = _gpTrinketRating(item.ratings, gc.origin);
+        const letter = rating?.tier || '';
+        const letterHtml = letter
+          ? `<span class="gp-tier-badge gp-tier-${letter.toLowerCase()}">${letter}</span>` : '';
+        const checkHtml = hasCheck ? `<span class="mcn-bis-check">&#10003;</span>` : '';
+        return (letter || hasCheck)
+          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">${letterHtml}${checkHtml}</td>`
+          : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
+      }
+      return hasCheck
+        ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;</td>`
+        : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
+    }).join('');
+
+    const excludeBtn = `<button class="mcn-exclude-btn" type="button" title="Exclude"
+        onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
+    return `<tr class="mcn-ut__item-row" data-group="${_gpEsc(groupKey)}">
+      <td class="mcn-ut__item-cell">
+        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
+      </td>
+      ${guideCells}
+      <td class="mcn-bis-grid__action">
+        <button class="gp-action-use" type="button"
+            onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${bid})">Use</button>${excludeBtn}
+      </td>
+    </tr>`;
+  }).join('');
+  return hdrRow + itemRows;
+}
+
+// Full unified table HTML (BIS Recommendations + available groups in one <table>).
+function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
+  const isTrinket = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
+  const bis = sd.bis_recommendations || [];
+  const trinketItems = (isTrinket && trinketState?.status === 'done')
+    ? (trinketState.data?.items || []) : [];
+
+  const guideCols = _gpComputeGuideColumns(bis, isTrinket ? trinketItems : []);
+  const colCount  = 1 + guideCols.length + 1;
+
+  // Build CT maps from BIS data
+  const guideCts = {};
+  const itemOriginCts = {};
+  for (const r of bis) {
+    if (!r.origin || !r.content_type) continue;
+    (guideCts[r.origin] = guideCts[r.origin] || new Set()).add(r.content_type);
+    itemOriginCts[r.blizzard_item_id] = itemOriginCts[r.blizzard_item_id] || {};
+    (itemOriginCts[r.blizzard_item_id][r.origin] =
+      itemOriginCts[r.blizzard_item_id][r.origin] || new Set()).add(r.content_type);
+  }
+
+  const guideThs = guideCols.map(gc =>
+    `<th class="mcn-ut__guide-col" title="${_gpEsc(gc.label)}">${_gpEsc(gc.label)}</th>`).join('');
+  const thead = `<thead><tr>
+    <th class="mcn-ut__item-col">Item</th>${guideThs}<th class="mcn-ut__action-col"></th>
+  </tr></thead>`;
+
+  // BIS group items
+  let bisItems;
+  if (isTrinket) {
+    bisItems = _gpMergeTrinketBis(bis, trinketItems);
+  } else {
+    const seen = new Set();
+    bisItems = [];
+    for (const r of bis) {
+      if (seen.has(r.blizzard_item_id)) continue;
+      seen.add(r.blizzard_item_id);
+      // Guide mode filter: keep if passes any guide's check
+      const iCts = itemOriginCts[r.blizzard_item_id] || {};
+      if (_gpGuideMode !== 'overall' && !guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
+      bisItems.push({
+        blizzard_item_id: r.blizzard_item_id, name: r.item_name || '',
+        icon_url: r.icon_url || '', sources: r.sources || [],
+        is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
+        target_ilvl: r.target_ilvl || null, ratings: {},
+      });
+    }
+  }
+  const bisLabel = 'BIS Recommendations' + (isTrinket && trinketState?.status === 'loading'
+    ? ' \u2026' : '');
+  let tbody = _gpRenderUtGroup('bis', bisLabel, bisItems, dbSlot,
+    guideCols, itemOriginCts, guideCts, isTrinket, colCount);
+
+  // Available item groups
+  const avStatus = availState?.status || 'loading';
+  const avGroups = availState?.groups || {};
+  if (avStatus === 'loading') {
+    tbody += `<tr class="mcn-ut__group-hdr" data-group="__loading">
+      <td colspan="${colCount}">Loading available items\u2026</td></tr>`;
+  } else if (avStatus === 'error') {
+    tbody += `<tr class="mcn-ut__group-hdr" data-group="__error">
+      <td colspan="${colCount}">Could not load available items</td></tr>`;
+  } else {
+    const avSections = [
+      ...(avGroups.tier != null ? [{ key: 'tier', label: 'Tier / Catalyst' }] : []),
+      { key: 'raid',    label: 'Raid Loot'    },
+      { key: 'dungeon', label: 'Mythic+ Loot' },
+      { key: 'crafted', label: 'Crafted'      },
+    ];
+    for (const { key, label } of avSections) {
+      const normItems = (avGroups[key] || []).map(it => ({
+        blizzard_item_id: it.blizzard_item_id, name: it.name || '',
+        icon_url: it.icon_url || '', sources: it.sources || [],
+        is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
+        target_ilvl: it.target_ilvl || null, ratings: {},
+      }));
+      tbody += _gpRenderUtGroup(key, label, normItems, dbSlot,
+        guideCols, itemOriginCts, guideCts, isTrinket, colCount);
+    }
+  }
+
+  const tableHtml = `<table class="mcn-unified-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+
+  const excludedItems = sd.excluded_items || [];
+  const excludedHtml = excludedItems.length
+    ? `<details class="mcn-avail-section" style="margin-top:0.75rem">
+        <summary class="mcn-avail-section__toggle">Excluded items (${excludedItems.length})</summary>
+        <div>${_gpRenderExcludedItems(dbSlot, excludedItems)}</div>
+       </details>`
+    : '';
+
+  return tableHtml + excludedHtml;
+}
+
+// Refresh just the unified table div for the open slot (called by Guide Mode + lazy loaders).
+function _gpRefreshUnifiedTable() {
+  const slot = _gpOpenSlot;
+  if (!slot) return;
+  const charId = _selectedChar?.id;
+  if (!charId) return;
+  const data = _gpCache[charId];
+  if (!data) return;
+  const sd     = data.slots?.[slot] || {};
+  const dbSlot = sd.canonical_slot || slot;
+  const tc     = data.track_colors || {};
+  const avKey  = `${charId}:${dbSlot}`;
+  const availState   = _gpAvailCache[avKey]   || { status: 'loading', groups: {} };
+  const trinketState = (dbSlot === 'trinket_1' || dbSlot === 'trinket_2')
+    ? (_gpTrinketCache[avKey] || { status: 'loading', data: null }) : null;
+  const el = document.getElementById(`mcn-ut-body-${dbSlot}`);
+  if (el) {
+    el.innerHTML = _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState);
+    if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
+  }
+}
+
+window._gpToggleGroup = function(groupKey, tableEl) {
+  if (!tableEl) return;
+  const hdr = tableEl.querySelector(`.mcn-ut__group-hdr[data-group="${CSS.escape(groupKey)}"]`);
+  if (!hdr) return;
+  const isOpen = hdr.classList.toggle('is-open');
+  tableEl.querySelectorAll(`.mcn-ut__item-row[data-group="${CSS.escape(groupKey)}"]`)
+    .forEach(r => { r.hidden = !isOpen; });
+};
+
+// ── REMOVED: _gpRenderBisGrid, _gpRenderAvailSections, _gpRenderAvailTable,
+//    _gpRenderTrinketRankings — all replaced by _gpRenderUnifiedTable above.
+// Keeping stub to avoid "undefined" errors from any cached onclick handlers.
 function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   dbSlot = dbSlot || slotKey;
   if (!bis.length) return '<div class="mcn-drawer-empty">No BIS data for this slot</div>';
@@ -2685,81 +2952,40 @@ function _gpRenderExcludedItems(dbSlot, items) {
 async function _gpLoadAvailableItems(charId, dbSlot) {
   const key = `${charId}:${dbSlot}`;
   if (_gpAvailCache[key]) {
-    // Already loaded — update DOM in case it rendered before the fetch completed
-    if (_gpAvailCache[key].status === 'done') {
-      const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
-      if (bodyEl) {
-        const tc = _gpCache[charId]?.track_colors || {};
-        bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, _gpAvailCache[key].groups, tc, 'done');
-      }
-    }
+    if (_gpAvailCache[key].status === 'done') _gpRefreshUnifiedTable();
     return;
   }
-
   _gpAvailCache[key] = { status: 'loading', groups: {} };
-
   try {
     const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/available-items?slot=${encodeURIComponent(dbSlot)}`);
-    if (resp.ok) {
-      _gpAvailCache[key] = { status: 'done', groups: resp.data || {} };
-    } else {
-      _gpAvailCache[key] = { status: 'error', groups: {} };
-    }
+    _gpAvailCache[key] = resp.ok
+      ? { status: 'done', groups: resp.data || {} }
+      : { status: 'error', groups: {} };
   } catch {
     _gpAvailCache[key] = { status: 'error', groups: {} };
   }
-
-  // Update the section in-place if still visible
-  const bodyEl = document.getElementById(`mcn-avail-body-${dbSlot}`);
-  if (bodyEl) {
-    const tc    = _gpCache[charId]?.track_colors || {};
-    const state = _gpAvailCache[key];
-    bodyEl.innerHTML = _gpRenderAvailSections(dbSlot, state.groups, tc, state.status);
-  }
+  _gpRefreshUnifiedTable();
 }
 
 // ── Trinket Rankings (Phase 1F Steps 11–12) ───────────────────────────────────
 
-const GP_CONTENT_TYPE_LABELS = { raid: 'Raid', dungeon: 'M+', crafted: 'Crafted' };
-
 async function _gpLoadTrinketRatings(charId, dbSlot) {
   const key = `${charId}:${dbSlot}`;
   if (_gpTrinketCache[key]) {
-    // Already loaded — update DOM in case drawer rendered before fetch completed
-    if (_gpTrinketCache[key].status === 'done') {
-      const bodyEl = document.getElementById(`mcn-trinket-ratings-body-${dbSlot}`);
-      if (bodyEl) {
-        const tc = _gpCache[charId]?.track_colors || {};
-        bodyEl.innerHTML = _gpRenderTrinketRankings(dbSlot, _gpTrinketCache[key].data, tc);
-        if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
-      }
-    }
+    if (_gpTrinketCache[key].status === 'done') _gpRefreshUnifiedTable();
     return;
   }
   if (_gpTrinketCache[key]?.status === 'loading') return;
-
   _gpTrinketCache[key] = { status: 'loading', data: null };
-
   try {
     const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/trinket-ratings?slot=${encodeURIComponent(dbSlot)}`);
-    if (resp.ok) {
-      _gpTrinketCache[key] = { status: 'done', data: resp.data };
-    } else {
-      _gpTrinketCache[key] = { status: 'error', data: null };
-    }
+    _gpTrinketCache[key] = resp.ok
+      ? { status: 'done', data: resp.data }
+      : { status: 'error', data: null };
   } catch {
     _gpTrinketCache[key] = { status: 'error', data: null };
   }
-
-  const bodyEl = document.getElementById(`mcn-trinket-ratings-body-${dbSlot}`);
-  if (bodyEl) {
-    const tc    = _gpCache[charId]?.track_colors || {};
-    const state = _gpTrinketCache[key];
-    bodyEl.innerHTML = state.status === 'done'
-      ? _gpRenderTrinketRankings(dbSlot, state.data, tc)
-      : '<div class="mcn-drawer-empty">Could not load rankings</div>';
-    if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
-  }
+  _gpRefreshUnifiedTable();
 }
 
 const GP_TIER_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
