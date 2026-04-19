@@ -1557,7 +1557,8 @@ async def get_plan_detail(
             if slot in _TRINKET_SLOTS:
                 rec["source_ratings"] = _tb_map.get(bid, [])
             # Item drop sources for drawer list display
-            rec["sources"] = bis_sources_by_bid.get(bid, [])
+            # Tier pieces have no enrichment.item_sources rows — use viz.tier_piece_sources data.
+            rec["sources"] = bis_sources_by_bid.get(bid) or sources_by_item.get(bid, [])
             # Popularity percentages from viz.item_popularity
             rec["popularity"] = bis_popularity.get(bid, {})
 
