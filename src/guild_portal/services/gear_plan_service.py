@@ -1251,6 +1251,43 @@ async def get_plan_detail(
                 if entry not in lst:
                     lst.append(entry)
 
+        # Popularity data for BIS items — keyed by bid -> {overall, raid, mythic_plus}
+        # Aggregate across paired slots (ring_1/ring_2, trinket_1/trinket_2) so the
+        # same item always shows the same % regardless of which slot it appears in.
+        bis_popularity: dict[int, dict] = {}
+        if all_bis_bids and spec_id:
+            _bis_slots: set[str] = set()
+            for sl in bis_by_slot:
+                _bis_slots.add(sl)
+                paired = _SLOT_META.get(sl, {}).get("paired_slot")
+                if paired:
+                    _bis_slots.add(paired)
+            _bis_slots_list = list(_bis_slots)
+            pop_rows = await conn.fetch(
+                """
+                SELECT blizzard_item_id, content_type,
+                       ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2) AS popularity_pct
+                  FROM enrichment.item_popularity ip
+                  JOIN ref.bis_list_sources src ON src.id = ip.source_id
+                 WHERE ip.spec_id = $1
+                   AND ip.blizzard_item_id = ANY($2::int[])
+                   AND ip.slot = ANY($3::text[])
+                 GROUP BY blizzard_item_id, content_type
+                UNION ALL
+                SELECT blizzard_item_id, 'overall',
+                       ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2)
+                  FROM enrichment.item_popularity
+                 WHERE spec_id = $1
+                   AND blizzard_item_id = ANY($2::int[])
+                   AND slot = ANY($3::text[])
+                 GROUP BY blizzard_item_id
+                """,
+                spec_id, list(all_bis_bids), _bis_slots_list,
+            )
+            for pr in pop_rows:
+                if pr["popularity_pct"] is not None:
+                    bis_popularity.setdefault(pr["blizzard_item_id"], {})[pr["content_type"]] = float(pr["popularity_pct"])
+
         # Collect all blizzard item IDs for source/track lookup
         all_bids: set[int] = set()
         for rows in bis_by_slot.values():
@@ -1520,7 +1557,10 @@ async def get_plan_detail(
             if slot in _TRINKET_SLOTS:
                 rec["source_ratings"] = _tb_map.get(bid, [])
             # Item drop sources for drawer list display
-            rec["sources"] = bis_sources_by_bid.get(bid, [])
+            # Tier pieces have no enrichment.item_sources rows — use viz.tier_piece_sources data.
+            rec["sources"] = bis_sources_by_bid.get(bid) or sources_by_item.get(bid, [])
+            # Popularity percentages from viz.item_popularity
+            rec["popularity"] = bis_popularity.get(bid, {})
 
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
@@ -1823,6 +1863,51 @@ async def get_available_items(
                         "tier": r["tier"],
                     })
 
+        # Popularity data: aggregate across paired slots (trinket_1+trinket_2, ring_1+ring_2)
+        # so both sections always show the same combined number.
+        _pop_paired = _SLOT_META[slot]["paired_slot"]
+        _pop_slots: list[str] = [slot] + ([_pop_paired] if _pop_paired else [])
+        pop_by_bid: dict[int, dict] = {}
+        if avail_spec_id:
+            pop_rows = await conn.fetch(
+                """
+                SELECT blizzard_item_id, content_type,
+                       ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2) AS popularity_pct
+                  FROM enrichment.item_popularity ip
+                  JOIN ref.bis_list_sources src ON src.id = ip.source_id
+                 WHERE ip.spec_id = $1 AND ip.slot = ANY($2::text[])
+                 GROUP BY blizzard_item_id, content_type
+                UNION ALL
+                SELECT blizzard_item_id, 'overall',
+                       ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2)
+                  FROM enrichment.item_popularity
+                 WHERE spec_id = $1 AND slot = ANY($2::text[])
+                 GROUP BY blizzard_item_id
+                """,
+                avail_spec_id, _pop_slots,
+            )
+            for pr in pop_rows:
+                if pr["popularity_pct"] is not None:
+                    pop_by_bid.setdefault(pr["blizzard_item_id"], {})[pr["content_type"]] = float(pr["popularity_pct"])
+
+        # Tier piece boss sources (only relevant for 5-piece tier slots)
+        tier_sources_by_bid: dict[int, list[dict]] = {}
+        if _SLOT_META[slot]["is_tier_catalyst_slot"]:
+            ts_rows = await conn.fetch(
+                """
+                SELECT DISTINCT tier_piece_blizzard_id, instance_type, boss_name, instance_name
+                  FROM viz.tier_piece_sources
+                 WHERE slot_type = $1
+                """,
+                slot_type,
+            )
+            for ts in ts_rows:
+                tier_sources_by_bid.setdefault(ts["tier_piece_blizzard_id"], []).append({
+                    "instance_type":   ts["instance_type"],
+                    "source_name":     ts["boss_name"],
+                    "source_instance": ts["instance_name"],
+                })
+
     # ── Group viz rows by item_category ───────────────────────────────────────
     raid_map:      dict[int, dict] = {}
     dungeon_map:   dict[int, dict] = {}
@@ -1845,6 +1930,7 @@ async def get_available_items(
                     "icon_url": r["icon_url"],
                     "primary_stat": r["primary_stat"],
                     "sources": [],
+                    "popularity": pop_by_bid.get(bid, {}),
                 }
             tracks = list(r["quality_tracks"] or [])
             src = {
@@ -1865,15 +1951,22 @@ async def get_available_items(
                     "icon_url": r["icon_url"],
                     "primary_stat": r["primary_stat"],
                     "profession_name": r["profession_name"],
+                    "popularity": pop_by_bid.get(bid, {}),
                 })
 
         elif cat in ("tier", "catalyst"):
             if bid not in tier_seen:
                 tier_seen.add(bid)
+                if cat == "catalyst":
+                    sources: list[dict] = [{"instance_type": "catalyst"}]
+                else:
+                    sources = tier_sources_by_bid.get(bid, [])
                 tier_rows.append({
                     "blizzard_item_id": bid,
                     "name": r["name"],
                     "icon_url": r["icon_url"],
+                    "popularity": pop_by_bid.get(bid, {}),
+                    "sources": sources,
                 })
 
     raid_items    = list(raid_map.values())
@@ -1911,6 +2004,7 @@ async def get_available_items(
                 "name": r["name"],
                 "icon_url": r["icon_url"],
                 "target_ilvl": tier_target,
+                "sources": r.get("sources", []),
             }
             for r in tier_rows
         ]

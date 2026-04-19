@@ -2702,6 +2702,8 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 }
 .mcn-unified-table .mcn-ut__item-col  { text-align: left; min-width: 160px; }
 .mcn-unified-table .mcn-ut__guide-col { text-align: center; width: 52px; }
+.mcn-unified-table .mcn-ut__pop-col   { text-align: right; width: 54px; font-size: 0.75rem; color: var(--color-text-muted); white-space: nowrap; padding-right: 0.6rem; }
+.mcn-unified-table .mcn-ut__pop-col--none { opacity: 0.35; }
 .mcn-unified-table .mcn-ut__action-col{ width: 56px; }
 
 /* Group header rows */

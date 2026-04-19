@@ -2535,6 +2535,14 @@ function _gpRenderSourceSub(sources) {
   return lines.length ? `<div class="mcn-avail-item__inst">${lines.join('<br>')}</div>` : '';
 }
 
+// Popularity % for the current guide mode — single value for the Pop. % column.
+function _gpPopularityVal(pop) {
+  if (!pop) return null;
+  if (_gpGuideMode === 'raid')        return pop.raid        ?? null;
+  if (_gpGuideMode === 'mythic_plus') return pop.mythic_plus ?? null;
+  return pop.overall ?? null;  // Overall: true weighted combined %
+}
+
 // Merge BIS items + all rated trinkets into one synthesis-sorted flat list.
 function _gpMergeTrinketBis(bis, trinketItems) {
   const itemMap = new Map();
@@ -2550,12 +2558,13 @@ function _gpMergeTrinketBis(bis, trinketItems) {
       if (r.is_bis) ex.is_bis = true;
       if (r.is_equipped) ex.is_equipped = true;
       if (!ex.target_ilvl && r.target_ilvl) ex.target_ilvl = r.target_ilvl;
+      if (!ex.popularity && r.popularity) ex.popularity = r.popularity;
     } else {
       itemMap.set(bid, {
         blizzard_item_id: bid, name: r.item_name || '', icon_url: r.icon_url || '',
         ratings: {}, content_types: [], sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
-        target_ilvl: r.target_ilvl || null,
+        target_ilvl: r.target_ilvl || null, popularity: r.popularity || null,
       });
     }
   }
@@ -2603,6 +2612,10 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
     const srcSub   = _gpRenderSourceSub(item.sources || []);
+    const popVal   = _gpPopularityVal(item.popularity || null);
+    const popCell  = popVal != null
+      ? `<td class="mcn-ut__pop-col">${popVal.toFixed(1)}%</td>`
+      : `<td class="mcn-ut__pop-col mcn-ut__pop-col--none">&mdash;</td>`;
     const itemBisCts = itemOriginCts[bid] || {};
 
     const guideCells = guideCols.map(gc => {
@@ -2629,6 +2642,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
         <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
       </td>
       ${guideCells}
+      ${popCell}
       <td class="mcn-bis-grid__action">
         <button class="gp-action-use" type="button"
             onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${bid})">Use</button>${excludeBtn}
@@ -2646,7 +2660,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
     ? (trinketState.data?.items || []) : [];
 
   const guideCols = _gpComputeGuideColumns(bis, isTrinket ? trinketItems : []);
-  const colCount  = 1 + guideCols.length + 1;
+  const colCount  = 1 + guideCols.length + 1 + 1; // item + guides + pop + action
 
   // Build CT maps from BIS data
   const guideCts = {};
@@ -2662,7 +2676,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
   const guideThs = guideCols.map(gc =>
     `<th class="mcn-ut__guide-col" title="${_gpEsc(gc.label)}">${_gpEsc(gc.label)}</th>`).join('');
   const thead = `<thead><tr>
-    <th class="mcn-ut__item-col">Item</th>${guideThs}<th class="mcn-ut__action-col"></th>
+    <th class="mcn-ut__item-col">Item</th>${guideThs}<th class="mcn-ut__pop-col">Pop. %</th><th class="mcn-ut__action-col"></th>
   </tr></thead>`;
 
   // BIS group items
@@ -2683,6 +2697,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
         icon_url: r.icon_url || '', sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, ratings: {},
+        popularity: r.popularity || null,
       });
     }
   }
@@ -2718,6 +2733,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
           sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
           is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
           target_ilvl: it.target_ilvl || null, ratings: {},
+          popularity: it.popularity || null,
         };
       });
       tbody += _gpRenderUtGroup(key, label, normItems, dbSlot,
