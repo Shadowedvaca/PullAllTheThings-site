@@ -160,7 +160,7 @@ function renderMatrix() {
     const head = document.getElementById('gp-matrix-head');
     const body = document.getElementById('gp-matrix-body');
 
-    // Two-row header: row 1 = Spec (rowspan2) + HT (rowspan2) + website groups (colspan)
+    // Two-row header: row 1 = Spec (rowspan2) + website groups (colspan)
     //                 row 2 = individual content-type sub-columns per website
 
     // Build website groups in source order (dedup by origin, preserve first-seen order)
@@ -183,13 +183,6 @@ function renderMatrix() {
     thSpec.rowSpan = 2;
     thSpec.textContent = 'Spec';
     row1.appendChild(thSpec);
-
-    // Hero Talent — rowspan 2
-    const thHt = document.createElement('th');
-    thHt.className = 'gp-th-ht';
-    thHt.rowSpan = 2;
-    thHt.textContent = 'Hero Talent';
-    row1.appendChild(thHt);
 
     // Website group headers (row 1)
     for (const origin of originOrder) {
@@ -239,14 +232,10 @@ function renderMatrix() {
         _collapsedClasses = new Set(_specs.map(sp => sp.class_name));
     }
 
-    // Pre-compute G/Y/R counts per class (across all specs, HTs, non-IV sources)
+    // Pre-compute G/Y/R counts per class (all specs are spec-level, no HT split)
     const classCountsMap = {};
     for (const sp of _specs) {
-        const hts = _htBySpec[sp.id] || [];
-        const rows = hts.length > 0
-            ? hts.map(ht => ({ specId: sp.id, htId: ht.id }))
-            : [{ specId: sp.id, htId: null }];
-        const statuses = rows.flatMap(r => orderedSources.map(src => _cellStatus(r.specId, src.id, r.htId)));
+        const statuses = orderedSources.map(src => _cellStatus(sp.id, src.id, null));
         const c = _countStatuses(statuses);
         const acc = classCountsMap[sp.class_name] ||= { success: 0, partial: 0, failed: 0, total: 0 };
         acc.success += c.success; acc.partial += c.partial;
@@ -261,30 +250,27 @@ function renderMatrix() {
             divRow.className = 'gp-class-divider';
             divRow.setAttribute('data-class-row', sp.class_name);
             const divStyle = 'background:#111114; color:var(--color-text-muted); font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;';
-            // Spec column: class name + toggle icon
+            // Spec column: class name + toggle icon + G/Y/R counts
             const divTdName = document.createElement('td');
             divTdName.style.cssText = divStyle + ' padding:0.3rem 0.75rem;';
             const icon = document.createElement('span');
             icon.className = 'gp-class-toggle-icon';
             divTdName.appendChild(icon);
-            divTdName.appendChild(document.createTextNode(sp.class_name));
-            divRow.appendChild(divTdName);
-            // Hero Talent column: G/Y/R counts
+            divTdName.appendChild(document.createTextNode(sp.class_name + ' '));
             const cc = classCountsMap[sp.class_name] || { success: 0, partial: 0, failed: 0, total: 0 };
-            const divTdCounts = document.createElement('td');
-            divTdCounts.style.cssText = divStyle + ' padding:0.3rem 0.5rem; font-weight:400; letter-spacing:0; text-transform:none;';
             for (const [count, color] of [[cc.success,'#4ade80'],[cc.partial,'#fbbf24'],[cc.failed,'#f87171']]) {
                 const sp2 = document.createElement('span');
                 sp2.className = 'gp-sum';
-                sp2.style.color = color;
+                sp2.style.cssText = `color:${color}; font-weight:400; letter-spacing:0; text-transform:none;`;
                 sp2.textContent = count;
-                divTdCounts.appendChild(sp2);
+                divTdName.appendChild(sp2);
             }
             const divTot = document.createElement('span');
             divTot.className = 'gp-sum gp-sum--t';
+            divTot.style.cssText = 'font-weight:400; letter-spacing:0; text-transform:none;';
             divTot.textContent = `/${cc.total}`;
-            divTdCounts.appendChild(divTot);
-            divRow.appendChild(divTdCounts);
+            divTdName.appendChild(divTot);
+            divRow.appendChild(divTdName);
             // Source columns: one empty td spanning the rest
             const divTdRest = document.createElement('td');
             divTdRest.colSpan = orderedSources.length;
@@ -294,79 +280,32 @@ function renderMatrix() {
             body.appendChild(divRow);
         }
 
-        const htOptions = (_htBySpec[sp.id] || []);
-
-        if (htOptions.length === 0) {
-            const row = document.createElement('tr');
-            row.setAttribute('data-class', sp.class_name);
-            const tdSpec = document.createElement('td');
-            tdSpec.className = 'gp-td-spec';
-            tdSpec.textContent = sp.spec_name;
-            row.appendChild(tdSpec);
-            const tdHt = document.createElement('td');
-            tdHt.className = 'gp-td-ht';
-            tdHt.textContent = '—';
-            row.appendChild(tdHt);
-            orderedSources.forEach((src, idx) => {
-                const td = document.createElement('td');
-                if (idx === 0 || orderedSources[idx - 1].origin !== src.origin) td.style.borderLeft = '1px solid #333';
-                td.appendChild(renderCell(sp.id, src.id));
-                td.addEventListener('click', () => drillDown(sp.id, src.id));
-                row.appendChild(td);
-            });
-            body.appendChild(row);
-        } else {
-            htOptions.forEach((ht, idx) => {
-                const row = document.createElement('tr');
-                row.setAttribute('data-class', sp.class_name);
-                if (idx === 0) {
-                    const tdSpec = document.createElement('td');
-                    tdSpec.className = 'gp-td-spec';
-                    tdSpec.rowSpan = htOptions.length;
-                    tdSpec.textContent = sp.spec_name;
-                    row.appendChild(tdSpec);
-                }
-                const tdHt = document.createElement('td');
-                tdHt.className = 'gp-td-ht';
-                tdHt.textContent = ht.name;
-                row.appendChild(tdHt);
-                orderedSources.forEach((src, srcIdx) => {
-                    const td = document.createElement('td');
-                    if (srcIdx === 0 || orderedSources[srcIdx - 1].origin !== src.origin) td.style.borderLeft = '1px solid #333';
-                    td.appendChild(renderCell(sp.id, src.id, ht.id));
-                    td.addEventListener('click', () => drillDown(sp.id, src.id, ht.id));
-                    row.appendChild(td);
-                });
-                body.appendChild(row);
-            });
-        }
+        const row = document.createElement('tr');
+        row.setAttribute('data-class', sp.class_name);
+        const tdSpec = document.createElement('td');
+        tdSpec.className = 'gp-td-spec';
+        tdSpec.textContent = sp.spec_name;
+        row.appendChild(tdSpec);
+        orderedSources.forEach((src, idx) => {
+            const td = document.createElement('td');
+            if (idx === 0 || orderedSources[idx - 1].origin !== src.origin) td.style.borderLeft = '1px solid #333';
+            td.appendChild(renderCell(sp.id, src.id));
+            td.addEventListener('click', () => drillDown(sp.id, src.id));
+            row.appendChild(td);
+        });
+        body.appendChild(row);
     }
 
     // Column summary footer row (always visible — no data-class attribute)
     const colSumRow = document.createElement('tr');
     colSumRow.className = 'gp-col-summary-row';
-    // Spec column: label text
     const colLabel = document.createElement('td');
     colLabel.className = 'gp-col-summary-label';
-    colLabel.textContent = 'Column totals';
+    colLabel.textContent = 'Totals ';
     colSumRow.appendChild(colLabel);
-    // Hero Talent column: grand total counts (filled in after iterating sources)
-    const grandTd = document.createElement('td');
-    grandTd.className = 'gp-col-summary-label';
-    grandTd.style.textTransform = 'none';
-    grandTd.style.fontWeight = '400';
-    colSumRow.appendChild(grandTd);
 
-    // Collect all spec/HT combinations for column counting
-    const allRows = [];
-    for (const sp of _specs) {
-        const hts = _htBySpec[sp.id] || [];
-        if (hts.length === 0) {
-            allRows.push({ specId: sp.id, htId: null });
-        } else {
-            for (const ht of hts) allRows.push({ specId: sp.id, htId: ht.id });
-        }
-    }
+    // All specs are spec-level (no HT split)
+    const allRows = _specs.map(sp => ({ specId: sp.id, htId: null }));
 
     let grandCounts = { success: 0, partial: 0, failed: 0, total: 0 };
     orderedSources.forEach((src, idx) => {
@@ -389,18 +328,19 @@ function renderMatrix() {
         colSumRow.appendChild(td);
     });
 
-    // Populate grand total into the HT column td
+    // Append grand totals to the label cell
     for (const [count, color] of [[grandCounts.success,'#4ade80'],[grandCounts.partial,'#fbbf24'],[grandCounts.failed,'#f87171']]) {
         const sp = document.createElement('span');
         sp.className = 'gp-sum';
-        sp.style.color = color;
+        sp.style.cssText = `color:${color}; font-weight:400; text-transform:none;`;
         sp.textContent = count;
-        grandTd.appendChild(sp);
+        colLabel.appendChild(sp);
     }
     const grandTot = document.createElement('span');
     grandTot.className = 'gp-sum gp-sum--t';
+    grandTot.style.cssText = 'font-weight:400; text-transform:none;';
     grandTot.textContent = `/${grandCounts.total}`;
-    grandTd.appendChild(grandTot);
+    colLabel.appendChild(grandTot);
 
     body.appendChild(colSumRow);
 
@@ -570,7 +510,7 @@ function populateSpecSelectors() {
 }
 
 const _ORIGIN_LABELS = {
-    archon:    'u.gg',
+    ugg:       'u.gg',
     wowhead:   'Wowhead',
     icy_veins: 'Icy Veins',
 };
@@ -600,6 +540,20 @@ function populateSourceSelector() {
             }
             originSel.appendChild(opt);
         }
+
+        // Hide "Overall" plan type when u.gg is selected (no overall page)
+        originSel.addEventListener('change', () => {
+            const planTypeSel = document.getElementById('sync-plan-type-select');
+            if (!planTypeSel) return;
+            const isUgg = originSel.value === 'ugg';
+            for (const opt of planTypeSel.options) {
+                if (opt.value === 'overall') {
+                    opt.disabled = isUgg;
+                    opt.style.display = isUgg ? 'none' : '';
+                }
+            }
+            if (isUgg && planTypeSel.value === 'overall') planTypeSel.value = 'raid';
+        });
     }
 
     // SimC modal source dropdown (keeps full source list)
@@ -842,10 +796,10 @@ async function resyncErrors() {
 // Drill-down
 // ---------------------------------------------------------------------------
 
-async function drillDown(specId, sourceId, htId) {
+async function drillDown(specId, sourceId) {
     _drillSpecId = specId;
     _drillSourceId = sourceId;
-    _drillHtId = htId || null;
+    _drillHtId = null;
 
     const specInfo = _specs.find(s => s.id == specId);
     const srcInfo  = _sources.find(s => s.id == sourceId);
@@ -855,9 +809,7 @@ async function drillDown(specId, sourceId, htId) {
     const slotsEl = document.getElementById('gp-detail-slots');
     const actionsEl = document.getElementById('gp-detail-actions');
 
-    const htInfo = _htBySpec[specId]?.find(h => h.id == htId);
-    const htLabel = htInfo ? ` — ${htInfo.name}` : (htId ? ` — HT ${htId}` : ' — All builds');
-    title.textContent = `BIS Entries — ${srcInfo?.name || sourceId} | ${specInfo?.class_name} ${specInfo?.spec_name}${htLabel}`;
+    title.textContent = `BIS Entries — ${srcInfo?.name || sourceId} | ${specInfo?.class_name} ${specInfo?.spec_name}`;
     slotsEl.innerHTML = '<span style="color:var(--color-text-muted);">Loading…</span>';
     actionsEl.innerHTML = '';
     panel.classList.add('visible');
@@ -866,18 +818,16 @@ async function drillDown(specId, sourceId, htId) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
     try {
-        let url = `/api/v1/admin/bis/entries?source_id=${sourceId}&spec_id=${specId}`;
-        if (_drillHtId) url += `&hero_talent_id=${_drillHtId}`;
+        const url = `/api/v1/admin/bis/entries?source_id=${sourceId}&spec_id=${specId}`;
         const r = await fetch(url);
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
 
         renderDrillDown(d.entries || [], specId, sourceId);
 
-        // Actions row — look up the HT-specific cell; fall back to "null" for shared targets
-        const _htKey = htId != null ? String(htId) : 'null';
+        // Look up the spec-level cell (hero_talent_id=NULL)
         const _srcCells = (_cells[specId] || {})[sourceId] || {};
-        const cellData = _srcCells[_htKey] ?? _srcCells['null'];
+        const cellData = _srcCells['null'];
         if (cellData?.target_id) {
             const resyncBtn = document.createElement('button');
             resyncBtn.className = 'btn-sm btn-secondary';
@@ -1024,7 +974,6 @@ async function resyncSingleTarget(targetId, tr, btn, statusTd, itemsTd) {
 
 async function loadXref() {
     const specId  = document.getElementById('xref-spec-select').value;
-    const htId    = document.getElementById('xref-ht-select').value;
     const content = document.getElementById('gp-xref-content');
 
     if (!specId) {
@@ -1035,8 +984,7 @@ async function loadXref() {
     content.innerHTML = '<span class="spinner"></span> Loading…';
 
     try {
-        let url = `/api/v1/admin/bis/cross-reference?spec_id=${specId}`;
-        if (htId) url += `&hero_talent_id=${htId}`;
+        const url = `/api/v1/admin/bis/cross-reference?spec_id=${specId}`;
         const r = await fetch(url);
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
@@ -1047,24 +995,9 @@ async function loadXref() {
     }
 }
 
-// Also update hero talent options when spec changes in xref
 document.addEventListener('DOMContentLoaded', () => {
     const xrefSpecSel = document.getElementById('xref-spec-select');
-    const xrefHtSel   = document.getElementById('xref-ht-select');
-
-    xrefSpecSel.addEventListener('change', () => {
-        const specId = xrefSpecSel.value;
-        xrefHtSel.innerHTML = '<option value="">All builds</option>';
-        if (specId && _htBySpec[specId]) {
-            for (const ht of _htBySpec[specId]) {
-                const opt = document.createElement('option');
-                opt.value = ht.id;
-                opt.textContent = ht.name;
-                xrefHtSel.appendChild(opt);
-            }
-        }
-        loadXref();
-    });
+    if (xrefSpecSel) xrefSpecSel.addEventListener('change', loadXref);
 });
 
 function renderXref(bySlot) {
@@ -1275,18 +1208,6 @@ function _renderTargets() {
         const specTd = document.createElement('td');
         specTd.textContent = `${t.class_name || ''} ${t.spec_name || ''}`;
         tr.appendChild(specTd);
-
-        // Hero Talent cell — editable select for IV rows
-        const htTd = document.createElement('td');
-        htTd.style.cssText = 'font-size:0.78rem;';
-        if (isIV && window._isGl) {
-            _renderHtSelect(htTd, t);
-        } else {
-            htTd.style.color = 'var(--color-text-muted)';
-            htTd.style.fontStyle = 'italic';
-            htTd.textContent = t.hero_talent_name || '—';
-        }
-        tr.appendChild(htTd);
 
         // Area Label cell
         const areaLabelTd = document.createElement('td');

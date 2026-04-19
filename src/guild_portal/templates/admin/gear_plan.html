@@ -163,19 +163,6 @@
     letter-spacing: 0.06em;
 }
 
-/* ── Hero talent column ───────────────────────────────────────────────── */
-.gp-matrix th.gp-th-ht {
-    min-width: 110px;
-    white-space: nowrap;
-}
-.gp-matrix td.gp-td-ht {
-    color: var(--color-text-muted);
-    font-size: 0.78rem;
-    font-style: italic;
-    min-width: 110px;
-    white-space: nowrap;
-}
-
 /* ── Detail / drill-down panel ────────────────────────────────────────── */
 .gp-detail-wrap {
     background: var(--color-card);
@@ -601,12 +588,8 @@ select.gp-select {
         <h2 class="gp-xref__title">Cross-Reference</h2>
         <div class="gp-xref__controls">
             <span class="gp-controls__label">Spec:</span>
-            <select class="gp-select" id="xref-spec-select" onchange="loadXref()">
+            <select class="gp-select" id="xref-spec-select">
                 <option value="">— select spec —</option>
-            </select>
-            <span class="gp-controls__label">Hero Talent:</span>
-            <select class="gp-select" id="xref-ht-select" onchange="loadXref()">
-                <option value="">All</option>
             </select>
         </div>
         <div id="gp-xref-content" style="color:var(--color-text-muted); font-size:0.85rem;">
@@ -639,7 +622,6 @@ select.gp-select {
                     <thead>
                         <tr>
                             <th>Spec</th>
-                            <th>Hero Talent</th>
                             <th>Area Label</th>
                             <th>Source</th>
                             <th>Type</th>
@@ -651,7 +633,7 @@ select.gp-select {
                         </tr>
                     </thead>
                     <tbody id="gp-targets-body">
-                        <tr><td colspan="10" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                        <tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -801,7 +783,7 @@ select.gp-select {
     </div>
 </div>
 
-<script src="/static/js/gear_plan_admin.js?v=1.2.1"></script>
+<script src="/static/js/gear_plan_admin.js?v=1.3.0"></script>
 <script>
     // Expose GL flag to JS
     window._isGl = {{ 'true' if is_gl else 'false' }};
