@@ -1998,7 +1998,7 @@ async def method_sections(
 
         gap_rows = await conn.fetch(
             """
-            SELECT DISTINCT
+            SELECT
                 t.spec_id,
                 sp.name           AS spec_name,
                 c.name            AS class_name,
