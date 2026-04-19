@@ -1251,29 +1251,42 @@ async def get_plan_detail(
                 if entry not in lst:
                     lst.append(entry)
 
-        # Popularity data for BIS items — keyed by (slot, bid) -> {overall, raid, mythic_plus}
-        bis_popularity: dict[tuple, dict] = {}
+        # Popularity data for BIS items — keyed by bid -> {overall, raid, mythic_plus}
+        # Aggregate across paired slots (ring_1/ring_2, trinket_1/trinket_2) so the
+        # same item always shows the same % regardless of which slot it appears in.
+        bis_popularity: dict[int, dict] = {}
         if all_bis_bids and spec_id:
+            _bis_slots: set[str] = set()
+            for sl in bis_by_slot:
+                _bis_slots.add(sl)
+                paired = _SLOT_META.get(sl, {}).get("paired_slot")
+                if paired:
+                    _bis_slots.add(paired)
+            _bis_slots_list = list(_bis_slots)
             pop_rows = await conn.fetch(
                 """
-                SELECT blizzard_item_id, slot, content_type, popularity_pct
-                  FROM viz.item_popularity
-                 WHERE spec_id = $1
-                   AND blizzard_item_id = ANY($2::int[])
+                SELECT blizzard_item_id, content_type,
+                       ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2) AS popularity_pct
+                  FROM enrichment.item_popularity ip
+                  JOIN ref.bis_list_sources src ON src.id = ip.source_id
+                 WHERE ip.spec_id = $1
+                   AND ip.blizzard_item_id = ANY($2::int[])
+                   AND ip.slot = ANY($3::text[])
+                 GROUP BY blizzard_item_id, content_type
                 UNION ALL
-                SELECT blizzard_item_id, slot, 'overall',
+                SELECT blizzard_item_id, 'overall',
                        ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2)
                   FROM enrichment.item_popularity
                  WHERE spec_id = $1
                    AND blizzard_item_id = ANY($2::int[])
-                 GROUP BY blizzard_item_id, slot
+                   AND slot = ANY($3::text[])
+                 GROUP BY blizzard_item_id
                 """,
-                spec_id, list(all_bis_bids),
+                spec_id, list(all_bis_bids), _bis_slots_list,
             )
             for pr in pop_rows:
                 if pr["popularity_pct"] is not None:
-                    key = (pr["slot"], pr["blizzard_item_id"])
-                    bis_popularity.setdefault(key, {})[pr["content_type"]] = float(pr["popularity_pct"])
+                    bis_popularity.setdefault(pr["blizzard_item_id"], {})[pr["content_type"]] = float(pr["popularity_pct"])
 
         # Collect all blizzard item IDs for source/track lookup
         all_bids: set[int] = set()
@@ -1546,7 +1559,7 @@ async def get_plan_detail(
             # Item drop sources for drawer list display
             rec["sources"] = bis_sources_by_bid.get(bid, [])
             # Popularity percentages from viz.item_popularity
-            rec["popularity"] = bis_popularity.get((slot, bid), {})
+            rec["popularity"] = bis_popularity.get(bid, {})
 
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
@@ -1849,23 +1862,28 @@ async def get_available_items(
                         "tier": r["tier"],
                     })
 
-        # Popularity data: per-content_type + combined overall
-        # Returns {bid: {overall, raid, mythic_plus}} — one query via UNION ALL
+        # Popularity data: aggregate across paired slots (trinket_1+trinket_2, ring_1+ring_2)
+        # so both sections always show the same combined number.
+        _pop_paired = _SLOT_META[slot]["paired_slot"]
+        _pop_slots: list[str] = [slot] + ([_pop_paired] if _pop_paired else [])
         pop_by_bid: dict[int, dict] = {}
         if avail_spec_id:
             pop_rows = await conn.fetch(
                 """
-                SELECT blizzard_item_id, content_type, popularity_pct
-                  FROM viz.item_popularity
-                 WHERE spec_id = $1 AND slot = $2
+                SELECT blizzard_item_id, content_type,
+                       ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2) AS popularity_pct
+                  FROM enrichment.item_popularity ip
+                  JOIN ref.bis_list_sources src ON src.id = ip.source_id
+                 WHERE ip.spec_id = $1 AND ip.slot = ANY($2::text[])
+                 GROUP BY blizzard_item_id, content_type
                 UNION ALL
                 SELECT blizzard_item_id, 'overall',
                        ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2)
                   FROM enrichment.item_popularity
-                 WHERE spec_id = $1 AND slot = $2
+                 WHERE spec_id = $1 AND slot = ANY($2::text[])
                  GROUP BY blizzard_item_id
                 """,
-                avail_spec_id, slot,
+                avail_spec_id, _pop_slots,
             )
             for pr in pop_rows:
                 if pr["popularity_pct"] is not None:

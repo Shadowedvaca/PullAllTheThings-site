@@ -96,6 +96,9 @@ Feature flags: `feature_invite_dm`, `feature_onboarding_dm` (separate toggles).
 - Pre-existing skips: identity_engine import error, migrate_sheets legacy models, 1 bot DM gate test
 - No DB needed for unit tests; `TEST_DATABASE_URL` needed for integration/regression
 
+## Gear Plan Design Decisions
+- [Popularity vs grade: separate columns](project_popularity_vs_grade.md) — no % → grade conversion; two independent columns
+
 ## Common Gotchas
 - Admin cookie auth: `admin_pages.py` uses `_require_admin()`. API routes under `/api/v1/admin/` use Bearer token.
 - `_require_admin` is an alias for `_require_screen("player_manager", ...)` (Officer+ level)
