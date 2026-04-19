@@ -57,8 +57,8 @@ Prod Server
 │   │                     blizzard_appearances, bis_scrape_raw, crafted_items,
 │   │                     wowhead_tooltips)
 │   ├── enrichment.*     (items, item_sources, item_recipes, item_seasons, item_set_members,
-│   │                     tier_tokens, bis_entries, trinket_ratings — stored procs rebuild all)
-│   ├── viz.*            (slot_items, tier_piece_sources, crafters_by_item, bis_recommendations)
+│   │                     tier_tokens, bis_entries, trinket_ratings, item_popularity — stored procs rebuild all)
+│   ├── viz.*            (slot_items, tier_piece_sources, crafters_by_item, bis_recommendations, item_popularity)
 │   ├── config.*         (bis_scrape_targets)
 │   └── guild_identity.* (players, wow_characters, discord_users, player_characters,
 │                          roles, audit_issues, sync_log,
@@ -259,9 +259,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0146 (on prod and dev)
+- **Last migration:** 0148 (on prod and dev)
 - **Last prod tag:** `prod-v0.20.5`
 - **Active branch:** `main` (feature branch merged and deleted)
+- **Next planned:** u.gg trinket popularity scraping — plan doc at `reference/gear-plan-1.1-ugg-trinket-scraping.md`. **NOTE: plan doc is stale** — references `guild_identity.wow_items` (DROPPED) and `guild_identity.ugg_trinket_popularity` (never created). Actual storage is `enrichment.item_popularity` (migration 0148, grain: source_id+spec_id+slot+blizzard_item_id) + `viz.item_popularity` view. The scraper/upsert work described in the plan doc is still valid; only the table name and FK targets need updating.
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
