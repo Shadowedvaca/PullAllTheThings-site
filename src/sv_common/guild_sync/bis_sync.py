@@ -23,6 +23,7 @@ sync_all(pool)                          — run extraction for every active sour
 sync_target(pool, target_id)            — re-sync a single scrape target
 rebuild_bis_from_landing(pool)          — rebuild enrichment.bis_entries from landing HTML
 rebuild_trinket_ratings_from_landing(pool) — rebuild enrichment.trinket_ratings from landing HTML
+rebuild_item_popularity_from_landing(pool) — rebuild enrichment.item_popularity from u.gg landing HTML
 cross_reference(pool, spec_id, ht_id)  — compare all sources per slot for one spec+hero
 import_simc(pool, text, source_id,      — import a SimC BIS profile as enrichment.bis_entries
             spec_id, hero_talent_id)
@@ -55,6 +56,14 @@ class ExtractedTrinketRating:
     item_name: str
     tier: str        # 'S', 'A', 'B', 'C', 'D', 'F'
     sort_order: int  # position within tier group, 0-indexed
+
+
+@dataclass
+class UggPopularityItem:
+    slot: str
+    blizzard_item_id: int
+    count: int   # players using this item in this slot
+    total: int   # total players sampled for this source × spec × slot
 
 # ---------------------------------------------------------------------------
 # Slug maps — (class_name, spec_name) → URL slugs per source
@@ -1079,6 +1088,185 @@ def _ugg_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
             quality_track=None,
         ))
     return slots
+
+
+def _ugg_items_to_popularity(items_by_slot: dict) -> list[UggPopularityItem]:
+    """Extract per-item count/total from u.gg's items_table dict.
+
+    Returns one UggPopularityItem per (slot, item_id) pair that has non-zero count.
+    total is derived from the slot_data or per-item fields; falls back to
+    count/perc derivation if neither is directly available.
+    """
+    result: list[UggPopularityItem] = []
+    for ugg_slot, slot_data in items_by_slot.items():
+        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
+        if normalised is None:
+            continue
+        items = slot_data.get("items") or []
+        if not items:
+            continue
+
+        # Derive slot-level total (same for all items in this slot)
+        slot_total: int = int(slot_data.get("total") or 0)
+        if not slot_total:
+            # Try per-item total (take first non-zero value)
+            for item in items:
+                t = item.get("total") or 0
+                if t:
+                    slot_total = int(t)
+                    break
+        if not slot_total:
+            # Last resort: derive from count + perc of the first item
+            for item in items:
+                count = int(item.get("count") or 0)
+                perc = float(item.get("perc") or 0)
+                if count and perc > 0:
+                    slot_total = round(count / perc)
+                    break
+        if not slot_total:
+            continue
+
+        for item in items:
+            item_id = item.get("item_id")
+            if not item_id:
+                continue
+            try:
+                iid = int(item_id)
+            except (ValueError, TypeError):
+                continue
+            if iid == 0:
+                continue
+            count = int(item.get("count") or 0)
+            if count == 0:
+                # No count field — derive from perc × total
+                perc = float(item.get("perc") or 0)
+                if perc > 0:
+                    count = round(perc * slot_total)
+            if count == 0:
+                continue
+            result.append(UggPopularityItem(
+                slot=normalised,
+                blizzard_item_id=iid,
+                count=count,
+                total=slot_total,
+            ))
+    return result
+
+
+def _parse_ugg_popularity(html: str, url: str) -> list[UggPopularityItem]:
+    """Parse u.gg SSR HTML and return per-item popularity data for all slots.
+
+    Pure function — no network calls.  Extracts the full items list (all items,
+    not just the top one) with count and total from the SSR JSON blob.
+    """
+    marker = "window.__SSR_DATA__"
+    ssr_idx = html.find(marker)
+    if ssr_idx < 0:
+        return []
+    obj_start = html.find("{", ssr_idx)
+    if obj_start < 0:
+        return []
+    try:
+        decoder = json.JSONDecoder()
+        data, _ = decoder.raw_decode(html, obj_start)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    spec_key = _ugg_url_to_spec_key(url)
+    section  = _ugg_url_to_section(url)
+
+    try:
+        for _url_key, table_data in data.items():
+            if not isinstance(table_data, dict):
+                continue
+            inner = table_data.get("data") or table_data
+            sec = inner.get(section)
+            if not isinstance(sec, dict):
+                continue
+            all_data = sec.get("all")
+            if not isinstance(all_data, dict) or not spec_key:
+                continue
+            spec_data = all_data.get(spec_key)
+            if not isinstance(spec_data, dict):
+                continue
+            items_by_slot = spec_data.get("items_table", {}).get("items", {})
+            if items_by_slot:
+                return _ugg_items_to_popularity(items_by_slot)
+    except (AttributeError, TypeError):
+        pass
+
+    return []
+
+
+async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
+    """Rebuild enrichment.item_popularity by re-parsing u.gg landing HTML.
+
+    Reads the most recent u.gg HTML for each scrape target (one per spec ×
+    content_type), extracts all items with count/total from the SSR items_table,
+    and TRUNCATE-rebuilds enrichment.item_popularity.
+
+    Called by enrich-and-classify after rebuild_bis_from_landing so the
+    popularity table reflects the same set of scraped pages.
+
+    Returns {rows_inserted, specs_processed}.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            WITH latest AS (
+                SELECT
+                    bsr.content, bsr.url,
+                    t.source_id, t.spec_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY bsr.target_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                 WHERE bsr.target_id IS NOT NULL
+                   AND bsr.source = 'ugg'
+            )
+            SELECT content, url, source_id, spec_id
+              FROM latest
+             WHERE rn = 1
+        """)
+        await conn.execute("TRUNCATE enrichment.item_popularity")
+
+    total_inserted = 0
+    specs_processed = 0
+
+    for row in rows:
+        items = _parse_ugg_popularity(row["content"], row["url"])
+        if not items:
+            continue
+
+        specs_processed += 1
+        async with pool.acquire() as conn:
+            for item in items:
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO enrichment.item_popularity
+                            (source_id, spec_id, slot, blizzard_item_id, count, total)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        ON CONFLICT (source_id, spec_id, slot, blizzard_item_id)
+                        DO UPDATE SET
+                            count      = EXCLUDED.count,
+                            total      = EXCLUDED.total,
+                            scraped_at = NOW()
+                        """,
+                        row["source_id"], row["spec_id"],
+                        item.slot, item.blizzard_item_id,
+                        item.count, item.total,
+                    )
+                    total_inserted += 1
+                except Exception:
+                    pass
+
+    logger.info(
+        "rebuild_item_popularity_from_landing: %d rows inserted from %d targets",
+        total_inserted, specs_processed,
+    )
+    return {"rows_inserted": total_inserted, "specs_processed": specs_processed}
 
 
 # ---------------------------------------------------------------------------

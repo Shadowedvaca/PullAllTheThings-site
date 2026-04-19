@@ -1704,6 +1704,7 @@ async def enrich_and_classify(
             from sv_common.guild_sync.bis_sync import (
                 rebuild_bis_from_landing as _rebuild_bis,
                 rebuild_trinket_ratings_from_landing as _rebuild_trinkets,
+                rebuild_item_popularity_from_landing as _rebuild_popularity,
             )
             bis_result = await _rebuild_bis(pool)
             logger.info(
@@ -1782,10 +1783,23 @@ async def enrich_and_classify(
                             detail=f"{icons_filled + icons_skipped}/{missing} processed"
                         )
 
+            # ── Step 5: rebuild item popularity from u.gg landing HTML ───────────
+            _enrich_classify_status.update(
+                step=5,
+                phase_label="Rebuilding item popularity from u.gg landing data",
+                detail="",
+            )
+            popularity_result = await _rebuild_popularity(pool)
+            logger.info(
+                "enrich-and-classify: popularity rebuild complete — %d rows",
+                popularity_result.get("rows_inserted", 0),
+            )
+
             detail = (
                 f"{item_counts['items']} items, {item_counts['sources']} sources, "
                 f"{bis_result.get('bis_entries_inserted', 0)} BIS entries, "
-                f"{trinket_result.get('trinket_ratings_inserted', 0)} trinket ratings. "
+                f"{trinket_result.get('trinket_ratings_inserted', 0)} trinket ratings, "
+                f"{popularity_result.get('rows_inserted', 0)} popularity rows. "
                 f"Icons: {icons_filled} fetched"
                 + (f", {icons_skipped} unavailable" if icons_skipped else "")
                 + "."
@@ -1793,7 +1807,7 @@ async def enrich_and_classify(
             _enrich_classify_status.update({
                 "running": False,
                 "phase_label": "Complete",
-                "step": 4,
+                "step": 5,
                 "detail": detail,
                 "finished_at": datetime.now(timezone.utc),
                 "error": None,
