@@ -1889,6 +1889,24 @@ async def get_available_items(
                 if pr["popularity_pct"] is not None:
                     pop_by_bid.setdefault(pr["blizzard_item_id"], {})[pr["content_type"]] = float(pr["popularity_pct"])
 
+        # Tier piece boss sources (only relevant for 5-piece tier slots)
+        tier_sources_by_bid: dict[int, list[dict]] = {}
+        if _SLOT_META[slot]["is_tier_catalyst_slot"]:
+            ts_rows = await conn.fetch(
+                """
+                SELECT DISTINCT tier_piece_blizzard_id, instance_type, boss_name, instance_name
+                  FROM viz.tier_piece_sources
+                 WHERE slot_type = $1
+                """,
+                slot_type,
+            )
+            for ts in ts_rows:
+                tier_sources_by_bid.setdefault(ts["tier_piece_blizzard_id"], []).append({
+                    "instance_type":   ts["instance_type"],
+                    "source_name":     ts["boss_name"],
+                    "source_instance": ts["instance_name"],
+                })
+
     # ── Group viz rows by item_category ───────────────────────────────────────
     raid_map:      dict[int, dict] = {}
     dungeon_map:   dict[int, dict] = {}
@@ -1938,11 +1956,16 @@ async def get_available_items(
         elif cat in ("tier", "catalyst"):
             if bid not in tier_seen:
                 tier_seen.add(bid)
+                if cat == "catalyst":
+                    sources: list[dict] = [{"instance_type": "catalyst"}]
+                else:
+                    sources = tier_sources_by_bid.get(bid, [])
                 tier_rows.append({
                     "blizzard_item_id": bid,
                     "name": r["name"],
                     "icon_url": r["icon_url"],
                     "popularity": pop_by_bid.get(bid, {}),
+                    "sources": sources,
                 })
 
     raid_items    = list(raid_map.values())
@@ -1980,6 +2003,7 @@ async def get_available_items(
                 "name": r["name"],
                 "icon_url": r["icon_url"],
                 "target_ilvl": tier_target,
+                "sources": r.get("sources", []),
             }
             for r in tier_rows
         ]
