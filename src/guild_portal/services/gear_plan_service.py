@@ -1251,6 +1251,22 @@ async def get_plan_detail(
                 if entry not in lst:
                     lst.append(entry)
 
+        # Popularity data for BIS items — keyed by (slot, bid, content_type)
+        bis_popularity: dict[tuple, float] = {}
+        if all_bis_bids and spec_id:
+            pop_rows = await conn.fetch(
+                """
+                SELECT blizzard_item_id, slot, content_type, popularity_pct
+                  FROM viz.item_popularity
+                 WHERE spec_id = $1
+                   AND blizzard_item_id = ANY($2::int[])
+                """,
+                spec_id, list(all_bis_bids),
+            )
+            for pr in pop_rows:
+                if pr["popularity_pct"] is not None:
+                    bis_popularity[(pr["slot"], pr["blizzard_item_id"], pr["content_type"])] = float(pr["popularity_pct"])
+
         # Collect all blizzard item IDs for source/track lookup
         all_bids: set[int] = set()
         for rows in bis_by_slot.values():
@@ -1521,6 +1537,11 @@ async def get_plan_detail(
                 rec["source_ratings"] = _tb_map.get(bid, [])
             # Item drop sources for drawer list display
             rec["sources"] = bis_sources_by_bid.get(bid, [])
+            # Popularity percentages from viz.item_popularity
+            rec["popularity"] = {
+                "raid":        bis_popularity.get((slot, bid, "raid")),
+                "mythic_plus": bis_popularity.get((slot, bid, "mythic_plus")),
+            }
 
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
@@ -1823,6 +1844,21 @@ async def get_available_items(
                         "tier": r["tier"],
                     })
 
+        # Popularity data for this slot — keyed by (content_type, blizzard_item_id)
+        pop_by_bid: dict[tuple, float] = {}
+        if avail_spec_id:
+            pop_rows = await conn.fetch(
+                """
+                SELECT blizzard_item_id, content_type, popularity_pct
+                  FROM viz.item_popularity
+                 WHERE spec_id = $1 AND slot = $2
+                """,
+                avail_spec_id, slot,
+            )
+            for pr in pop_rows:
+                if pr["popularity_pct"] is not None:
+                    pop_by_bid[(pr["content_type"], pr["blizzard_item_id"])] = float(pr["popularity_pct"])
+
     # ── Group viz rows by item_category ───────────────────────────────────────
     raid_map:      dict[int, dict] = {}
     dungeon_map:   dict[int, dict] = {}
@@ -1845,6 +1881,10 @@ async def get_available_items(
                     "icon_url": r["icon_url"],
                     "primary_stat": r["primary_stat"],
                     "sources": [],
+                    "popularity": {
+                        "raid":        pop_by_bid.get(("raid", bid)),
+                        "mythic_plus": pop_by_bid.get(("mythic_plus", bid)),
+                    },
                 }
             tracks = list(r["quality_tracks"] or [])
             src = {
@@ -1865,6 +1905,10 @@ async def get_available_items(
                     "icon_url": r["icon_url"],
                     "primary_stat": r["primary_stat"],
                     "profession_name": r["profession_name"],
+                    "popularity": {
+                        "raid":        pop_by_bid.get(("raid", bid)),
+                        "mythic_plus": pop_by_bid.get(("mythic_plus", bid)),
+                    },
                 })
 
         elif cat in ("tier", "catalyst"):
@@ -1874,6 +1918,10 @@ async def get_available_items(
                     "blizzard_item_id": bid,
                     "name": r["name"],
                     "icon_url": r["icon_url"],
+                    "popularity": {
+                        "raid":        pop_by_bid.get(("raid", bid)),
+                        "mythic_plus": pop_by_bid.get(("mythic_plus", bid)),
+                    },
                 })
 
     raid_items    = list(raid_map.values())

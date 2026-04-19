@@ -2748,6 +2748,14 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
   font-size: 0.8rem;
 }
 
+/* Item popularity sub-line */
+.mcn-item-pop {
+  font-size: 0.68rem;
+  color: var(--color-text-muted);
+  margin-top: 0.1rem;
+  opacity: 0.8;
+}
+
 /* Trinket guide cell — letter + check aligned in columns */
 .gp-guide-cell {
   display: inline-flex;

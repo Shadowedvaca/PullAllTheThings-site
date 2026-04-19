@@ -2535,6 +2535,23 @@ function _gpRenderSourceSub(sources) {
   return lines.length ? `<div class="mcn-avail-item__inst">${lines.join('<br>')}</div>` : '';
 }
 
+// Popularity sub-line HTML based on current guide mode.
+function _gpRenderPopularity(pop) {
+  if (!pop) return '';
+  const raid = pop.raid != null ? pop.raid : null;
+  const mp   = pop.mythic_plus != null ? pop.mythic_plus : null;
+  let parts = [];
+  if (_gpGuideMode === 'raid') {
+    if (raid != null) parts.push(`R: ${raid.toFixed(1)}%`);
+  } else if (_gpGuideMode === 'mythic_plus') {
+    if (mp != null) parts.push(`M+: ${mp.toFixed(1)}%`);
+  } else {
+    if (raid != null) parts.push(`R: ${raid.toFixed(1)}%`);
+    if (mp   != null) parts.push(`M+: ${mp.toFixed(1)}%`);
+  }
+  return parts.length ? `<div class="mcn-item-pop">${parts.join(' &middot; ')}</div>` : '';
+}
+
 // Merge BIS items + all rated trinkets into one synthesis-sorted flat list.
 function _gpMergeTrinketBis(bis, trinketItems) {
   const itemMap = new Map();
@@ -2550,12 +2567,13 @@ function _gpMergeTrinketBis(bis, trinketItems) {
       if (r.is_bis) ex.is_bis = true;
       if (r.is_equipped) ex.is_equipped = true;
       if (!ex.target_ilvl && r.target_ilvl) ex.target_ilvl = r.target_ilvl;
+      if (!ex.popularity && r.popularity) ex.popularity = r.popularity;
     } else {
       itemMap.set(bid, {
         blizzard_item_id: bid, name: r.item_name || '', icon_url: r.icon_url || '',
         ratings: {}, content_types: [], sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
-        target_ilvl: r.target_ilvl || null,
+        target_ilvl: r.target_ilvl || null, popularity: r.popularity || null,
       });
     }
   }
@@ -2603,6 +2621,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
     const srcSub   = _gpRenderSourceSub(item.sources || []);
+    const popSub   = _gpRenderPopularity(item.popularity || null);
     const itemBisCts = itemOriginCts[bid] || {};
 
     const guideCells = guideCols.map(gc => {
@@ -2626,7 +2645,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
         onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
     return `<tr class="mcn-ut__item-row"${startOpen ? '' : ' hidden'} data-group="${_gpEsc(groupKey)}">
       <td class="mcn-ut__item-cell">
-        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
+        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}${popSub}
       </td>
       ${guideCells}
       <td class="mcn-bis-grid__action">
@@ -2683,6 +2702,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
         icon_url: r.icon_url || '', sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, ratings: {},
+        popularity: r.popularity || null,
       });
     }
   }
@@ -2718,6 +2738,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
           sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
           is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
           target_ilvl: it.target_ilvl || null, ratings: {},
+          popularity: it.popularity || null,
         };
       });
       tbody += _gpRenderUtGroup(key, label, normItems, dbSlot,
