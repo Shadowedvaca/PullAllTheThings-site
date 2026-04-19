@@ -199,7 +199,7 @@ percentages (`34.1%`) alongside letter grades (`S`) in the same grid column crea
 confusing mixed-signal display. Converting to letter grades makes the grid scannable and
 puts all sources on the same visual language.
 
-### Analysis Step (Do Before Coding)
+### Analysis Step (Do Before Coding)What happ
 
 Before hardcoding any thresholds, pull data for 3–5 specs and compare:
 
