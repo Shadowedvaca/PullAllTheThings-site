@@ -1885,23 +1885,20 @@ function _gpRenderCenterPanel(data) {
     </div>`;
 
   area.innerHTML = `
-    <div id="mcn-gp-slot-detail" hidden></div>
     <div class="mcn-detail-area__heading">
       Gear Plan
-      <button id="mcn-gp-tour-btn" class="mcn-gp-tour-btn" type="button" title="Take a guided tour of the gear plan">?</button>
-      <a href="#mcn-gp-faq" class="mcn-gp-faq-link">FAQ &#x2193;</a>
-    </div>
-    <div class="mcn-gp-sections">
-      ${equippedSection}
-      ${bisSection}
-    </div>
-    <div class="mcn-gp-guide-mode-wrap">
-      <span class="mcn-gp-guide-mode-label">Guide Mode</span>
-      <div class="mcn-guide-mode-bar">
+      <div class="mcn-gp-mode-bar-inline">
         <button class="mcn-guide-mode-btn${_gpGuideMode === 'overall' ? ' is-active' : ''}" type="button" data-mode="overall" onclick="mcnGpSetGuideMode('overall')">Overall</button>
         <button class="mcn-guide-mode-btn${_gpGuideMode === 'raid' ? ' is-active' : ''}" type="button" data-mode="raid" onclick="mcnGpSetGuideMode('raid')">Raid</button>
         <button class="mcn-guide-mode-btn${_gpGuideMode === 'mythic_plus' ? ' is-active' : ''}" type="button" data-mode="mythic_plus" onclick="mcnGpSetGuideMode('mythic_plus')">M+</button>
       </div>
+      <button id="mcn-gp-tour-btn" class="mcn-gp-tour-btn" type="button" title="Take a guided tour of the gear plan">?</button>
+      <a href="#mcn-gp-faq" class="mcn-gp-faq-link">FAQ &#x2193;</a>
+    </div>
+    <div id="mcn-gp-slot-detail" hidden></div>
+    <div class="mcn-gp-sections">
+      ${equippedSection}
+      ${bisSection}
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
     ${_gpRenderGearTable(data.slots, data.track_colors)}
@@ -2513,7 +2510,13 @@ function _gpRenderSourceSub(sources) {
       continue;
     }
     if (itype === 'crafted') {
-      if (!seen.has('__crafted')) { seen.add('__crafted'); lines.push('Crafted'); }
+      if (!seen.has('__crafted')) {
+        seen.add('__crafted');
+        const prof = s.profession_name || 'Crafted';
+        const q = s.item_name ? encodeURIComponent(s.item_name) : '';
+        const href = q ? `/crafting-corner?q=${q}` : '/crafting-corner';
+        lines.push(`<a href="${href}" class="gp-source-link" target="_blank" rel="noopener noreferrer">${_gpEsc(prof)}</a>`);
+      }
       continue;
     }
     const inst = s.instance_name || s.source_instance || '';
@@ -2703,14 +2706,18 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
       { key: 'crafted', label: 'Crafted'      },
     ];
     for (const { key, label } of avSections) {
-      const fallbackSrcs = key === 'crafted' ? [{instance_type: 'crafted'}] : [];
-      const normItems = (avGroups[key] || []).map(it => ({
-        blizzard_item_id: it.blizzard_item_id, name: it.name || '',
-        icon_url: it.icon_url || '',
-        sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
-        is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
-        target_ilvl: it.target_ilvl || null, ratings: {},
-      }));
+      const normItems = (avGroups[key] || []).map(it => {
+        const fallbackSrcs = key === 'crafted'
+          ? [{instance_type: 'crafted', profession_name: it.profession_name || '', item_name: it.name || ''}]
+          : [];
+        return {
+          blizzard_item_id: it.blizzard_item_id, name: it.name || '',
+          icon_url: it.icon_url || '',
+          sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
+          is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
+          target_ilvl: it.target_ilvl || null, ratings: {},
+        };
+      });
       tbody += _gpRenderUtGroup(key, label, normItems, dbSlot,
         guideCols, itemOriginCts, guideCts, isTrinket, colCount);
     }

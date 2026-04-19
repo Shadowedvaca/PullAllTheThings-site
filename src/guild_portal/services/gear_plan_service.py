@@ -1876,6 +1876,28 @@ async def get_available_items(
         dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat_filter)
         crafted_items = _filter_by_primary_stat(crafted_items, primary_stat_filter)
 
+    # Attach profession_name to crafted items for UI display + Crafting Corner link
+    crafted_bids_list = [it["blizzard_item_id"] for it in crafted_items]
+    if crafted_bids_list:
+        prof_rows = await conn.fetch(
+            """
+            SELECT DISTINCT ON (ir.blizzard_item_id)
+                   ir.blizzard_item_id,
+                   p.name AS profession_name
+              FROM enrichment.item_recipes ir
+              JOIN guild_identity.recipes r ON r.id = ir.recipe_id
+              JOIN guild_identity.professions p ON p.id = r.profession_id
+             WHERE ir.blizzard_item_id = ANY($1::int[])
+             ORDER BY ir.blizzard_item_id, ir.confidence DESC NULLS LAST
+            """,
+            crafted_bids_list,
+        )
+        prof_by_bid: dict[int, str] = {
+            r["blizzard_item_id"]: r["profession_name"] for r in prof_rows
+        }
+        for it in crafted_items:
+            it["profession_name"] = prof_by_bid.get(it["blizzard_item_id"])
+
     # Strip primary_stat from items before returning (internal filter field)
     for item in raid_items + dungeon_items + crafted_items:
         item.pop("primary_stat", None)
