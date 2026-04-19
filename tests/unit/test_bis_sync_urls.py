@@ -116,20 +116,21 @@ class TestIvBaseUrl:
 
 
 class TestBuildUrlArchon:
-    def test_archon_overall(self):
-        url = _build_url("ugg", "Death Knight", "Blood", "san-layn", "overall", "_")
-        assert url == "https://u.gg/wow/blood/death_knight/gear?hero=san-layn"
+    def test_archon_overall_returns_none(self):
+        # u.gg has no overall page
+        url = _build_url("ugg", "Death Knight", "Blood", "", "overall", "_")
+        assert url is None
 
     def test_archon_raid(self):
-        url = _build_url("ugg", "Death Knight", "Blood", "san-layn", "raid", "_")
-        assert url == "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=raid"
+        url = _build_url("ugg", "Death Knight", "Blood", "", "raid", "_")
+        assert url == "https://u.gg/wow/blood/death_knight/gear/raid"
 
     def test_archon_mythic_plus(self):
-        url = _build_url("ugg", "Death Knight", "Blood", "san-layn", "mythic_plus", "_")
-        assert url == "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=mythicdungeon"
+        url = _build_url("ugg", "Death Knight", "Blood", "", "mythic_plus", "_")
+        assert url == "https://u.gg/wow/blood/death_knight/gear"
 
     def test_archon_slug_separator_applied(self):
-        url = _build_url("ugg", "Demon Hunter", "Havoc", "aldrachi-reaver", "overall", "_")
+        url = _build_url("ugg", "Demon Hunter", "Havoc", "", "mythic_plus", "_")
         assert "demon_hunter" in url
         assert "havoc" in url
 
@@ -251,17 +252,14 @@ class TestUggUrlToSpecKey:
 
 
 class TestUggUrlToSection:
-    def test_raid_role(self):
-        assert _ugg_url_to_section("https://u.gg/wow/blood/death_knight/gear?hero=x&role=raid") == "raid"
+    def test_raid_path(self):
+        assert _ugg_url_to_section("https://u.gg/wow/blood/death_knight/gear/raid") == "raid"
 
-    def test_mythic_plus_role(self):
-        assert _ugg_url_to_section("https://u.gg/wow/frost/mage/gear?role=mythicdungeon") == "mythic"
+    def test_base_gear_url_is_mythic(self):
+        assert _ugg_url_to_section("https://u.gg/wow/frost/mage/gear") == "mythic"
 
-    def test_no_role_defaults_single_target(self):
-        assert _ugg_url_to_section("https://u.gg/wow/frost/mage/gear?hero=x") == "single_target"
-
-    def test_empty_url_defaults_single_target(self):
-        assert _ugg_url_to_section("") == "single_target"
+    def test_empty_url_defaults_mythic(self):
+        assert _ugg_url_to_section("") == "mythic"
 
 
 # ---------------------------------------------------------------------------
@@ -309,7 +307,7 @@ class TestParseArchonSsr:
             {"weapon1": _make_items_table_entry(237846)},
             affixes_weapon_id=193716,
         )
-        url = "https://u.gg/wow/blood/death_knight/gear?hero=san-layn&role=raid"
+        url = "https://u.gg/wow/blood/death_knight/gear/raid"
         slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("main_hand") == 237846, "Should use raid[all] items_table, not affixes"
@@ -319,17 +317,17 @@ class TestParseArchonSsr:
             "mythic", "Mage-Frost",
             {"head": _make_items_table_entry(249970)},
         )
-        url = "https://u.gg/wow/frost/mage/gear?role=mythicdungeon"
+        url = "https://u.gg/wow/frost/mage/gear"
         slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("head") == 249970
 
-    def test_overall_url_uses_single_target_section(self):
+    def test_base_gear_url_uses_mythic_section(self):
         ssr = _make_ssr_with_section(
-            "single_target", "Mage-Arcane",
+            "mythic", "Mage-Arcane",
             {"head": _make_items_table_entry(249970)},
         )
-        url = "https://u.gg/wow/arcane/mage/gear?hero=x"
+        url = "https://u.gg/wow/arcane/mage/gear"
         slots = _parse_ugg_ssr(ssr, url)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("head") == 249970

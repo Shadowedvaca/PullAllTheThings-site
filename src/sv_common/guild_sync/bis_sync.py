@@ -132,7 +132,7 @@ _HEADERS = {
 async def discover_targets(pool: asyncpg.Pool) -> dict:
     """Auto-generate scrape targets for all active spec × source combos.
 
-    u.gg: one target per spec × hero talent (URLs embed the HT slug).
+    u.gg: one target per spec with hero_talent_id=NULL (raid + M+ path-based URLs).
     Wowhead + Icy Veins: one target per spec with hero_talent_id=NULL.
       Wowhead's BIS page is not HT-specific — the same page/URL covers all builds.
       IV pages are also not HT-specific and are JS-rendered (extraction stubbed).
@@ -191,7 +191,35 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                 spec_name = spec["spec_name"]
                 role_name = spec["role_name"] or "dps"
 
-                if origin in ("icy_veins", "wowhead"):
+                if origin == "ugg":
+                    # u.gg: one target per spec, no hero talent split.
+                    # Path-based URLs (/gear/raid, /gear) — no overall content type.
+                    if content_type == "overall":
+                        continue
+                    url = _build_url(origin, class_name, spec_name, "", content_type,
+                                     source["slug_separator"])
+                    if not url:
+                        continue
+                    technique = _TECHNIQUE_ORDER.get(origin, ["json_embed"])[0]
+                    expected += 1
+                    result = await conn.fetchrow(
+                        """
+                        INSERT INTO config.bis_scrape_targets
+                            (source_id, spec_id, hero_talent_id, content_type,
+                             url, preferred_technique, status)
+                        VALUES ($1, $2, NULL, $3, $4, $5, 'pending')
+                        ON CONFLICT (source_id, spec_id, url)
+                        DO NOTHING
+                        RETURNING id
+                        """,
+                        source_id, spec_id, content_type, url, technique,
+                    )
+                    if result:
+                        inserted += 1
+                    else:
+                        skipped += 1
+
+                elif origin in ("icy_veins", "wowhead"):
                     # These sources have one page per spec — no HT variation in the URL.
                     # Wowhead: one combined BIS page per spec; sections toggle raid/M+/overall.
                     # IV: one page per spec, all content toggled client-side (extraction stubbed).
@@ -200,7 +228,6 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                         url = _iv_base_url(class_name, spec_name, role_name)
                         technique = "html_parse"
                     else:
-                        # Wowhead URL ignores ht_slug entirely
                         url = _build_url(origin, class_name, spec_name, "", content_type,
                                          source["slug_separator"])
                         technique = "wh_gatherer"
@@ -379,13 +406,12 @@ def _build_url(
     spec = _slug(spec_name,  slug_sep)
 
     if origin == "ugg":
-        base = f"https://u.gg/wow/{spec}/{cls}/gear?hero={hero_slug}"
         if content_type == "raid":
-            return base + "&role=raid"
+            return f"https://u.gg/wow/{spec}/{cls}/gear/raid"
         elif content_type == "mythic_plus":
-            return base + "&role=mythicdungeon"
+            return f"https://u.gg/wow/{spec}/{cls}/gear"
         else:
-            return base
+            return None  # u.gg has no overall page
 
     elif origin == "wowhead":
         # Wowhead always uses hyphens regardless of guide_sites separator.
@@ -822,7 +848,7 @@ async def _extract_ugg(url: str) -> tuple[list[SimcSlot], Optional[str]]:
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
     """Attempt to derive a stats2.u.gg JSON URL from a u.gg page URL.
 
-    Pattern: https://u.gg/wow/{spec}/{class}/gear?hero={hero}&role={role}
+    Pattern: https://u.gg/wow/{spec}/{class}/gear[/raid]
     → https://stats2.u.gg/wow/builds/v29/all/{Class}/{Class}_{spec}_itemsTable.json
 
     u.gg uses underscore slugs (demon_hunter), stats2 expects PascalCase (DemonHunter).
@@ -838,8 +864,8 @@ def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
 def _ugg_url_to_spec_key(url: str) -> str:
     """Derive u.gg's internal spec key from the page URL.
 
-    https://u.gg/wow/blood/death_knight/gear → "DeathKnight-Blood"
-    https://u.gg/wow/frost/mage/gear          → "Mage-Frost"
+    https://u.gg/wow/blood/death_knight/gear/raid → "DeathKnight-Blood"
+    https://u.gg/wow/frost/mage/gear              → "Mage-Frost"
     """
     m = re.search(r"u\.gg/wow/([^/]+)/([^/]+)/gear", url)
     if not m:
@@ -850,17 +876,14 @@ def _ugg_url_to_spec_key(url: str) -> str:
 
 
 def _ugg_url_to_section(url: str) -> str:
-    """Map the role= query param to the correct SSR data section.
+    """Map the u.gg URL path to the correct SSR data section.
 
-    role=raid         → "raid"
-    role=mythicdungeon→ "mythic"
-    (no role)         → "single_target"
+    /gear/raid → "raid"
+    /gear      → "mythic"  (base gear page is M+)
     """
-    if "role=raid" in url:
+    if "/gear/raid" in url:
         return "raid"
-    if "role=mythicdungeon" in url:
-        return "mythic"
-    return "single_target"
+    return "mythic"
 
 
 def _slug_to_pascal(slug: str) -> str:
