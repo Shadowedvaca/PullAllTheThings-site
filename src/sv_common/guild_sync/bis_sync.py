@@ -105,6 +105,7 @@ _TECHNIQUE_ORDER: dict[str, list[str]] = {
     "ugg":       ["json_embed"],
     "wowhead":   ["wh_gatherer"],
     "icy_veins": ["html_parse"],  # STUB — html_parse returns [] for IV; see _extract_icy_veins
+    "method":    ["html_parse_method"],
     "manual":    ["manual"],
 }
 
@@ -228,14 +229,18 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                     else:
                         skipped += 1
 
-                elif origin in ("icy_veins", "wowhead"):
+                elif origin in ("icy_veins", "wowhead", "method"):
                     # These sources have one page per spec — no HT variation in the URL.
-                    # Wowhead: one combined BIS page per spec; sections toggle raid/M+/overall.
+                    # Wowhead/Method: one combined BIS page per spec; sections differ by content_type.
                     # IV: one page per spec, all content toggled client-side (extraction stubbed).
-                    # Both get hero_talent_id=NULL ("applies to all builds").
+                    # All get hero_talent_id=NULL ("applies to all builds").
                     if origin == "icy_veins":
                         url = _iv_base_url(class_name, spec_name, role_name)
                         technique = "html_parse"
+                    elif origin == "method":
+                        url = _build_url(origin, class_name, spec_name, "", content_type,
+                                         source["slug_separator"])
+                        technique = "html_parse_method"
                     else:
                         url = _build_url(origin, class_name, spec_name, "", content_type,
                                          source["slug_separator"])
@@ -430,9 +435,15 @@ def _build_url(
         spec_wh = _slug(spec_name,  "-")
         return f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear#bis-gear"
 
-    # Icy Veins — targets come from discover_iv_areas (which uses _iv_base_url with
-    # the real role name).  discover_targets skips icy_veins, so this should never
-    # be reached; return None to surface any accidental call clearly.
+    elif origin == "method":
+        # Method always uses hyphens. All three content types (overall/raid/mythic_plus)
+        # are on the same /gearing page — parser selects the correct table by index.
+        cls_m  = _slug(class_name, "-")
+        spec_m = _slug(spec_name,  "-")
+        return f"https://www.method.gg/guides/{spec_m}-{cls_m}/gearing"
+
+    # Icy Veins — targets come from _iv_base_url via discover_targets.
+    # Other unknown origins fall through to None.
 
     return None
 
@@ -782,6 +793,9 @@ async def _extract(
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
             return slots, [], None, None
+        elif technique == "html_parse_method":
+            slots, raw_content = await _extract_method(url, content_type)
+            return slots, [], None, raw_content
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
             return [], [], "manual technique — use the API to enter items", None
@@ -1486,6 +1500,8 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
             slots = _parse_ugg_html(html, url)
         elif source == "wowhead":
             slots, _ = _parse_wowhead_html(html, url, content_type)
+        elif source == "method":
+            slots = _parse_method_html(html, url, content_type)
         else:
             continue  # icy_veins and others not yet parseable
 
@@ -1697,6 +1713,156 @@ async def _extract_wowhead(
 
     slots, trinket_ratings = _parse_wowhead_html(html, url, content_type)
     return slots, trinket_ratings, html
+
+
+# ---------------------------------------------------------------------------
+# Method.gg extractor  (html_parse_method)
+# ---------------------------------------------------------------------------
+
+_METHOD_TABLE_INDEX: dict[str, int] = {
+    "overall":     0,
+    "raid":        1,
+    "mythic_plus": 2,
+}
+
+_METHOD_SLOT_MAP: dict[str, str | None] = {
+    "head":       "head",
+    "neck":       "neck",
+    "shoulders":  "shoulder",
+    "back":       "back",
+    "chest":      "chest",
+    "wrists":     "wrist",
+    "hands":      "hands",
+    "waist":      "waist",
+    "legs":       "legs",
+    "feet":       "feet",
+    "ring 1":     "ring_1",
+    "ring 2":     "ring_2",
+    "ring":       None,      # positional — handled by ring_count
+    "trinket 1":  "trinket_1",
+    "trinket 2":  "trinket_2",
+    "trinket":    None,      # positional — handled by trinket_count
+    "main hand":  "main_hand",
+    "main-hand":  "main_hand",
+    "off hand":   "off_hand",
+    "off-hand":   "off_hand",
+}
+
+
+def _parse_method_html(
+    html: str, url: str = "", content_type: str = "overall"
+) -> list[SimcSlot]:
+    """Parse Method.gg gearing page HTML and extract BIS items.
+
+    Pure function — no network calls.  Called by _extract_method() during live
+    scraping and by rebuild_bis_from_landing() to re-parse stored HTML.
+
+    Method publishes three tables on a single /gearing page:
+      tables[0] = Overall, tables[1] = Raid, tables[2] = Mythic+
+
+    Each row: td[0]=slot label, td[1]=Wowhead link with item=NNNNN in href,
+              td[2]=source text (boss/dungeon name).
+
+    Item IDs and bonus IDs are extracted from the Wowhead href embedded in td[1].
+
+    Returns a list of SimcSlot (empty list on parse failure).
+    """
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        logger.warning("_parse_method_html: BeautifulSoup not available")
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+    tables = soup.find_all("table")
+
+    idx = _METHOD_TABLE_INDEX.get(content_type, 0)
+    if idx >= len(tables):
+        logger.warning(
+            "_parse_method_html: expected table index %d but only %d tables found (%s)",
+            idx, len(tables), url,
+        )
+        return []
+
+    table = tables[idx]
+    results: list[SimcSlot] = []
+    ring_count = 0
+    trinket_count = 0
+
+    for row in table.find_all("tr")[1:]:  # skip header row
+        cells = row.find_all("td")
+        if len(cells) < 2:
+            continue
+
+        raw_slot = cells[0].get_text(strip=True).lower()
+        link = cells[1].find("a", href=True)
+        if not link:
+            continue
+
+        m = re.search(r"item=(\d+)", link["href"])
+        if not m:
+            continue
+        item_id = int(m.group(1))
+
+        bonus_ids: list[int] = []
+        bm = re.search(r"bonus=([0-9:]+)", link["href"])
+        if bm:
+            bonus_ids = [int(b) for b in bm.group(1).split(":") if b]
+
+        slot_key = _METHOD_SLOT_MAP.get(raw_slot)
+        if slot_key is None and raw_slot not in _METHOD_SLOT_MAP:
+            # Unknown slot label — try partial match for robustness
+            if "ring" in raw_slot:
+                slot_key = None  # fall through to positional
+            elif "trinket" in raw_slot:
+                slot_key = None  # fall through to positional
+            else:
+                logger.debug("_parse_method_html: unrecognised slot %r, skipping", raw_slot)
+                continue
+
+        # Positional handling for paired slots
+        if slot_key is None:
+            if "ring" in raw_slot:
+                ring_count += 1
+                slot_key = "ring_1" if ring_count == 1 else "ring_2"
+                if ring_count > 2:
+                    continue
+            elif "trinket" in raw_slot:
+                trinket_count += 1
+                slot_key = "trinket_1" if trinket_count == 1 else "trinket_2"
+                if trinket_count > 2:
+                    continue
+            else:
+                continue
+
+        results.append(SimcSlot(
+            slot=slot_key,
+            blizzard_item_id=item_id,
+            bonus_ids=bonus_ids,
+            enchant_id=None,
+            gem_ids=[],
+            quality_track=None,
+        ))
+
+    return results
+
+
+async def _extract_method(
+    url: str, content_type: str = "overall"
+) -> tuple[list[SimcSlot], Optional[str]]:
+    """Fetch Method.gg gearing page and extract BIS items.
+
+    Returns (slots, raw_html).  raw_html written to landing.bis_scrape_raw.
+    Parsing is delegated to _parse_method_html() for reuse in rebuild_bis_from_landing().
+    """
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
+    ) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        html = response.text
+
+    return _parse_method_html(html, url, content_type), html
 
 
 def _wh_slots_from_section(
