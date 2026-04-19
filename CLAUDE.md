@@ -247,7 +247,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — COMPLETE** — shipped as `prod-v0.20.0` / `prod-v0.20.1`. All phases A–H deployed to prod. Feature branch `feature/gear-plan-schema-overhaul` merged to main. Patch `prod-v0.20.2`: migrated `gear_needs_routes.py` from `guild_identity.item_sources` / `v_tier_piece_sources` to `enrichment.item_sources` / `viz.tier_piece_sources` — fixes duplicate encounters in Roster Needs.
+- **Gear Plan Schema Overhaul — COMPLETE** — shipped as `prod-v0.20.0` / `prod-v0.20.1`. All phases A–H deployed to prod. Feature branch `feature/gear-plan-schema-overhaul` merged to main. Patch `prod-v0.20.2`: migrated `gear_needs_routes.py` from `guild_identity.item_sources` / `v_tier_piece_sources` to `enrichment.item_sources` / `viz.tier_piece_sources` — fixes duplicate encounters in Roster Needs. **prod-v0.20.4**: gear plan UI polish (guide mode bar inline on heading, crafted items link to Crafting Corner, wowhead trinket ratings always use overall). **prod-v0.20.5**: gear plan popularity column (Pop. %) — last column before action buttons, changes with guide mode, Overall = weighted combined; paired-slot aggregation for rings/trinkets; tier/catalyst items show boss sources in BIS recs and available items.
   - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. Dual-write added to all 5 ingest paths.
   - **Phase B** (migration 0105): enrichment schema tables + stored procedures. 5 tables, 2 helpers, 8 sprocs.
   - **Phase C** (migration 0106): viz schema views (`viz.slot_items`, `viz.tier_piece_sources`, `viz.crafters_by_item`, `viz.bis_recommendations`). 51 unit tests.
@@ -260,7 +260,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
 - **Last migration:** 0146 (on prod and dev)
-- **Last prod tag:** `prod-v0.20.3`
+- **Last prod tag:** `prod-v0.20.5`
 - **Active branch:** `main` (feature branch merged and deleted)
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
