@@ -2035,9 +2035,12 @@ async def method_sections(
             """
         ) if include_gaps else []
 
+    import json as _json
+
     data = []
     for r in section_rows:
-        overrides = r["overrides"] or []
+        raw = r["overrides"]
+        overrides = _json.loads(raw) if isinstance(raw, str) else (raw or [])
         override_for = [
             o["content_type"] for o in overrides
             if o["section_heading"] == r["section_heading"]
