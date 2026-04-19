@@ -1895,6 +1895,14 @@ function _gpRenderCenterPanel(data) {
       ${equippedSection}
       ${bisSection}
     </div>
+    <div class="mcn-gp-guide-mode-wrap">
+      <span class="mcn-gp-guide-mode-label">Guide Mode</span>
+      <div class="mcn-guide-mode-bar">
+        <button class="mcn-guide-mode-btn${_gpGuideMode === 'overall' ? ' is-active' : ''}" type="button" data-mode="overall" onclick="mcnGpSetGuideMode('overall')">Overall</button>
+        <button class="mcn-guide-mode-btn${_gpGuideMode === 'raid' ? ' is-active' : ''}" type="button" data-mode="raid" onclick="mcnGpSetGuideMode('raid')">Raid</button>
+        <button class="mcn-guide-mode-btn${_gpGuideMode === 'mythic_plus' ? ' is-active' : ''}" type="button" data-mode="mythic_plus" onclick="mcnGpSetGuideMode('mythic_plus')">M+</button>
+      </div>
+    </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
     ${_gpRenderGearTable(data.slots, data.track_colors)}
     ${_gpRenderFaq()}
@@ -2504,6 +2512,10 @@ function _gpRenderSourceSub(sources) {
       if (!seen.has('__catalyst')) { seen.add('__catalyst'); lines.push('Catalyst'); }
       continue;
     }
+    if (itype === 'crafted') {
+      if (!seen.has('__crafted')) { seen.add('__crafted'); lines.push('Crafted'); }
+      continue;
+    }
     const inst = s.instance_name || s.source_instance || '';
     const boss = s.encounter_name || s.source_name || '';
     if (!inst && !boss) continue;
@@ -2566,11 +2578,12 @@ function _gpMergeTrinketBis(bis, trinketItems) {
 // Render one group: header row + item rows for the unified table tbody.
 function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginCts, guideCts, isTrinket, colCount) {
   const chevron = `<span class="mcn-ut__chevron">&#9660;</span>`;
+  const startOpen = groupKey === 'bis';
   if (!items.length) {
-    return `<tr class="mcn-ut__group-hdr mcn-ut__group-hdr--empty is-open" data-group="${_gpEsc(groupKey)}">
+    return `<tr class="mcn-ut__group-hdr mcn-ut__group-hdr--empty${startOpen ? ' is-open' : ''}" data-group="${_gpEsc(groupKey)}">
       <td colspan="${colCount}">${chevron} ${_gpEsc(label)} <span class="mcn-ut__count">0</span></td></tr>`;
   }
-  const hdrRow = `<tr class="mcn-ut__group-hdr is-open" data-group="${_gpEsc(groupKey)}"
+  const hdrRow = `<tr class="mcn-ut__group-hdr${startOpen ? ' is-open' : ''}" data-group="${_gpEsc(groupKey)}"
     onclick="_gpToggleGroup('${_gpEsc(groupKey)}',this.closest('table'))">
     <td colspan="${colCount}">${chevron} ${_gpEsc(label)} <span class="mcn-ut__count">${items.length}</span></td></tr>`;
 
@@ -2592,11 +2605,11 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
       if (isTrinket) {
         const rating = _gpTrinketRating(item.ratings, gc.origin);
         const letter = rating?.tier || '';
-        const letterHtml = letter
+        const letterInner = letter
           ? `<span class="gp-tier-badge gp-tier-${letter.toLowerCase()}">${letter}</span>` : '';
-        const checkHtml = hasCheck ? `<span class="mcn-bis-check">&#10003;</span>` : '';
+        const checkInner = hasCheck ? `<span class="mcn-bis-check">&#10003;</span>` : '';
         return (letter || hasCheck)
-          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">${letterHtml}${checkHtml}</td>`
+          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes"><span class="gp-guide-cell"><span class="gp-guide-letter">${letterInner}</span><span class="gp-guide-check">${checkInner}</span></span></td>`
           : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
       }
       return hasCheck
@@ -2606,7 +2619,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
 
     const excludeBtn = `<button class="mcn-exclude-btn" type="button" title="Exclude"
         onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
-    return `<tr class="mcn-ut__item-row" data-group="${_gpEsc(groupKey)}">
+    return `<tr class="mcn-ut__item-row"${startOpen ? '' : ' hidden'} data-group="${_gpEsc(groupKey)}">
       <td class="mcn-ut__item-cell">
         <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
       </td>
@@ -2690,9 +2703,11 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
       { key: 'crafted', label: 'Crafted'      },
     ];
     for (const { key, label } of avSections) {
+      const fallbackSrcs = key === 'crafted' ? [{instance_type: 'crafted'}] : [];
       const normItems = (avGroups[key] || []).map(it => ({
         blizzard_item_id: it.blizzard_item_id, name: it.name || '',
-        icon_url: it.icon_url || '', sources: it.sources || [],
+        icon_url: it.icon_url || '',
+        sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
         is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
         target_ilvl: it.target_ilvl || null, ratings: {},
       }));
