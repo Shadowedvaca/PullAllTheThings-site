@@ -723,10 +723,7 @@ async function syncGaps() {
         const r = await fetch('/api/v1/admin/bis/sync-gaps', { method: 'POST' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
-        const msg = `Gap fill complete — ${d.targets_run} targets synced, ${d.items_found} items found, ${d.errors} errors.`;
-        setStatus(msg, d.errors > 0 ? 'error' : 'success');
-        await loadMatrix();
-        if (_targetsVisible) loadTargets();
+        setStatus('Gap fill started in background — refresh the matrix in a few minutes to see results.', 'success');
     } catch (err) {
         setStatus('Gap fill failed: ' + err.message, 'error');
     } finally {
