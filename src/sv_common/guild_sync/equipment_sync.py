@@ -147,35 +147,15 @@ async def _sync_one_character(
     async with pool.acquire() as conn:
         async with conn.transaction():
             for slot_data in slots:
-                # Stub wow_items row so icon enrichment can pick it up later.
-                # ON CONFLICT DO NOTHING — never overwrite richer existing data.
-                await conn.execute(
-                    """
-                    INSERT INTO guild_identity.wow_items
-                        (blizzard_item_id, name, slot_type)
-                    VALUES ($1, $2, 'other')
-                    ON CONFLICT (blizzard_item_id) DO NOTHING
-                    """,
-                    slot_data.blizzard_item_id, slot_data.item_name,
-                )
-
-                # Resolve the wow_items PK so character_equipment.item_id is set.
-                item_row = await conn.fetchrow(
-                    "SELECT id FROM guild_identity.wow_items WHERE blizzard_item_id = $1",
-                    slot_data.blizzard_item_id,
-                )
-                wow_item_id = item_row["id"] if item_row else None
-
                 await conn.execute(
                     """
                     INSERT INTO guild_identity.character_equipment
-                        (character_id, slot, blizzard_item_id, item_id, item_name,
+                        (character_id, slot, blizzard_item_id, item_name,
                          item_level, quality_track, bonus_ids, enchant_id,
                          gem_ids, synced_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                     ON CONFLICT (character_id, slot) DO UPDATE
                         SET blizzard_item_id = EXCLUDED.blizzard_item_id,
-                            item_id          = EXCLUDED.item_id,
                             item_name        = EXCLUDED.item_name,
                             item_level       = EXCLUDED.item_level,
                             quality_track    = EXCLUDED.quality_track,
@@ -187,7 +167,6 @@ async def _sync_one_character(
                     char_id,
                     slot_data.slot,
                     slot_data.blizzard_item_id,
-                    wow_item_id,
                     slot_data.item_name,
                     slot_data.item_level,
                     slot_data.quality_track,

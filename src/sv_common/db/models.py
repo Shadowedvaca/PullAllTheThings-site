@@ -1576,46 +1576,22 @@ class VoiceAttendanceLog(Base):
 # ---------------------------------------------------------------------------
 
 
-class WowItem(Base):
-    """Cached WoW item metadata sourced from the Wowhead tooltip API."""
-
-    __tablename__ = "wow_items"
-    __table_args__ = {"schema": "guild_identity"}
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    blizzard_item_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    icon_url: Mapped[Optional[str]] = mapped_column(String(500))
-    slot_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    armor_type: Mapped[Optional[str]] = mapped_column(String(20))
-    weapon_type: Mapped[Optional[str]] = mapped_column(String(30))
-    wowhead_tooltip_html: Mapped[Optional[str]] = mapped_column(Text)
-    quality_track: Mapped[Optional[str]] = mapped_column(String(1))
-    fetched_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.now()
-    )
-
-
 class ItemSource(Base):
     """Boss / dungeon / world boss source for a WoW item."""
 
     __tablename__ = "item_sources"
     __table_args__ = (
-        UniqueConstraint("item_id", "instance_type", "encounter_name", name="uq_item_source"),
+        UniqueConstraint("blizzard_item_id", "instance_type", "encounter_name", name="uq_item_source_bid"),
         {"schema": "guild_identity"},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    item_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"), nullable=False
-    )
+    blizzard_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
     instance_type: Mapped[str] = mapped_column(String(20), nullable=False)
     encounter_name: Mapped[str] = mapped_column(String(100), nullable=False)
     instance_name: Mapped[Optional[str]] = mapped_column(String(100))
     blizzard_encounter_id: Mapped[Optional[int]] = mapped_column(Integer)
     blizzard_instance_id: Mapped[Optional[int]] = mapped_column(Integer)
-
-    item: Mapped["WowItem"] = relationship()
 
 
 class HeroTalent(Base):
@@ -1670,9 +1646,6 @@ class CharacterEquipment(Base):
     )
     slot: Mapped[str] = mapped_column(String(20), nullable=False)
     blizzard_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    item_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="SET NULL")
-    )
     item_name: Mapped[Optional[str]] = mapped_column(String(200))
     item_level: Mapped[int] = mapped_column(Integer, nullable=False)
     quality_track: Mapped[Optional[str]] = mapped_column(String(1))
@@ -1684,7 +1657,6 @@ class CharacterEquipment(Base):
     )
 
     character: Mapped["WowCharacter"] = relationship()
-    item: Mapped[Optional["WowItem"]] = relationship()
 
 
 class GearPlan(Base):
@@ -1748,16 +1720,12 @@ class GearPlanSlot(Base):
         Integer, ForeignKey("guild_identity.gear_plans.id", ondelete="CASCADE"), nullable=False
     )
     slot: Mapped[str] = mapped_column(String(20), nullable=False)
-    desired_item_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("guild_identity.wow_items.id", ondelete="SET NULL")
-    )
     blizzard_item_id: Mapped[Optional[int]] = mapped_column(Integer)
     item_name: Mapped[Optional[str]] = mapped_column(String(200))
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     notes: Mapped[Optional[str]] = mapped_column(Text)
 
     plan: Mapped["GearPlan"] = relationship(back_populates="slots")
-    desired_item: Mapped[Optional["WowItem"]] = relationship()
 
 
 class BisScrapeTarget(Base):
@@ -1828,11 +1796,7 @@ class TierTokenAttrs(Base):
     __tablename__ = "tier_token_attrs"
     __table_args__ = {"schema": "guild_identity"}
 
-    token_item_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("guild_identity.wow_items.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
+    blizzard_item_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     target_slot: Mapped[str] = mapped_column(String(20), nullable=False)
     armor_type: Mapped[str] = mapped_column(String(20), nullable=False)
     eligible_class_ids: Mapped[list[int]] = mapped_column(
@@ -1846,5 +1810,3 @@ class TierTokenAttrs(Base):
     )
     override_notes: Mapped[Optional[str]] = mapped_column(Text)
     last_processed: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
-
-    item: Mapped["WowItem"] = relationship()

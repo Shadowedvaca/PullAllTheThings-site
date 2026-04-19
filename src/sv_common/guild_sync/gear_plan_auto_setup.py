@@ -93,11 +93,10 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
                 bis_rows = await conn.fetch(
                     """
                     SELECT DISTINCT ON (be.slot)
-                           be.slot, wi.id AS item_id, be.blizzard_item_id,
+                           be.slot, be.blizzard_item_id,
                            i.name AS item_name
                       FROM enrichment.bis_entries be
                       LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
-                      LEFT JOIN guild_identity.wow_items wi ON wi.blizzard_item_id = be.blizzard_item_id
                      WHERE be.source_id = $1
                        AND be.spec_id = $2
                        AND be.hero_talent_id IS NULL
@@ -112,11 +111,11 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
                     await conn.execute(
                         """
                         INSERT INTO guild_identity.gear_plan_slots
-                            (plan_id, slot, desired_item_id, blizzard_item_id, item_name, is_locked)
-                        VALUES ($1, $2, $3, $4, $5, FALSE)
+                            (plan_id, slot, blizzard_item_id, item_name, is_locked)
+                        VALUES ($1, $2, $3, $4, FALSE)
                         ON CONFLICT (plan_id, slot) DO NOTHING
                         """,
-                        plan_id, row["slot"], row["item_id"],
+                        plan_id, row["slot"],
                         row["blizzard_item_id"], row["item_name"],
                     )
                     populated += 1

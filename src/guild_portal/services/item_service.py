@@ -79,34 +79,39 @@ async def get_or_fetch_item(
 ) -> Optional[dict]:
     """Return cached item metadata, fetching from Wowhead if not cached.
 
-    Returns a dict with keys: id, blizzard_item_id, name, icon_url, slot_type,
+    Returns a dict with keys: blizzard_item_id, name, icon_url, slot_type,
     armor_type, weapon_type.  Returns None if the item cannot be resolved.
     """
-    # 1. Check cache
+    # 1. Check cache in enrichment.items (rebuilt by sp_rebuild_items)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, blizzard_item_id, name, icon_url, slot_type, armor_type, weapon_type"
-            "  FROM guild_identity.wow_items"
-            " WHERE blizzard_item_id = $1",
+            """
+            SELECT blizzard_item_id, name, icon_url, slot_type, armor_type
+              FROM enrichment.items
+             WHERE blizzard_item_id = $1
+            """,
             blizzard_item_id,
         )
     if row:
-        return dict(row)
+        return {**dict(row), "weapon_type": None}
 
     # 2. Fetch from Wowhead tooltip API
     data = await _fetch_wowhead_tooltip(blizzard_item_id, http_client)
     if not data:
         return None
 
-    # Phase A: dual-write raw Wowhead payload to landing schema
+    # Write raw Wowhead payload to landing schema for future enrichment runs
     async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO landing.wowhead_tooltips (blizzard_item_id, payload)
-            VALUES ($1, $2::jsonb)
-            """,
-            blizzard_item_id, json.dumps(data),
-        )
+        try:
+            await conn.execute(
+                """
+                INSERT INTO landing.wowhead_tooltips (blizzard_item_id, payload)
+                VALUES ($1, $2::jsonb)
+                """,
+                blizzard_item_id, json.dumps(data),
+            )
+        except Exception:
+            pass  # landing write is best-effort
 
     name = data.get("name", "")
     icon_name = data.get("icon", "")
@@ -114,40 +119,22 @@ async def get_or_fetch_item(
         f"https://wow.zamimg.com/images/wow/icons/medium/{icon_name}.jpg"
         if icon_name else None
     )
-
     tooltip_html = data.get("tooltip")
     slot_type = _slot_from_tooltip(tooltip_html or "")
-
-    # Armor / weapon type from json equip data
     jsonequip = data.get("jsonequip", {}) or {}
     armor_type = jsonequip.get("subclass") if isinstance(jsonequip, dict) else None
     weapon_type = None
     if data.get("weaponinfo"):
         weapon_type = data.get("subclassname")
 
-    # 3. Upsert into cache
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            INSERT INTO guild_identity.wow_items
-                (blizzard_item_id, name, icon_url, slot_type, armor_type,
-                 weapon_type, wowhead_tooltip_html)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (blizzard_item_id) DO UPDATE
-                SET name                 = EXCLUDED.name,
-                    icon_url             = EXCLUDED.icon_url,
-                    slot_type            = EXCLUDED.slot_type,
-                    armor_type           = EXCLUDED.armor_type,
-                    weapon_type          = EXCLUDED.weapon_type,
-                    wowhead_tooltip_html = EXCLUDED.wowhead_tooltip_html,
-                    fetched_at           = NOW()
-            RETURNING id, blizzard_item_id, name, icon_url, slot_type, armor_type, weapon_type
-            """,
-            blizzard_item_id, name, icon_url, slot_type,
-            str(armor_type) if armor_type is not None else None,
-            weapon_type, tooltip_html,
-        )
-    return dict(row) if row else None
+    return {
+        "blizzard_item_id": blizzard_item_id,
+        "name": name,
+        "icon_url": icon_url,
+        "slot_type": slot_type,
+        "armor_type": str(armor_type) if armor_type is not None else None,
+        "weapon_type": weapon_type,
+    }
 
 
 async def _fetch_wowhead_tooltip(
@@ -214,30 +201,34 @@ async def enrich_blizzard_metadata(
 ) -> tuple[int, list[str]]:
     """Fetch armor_type + set-piece marker for tier-slot BIS items from Blizzard.
 
-    Targets wow_items that appear in BIS lists with a tier slot
-    (head/shoulder/chest/hands/legs) and have no wowhead_tooltip_html.
+    Targets enrichment.items that appear in BIS lists with a tier slot
+    (head/shoulder/chest/hands/legs) and have no wowhead_tooltip entry in landing.
     Calls GET /data/wow/item/{id} and:
-      - Sets armor_type from item_subclass (cloth/leather/mail/plate)
-      - Sets wowhead_tooltip_html to '/item-set=ID' marker if item_set present
-        (the view and gear_plan_service detect tier pieces via this pattern)
-      - Also fixes slot_type if still 'other'
+      - Writes the full payload to landing.blizzard_items (sp_rebuild_items derives
+        armor_type and slot_type from it on next rebuild)
+      - Writes a synthetic '/item-set=ID' marker to landing.wowhead_tooltips so
+        process_tier_tokens can detect tier set membership
 
-    Safe to re-run — uses COALESCE so existing data is never overwritten.
+    Safe to re-run — landing.blizzard_items is append-only; landing.wowhead_tooltips
+    insert is best-effort (duplicate rows are harmless).
     Returns (updated_count, errors).
     """
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT DISTINCT wi.blizzard_item_id, wi.slot_type, wi.armor_type
-              FROM guild_identity.wow_items wi
-              JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
-             WHERE wi.wowhead_tooltip_html IS NULL
+            SELECT DISTINCT ei.blizzard_item_id, ei.slot_type, ei.armor_type
+              FROM enrichment.items ei
+              JOIN enrichment.bis_entries be ON be.blizzard_item_id = ei.blizzard_item_id
+             WHERE NOT EXISTS (
+                     SELECT 1 FROM landing.wowhead_tooltips wt
+                      WHERE wt.blizzard_item_id = ei.blizzard_item_id
+                   )
                AND (
-                     wi.slot_type IN ('head','shoulder','chest','hands','legs')
-                     OR wi.slot_type = 'other'
-                     OR wi.armor_type IS NULL
+                     ei.slot_type IN ('head','shoulder','chest','hands','legs')
+                     OR ei.slot_type = 'other'
+                     OR ei.armor_type IS NULL
                )
-             ORDER BY wi.blizzard_item_id
+             ORDER BY ei.blizzard_item_id
             """
         )
 
@@ -293,7 +284,9 @@ async def enrich_blizzard_metadata(
                 if inv_type:
                     slot_type = _BLIZZARD_SLOT_MAP.get(inv_type)
 
-                # Synthetic tooltip marker if item is part of a set
+                # Synthetic tooltip marker if item is part of a set.
+                # Write to landing.wowhead_tooltips so process_tier_tokens can detect
+                # tier set membership (reads wt.payload->>'tooltip' LIKE '%/item-set=%').
                 tooltip_marker = None
                 item_set = data.get("item_set")
                 if item_set:
@@ -301,19 +294,19 @@ async def enrich_blizzard_metadata(
                     tooltip_marker = f"/item-set={set_id}"
 
                 if armor_type or slot_type or tooltip_marker:
-                    async with pool.acquire() as conn:
-                        await conn.execute(
-                            """
-                            UPDATE guild_identity.wow_items
-                               SET armor_type           = COALESCE(armor_type, $2),
-                                   slot_type            = CASE
-                                       WHEN slot_type = 'other' AND $3::text IS NOT NULL
-                                       THEN $3::text ELSE slot_type END,
-                                   wowhead_tooltip_html = COALESCE(wowhead_tooltip_html, $4)
-                             WHERE blizzard_item_id = $1
-                            """,
-                            blizzard_item_id, armor_type, slot_type, tooltip_marker,
-                        )
+                    if tooltip_marker:
+                        try:
+                            async with pool.acquire() as conn:
+                                await conn.execute(
+                                    """
+                                    INSERT INTO landing.wowhead_tooltips (blizzard_item_id, payload)
+                                    VALUES ($1, $2::jsonb)
+                                    """,
+                                    blizzard_item_id,
+                                    json.dumps({"tooltip": tooltip_marker}),
+                                )
+                        except Exception:
+                            pass  # landing write is best-effort
                     async with lock:
                         updated += 1
                         if progress_cb:
@@ -350,13 +343,14 @@ async def enrich_null_icons(
     blizzard_client,
     progress_cb=None,
 ) -> tuple[int, list[str]]:
-    """Fetch icon URLs (and names) from Blizzard Item APIs for items where
-    Wowhead returned no icon data.
+    """Fetch icon URLs from Blizzard Item APIs for enriched items missing icon data.
 
-    Targets rows where icon_url IS NULL — these are items too new for Wowhead
-    to have indexed (common at the start of a new expansion).  Calls:
-      - GET /data/wow/media/item/{id}  → icon_url
-      - GET /data/wow/item/{id}        → name (if name is empty)
+    Targets enrichment.items rows where icon_url IS NULL — these are items too new
+    for Wowhead to have indexed (common at the start of a new expansion).  Calls:
+      - GET /data/wow/media/item/{id}  → written to landing.blizzard_item_icons
+
+    sp_rebuild_items reads landing.blizzard_item_icons for icon_url, so icons
+    become visible in enrichment.items after the next "Enrich & Classify" rebuild.
 
     Uses the same concurrency limit as enrich_unenriched_items.
     progress_cb(updated, error_count) is called after each item if provided.
@@ -366,7 +360,7 @@ async def enrich_null_icons(
         rows = await conn.fetch(
             """
             SELECT blizzard_item_id, name
-              FROM guild_identity.wow_items
+              FROM enrichment.items
              WHERE icon_url IS NULL
              ORDER BY blizzard_item_id
             """
@@ -396,34 +390,23 @@ async def enrich_null_icons(
             try:
                 icon_url = await blizzard_client.get_item_media(blizzard_item_id)
 
-                # Also fetch name from Blizzard if Wowhead left it empty
-                name = existing_name or ""
-                if not name:
-                    item_data = await blizzard_client.get_item(blizzard_item_id)
-                    if item_data:
-                        name = item_data.get("name") or ""
-
-                if icon_url is not None or name:
+                if icon_url is not None:
                     async with pool.acquire() as conn:
                         await conn.execute(
                             """
-                            UPDATE guild_identity.wow_items
-                               SET icon_url = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE icon_url END,
-                                   name     = CASE WHEN (name IS NULL OR name = '') AND $3 != ''
-                                                   THEN $3 ELSE name END
-                             WHERE blizzard_item_id = $1
+                            INSERT INTO landing.blizzard_item_icons
+                                (blizzard_item_id, icon_url)
+                            VALUES ($1, $2)
+                            ON CONFLICT (blizzard_item_id)
+                            DO UPDATE SET icon_url = EXCLUDED.icon_url,
+                                          fetched_at = NOW()
                             """,
-                            blizzard_item_id, icon_url, name,
+                            blizzard_item_id, icon_url,
                         )
-                    if icon_url is not None:
-                        async with lock:
-                            updated += 1
-                            if progress_cb:
-                                progress_cb(updated, len(errors))
-                    else:
-                        async with lock:
-                            if progress_cb:
-                                progress_cb(updated, len(errors))
+                    async with lock:
+                        updated += 1
+                        if progress_cb:
+                            progress_cb(updated, len(errors))
                 else:
                     async with lock:
                         if progress_cb:
@@ -455,13 +438,16 @@ async def enrich_unenriched_items(
     pool: asyncpg.Pool,
     progress_cb=None,
 ) -> tuple[int, list[str]]:
-    """Fetch Wowhead data for wow_items rows missing tooltip data.
+    """Fetch Wowhead data for items missing tooltip data in landing.wowhead_tooltips.
 
     Targets two categories:
-    1. Rows with slot_type='other' — BIS-sourced stubs not yet enriched.
-    2. Rows in item_recipe_links with no wowhead_tooltip_html — crafted item stubs
-       from Sync Crafted Items.  These have slot_type/armor_type from Blizzard API
-       but need a Wowhead tooltip so the quality filter (class="q4") can pass.
+    1. enrichment.items rows with slot_type='other' — stubs not yet enriched.
+    2. Items in item_recipe_links with no landing.wowhead_tooltips entry — crafted
+       item stubs from Sync Crafted Items that need a Wowhead tooltip so the quality
+       filter (class="q4") can pass.
+
+    Writes fetched payloads to landing.wowhead_tooltips.  sp_rebuild_items will
+    derive slot_type/armor_type from the payloads on the next Enrich & Classify run.
 
     Uses up to _WOWHEAD_ENRICH_CONCURRENCY concurrent connections so 4k+ items
     complete in ~45 seconds instead of 15 minutes.
@@ -472,17 +458,20 @@ async def enrich_unenriched_items(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT DISTINCT wi.blizzard_item_id
-              FROM guild_identity.wow_items wi
-             WHERE wi.slot_type = 'other'
+            SELECT DISTINCT ei.blizzard_item_id
+              FROM enrichment.items ei
+             WHERE ei.slot_type = 'other'
                 OR (
-                    wi.wowhead_tooltip_html IS NULL
+                    NOT EXISTS (
+                        SELECT 1 FROM landing.wowhead_tooltips wt
+                         WHERE wt.blizzard_item_id = ei.blizzard_item_id
+                    )
                     AND EXISTS (
                         SELECT 1 FROM guild_identity.item_recipe_links irl
-                         WHERE irl.item_id = wi.id
+                         WHERE irl.blizzard_item_id = ei.blizzard_item_id
                     )
                 )
-             ORDER BY wi.blizzard_item_id
+             ORDER BY ei.blizzard_item_id
             """
         )
 
@@ -512,7 +501,9 @@ async def enrich_unenriched_items(
                 await asyncio.sleep(_WOWHEAD_ENRICH_DELAY)
                 return
 
-            # Phase A: dual-write raw Wowhead payload to landing schema
+            # Write raw Wowhead payload to landing.wowhead_tooltips.
+            # sp_rebuild_items derives slot_type/armor_type from the payload on
+            # the next Enrich & Classify run.
             try:
                 async with pool.acquire() as _lconn:
                     await _lconn.execute(
@@ -522,51 +513,13 @@ async def enrich_unenriched_items(
                         """,
                         blizzard_item_id, json.dumps(data),
                     )
-            except Exception:
-                pass  # landing write is best-effort; don't fail enrichment
-
-            name = data.get("name", "")
-            icon_name = data.get("icon", "")
-            icon_url = (
-                f"https://wow.zamimg.com/images/wow/icons/medium/{icon_name}.jpg"
-                if icon_name else None
-            )
-            slot_type = _slot_from_tooltip(data.get("tooltip") or "")
-            jsonequip = data.get("jsonequip", {}) or {}
-            armor_type = jsonequip.get("subclass") if isinstance(jsonequip, dict) else None
-            weapon_type = data.get("subclassname") if data.get("weaponinfo") else None
-            tooltip_html = data.get("tooltip")
-
-            try:
-                async with pool.acquire() as conn:
-                    await conn.execute(
-                        """
-                        UPDATE guild_identity.wow_items
-                           SET name                 = CASE WHEN name = '' OR name IS NULL
-                                                          THEN $2 ELSE name END,
-                               icon_url             = COALESCE(icon_url, $3),
-                               slot_type            = CASE
-                                                          WHEN slot_type = 'other' OR slot_type IS NULL
-                                                          THEN COALESCE($4, slot_type)
-                                                          ELSE slot_type
-                                                      END,
-                               armor_type           = COALESCE(armor_type, $5),
-                               weapon_type          = COALESCE(weapon_type, $6),
-                               wowhead_tooltip_html = COALESCE(wowhead_tooltip_html, $7),
-                               fetched_at           = NOW()
-                         WHERE blizzard_item_id = $1
-                        """,
-                        blizzard_item_id, name, icon_url, slot_type,
-                        str(armor_type) if armor_type is not None else None,
-                        weapon_type, tooltip_html,
-                    )
                 async with lock:
                     enriched += 1
                     if progress_cb:
                         progress_cb(enriched, len(errors))
             except Exception as exc:
                 async with lock:
-                    errors.append(f"DB error enriching item {blizzard_item_id}: {exc}")
+                    errors.append(f"DB error storing tooltip for item {blizzard_item_id}: {exc}")
                     if progress_cb:
                         progress_cb(enriched, len(errors))
 
@@ -576,57 +529,6 @@ async def enrich_unenriched_items(
         await asyncio.gather(*[_process_one(iid, http_client) for iid in item_ids])
 
     logger.info("Enriched %d items (%d errors)", enriched, len(errors))
-
-    # Backfill armor_type from Wowhead tooltip HTML for any item that has a
-    # tooltip but still lacks armor_type (e.g. items enriched before this
-    # field was populated, or items stubbed via BIS sync with slot set but
-    # no armor_type).  Safe to run repeatedly — only touches NULL rows.
-    backfilled = await backfill_armor_type_from_tooltip(pool)
-    if backfilled:
-        logger.info("backfill_armor_type_from_tooltip: updated %d rows", backfilled)
-
     return enriched, errors
 
 
-async def backfill_armor_type_from_tooltip(pool: asyncpg.Pool) -> int:
-    """Parse armor_type from existing Wowhead tooltip HTML for items missing it.
-
-    Wowhead tooltips embed the armor subclass as:
-      <!--scstart4:N--><span class="q1">Mail</span><!--scend-->
-    where class 4 = Armor and N is the subclass index.
-
-    Only updates rows in equippable armor slots (head/shoulder/chest/etc.) that
-    have a tooltip but NULL armor_type.  Returns the number of rows updated.
-    """
-    async with pool.acquire() as conn:
-        result = await conn.execute(
-            """
-            UPDATE guild_identity.wow_items
-               SET armor_type = CASE
-                   WHEN wowhead_tooltip_html ~ $1 THEN 'cloth'
-                   WHEN wowhead_tooltip_html ~ $2 THEN 'leather'
-                   WHEN wowhead_tooltip_html ~ $3 THEN 'mail'
-                   WHEN wowhead_tooltip_html ~ $4 THEN 'plate'
-               END
-             WHERE armor_type IS NULL
-               AND wowhead_tooltip_html IS NOT NULL
-               AND slot_type IS NOT NULL
-               AND slot_type != 'other'
-               AND slot_type NOT IN (
-                   'neck', 'ring_1', 'ring_2',
-                   'trinket_1', 'trinket_2',
-                   'main_hand', 'off_hand', 'back'
-               )
-               AND (
-                   wowhead_tooltip_html ~ $1
-                   OR wowhead_tooltip_html ~ $2
-                   OR wowhead_tooltip_html ~ $3
-                   OR wowhead_tooltip_html ~ $4
-               )
-            """,
-            r"<!--scstart4:[0-9]+--><span[^>]*>Cloth</span>",
-            r"<!--scstart4:[0-9]+--><span[^>]*>Leather</span>",
-            r"<!--scstart4:[0-9]+--><span[^>]*>Mail</span>",
-            r"<!--scstart4:[0-9]+--><span[^>]*>Plate</span>",
-        )
-    return int(result.split()[-1])

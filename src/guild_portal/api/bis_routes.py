@@ -775,7 +775,7 @@ async def enrich_items(
     # Count pending items for Phase 1 so the UI can show a denominator immediately
     async with pool.acquire() as conn:
         p1_total = await conn.fetchval(
-            "SELECT COUNT(*) FROM guild_identity.wow_items WHERE slot_type = 'other'"
+            "SELECT COUNT(*) FROM enrichment.items WHERE slot_type = 'other'"
         )
 
     _enrich_status = {
@@ -805,7 +805,7 @@ async def enrich_items(
             # --- Phase 2: Blizzard icon fallback for items still missing icons ---
             async with pool.acquire() as conn:
                 p2_total = await conn.fetchval(
-                    "SELECT COUNT(*) FROM guild_identity.wow_items WHERE icon_url IS NULL"
+                    "SELECT COUNT(*) FROM enrichment.items WHERE icon_url IS NULL"
                 )
             _enrich_status.update({
                 "phase": 2, "phase_label": "Icons",
@@ -819,12 +819,15 @@ async def enrich_items(
             async with pool.acquire() as conn:
                 p3_total = await conn.fetchval(
                     """
-                    SELECT COUNT(DISTINCT wi.blizzard_item_id)
-                      FROM guild_identity.wow_items wi
-                      JOIN enrichment.bis_entries be ON be.blizzard_item_id = wi.blizzard_item_id
-                     WHERE wi.wowhead_tooltip_html IS NULL
-                       AND (wi.slot_type IN ('head','shoulder','chest','hands','legs')
-                            OR wi.slot_type = 'other' OR wi.armor_type IS NULL)
+                    SELECT COUNT(DISTINCT ei.blizzard_item_id)
+                      FROM enrichment.items ei
+                      JOIN enrichment.bis_entries be ON be.blizzard_item_id = ei.blizzard_item_id
+                     WHERE NOT EXISTS (
+                             SELECT 1 FROM landing.wowhead_tooltips wt
+                              WHERE wt.blizzard_item_id = ei.blizzard_item_id
+                           )
+                       AND (ei.slot_type IN ('head','shoulder','chest','hands','legs')
+                            OR ei.slot_type = 'other' OR ei.armor_type IS NULL)
                     """
                 )
             _enrich_status.update({

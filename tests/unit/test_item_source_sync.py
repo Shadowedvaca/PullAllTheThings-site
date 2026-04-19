@@ -277,8 +277,8 @@ class TestSyncEncounter:
 
     @pytest.mark.asyncio
     async def test_upsert_stores_correct_raw_fields(self):
-        """Upsert must store encounter_name, instance_name, instance_type — no quality_tracks."""
-        pool, conn = _make_pool({"id": 42})
+        """Upsert must store blizzard_item_id, encounter_name, instance_name, instance_type."""
+        pool, conn = _make_pool()
         client = _make_client(get_journal_encounter={
             "items": [{"item": {"id": 211438, "name": "Warband Satchel"}}],
         })
@@ -296,8 +296,8 @@ class TestSyncEncounter:
         assert len(src_calls) == 1
         sql, *args = src_calls[0].args
 
-        # Correct raw values stored
-        assert 42 in args               # item_id
+        # Correct raw values stored — blizzard_item_id is now the primary key
+        assert 211438 in args           # blizzard_item_id
         assert "dungeon" in args        # instance_type
         assert "Captain Dailcry" in args        # encounter_name
         assert "Priory of the Sacred Flame" in args  # instance_name
@@ -307,7 +307,8 @@ class TestSyncEncounter:
         # quality_tracks must NOT be stored
         assert not any(isinstance(a, list) and set(a) <= {"V", "C", "H", "M"} for a in args)
 
-        # Confirm new column names in SQL (not old names)
+        # Confirm column names in SQL
+        assert "blizzard_item_id" in sql
         assert "instance_type" in sql
         assert "encounter_name" in sql
         assert "instance_name" in sql
@@ -315,10 +316,13 @@ class TestSyncEncounter:
         assert "source_type" not in sql
         assert "source_name" not in sql
         assert "source_instance" not in sql
+        # No longer uses wow_items integer id — check no bare "item_id" column (not blizzard_item_id)
+        import re as _re
+        assert not _re.search(r'(?<!blizzard_)item_id', sql)
 
     @pytest.mark.asyncio
     async def test_world_boss_stored_as_world_boss_type(self):
-        pool, conn = _make_pool({"id": 7})
+        pool, conn = _make_pool()
         client = _make_client(get_journal_encounter={
             "items": [{"item": {"id": 250050, "name": "Boss Loot"}}],
         })
@@ -339,10 +343,14 @@ class TestSyncEncounter:
         assert "Midnight" in args
 
     @pytest.mark.asyncio
-    async def test_skips_item_when_wow_items_row_missing(self):
-        pool, conn = _make_pool(None)
+    async def test_skips_items_without_blizzard_id_only(self):
+        """_sync_encounter must handle items where blizzard_item_id is absent."""
+        pool, conn = _make_pool()
         client = _make_client(get_journal_encounter={
-            "items": [{"item": {"id": 12345, "name": "Item"}}],
+            "items": [
+                {"item": {}},          # no id
+                {"no_item_key": True}, # no item key
+            ]
         })
         count, errors = await _sync_encounter(
             pool, client, 2639, "Boss", 1, "Instance", "raid"
@@ -425,10 +433,10 @@ class TestFlagJunkSources:
         pool, conn = self._make_flag_pool(wb_count=0, tp_count=0)
         await flag_junk_sources(pool, flag_tier_pieces=True)
         tp_sql = conn.execute.call_args_list[2].args[0]
-        assert "wow_items" in tp_sql  # still needed for item_id FK resolution
         assert "enrichment.items" in tp_sql
         assert "item_category" in tp_sql
         assert "slot_type" in tp_sql
+        assert "blizzard_item_id" in tp_sql
 
     @pytest.mark.asyncio
     async def test_returns_zero_counts_when_nothing_flagged(self):
