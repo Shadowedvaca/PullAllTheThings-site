@@ -2025,16 +2025,18 @@ async function loadMethodSections() {
     tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">Loading…</td></tr>';
 
     try {
-        const r = await fetch(`/api/v1/admin/bis/method-sections?outliers_only=${outliersOnly}`);
+        const r = await fetch(`/api/v1/admin/bis/method-sections?outliers_only=${outliersOnly}&include_gaps=true`);
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
 
         const rows = d.data;
-        if (count) count.textContent = `${rows.length} section${rows.length !== 1 ? 's' : ''}`;
+        const sectionRows = rows.filter(r => r.row_type === 'section');
+        const gapRows = rows.filter(r => r.row_type === 'gap');
+        if (count) count.textContent = `${sectionRows.length} outlier section${sectionRows.length !== 1 ? 's' : ''}, ${gapRows.length} coverage gap${gapRows.length !== 1 ? 's' : ''}`;
 
         if (!rows.length) {
             tbody.innerHTML = `<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">
-                ${outliersOnly ? 'No outlier sections — all Method.gg headings auto-classified.' : 'No sections found — run Gap Fill first.'}
+                ${outliersOnly ? 'No issues — all Method.gg headings auto-classified and all content types covered.' : 'No sections found — run Gap Fill first.'}
             </td></tr>`;
             return;
         }
@@ -2042,7 +2044,7 @@ async function loadMethodSections() {
         const CT_LABELS = { overall: 'Overall', raid: 'Raid', mythic_plus: 'M+' };
         const ALL_CTS = ['overall', 'raid', 'mythic_plus'];
 
-        tbody.innerHTML = rows.map(s => {
+        const sectionHtml = sectionRows.map(s => {
             const inferred = s.inferred_content_type
                 ? `<span style="color:var(--color-text-muted);">${CT_LABELS[s.inferred_content_type] || s.inferred_content_type}</span>`
                 : '<span style="color:#f87171;">unknown</span>';
@@ -2089,8 +2091,60 @@ async function loadMethodSections() {
                 </td>
             </tr>`;
         }).join('');
+
+        const gapHtml = gapRows.length ? [
+            `<tr><td colspan="8" style="padding:0.5rem 0.6rem; background:rgba(96,165,250,0.07); font-size:0.75rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em;">Coverage Gaps — content types with no matching section</td></tr>`,
+            ...gapRows.map(g => {
+                const headingOptions = (g.available_headings || []).map(h =>
+                    `<option value="${h.replace(/"/g, '&quot;')}">${h}</option>`
+                ).join('');
+                const selectId = `method-gap-${g.spec_id}-${g.content_type}`;
+                return `<tr style="opacity:0.85;">
+                    <td>${g.class_name}</td>
+                    <td>${g.spec_name}</td>
+                    <td colspan="3" style="color:#60a5fa; font-size:0.82rem;">
+                        No section found for <strong>${CT_LABELS[g.content_type] || g.content_type}</strong>
+                    </td>
+                    <td style="font-size:0.78rem; color:#60a5fa;">missing</td>
+                    <td>
+                        <select id="${selectId}" class="gp-select" style="font-size:0.78rem; padding:2px 4px;">
+                            <option value="">— map to heading —</option>
+                            ${headingOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                            onclick="saveMethodGapOverride(${g.spec_id}, '${g.content_type}', '${selectId}')">
+                            Save
+                        </button>
+                    </td>
+                </tr>`;
+            })
+        ].join('') : '';
+
+        tbody.innerHTML = (sectionHtml || '') + (gapHtml || '');
+        if (!tbody.innerHTML.trim()) {
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">No issues found.</td></tr>';
+        }
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="8" style="color:#f87171;padding:1rem;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function saveMethodGapOverride(specId, contentType, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a heading to map to.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, content_type: contentType, section_heading: sel.value }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadMethodSections();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
     }
 }
 

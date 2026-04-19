@@ -1953,16 +1953,19 @@ class MethodOverrideBody(BaseModel):
 async def method_sections(
     request: Request,
     outliers_only: bool = False,
+    include_gaps: bool = True,
     player: Player = Depends(require_rank(5)),
 ):
-    """Return Method.gg page sections from landing.method_page_sections.
+    """Return Method.gg page sections and coverage gaps.
 
-    When outliers_only=true, only sections that need manual override are returned.
-    Includes current override (if any) for each (spec_id, content_type) combination.
+    Sections: rows from landing.method_page_sections (outlier filter when outliers_only=true).
+    Gaps: (spec_id, content_type) combinations where a target exists and the spec has
+          been scraped but no non-outlier section matches that content type and no override
+          is configured. Only returned when include_gaps=true.
     """
     pool = _pool(request)
     async with pool.acquire() as conn:
-        rows = await conn.fetch(
+        section_rows = await conn.fetch(
             """
             SELECT
                 mps.id,
@@ -1976,7 +1979,6 @@ async def method_sections(
                 mps.is_outlier,
                 mps.outlier_reason,
                 mps.fetched_at,
-                -- Collect overrides for this spec as a JSON array
                 (
                     SELECT json_agg(json_build_object(
                         'content_type', mso.content_type,
@@ -1994,15 +1996,54 @@ async def method_sections(
             outliers_only,
         )
 
+        gap_rows = await conn.fetch(
+            """
+            SELECT DISTINCT
+                t.spec_id,
+                sp.name           AS spec_name,
+                c.name            AS class_name,
+                t.content_type,
+                (
+                    SELECT json_agg(section_heading ORDER BY table_index)
+                    FROM landing.method_page_sections
+                    WHERE spec_id = t.spec_id
+                ) AS available_headings
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources s  ON s.id = t.source_id
+              JOIN ref.specializations sp  ON sp.id = t.spec_id
+              JOIN ref.classes c           ON c.id = sp.class_id
+             WHERE s.origin = 'method'
+               AND s.is_active = TRUE
+               -- Spec has been scraped (sections exist)
+               AND EXISTS (
+                   SELECT 1 FROM landing.method_page_sections
+                    WHERE spec_id = t.spec_id
+               )
+               -- No non-outlier section matches this content type
+               AND NOT EXISTS (
+                   SELECT 1 FROM landing.method_page_sections
+                    WHERE spec_id = t.spec_id
+                      AND inferred_content_type = t.content_type
+                      AND NOT is_outlier
+               )
+               -- No override configured
+               AND NOT EXISTS (
+                   SELECT 1 FROM config.method_section_overrides
+                    WHERE spec_id = t.spec_id AND content_type = t.content_type
+               )
+             ORDER BY c.name, sp.name, t.content_type
+            """
+        ) if include_gaps else []
+
     data = []
-    for r in rows:
+    for r in section_rows:
         overrides = r["overrides"] or []
-        # Find if any override maps to this heading
         override_for = [
             o["content_type"] for o in overrides
             if o["section_heading"] == r["section_heading"]
         ]
         data.append({
+            "row_type": "section",
             "id": r["id"],
             "spec_id": r["spec_id"],
             "spec_name": r["spec_name"],
@@ -2015,6 +2056,20 @@ async def method_sections(
             "outlier_reason": r["outlier_reason"],
             "fetched_at": r["fetched_at"].isoformat() if r["fetched_at"] else None,
             "override_for": override_for,
+        })
+
+    import json as _json
+    for g in gap_rows:
+        headings = g["available_headings"] or []
+        if isinstance(headings, str):
+            headings = _json.loads(headings)
+        data.append({
+            "row_type": "gap",
+            "spec_id": g["spec_id"],
+            "spec_name": g["spec_name"],
+            "class_name": g["class_name"],
+            "content_type": g["content_type"],
+            "available_headings": headings,
         })
 
     return JSONResponse({"ok": True, "data": data})
