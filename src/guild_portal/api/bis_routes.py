@@ -30,6 +30,9 @@ Endpoints:
   POST /api/v1/admin/bis/sync-crafted-items  (start job)
   GET  /api/v1/admin/bis/trinket-ratings-status
   POST /api/v1/admin/bis/rebuild-enrichment
+  GET  /api/v1/admin/bis/method-sections        (GL+ — section inventory with override status)
+  POST /api/v1/admin/bis/method-sections/override  (GL+ — upsert override)
+  DELETE /api/v1/admin/bis/method-sections/override (GL+ — remove override)
 """
 
 import asyncio
@@ -1933,3 +1936,131 @@ async def trinket_ratings_status(request: Request):
             for r in rows
         ],
     })
+
+
+# ---------------------------------------------------------------------------
+# Method.gg section inventory  (GL+ read/write)
+# ---------------------------------------------------------------------------
+
+
+class MethodOverrideBody(BaseModel):
+    spec_id: int
+    content_type: str
+    section_heading: str
+
+
+@router.get("/method-sections")
+async def method_sections(
+    request: Request,
+    outliers_only: bool = False,
+    player: Player = Depends(require_rank(5)),
+):
+    """Return Method.gg page sections from landing.method_page_sections.
+
+    When outliers_only=true, only sections that need manual override are returned.
+    Includes current override (if any) for each (spec_id, content_type) combination.
+    """
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                mps.id,
+                mps.spec_id,
+                sp.name           AS spec_name,
+                c.name            AS class_name,
+                mps.section_heading,
+                mps.table_index,
+                mps.row_count,
+                mps.inferred_content_type,
+                mps.is_outlier,
+                mps.outlier_reason,
+                mps.fetched_at,
+                -- Collect overrides for this spec as a JSON array
+                (
+                    SELECT json_agg(json_build_object(
+                        'content_type', mso.content_type,
+                        'section_heading', mso.section_heading
+                    ))
+                    FROM config.method_section_overrides mso
+                    WHERE mso.spec_id = mps.spec_id
+                ) AS overrides
+              FROM landing.method_page_sections mps
+              JOIN ref.specializations sp ON sp.id = mps.spec_id
+              JOIN ref.classes c ON c.id = sp.class_id
+             WHERE ($1 = FALSE OR mps.is_outlier = TRUE)
+             ORDER BY c.name, sp.name, mps.table_index
+            """,
+            outliers_only,
+        )
+
+    data = []
+    for r in rows:
+        overrides = r["overrides"] or []
+        # Find if any override maps to this heading
+        override_for = [
+            o["content_type"] for o in overrides
+            if o["section_heading"] == r["section_heading"]
+        ]
+        data.append({
+            "id": r["id"],
+            "spec_id": r["spec_id"],
+            "spec_name": r["spec_name"],
+            "class_name": r["class_name"],
+            "section_heading": r["section_heading"],
+            "table_index": r["table_index"],
+            "row_count": r["row_count"],
+            "inferred_content_type": r["inferred_content_type"],
+            "is_outlier": r["is_outlier"],
+            "outlier_reason": r["outlier_reason"],
+            "fetched_at": r["fetched_at"].isoformat() if r["fetched_at"] else None,
+            "override_for": override_for,
+        })
+
+    return JSONResponse({"ok": True, "data": data})
+
+
+@router.post("/method-sections/override")
+async def set_method_section_override(
+    body: MethodOverrideBody,
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Upsert a Method.gg section override: (spec_id, content_type) → section_heading."""
+    if body.content_type not in ("overall", "raid", "mythic_plus"):
+        raise HTTPException(status_code=422, detail="Invalid content_type")
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO config.method_section_overrides
+                (spec_id, content_type, section_heading)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (spec_id, content_type) DO UPDATE SET
+                section_heading = EXCLUDED.section_heading,
+                created_at      = NOW()
+            """,
+            body.spec_id, body.content_type, body.section_heading,
+        )
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/method-sections/override")
+async def delete_method_section_override(
+    request: Request,
+    spec_id: int,
+    content_type: str,
+    player: Player = Depends(require_rank(5)),
+):
+    """Remove a Method.gg section override for (spec_id, content_type)."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM config.method_section_overrides
+             WHERE spec_id = $1 AND content_type = $2
+            """,
+            spec_id, content_type,
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    return JSONResponse({"ok": True, "deleted": deleted})
