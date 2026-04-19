@@ -2489,11 +2489,13 @@ function _gpBisCheck(itemCts, guideCts, origin) {
 }
 
 // Best trinket rating for an origin in current Guide Mode. Returns {tier,position} or null.
+// Wowhead only publishes Overall rankings — always use overall for that origin.
 function _gpTrinketRating(ratings, origin) {
   const bo = ratings?.[origin];
   if (!bo) return null;
-  if (_gpGuideMode === 'overall')   return bo.overall || bo.raid || bo.mythic_plus || null;
-  if (_gpGuideMode === 'raid')      return bo.raid    || bo.overall || null;
+  if (origin === 'wowhead') return bo.overall || null;
+  if (_gpGuideMode === 'overall')     return bo.overall || bo.raid || bo.mythic_plus || null;
+  if (_gpGuideMode === 'raid')        return bo.raid    || bo.overall || null;
   if (_gpGuideMode === 'mythic_plus') return bo.mythic_plus || bo.overall || null;
   return null;
 }
