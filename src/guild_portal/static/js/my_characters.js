@@ -2535,21 +2535,12 @@ function _gpRenderSourceSub(sources) {
   return lines.length ? `<div class="mcn-avail-item__inst">${lines.join('<br>')}</div>` : '';
 }
 
-// Popularity sub-line HTML based on current guide mode.
-function _gpRenderPopularity(pop) {
-  if (!pop) return '';
-  const raid = pop.raid != null ? pop.raid : null;
-  const mp   = pop.mythic_plus != null ? pop.mythic_plus : null;
-  let parts = [];
-  if (_gpGuideMode === 'raid') {
-    if (raid != null) parts.push(`R: ${raid.toFixed(1)}%`);
-  } else if (_gpGuideMode === 'mythic_plus') {
-    if (mp != null) parts.push(`M+: ${mp.toFixed(1)}%`);
-  } else {
-    if (raid != null) parts.push(`R: ${raid.toFixed(1)}%`);
-    if (mp   != null) parts.push(`M+: ${mp.toFixed(1)}%`);
-  }
-  return parts.length ? `<div class="mcn-item-pop">${parts.join(' &middot; ')}</div>` : '';
+// Popularity % for the current guide mode — single value for the Pop. % column.
+function _gpPopularityVal(pop) {
+  if (!pop) return null;
+  if (_gpGuideMode === 'raid')        return pop.raid        ?? null;
+  if (_gpGuideMode === 'mythic_plus') return pop.mythic_plus ?? null;
+  return pop.overall ?? null;  // Overall: true weighted combined %
 }
 
 // Merge BIS items + all rated trinkets into one synthesis-sorted flat list.
@@ -2621,7 +2612,10 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
     const srcSub   = _gpRenderSourceSub(item.sources || []);
-    const popSub   = _gpRenderPopularity(item.popularity || null);
+    const popVal   = _gpPopularityVal(item.popularity || null);
+    const popCell  = popVal != null
+      ? `<td class="mcn-ut__pop-col">${popVal.toFixed(1)}%</td>`
+      : `<td class="mcn-ut__pop-col mcn-ut__pop-col--none">&mdash;</td>`;
     const itemBisCts = itemOriginCts[bid] || {};
 
     const guideCells = guideCols.map(gc => {
@@ -2645,9 +2639,10 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
         onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
     return `<tr class="mcn-ut__item-row"${startOpen ? '' : ' hidden'} data-group="${_gpEsc(groupKey)}">
       <td class="mcn-ut__item-cell">
-        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}${popSub}
+        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
       </td>
       ${guideCells}
+      ${popCell}
       <td class="mcn-bis-grid__action">
         <button class="gp-action-use" type="button"
             onclick="mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${bid})">Use</button>${excludeBtn}
@@ -2665,7 +2660,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
     ? (trinketState.data?.items || []) : [];
 
   const guideCols = _gpComputeGuideColumns(bis, isTrinket ? trinketItems : []);
-  const colCount  = 1 + guideCols.length + 1;
+  const colCount  = 1 + guideCols.length + 1 + 1; // item + guides + pop + action
 
   // Build CT maps from BIS data
   const guideCts = {};
@@ -2681,7 +2676,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
   const guideThs = guideCols.map(gc =>
     `<th class="mcn-ut__guide-col" title="${_gpEsc(gc.label)}">${_gpEsc(gc.label)}</th>`).join('');
   const thead = `<thead><tr>
-    <th class="mcn-ut__item-col">Item</th>${guideThs}<th class="mcn-ut__action-col"></th>
+    <th class="mcn-ut__item-col">Item</th>${guideThs}<th class="mcn-ut__pop-col">Pop. %</th><th class="mcn-ut__action-col"></th>
   </tr></thead>`;
 
   // BIS group items
