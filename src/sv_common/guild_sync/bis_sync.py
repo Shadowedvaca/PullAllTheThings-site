@@ -1818,6 +1818,42 @@ async def _load_wowhead_invtypes(conn: asyncpg.Connection) -> dict[int, str]:
     return {r["invtype_id"]: r["slot_key"] for r in rows}
 
 
+def _resolve_text_slot(
+    raw_label: str,
+    slot_map: dict[str, str | None],
+    ring_count: int = 0,
+    trinket_count: int = 0,
+) -> tuple[str | None, int, int]:
+    """Resolve a text BIS slot label to a canonical slot key.
+
+    Shared by all text-label BIS parsers (Method.gg, Icy Veins, etc.).
+
+    Returns (slot_key, ring_count, trinket_count).  slot_key is None for
+    unrecognised labels; counters are updated when a ring or trinket slot
+    is positionally assigned.
+
+    Resolution rules (in order):
+      1. Label in map with non-NULL value → return it directly.
+      2. Label in map with NULL value     → positional ring_1/ring_2 or trinket_1/trinket_2.
+      3. Label absent, contains "ring" or "trinket" → positional (unknown variant).
+      4. Label absent and unrelated       → None (caller should skip and log).
+    """
+    slot_key = slot_map.get(raw_label)
+    known = raw_label in slot_map
+
+    if slot_key is not None:
+        return slot_key, ring_count, trinket_count
+
+    if not known and "ring" not in raw_label and "trinket" not in raw_label:
+        return None, ring_count, trinket_count
+
+    if "ring" in raw_label:
+        ring_count += 1
+        return ("ring_1" if ring_count % 2 == 1 else "ring_2"), ring_count, trinket_count
+    trinket_count += 1
+    return ("trinket_1" if trinket_count % 2 == 1 else "trinket_2"), ring_count, trinket_count
+
+
 def _classify_method_heading(heading: str) -> Optional[str]:
     """Infer content_type from a Method.gg section heading.
 
@@ -1851,18 +1887,20 @@ def _parse_method_table(
 
         raw_slot = cells[0].get_text(strip=True).lower()
 
-        slot_key = slot_map.get(raw_slot)
-        if slot_key is None and raw_slot not in slot_map:
-            if "ring" in raw_slot or "trinket" in raw_slot:
-                pass  # fall through to positional handling
-            else:
-                logger.debug("_parse_method_table: unrecognised slot %r, skipping", raw_slot)
-                continue
+        # Peek at the map without consuming ring/trinket counts.
+        direct_key = slot_map.get(raw_slot)
+        known = raw_slot in slot_map
+        # NULL in map or absent ring/trinket variant → positional pool row
+        is_positional = direct_key is None and (known or "ring" in raw_slot or "trinket" in raw_slot)
+
+        if direct_key is None and not is_positional:
+            logger.debug("_parse_method_table: unrecognised slot %r, skipping", raw_slot)
+            continue
 
         # Ring/trinket pool rows ("Rings (any 2 of these)") can have multiple
         # item links in one cell — emit one SimcSlot per link.  All other rows
         # use only the first link (named slots never have multi-item cells).
-        if slot_key is None:
+        if is_positional:
             candidate_links = cells[1].find_all("a", href=True)
         else:
             first = cells[1].find("a", href=True)
@@ -1872,7 +1910,7 @@ def _parse_method_table(
             continue
 
         # Limit weapon slots to 2: guide_order=1 (preferred build) and =2 (alt build).
-        if slot_key == "main_hand":
+        if direct_key == "main_hand":
             weapon_count += 1
             if weapon_count > 2:
                 continue
@@ -1888,16 +1926,11 @@ def _parse_method_table(
             if bm:
                 bonus_ids = [int(b) for b in bm.group(1).split(":") if b]
 
-            current_slot = slot_key
+            current_slot, ring_count, trinket_count = _resolve_text_slot(
+                raw_slot, slot_map, ring_count, trinket_count
+            )
             if current_slot is None:
-                if "ring" in raw_slot:
-                    ring_count += 1
-                    current_slot = "ring_1" if ring_count % 2 == 1 else "ring_2"
-                elif "trinket" in raw_slot:
-                    trinket_count += 1
-                    current_slot = "trinket_1" if trinket_count % 2 == 1 else "trinket_2"
-                else:
-                    continue
+                continue
 
             results.append(SimcSlot(
                 slot=current_slot,
