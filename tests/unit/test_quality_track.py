@@ -120,10 +120,12 @@ class TestNormalizeSlot:
         assert normalize_slot("TRINKET_2") == "trinket_2"
 
     def test_weapon_slots(self):
-        assert normalize_slot("MAIN_HAND") == "main_hand"
+        # MAIN_HAND = 1H weapon in main hand slot
+        assert normalize_slot("MAIN_HAND") == "main_hand_1h"
         assert normalize_slot("OFF_HAND") == "off_hand"
-        assert normalize_slot("TWOHWEAPON") == "main_hand"
-        assert normalize_slot("RANGED") == "main_hand"
+        # TWOHWEAPON and RANGED are always 2H-equivalent
+        assert normalize_slot("TWOHWEAPON") == "main_hand_2h"
+        assert normalize_slot("RANGED") == "main_hand_2h"
 
     def test_ignored_slots(self):
         assert normalize_slot("TABARD") is None

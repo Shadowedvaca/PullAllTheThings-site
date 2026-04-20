@@ -1207,7 +1207,8 @@ document.addEventListener("DOMContentLoaded", _init);
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GP_LEFT_BODY_SLOTS   = ['head','neck','shoulder','back','chest','wrist'];
-const GP_LEFT_WEAPON_SLOTS = ['main_hand','off_hand'];
+// Weapon slots: both typed main-hand keys + off_hand; actual display is data-driven
+const GP_LEFT_WEAPON_SLOTS = ['main_hand_2h', 'main_hand_1h', 'off_hand'];
 const GP_LEFT_SLOTS        = [...GP_LEFT_BODY_SLOTS, ...GP_LEFT_WEAPON_SLOTS];
 const GP_RIGHT_SLOTS       = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
 const GP_INACTIVE_SLOTS    = new Set();
@@ -1217,7 +1218,7 @@ const GP_ALL_SLOTS = [
   'head','neck','shoulder','back','chest','wrist',
   'hands','waist','legs','feet',
   'ring_1','ring_2','trinket_1','trinket_2',
-  'main_hand','off_hand',
+  'main_hand_2h','main_hand_1h','off_hand',
 ];
 
 const GP_SLOT_LABELS = {
@@ -1226,7 +1227,7 @@ const GP_SLOT_LABELS = {
   hands:'Hands', waist:'Waist', legs:'Legs', feet:'Feet',
   ring_1:'Ring 1', ring_2:'Ring 2',
   trinket_1:'Trinket 1', trinket_2:'Trinket 2',
-  main_hand:'Main Hand', off_hand:'Off Hand',
+  main_hand_2h:'Main Hand', main_hand_1h:'Main Hand', off_hand:'Off Hand',
 };
 
 // Fallback track colors before API data loads
@@ -1388,10 +1389,11 @@ function _gpResetPaperdolls() {
   const leftEl  = document.getElementById('mcn-left-paperdoll');
   const rightEl = document.getElementById('mcn-right-paperdoll');
   if (leftEl) {
+    // Default placeholder: body slots + weapon separator + main_hand_2h (most specs 2H or no weapon)
     leftEl.innerHTML = '<div class="mcn-paperdoll__placeholder">'
       + GP_LEFT_BODY_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
       + '<div class="mcn-paperdoll__weapon-sep"></div>'
-      + GP_LEFT_WEAPON_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
+      + `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS['main_hand_2h']}"></span>`
       + '</div>';
   }
   if (rightEl) {
@@ -1551,7 +1553,9 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
 
 // ── Render paperdoll columns ───────────────────────────────────────────────────
 
-function _gpRenderPaperdolls(slots, tc) {
+// weaponBuild: "2h" | "1h" | null  (null = no data → default to 2h)
+// showOffHand: bool (true for 1H builds and Titan's Grip)
+function _gpRenderPaperdolls(slots, tc, weaponBuild, showOffHand) {
   const leftEl  = document.getElementById('mcn-left-paperdoll');
   const rightEl = document.getElementById('mcn-right-paperdoll');
   if (leftEl) {
@@ -1561,7 +1565,13 @@ function _gpRenderPaperdolls(slots, tc) {
     const sep = document.createElement('div');
     sep.className = 'mcn-paperdoll__weapon-sep';
     leftEl.appendChild(sep);
-    GP_LEFT_WEAPON_SLOTS.forEach(k => leftEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+    // Show active main hand slot: 1h build shows main_hand_1h; all others show main_hand_2h
+    const mhSlot = weaponBuild === '1h' ? 'main_hand_1h' : 'main_hand_2h';
+    leftEl.appendChild(_gpBuildSlotCard(mhSlot, slots[mhSlot], tc));
+    // Off hand: 1H builds and Titan's Grip only
+    if (showOffHand) {
+      leftEl.appendChild(_gpBuildSlotCard('off_hand', slots['off_hand'], tc));
+    }
   }
   if (rightEl) {
     rightEl.innerHTML = '';
@@ -1570,22 +1580,23 @@ function _gpRenderPaperdolls(slots, tc) {
   if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
-// ── Render weapons in center panel ────────────────────────────────────────────
-
-function _gpRenderWeapons(slots, tc) {
-  const el = document.getElementById('mcn-gp-weapons');
-  if (!el) return;
-  el.innerHTML = '';
-  GP_WEAPON_SLOTS.forEach(k => el.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
-  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
-}
-
 // ── Gear table (Option C) — full-width slot table ─────────────────────────────
 
-function _gpRenderGearTable(slots, tc) {
-  const allSlots = slots || {};
+function _gpRenderGearTable(data) {
+  const allSlots   = data.slots        || {};
+  const tc         = data.track_colors || {};
+  const weaponBuild  = data.weapon_build  || null;
+  const showOffHand  = !!data.show_off_hand;
 
-  const hasAnyData = GP_ALL_SLOTS.some(k => {
+  // Filter GP_ALL_SLOTS to only show the active weapon slots
+  const visibleSlots = GP_ALL_SLOTS.filter(k => {
+    if (k === 'main_hand_2h') return weaponBuild !== '1h'; // show unless 1H build
+    if (k === 'main_hand_1h') return weaponBuild === '1h'; // only for 1H build
+    if (k === 'off_hand')     return showOffHand;
+    return true;
+  });
+
+  const hasAnyData = visibleSlots.some(k => {
     const sd = allSlots[k];
     return sd && (sd.equipped?.blizzard_item_id || sd.desired?.blizzard_item_id || (sd.bis_recommendations || []).length > 0);
   });
@@ -1597,7 +1608,7 @@ function _gpRenderGearTable(slots, tc) {
     </div>`;
   }
 
-  const rows = GP_ALL_SLOTS.map(slotKey => {
+  const rows = visibleSlots.map(slotKey => {
     const sd      = allSlots[slotKey] || {};
     const eq      = sd.equipped;
     const desired = sd.desired;
@@ -1901,7 +1912,7 @@ function _gpRenderCenterPanel(data) {
       ${bisSection}
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
-    ${_gpRenderGearTable(data.slots, data.track_colors)}
+    ${_gpRenderGearTable(data)}
     ${_gpRenderFaq()}
   `;
 
@@ -2007,7 +2018,7 @@ window.mcnGpCloseSlotDetail = function() {
 async function _gpLoadPlan(charId, forceReload) {
   if (!forceReload && _gpCache[charId]) {
     const d = _gpCache[charId];
-    _gpRenderPaperdolls(d.slots, d.track_colors);
+    _gpRenderPaperdolls(d.slots, d.track_colors, d.weapon_build, !!d.show_off_hand);
     _gpRenderCenterPanel(d);
     return;
   }
@@ -2021,7 +2032,7 @@ async function _gpLoadPlan(charId, forceReload) {
 
     _gpCache[charId] = resp.data;
 
-    _gpRenderPaperdolls(resp.data.slots, resp.data.track_colors);
+    _gpRenderPaperdolls(resp.data.slots, resp.data.track_colors, resp.data.weapon_build, !!resp.data.show_off_hand);
     _gpRenderCenterPanel(resp.data);
 
   } catch (err) {

@@ -130,10 +130,10 @@ BLIZZARD_SLOT_MAP: dict[str, str] = {
     "FINGER_2":   "ring_2",
     "TRINKET_1":  "trinket_1",
     "TRINKET_2":  "trinket_2",
-    "MAIN_HAND":  "main_hand",
+    "MAIN_HAND":  "main_hand_1h",
     "OFF_HAND":   "off_hand",
-    "TWOHWEAPON": "main_hand",
-    "RANGED":     "main_hand",
+    "TWOHWEAPON": "main_hand_2h",
+    "RANGED":     "main_hand_2h",
 }
 
 

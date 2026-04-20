@@ -161,6 +161,53 @@ _ARMOR_TYPE_MARKER: dict[str, str] = {
     "plate":   "%<!--scstart4:4-->%",
 }
 
+# The two weapon main-hand plan slot keys — used throughout weapon display logic.
+_WEAPON_MH_SLOTS: frozenset[str] = frozenset({"main_hand_2h", "main_hand_1h"})
+
+
+def _compute_weapon_display(
+    bis_by_slot: dict,
+    equipped_by_slot: dict,
+    desired_by_slot: dict,
+) -> tuple[Optional[str], bool]:
+    """Determine weapon build and off-hand visibility.
+
+    Priority order: BIS guide entries (lowest guide_order) → equipped → desired → default.
+
+    Returns:
+        weapon_build: "2h" | "1h" | None (None = no weapon data at all)
+        show_off_hand: True when build is 1H or Titan's Grip (2H + off_hand BIS)
+    """
+    mh2h = bis_by_slot.get("main_hand_2h", [])
+    mh1h = bis_by_slot.get("main_hand_1h", [])
+
+    if mh2h or mh1h:
+        min_2h = min((r.get("guide_order", 1) for r in mh2h), default=99)
+        min_1h = min((r.get("guide_order", 1) for r in mh1h), default=99)
+        weapon_build: Optional[str] = "2h" if min_2h <= min_1h else "1h"
+    elif equipped_by_slot.get("main_hand_2h"):
+        weapon_build = "2h"
+    elif equipped_by_slot.get("main_hand_1h"):
+        weapon_build = "1h"
+    elif desired_by_slot.get("main_hand_2h"):
+        weapon_build = "2h"
+    elif desired_by_slot.get("main_hand_1h"):
+        weapon_build = "1h"
+    else:
+        weapon_build = None
+
+    # Show off_hand for 1H builds and Titan's Grip (2H build with off_hand BIS).
+    # Any off_hand BIS entry alongside a 2H main hand means Titan's Grip.
+    if weapon_build == "1h":
+        show_off_hand = True
+    elif weapon_build == "2h":
+        show_off_hand = bool(bis_by_slot.get("off_hand"))
+    else:
+        show_off_hand = False
+
+    return weapon_build, show_off_hand
+
+
 
 def _upgrade_tracks(
     equipped_track: Optional[str],
@@ -575,10 +622,22 @@ async def populate_from_bis(
             use_source, spec_id, use_ht,
         )
 
-        # Group candidates by slot (already ordered by priority)
+        # Group candidates by slot (already ordered by guide_order)
         by_slot: dict[str, list] = {}
         for row in bis_rows:
             by_slot.setdefault(row["slot"], []).append(row)
+
+        # Weapon build selection: when BIS has entries for both main_hand_2h and
+        # main_hand_1h (e.g. Frost DK 2H vs DW), only populate the preferred build
+        # (lowest guide_order across both slots).
+        weapon_slots_in_bis = _WEAPON_MH_SLOTS & set(by_slot.keys())
+        if len(weapon_slots_in_bis) > 1:
+            min_2h = min((r["guide_order"] for r in by_slot.get("main_hand_2h", [])), default=99)
+            min_1h = min((r["guide_order"] for r in by_slot.get("main_hand_1h", [])), default=99)
+            if min_2h <= min_1h:
+                by_slot.pop("main_hand_1h", None)
+            else:
+                by_slot.pop("main_hand_2h", None)
 
         populated = 0
         for slot, candidates in by_slot.items():
@@ -697,14 +756,35 @@ async def import_simc_goals(
 
         for simc_slot in slots:
             slot = simc_slot.slot
+            bid = simc_slot.blizzard_item_id
+
+            # SimC uses 'main_hand' for all weapon types; resolve to typed slot
+            if slot == "main_hand":
+                type_row = await conn.fetchrow(
+                    "SELECT slot_type FROM enrichment.items WHERE blizzard_item_id=$1",
+                    bid,
+                )
+                if type_row:
+                    st = type_row["slot_type"] or ""
+                    if st in ("two_hand", "ranged"):
+                        slot = "main_hand_2h"
+                    elif st == "one_hand":
+                        slot = "main_hand_1h"
+                    else:
+                        slot = "main_hand_2h"
+                else:
+                    logger.error(
+                        "import_simc_goals: item %s not in enrichment.items — defaulting to main_hand_2h",
+                        bid,
+                    )
+                    slot = "main_hand_2h"
+
             if not is_valid_slot(slot):
                 unrecognised += 1
                 continue
             if slot in locked_slots:
                 skipped_locked += 1
                 continue
-
-            bid = simc_slot.blizzard_item_id
 
             name_row = await conn.fetchrow(
                 "SELECT name FROM enrichment.items WHERE blizzard_item_id=$1",
@@ -1008,7 +1088,7 @@ async def get_plan_detail(
             """
             SELECT ce.slot, ce.blizzard_item_id, ce.item_name, ce.item_level,
                    ce.quality_track, ce.enchant_id, ce.gem_ids, ce.bonus_ids,
-                   ei.icon_url
+                   ei.icon_url, ei.slot_type
               FROM guild_identity.character_equipment ce
               LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = ce.blizzard_item_id
              WHERE ce.character_id = $1
@@ -1019,7 +1099,17 @@ async def get_plan_detail(
         for r in equip_rows:
             d = dict(r)
             d["is_crafted"] = is_crafted_item(d.get("bonus_ids") or [])
-            equipped_by_slot[r["slot"]] = d
+            slot_key = r["slot"]
+            # Remap legacy 'main_hand' rows not yet updated by migration 0156
+            if slot_key == "main_hand":
+                st = r.get("slot_type") or ""
+                if st in ("two_hand", "ranged"):
+                    slot_key = "main_hand_2h"
+                elif st == "one_hand":
+                    slot_key = "main_hand_1h"
+                else:
+                    slot_key = "main_hand_2h"
+            equipped_by_slot[slot_key] = d
 
         # Phase 1E.6: If equipped_source='simc' and a stored simc_profile exists,
         # parse it and override equipped_by_slot with SimC-sourced gear data.
@@ -1473,6 +1563,11 @@ async def get_plan_detail(
     _merge_paired_bis(bis_by_slot, "ring_1", "ring_2")
     _merge_paired_bis(bis_by_slot, "trinket_1", "trinket_2")
 
+    # Weapon build display rules: determine active main-hand slot and off-hand visibility.
+    weapon_build, show_off_hand = _compute_weapon_display(
+        bis_by_slot, equipped_by_slot, desired_by_slot
+    )
+
     # Build per-slot data
     slots_data: dict[str, dict] = {}
     for slot in _SLOTS_ORDERED:
@@ -1643,6 +1738,8 @@ async def get_plan_detail(
         "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
+        "weapon_build": weapon_build,
+        "show_off_hand": show_off_hand,
     }
 
 
