@@ -1455,6 +1455,51 @@ def _extract_trinket_tiers(raw_html: str, item_meta: dict[int, dict]) -> list[Ex
 # ---------------------------------------------------------------------------
 
 
+async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
+    """Re-run section extraction on existing Method HTML in landing.bis_scrape_raw.
+
+    Does NOT re-fetch from Method.gg — reads stored HTML and re-classifies
+    headings using the current classifier.  Use this after updating keyword
+    rules in _classify_method_heading to apply them without waiting for stale
+    targets to be re-scraped by gap fill.
+
+    Returns {specs_processed, sections_upserted}.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            WITH latest AS (
+                SELECT bsr.content, t.spec_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY t.spec_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                  JOIN ref.bis_list_sources s ON s.id = t.source_id
+                 WHERE s.origin = 'method'
+                   AND bsr.content IS NOT NULL
+            )
+            SELECT content, spec_id FROM latest WHERE rn = 1
+        """)
+
+    specs_processed = 0
+    sections_upserted = 0
+    for row in rows:
+        sections = _extract_method_sections(row["content"])
+        if not sections:
+            continue
+        async with pool.acquire() as conn:
+            await _upsert_method_sections(conn, row["spec_id"], sections)
+        specs_processed += 1
+        sections_upserted += len(sections)
+
+    logger.info(
+        "reparse_method_sections: %d specs, %d sections upserted",
+        specs_processed, sections_upserted,
+    )
+    return {"specs_processed": specs_processed, "sections_upserted": sections_upserted}
+
+
 async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     """Rebuild enrichment.bis_entries by re-parsing landing.bis_scrape_raw.
 

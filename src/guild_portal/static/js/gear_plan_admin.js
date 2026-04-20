@@ -2165,6 +2165,23 @@ async function saveMethodOverride(specId, heading, selectId) {
     }
 }
 
+async function reparseMethodSections() {
+    const btn = document.getElementById('method-reparse-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Re-parsing…'; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/reparse', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadMethodSections();
+        const count = document.getElementById('method-sections-count');
+        if (count) count.textContent += ` (re-parsed ${d.specs_processed} specs, ${d.sections_upserted} sections)`;
+    } catch (err) {
+        alert('Re-parse failed: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Re-parse Sections'; }
+    }
+}
+
 async function clearMethodOverride(specId, contentType) {
     if (!confirm(`Clear override for spec ${specId} / ${contentType}?`)) return;
     try {

@@ -2078,6 +2078,21 @@ async def method_sections(
     return JSONResponse({"ok": True, "data": data})
 
 
+@router.post("/method-sections/reparse")
+async def reparse_method_sections(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Re-run section extraction on existing Method HTML without re-fetching.
+
+    Use after updating keyword classification rules to apply them immediately.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.bis_sync import reparse_method_sections as _reparse
+    result = await _reparse(pool)
+    return JSONResponse({"ok": True, **result})
+
+
 @router.post("/method-sections/override")
 async def set_method_section_override(
     body: MethodOverrideBody,
