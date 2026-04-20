@@ -1352,6 +1352,10 @@ async def get_plan_detail(
                 paired = _SLOT_META.get(sl, {}).get("paired_slot")
                 if paired:
                     _bis_slots.add(paired)
+            # Include legacy 'main_hand' so existing DB rows (pre-Phase 2 re-sync)
+            # still match; new rows use typed slots after rebuild_item_popularity runs.
+            if _bis_slots & _WEAPON_MH_SLOTS:
+                _bis_slots.add("main_hand")
             _bis_slots_list = list(_bis_slots)
             pop_rows = await conn.fetch(
                 """
@@ -1963,7 +1967,11 @@ async def get_available_items(
         # Popularity data: aggregate across paired slots (trinket_1+trinket_2, ring_1+ring_2)
         # so both sections always show the same combined number.
         _pop_paired = _SLOT_META[slot]["paired_slot"]
-        _pop_slots: list[str] = [slot] + ([_pop_paired] if _pop_paired else [])
+        _pop_slots_set: set[str] = {slot} | ({_pop_paired} if _pop_paired else set())
+        # Include legacy 'main_hand' for existing DB rows pre-Phase 2 popularity re-sync
+        if _pop_slots_set & _WEAPON_MH_SLOTS:
+            _pop_slots_set.add("main_hand")
+        _pop_slots: list[str] = list(_pop_slots_set)
         pop_by_bid: dict[int, dict] = {}
         if avail_spec_id:
             pop_rows = await conn.fetch(

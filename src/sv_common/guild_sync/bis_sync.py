@@ -1166,12 +1166,20 @@ def _ugg_items_to_popularity(items_by_slot: dict) -> list[UggPopularityItem]:
                     count = round(perc * slot_total)
             if count == 0:
                 continue
-            result.append(UggPopularityItem(
-                slot=normalised,
-                blizzard_item_id=iid,
-                count=count,
-                total=slot_total,
-            ))
+            # Weapon1 maps to generic "main_hand" — emit both typed slots so
+            # popularity shows correctly regardless of 2H vs 1H build mode.
+            emit_slots = (
+                ["main_hand_2h", "main_hand_1h"]
+                if normalised == "main_hand"
+                else [normalised]
+            )
+            for emit_slot in emit_slots:
+                result.append(UggPopularityItem(
+                    slot=emit_slot,
+                    blizzard_item_id=iid,
+                    count=count,
+                    total=slot_total,
+                ))
     return result
 
 
