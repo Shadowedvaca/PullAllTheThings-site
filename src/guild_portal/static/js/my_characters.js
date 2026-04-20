@@ -2818,20 +2818,25 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   const CT_TITLE = { overall: 'All Content', raid: 'Raid', mythic_plus: 'Mythic+' };
   const activeCts = CT_ORDER.filter(ct => ctSet.has(ct));
 
-  // Build item map: per item, track which content_types it appears in
+  // Build item map: per item, track content_types, guide count for current mode, popularity.
   const itemMap = new Map();
   for (const r of bis) {
     if (!itemMap.has(r.blizzard_item_id)) {
       itemMap.set(r.blizzard_item_id, {
         bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url,
         cts: new Set(),
+        guideCount:     0,
+        popularity:     r.popularity     || {},
         target_ilvl:    r.target_ilvl    || null,
         is_equipped:    r.is_equipped    || false,
         is_bis:         r.is_bis         || false,
         source_ratings: r.source_ratings || [],
       });
     }
-    if (r.content_type) itemMap.get(r.blizzard_item_id).cts.add(r.content_type);
+    const it = itemMap.get(r.blizzard_item_id);
+    if (r.content_type) it.cts.add(r.content_type);
+    // Count guides recommending this item for the current filter
+    if (_gpGuideMode === 'overall' || r.content_type === _gpGuideMode) it.guideCount++;
   }
 
   // Filter items by Guide Mode
@@ -2845,11 +2850,18 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   }
 
   items.sort((a, b) => {
+    // Desired item always first
     if (primaryBid) {
       const d = (b.bid === primaryBid ? 1 : 0) - (a.bid === primaryBid ? 1 : 0);
       if (d !== 0) return d;
     }
-    return b.cts.size !== a.cts.size ? b.cts.size - a.cts.size : a.name.localeCompare(b.name);
+    if (!isTrinketBis) {
+      // Non-trinket: guide count desc → overall popularity desc → name asc
+      if (b.guideCount !== a.guideCount) return b.guideCount - a.guideCount;
+      const popDiff = (b.popularity?.overall ?? 0) - (a.popularity?.overall ?? 0);
+      if (popDiff !== 0) return popDiff;
+    }
+    return a.name.localeCompare(b.name);
   });
 
   const ctHeaders = activeCts.map(ct =>
