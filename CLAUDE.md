@@ -247,7 +247,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Gear Plan Schema Overhaul — COMPLETE** — shipped as `prod-v0.20.0` / `prod-v0.20.1`. All phases A–H deployed to prod. Feature branch `feature/gear-plan-schema-overhaul` merged to main. Patch `prod-v0.20.2`: migrated `gear_needs_routes.py` from `guild_identity.item_sources` / `v_tier_piece_sources` to `enrichment.item_sources` / `viz.tier_piece_sources` — fixes duplicate encounters in Roster Needs. **prod-v0.20.4**: gear plan UI polish (guide mode bar inline on heading, crafted items link to Crafting Corner, wowhead trinket ratings always use overall). **prod-v0.20.5**: gear plan popularity column (Pop. %) — last column before action buttons, changes with guide mode, Overall = weighted combined; paired-slot aggregation for rings/trinkets; tier/catalyst items show boss sources in BIS recs and available items.
+- **Weapon Build Variant — Phase 1 COMPLETE** — migration 0155. Schema + back end for `main_hand` → `main_hand_1h` / `main_hand_2h` weapon slot split. `enrichment.bis_entries.priority` renamed to `guide_order` (SMALLINT). `ref.gear_plan_slots` updated (2 new weapon rows, off_hand bumped to slot_order=17). `viz.bis_recommendations` recreated with `guide_order`. Parsers (Method, Wowhead) now capture up to 2 weapon items per guide; `rebuild_bis_from_landing()` resolves each to typed slot via `_resolve_weapon_slot()` with guide_order. 65 unit tests pass. Deployed dev as `feature/gear-plan-1.7-weapon-build-variant-plan`, shipped prod as `prod-v0.21.0`.
+  - **Phase 2** — gear plan display: weapon display rules in gear_plan_service.py + my_characters.html/JS; update viz.slot_items.
+  - **Phase 3** — Populate All Plans weapon logic.
+- **Previous: Gear Plan Schema Overhaul — COMPLETE** — shipped as `prod-v0.20.0` / `prod-v0.20.1`. All phases A–H deployed to prod. Feature branch `feature/gear-plan-schema-overhaul` merged to main. Patch `prod-v0.20.2`: migrated `gear_needs_routes.py` from `guild_identity.item_sources` / `v_tier_piece_sources` to `enrichment.item_sources` / `viz.tier_piece_sources` — fixes duplicate encounters in Roster Needs. **prod-v0.20.4**: gear plan UI polish (guide mode bar inline on heading, crafted items link to Crafting Corner, wowhead trinket ratings always use overall). **prod-v0.20.5**: gear plan popularity column (Pop. %) — last column before action buttons, changes with guide mode, Overall = weighted combined; paired-slot aggregation for rings/trinkets; tier/catalyst items show boss sources in BIS recs and available items.
   - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. Dual-write added to all 5 ingest paths.
   - **Phase B** (migration 0105): enrichment schema tables + stored procedures. 5 tables, 2 helpers, 8 sprocs.
   - **Phase C** (migration 0106): viz schema views (`viz.slot_items`, `viz.tier_piece_sources`, `viz.crafters_by_item`, `viz.bis_recommendations`). 51 unit tests.
@@ -259,10 +262,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0148 (on prod and dev)
-- **Last prod tag:** `prod-v0.20.5`
-- **Active branch:** `main` (feature branch merged and deleted)
-- **Next planned:** u.gg trinket popularity scraping — plan doc at `reference/gear-plan-1.1-ugg-trinket-scraping.md`. **NOTE: plan doc is stale** — references `guild_identity.wow_items` (DROPPED) and `guild_identity.ugg_trinket_popularity` (never created). Actual storage is `enrichment.item_popularity` (migration 0148, grain: source_id+spec_id+slot+blizzard_item_id) + `viz.item_popularity` view. The scraper/upsert work described in the plan doc is still valid; only the table name and FK targets need updating.
+- **Last migration:** 0155 (on prod and dev after prod-v0.21.0)
+- **Last prod tag:** `prod-v0.21.0`
+- **Active branch:** `main` (feature/gear-plan-1.7-weapon-build-variant-plan merged and deleted)
+- **Next planned:** Weapon Build Variant Phase 2 — gear plan display rules (gear_plan_service.py, my_characters.html/JS, viz.slot_items view update).
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
