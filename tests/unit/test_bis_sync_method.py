@@ -14,6 +14,38 @@ from sv_common.guild_sync.bis_sync import (
     _resolve_method_section_local,
 )
 
+# Mirrors the seed data in migration 0153 / config.method_slot_labels.
+# Tests pass this directly so they don't need a DB connection.
+_TEST_SLOT_MAP: dict[str, str | None] = {
+    "head":       "head",
+    "neck":       "neck",
+    "shoulders":  "shoulder",
+    "shoulder":   "shoulder",
+    "back":       "back",
+    "cloak":      "back",
+    "chest":      "chest",
+    "wrists":     "wrist",
+    "wrist":      "wrist",
+    "hands":      "hands",
+    "gloves":     "hands",
+    "waist":      "waist",
+    "belt":       "waist",
+    "legs":       "legs",
+    "feet":       "feet",
+    "boots":      "feet",
+    "ring 1":     "ring_1",
+    "ring 2":     "ring_2",
+    "ring":       None,
+    "trinket 1":  "trinket_1",
+    "trinket 2":  "trinket_2",
+    "trinket":    None,
+    "main hand":  "main_hand",
+    "main-hand":  "main_hand",
+    "weapon":     "main_hand",
+    "off hand":   "off_hand",
+    "off-hand":   "off_hand",
+}
+
 
 # ---------------------------------------------------------------------------
 # Fixture HTML helpers
@@ -197,7 +229,7 @@ class TestClassifyMethodHeading:
 
 class TestExtractMethodSectionsStandard:
     def setup_method(self):
-        self.sections = _extract_method_sections(_STANDARD_PAGE)
+        self.sections = _extract_method_sections(_STANDARD_PAGE, _TEST_SLOT_MAP)
 
     def test_finds_three_sections(self):
         assert len(self.sections) == 3
@@ -238,7 +270,7 @@ class TestExtractMethodSectionsStandard:
 
 class TestExtractMethodSectionsOutlier:
     def setup_method(self):
-        self.sections = _extract_method_sections(_BLOOD_DK_PAGE)
+        self.sections = _extract_method_sections(_BLOOD_DK_PAGE, _TEST_SLOT_MAP)
 
     def test_finds_two_sections(self):
         assert len(self.sections) == 2
@@ -262,11 +294,11 @@ class TestExtractMethodSectionsOutlier:
 
 class TestExtractMethodSectionsEdgeCases:
     def test_empty_html_returns_empty(self):
-        assert _extract_method_sections("") == []
+        assert _extract_method_sections("", _TEST_SLOT_MAP) == []
 
     def test_tables_without_heading_skipped(self):
         html = "<html><body><table><tr><td>Head</td><td><a href='/item=500001'>X</a></td></tr></table></body></html>"
-        sections = _extract_method_sections(html)
+        sections = _extract_method_sections(html, _TEST_SLOT_MAP)
         assert sections == []
 
     def test_h2_heading_detected(self):
@@ -278,20 +310,20 @@ class TestExtractMethodSectionsEdgeCases:
             "</table>"
             "</body></html>"
         )
-        sections = _extract_method_sections(html)
+        sections = _extract_method_sections(html, _TEST_SLOT_MAP)
         assert len(sections) == 1
         assert sections[0].inferred_content_type == "overall"
         assert sections[0].slots[0].blizzard_item_id == 800001
 
     def test_single_section_not_outlier(self):
         page = _make_method_page([("Overall Best Gear", [("Head", 100001, "Boss")])])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         assert len(sections) == 1
         assert not sections[0].is_outlier
 
     def test_unrecognised_heading_is_outlier(self):
         page = _make_method_page([("San'layn Build", [("Head", 100002, "Boss")])])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         assert sections[0].is_outlier
         assert sections[0].inferred_content_type is None
 
@@ -300,7 +332,7 @@ class TestExtractMethodSectionsEdgeCases:
         page = _make_method_page([
             ("Overall / Raid Best Gear for Demonology Warlock", [("Head", 100003, "Boss")])
         ])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         assert len(sections) == 1
         assert sections[0].inferred_content_type == "overall"
         assert not sections[0].is_outlier
@@ -310,7 +342,7 @@ class TestExtractMethodSectionsEdgeCases:
         page = _make_method_page([
             ("Best Raid Gear for Spec", [("Head", 100004, "Boss")])
         ])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         assert sections[0].inferred_content_type == "raid"
         assert not sections[0].is_outlier
 
@@ -323,7 +355,7 @@ class TestExtractMethodSectionsEdgeCases:
             "<table><tr><td>Head</td><td>No link here</td></tr></table>"
             "</body></html>"
         )
-        sections = _extract_method_sections(html)
+        sections = _extract_method_sections(html, _TEST_SLOT_MAP)
         assert sections[0].row_count == 0
 
 
@@ -334,7 +366,7 @@ class TestExtractMethodSectionsEdgeCases:
 
 class TestResolveMethodSectionLocal:
     def setup_method(self):
-        self.sections = _extract_method_sections(_STANDARD_PAGE)
+        self.sections = _extract_method_sections(_STANDARD_PAGE, _TEST_SLOT_MAP)
 
     def test_overall_resolves(self):
         slots = _resolve_method_section_local(self.sections, "overall")
@@ -355,7 +387,7 @@ class TestResolveMethodSectionLocal:
         assert 200001 not in item_ids
 
     def test_outlier_page_returns_empty_without_override(self):
-        sections = _extract_method_sections(_BLOOD_DK_PAGE)
+        sections = _extract_method_sections(_BLOOD_DK_PAGE, _TEST_SLOT_MAP)
         # All sections are outliers; local resolve can't help
         assert _resolve_method_section_local(sections, "raid") == []
         assert _resolve_method_section_local(sections, "mythic_plus") == []
@@ -371,7 +403,7 @@ class TestResolveMethodSectionLocal:
 
 class TestSlotNormalisation:
     def _slots_dict(self, content_type: str = "overall") -> dict[str, int]:
-        sections = _extract_method_sections(_STANDARD_PAGE)
+        sections = _extract_method_sections(_STANDARD_PAGE, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, content_type)
         return {s.slot: s.blizzard_item_id for s in slots}
 
@@ -429,7 +461,7 @@ class TestPositionalSlots:
         return _make_method_page([("Overall Best Gear", rows)])
 
     def setup_method(self):
-        sections = _extract_method_sections(self._make_page())
+        sections = _extract_method_sections(self._make_page(), _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "overall")
         self.d = {s.slot: s.blizzard_item_id for s in slots}
 
@@ -455,14 +487,14 @@ class TestBonusIds:
     def test_bonus_ids_extracted(self):
         rows = [("Head", 400001, "Boss")]
         page = _make_method_page([("Overall Best Gear", rows)], bonus_ids="1472:6652:8767")
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "overall")
         assert slots[0].bonus_ids == [1472, 6652, 8767]
 
     def test_no_bonus_ids_returns_empty_list(self):
         rows = [("Head", 400002, "Boss")]
         page = _make_method_page([("Overall Best Gear", rows)])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "overall")
         assert slots[0].bonus_ids == []
 
@@ -479,7 +511,7 @@ class TestEdgeCases:
             ("UNKNOWN_SLOT_XYZ", 600099, "Boss"),
         ]
         page = _make_method_page([("Overall Best Gear", rows)])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "overall")
         item_ids = {s.blizzard_item_id for s in slots}
         assert 600001 in item_ids
@@ -495,13 +527,13 @@ class TestEdgeCases:
             "</table>"
             "</body></html>"
         )
-        sections = _extract_method_sections(html)
+        sections = _extract_method_sections(html, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "overall")
         assert slots[0].slot == "main_hand"
         assert slots[0].blizzard_item_id == 700001
 
     def test_mythic_plus_missing_returns_empty(self):
         page = _make_method_page([("Overall Best Gear", [("Head", 500001, "Boss")])])
-        sections = _extract_method_sections(page)
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "mythic_plus")
         assert slots == []

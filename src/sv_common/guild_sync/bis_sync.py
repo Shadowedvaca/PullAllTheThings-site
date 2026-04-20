@@ -1481,11 +1481,12 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
             )
             SELECT content, spec_id FROM latest WHERE rn = 1
         """)
+        slot_map = await _load_slot_labels(conn)
 
     specs_processed = 0
     sections_upserted = 0
     for row in rows:
-        sections = _extract_method_sections(row["content"])
+        sections = _extract_method_sections(row["content"], slot_map)
         if not sections:
             continue
         async with pool.acquire() as conn:
@@ -1779,35 +1780,10 @@ class MethodSection:
     outlier_reason: Optional[str]
 
 
-_METHOD_SLOT_MAP: dict[str, str | None] = {
-    "head":       "head",
-    "neck":       "neck",
-    "shoulders":  "shoulder",
-    "shoulder":   "shoulder",
-    "back":       "back",
-    "cloak":      "back",
-    "chest":      "chest",
-    "wrists":     "wrist",
-    "wrist":      "wrist",
-    "hands":      "hands",
-    "gloves":     "hands",
-    "waist":      "waist",
-    "belt":       "waist",
-    "legs":       "legs",
-    "feet":       "feet",
-    "boots":      "feet",
-    "ring 1":     "ring_1",
-    "ring 2":     "ring_2",
-    "ring":       None,      # positional — handled by ring_count
-    "trinket 1":  "trinket_1",
-    "trinket 2":  "trinket_2",
-    "trinket":    None,      # positional — handled by trinket_count
-    "main hand":  "main_hand",
-    "main-hand":  "main_hand",
-    "weapon":     "main_hand",
-    "off hand":   "off_hand",
-    "off-hand":   "off_hand",
-}
+async def _load_slot_labels(conn: asyncpg.Connection) -> dict[str, str | None]:
+    """Load slot label → slot_key mapping from config.method_slot_labels."""
+    rows = await conn.fetch("SELECT page_label, slot_key FROM config.method_slot_labels")
+    return {r["page_label"]: r["slot_key"] for r in rows}
 
 
 def _classify_method_heading(heading: str) -> Optional[str]:
@@ -1827,7 +1803,9 @@ def _classify_method_heading(heading: str) -> Optional[str]:
     return None
 
 
-def _parse_method_table(table_el) -> list[SimcSlot]:
+def _parse_method_table(
+    table_el, slot_map: dict[str, str | None]
+) -> list[SimcSlot]:
     """Parse a single Method.gg BIS table element into SimcSlot list."""
     results: list[SimcSlot] = []
     ring_count = 0
@@ -1853,8 +1831,8 @@ def _parse_method_table(table_el) -> list[SimcSlot]:
         if bm:
             bonus_ids = [int(b) for b in bm.group(1).split(":") if b]
 
-        slot_key = _METHOD_SLOT_MAP.get(raw_slot)
-        if slot_key is None and raw_slot not in _METHOD_SLOT_MAP:
+        slot_key = slot_map.get(raw_slot)
+        if slot_key is None and raw_slot not in slot_map:
             if "ring" in raw_slot or "trinket" in raw_slot:
                 pass  # fall through to positional handling
             else:
@@ -1887,7 +1865,9 @@ def _parse_method_table(table_el) -> list[SimcSlot]:
     return results
 
 
-def _extract_method_sections(html: str) -> list[MethodSection]:
+def _extract_method_sections(
+    html: str, slot_map: dict[str, str | None]
+) -> list[MethodSection]:
     """Parse Method.gg gearing page HTML into a list of MethodSection objects.
 
     Walks document elements in order, pairing each h3 with the table that
@@ -1898,6 +1878,7 @@ def _extract_method_sections(html: str) -> list[MethodSection]:
     as outliers so the admin can configure overrides.
 
     Pure function — no network calls or DB access.
+    slot_map is loaded from config.method_slot_labels by async callers.
     """
     try:
         from bs4 import BeautifulSoup
@@ -1926,7 +1907,7 @@ def _extract_method_sections(html: str) -> list[MethodSection]:
     # Build sections with initial classification
     sections: list[MethodSection] = []
     for i, (heading, table_el) in enumerate(pairs):
-        slots = _parse_method_table(table_el)
+        slots = _parse_method_table(table_el, slot_map)
         inferred = _classify_method_heading(heading)
         sections.append(MethodSection(
             heading=heading,
@@ -2083,8 +2064,9 @@ async def _resolve_method_bis_from_db(
             """,
             spec_id, content_type,
         )
+        slot_map = await _load_slot_labels(conn)
 
-    sections = _extract_method_sections(raw_row["content"])
+    sections = _extract_method_sections(raw_row["content"], slot_map)
     if not sections:
         return []
 
@@ -2123,13 +2105,14 @@ async def _extract_method(
         response.raise_for_status()
         html = response.text
 
-    sections = _extract_method_sections(html)
-
     if pool and spec_id:
         async with pool.acquire() as conn:
+            slot_map = await _load_slot_labels(conn)
+            sections = _extract_method_sections(html, slot_map)
             await _upsert_method_sections(conn, spec_id, sections)
         slots = await _resolve_method_section(pool, sections, spec_id, content_type)
     else:
+        sections = _extract_method_sections(html, {})
         slots = _resolve_method_section_local(sections, content_type)
 
     return slots, html
