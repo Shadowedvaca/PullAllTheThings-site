@@ -247,11 +247,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Weapon Build Variant — Phase 2 IN PROGRESS** (feature/gear-plan-1.7-weapon-build-variant-plan, migrations 0156-0158 on dev). Gear plan display rules: `_compute_weapon_display()` in gear_plan_service returns `weapon_build` ("2h"/"1h"/None) + `show_off_hand` (always True); paperdoll and gear table show active weapon slot only; both 1H and 2H BIS options merged into single Main Hand row via `_merge_paired_bis()` (runs AFTER `_compute_weapon_display`); `populate_from_bis` picks preferred weapon slot (lowest guide_order); `import_simc_goals` resolves SimC "main_hand" to typed slot; `BLIZZARD_SLOT_MAP` updated (MAIN_HAND→1h, TWOHWEAPON/RANGED→2h); `export_gear_plan` maps plan slots back to SimC "main_hand". Migration 0156: reclassifies `character_equipment.slot` main_hand→typed; viz.slot_items gets `weapon_plan_slot` column. 1520 unit tests pass. Deployed to dev.
-  - **UI fixes:** available items drawer shows all weapon types (1H+2H+ranged) for weapon slots; `_ugg_items_to_popularity` emits both typed weapon slots; popularity query includes legacy `main_hand` slot; `show_off_hand` always True; BIS sort fixed in `_gpRenderUnifiedTable` (was in dead replaced function) — sort by checkmark count via `_gpBisCheck` desc → `_gpPopularityVal` desc → name asc; `guideOrigins` count in old `_gpRenderBisGrid` also fixed (was short-circuiting on 'overall').
-  - **Phase 1 COMPLETE** — migration 0155. Schema + back end for `main_hand` → `main_hand_1h` / `main_hand_2h` weapon slot split. Shipped prod as `prod-v0.21.0`.
-  - **BIS alternative recommendations:** migration 0158 adds two-hand weapon/two hand weapon to config.method_slot_labels; _parse_method_table now captures all ring/trinket rows (no cap of 2) and handles multi-link pool rows with multiple items per cell, alternating ring_1/ring_2; rebuild_bis_from_landing uses per-slot slot_counters for guide_order instead of hardcoding 1 -- alternative items get guide_order=2+ and appear as green checkmarks. No UI change needed.
-  - **Phase 3** — Populate All Plans weapon logic (populate_from_bis 2H/1H off_hand assignment rule).
+- **Weapon Build Variant — COMPLETE** (prod-v0.21.1, migrations 0155–0158). Full 3-phase feature shipped.
+  - **Phase 1** (migration 0155): `main_hand` split into `main_hand_2h`/`main_hand_1h`; `priority` → `guide_order` on `enrichment.bis_entries`. Shipped prod-v0.21.0.
+  - **Phase 2** (migrations 0156–0158): gear plan display rules (`_compute_weapon_display`, `_merge_paired_bis`, `show_off_hand` always True); paperdoll/gear table show active weapon slot only; available items drawer shows all weapon types; BIS sort fixed in `_gpRenderUnifiedTable`; Method parser handles multi-link pool rows + alternative items (guide_order 2+); one-hand/two-hand weapon labels added to `config.method_slot_labels`. 1527 unit tests pass.
+  - **Phase 3** (no migration): `populate_from_bis` suppresses off_hand when preferred build is 2H — `_apply_off_hand_rule()` helper; Titan's Grip exception (off_hand BIS item slot_type='two_hand' → keep it); clears existing unlocked off_hand slot from plan when suppressed. 1534 unit tests pass.
 - **Previous: Gear Plan Schema Overhaul — COMPLETE** — shipped as `prod-v0.20.0` / `prod-v0.20.1`. All phases A–H deployed to prod. Feature branch `feature/gear-plan-schema-overhaul` merged to main. Patch `prod-v0.20.2`: migrated `gear_needs_routes.py` from `guild_identity.item_sources` / `v_tier_piece_sources` to `enrichment.item_sources` / `viz.tier_piece_sources` — fixes duplicate encounters in Roster Needs. **prod-v0.20.4**: gear plan UI polish (guide mode bar inline on heading, crafted items link to Crafting Corner, wowhead trinket ratings always use overall). **prod-v0.20.5**: gear plan popularity column (Pop. %) — last column before action buttons, changes with guide mode, Overall = weighted combined; paired-slot aggregation for rings/trinkets; tier/catalyst items show boss sources in BIS recs and available items.
   - **Phase A** (migration 0104): created `landing`, `enrichment`, and `viz` schemas. Dual-write added to all 5 ingest paths.
   - **Phase B** (migration 0105): enrichment schema tables + stored procedures. 5 tables, 2 helpers, 8 sprocs.
@@ -264,10 +263,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0158 (on dev); 0155 on prod
-- **Last prod tag:** `prod-v0.21.0`
-- **Active branch:** `feature/gear-plan-1.7-weapon-build-variant-plan`
-- **Next planned:** Weapon Build Variant Phase 3 — Populate All Plans off_hand weapon assignment rules (2H suppresses off_hand unless Titan's Grip; 1H assigns off_hand BIS).
+- **Last migration:** 0158 (on prod)
+- **Last prod tag:** `prod-v0.21.1`
+- **Active branch:** `main`
+- **Next planned:** TBD
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
