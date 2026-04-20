@@ -2689,9 +2689,9 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
     for (const r of bis) {
       if (seen.has(r.blizzard_item_id)) continue;
       seen.add(r.blizzard_item_id);
-      // Guide mode filter: keep if passes any guide's check
+      // Guide mode filter: keep if at least one guide recommends this item in current mode
       const iCts = itemOriginCts[r.blizzard_item_id] || {};
-      if (_gpGuideMode !== 'overall' && !guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
+      if (!guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
       bisItems.push({
         blizzard_item_id: r.blizzard_item_id, name: r.item_name || '',
         icon_url: r.icon_url || '', sources: r.sources || [],
