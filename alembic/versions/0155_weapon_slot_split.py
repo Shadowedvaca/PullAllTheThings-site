@@ -30,6 +30,13 @@ depends_on = None
 
 def upgrade() -> None:
     # -------------------------------------------------------------------------
+    # Drop viz.bis_recommendations first — it references priority by name, and
+    # PostgreSQL won't allow renaming/retyping a column used by an active view.
+    # The view is recreated at the end of this migration.
+    # -------------------------------------------------------------------------
+    op.execute("DROP VIEW IF EXISTS viz.bis_recommendations")
+
+    # -------------------------------------------------------------------------
     # 1. Rename enrichment.bis_entries.priority → guide_order
     # -------------------------------------------------------------------------
     op.execute("""
@@ -114,8 +121,8 @@ def upgrade() -> None:
 
     # -------------------------------------------------------------------------
     # 5. Recreate viz.bis_recommendations with guide_order
+    # (view was already dropped at the top of this migration)
     # -------------------------------------------------------------------------
-    op.execute("DROP VIEW IF EXISTS viz.bis_recommendations")
     op.execute("""
         CREATE VIEW viz.bis_recommendations AS
         SELECT
