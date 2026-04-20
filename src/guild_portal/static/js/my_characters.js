@@ -2442,7 +2442,8 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   const isTrinketSlot = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
   const trCached = avKey && isTrinketSlot ? _gpTrinketCache[avKey] : null;
   const trinketState = trCached || (isTrinketSlot ? { status: 'loading', data: null } : null);
-  const unifiedHtml = _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState);
+  const gpBisSources = charIdUT ? (_gpCache[charIdUT]?.bis_sources || []) : [];
+  const unifiedHtml = _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, gpBisSources);
 
   // Kick off lazy loads
   if (charIdUT) _gpLoadAvailableItems(charIdUT, dbSlot);
@@ -2461,12 +2462,13 @@ const _GP_ORIGIN_LABELS = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy 
 const _GP_ORIGIN_ORDER  = ['archon', 'icy_veins', 'wowhead'];
 const _GP_TIER_VAL      = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 
-// Ordered guide columns derived from BIS data origins (+ trinket ratings origins for trinket slots)
-function _gpComputeGuideColumns(bis, trinketItems) {
+// Ordered guide columns — always derived from global bis_sources so columns are consistent across slots.
+// globalSources: data.bis_sources (array with .origin); trinketItems adds any extra rating origins.
+function _gpComputeGuideColumns(globalSources, trinketItems) {
   const seen = new Set();
   const ordered = [];
   const add = o => { if (o && !seen.has(o)) { seen.add(o); ordered.push(o); } };
-  for (const r of (bis || [])) add(r.origin);
+  for (const s of (globalSources || [])) add(s.origin);
   for (const it of (trinketItems || [])) for (const o of Object.keys(it.ratings || {})) add(o);
   return _GP_ORIGIN_ORDER.filter(o => seen.has(o))
     .concat(ordered.filter(o => !_GP_ORIGIN_ORDER.includes(o)))
@@ -2493,7 +2495,7 @@ function _gpBisCheck(itemCts, guideCts, origin) {
 function _gpTrinketRating(ratings, origin) {
   const bo = ratings?.[origin];
   if (!bo) return null;
-  if (origin === 'wowhead') return bo.overall || null;
+  if (origin === 'wowhead') return bo.overall || bo.raid || bo.mythic_plus || null;
   if (_gpGuideMode === 'overall')     return bo.overall || bo.raid || bo.mythic_plus || null;
   if (_gpGuideMode === 'raid')        return bo.raid    || bo.overall || null;
   if (_gpGuideMode === 'mythic_plus') return bo.mythic_plus || bo.overall || null;
@@ -2653,13 +2655,13 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
 }
 
 // Full unified table HTML (BIS Recommendations + available groups in one <table>).
-function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
+function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSources) {
   const isTrinket = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
   const bis = sd.bis_recommendations || [];
   const trinketItems = (isTrinket && trinketState?.status === 'done')
     ? (trinketState.data?.items || []) : [];
 
-  const guideCols = _gpComputeGuideColumns(bis, isTrinket ? trinketItems : []);
+  const guideCols = _gpComputeGuideColumns(bisSources || [], isTrinket ? trinketItems : []);
   const colCount  = 1 + guideCols.length + 1 + 1; // item + guides + pop + action
 
   // Build CT maps from BIS data
@@ -2689,9 +2691,9 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
     for (const r of bis) {
       if (seen.has(r.blizzard_item_id)) continue;
       seen.add(r.blizzard_item_id);
-      // Guide mode filter: keep if passes any guide's check
+      // Guide mode filter: keep if at least one guide recommends this item in current mode
       const iCts = itemOriginCts[r.blizzard_item_id] || {};
-      if (_gpGuideMode !== 'overall' && !guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
+      if (!guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
       bisItems.push({
         blizzard_item_id: r.blizzard_item_id, name: r.item_name || '',
         icon_url: r.icon_url || '', sources: r.sources || [],
@@ -2705,6 +2707,10 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
     ? ' \u2026' : '');
   let tbody = _gpRenderUtGroup('bis', bisLabel, bisItems, dbSlot,
     guideCols, itemOriginCts, guideCts, isTrinket, colCount);
+
+  // Build trinket ratings lookup for available item groups
+  const trinketRatingsMap = new Map();
+  if (isTrinket) for (const it of trinketItems) trinketRatingsMap.set(it.blizzard_item_id, it.ratings || {});
 
   // Available item groups
   const avStatus = availState?.status || 'loading';
@@ -2732,7 +2738,8 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState) {
           icon_url: it.icon_url || '',
           sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
           is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
-          target_ilvl: it.target_ilvl || null, ratings: {},
+          target_ilvl: it.target_ilvl || null,
+          ratings: trinketRatingsMap.get(it.blizzard_item_id) || {},
           popularity: it.popularity || null,
         };
       });
@@ -2771,7 +2778,7 @@ function _gpRefreshUnifiedTable() {
     ? (_gpTrinketCache[avKey] || { status: 'loading', data: null }) : null;
   const el = document.getElementById(`mcn-ut-body-${dbSlot}`);
   if (el) {
-    el.innerHTML = _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState);
+    el.innerHTML = _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, data.bis_sources || []);
     if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
   }
 }

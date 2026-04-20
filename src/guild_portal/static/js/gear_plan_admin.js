@@ -723,10 +723,7 @@ async function syncGaps() {
         const r = await fetch('/api/v1/admin/bis/sync-gaps', { method: 'POST' });
         const d = await r.json();
         if (!d.ok) throw new Error(d.error || 'Failed');
-        const msg = `Gap fill complete — ${d.targets_run} targets synced, ${d.items_found} items found, ${d.errors} errors.`;
-        setStatus(msg, d.errors > 0 ? 'error' : 'success');
-        await loadMatrix();
-        if (_targetsVisible) loadTargets();
+        setStatus('Gap fill started in background — refresh the matrix in a few minutes to see results.', 'success');
     } catch (err) {
         setStatus('Gap fill failed: ' + err.message, 'error');
     } finally {
@@ -2004,5 +2001,198 @@ async function rebuildEnrichment() {
         if (result) result.textContent = 'Error: ' + err.message;
     } finally {
         _setBtnDone(btn);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Method.gg Section Inventory
+// ---------------------------------------------------------------------------
+
+function toggleMethodSections() {
+    const content = document.getElementById('gp-method-sections-content');
+    const icon = document.getElementById('method-sections-toggle-icon');
+    const hidden = content.style.display === 'none';
+    content.style.display = hidden ? 'block' : 'none';
+    if (icon) icon.textContent = hidden ? '▲' : '▼';
+    if (hidden) loadMethodSections();
+}
+
+async function loadMethodSections() {
+    const outliersOnly = document.getElementById('method-outliers-only')?.checked ?? true;
+    const tbody = document.getElementById('method-sections-body');
+    const count = document.getElementById('method-sections-count');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">Loading…</td></tr>';
+
+    try {
+        const r = await fetch(`/api/v1/admin/bis/method-sections?outliers_only=${outliersOnly}&include_gaps=true`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        const rows = d.data;
+        const sectionRows = rows.filter(r => r.row_type === 'section');
+        const gapRows = rows.filter(r => r.row_type === 'gap');
+        if (count) count.textContent = `${sectionRows.length} outlier section${sectionRows.length !== 1 ? 's' : ''}, ${gapRows.length} coverage gap${gapRows.length !== 1 ? 's' : ''}`;
+
+        if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">
+                ${outliersOnly ? 'No issues — all Method.gg headings auto-classified and all content types covered.' : 'No sections found — run Gap Fill first.'}
+            </td></tr>`;
+            return;
+        }
+
+        const CT_LABELS = { overall: 'Overall', raid: 'Raid', mythic_plus: 'M+' };
+        const ALL_CTS = ['overall', 'raid', 'mythic_plus'];
+
+        const sectionHtml = sectionRows.map(s => {
+            const inferred = s.inferred_content_type
+                ? `<span style="color:var(--color-text-muted);">${CT_LABELS[s.inferred_content_type] || s.inferred_content_type}</span>`
+                : '<span style="color:#f87171;">unknown</span>';
+
+            const outlierBadge = s.is_outlier
+                ? `<span style="color:#fbbf24; font-size:0.75rem;">${s.outlier_reason || 'outlier'}</span>`
+                : '—';
+
+            const overrideForCTs = s.override_for || [];
+            const overrideLabel = overrideForCTs.length
+                ? overrideForCTs.map(ct => `<span style="color:#4ade80;font-size:0.78rem;">${CT_LABELS[ct] || ct}</span>`).join(', ')
+                : '';
+
+            const ctOptions = ALL_CTS.map(ct =>
+                `<option value="${ct}" ${overrideForCTs.includes(ct) ? 'selected' : ''}>${CT_LABELS[ct]}</option>`
+            ).join('');
+
+            const selectId = `method-override-${s.spec_id}-${s.table_index}`;
+            const hasOverride = overrideForCTs.length > 0;
+
+            return `<tr data-spec-id="${s.spec_id}" data-heading="${s.section_heading.replace(/"/g, '&quot;')}">
+                <td>${s.class_name}</td>
+                <td>${s.spec_name}</td>
+                <td style="max-width:280px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${s.section_heading}">${s.section_heading}</td>
+                <td>${s.row_count}</td>
+                <td>${inferred}</td>
+                <td style="font-size:0.78rem;">${outlierBadge}</td>
+                <td>
+                    ${overrideLabel ? overrideLabel + ' ' : ''}
+                    <select id="${selectId}" class="gp-select" style="font-size:0.78rem; padding:2px 4px;">
+                        <option value="">— set override —</option>
+                        ${ctOptions}
+                    </select>
+                </td>
+                <td style="white-space:nowrap;">
+                    <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                        onclick="saveMethodOverride(${s.spec_id}, '${s.section_heading.replace(/'/g, "\\'")}', '${selectId}')">
+                        Save
+                    </button>
+                    ${hasOverride ? `<button class="btn-sm" style="font-size:0.75rem; background:var(--color-danger,#7f1d1d); color:#fff; margin-left:4px;"
+                        onclick="clearMethodOverride(${s.spec_id}, '${overrideForCTs[0]}')">
+                        Clear
+                    </button>` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+
+        const gapHtml = gapRows.length ? [
+            `<tr><td colspan="8" style="padding:0.5rem 0.6rem; background:rgba(96,165,250,0.07); font-size:0.75rem; color:var(--color-text-muted); text-transform:uppercase; letter-spacing:.05em;">Coverage Gaps — content types with no matching section</td></tr>`,
+            ...gapRows.map(g => {
+                const headingOptions = (g.available_headings || []).map(h =>
+                    `<option value="${h.replace(/"/g, '&quot;')}">${h}</option>`
+                ).join('');
+                const selectId = `method-gap-${g.spec_id}-${g.content_type}`;
+                return `<tr style="opacity:0.85;">
+                    <td>${g.class_name}</td>
+                    <td>${g.spec_name}</td>
+                    <td colspan="3" style="color:#60a5fa; font-size:0.82rem;">
+                        No section found for <strong>${CT_LABELS[g.content_type] || g.content_type}</strong>
+                    </td>
+                    <td style="font-size:0.78rem; color:#60a5fa;">missing</td>
+                    <td>
+                        <select id="${selectId}" class="gp-select" style="font-size:0.78rem; padding:2px 4px;">
+                            <option value="">— map to heading —</option>
+                            ${headingOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                            onclick="saveMethodGapOverride(${g.spec_id}, '${g.content_type}', '${selectId}')">
+                            Save
+                        </button>
+                    </td>
+                </tr>`;
+            })
+        ].join('') : '';
+
+        tbody.innerHTML = (sectionHtml || '') + (gapHtml || '');
+        if (!tbody.innerHTML.trim()) {
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">No issues found.</td></tr>';
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#f87171;padding:1rem;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function saveMethodGapOverride(specId, contentType, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a heading to map to.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, content_type: contentType, section_heading: sel.value }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadMethodSections();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function saveMethodOverride(specId, heading, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a content type first.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, content_type: sel.value, section_heading: heading }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadMethodSections();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function reparseMethodSections() {
+    const btn = document.getElementById('method-reparse-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Re-parsing…'; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/reparse', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadMethodSections();
+        const count = document.getElementById('method-sections-count');
+        if (count) count.textContent += ` (re-parsed ${d.specs_processed} specs, ${d.sections_upserted} sections)`;
+    } catch (err) {
+        alert('Re-parse failed: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Re-parse Sections'; }
+    }
+}
+
+async function clearMethodOverride(specId, contentType) {
+    if (!confirm(`Clear override for spec ${specId} / ${contentType}?`)) return;
+    try {
+        const r = await fetch(
+            `/api/v1/admin/bis/method-sections/override?spec_id=${specId}&content_type=${contentType}`,
+            { method: 'DELETE' }
+        );
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadMethodSections();
+    } catch (err) {
+        alert('Clear failed: ' + err.message);
     }
 }

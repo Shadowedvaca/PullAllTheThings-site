@@ -30,6 +30,9 @@ Endpoints:
   POST /api/v1/admin/bis/sync-crafted-items  (start job)
   GET  /api/v1/admin/bis/trinket-ratings-status
   POST /api/v1/admin/bis/rebuild-enrichment
+  GET  /api/v1/admin/bis/method-sections        (GL+ — section inventory with override status)
+  POST /api/v1/admin/bis/method-sections/override  (GL+ — upsert override)
+  DELETE /api/v1/admin/bis/method-sections/override (GL+ — remove override)
 """
 
 import asyncio
@@ -375,13 +378,13 @@ async def sync_gaps(request: Request, player: Player = Depends(require_rank(5)))
     """Sync only BIS targets missing from or stale in landing.bis_scrape_raw (GL only).
 
     A target is eligible if it has no raw row or its last fetch is older than
-    7 days.  Useful for keeping the landing layer fresh without a full re-scrape.
-    Runs synchronously and returns when complete.
+    7 days.  Runs in background — check the BIS matrix for progress.
     """
     pool = _pool(request)
     from sv_common.guild_sync.bis_sync import sync_gaps as _sync_gaps
-    result = await _sync_gaps(pool)
-    return {"ok": True, **result}
+    import asyncio
+    asyncio.create_task(_sync_gaps(pool))
+    return {"ok": True, "message": "Gap fill started in background"}
 
 
 @router.post("/sync/{source_id}")
@@ -1933,3 +1936,204 @@ async def trinket_ratings_status(request: Request):
             for r in rows
         ],
     })
+
+
+# ---------------------------------------------------------------------------
+# Method.gg section inventory  (GL+ read/write)
+# ---------------------------------------------------------------------------
+
+
+class MethodOverrideBody(BaseModel):
+    spec_id: int
+    content_type: str
+    section_heading: str
+
+
+@router.get("/method-sections")
+async def method_sections(
+    request: Request,
+    outliers_only: bool = False,
+    include_gaps: bool = True,
+    player: Player = Depends(require_rank(5)),
+):
+    """Return Method.gg page sections and coverage gaps.
+
+    Sections: rows from landing.method_page_sections (outlier filter when outliers_only=true).
+    Gaps: (spec_id, content_type) combinations where a target exists and the spec has
+          been scraped but no non-outlier section matches that content type and no override
+          is configured. Only returned when include_gaps=true.
+    """
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        section_rows = await conn.fetch(
+            """
+            SELECT
+                mps.id,
+                mps.spec_id,
+                sp.name           AS spec_name,
+                c.name            AS class_name,
+                mps.section_heading,
+                mps.table_index,
+                mps.row_count,
+                mps.inferred_content_type,
+                mps.is_outlier,
+                mps.outlier_reason,
+                mps.fetched_at,
+                (
+                    SELECT json_agg(json_build_object(
+                        'content_type', mso.content_type,
+                        'section_heading', mso.section_heading
+                    ))
+                    FROM config.method_section_overrides mso
+                    WHERE mso.spec_id = mps.spec_id
+                ) AS overrides
+              FROM landing.method_page_sections mps
+              JOIN ref.specializations sp ON sp.id = mps.spec_id
+              JOIN ref.classes c ON c.id = sp.class_id
+             WHERE ($1 = FALSE OR mps.is_outlier = TRUE)
+             ORDER BY c.name, sp.name, mps.table_index
+            """,
+            outliers_only,
+        )
+
+        gap_rows = await conn.fetch(
+            """
+            SELECT
+                t.spec_id,
+                sp.name           AS spec_name,
+                c.name            AS class_name,
+                t.content_type,
+                (
+                    SELECT json_agg(section_heading ORDER BY table_index)
+                    FROM landing.method_page_sections
+                    WHERE spec_id = t.spec_id
+                ) AS available_headings
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources s  ON s.id = t.source_id
+              JOIN ref.specializations sp  ON sp.id = t.spec_id
+              JOIN ref.classes c           ON c.id = sp.class_id
+             WHERE s.origin = 'method'
+               AND s.is_active = TRUE
+               -- Spec has been scraped (sections exist)
+               AND EXISTS (
+                   SELECT 1 FROM landing.method_page_sections
+                    WHERE spec_id = t.spec_id
+               )
+               -- No non-outlier section matches this content type
+               AND NOT EXISTS (
+                   SELECT 1 FROM landing.method_page_sections
+                    WHERE spec_id = t.spec_id
+                      AND inferred_content_type = t.content_type
+                      AND NOT is_outlier
+               )
+               -- No override configured
+               AND NOT EXISTS (
+                   SELECT 1 FROM config.method_section_overrides
+                    WHERE spec_id = t.spec_id AND content_type = t.content_type
+               )
+             ORDER BY c.name, sp.name, t.content_type
+            """
+        ) if include_gaps else []
+
+    import json as _json
+
+    data = []
+    for r in section_rows:
+        raw = r["overrides"]
+        overrides = _json.loads(raw) if isinstance(raw, str) else (raw or [])
+        override_for = [
+            o["content_type"] for o in overrides
+            if o["section_heading"] == r["section_heading"]
+        ]
+        data.append({
+            "row_type": "section",
+            "id": r["id"],
+            "spec_id": r["spec_id"],
+            "spec_name": r["spec_name"],
+            "class_name": r["class_name"],
+            "section_heading": r["section_heading"],
+            "table_index": r["table_index"],
+            "row_count": r["row_count"],
+            "inferred_content_type": r["inferred_content_type"],
+            "is_outlier": r["is_outlier"],
+            "outlier_reason": r["outlier_reason"],
+            "fetched_at": r["fetched_at"].isoformat() if r["fetched_at"] else None,
+            "override_for": override_for,
+        })
+
+    import json as _json
+    for g in gap_rows:
+        headings = g["available_headings"] or []
+        if isinstance(headings, str):
+            headings = _json.loads(headings)
+        data.append({
+            "row_type": "gap",
+            "spec_id": g["spec_id"],
+            "spec_name": g["spec_name"],
+            "class_name": g["class_name"],
+            "content_type": g["content_type"],
+            "available_headings": headings,
+        })
+
+    return JSONResponse({"ok": True, "data": data})
+
+
+@router.post("/method-sections/reparse")
+async def reparse_method_sections(
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Re-run section extraction on existing Method HTML without re-fetching.
+
+    Use after updating keyword classification rules to apply them immediately.
+    """
+    pool = _pool(request)
+    from sv_common.guild_sync.bis_sync import reparse_method_sections as _reparse
+    result = await _reparse(pool)
+    return JSONResponse({"ok": True, **result})
+
+
+@router.post("/method-sections/override")
+async def set_method_section_override(
+    body: MethodOverrideBody,
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Upsert a Method.gg section override: (spec_id, content_type) → section_heading."""
+    if body.content_type not in ("overall", "raid", "mythic_plus"):
+        raise HTTPException(status_code=422, detail="Invalid content_type")
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO config.method_section_overrides
+                (spec_id, content_type, section_heading)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (spec_id, content_type) DO UPDATE SET
+                section_heading = EXCLUDED.section_heading,
+                created_at      = NOW()
+            """,
+            body.spec_id, body.content_type, body.section_heading,
+        )
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/method-sections/override")
+async def delete_method_section_override(
+    request: Request,
+    spec_id: int,
+    content_type: str,
+    player: Player = Depends(require_rank(5)),
+):
+    """Remove a Method.gg section override for (spec_id, content_type)."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM config.method_section_overrides
+             WHERE spec_id = $1 AND content_type = $2
+            """,
+            spec_id, content_type,
+        )
+    deleted = int(result.split()[-1]) if result else 0
+    return JSONResponse({"ok": True, "deleted": deleted})

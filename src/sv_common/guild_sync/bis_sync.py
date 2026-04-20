@@ -105,6 +105,7 @@ _TECHNIQUE_ORDER: dict[str, list[str]] = {
     "ugg":       ["json_embed"],
     "wowhead":   ["wh_gatherer"],
     "icy_veins": ["html_parse"],  # STUB — html_parse returns [] for IV; see _extract_icy_veins
+    "method":    ["html_parse_method"],
     "manual":    ["manual"],
 }
 
@@ -228,14 +229,18 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                     else:
                         skipped += 1
 
-                elif origin in ("icy_veins", "wowhead"):
+                elif origin in ("icy_veins", "wowhead", "method"):
                     # These sources have one page per spec — no HT variation in the URL.
-                    # Wowhead: one combined BIS page per spec; sections toggle raid/M+/overall.
+                    # Wowhead/Method: one combined BIS page per spec; sections differ by content_type.
                     # IV: one page per spec, all content toggled client-side (extraction stubbed).
-                    # Both get hero_talent_id=NULL ("applies to all builds").
+                    # All get hero_talent_id=NULL ("applies to all builds").
                     if origin == "icy_veins":
                         url = _iv_base_url(class_name, spec_name, role_name)
                         technique = "html_parse"
+                    elif origin == "method":
+                        url = _build_url(origin, class_name, spec_name, "", content_type,
+                                         source["slug_separator"])
+                        technique = "html_parse_method"
                     else:
                         url = _build_url(origin, class_name, spec_name, "", content_type,
                                          source["slug_separator"])
@@ -430,9 +435,15 @@ def _build_url(
         spec_wh = _slug(spec_name,  "-")
         return f"https://www.wowhead.com/guide/classes/{cls_wh}/{spec_wh}/bis-gear#bis-gear"
 
-    # Icy Veins — targets come from discover_iv_areas (which uses _iv_base_url with
-    # the real role name).  discover_targets skips icy_veins, so this should never
-    # be reached; return None to surface any accidental call clearly.
+    elif origin == "method":
+        # Method always uses hyphens. All three content types (overall/raid/mythic_plus)
+        # are on the same /gearing page — parser selects the correct table by index.
+        cls_m  = _slug(class_name, "-")
+        spec_m = _slug(spec_name,  "-")
+        return f"https://www.method.gg/guides/{spec_m}-{cls_m}/gearing"
+
+    # Icy Veins — targets come from _iv_base_url via discover_targets.
+    # Other unknown origins fall through to None.
 
     return None
 
@@ -700,7 +711,9 @@ async def sync_target(
     # Run extraction — fetches raw content, parses to determine status
     content_type = _target_row.get("content_type") or "overall"
     origin = _target_row.get("origin", "")
-    slots, _trinket_ratings, error, raw_content = await _extract(url, technique, content_type=content_type)
+    slots, _trinket_ratings, error, raw_content = await _extract(
+        url, technique, content_type=content_type, spec_id=spec_id, pool=pool
+    )
 
     now = datetime.now(timezone.utc)
 
@@ -763,7 +776,8 @@ async def sync_target(
 
 
 async def _extract(
-    url: str, technique: str, content_type: str = "overall"
+    url: str, technique: str, content_type: str = "overall",
+    spec_id: int = 0, pool: Optional[asyncpg.Pool] = None,
 ) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str], Optional[str]]:
     """Dispatch to the appropriate extractor.
 
@@ -782,6 +796,9 @@ async def _extract(
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
             return slots, [], None, None
+        elif technique == "html_parse_method":
+            slots, raw_content = await _extract_method(url, content_type, spec_id=spec_id, pool=pool)
+            return slots, [], None, raw_content
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
             return [], [], "manual technique — use the API to enter items", None
@@ -1438,6 +1455,52 @@ def _extract_trinket_tiers(raw_html: str, item_meta: dict[int, dict]) -> list[Ex
 # ---------------------------------------------------------------------------
 
 
+async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
+    """Re-run section extraction on existing Method HTML in landing.bis_scrape_raw.
+
+    Does NOT re-fetch from Method.gg — reads stored HTML and re-classifies
+    headings using the current classifier.  Use this after updating keyword
+    rules in _classify_method_heading to apply them without waiting for stale
+    targets to be re-scraped by gap fill.
+
+    Returns {specs_processed, sections_upserted}.
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            WITH latest AS (
+                SELECT bsr.content, t.spec_id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY t.spec_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                  JOIN ref.bis_list_sources s ON s.id = t.source_id
+                 WHERE s.origin = 'method'
+                   AND bsr.content IS NOT NULL
+            )
+            SELECT content, spec_id FROM latest WHERE rn = 1
+        """)
+        slot_map = await _load_slot_labels(conn)
+
+    specs_processed = 0
+    sections_upserted = 0
+    for row in rows:
+        sections = _extract_method_sections(row["content"], slot_map)
+        if not sections:
+            continue
+        async with pool.acquire() as conn:
+            await _upsert_method_sections(conn, row["spec_id"], sections)
+        specs_processed += 1
+        sections_upserted += len(sections)
+
+    logger.info(
+        "reparse_method_sections: %d specs, %d sections upserted",
+        specs_processed, sections_upserted,
+    )
+    return {"specs_processed": specs_processed, "sections_upserted": sections_upserted}
+
+
 async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     """Rebuild enrichment.bis_entries by re-parsing landing.bis_scrape_raw.
 
@@ -1455,6 +1518,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
             WITH latest AS (
                 SELECT
                     bsr.content, bsr.url, bsr.source,
+                    t.id AS target_id,
                     t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
                     ROW_NUMBER() OVER (
                         PARTITION BY bsr.target_id
@@ -1464,7 +1528,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                  WHERE bsr.target_id IS NOT NULL
             )
-            SELECT content, url, source, source_id, spec_id, hero_talent_id, content_type
+            SELECT content, url, source, target_id, source_id, spec_id, hero_talent_id, content_type
               FROM latest
              WHERE rn = 1
         """)
@@ -1473,10 +1537,12 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         await conn.execute("TRUNCATE enrichment.bis_entries")
 
     total_inserted = 0
+    now = datetime.now(timezone.utc)
     for row in rows:
         html = row["content"]
         url = row["url"]
         source = row["source"]
+        target_id = row["target_id"]
         source_id = row["source_id"]
         spec_id = row["spec_id"]
         hero_talent_id = row["hero_talent_id"]
@@ -1486,35 +1552,55 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
             slots = _parse_ugg_html(html, url)
         elif source == "wowhead":
             slots, _ = _parse_wowhead_html(html, url, content_type)
+        elif source == "method":
+            slots = await _resolve_method_bis_from_db(pool, spec_id, content_type)
         else:
             continue  # icy_veins and others not yet parseable
 
-        if not slots:
-            continue
+        target_inserted = 0
+        if slots:
+            async with pool.acquire() as conn:
+                for slot_data in slots:
+                    # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
+                    # skip items not yet in the enrichment layer.
+                    exists = await conn.fetchval(
+                        "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
+                        slot_data.blizzard_item_id,
+                    )
+                    if not exists:
+                        continue
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO enrichment.bis_entries
+                                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+                            VALUES ($1, $2, $3, $4, $5, 1)
+                            """,
+                            source_id, spec_id, hero_talent_id,
+                            slot_data.slot, slot_data.blizzard_item_id,
+                        )
+                        target_inserted += 1
+                        total_inserted += 1
+                    except Exception:
+                        pass  # duplicate within this rebuild — silently skip
+
+        # Determine status from coverage and stamp back onto scrape target
+        if target_inserted == 0:
+            rebuild_status = "failed"
+        else:
+            extracted_slots = {s.slot for s in slots} if slots else set()
+            missing = set(SLOT_ORDER) - extracted_slots
+            rebuild_status = "success" if missing <= {"off_hand"} else "partial"
 
         async with pool.acquire() as conn:
-            for slot_data in slots:
-                # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
-                # skip items not yet in the enrichment layer.
-                exists = await conn.fetchval(
-                    "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
-                    slot_data.blizzard_item_id,
-                )
-                if not exists:
-                    continue
-                try:
-                    await conn.execute(
-                        """
-                        INSERT INTO enrichment.bis_entries
-                            (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
-                        VALUES ($1, $2, $3, $4, $5, 1)
-                        """,
-                        source_id, spec_id, hero_talent_id,
-                        slot_data.slot, slot_data.blizzard_item_id,
-                    )
-                    total_inserted += 1
-                except Exception:
-                    pass  # duplicate within this rebuild — silently skip
+            await conn.execute(
+                """
+                UPDATE config.bis_scrape_targets
+                   SET items_found = $1, status = $2, last_fetched = $3
+                 WHERE id = $4
+                """,
+                target_inserted, rebuild_status, now, target_id,
+            )
 
     logger.info("rebuild_bis_from_landing: %d bis_entries inserted", total_inserted)
     return {"bis_entries_inserted": total_inserted}
@@ -1697,6 +1783,360 @@ async def _extract_wowhead(
 
     slots, trinket_ratings = _parse_wowhead_html(html, url, content_type)
     return slots, trinket_ratings, html
+
+
+# ---------------------------------------------------------------------------
+# Method.gg extractor  (html_parse_method)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class MethodSection:
+    heading: str
+    table_index: int
+    row_count: int
+    slots: list[SimcSlot]
+    inferred_content_type: Optional[str]
+    is_outlier: bool
+    outlier_reason: Optional[str]
+
+
+async def _load_slot_labels(conn: asyncpg.Connection) -> dict[str, str | None]:
+    """Load slot label → slot_key mapping from config.method_slot_labels."""
+    rows = await conn.fetch("SELECT page_label, slot_key FROM config.method_slot_labels")
+    return {r["page_label"]: r["slot_key"] for r in rows}
+
+
+def _classify_method_heading(heading: str) -> Optional[str]:
+    """Infer content_type from a Method.gg section heading.
+
+    Returns 'overall', 'raid', 'mythic_plus', or None if unrecognised.
+    """
+    h = heading.lower()
+    if "mythic" in h or "dungeon" in h:
+        return "mythic_plus"
+    if "raid" in h:
+        return "raid"
+    if "overall" in h:
+        return "overall"
+    if "best in slot" in h or "bis" in h:
+        return "overall"
+    return None
+
+
+def _parse_method_table(
+    table_el, slot_map: dict[str, str | None]
+) -> list[SimcSlot]:
+    """Parse a single Method.gg BIS table element into SimcSlot list."""
+    results: list[SimcSlot] = []
+    ring_count = 0
+    trinket_count = 0
+
+    for row in table_el.find_all("tr")[1:]:  # skip header row
+        cells = row.find_all("td")
+        if len(cells) < 2:
+            continue
+
+        raw_slot = cells[0].get_text(strip=True).lower()
+        link = cells[1].find("a", href=True)
+        if not link:
+            continue
+
+        m = re.search(r"item=(\d+)", link["href"])
+        if not m:
+            continue
+        item_id = int(m.group(1))
+
+        bonus_ids: list[int] = []
+        bm = re.search(r"bonus=([0-9:]+)", link["href"])
+        if bm:
+            bonus_ids = [int(b) for b in bm.group(1).split(":") if b]
+
+        slot_key = slot_map.get(raw_slot)
+        if slot_key is None and raw_slot not in slot_map:
+            if "ring" in raw_slot or "trinket" in raw_slot:
+                pass  # fall through to positional handling
+            else:
+                logger.debug("_parse_method_table: unrecognised slot %r, skipping", raw_slot)
+                continue
+
+        if slot_key is None:
+            if "ring" in raw_slot:
+                ring_count += 1
+                if ring_count > 2:
+                    continue
+                slot_key = "ring_1" if ring_count == 1 else "ring_2"
+            elif "trinket" in raw_slot:
+                trinket_count += 1
+                if trinket_count > 2:
+                    continue
+                slot_key = "trinket_1" if trinket_count == 1 else "trinket_2"
+            else:
+                continue
+
+        results.append(SimcSlot(
+            slot=slot_key,
+            blizzard_item_id=item_id,
+            bonus_ids=bonus_ids,
+            enchant_id=None,
+            gem_ids=[],
+            quality_track=None,
+        ))
+
+    return results
+
+
+def _extract_method_sections(
+    html: str, slot_map: dict[str, str | None]
+) -> list[MethodSection]:
+    """Parse Method.gg gearing page HTML into a list of MethodSection objects.
+
+    Walks document elements in order, pairing each h3 with the table that
+    immediately follows it.  Sections without a preceding h3 are skipped.
+
+    After parsing, sections are classified by heading keyword and any that
+    produce duplicate or unrecognised inferred_content_type values are flagged
+    as outliers so the admin can configure overrides.
+
+    Pure function — no network calls or DB access.
+    slot_map is loaded from config.method_slot_labels by async callers.
+    """
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        logger.warning("_extract_method_sections: BeautifulSoup not available")
+        return []
+
+    if not html:
+        return []
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Walk all heading (h2/h3/h4) and table elements in document order.
+    # Each heading sets the pending heading; the next table consumes it.
+    _HEADING_TAGS = {"h2", "h3", "h4"}
+    pairs: list[tuple[str, object]] = []  # (heading, table_el)
+    pending_heading: Optional[str] = None
+
+    for elem in soup.find_all(["h2", "h3", "h4", "table"]):
+        if elem.name in _HEADING_TAGS:
+            pending_heading = elem.get_text(strip=True)
+        elif elem.name == "table" and pending_heading is not None:
+            pairs.append((pending_heading, elem))
+            pending_heading = None
+
+    # Build sections with initial classification
+    sections: list[MethodSection] = []
+    for i, (heading, table_el) in enumerate(pairs):
+        slots = _parse_method_table(table_el, slot_map)
+        inferred = _classify_method_heading(heading)
+        sections.append(MethodSection(
+            heading=heading,
+            table_index=i,
+            row_count=len(slots),
+            slots=slots,
+            inferred_content_type=inferred,
+            is_outlier=False,
+            outlier_reason=None,
+        ))
+
+    # Single-section rule: if only one section exists and its heading contains
+    # "overall", treat it as overall regardless of other conflicting keywords
+    # (e.g. "Overall / Raid Best Gear" on a spec with no separate Raid list).
+    if len(sections) == 1 and "overall" in sections[0].heading.lower():
+        sections[0].inferred_content_type = "overall"
+        sections[0].is_outlier = False
+        sections[0].outlier_reason = None
+        return sections
+
+    # Detect outliers: same inferred CT more than once, or unrecognised heading
+    ct_counts: dict[str, int] = {}
+    for s in sections:
+        if s.inferred_content_type:
+            ct_counts[s.inferred_content_type] = ct_counts.get(s.inferred_content_type, 0) + 1
+
+    for s in sections:
+        if s.inferred_content_type is None:
+            s.is_outlier = True
+            s.outlier_reason = "unrecognised heading"
+        elif ct_counts.get(s.inferred_content_type, 0) > 1:
+            s.is_outlier = True
+            s.outlier_reason = f"duplicate classification for {s.inferred_content_type!r}"
+
+    return sections
+
+
+def _resolve_method_section_local(
+    sections: list[MethodSection], content_type: str
+) -> list[SimcSlot]:
+    """Return slots for content_type using only auto-classification.
+
+    Picks the first non-outlier section whose inferred_content_type matches.
+    Returns empty list if no match found.  Pure — no DB access.
+    """
+    for s in sections:
+        if s.inferred_content_type == content_type and not s.is_outlier:
+            return s.slots
+    return []
+
+
+async def _upsert_method_sections(
+    conn: asyncpg.Connection,
+    spec_id: int,
+    sections: list[MethodSection],
+) -> None:
+    """Upsert section heading metadata to landing.method_page_sections.
+
+    Only stores metadata used by the override UI (heading, classification,
+    outlier status).  Slots are NOT stored here — they live in
+    enrichment.bis_entries, populated by rebuild_bis_from_landing() which
+    re-parses raw HTML from landing.bis_scrape_raw.
+    """
+    now = datetime.now(timezone.utc)
+    for s in sections:
+        await conn.execute(
+            """
+            INSERT INTO landing.method_page_sections
+                (spec_id, section_heading, table_index, row_count,
+                 inferred_content_type, is_outlier, outlier_reason, fetched_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (spec_id, section_heading) DO UPDATE SET
+                table_index           = EXCLUDED.table_index,
+                row_count             = EXCLUDED.row_count,
+                inferred_content_type = EXCLUDED.inferred_content_type,
+                is_outlier            = EXCLUDED.is_outlier,
+                outlier_reason        = EXCLUDED.outlier_reason,
+                fetched_at            = EXCLUDED.fetched_at
+            """,
+            spec_id, s.heading, s.table_index, s.row_count,
+            s.inferred_content_type, s.is_outlier, s.outlier_reason, now,
+        )
+
+
+async def _resolve_method_section(
+    pool: asyncpg.Pool,
+    sections: list[MethodSection],
+    spec_id: int,
+    content_type: str,
+) -> list[SimcSlot]:
+    """Resolve which section to use for content_type, consulting DB overrides.
+
+    If an override row exists in config.method_section_overrides for this
+    (spec_id, content_type), use the section matching that heading.
+    Otherwise fall back to auto-classification via _resolve_method_section_local.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT section_heading
+              FROM config.method_section_overrides
+             WHERE spec_id = $1 AND content_type = $2
+            """,
+            spec_id, content_type,
+        )
+    if row:
+        target_heading = row["section_heading"]
+        for s in sections:
+            if s.heading == target_heading:
+                return s.slots
+        logger.warning(
+            "_resolve_method_section: override heading %r not found in sections for spec %d / %s",
+            target_heading, spec_id, content_type,
+        )
+        return []
+    return _resolve_method_section_local(sections, content_type)
+
+
+async def _resolve_method_bis_from_db(
+    pool: asyncpg.Pool,
+    spec_id: int,
+    content_type: str,
+) -> list[SimcSlot]:
+    """Resolve BIS slots for a Method target by re-parsing raw HTML.
+
+    Used by rebuild_bis_from_landing() — reads the latest raw HTML for this
+    spec from landing.bis_scrape_raw, re-parses sections with the current
+    classifier, then resolves via config.method_section_overrides or
+    auto-classification.  No pre-parsed slot data is read from landing.
+    """
+    async with pool.acquire() as conn:
+        raw_row = await conn.fetchrow(
+            """
+            SELECT bsr.content
+              FROM landing.bis_scrape_raw bsr
+              JOIN config.bis_scrape_targets t  ON t.id = bsr.target_id
+              JOIN ref.bis_list_sources s        ON s.id = t.source_id
+             WHERE s.origin = 'method'
+               AND t.spec_id = $1
+               AND bsr.content IS NOT NULL
+             ORDER BY bsr.fetched_at DESC
+             LIMIT 1
+            """,
+            spec_id,
+        )
+        if not raw_row:
+            return []
+
+        override = await conn.fetchrow(
+            """
+            SELECT section_heading
+              FROM config.method_section_overrides
+             WHERE spec_id = $1 AND content_type = $2
+            """,
+            spec_id, content_type,
+        )
+        slot_map = await _load_slot_labels(conn)
+
+    sections = _extract_method_sections(raw_row["content"], slot_map)
+    if not sections:
+        return []
+
+    if override:
+        target_heading = override["section_heading"]
+        for s in sections:
+            if s.heading == target_heading:
+                return s.slots
+        logger.warning(
+            "_resolve_method_bis_from_db: override heading %r not found for spec %d / %s",
+            target_heading, spec_id, content_type,
+        )
+        return []
+
+    return _resolve_method_section_local(sections, content_type)
+
+
+async def _extract_method(
+    url: str,
+    content_type: str = "overall",
+    spec_id: int = 0,
+    pool: Optional[asyncpg.Pool] = None,
+) -> tuple[list[SimcSlot], Optional[str]]:
+    """Fetch Method.gg gearing page and extract BIS items.
+
+    Returns (slots, raw_html).  raw_html written to landing.bis_scrape_raw.
+
+    When spec_id and pool are provided, parsed sections are upserted to
+    landing.method_page_sections and DB overrides are consulted for resolution.
+    Otherwise falls back to pure auto-classification (used in tests).
+    """
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
+    ) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        html = response.text
+
+    if pool and spec_id:
+        async with pool.acquire() as conn:
+            slot_map = await _load_slot_labels(conn)
+            sections = _extract_method_sections(html, slot_map)
+            await _upsert_method_sections(conn, spec_id, sections)
+        slots = await _resolve_method_section(pool, sections, spec_id, content_type)
+    else:
+        sections = _extract_method_sections(html, {})
+        slots = _resolve_method_section_local(sections, content_type)
+
+    return slots, html
 
 
 def _wh_slots_from_section(
