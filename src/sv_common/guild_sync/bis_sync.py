@@ -76,30 +76,6 @@ def _slug(name: str, sep: str = "-") -> str:
     return name.lower().replace(" ", sep)
 
 # u.gg slot names → our normalised internal keys
-_UGG_SLOT_MAP: dict[str, str] = {
-    "head":      "head",
-    "neck":      "neck",
-    "shoulder":  "shoulder",
-    "back":      "back",
-    "cape":      "back",
-    "chest":     "chest",
-    "wrist":     "wrist",
-    "gloves":    "hands",
-    "hands":     "hands",
-    "belt":      "waist",
-    "waist":     "waist",
-    "legs":      "legs",
-    "feet":      "feet",
-    "ring1":     "ring_1",
-    "ring2":     "ring_2",
-    "trinket1":  "trinket_1",
-    "trinket2":  "trinket_2",
-    "weapon1":   "main_hand",
-    "weapon2":   "off_hand",
-    "main_hand": "main_hand",
-    "off_hand":  "off_hand",
-}
-
 # Technique priority order for each BIS source origin
 _TECHNIQUE_ORDER: dict[str, list[str]] = {
     "ugg":       ["json_embed"],
@@ -793,10 +769,10 @@ async def _extract(
     """
     try:
         if technique == "json_embed":
-            slots, raw_content = await _extract_ugg(url)
+            slots, raw_content = await _extract_ugg(url, pool=pool)
             return slots, [], None, raw_content
         elif technique == "wh_gatherer":
-            slots, trinket_ratings, raw_content = await _extract_wowhead(url, content_type=content_type)
+            slots, trinket_ratings, raw_content = await _extract_wowhead(url, content_type=content_type, pool=pool)
             return slots, trinket_ratings, None, raw_content
         elif technique == "html_parse":
             slots = await _extract_icy_veins(url)
@@ -823,7 +799,7 @@ async def _extract(
 # ---------------------------------------------------------------------------
 
 
-def _parse_ugg_html(html: str, url: str) -> list[SimcSlot]:
+def _parse_ugg_html(html: str, url: str, slot_map: dict[str, str | None] | None = None) -> list[SimcSlot]:
     """Parse u.gg page HTML and extract BIS items from embedded SSR JSON.
 
     Pure function — no network calls.  Called by _extract_ugg() during live
@@ -846,7 +822,7 @@ def _parse_ugg_html(html: str, url: str) -> list[SimcSlot]:
             try:
                 decoder = json.JSONDecoder()
                 data, _ = decoder.raw_decode(html, obj_start)
-                return _parse_ugg_ssr(data, url)
+                return _parse_ugg_ssr(data, url, slot_map)
             except (json.JSONDecodeError, KeyError, ValueError):
                 pass
 
@@ -860,7 +836,9 @@ def _parse_ugg_html(html: str, url: str) -> list[SimcSlot]:
     return []
 
 
-async def _extract_ugg(url: str) -> tuple[list[SimcSlot], Optional[str]]:
+async def _extract_ugg(
+    url: str, pool: Optional[asyncpg.Pool] = None
+) -> tuple[list[SimcSlot], Optional[str]]:
     """Fetch u.gg page and extract BIS items.
 
     Returns (slots, raw_html) — raw_html written to landing.bis_scrape_raw.
@@ -873,7 +851,12 @@ async def _extract_ugg(url: str) -> tuple[list[SimcSlot], Optional[str]]:
         response.raise_for_status()
         html = response.text
 
-    return _parse_ugg_html(html, url), html
+    slot_map: dict[str, str | None] = {}
+    if pool:
+        async with pool.acquire() as conn:
+            slot_map = await _load_slot_labels(conn, "ugg")
+
+    return _parse_ugg_html(html, url, slot_map), html
 
 
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
@@ -925,7 +908,7 @@ def _slug_to_pascal(slug: str) -> str:
     return "".join(word.capitalize() for word in re.split(r"[-_]", slug))
 
 
-def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
+def _parse_ugg_ssr(data: dict, url: str = "", slot_map: dict[str, str | None] | None = None) -> list[SimcSlot]:
     """Parse items from the window.__SSR_DATA__ blob.
 
     u.gg SSR format: the top-level dict is keyed by a stats2 URL.  Its value
@@ -941,6 +924,7 @@ def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
       fluctuate per boss and can surface stale items from wrong specs or seasons.
     - section is derived from the URL's role= parameter.
     """
+    sm: dict[str, str | None] = slot_map or {}
     spec_key = _ugg_url_to_spec_key(url)    # e.g. "DeathKnight-Blood"
     section  = _ugg_url_to_section(url)     # "raid", "mythic", or "single_target"
 
@@ -953,7 +937,7 @@ def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
             # Legacy items_table at top level (older u.gg format)
             items_by_slot = inner.get("items_table", {}).get("items", {})
             if items_by_slot:
-                return _ugg_items_to_slots(items_by_slot)
+                return _ugg_items_to_slots(items_by_slot, sm)
 
             # Current format: section["all"][spec_key]["items_table"]["items"]
             sec = inner.get(section)
@@ -968,7 +952,7 @@ def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
                                 "_parse_ugg_ssr: using %s[all][%s][items_table] for %s",
                                 section, spec_key, url,
                             )
-                            return _ugg_items_to_slots(items_table)
+                            return _ugg_items_to_slots(items_table, sm)
 
             # Fallback: affixes (M+ data — mixes specs and may surface stale items)
             affixes = inner.get("affixes", {})
@@ -978,13 +962,13 @@ def _parse_ugg_ssr(data: dict, url: str = "") -> list[SimcSlot]:
                     "(section=%s spec_key=%s not found)",
                     url, section, spec_key,
                 )
-                return _parse_ugg_combo_data(affixes)
+                return _parse_ugg_combo_data(affixes, sm)
     except (AttributeError, TypeError):
         pass
     return []
 
 
-def _parse_ugg_combo_data(affixes: dict) -> list[SimcSlot]:
+def _parse_ugg_combo_data(affixes: dict, slot_map: dict[str, str | None]) -> list[SimcSlot]:
     """Extract most popular item per slot from u.gg's affixes data structure.
 
     Handles both the current format (items → slot → dps_item → {item_id})
@@ -1055,7 +1039,7 @@ def _parse_ugg_combo_data(affixes: dict) -> list[SimcSlot]:
 
     slots: list[SimcSlot] = []
     for ugg_slot, id_counts in slot_counts.items():
-        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
+        normalised = slot_map.get(ugg_slot.lower())
         if not normalised:
             continue
         best_id = max(id_counts, key=lambda k: id_counts[k])
@@ -1075,20 +1059,20 @@ def _parse_ugg_combo_data(affixes: dict) -> list[SimcSlot]:
     return slots
 
 
-def _parse_ugg_items_table(data: dict) -> list[SimcSlot]:
+def _parse_ugg_items_table(data: dict, slot_map: dict[str, str | None]) -> list[SimcSlot]:
     """Parse items from the stats2.u.gg direct JSON response (legacy format)."""
     try:
         items_by_slot = data.get("items_table", {}).get("items", {})
-        return _ugg_items_to_slots(items_by_slot)
+        return _ugg_items_to_slots(items_by_slot, slot_map)
     except (AttributeError, TypeError):
         return []
 
 
-def _ugg_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
+def _ugg_items_to_slots(items_by_slot: dict, slot_map: dict[str, str | None]) -> list[SimcSlot]:
     """Convert u.gg's per-slot items dict into SimcSlot list."""
     slots: list[SimcSlot] = []
     for ugg_slot, slot_data in items_by_slot.items():
-        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
+        normalised = slot_map.get(ugg_slot.lower())
         if normalised is None:
             continue
         items = slot_data.get("items") or []
@@ -1112,7 +1096,7 @@ def _ugg_items_to_slots(items_by_slot: dict) -> list[SimcSlot]:
     return slots
 
 
-def _ugg_items_to_popularity(items_by_slot: dict) -> list[UggPopularityItem]:
+def _ugg_items_to_popularity(items_by_slot: dict, slot_map: dict[str, str | None]) -> list[UggPopularityItem]:
     """Extract per-item count/total from u.gg's items_table dict.
 
     Returns one UggPopularityItem per (slot, item_id) pair that has non-zero count.
@@ -1121,7 +1105,7 @@ def _ugg_items_to_popularity(items_by_slot: dict) -> list[UggPopularityItem]:
     """
     result: list[UggPopularityItem] = []
     for ugg_slot, slot_data in items_by_slot.items():
-        normalised = _UGG_SLOT_MAP.get(ugg_slot.lower())
+        normalised = slot_map.get(ugg_slot.lower())
         if normalised is None:
             continue
         items = slot_data.get("items") or []
@@ -1183,7 +1167,7 @@ def _ugg_items_to_popularity(items_by_slot: dict) -> list[UggPopularityItem]:
     return result
 
 
-def _parse_ugg_popularity(html: str, url: str) -> list[UggPopularityItem]:
+def _parse_ugg_popularity(html: str, url: str, slot_map: dict[str, str | None] | None = None) -> list[UggPopularityItem]:
     """Parse u.gg SSR HTML and return per-item popularity data for all slots.
 
     Pure function — no network calls.  Extracts the full items list (all items,
@@ -1221,7 +1205,7 @@ def _parse_ugg_popularity(html: str, url: str) -> list[UggPopularityItem]:
                 continue
             items_by_slot = spec_data.get("items_table", {}).get("items", {})
             if items_by_slot:
-                return _ugg_items_to_popularity(items_by_slot)
+                return _ugg_items_to_popularity(items_by_slot, slot_map or {})
     except (AttributeError, TypeError):
         pass
 
@@ -1241,6 +1225,7 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
     Returns {rows_inserted, specs_processed}.
     """
     async with pool.acquire() as conn:
+        ugg_slot_map = await _load_slot_labels(conn, "ugg")
         rows = await conn.fetch("""
             WITH latest AS (
                 SELECT
@@ -1265,7 +1250,7 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
     specs_processed = 0
 
     for row in rows:
-        items = _parse_ugg_popularity(row["content"], row["url"])
+        items = _parse_ugg_popularity(row["content"], row["url"], ugg_slot_map)
         if not items:
             continue
 
@@ -1329,28 +1314,6 @@ _TIER_BADGE_ITEM_RE = re.compile(r'\[icon-badge=(\d+)')
 #
 # Rings (11) and trinkets (12) share a single invtype for both slots; the
 # extractor uses first/second occurrence order to assign _1 vs _2.
-_WOWHEAD_SLOT_MAP: dict[int, str] = {
-    1:  "head",
-    2:  "neck",
-    3:  "shoulder",
-    5:  "chest",       # INVTYPE_CHEST
-    6:  "waist",
-    7:  "legs",
-    8:  "feet",
-    9:  "wrist",
-    10: "hands",
-    11: "ring",        # both ring slots — resolved by occurrence order below
-    12: "trinket",     # both trinket slots — resolved by occurrence order below
-    13: "main_hand",   # INVTYPE_WEAPON (1H, equips in main hand)
-    14: "off_hand",    # INVTYPE_SHIELD
-    15: "main_hand",   # INVTYPE_RANGED (bows, guns, crossbows — Hunter ranged weapon)
-    16: "back",        # INVTYPE_CLOAK
-    17: "main_hand",   # INVTYPE_2HWEAPON
-    20: "chest",       # INVTYPE_ROBE (same equip slot as chest)
-    21: "main_hand",   # INVTYPE_MAINHAND
-    22: "off_hand",    # INVTYPE_OFFHAND
-    23: "off_hand",    # INVTYPE_HOLDABLE (held in off hand)
-}
 
 # Wowhead BBCode section-header pattern.  Section titles live in the `toc`
 # attribute, not between the tags.  The HTML is served inside a JSON string
@@ -1494,7 +1457,7 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
             )
             SELECT content, spec_id FROM latest WHERE rn = 1
         """)
-        slot_map = await _load_slot_labels(conn)
+        slot_map = await _load_slot_labels(conn, "method")
 
     specs_processed = 0
     sections_upserted = 0
@@ -1527,6 +1490,9 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     Returns {bis_entries_inserted}.
     """
     async with pool.acquire() as conn:
+        ugg_slot_map = await _load_slot_labels(conn, "ugg")
+        wh_raw = await _load_slot_labels(conn, "wowhead")
+        wh_slot_map: dict[int, str | None] = {int(k): v for k, v in wh_raw.items()}
         rows = await conn.fetch("""
             WITH latest AS (
                 SELECT
@@ -1562,9 +1528,9 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         content_type = row["content_type"] or "overall"
 
         if source == "ugg":
-            slots = _parse_ugg_html(html, url)
+            slots = _parse_ugg_html(html, url, ugg_slot_map)
         elif source == "wowhead":
-            slots, _ = _parse_wowhead_html(html, url, content_type)
+            slots, _ = _parse_wowhead_html(html, url, content_type, wh_slot_map)
         elif source == "method":
             slots = await _resolve_method_bis_from_db(pool, spec_id, content_type)
         else:
@@ -1687,6 +1653,8 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
               FROM ranked
              WHERE rn = 1
         """)
+        wh_raw = await _load_slot_labels(conn, "wowhead")
+        wh_slot_map: dict[int, str | None] = {int(k): v for k, v in wh_raw.items()}
         await conn.execute("TRUNCATE enrichment.trinket_ratings")
 
     total_inserted = 0
@@ -1697,7 +1665,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
         spec_id = row["spec_id"]
         hero_talent_id = row["hero_talent_id"]
 
-        _, trinket_ratings = _parse_wowhead_html(html, url)
+        _, trinket_ratings = _parse_wowhead_html(html, url, slot_map=wh_slot_map)
 
         if not trinket_ratings:
             continue
@@ -1732,7 +1700,8 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
 
 
 def _parse_wowhead_html(
-    html: str, url: str = "", content_type: str = "overall"
+    html: str, url: str = "", content_type: str = "overall",
+    slot_map: dict[int, str | None] | None = None,
 ) -> tuple[list[SimcSlot], list[ExtractedTrinketRating]]:
     """Parse Wowhead BIS guide HTML and extract items + trinket ratings.
 
@@ -1753,6 +1722,7 @@ def _parse_wowhead_html(
 
     Returns (slots, trinket_ratings).
     """
+    sm: dict[int, str | None] = slot_map or {}
     # Build item metadata map from ALL WH.Gatherer.addData() calls in the page.
     # Metadata is declared globally (not per-section), so we always scan the
     # full HTML for this step.
@@ -1775,12 +1745,12 @@ def _parse_wowhead_html(
     # missing slots from the overall BiS section.  Raid and M+ sections only
     # list the items specifically worth farming from that content; the overall
     # section provides the complete recommended set for all other slots.
-    section_slots = _wh_slots_from_section(html, item_meta, content_type)
+    section_slots = _wh_slots_from_section(html, item_meta, content_type, sm)
 
     if content_type != "overall":
         # Backfill missing slots with overall recommendations so every
         # content_type ends up with a full 16-slot BIS list.
-        overall_slots = _wh_slots_from_section(html, item_meta, "overall")
+        overall_slots = _wh_slots_from_section(html, item_meta, "overall", sm)
         filled: dict[str, int] = {s.slot: s.blizzard_item_id for s in overall_slots}
         # Section-specific items take priority; they override overall
         filled.update({s.slot: s.blizzard_item_id for s in section_slots})
@@ -1798,7 +1768,8 @@ def _parse_wowhead_html(
 
 
 async def _extract_wowhead(
-    url: str, content_type: str = "overall"
+    url: str, content_type: str = "overall",
+    pool: Optional[asyncpg.Pool] = None,
 ) -> tuple[list[SimcSlot], list[ExtractedTrinketRating], Optional[str]]:
     """Fetch Wowhead BIS guide and extract items via WH.Gatherer.addData() calls.
 
@@ -1812,7 +1783,13 @@ async def _extract_wowhead(
         response.raise_for_status()
         html = response.text
 
-    slots, trinket_ratings = _parse_wowhead_html(html, url, content_type)
+    slot_map: dict[int, str | None] = {}
+    if pool:
+        async with pool.acquire() as conn:
+            raw = await _load_slot_labels(conn, "wowhead")
+            slot_map = {int(k): v for k, v in raw.items()}
+
+    slots, trinket_ratings = _parse_wowhead_html(html, url, content_type, slot_map)
     return slots, trinket_ratings, html
 
 
@@ -1832,9 +1809,14 @@ class MethodSection:
     outlier_reason: Optional[str]
 
 
-async def _load_slot_labels(conn: asyncpg.Connection) -> dict[str, str | None]:
-    """Load slot label → slot_key mapping from config.method_slot_labels."""
-    rows = await conn.fetch("SELECT page_label, slot_key FROM config.method_slot_labels")
+async def _load_slot_labels(
+    conn: asyncpg.Connection, origin: str
+) -> dict[str, str | None]:
+    """Load slot label → slot_key mapping from config.slot_labels for one origin."""
+    rows = await conn.fetch(
+        "SELECT page_label, slot_key FROM config.slot_labels WHERE origin = $1",
+        origin,
+    )
     return {r["page_label"]: r["slot_key"] for r in rows}
 
 
@@ -2130,7 +2112,7 @@ async def _resolve_method_bis_from_db(
             """,
             spec_id, content_type,
         )
-        slot_map = await _load_slot_labels(conn)
+        slot_map = await _load_slot_labels(conn, "method")
 
     sections = _extract_method_sections(raw_row["content"], slot_map)
     if not sections:
@@ -2173,7 +2155,7 @@ async def _extract_method(
 
     if pool and spec_id:
         async with pool.acquire() as conn:
-            slot_map = await _load_slot_labels(conn)
+            slot_map = await _load_slot_labels(conn, "method")
             sections = _extract_method_sections(html, slot_map)
             await _upsert_method_sections(conn, spec_id, sections)
         slots = await _resolve_method_section(pool, sections, spec_id, content_type)
@@ -2214,12 +2196,13 @@ async def _resolve_weapon_slot(conn: asyncpg.Connection, blizzard_item_id: int) 
 
 
 def _wh_slots_from_section(
-    html: str, item_meta: dict, content_type: str
+    html: str, item_meta: dict, content_type: str,
+    slot_map: dict[int, str | None] | None = None,
 ) -> list[SimcSlot]:
     """Extract SimcSlot list from a single Wowhead page section.
 
     Scans both [item=N] and [icon-badge=N] markup within the section slice,
-    resolves slot codes via _WOWHEAD_SLOT_MAP, and assigns ring_1/ring_2 and
+    resolves slot codes via the wowhead slot_map, and assigns ring_1/ring_2 and
     trinket_1/trinket_2 by document order.
     """
     section_html = _wh_section_for_content_type(html, content_type)
@@ -2244,7 +2227,7 @@ def _wh_slots_from_section(
             continue
         je = meta.get("jsonequip") or {}
         slot_code = je.get("slotbak") if isinstance(je, dict) else meta.get("slotbak")
-        base_slot = _WOWHEAD_SLOT_MAP.get(slot_code)
+        base_slot = (slot_map or {}).get(slot_code)
         if not base_slot:
             continue
 
