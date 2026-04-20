@@ -1931,6 +1931,15 @@ def _extract_method_sections(html: str) -> list[MethodSection]:
             outlier_reason=None,
         ))
 
+    # Single-section rule: if only one section exists and its heading contains
+    # "overall", treat it as overall regardless of other conflicting keywords
+    # (e.g. "Overall / Raid Best Gear" on a spec with no separate Raid list).
+    if len(sections) == 1 and "overall" in sections[0].heading.lower():
+        sections[0].inferred_content_type = "overall"
+        sections[0].is_outlier = False
+        sections[0].outlier_reason = None
+        return sections
+
     # Detect outliers: same inferred CT more than once, or unrecognised heading
     ct_counts: dict[str, int] = {}
     for s in sections:

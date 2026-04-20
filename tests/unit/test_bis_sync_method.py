@@ -295,6 +295,25 @@ class TestExtractMethodSectionsEdgeCases:
         assert sections[0].is_outlier
         assert sections[0].inferred_content_type is None
 
+    def test_single_section_with_overall_and_raid_classifies_as_overall(self):
+        """'Overall / Raid Best Gear' as the only section → overall, not raid, not outlier."""
+        page = _make_method_page([
+            ("Overall / Raid Best Gear for Demonology Warlock", [("Head", 100003, "Boss")])
+        ])
+        sections = _extract_method_sections(page)
+        assert len(sections) == 1
+        assert sections[0].inferred_content_type == "overall"
+        assert not sections[0].is_outlier
+
+    def test_single_section_without_overall_keyword_uses_normal_classification(self):
+        """Single section with 'Raid' but no 'overall' keyword → normal classification."""
+        page = _make_method_page([
+            ("Best Raid Gear for Spec", [("Head", 100004, "Boss")])
+        ])
+        sections = _extract_method_sections(page)
+        assert sections[0].inferred_content_type == "raid"
+        assert not sections[0].is_outlier
+
     def test_row_without_link_skipped(self):
         page = _make_method_page([("Overall Best Gear", [("Head", 0, None)])])
         # Override to make a row without a real link
