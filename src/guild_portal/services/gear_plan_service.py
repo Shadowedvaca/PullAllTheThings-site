@@ -1674,6 +1674,19 @@ async def get_plan_detail(
             # Popularity percentages from viz.item_popularity
             rec["popularity"] = bis_popularity.get(bid, {})
 
+        # Sort BIS recommendations (non-trinket slots).
+        # Trinket slots retain DB order (sorted by tier rating + list position upstream).
+        if slot not in _TRINKET_SLOTS:
+            _bid_guide_count: dict[int, int] = {}
+            for _r in bis_recs:
+                _b = _r["blizzard_item_id"]
+                _bid_guide_count[_b] = _bid_guide_count.get(_b, 0) + 1
+            bis_recs.sort(key=lambda r: (
+                -_bid_guide_count[r["blizzard_item_id"]],
+                -(r.get("popularity", {}).get("overall") or 0),
+                (r.get("item_name") or "").lower(),
+            ))
+
         if desired and desired_bid:
             if desired_bid in craftable_desired_bids:
                 desired["target_ilvl"] = slot_crafted_ilvl
@@ -2133,6 +2146,26 @@ async def get_available_items(
             }
             for r in tier_rows
         ]
+
+    # Sort available items.
+    def _item_first_source(item: dict, field: str) -> str:
+        srcs = item.get("sources") or []
+        return (srcs[0].get(field) or "").lower() if srcs else ""
+
+    raid_items.sort(key=lambda i: (
+        _item_first_source(i, "source_instance"),
+        _item_first_source(i, "source_name"),
+        (i.get("name") or "").lower(),
+    ))
+    dungeon_items.sort(key=lambda i: (
+        _item_first_source(i, "source_instance"),
+        _item_first_source(i, "source_name"),
+        (i.get("name") or "").lower(),
+    ))
+    crafted_items.sort(key=lambda i: (
+        (i.get("profession_name") or "").lower(),
+        (i.get("name") or "").lower(),
+    ))
 
     # Phase 1F: add is_equipped, is_bis, and (for trinkets) source_ratings per item
     for item in raid_items + dungeon_items + crafted_items + (tier_items or []):
