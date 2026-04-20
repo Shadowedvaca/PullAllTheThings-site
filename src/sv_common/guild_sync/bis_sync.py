@@ -1976,31 +1976,31 @@ async def _upsert_method_sections(
     spec_id: int,
     sections: list[MethodSection],
 ) -> None:
-    """Upsert parsed sections to landing.method_page_sections."""
+    """Upsert section heading metadata to landing.method_page_sections.
+
+    Only stores metadata used by the override UI (heading, classification,
+    outlier status).  Slots are NOT stored here — they live in
+    enrichment.bis_entries, populated by rebuild_bis_from_landing() which
+    re-parses raw HTML from landing.bis_scrape_raw.
+    """
     now = datetime.now(timezone.utc)
     for s in sections:
-        slots_json = json.dumps([
-            {"slot": sl.slot, "blizzard_item_id": sl.blizzard_item_id, "bonus_ids": sl.bonus_ids}
-            for sl in s.slots
-        ])
         await conn.execute(
             """
             INSERT INTO landing.method_page_sections
-                (spec_id, section_heading, table_index, row_count, slots,
+                (spec_id, section_heading, table_index, row_count,
                  inferred_content_type, is_outlier, outlier_reason, fetched_at)
-            VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (spec_id, section_heading) DO UPDATE SET
                 table_index           = EXCLUDED.table_index,
                 row_count             = EXCLUDED.row_count,
-                slots                 = EXCLUDED.slots,
                 inferred_content_type = EXCLUDED.inferred_content_type,
                 is_outlier            = EXCLUDED.is_outlier,
                 outlier_reason        = EXCLUDED.outlier_reason,
                 fetched_at            = EXCLUDED.fetched_at
             """,
             spec_id, s.heading, s.table_index, s.row_count,
-            slots_json, s.inferred_content_type,
-            s.is_outlier, s.outlier_reason, now,
+            s.inferred_content_type, s.is_outlier, s.outlier_reason, now,
         )
 
 
@@ -2043,12 +2043,31 @@ async def _resolve_method_bis_from_db(
     spec_id: int,
     content_type: str,
 ) -> list[SimcSlot]:
-    """Resolve BIS slots for a Method target from landing.method_page_sections.
+    """Resolve BIS slots for a Method target by re-parsing raw HTML.
 
-    Used by rebuild_bis_from_landing() so we don't re-fetch HTML.
-    Checks config.method_section_overrides first; falls back to inferred CT.
+    Used by rebuild_bis_from_landing() — reads the latest raw HTML for this
+    spec from landing.bis_scrape_raw, re-parses sections with the current
+    classifier, then resolves via config.method_section_overrides or
+    auto-classification.  No pre-parsed slot data is read from landing.
     """
     async with pool.acquire() as conn:
+        raw_row = await conn.fetchrow(
+            """
+            SELECT bsr.content
+              FROM landing.bis_scrape_raw bsr
+              JOIN config.bis_scrape_targets t  ON t.id = bsr.target_id
+              JOIN ref.bis_list_sources s        ON s.id = t.source_id
+             WHERE s.origin = 'method'
+               AND t.spec_id = $1
+               AND bsr.content IS NOT NULL
+             ORDER BY bsr.fetched_at DESC
+             LIMIT 1
+            """,
+            spec_id,
+        )
+        if not raw_row:
+            return []
+
         override = await conn.fetchrow(
             """
             SELECT section_heading
@@ -2057,44 +2076,23 @@ async def _resolve_method_bis_from_db(
             """,
             spec_id, content_type,
         )
-        if override:
-            row = await conn.fetchrow(
-                """
-                SELECT slots
-                  FROM landing.method_page_sections
-                 WHERE spec_id = $1 AND section_heading = $2
-                """,
-                spec_id, override["section_heading"],
-            )
-        else:
-            row = await conn.fetchrow(
-                """
-                SELECT slots
-                  FROM landing.method_page_sections
-                 WHERE spec_id = $1
-                   AND inferred_content_type = $2
-                   AND NOT is_outlier
-                 LIMIT 1
-                """,
-                spec_id, content_type,
-            )
 
-    if not row or not row["slots"]:
+    sections = _extract_method_sections(raw_row["content"])
+    if not sections:
         return []
 
-    raw = row["slots"]
-    slots_data = raw if isinstance(raw, list) else json.loads(raw)
-    return [
-        SimcSlot(
-            slot=s["slot"],
-            blizzard_item_id=s["blizzard_item_id"],
-            bonus_ids=s.get("bonus_ids", []),
-            enchant_id=None,
-            gem_ids=[],
-            quality_track=None,
+    if override:
+        target_heading = override["section_heading"]
+        for s in sections:
+            if s.heading == target_heading:
+                return s.slots
+        logger.warning(
+            "_resolve_method_bis_from_db: override heading %r not found for spec %d / %s",
+            target_heading, spec_id, content_type,
         )
-        for s in slots_data
-    ]
+        return []
+
+    return _resolve_method_section_local(sections, content_type)
 
 
 async def _extract_method(
