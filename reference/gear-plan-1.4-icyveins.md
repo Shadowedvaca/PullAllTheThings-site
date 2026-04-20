@@ -1,15 +1,16 @@
-# gear-plan-2-icyveins — Icy Veins BIS Extraction
+# gear-plan-1.4-icyveins — Icy Veins BIS Extraction
 
-> **Status:** Implementation plan — ready to build in a fresh conversation.
-> Branch: new `feature/iv-bis-extraction` off `main` after gear-plan-schema-overhaul merges.
+> **Status:** Plan updated 2026-04-19 — ready to build.
+> Branch: `feature/iv-bis-extraction` off `main`.
+> Check `alembic/versions/` for the latest migration number before writing new ones.
 
 ---
 
-## What We Confirmed (Pre-Investigation)
+## What We Know (Confirmed)
 
 **IV pages are partially SSR — item data IS in static HTML.**
 
-Original assumption (PHASE_Z): "fully JS-rendered, httpx returns no item data."
+Original assumption: "fully JS-rendered, httpx returns no item data."  
 That was wrong. Confirmed via view-source:
 
 - `<h3>` section headers ARE in static HTML
@@ -42,19 +43,17 @@ Every BIS list section is preceded by a heading div:
 ```
 
 The `id` attribute on `<h3>` is the machine-readable section key.
-The text content is the human-readable label.
 
-### Known Section ID → Content Type Mapping
+### Section ID → Content Type Mapping
 
 | h3 id prefix | content_type | Notes |
 |---|---|---|
 | `overall-bis-list-for-` | `overall` | |
 | `raid-bis-list-for-` | `raid` | |
 | `mythic-gear-bis-list-for-` | `dungeon` | "Mythic+" = M+ = dungeon in our schema |
-| anything else | `unknown` | Flagged as outlier — review before mapping |
+| anything else | `NULL` | Flagged as outlier |
 
-Section IDs are spec-specific in the HTML (`-for-specspec-specclass`) but the prefix is the stable key.
-Strip everything after `-for-` to get the canonical prefix for matching.
+Strip everything after `-for-` to get the canonical prefix.
 
 ### Regular BIS Table Row
 
@@ -76,11 +75,9 @@ Strip everything after `-for-` to get the canonical prefix for matching.
 ```
 
 Extraction per row:
-- **slot**: `td[0].get_text(strip=True)`
+- **slot**: `td[0].get_text(strip=True)` → lowercased → looked up in `config.slot_labels` (origin='icy_veins')
 - **item_id**: `int(span['data-wowhead'].split('=')[1])` from `td[1] span[data-wowhead]`
 - **item_name**: `span.get_text(strip=True)` from same span
-- **encounter**: `td[2]` first anchor text (if present)
-- **instance**: `td[2]` second anchor text (if present)
 
 ### Trinket Dropdown Table Row
 
@@ -107,183 +104,366 @@ Extraction per row:
 
 ---
 
-## What We're Building
+## Design Principles
 
-### Goal
+**Landing = raw. Enrichment = parsed.**
 
-Implement `_extract_icy_veins()` in `bis_sync.py` to:
+- `landing.bis_scrape_raw` — raw page HTML (same as every other source)
+- `landing.iv_page_sections` — section metadata only (h3 id, title, classification, outlier flag, row count). **No items JSONB.** Items are re-parsed from raw HTML during `rebuild_bis_from_landing()`, same pattern as Method.
+- `enrichment.bis_entries` — final parsed slot → item assignments
+- `enrichment.trinket_ratings` — trinket tier ratings, parsed from raw HTML during `rebuild_trinket_ratings_from_landing()`
 
-1. Fetch IV page HTML with `httpx`
-2. Discover **all** BIS sections on the page (not just the three we expect)
-3. Extract items per section, storing raw data in `landing` schema
-4. Flag outlier sections (unknown IDs, unexpectedly short item lists)
-5. Map known sections → `bis_list_entries` enrichment pipeline
-6. Map trinket sections → `trinket_tier_ratings` as a bonus
+**No translation tables in code.**
 
-### Design Principle: Capture Everything, Map What We Recognize
-
-We do NOT cherry-pick only Raid/M+/Overall. We extract every section the page has.
-After scraping, the admin UI shows a section inventory with outlier flags so we can
-decide how to map anything unexpected before it enters the enrichment pipeline.
-
-This protects against:
-- IV adding a new section type (e.g., "Hero Talent BIS List")
-- Specs with atypical guides (e.g., only one list, or extra lists)
-- Layout anomalies in a handful of specs
+All slot label → slot key mappings live in `config.slot_labels` (see Phase Z.0).
 
 ---
 
-## Phase Z.1 — New Landing Table
+## Phases
 
-### Migration
+| Phase | Scope | Migration |
+|---|---|---|
+| Z.0 | Consolidate all slot label maps into `config.slot_labels`; remove hardcoded dicts | Yes (next) |
+| Z.1 | `landing.iv_page_sections` metadata table | Yes (next+1) |
+| Z.2 | `_extract_icy_veins()` rewrite + dead code removal | No |
+| Z.3 | Admin section inventory UI + API endpoint | No |
+| Z.4 | `rebuild_bis_from_landing()` + `rebuild_trinket_ratings_from_landing()` IV branches | No |
 
-Add `landing.iv_page_sections` — one row per scraped section per spec URL.
+---
+
+## Phase Z.0 — Unified `config.slot_labels`
+
+### Why
+
+Three slot translation dicts currently exist as hardcoded Python:
+- `_UGG_SLOT_MAP` — text labels like `"belt"`, `"ring1"`, `"weapon1"`
+- `_WOWHEAD_SLOT_MAP` — integer inventory_type codes (Blizzard API) like `1` (head), `6` (waist)
+- Icy Veins needs its own map — text labels like `"helm"`, `"off hand"`
+
+Method already has `config.method_slot_labels` (migration 0153).
+
+A single `config.slot_labels` table covers all origins. If IV says "belt" or Wowhead updates its HTML, the fix is an admin INSERT — no code deploy.
+
+### Migration (next after latest)
+
+```sql
+CREATE TABLE config.slot_labels (
+    origin      VARCHAR(20) NOT NULL,
+    page_label  VARCHAR(40) NOT NULL,
+    slot_key    VARCHAR(20),           -- NULL = "resolve by position" (ring, trinket ambiguity)
+    PRIMARY KEY (origin, page_label)
+);
+```
+
+Seed rows (origin='method') — migrated from `config.method_slot_labels`:
+
+```sql
+INSERT INTO config.slot_labels (origin, page_label, slot_key)
+SELECT 'method', page_label, slot_key FROM config.method_slot_labels;
+```
+
+Seed rows (origin='ugg') — from `_UGG_SLOT_MAP` in code:
+
+| page_label | slot_key |
+|---|---|
+| head | head |
+| neck | neck |
+| shoulder | shoulder |
+| back | back |
+| cape | back |
+| chest | chest |
+| wrist | wrist |
+| gloves | hands |
+| hands | hands |
+| belt | waist |
+| waist | waist |
+| legs | legs |
+| feet | feet |
+| ring1 | ring_1 |
+| ring2 | ring_2 |
+| trinket1 | trinket_1 |
+| trinket2 | trinket_2 |
+| weapon1 | main_hand |
+| weapon2 | off_hand |
+| main_hand | main_hand |
+| off_hand | off_hand |
+
+Seed rows (origin='wowhead') — from `_WOWHEAD_SLOT_MAP` (integer keys stored as text):
+
+| page_label | slot_key | Notes |
+|---|---|---|
+| 1 | head | |
+| 2 | neck | |
+| 3 | shoulder | |
+| 5 | chest | INVTYPE_CHEST |
+| 6 | waist | |
+| 7 | legs | |
+| 8 | feet | |
+| 9 | wrist | |
+| 10 | hands | |
+| 11 | ring | NULL — resolved by occurrence order |
+| 12 | trinket | NULL — resolved by occurrence order |
+| 13 | main_hand | INVTYPE_WEAPON (1H) |
+| 14 | off_hand | INVTYPE_SHIELD |
+| 15 | main_hand | INVTYPE_RANGED |
+| 16 | back | INVTYPE_CLOAK |
+| 17 | main_hand | INVTYPE_2HWEAPON |
+| 20 | chest | INVTYPE_ROBE |
+| 21 | main_hand | INVTYPE_MAINHAND |
+| 22 | off_hand | INVTYPE_OFFHAND |
+| 23 | off_hand | INVTYPE_HOLDABLE |
+
+Seed rows (origin='icy_veins') — IV uses title-cased labels; store lowercased:
+
+| page_label | slot_key |
+|---|---|
+| helm | head |
+| head | head |
+| neck | neck |
+| shoulders | shoulder |
+| shoulder | shoulder |
+| back | back |
+| cloak | back |
+| chest | chest |
+| wrists | wrist |
+| wrist | wrist |
+| hands | hands |
+| gloves | hands |
+| waist | waist |
+| belt | waist |
+| legs | legs |
+| feet | feet |
+| boots | feet |
+| ring 1 | ring_1 |
+| ring 2 | ring_2 |
+| ring | NULL |
+| trinket 1 | trinket_1 |
+| trinket 2 | trinket_2 |
+| trinket | NULL |
+| main hand | main_hand |
+| off hand | off_hand |
+| weapon | main_hand |
+
+After seeding, drop the old table:
+
+```sql
+DROP TABLE config.method_slot_labels;
+```
+
+### Code Changes (bis_sync.py)
+
+**Remove:**
+- `_UGG_SLOT_MAP` dict (lines ~79–101)
+- `_WOWHEAD_SLOT_MAP` dict (lines ~1319–1340)
+
+**Update `_load_slot_labels(conn, origin)`:**
+
+```python
+async def _load_slot_labels(
+    conn: asyncpg.Connection, origin: str
+) -> dict[str, str | None]:
+    """Load slot label → slot_key mapping from config.slot_labels for one origin."""
+    rows = await conn.fetch(
+        "SELECT page_label, slot_key FROM config.slot_labels WHERE origin = $1",
+        origin,
+    )
+    return {row["page_label"]: row["slot_key"] for row in rows}
+```
+
+**Update callers:**
+- Method: `_load_slot_labels(conn, "method")` — already passes origin-equivalent; now explicit
+- u.gg: load `_load_slot_labels(conn, "ugg")` at start of `_parse_ugg_html()` callers
+- Wowhead: load `_load_slot_labels(conn, "wowhead")` with `{int(k): v for k, v in labels.items()}` for integer lookup
+- IV: `_load_slot_labels(conn, "icy_veins")` in new `_extract_icy_veins()`
+
+---
+
+## Phase Z.1 — `landing.iv_page_sections`
+
+### Migration (next after Z.0)
 
 ```sql
 CREATE TABLE landing.iv_page_sections (
-    id              BIGSERIAL PRIMARY KEY,
-    spec_id         INTEGER NOT NULL REFERENCES guild_identity.specializations(id),
-    source_id       INTEGER NOT NULL REFERENCES guild_identity.bis_list_sources(id),
-    page_url        TEXT NOT NULL,
-    section_h3_id   TEXT NOT NULL,          -- raw h3 id attr, e.g. "overall-bis-list-for-specspec-specclass"
-    section_title   TEXT NOT NULL,          -- human label, e.g. "Overall BiS List for Balance Druid"
-    content_type    VARCHAR(20),            -- 'raid'/'dungeon'/'overall'/NULL if unknown
+    id                 BIGSERIAL PRIMARY KEY,
+    spec_id            INTEGER NOT NULL REFERENCES ref.specializations(id),
+    source_id          INTEGER NOT NULL REFERENCES ref.bis_list_sources(id),
+    page_url           TEXT NOT NULL,
+    section_h3_id      TEXT NOT NULL,
+    section_title      TEXT NOT NULL,
+    content_type       VARCHAR(20),           -- 'raid'/'dungeon'/'overall'/NULL if unknown
     is_trinket_section BOOLEAN NOT NULL DEFAULT FALSE,
-    items           JSONB NOT NULL,         -- see schema below
-    items_found     INTEGER NOT NULL DEFAULT 0,
-    is_outlier      BOOLEAN NOT NULL DEFAULT FALSE,
-    outlier_reason  TEXT,
-    scraped_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    row_count          INTEGER NOT NULL DEFAULT 0,
+    is_outlier         BOOLEAN NOT NULL DEFAULT FALSE,
+    outlier_reason     TEXT,
+    scraped_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (spec_id, source_id, section_h3_id)
 );
 ```
 
-`items` JSONB schema for regular sections:
-```json
-[
-  {
-    "slot": "Helm",
-    "item_id": 250024,
-    "item_name": "Branches of the Luminous Bloom",
-    "encounter": "Lightblinded Vanguard",
-    "instance": "The Voidspire",
-    "priority": 1
-  }
-]
-```
-
-`items` JSONB schema for trinket sections:
-```json
-[
-  { "tier": "S", "item_id": 249346, "item_name": "Vaelgor's Final Stare", "sort_order": 1 },
-  { "tier": "S", "item_id": 249809, "item_name": "Locus-Walker's Ribbon",  "sort_order": 2 }
-]
-```
+**No `items` column.** Raw HTML lives in `landing.bis_scrape_raw` (same as Method/Wowhead/u.gg). Items are re-parsed from there during enrichment rebuild.
 
 ---
 
-## Phase Z.2 — Extraction Implementation
+## Phase Z.2 — `_extract_icy_veins()` Rewrite
 
-### Changes to `bis_sync.py`
+### Dead Code to Remove
 
-**Remove (dead code):**
-- `_IV_AREA_LINK_RE` regex
-- `_IV_ITEM_ID_RE`, `_IV_ITEM_LINK_RE` (old commented-out regexes)
-- `discover_iv_areas()` — no-op stub
-- `_fetch_iv_areas()` — orphaned helper
+All of these are dead before any new code is written:
+
+| Symbol | Location | Why dead |
+|---|---|---|
+| `_IV_AREA_LINK_RE` | ~line 322 | Old regex, never matches IV HTML |
+| `_IV_ITEM_ID_RE` | ~line 2226 | Never matches IV static HTML (see comment in code) |
+| `_IV_ITEM_LINK_RE` | ~line 2227 | Never matches IV static HTML |
+| `discover_iv_areas()` | ~line 307 | No-op stub, logs and returns |
+| `_fetch_iv_areas()` | ~line 329 | Orphaned helper for discover_iv_areas |
+| `_categorize_iv_area()` | ~line 378 | Old hero-talent label-matching approach; replaced by h3 id prefix |
 
 **Keep unchanged:**
 - `_iv_base_url()` — correct URL builder
 - `_iv_bis_role()` — correct role mapper
 
-**Rewrite `_extract_icy_veins()`:**
+### New Implementation
 
 ```python
-async def _extract_icy_veins(url: str, spec_id: int, source_id: int, pool) -> list[dict]:
-    """
-    Fetch one IV BIS page. Extract all sections. Upsert into landing.iv_page_sections.
-    Returns list of raw item dicts for the content_type matching source_id (for backward compat).
+async def _extract_icy_veins(
+    url: str,
+    spec_id: int,
+    source_id: int,
+    pool: asyncpg.Pool,
+) -> tuple[list[SimcSlot], str | None]:
+    """Fetch one IV BIS page, extract all sections, upsert metadata to
+    landing.iv_page_sections, store raw HTML in landing.bis_scrape_raw.
+
+    Returns (slots_for_this_content_type, raw_html).
     """
 ```
 
-Internal helpers (new, private to this module):
-- `_iv_parse_sections(html: str) -> list[SectionRaw]` — pure BeautifulSoup parse, no DB
-- `_iv_classify_section(h3_id: str) -> tuple[str | None, bool]` — returns `(content_type, is_trinket)`
-- `_iv_is_outlier(section: SectionRaw) -> tuple[bool, str | None]` — returns `(flag, reason)`
-- `_iv_extract_regular_rows(table) -> list[dict]` — parses standard 3-col BIS table
-- `_iv_extract_trinket_rows(details_el) -> list[dict]` — parses tier-grouped trinket dropdown
+Internal helpers (pure functions, no DB/network):
+
+- `_iv_parse_sections(html: str) -> list[IVSection]` — BeautifulSoup parse; finds all h3 + following tables + trinket dropdowns
+- `_iv_classify_section(h3_id: str) -> tuple[str | None, bool]` — returns `(content_type, is_trinket_section)` from h3 id prefix
+- `_iv_is_outlier(section: IVSection) -> tuple[bool, str | None]` — returns `(flag, reason)` 
+- `_iv_extract_regular_rows(table_el, slot_map) -> list[SimcSlot]` — parses 3-col BIS table using slot_labels
+- `_iv_extract_trinket_rows(details_el) -> list[dict]` — parses tier-grouped trinket dropdown; returns `[{tier, item_id, sort_order}]`
 
 ### Outlier Detection Rules
 
 A section is flagged as outlier if ANY of:
-- `content_type is None` — section ID prefix not in known mapping
-- `items_found < 5` — suspiciously short list (most slot lists have 14+ rows)
-- `items_found == 0` — extraction produced nothing (parse failure)
+- `content_type is None` — h3 id prefix not in known mapping
+- `row_count < 5` — suspiciously short list
+- `row_count == 0` — extraction produced nothing
 - Trinket section has no tier labels found
 
 ### Two-Phase HTTP Fetch
 
-Avoid holding DB connection during HTTP (lesson from PHASE_Z):
+Avoid holding DB connection during HTTP:
 1. Fetch all pages with `httpx` (no DB) → collect `(url, html)` pairs
 2. Open DB pool → parse and upsert all results
 
+### Slot Resolution (IV-specific)
+
+IV shows "Ring" once for each ring slot (two rows with identical label). When `slot_map.get("ring") is None`, use occurrence order to assign `ring_1` / `ring_2`. Same logic for "Trinket". This is identical to how Method handles the ambiguity.
+
+### Update `_TECHNIQUE_ORDER`
+
+```python
+"icy_veins": ["html_parse"],  # no longer a stub
+```
+
+Update the comment; behavior is now real.
+
 ---
 
-## Phase Z.3 — Admin UI: Section Inventory
+## Phase Z.3 — Admin Section Inventory
 
-### New section on `/admin/gear-plan`
+### API Endpoint
 
-**"IV Section Inventory"** panel — shows after "Sync BIS Lists" completes for IV sources.
+`GET /api/v1/admin/bis/iv-sections?outliers_only=false`
 
-Columns: Spec | Section Title | Content Type | Items | Outlier | Outlier Reason | Last Scraped
+Returns rows from `landing.iv_page_sections` joined to `ref.specializations` and `ref.bis_list_sources`.
+
+Response shape:
+```json
+{
+  "sections": [
+    {
+      "spec_id": 1,
+      "spec_name": "Balance",
+      "class_name": "Druid",
+      "source_name": "Icy Veins Overall",
+      "section_h3_id": "overall-bis-list-for-balance-druid",
+      "section_title": "Overall BiS List for Balance Druid",
+      "content_type": "overall",
+      "is_trinket_section": false,
+      "row_count": 16,
+      "is_outlier": false,
+      "outlier_reason": null,
+      "scraped_at": "2026-04-20T12:00:00Z"
+    }
+  ]
+}
+```
+
+### UI Panel
+
+New collapsible panel in `gear_plan_admin.html` — **"IV Section Inventory"** — below the existing BIS sync matrix.
+
+Columns: Spec | Source | Section Title | Content Type | Rows | Outlier | Reason | Scraped
 
 Filters:
 - Outliers only toggle
 - Source filter (IV Raid / IV M+ / IV Overall)
 
-**Purpose:** After the first full scrape across all 40 specs, review this table to:
-- Confirm known sections mapped correctly
-- Identify any specs with unusual guide structures
-- Decide how to handle `unknown` content_type sections
-
-No action buttons needed in v1 — this is read-only diagnostics. Manual mapping decisions
-feed back into code updates to `_iv_classify_section()`.
-
-### API endpoint
-
-`GET /api/v1/admin/bis/iv-sections?outliers_only=true`
-
-Returns summary rows from `landing.iv_page_sections`.
+Read-only in v1. Outlier decisions feed back into code updates to `_iv_classify_section()`.
 
 ---
 
 ## Phase Z.4 — Enrichment Pipeline
 
-### BIS Entries
+### BIS Entries (`rebuild_bis_from_landing`)
 
-After scraping, the existing `bis_list_entries` pipeline reads from `landing.iv_page_sections`
-where `content_type IS NOT NULL AND NOT is_outlier`.
+Add `elif source == "icy_veins":` branch after the method branch:
 
-Map `content_type` → `source_id` via `bis_list_sources`:
-- `overall` → "Icy Veins Overall" source
-- `raid` → "Icy Veins Raid" source
-- `dungeon` → "Icy Veins M+" source
+```python
+elif source == "icy_veins":
+    slot_map = await _load_slot_labels_sync(conn, "icy_veins")
+    slots = _iv_parse_bis_from_raw(html, content_type, slot_map)
+```
 
-Slot normalization: IV slot names (e.g., "Helm", "Main Hand") → our `slot` enum values.
-Build a mapping table in code (similar to how we handle Wowhead/u.gg slot names).
+`_iv_parse_bis_from_raw(html, content_type, slot_map)` — pure function. Re-parses the stored HTML for the section matching `content_type`, applies slot_map, returns `list[SimcSlot]`.
 
-### Trinket Tier Ratings (Bonus)
+Only sections where `content_type IS NOT NULL AND NOT is_outlier` (consulted from `landing.iv_page_sections`) are processed.
 
-Trinket sections feed directly into `trinket_tier_ratings`:
-- `source_id` = the IV source that owns the page section
-- `spec_id` = from the scrape target
-- `hero_talent_id` = NULL (IV pages don't split by hero talent)
-- `item_id` = from JSONB
-- `tier` = S/A/B/C/D from JSONB
-- `sort_order` = sequential within tier
+### Trinket Tier Ratings (`rebuild_trinket_ratings_from_landing`)
 
-This is a net-new capability — IV trinket tiers are not currently in the system.
-Run upsert after BIS entries are populated, same transaction window.
+Add `elif source == "icy_veins":` branch:
+
+```python
+elif source == "icy_veins":
+    trinket_rows = _iv_parse_trinkets_from_raw(html)
+```
+
+`_iv_parse_trinkets_from_raw(html)` — pure function. Finds `<details class="trinket-dropdown">`, extracts all tier rows, returns `[{tier, item_id, sort_order}]`.
+
+Upsert to `enrichment.trinket_ratings`:
+- `source_id` — from the scrape target row
+- `spec_id` — from the scrape target row
+- `hero_talent_id` — NULL (IV pages don't split by hero talent)
+- `blizzard_item_id` — from the JSONB
+- `tier` — S/A/B/C/D
+- `sort_order` — sequential within tier
+
+---
+
+## Schema Dependencies (current, post-0154)
+
+- `ref.specializations` — all 40 specs (FK target for iv_page_sections)
+- `ref.bis_list_sources` — has IV Raid/M+/Overall rows (FK target for iv_page_sections)
+- `landing` schema exists (Phase A, migration 0104)
+- `config.bis_scrape_targets` — IV rows already seeded (hero_talent_id=NULL, one per spec per IV source)
+- `enrichment.bis_entries` — target for Phase Z.4 BIS rebuild
+- `enrichment.trinket_ratings` — target for Phase Z.4 trinket ratings
 
 ---
 
@@ -291,46 +471,21 @@ Run upsert after BIS entries are populated, same transaction window.
 
 | File | Current State | Change |
 |---|---|---|
-| `src/sv_common/guild_sync/bis_sync.py` | `_extract_icy_veins()` stub, dead regex helpers | Rewrite extraction; remove dead code |
-| `src/sv_common/guild_sync/bis_sync.py` | `_TECHNIQUE_ORDER['icy_veins']` = `'html_parse'` | Already correct technique name — keep |
-| `src/sv_common/guild_sync/api/routes.py` | IV matrix cells show "— Coming Soon" | Update to real status after extraction works |
-| `src/guild_portal/static/js/gear_plan_admin.js` | IV cells show coming-soon indicator | Same — update after Phase Z.3 endpoint exists |
-| `alembic/versions/` | Through 0109 | New migration for `landing.iv_page_sections` |
-
----
-
-## Schema Dependencies
-
-- `landing` schema exists (Phase A, migration 0104)
-- `bis_list_sources` has 3 IV rows (seeds from Phase 1B)
-- `bis_scrape_targets` has IV rows (hero_talent_id=NULL, one per spec per IV source)
-- `trinket_tier_ratings` exists (migration 0100, Phase 1F)
-- `specializations` exists with all 40 specs
-
----
-
-## Build Phases
-
-| Phase | Scope | Migration |
-|---|---|---|
-| Z.1 | `landing.iv_page_sections` table | Yes |
-| Z.2 | `_extract_icy_veins()` rewrite + dead code removal | No |
-| Z.3 | Admin section inventory UI + API | No |
-| Z.4 | Enrichment: `bis_list_entries` + `trinket_tier_ratings` from landing | No |
-
-All four phases fit in one feature branch. Suggest tackling Z.1 + Z.2 together (extraction
-with no visible results yet), Z.3 (make it observable), then Z.4 (wire into enrichment).
+| `src/sv_common/guild_sync/bis_sync.py` | `_extract_icy_veins()` stub, dead code, 2 hardcoded dicts | Z.0: remove dicts; Z.2: rewrite extraction, remove dead code |
+| `src/sv_common/guild_sync/bis_sync.py` | `_load_slot_labels(conn)` loads method_slot_labels | Z.0: add `origin` param, load from slot_labels |
+| `alembic/versions/` | Check latest before writing | Z.0: next (slot_labels); Z.1: next+1 (iv_page_sections) |
+| `src/guild_portal/api/bis_routes.py` | IV targets skipped in sync | Z.3: new `/iv-sections` endpoint |
+| `src/guild_portal/templates/admin/gear_plan_admin.html` | IV cells show coming-soon | Z.3: IV Section Inventory panel |
+| `src/guild_portal/static/js/gear_plan_admin.js` | IV cells show coming-soon indicator | Z.3: fetch + render iv-sections |
 
 ---
 
 ## Open Questions for Build Session
 
-1. IV slot names — do they match our `slot` enum exactly, or do we need a mapping table?
-   Check by looking at a few pages across different spec types (caster / melee / tank / healer).
+1. **IV ring/trinket row order** — does IV always show Ring followed by Ring, or does it use "Ring 1" / "Ring 2" labels explicitly? Check by fetching 2–3 specs across different class archetypes (caster, melee, tank). If IV already uses explicit labels, `ring` → NULL row in slot_labels may not be needed.
 
-2. Do some specs have only a single list (e.g., only "Overall", no Raid/M+ split)?
-   If so, the outlier detection threshold of `items_found < 5` is the right gate,
-   not "must have exactly 3 sections."
+2. **Single-section specs** — do any specs have only one IV list (e.g., only "Overall", no Raid/M+ split)? Outlier detection `row_count < 5` gates against empty parse failures; a single-section spec with a full list is NOT an outlier — the absence of Raid/M+ sections is just handled by the enrichment layer finding no row for those content_types.
 
-3. How often should IV scrapes run? Weekly is probably sufficient (they update per patch,
-   not per day). Consider a separate `iv_sync` scheduler entry distinct from the daily BIS sync.
+3. **Scrape frequency** — IV updates per patch, not daily. Consider a separate scheduler cadence (weekly) distinct from the nightly BIS sync. Low priority for v1; can reuse the existing sync trigger manually.
+
+4. **u.gg wowhead slot map loading** — `_parse_ugg_html()` and `_parse_wowhead_html()` are currently pure functions with no DB access. Loading slot maps from DB requires passing either the map dict or a connection. Recommend: load the map in the async caller (`_extract_ugg`, `_extract_wowhead`) and pass it through, keeping the parse functions pure. Same pattern Method already uses.
