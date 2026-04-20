@@ -854,7 +854,7 @@ async def _extract_ugg(
     slot_map: dict[str, str | None] = {}
     if pool:
         async with pool.acquire() as conn:
-            slot_map = await _load_slot_labels(conn, "ugg")
+            slot_map = await _load_slot_labels(conn)
 
     return _parse_ugg_html(html, url, slot_map), html
 
@@ -1225,7 +1225,7 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
     Returns {rows_inserted, specs_processed}.
     """
     async with pool.acquire() as conn:
-        ugg_slot_map = await _load_slot_labels(conn, "ugg")
+        ugg_slot_map = await _load_slot_labels(conn)
         rows = await conn.fetch("""
             WITH latest AS (
                 SELECT
@@ -1457,7 +1457,7 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
             )
             SELECT content, spec_id FROM latest WHERE rn = 1
         """)
-        slot_map = await _load_slot_labels(conn, "method")
+        slot_map = await _load_slot_labels(conn)
 
     specs_processed = 0
     sections_upserted = 0
@@ -1490,9 +1490,8 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     Returns {bis_entries_inserted}.
     """
     async with pool.acquire() as conn:
-        ugg_slot_map = await _load_slot_labels(conn, "ugg")
-        wh_raw = await _load_slot_labels(conn, "wowhead")
-        wh_slot_map: dict[int, str | None] = {int(k): v for k, v in wh_raw.items()}
+        slot_map = await _load_slot_labels(conn)
+        wh_invtype_map = await _load_wowhead_invtypes(conn)
         rows = await conn.fetch("""
             WITH latest AS (
                 SELECT
@@ -1528,9 +1527,9 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         content_type = row["content_type"] or "overall"
 
         if source == "ugg":
-            slots = _parse_ugg_html(html, url, ugg_slot_map)
+            slots = _parse_ugg_html(html, url, slot_map)
         elif source == "wowhead":
-            slots, _ = _parse_wowhead_html(html, url, content_type, wh_slot_map)
+            slots, _ = _parse_wowhead_html(html, url, content_type, wh_invtype_map)
         elif source == "method":
             slots = await _resolve_method_bis_from_db(pool, spec_id, content_type)
         else:
@@ -1653,8 +1652,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
               FROM ranked
              WHERE rn = 1
         """)
-        wh_raw = await _load_slot_labels(conn, "wowhead")
-        wh_slot_map: dict[int, str | None] = {int(k): v for k, v in wh_raw.items()}
+        wh_invtype_map = await _load_wowhead_invtypes(conn)
         await conn.execute("TRUNCATE enrichment.trinket_ratings")
 
     total_inserted = 0
@@ -1665,7 +1663,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
         spec_id = row["spec_id"]
         hero_talent_id = row["hero_talent_id"]
 
-        _, trinket_ratings = _parse_wowhead_html(html, url, slot_map=wh_slot_map)
+        _, trinket_ratings = _parse_wowhead_html(html, url, slot_map=wh_invtype_map)
 
         if not trinket_ratings:
             continue
@@ -1701,7 +1699,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
 
 def _parse_wowhead_html(
     html: str, url: str = "", content_type: str = "overall",
-    slot_map: dict[int, str | None] | None = None,
+    slot_map: dict[int, str] | None = None,
 ) -> tuple[list[SimcSlot], list[ExtractedTrinketRating]]:
     """Parse Wowhead BIS guide HTML and extract items + trinket ratings.
 
@@ -1722,7 +1720,7 @@ def _parse_wowhead_html(
 
     Returns (slots, trinket_ratings).
     """
-    sm: dict[int, str | None] = slot_map or {}
+    sm: dict[int, str] = slot_map or {}
     # Build item metadata map from ALL WH.Gatherer.addData() calls in the page.
     # Metadata is declared globally (not per-section), so we always scan the
     # full HTML for this step.
@@ -1783,13 +1781,12 @@ async def _extract_wowhead(
         response.raise_for_status()
         html = response.text
 
-    slot_map: dict[int, str | None] = {}
+    invtype_map: dict[int, str] = {}
     if pool:
         async with pool.acquire() as conn:
-            raw = await _load_slot_labels(conn, "wowhead")
-            slot_map = {int(k): v for k, v in raw.items()}
+            invtype_map = await _load_wowhead_invtypes(conn)
 
-    slots, trinket_ratings = _parse_wowhead_html(html, url, content_type, slot_map)
+    slots, trinket_ratings = _parse_wowhead_html(html, url, content_type, invtype_map)
     return slots, trinket_ratings, html
 
 
@@ -1809,15 +1806,16 @@ class MethodSection:
     outlier_reason: Optional[str]
 
 
-async def _load_slot_labels(
-    conn: asyncpg.Connection, origin: str
-) -> dict[str, str | None]:
-    """Load slot label → slot_key mapping from config.slot_labels for one origin."""
-    rows = await conn.fetch(
-        "SELECT page_label, slot_key FROM config.slot_labels WHERE origin = $1",
-        origin,
-    )
+async def _load_slot_labels(conn: asyncpg.Connection) -> dict[str, str | None]:
+    """Load universal text label → slot_key mapping from config.slot_labels."""
+    rows = await conn.fetch("SELECT page_label, slot_key FROM config.slot_labels")
     return {r["page_label"]: r["slot_key"] for r in rows}
+
+
+async def _load_wowhead_invtypes(conn: asyncpg.Connection) -> dict[int, str]:
+    """Load Blizzard inventory_type code → slot_key from config.wowhead_invtypes."""
+    rows = await conn.fetch("SELECT invtype_id, slot_key FROM config.wowhead_invtypes")
+    return {r["invtype_id"]: r["slot_key"] for r in rows}
 
 
 def _classify_method_heading(heading: str) -> Optional[str]:
@@ -2112,7 +2110,7 @@ async def _resolve_method_bis_from_db(
             """,
             spec_id, content_type,
         )
-        slot_map = await _load_slot_labels(conn, "method")
+        slot_map = await _load_slot_labels(conn)
 
     sections = _extract_method_sections(raw_row["content"], slot_map)
     if not sections:
@@ -2155,7 +2153,7 @@ async def _extract_method(
 
     if pool and spec_id:
         async with pool.acquire() as conn:
-            slot_map = await _load_slot_labels(conn, "method")
+            slot_map = await _load_slot_labels(conn)
             sections = _extract_method_sections(html, slot_map)
             await _upsert_method_sections(conn, spec_id, sections)
         slots = await _resolve_method_section(pool, sections, spec_id, content_type)
@@ -2197,13 +2195,13 @@ async def _resolve_weapon_slot(conn: asyncpg.Connection, blizzard_item_id: int) 
 
 def _wh_slots_from_section(
     html: str, item_meta: dict, content_type: str,
-    slot_map: dict[int, str | None] | None = None,
+    slot_map: dict[int, str] | None = None,
 ) -> list[SimcSlot]:
     """Extract SimcSlot list from a single Wowhead page section.
 
     Scans both [item=N] and [icon-badge=N] markup within the section slice,
-    resolves slot codes via the wowhead slot_map, and assigns ring_1/ring_2 and
-    trinket_1/trinket_2 by document order.
+    resolves invtype codes via config.wowhead_invtypes, and assigns ring_1/ring_2
+    and trinket_1/trinket_2 by document order.
     """
     section_html = _wh_section_for_content_type(html, content_type)
 

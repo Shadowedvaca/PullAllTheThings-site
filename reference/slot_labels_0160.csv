@@ -1,0 +1,44 @@
+page_label,slot_key
+back,back
+belt,waist
+boots,feet
+cape,back
+chest,chest
+cloak,back
+feet,feet
+gloves,hands
+hands,hands
+head,head
+helm,head
+legs,legs
+main hand,main_hand
+main hand (2h),main_hand
+main hand (dw),main_hand
+main-hand,main_hand
+main_hand,main_hand
+neck,neck
+off hand,off_hand
+off-hand,off_hand
+off_hand,off_hand
+one hand,main_hand
+one-hand,main_hand
+ring,
+ring 1,ring_1
+ring 2,ring_2
+ring1,ring_1
+ring2,ring_2
+shoulder,shoulder
+shoulders,shoulder
+trinket,
+trinket 1,trinket_1
+trinket 2,trinket_2
+trinket1,trinket_1
+trinket2,trinket_2
+two hand weapon,main_hand
+two-hand weapon,main_hand
+waist,waist
+weapon,main_hand
+weapon1,main_hand
+weapon2,off_hand
+wrist,wrist
+wrists,wrist
