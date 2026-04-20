@@ -196,14 +196,12 @@ def _compute_weapon_display(
     else:
         weapon_build = None
 
-    # Show off_hand for 1H builds and Titan's Grip (2H build with off_hand BIS).
-    # Any off_hand BIS entry alongside a 2H main hand means Titan's Grip.
-    if weapon_build == "1h":
-        show_off_hand = True
-    elif weapon_build == "2h":
-        show_off_hand = bool(bis_by_slot.get("off_hand"))
-    else:
-        show_off_hand = False
+    # Show off_hand only for 1H builds.
+    # Titan's Grip (Fury Warrior with two 2H weapons) is not yet detected here —
+    # it requires knowing the off_hand BIS item's slot_type, which is not in
+    # bis_by_slot. TG support will be added when slot_type is exposed in
+    # viz.bis_recommendations.  For now, a 2H build never shows off_hand.
+    show_off_hand = weapon_build == "1h"
 
     return weapon_build, show_off_hand
 
@@ -1566,6 +1564,10 @@ async def get_plan_detail(
     # ring (or trinket) items, not just those scraped under that specific slot key.
     _merge_paired_bis(bis_by_slot, "ring_1", "ring_2")
     _merge_paired_bis(bis_by_slot, "trinket_1", "trinket_2")
+    # Merge both weapon pools so the active main-hand slot shows BIS for BOTH
+    # 1H and 2H builds.  Balance Druid: 2H staff (guide_order=1) and 1H weapon
+    # (guide_order=2) both appear with their respective checkmarks.
+    _merge_paired_bis(bis_by_slot, "main_hand_2h", "main_hand_1h")
 
     # Weapon build display rules: determine active main-hand slot and off-hand visibility.
     weapon_build, show_off_hand = _compute_weapon_display(
@@ -1635,13 +1637,28 @@ async def get_plan_detail(
             is_bis, equipped_track, plan_crafted_ilvl_map
         )
 
-        # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS
+        # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS.
+        # Weapon slots: both main_hand_2h and main_hand_1h desired items count so the
+        # merged BIS pool shows checkmarks for whichever build the player has set.
         _paired_slot = _SLOT_META[slot]["paired_slot"]
         _paired_desired_bid: Optional[int] = None
         if _paired_slot:
             _pd = desired_by_slot.get(_paired_slot)
             _paired_desired_bid = _pd["blizzard_item_id"] if _pd else None
         _all_desired_bids: set[int] = {b for b in (desired_bid, _paired_desired_bid) if b}
+        if slot in _WEAPON_MH_SLOTS:
+            _other_mh = "main_hand_1h" if slot == "main_hand_2h" else "main_hand_2h"
+            _other_mh_d = desired_by_slot.get(_other_mh)
+            if _other_mh_d and _other_mh_d.get("blizzard_item_id"):
+                _all_desired_bids.add(_other_mh_d["blizzard_item_id"])
+
+        # For weapon slots, also check the other typed slot's equipped item.
+        _all_equipped_bids: set[int] = {equipped_bid} if equipped_bid else set()
+        if slot in _WEAPON_MH_SLOTS:
+            _other_mh = "main_hand_1h" if slot == "main_hand_2h" else "main_hand_2h"
+            _other_eq = equipped_by_slot.get(_other_mh)
+            if _other_eq and _other_eq.get("blizzard_item_id"):
+                _all_equipped_bids.add(_other_eq["blizzard_item_id"])
 
         for rec in bis_recs:
             bid = rec["blizzard_item_id"]
@@ -1650,7 +1667,7 @@ async def get_plan_detail(
             else:
                 rec["target_ilvl"] = slot_noncrafted_ilvl
             # Phase 1F: EQUIPPED / BIS badges on BIS recommendations
-            rec["is_equipped"] = bool(equipped_bid and bid == equipped_bid)
+            rec["is_equipped"] = bid in _all_equipped_bids
             rec["is_bis"]      = bool(_all_desired_bids and bid in _all_desired_bids)
             # Phase 1F: trinket tier badge on BIS recs (full-spec map fetched above)
             if slot in _TRINKET_SLOTS:

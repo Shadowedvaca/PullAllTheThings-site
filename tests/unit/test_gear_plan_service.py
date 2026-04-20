@@ -135,15 +135,17 @@ class TestComputeWeaponDisplay:
         assert build == "1h"
         assert show_oh is True
 
-    def test_titans_grip_shows_off_hand(self):
-        # Fury Warrior TG: 2H build with off_hand BIS → show off_hand
+    def test_2h_build_with_offhand_bis_does_not_show_offhand(self):
+        # 2H build + off_hand BIS (e.g. Balance Druid 1H alt build's off_hand):
+        # off_hand should NOT show — it belongs to the 1H build, not the 2H build.
+        # Titan's Grip support is deferred until slot_type is in viz.bis_recommendations.
         bis = {
             "main_hand_2h": [_make_bis("main_hand_2h", 1)],
             "off_hand":     [_make_bis("off_hand", 1)],
         }
         build, show_oh = _compute_weapon_display(bis, {}, {})
         assert build == "2h"
-        assert show_oh is True
+        assert show_oh is False
 
     def test_no_bis_falls_back_to_equipped_2h(self):
         equipped = {"main_hand_2h": {"blizzard_item_id": 999, "slot": "main_hand_2h"}}
