@@ -2713,6 +2713,17 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
         popularity: r.popularity || null,
       });
     }
+    // Sort: guide count (checkmarks visible in current mode) desc → popularity desc → name asc
+    bisItems.sort((a, b) => {
+      const iCtsA = itemOriginCts[a.blizzard_item_id] || {};
+      const iCtsB = itemOriginCts[b.blizzard_item_id] || {};
+      const checksA = guideCols.filter(gc => _gpBisCheck(iCtsA, guideCts, gc.origin)).length;
+      const checksB = guideCols.filter(gc => _gpBisCheck(iCtsB, guideCts, gc.origin)).length;
+      if (checksB !== checksA) return checksB - checksA;
+      const popDiff = (_gpPopularityVal(b.popularity) ?? 0) - (_gpPopularityVal(a.popularity) ?? 0);
+      if (popDiff !== 0) return popDiff;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }
   const bisLabel = 'BIS Recommendations' + (isTrinket && trinketState?.status === 'loading'
     ? ' \u2026' : '');
