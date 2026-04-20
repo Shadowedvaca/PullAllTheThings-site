@@ -196,12 +196,7 @@ def _compute_weapon_display(
     else:
         weapon_build = None
 
-    # Show off_hand only for 1H builds.
-    # Titan's Grip (Fury Warrior with two 2H weapons) is not yet detected here —
-    # it requires knowing the off_hand BIS item's slot_type, which is not in
-    # bis_by_slot. TG support will be added when slot_type is exposed in
-    # viz.bis_recommendations.  For now, a 2H build never shows off_hand.
-    show_off_hand = weapon_build == "1h"
+    show_off_hand = True
 
     return weapon_build, show_off_hand
 

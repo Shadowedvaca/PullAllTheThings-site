@@ -107,7 +107,7 @@ class TestComputeWeaponDisplay:
         bis = {"main_hand_2h": [_make_bis("main_hand_2h", 1)]}
         build, show_oh = _compute_weapon_display(bis, {}, {})
         assert build == "2h"
-        assert show_oh is False
+        assert show_oh is True
 
     def test_1h_bis_only(self):
         bis = {"main_hand_1h": [_make_bis("main_hand_1h", 1)]}
@@ -123,7 +123,7 @@ class TestComputeWeaponDisplay:
         }
         build, show_oh = _compute_weapon_display(bis, {}, {})
         assert build == "2h"
-        assert show_oh is False
+        assert show_oh is True
 
     def test_prefer_lower_guide_order_1h(self):
         # Spec where 1H is preferred (guide_order=1 on 1H)
@@ -135,23 +135,25 @@ class TestComputeWeaponDisplay:
         assert build == "1h"
         assert show_oh is True
 
-    def test_2h_build_with_offhand_bis_does_not_show_offhand(self):
-        # 2H build + off_hand BIS (e.g. Balance Druid 1H alt build's off_hand):
-        # off_hand should NOT show — it belongs to the 1H build, not the 2H build.
-        # Titan's Grip support is deferred until slot_type is in viz.bis_recommendations.
+    def test_2h_build_always_shows_off_hand(self):
         bis = {
             "main_hand_2h": [_make_bis("main_hand_2h", 1)],
             "off_hand":     [_make_bis("off_hand", 1)],
         }
         build, show_oh = _compute_weapon_display(bis, {}, {})
         assert build == "2h"
-        assert show_oh is False
+        assert show_oh is True
+
+    def test_no_data_still_shows_off_hand(self):
+        build, show_oh = _compute_weapon_display({}, {}, {})
+        assert build is None
+        assert show_oh is True
 
     def test_no_bis_falls_back_to_equipped_2h(self):
         equipped = {"main_hand_2h": {"blizzard_item_id": 999, "slot": "main_hand_2h"}}
         build, show_oh = _compute_weapon_display({}, equipped, {})
         assert build == "2h"
-        assert show_oh is False
+        assert show_oh is True
 
     def test_no_bis_falls_back_to_equipped_1h(self):
         equipped = {"main_hand_1h": {"blizzard_item_id": 888, "slot": "main_hand_1h"}}
@@ -159,10 +161,6 @@ class TestComputeWeaponDisplay:
         assert build == "1h"
         assert show_oh is True
 
-    def test_no_data_returns_none(self):
-        build, show_oh = _compute_weapon_display({}, {}, {})
-        assert build is None
-        assert show_oh is False
 
     def test_desired_fallback_2h(self):
         desired = {"main_hand_2h": {"blizzard_item_id": 777}}
