@@ -482,6 +482,48 @@ class TestPositionalSlots:
         assert self.d["trinket_2"] == 300014
 
 
+class TestAlternativeRingsAndTrinkets:
+    """4 Ring rows and 4 Trinket rows should all be captured (no cap at 2)."""
+
+    def _make_page(self) -> str:
+        rows = [
+            ("Ring", 400011, None),
+            ("Ring", 400012, None),
+            ("Ring", 400013, None),  # alt 1
+            ("Ring", 400014, None),  # alt 2
+            ("Trinket", 400021, None),
+            ("Trinket", 400022, None),
+            ("Trinket", 400023, None),  # alt 1
+            ("Trinket", 400024, None),  # alt 2
+        ]
+        return _make_method_page([("Overall Best Gear", rows)])
+
+    def setup_method(self):
+        sections = _extract_method_sections(self._make_page(), _TEST_SLOT_MAP)
+        slots = _resolve_method_section_local(sections, "overall")
+        self.slots = slots
+        # group by slot
+        from collections import defaultdict
+        self.by_slot: dict[str, list[int]] = defaultdict(list)
+        for s in slots:
+            self.by_slot[s.slot].append(s.blizzard_item_id)
+
+    def test_ring_1_has_two_items(self):
+        assert set(self.by_slot["ring_1"]) == {400011, 400013}
+
+    def test_ring_2_has_two_items(self):
+        assert set(self.by_slot["ring_2"]) == {400012, 400014}
+
+    def test_trinket_1_has_two_items(self):
+        assert set(self.by_slot["trinket_1"]) == {400021, 400023}
+
+    def test_trinket_2_has_two_items(self):
+        assert set(self.by_slot["trinket_2"]) == {400022, 400024}
+
+    def test_total_slot_count(self):
+        assert len(self.slots) == 8
+
+
 # ---------------------------------------------------------------------------
 # Bonus ID extraction
 # ---------------------------------------------------------------------------

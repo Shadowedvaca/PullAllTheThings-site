@@ -1574,6 +1574,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         if slots:
             async with pool.acquire() as conn:
                 weapon_counter = 0
+                slot_counters: dict[str, int] = {}
                 for slot_data in slots:
                     # Resolve main_hand intermediate slot → main_hand_1h or main_hand_2h
                     if slot_data.slot == "main_hand":
@@ -1585,7 +1586,8 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                         guide_order = weapon_counter
                     else:
                         actual_slot = slot_data.slot
-                        guide_order = 1
+                        slot_counters[actual_slot] = slot_counters.get(actual_slot, 0) + 1
+                        guide_order = slot_counters[actual_slot]
 
                     # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
                     # skip items not yet in the enrichment layer.
@@ -1893,14 +1895,10 @@ def _parse_method_table(
         if slot_key is None:
             if "ring" in raw_slot:
                 ring_count += 1
-                if ring_count > 2:
-                    continue
-                slot_key = "ring_1" if ring_count == 1 else "ring_2"
+                slot_key = "ring_1" if ring_count % 2 == 1 else "ring_2"
             elif "trinket" in raw_slot:
                 trinket_count += 1
-                if trinket_count > 2:
-                    continue
-                slot_key = "trinket_1" if trinket_count == 1 else "trinket_2"
+                slot_key = "trinket_1" if trinket_count % 2 == 1 else "trinket_2"
             else:
                 continue
 
