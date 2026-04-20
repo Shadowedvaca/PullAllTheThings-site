@@ -1764,7 +1764,7 @@ def _classify_method_heading(heading: str) -> Optional[str]:
     Returns 'overall', 'raid', 'mythic_plus', or None if unrecognised.
     """
     h = heading.lower()
-    if "mythic" in h:
+    if "mythic" in h or "dungeon" in h:
         return "mythic_plus"
     if "raid" in h:
         return "raid"

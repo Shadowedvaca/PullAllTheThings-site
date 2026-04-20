@@ -168,6 +168,9 @@ class TestClassifyMethodHeading:
     def test_mythic_keyword(self):
         assert _classify_method_heading("Best Mythic Gear") == "mythic_plus"
 
+    def test_dungeon_keyword(self):
+        assert _classify_method_heading("Best Dungeon Gear for Affliction Warlock") == "mythic_plus"
+
     def test_hero_talent_heading_with_overall_classifies_as_overall(self):
         # "Overall Best Gear for San'layn" still contains "overall" → classified as overall.
         # The outlier is detected at the page level (duplicate classification), not here.
