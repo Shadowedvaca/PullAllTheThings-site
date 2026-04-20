@@ -2495,7 +2495,7 @@ function _gpBisCheck(itemCts, guideCts, origin) {
 function _gpTrinketRating(ratings, origin) {
   const bo = ratings?.[origin];
   if (!bo) return null;
-  if (origin === 'wowhead') return bo.overall || null;
+  if (origin === 'wowhead') return bo.overall || bo.raid || bo.mythic_plus || null;
   if (_gpGuideMode === 'overall')     return bo.overall || bo.raid || bo.mythic_plus || null;
   if (_gpGuideMode === 'raid')        return bo.raid    || bo.overall || null;
   if (_gpGuideMode === 'mythic_plus') return bo.mythic_plus || bo.overall || null;
