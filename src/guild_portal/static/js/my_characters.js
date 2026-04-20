@@ -2835,8 +2835,10 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     }
     const it = itemMap.get(r.blizzard_item_id);
     if (r.content_type) it.cts.add(r.content_type);
-    // Count unique guide origins recommending this item for the active mode
-    if (r.origin && (_gpGuideMode === 'overall' || r.content_type === _gpGuideMode)) {
+    // Count unique guide origins recommending this item for the active mode.
+    // Always match content_type exactly — the 'overall' short-circuit would
+    // count M+/Raid origins invisible in the current filter, corrupting the sort.
+    if (r.origin && r.content_type === _gpGuideMode) {
       it.guideOrigins.add(r.origin);
     }
   }
