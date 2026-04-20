@@ -110,7 +110,7 @@ SLOT_ORDER = [
     "head", "neck", "shoulder", "back", "chest", "wrist",
     "hands", "waist", "legs", "feet",
     "ring_1", "ring_2", "trinket_1", "trinket_2",
-    "main_hand", "off_hand",
+    "main_hand_2h", "main_hand_1h", "off_hand",
 ]
 
 # Blizzard API slot_type string → normalised slot key

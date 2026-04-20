@@ -539,3 +539,72 @@ class TestEdgeCases:
         sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "mythic_plus")
         assert slots == []
+
+
+# ---------------------------------------------------------------------------
+# Weapon build variants — two main_hand rows (e.g. Frost DK 2H vs DW)
+# ---------------------------------------------------------------------------
+
+
+class TestWeaponBuildVariants:
+    """Method parser returns slot='main_hand' as an intermediate value for all
+    weapon rows.  Downstream (rebuild_bis_from_landing) resolves each to
+    main_hand_2h or main_hand_1h via enrichment.items.slot_type.
+
+    These tests verify the parser:
+    1. Returns both weapon rows (not just the first).
+    2. Preserves document order (guide_order=1 first, guide_order=2 second).
+    3. A single-weapon page still produces one main_hand slot.
+    """
+
+    def _parse_weapon_rows(self, rows: list[tuple[str, int, str | None]]) -> list:
+        page = _make_method_page([("Overall Best Gear", rows)])
+        sections = _extract_method_sections(page, _TEST_SLOT_MAP)
+        slots = _resolve_method_section_local(sections, "overall")
+        return [s for s in slots if s.slot == "main_hand"]
+
+    def test_single_2h_weapon_row_returns_one_main_hand(self):
+        rows = [("Main Hand (2h)", 800001, "Boss")]
+        weapons = self._parse_weapon_rows(rows)
+        assert len(weapons) == 1
+        assert weapons[0].blizzard_item_id == 800001
+
+    def test_single_dw_weapon_row_returns_one_main_hand(self):
+        rows = [("Main Hand (dw)", 800002, "Boss")]
+        weapons = self._parse_weapon_rows(rows)
+        assert len(weapons) == 1
+        assert weapons[0].blizzard_item_id == 800002
+
+    def test_two_weapon_rows_both_returned(self):
+        rows = [
+            ("Main Hand (2h)", 800003, "Boss A"),
+            ("Main Hand (dw)", 800004, "Boss B"),
+        ]
+        weapons = self._parse_weapon_rows(rows)
+        assert len(weapons) == 2
+
+    def test_two_weapon_rows_document_order_preserved(self):
+        rows = [
+            ("Main Hand (2h)", 800003, "Boss A"),
+            ("Main Hand (dw)", 800004, "Boss B"),
+        ]
+        weapons = self._parse_weapon_rows(rows)
+        # First in document → guide_order=1, second → guide_order=2
+        assert weapons[0].blizzard_item_id == 800003
+        assert weapons[1].blizzard_item_id == 800004
+
+    def test_third_weapon_row_ignored(self):
+        rows = [
+            ("Main Hand (2h)", 800005, "Boss A"),
+            ("Main Hand (dw)", 800006, "Boss B"),
+            ("Main Hand",      800007, "Boss C"),
+        ]
+        weapons = self._parse_weapon_rows(rows)
+        assert len(weapons) == 2
+        assert 800007 not in {w.blizzard_item_id for w in weapons}
+
+    def test_plain_main_hand_label_returns_one(self):
+        rows = [("Main Hand", 800010, "Boss")]
+        weapons = self._parse_weapon_rows(rows)
+        assert len(weapons) == 1
+        assert weapons[0].blizzard_item_id == 800010

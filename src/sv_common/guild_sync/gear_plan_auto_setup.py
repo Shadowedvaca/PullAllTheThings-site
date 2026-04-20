@@ -100,7 +100,7 @@ async def auto_setup_gear_plan(pool: asyncpg.Pool, character_id: int) -> bool:
                      WHERE be.source_id = $1
                        AND be.spec_id = $2
                        AND be.hero_talent_id IS NULL
-                     ORDER BY be.slot, be.priority
+                     ORDER BY be.slot, be.guide_order
                     """,
                     source_id, spec_id,
                 )

@@ -111,7 +111,7 @@ class EntryCreate(BaseModel):
     hero_talent_id: Optional[int] = None
     slot: str
     blizzard_item_id: int
-    priority: int = 1
+    guide_order: int = 1
     notes: Optional[str] = None
 
 
@@ -198,12 +198,12 @@ async def list_entries(
         rows = await conn.fetch(
             f"""
             SELECT e.id, e.source_id, e.spec_id, e.hero_talent_id, e.slot,
-                   e.blizzard_item_id, e.priority,
+                   e.blizzard_item_id, e.guide_order,
                    i.name AS item_name, i.icon_url
               FROM enrichment.bis_entries e
               LEFT JOIN enrichment.items i ON i.blizzard_item_id = e.blizzard_item_id
              {where}
-             ORDER BY e.slot, e.priority
+             ORDER BY e.slot, e.guide_order
             """,
             *args,
         )
@@ -234,12 +234,12 @@ async def create_entry(body: EntryCreate, request: Request):
         row = await conn.fetchrow(
             """
             INSERT INTO enrichment.bis_entries
-                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order)
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
             body.source_id, body.spec_id, body.hero_talent_id,
-            body.slot, body.blizzard_item_id, body.priority,
+            body.slot, body.blizzard_item_id, body.guide_order,
         )
     return {"ok": True, "id": row["id"]}
 
