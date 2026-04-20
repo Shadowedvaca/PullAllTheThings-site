@@ -2853,6 +2853,8 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     return `<div class="mcn-drawer-empty">No ${modeLabel} BIS data for this slot</div>`;
   }
 
+  const isTrinketBis = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
+
   items.sort((a, b) => {
     // Desired item always first
     if (primaryBid) {
@@ -2872,8 +2874,6 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     `<th class="mcn-bis-grid__src" title="${CT_TITLE[ct]}">${CT_LABEL[ct]}</th>`
   ).join('');
   const thead = `<thead><tr><th class="mcn-bis-grid__name-col">Item</th>${ctHeaders}<th></th></tr></thead>`;
-
-  const isTrinketBis = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
   const rows = items.map(item => {
     const cells = activeCts.map(ct =>
       item.cts.has(ct)
