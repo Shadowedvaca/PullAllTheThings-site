@@ -1770,6 +1770,8 @@ def _classify_method_heading(heading: str) -> Optional[str]:
         return "raid"
     if "overall" in h:
         return "overall"
+    if "best in slot" in h or "bis" in h:
+        return "overall"
     return None
 
 
@@ -1856,13 +1858,14 @@ def _extract_method_sections(html: str) -> list[MethodSection]:
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # Walk all h3 and table elements in document order.
-    # Each h3 sets the pending heading; the next table consumes it.
+    # Walk all heading (h2/h3/h4) and table elements in document order.
+    # Each heading sets the pending heading; the next table consumes it.
+    _HEADING_TAGS = {"h2", "h3", "h4"}
     pairs: list[tuple[str, object]] = []  # (heading, table_el)
     pending_heading: Optional[str] = None
 
-    for elem in soup.find_all(["h3", "table"]):
-        if elem.name == "h3":
+    for elem in soup.find_all(["h2", "h3", "h4", "table"]):
+        if elem.name in _HEADING_TAGS:
             pending_heading = elem.get_text(strip=True)
         elif elem.name == "table" and pending_heading is not None:
             pairs.append((pending_heading, elem))

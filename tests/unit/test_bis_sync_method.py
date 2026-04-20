@@ -180,6 +180,12 @@ class TestClassifyMethodHeading:
     def test_hero_talent_name_only_returns_none(self):
         assert _classify_method_heading("San'layn Build") is None
 
+    def test_best_in_slot_classifies_as_overall(self):
+        assert _classify_method_heading("shadow priest Best in Slot Gear") == "overall"
+
+    def test_bis_keyword_classifies_as_overall(self):
+        assert _classify_method_heading("BIS List for Fire Mage") == "overall"
+
 
 # ---------------------------------------------------------------------------
 # _extract_method_sections — standard page
@@ -255,10 +261,24 @@ class TestExtractMethodSectionsEdgeCases:
     def test_empty_html_returns_empty(self):
         assert _extract_method_sections("") == []
 
-    def test_tables_without_h3_skipped(self):
+    def test_tables_without_heading_skipped(self):
         html = "<html><body><table><tr><td>Head</td><td><a href='/item=500001'>X</a></td></tr></table></body></html>"
         sections = _extract_method_sections(html)
         assert sections == []
+
+    def test_h2_heading_detected(self):
+        html = (
+            "<html><body>"
+            "<h2>shadow priest Best in Slot Gear</h2>"
+            "<table><tr><th>Slot</th><th>Item</th></tr>"
+            "<tr><td>Head</td><td><a href='https://www.wowhead.com/item=800001'>X</a></td></tr>"
+            "</table>"
+            "</body></html>"
+        )
+        sections = _extract_method_sections(html)
+        assert len(sections) == 1
+        assert sections[0].inferred_content_type == "overall"
+        assert sections[0].slots[0].blizzard_item_id == 800001
 
     def test_single_section_not_outlier(self):
         page = _make_method_page([("Overall Best Gear", [("Head", 100001, "Boss")])])
