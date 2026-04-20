@@ -2708,6 +2708,10 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
   let tbody = _gpRenderUtGroup('bis', bisLabel, bisItems, dbSlot,
     guideCols, itemOriginCts, guideCts, isTrinket, colCount);
 
+  // Build trinket ratings lookup for available item groups
+  const trinketRatingsMap = new Map();
+  if (isTrinket) for (const it of trinketItems) trinketRatingsMap.set(it.blizzard_item_id, it.ratings || {});
+
   // Available item groups
   const avStatus = availState?.status || 'loading';
   const avGroups = availState?.groups || {};
@@ -2734,7 +2738,8 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
           icon_url: it.icon_url || '',
           sources: (it.sources && it.sources.length) ? it.sources : fallbackSrcs,
           is_equipped: it.is_equipped || false, is_bis: it.is_bis || false,
-          target_ilvl: it.target_ilvl || null, ratings: {},
+          target_ilvl: it.target_ilvl || null,
+          ratings: trinketRatingsMap.get(it.blizzard_item_id) || {},
           popularity: it.popularity || null,
         };
       });
