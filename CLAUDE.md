@@ -59,7 +59,7 @@ Prod Server
 │   ├── enrichment.*     (items, item_sources, item_recipes, item_seasons, item_set_members,
 │   │                     tier_tokens, bis_entries, trinket_ratings, item_popularity — stored procs rebuild all)
 │   ├── viz.*            (slot_items, tier_piece_sources, crafters_by_item, bis_recommendations, item_popularity)
-│   ├── config.*         (bis_scrape_targets)
+│   ├── config.*         (bis_scrape_targets, slot_labels, wowhead_invtypes)
 │   └── guild_identity.* (players, wow_characters, discord_users, player_characters,
 │                          roles, audit_issues, sync_log,
 │                          onboarding_sessions, professions, profession_tiers, recipes,
@@ -183,6 +183,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 | `guild_identity` | `players` (central entity), `wow_characters` (+`last_progression_sync`, +`last_profession_sync`, +**`in_guild`**, +**`last_equipment_sync`** — 0066, +**`race VARCHAR(40)`** — 0080), `discord_users` (+`no_guild_role_since`), `player_characters` (bridge, +`link_source`/`confidence`), `roles`, `audit_issues`, `sync_log`, `onboarding_sessions`, `professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`, `discord_channels`, `raiderio_profiles`, `battlenet_accounts`, `wcl_config`, `character_parses`, `raid_reports`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history`, **`item_sources`** (blizzard_item_id NOT NULL, UNIQUE(blizzard_item_id, instance_type, encounter_name) — item_id FK DROPPED Phase E), **`character_equipment`** (blizzard_item_id NOT NULL — item_id FK DROPPED Phase E), **`gear_plans`** (+`simc_imported_at TIMESTAMPTZ`, +`equipped_source VARCHAR(10) DEFAULT 'blizzard'` — 0094), **`gear_plan_slots`** (blizzard_item_id — desired_item_id FK DROPPED Phase E), **`tier_token_attrs`** (blizzard_item_id PK — was token_item_id FK, changed Phase E), **`item_recipe_links`** (blizzard_item_id, recipe_id FK→recipes, confidence INT CHECK 0–100, match_type VARCHAR(50), UNIQUE(blizzard_item_id,recipe_id) — item_id FK DROPPED Phase E) |
 | `ref` | `classes` (+`blizzard_class_id` — 0127), **`specializations`** (moved from guild_identity — 0130), **`hero_talents`** (moved from guild_identity — 0130), **`bis_list_sources`** (5 seed rows; display names "u.gg Raid/M+/Overall" — 0075; moved from guild_identity — 0130) |
 | `patt` | `campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (+`subject_id`), `guild_quote_titles` (+`subject_id`), `quote_subjects`, `player_availability`, `raid_seasons` (+`blizzard_mplus_season_id`, +**`quality_ilvl_map JSONB`**, +**`crafted_ilvl_map JSONB`** — 0099), `raid_events` (+`voice_channel_id`, +`voice_tracking_enabled`, +`attendance_processed_at`, +`is_deleted` BOOLEAN — 0062, +`signup_snapshot_at` — 0063), `raid_attendance` (+`minutes_present`, +`first_join_at`, +`last_leave_at`, +`joined_late`, +`left_early`, +`was_available` BOOLEAN, +`raid_helper_status` VARCHAR(20) — 0063), `recurring_events`, `voice_attendance_log`, **`attendance_rules`** (id, name, group_label, group_type CHECK('promotion'/'warning'/'info'), is_active, target_rank_ids INTEGER[], result_rank_id FK→guild_ranks, conditions JSONB, sort_order, created_at — 0064) |
+| `config` | **`bis_scrape_targets`** (240 rows; source_id FK→ref.bis_list_sources, spec_id FK→ref.specializations, hero_talent_id FK→ref.hero_talents, content_type, url, preferred_technique, status, items_found, last_fetched), **`slot_labels`** (page_label PK VARCHAR(40), slot_key VARCHAR(20) — 43 universal text labels, NULL slot_key = resolve positionally — 0160), **`wowhead_invtypes`** (invtype_id PK INTEGER, slot_key VARCHAR(20) NOT NULL — 20 Blizzard inventory_type codes, Wowhead-only — 0160) |
 
 **Key design notes:**
 - `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`
@@ -247,7 +248,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Weapon Build Variant — COMPLETE** (prod-v0.21.1, migrations 0155–0158). Full 3-phase feature shipped.
+- **IV BIS Extraction — Phase Z.0 COMPLETE** (on dev, migrations 0159–0160, branch `feature/iv-bis-extraction`).
+  - **Z.0** (migrations 0159–0160): Unified slot label tables. Dropped `config.method_slot_labels`. Created `config.slot_labels(page_label PK, slot_key)` — 43 universal text labels, no origin column. Created `config.wowhead_invtypes(invtype_id PK, slot_key)` — 20 Blizzard invtype codes (Wowhead-specific). Removed `_UGG_SLOT_MAP` + `_WOWHEAD_SLOT_MAP` hardcoded dicts from `bis_sync.py`. Added `_resolve_text_slot()` shared helper for positional ring/trinket resolution. All text-label parsers (UGG, Method) use `_load_slot_labels(conn)`; Wowhead uses `_load_wowhead_invtypes(conn)`. 1534 unit tests pass.
+  - **Next:** Z.1 — `landing.iv_page_sections` metadata table (migration 0161)
+- **Previous: Weapon Build Variant — COMPLETE** (prod-v0.21.1, migrations 0155–0158). Full 3-phase feature shipped.
   - **Phase 1** (migration 0155): `main_hand` split into `main_hand_2h`/`main_hand_1h`; `priority` → `guide_order` on `enrichment.bis_entries`. Shipped prod-v0.21.0.
   - **Phase 2** (migrations 0156–0158): gear plan display rules (`_compute_weapon_display`, `_merge_paired_bis`, `show_off_hand` always True); paperdoll/gear table show active weapon slot only; available items drawer shows all weapon types; BIS sort fixed in `_gpRenderUnifiedTable`; Method parser handles multi-link pool rows + alternative items (guide_order 2+); one-hand/two-hand weapon labels added to `config.method_slot_labels`. 1527 unit tests pass.
   - **Phase 3** (no migration): `populate_from_bis` suppresses off_hand when preferred build is 2H — `_apply_off_hand_rule()` helper; Titan's Grip exception (off_hand BIS item slot_type='two_hand' → keep it); clears existing unlocked off_hand slot from plan when suppressed. 1534 unit tests pass.
@@ -263,10 +267,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0158 (on prod)
+- **Last migration:** 0160 (on dev only — not yet on prod); prod is at 0158
 - **Last prod tag:** `prod-v0.21.1`
-- **Active branch:** `main`
-- **Next planned:** TBD
+- **Active branch:** `feature/iv-bis-extraction`
+- **Next planned:** Z.1 — `landing.iv_page_sections` (migration 0161)
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.

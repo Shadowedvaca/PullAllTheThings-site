@@ -121,160 +121,78 @@ All slot label → slot key mappings live in `config.slot_labels` (see Phase Z.0
 
 ## Phases
 
-| Phase | Scope | Migration |
+| Phase | Scope | Migrations |
 |---|---|---|
-| Z.0 | Consolidate all slot label maps into `config.slot_labels`; remove hardcoded dicts | Yes (next) |
-| Z.1 | `landing.iv_page_sections` metadata table | Yes (next+1) |
+| Z.0 | Unified slot label tables; shared `_resolve_text_slot` helper; remove hardcoded dicts | **0159, 0160 — COMPLETE** |
+| Z.1 | `landing.iv_page_sections` metadata table | Yes (next) |
 | Z.2 | `_extract_icy_veins()` rewrite + dead code removal | No |
 | Z.3 | Admin section inventory UI + API endpoint | No |
 | Z.4 | `rebuild_bis_from_landing()` + `rebuild_trinket_ratings_from_landing()` IV branches | No |
 
 ---
 
-## Phase Z.0 — Unified `config.slot_labels`
+## Phase Z.0 — COMPLETE (migrations 0159–0160)
 
-### Why
+### What shipped
 
-Three slot translation dicts currently exist as hardcoded Python:
-- `_UGG_SLOT_MAP` — text labels like `"belt"`, `"ring1"`, `"weapon1"`
-- `_WOWHEAD_SLOT_MAP` — integer inventory_type codes (Blizzard API) like `1` (head), `6` (waist)
-- Icy Veins needs its own map — text labels like `"helm"`, `"off hand"`
+**Two tables replace all hardcoded slot-label dicts:**
 
-Method already has `config.method_slot_labels` (migration 0153).
+`config.slot_labels(page_label PK, slot_key)` — 43 rows, universal text labels shared by Method, u.gg, and Icy Veins. No origin column — labels like "back", "cloak", "belt" mean the same thing across all text-based guides.
 
-A single `config.slot_labels` table covers all origins. If IV says "belt" or Wowhead updates its HTML, the fix is an admin INSERT — no code deploy.
+`config.wowhead_invtypes(invtype_id PK, slot_key)` — 20 rows, Blizzard inventory_type integer codes used only by Wowhead's WH.Gatherer metadata. Kept separate because integers cannot conflict with text labels.
 
-### Migration (next after latest)
+**Migration history:**
+- 0153–0158: `config.method_slot_labels` (Method-only, now retired)
+- 0159: Created `config.slot_labels` with origin column (first attempt)
+- 0160: Dropped origin column; split Wowhead codes into `config.wowhead_invtypes`; final design
 
-```sql
-CREATE TABLE config.slot_labels (
-    origin      VARCHAR(20) NOT NULL,
-    page_label  VARCHAR(40) NOT NULL,
-    slot_key    VARCHAR(20),           -- NULL = "resolve by position" (ring, trinket ambiguity)
-    PRIMARY KEY (origin, page_label)
-);
-```
+**Code changes in `bis_sync.py`:**
+- Removed `_UGG_SLOT_MAP` and `_WOWHEAD_SLOT_MAP` hardcoded dicts
+- `_load_slot_labels(conn)` — loads all text labels, no origin param
+- `_load_wowhead_invtypes(conn)` — loads integer invtype map
+- All text-label parsers (UGG, Method) call `_load_slot_labels(conn)`; Wowhead calls `_load_wowhead_invtypes(conn)`
+- Slot maps threaded as parameters through all pure parse functions
 
-Seed rows (origin='method') — migrated from `config.method_slot_labels`:
-
-```sql
-INSERT INTO config.slot_labels (origin, page_label, slot_key)
-SELECT 'method', page_label, slot_key FROM config.method_slot_labels;
-```
-
-Seed rows (origin='ugg') — from `_UGG_SLOT_MAP` in code:
-
-| page_label | slot_key |
-|---|---|
-| head | head |
-| neck | neck |
-| shoulder | shoulder |
-| back | back |
-| cape | back |
-| chest | chest |
-| wrist | wrist |
-| gloves | hands |
-| hands | hands |
-| belt | waist |
-| waist | waist |
-| legs | legs |
-| feet | feet |
-| ring1 | ring_1 |
-| ring2 | ring_2 |
-| trinket1 | trinket_1 |
-| trinket2 | trinket_2 |
-| weapon1 | main_hand |
-| weapon2 | off_hand |
-| main_hand | main_hand |
-| off_hand | off_hand |
-
-Seed rows (origin='wowhead') — from `_WOWHEAD_SLOT_MAP` (integer keys stored as text):
-
-| page_label | slot_key | Notes |
-|---|---|---|
-| 1 | head | |
-| 2 | neck | |
-| 3 | shoulder | |
-| 5 | chest | INVTYPE_CHEST |
-| 6 | waist | |
-| 7 | legs | |
-| 8 | feet | |
-| 9 | wrist | |
-| 10 | hands | |
-| 11 | ring | NULL — resolved by occurrence order |
-| 12 | trinket | NULL — resolved by occurrence order |
-| 13 | main_hand | INVTYPE_WEAPON (1H) |
-| 14 | off_hand | INVTYPE_SHIELD |
-| 15 | main_hand | INVTYPE_RANGED |
-| 16 | back | INVTYPE_CLOAK |
-| 17 | main_hand | INVTYPE_2HWEAPON |
-| 20 | chest | INVTYPE_ROBE |
-| 21 | main_hand | INVTYPE_MAINHAND |
-| 22 | off_hand | INVTYPE_OFFHAND |
-| 23 | off_hand | INVTYPE_HOLDABLE |
-
-Seed rows (origin='icy_veins') — IV uses title-cased labels; store lowercased:
-
-| page_label | slot_key |
-|---|---|
-| helm | head |
-| head | head |
-| neck | neck |
-| shoulders | shoulder |
-| shoulder | shoulder |
-| back | back |
-| cloak | back |
-| chest | chest |
-| wrists | wrist |
-| wrist | wrist |
-| hands | hands |
-| gloves | hands |
-| waist | waist |
-| belt | waist |
-| legs | legs |
-| feet | feet |
-| boots | feet |
-| ring 1 | ring_1 |
-| ring 2 | ring_2 |
-| ring | NULL |
-| trinket 1 | trinket_1 |
-| trinket 2 | trinket_2 |
-| trinket | NULL |
-| main hand | main_hand |
-| off hand | off_hand |
-| weapon | main_hand |
-
-After seeding, drop the old table:
-
-```sql
-DROP TABLE config.method_slot_labels;
-```
-
-### Code Changes (bis_sync.py)
-
-**Remove:**
-- `_UGG_SLOT_MAP` dict (lines ~79–101)
-- `_WOWHEAD_SLOT_MAP` dict (lines ~1319–1340)
-
-**Update `_load_slot_labels(conn, origin)`:**
+### `_resolve_text_slot` — shared helper
 
 ```python
-async def _load_slot_labels(
-    conn: asyncpg.Connection, origin: str
-) -> dict[str, str | None]:
-    """Load slot label → slot_key mapping from config.slot_labels for one origin."""
-    rows = await conn.fetch(
-        "SELECT page_label, slot_key FROM config.slot_labels WHERE origin = $1",
-        origin,
-    )
-    return {row["page_label"]: row["slot_key"] for row in rows}
+def _resolve_text_slot(
+    raw_label: str,
+    slot_map: dict[str, str | None],
+    ring_count: int = 0,
+    trinket_count: int = 0,
+) -> tuple[str | None, int, int]:
 ```
 
-**Update callers:**
-- Method: `_load_slot_labels(conn, "method")` — already passes origin-equivalent; now explicit
-- u.gg: load `_load_slot_labels(conn, "ugg")` at start of `_parse_ugg_html()` callers
-- Wowhead: load `_load_slot_labels(conn, "wowhead")` with `{int(k): v for k, v in labels.items()}` for integer lookup
-- IV: `_load_slot_labels(conn, "icy_veins")` in new `_extract_icy_veins()`
+Handles NULL map entries (ring, trinket) by positional assignment. Call at the **per-item** level (not per-row) so pool rows with multiple links each get their own ring_1/ring_2 assignment.
+
+Resolution rules (in order):
+1. Label in map with non-NULL value → return directly
+2. Label in map with NULL → positional ring_1/ring_2 or trinket_1/trinket_2
+3. Label absent but contains "ring" or "trinket" → positional (handles novel variants)
+4. Label absent and unrelated → None (caller should skip and log)
+
+**Used by:** `_parse_method_table`. **Must be used by:** `_extract_icy_veins` (Z.2) — do not re-implement ring/trinket resolution inline.
+
+**Row-level positional check (Method-specific HTML logic):**
+```python
+direct_key = slot_map.get(raw_slot)
+known = raw_slot in slot_map
+is_positional = direct_key is None and (known or "ring" in raw_slot or "trinket" in raw_slot)
+```
+This peek does NOT consume ring/trinket counts. The actual count increment happens inside the per-link loop via `_resolve_text_slot`.
+
+### Slot label NULL semantics
+
+`slot_key = NULL` in `config.slot_labels` means **"I know this label exists; resolve by occurrence order."**  This is different from a label being absent from the table (which means "unrecognised"). The distinction matters for logging — absent labels get a debug warning; NULL labels are silently resolved positionally.
+
+### IV slot lookup (Z.2)
+
+IV parser calls `_load_slot_labels(conn)` — same as Method and u.gg. No origin argument needed. IV uses bare "Ring" and "Trinket" labels (title-cased → lowercased before lookup), which hit the NULL rows and are resolved positionally via `_resolve_text_slot`.
+
+### Reference files
+- `reference/slot_labels_0160.csv` — 43 universal text label rows
+- `reference/wowhead_invtypes_0160.csv` — 20 Wowhead invtype rows
 
 ---
 
@@ -363,7 +281,9 @@ Avoid holding DB connection during HTTP:
 
 ### Slot Resolution (IV-specific)
 
-IV shows "Ring" once for each ring slot (two rows with identical label). When `slot_map.get("ring") is None`, use occurrence order to assign `ring_1` / `ring_2`. Same logic for "Trinket". This is identical to how Method handles the ambiguity.
+IV shows "Ring" once for each ring slot (two rows with identical label). When `slot_map.get("ring") is None`, use occurrence order to assign `ring_1` / `ring_2`. Same logic for "Trinket".
+
+`_iv_extract_regular_rows` **must call `_resolve_text_slot`** for every row — do not re-implement ring/trinket positional logic inline. The helper is already shared with Method and handles all four resolution rules including novel label variants.
 
 ### Update `_TECHNIQUE_ORDER`
 
@@ -427,7 +347,7 @@ Add `elif source == "icy_veins":` branch after the method branch:
 
 ```python
 elif source == "icy_veins":
-    slot_map = await _load_slot_labels_sync(conn, "icy_veins")
+    slot_map = await _load_slot_labels(conn)
     slots = _iv_parse_bis_from_raw(html, content_type, slot_map)
 ```
 
@@ -471,9 +391,11 @@ Upsert to `enrichment.trinket_ratings`:
 
 | File | Current State | Change |
 |---|---|---|
-| `src/sv_common/guild_sync/bis_sync.py` | `_extract_icy_veins()` stub, dead code, 2 hardcoded dicts | Z.0: remove dicts; Z.2: rewrite extraction, remove dead code |
-| `src/sv_common/guild_sync/bis_sync.py` | `_load_slot_labels(conn)` loads method_slot_labels | Z.0: add `origin` param, load from slot_labels |
-| `alembic/versions/` | Check latest before writing | Z.0: next (slot_labels); Z.1: next+1 (iv_page_sections) |
+| `src/sv_common/guild_sync/bis_sync.py` | `_extract_icy_veins()` stub, dead code; hardcoded dicts removed (**Z.0 done**) | Z.2: rewrite extraction, remove dead code |
+| `src/sv_common/guild_sync/bis_sync.py` | `_load_slot_labels(conn)` — no origin param, reads `config.slot_labels` (**Z.0 done**) | Z.2: call from `_extract_icy_veins` |
+| `src/sv_common/guild_sync/bis_sync.py` | `_load_wowhead_invtypes(conn)` — reads `config.wowhead_invtypes` (**Z.0 done**) | No further change needed |
+| `src/sv_common/guild_sync/bis_sync.py` | `_resolve_text_slot(raw_label, slot_map, ring_count, trinket_count)` — shared helper (**Z.0 done**) | Z.2: must be called from `_iv_extract_regular_rows` |
+| `alembic/versions/` | 0160 is latest (**Z.0 done**) | Z.1: 0161 (iv_page_sections) |
 | `src/guild_portal/api/bis_routes.py` | IV targets skipped in sync | Z.3: new `/iv-sections` endpoint |
 | `src/guild_portal/templates/admin/gear_plan_admin.html` | IV cells show coming-soon | Z.3: IV Section Inventory panel |
 | `src/guild_portal/static/js/gear_plan_admin.js` | IV cells show coming-soon indicator | Z.3: fetch + render iv-sections |
@@ -488,4 +410,4 @@ Upsert to `enrichment.trinket_ratings`:
 
 3. **Scrape frequency** — IV updates per patch, not daily. Consider a separate scheduler cadence (weekly) distinct from the nightly BIS sync. Low priority for v1; can reuse the existing sync trigger manually.
 
-4. **u.gg wowhead slot map loading** — `_parse_ugg_html()` and `_parse_wowhead_html()` are currently pure functions with no DB access. Loading slot maps from DB requires passing either the map dict or a connection. Recommend: load the map in the async caller (`_extract_ugg`, `_extract_wowhead`) and pass it through, keeping the parse functions pure. Same pattern Method already uses.
+4. ~~**u.gg wowhead slot map loading**~~ — **RESOLVED in Z.0.** `_extract_ugg` and `_extract_wowhead` each load their respective maps from DB and pass them as parameters to the pure parse functions. `_parse_ugg_html`, `_parse_wowhead_html`, etc. are all pure — no DB access.
