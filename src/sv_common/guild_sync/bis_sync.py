@@ -1870,19 +1870,6 @@ def _parse_method_table(
             continue
 
         raw_slot = cells[0].get_text(strip=True).lower()
-        link = cells[1].find("a", href=True)
-        if not link:
-            continue
-
-        m = re.search(r"item=(\d+)", link["href"])
-        if not m:
-            continue
-        item_id = int(m.group(1))
-
-        bonus_ids: list[int] = []
-        bm = re.search(r"bonus=([0-9:]+)", link["href"])
-        if bm:
-            bonus_ids = [int(b) for b in bm.group(1).split(":") if b]
 
         slot_key = slot_map.get(raw_slot)
         if slot_key is None and raw_slot not in slot_map:
@@ -1892,15 +1879,17 @@ def _parse_method_table(
                 logger.debug("_parse_method_table: unrecognised slot %r, skipping", raw_slot)
                 continue
 
+        # Ring/trinket pool rows ("Rings (any 2 of these)") can have multiple
+        # item links in one cell — emit one SimcSlot per link.  All other rows
+        # use only the first link (named slots never have multi-item cells).
         if slot_key is None:
-            if "ring" in raw_slot:
-                ring_count += 1
-                slot_key = "ring_1" if ring_count % 2 == 1 else "ring_2"
-            elif "trinket" in raw_slot:
-                trinket_count += 1
-                slot_key = "trinket_1" if trinket_count % 2 == 1 else "trinket_2"
-            else:
-                continue
+            candidate_links = cells[1].find_all("a", href=True)
+        else:
+            first = cells[1].find("a", href=True)
+            candidate_links = [first] if first else []
+
+        if not candidate_links:
+            continue
 
         # Limit weapon slots to 2: guide_order=1 (preferred build) and =2 (alt build).
         if slot_key == "main_hand":
@@ -1908,14 +1897,36 @@ def _parse_method_table(
             if weapon_count > 2:
                 continue
 
-        results.append(SimcSlot(
-            slot=slot_key,
-            blizzard_item_id=item_id,
-            bonus_ids=bonus_ids,
-            enchant_id=None,
-            gem_ids=[],
-            quality_track=None,
-        ))
+        for link in candidate_links:
+            m = re.search(r"item=(\d+)", link["href"])
+            if not m:
+                continue
+            item_id = int(m.group(1))
+
+            bonus_ids: list[int] = []
+            bm = re.search(r"bonus=([0-9:]+)", link["href"])
+            if bm:
+                bonus_ids = [int(b) for b in bm.group(1).split(":") if b]
+
+            current_slot = slot_key
+            if current_slot is None:
+                if "ring" in raw_slot:
+                    ring_count += 1
+                    current_slot = "ring_1" if ring_count % 2 == 1 else "ring_2"
+                elif "trinket" in raw_slot:
+                    trinket_count += 1
+                    current_slot = "trinket_1" if trinket_count % 2 == 1 else "trinket_2"
+                else:
+                    continue
+
+            results.append(SimcSlot(
+                slot=current_slot,
+                blizzard_item_id=item_id,
+                bonus_ids=bonus_ids,
+                enchant_id=None,
+                gem_ids=[],
+                quality_track=None,
+            ))
 
     return results
 

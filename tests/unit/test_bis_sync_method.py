@@ -524,6 +524,49 @@ class TestAlternativeRingsAndTrinkets:
         assert len(self.slots) == 8
 
 
+class TestMultiLinkRingCell:
+    """Method pool rows ("Rings (any 2 of these)") have multiple <a> tags in one cell."""
+
+    def _make_page(self) -> str:
+        # Build the multi-link ring row manually — _make_method_page only supports one link per row
+        pool_row = (
+            '<tr><td>Rings (any 2 of these)</td><td>'
+            '<a href="https://www.wowhead.com/item=500001">Pool Ring A</a>'
+            '<a href="https://www.wowhead.com/item=500002">Pool Ring B</a>'
+            '<a href="https://www.wowhead.com/item=500003">Pool Ring C</a>'
+            '<a href="https://www.wowhead.com/item=500004">Pool Ring D</a>'
+            '</td><td></td></tr>'
+        )
+        trinket_pool_row = (
+            '<tr><td>Trinket</td><td>'
+            '<a href="https://www.wowhead.com/item=500011">Pool Trinket A</a>'
+            '<a href="https://www.wowhead.com/item=500012">Pool Trinket B</a>'
+            '</td><td></td></tr>'
+        )
+        table = f'<table><thead><tr><th>Slot</th><th>Item</th><th>Source</th></tr></thead><tbody>{pool_row}{trinket_pool_row}</tbody></table>'
+        return f'<html><body><h3>Overall Best Gear</h3>{table}</body></html>'
+
+    def setup_method(self):
+        sections = _extract_method_sections(self._make_page(), _TEST_SLOT_MAP)
+        slots = _resolve_method_section_local(sections, "overall")
+        from collections import defaultdict
+        self.by_slot: dict[str, list[int]] = defaultdict(list)
+        for s in slots:
+            self.by_slot[s.slot].append(s.blizzard_item_id)
+
+    def test_all_four_ring_items_captured(self):
+        all_rings = set(self.by_slot["ring_1"] + self.by_slot["ring_2"])
+        assert all_rings == {500001, 500002, 500003, 500004}
+
+    def test_rings_distributed_across_both_slots(self):
+        assert len(self.by_slot["ring_1"]) == 2
+        assert len(self.by_slot["ring_2"]) == 2
+
+    def test_both_trinket_pool_items_captured(self):
+        all_trinkets = set(self.by_slot["trinket_1"] + self.by_slot["trinket_2"])
+        assert all_trinkets == {500011, 500012}
+
+
 # ---------------------------------------------------------------------------
 # Bonus ID extraction
 # ---------------------------------------------------------------------------
