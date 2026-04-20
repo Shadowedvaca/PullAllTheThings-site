@@ -201,6 +201,30 @@ def _compute_weapon_display(
     return weapon_build, show_off_hand
 
 
+def _apply_off_hand_rule(
+    by_slot: dict[str, list],
+    preferred_mh: Optional[str],
+) -> tuple[dict[str, list], bool]:
+    """Apply 2H/1H off-hand suppression to a BIS slot candidate map.
+
+    When the preferred main hand is 2H, off_hand is suppressed unless any
+    BIS off_hand candidate has slot_type='two_hand' (Titan's Grip).
+
+    Returns:
+        (by_slot, clear_off_hand)
+        clear_off_hand: True if the off_hand plan slot should be deleted
+    """
+    if preferred_mh != "main_hand_2h" or "off_hand" not in by_slot:
+        return by_slot, False
+
+    titans_grip = [r for r in by_slot["off_hand"] if r.get("slot_type") == "two_hand"]
+    if titans_grip:
+        by_slot["off_hand"] = titans_grip
+        return by_slot, False
+
+    del by_slot["off_hand"]
+    return by_slot, True
+
 
 def _upgrade_tracks(
     equipped_track: Optional[str],
@@ -599,12 +623,12 @@ async def populate_from_bis(
             r["slot"]: set(r["excluded_item_ids"] or []) for r in slot_data_rows
         }
 
-        # Get ALL BIS entries ordered by priority so we can skip excluded items
+        # Get ALL BIS entries ordered by guide_order so we can skip excluded items
         # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
             SELECT be.slot, be.guide_order,
-                   be.blizzard_item_id, i.name AS item_name
+                   be.blizzard_item_id, i.name AS item_name, i.slot_type
               FROM enrichment.bis_entries be
               LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
              WHERE be.source_id = $1
@@ -618,7 +642,7 @@ async def populate_from_bis(
         # Group candidates by slot (already ordered by guide_order)
         by_slot: dict[str, list] = {}
         for row in bis_rows:
-            by_slot.setdefault(row["slot"], []).append(row)
+            by_slot.setdefault(row["slot"], []).append(dict(row))
 
         # Weapon build selection: when BIS has entries for both main_hand_2h and
         # main_hand_1h (e.g. Frost DK 2H vs DW), only populate the preferred build
@@ -631,6 +655,16 @@ async def populate_from_bis(
                 by_slot.pop("main_hand_1h", None)
             else:
                 by_slot.pop("main_hand_2h", None)
+
+        # Off-hand suppression for 2H builds.
+        # Determine preferred main hand after build selection.
+        preferred_mh = next((s for s in ("main_hand_2h", "main_hand_1h") if s in by_slot), None)
+        by_slot, clear_off_hand = _apply_off_hand_rule(by_slot, preferred_mh)
+        if clear_off_hand and "off_hand" not in locked_slots:
+            await conn.execute(
+                "DELETE FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND slot='off_hand'",
+                plan_id,
+            )
 
         populated = 0
         for slot, candidates in by_slot.items():

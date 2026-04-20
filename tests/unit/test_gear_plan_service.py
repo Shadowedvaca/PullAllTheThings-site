@@ -5,6 +5,7 @@ import pytest
 from guild_portal.services.gear_plan_service import (
     WOW_SLOTS,
     TRACK_ORDER,
+    _apply_off_hand_rule,
     _compute_weapon_display,
     _upgrade_tracks,
 )
@@ -190,3 +191,79 @@ class TestIsCraftedItem:
 
     def test_empty_list_returns_false(self):
         assert is_crafted_item([]) is False
+
+
+# ---------------------------------------------------------------------------
+# _apply_off_hand_rule — Phase 3 off-hand suppression
+# ---------------------------------------------------------------------------
+
+
+def _make_oh(slot_type: str) -> dict:
+    return {"slot": "off_hand", "guide_order": 1, "blizzard_item_id": 42, "slot_type": slot_type}
+
+
+class TestApplyOffHandRule:
+    def test_1h_build_keeps_off_hand(self):
+        by_slot = {
+            "main_hand_1h": [_make_bis("main_hand_1h", 1)],
+            "off_hand": [_make_oh("off_hand")],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_1h")
+        assert "off_hand" in result
+        assert clear is False
+
+    def test_2h_build_no_off_hand_in_bis(self):
+        by_slot = {"main_hand_2h": [_make_bis("main_hand_2h", 1)]}
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" not in result
+        assert clear is False
+
+    def test_2h_build_off_hand_shield_suppressed(self):
+        # off_hand shield/frill (slot_type='off_hand') → suppressed, clear=True
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [_make_oh("off_hand")],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" not in result
+        assert clear is True
+
+    def test_2h_build_titans_grip_kept(self):
+        # Titan's Grip: off_hand item has slot_type='two_hand' → keep it
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [_make_oh("two_hand")],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" in result
+        assert clear is False
+
+    def test_2h_mixed_off_hand_candidates_keeps_only_two_hand(self):
+        # Multiple off_hand candidates: only two_hand survivors (Titan's Grip)
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [
+                {**_make_oh("off_hand"), "blizzard_item_id": 10},
+                {**_make_oh("two_hand"), "blizzard_item_id": 20},
+            ],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" in result
+        assert len(result["off_hand"]) == 1
+        assert result["off_hand"][0]["blizzard_item_id"] == 20
+        assert clear is False
+
+    def test_no_preferred_mh_no_change(self):
+        by_slot = {"off_hand": [_make_oh("off_hand")]}
+        result, clear = _apply_off_hand_rule(by_slot, None)
+        assert "off_hand" in result
+        assert clear is False
+
+    def test_does_not_mutate_other_slots(self):
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [_make_oh("off_hand")],
+            "head": [_make_bis("head", 1)],
+        }
+        result, _ = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "head" in result
