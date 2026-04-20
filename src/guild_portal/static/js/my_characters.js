@@ -2818,14 +2818,14 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   const CT_TITLE = { overall: 'All Content', raid: 'Raid', mythic_plus: 'Mythic+' };
   const activeCts = CT_ORDER.filter(ct => ctSet.has(ct));
 
-  // Build item map: per item, track content_types, guide count for current mode, popularity.
+  // Build item map: per item, track content_types, unique guide origins for current mode, popularity.
   const itemMap = new Map();
   for (const r of bis) {
     if (!itemMap.has(r.blizzard_item_id)) {
       itemMap.set(r.blizzard_item_id, {
         bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url,
         cts: new Set(),
-        guideCount:     0,
+        guideOrigins:   new Set(),   // unique origins (wowhead/method/ugg/iv) for current mode
         popularity:     r.popularity     || {},
         target_ilvl:    r.target_ilvl    || null,
         is_equipped:    r.is_equipped    || false,
@@ -2835,8 +2835,10 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     }
     const it = itemMap.get(r.blizzard_item_id);
     if (r.content_type) it.cts.add(r.content_type);
-    // Count guides recommending this item for the current filter
-    if (_gpGuideMode === 'overall' || r.content_type === _gpGuideMode) it.guideCount++;
+    // Count unique guide origins recommending this item for the active mode
+    if (r.origin && (_gpGuideMode === 'overall' || r.content_type === _gpGuideMode)) {
+      it.guideOrigins.add(r.origin);
+    }
   }
 
   // Filter items by Guide Mode
@@ -2856,8 +2858,8 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
       if (d !== 0) return d;
     }
     if (!isTrinketBis) {
-      // Non-trinket: guide count desc → overall popularity desc → name asc
-      if (b.guideCount !== a.guideCount) return b.guideCount - a.guideCount;
+      // Non-trinket: unique guide count desc → overall popularity desc → name asc
+      if (b.guideOrigins.size !== a.guideOrigins.size) return b.guideOrigins.size - a.guideOrigins.size;
       const popDiff = (b.popularity?.overall ?? 0) - (a.popularity?.overall ?? 0);
       if (popDiff !== 0) return popDiff;
     }
