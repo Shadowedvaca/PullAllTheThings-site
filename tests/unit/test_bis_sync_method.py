@@ -43,6 +43,8 @@ _TEST_SLOT_MAP: dict[str, str | None] = {
     "main-hand":      "main_hand",
     "main hand (2h)": "main_hand",
     "main hand (dw)": "main_hand",
+    "one-hand":       "main_hand",
+    "one hand":       "main_hand",
     "weapon":         "main_hand",
     "off hand":       "off_hand",
     "off-hand":       "off_hand",
