@@ -1227,7 +1227,7 @@ const GP_SLOT_LABELS = {
   hands:'Hands', waist:'Waist', legs:'Legs', feet:'Feet',
   ring_1:'Ring 1', ring_2:'Ring 2',
   trinket_1:'Trinket 1', trinket_2:'Trinket 2',
-  main_hand_2h:'Main Hand (2H)', main_hand_1h:'Main Hand (1H)', off_hand:'Off Hand',
+  main_hand_2h:'Main Hand', main_hand_1h:'Main Hand', off_hand:'Off Hand',
 };
 
 // Fallback track colors before API data loads
@@ -1588,10 +1588,11 @@ function _gpRenderGearTable(data) {
   const weaponBuild  = data.weapon_build  || null;
   const showOffHand  = !!data.show_off_hand;
 
-  // Both weapon slots always shown so specs that can use either type remain accessible.
-  // Only off_hand is conditional (1H builds and Titan's Grip).
+  // Filter GP_ALL_SLOTS to only show the active weapon slots
   const visibleSlots = GP_ALL_SLOTS.filter(k => {
-    if (k === 'off_hand') return showOffHand;
+    if (k === 'main_hand_2h') return weaponBuild !== '1h'; // show unless 1H build
+    if (k === 'main_hand_1h') return weaponBuild === '1h'; // only for 1H build
+    if (k === 'off_hand')     return showOffHand;
     return true;
   });
 

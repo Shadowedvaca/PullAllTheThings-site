@@ -1881,6 +1881,13 @@ async def get_available_items(
         # Normalize paired slots to canonical enrichment.items slot_type
         slot_type = _SLOT_META[slot]["enrichment_slot_type"]
 
+        # For main-hand weapon slots, show all equippable weapon types so players
+        # can browse both 1H and 2H options regardless of which build is active.
+        if slot in _WEAPON_MH_SLOTS:
+            slot_types: list[str] = ["one_hand", "two_hand", "ranged"]
+        else:
+            slot_types = [slot_type]
+
         # Armor type filter — None for accessories/weapons (no class restriction)
         armor_filter: Optional[str] = (
             CLASS_ARMOR_TYPE.get(class_name) if _SLOT_META[slot]["is_armor_slot"] else None
@@ -1910,7 +1917,7 @@ async def get_available_items(
                         LIMIT 1
                    ) END AS profession_name
               FROM viz.slot_items
-             WHERE slot_type = $1
+             WHERE slot_type = ANY($1::text[])
                AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
                AND item_category IN ('raid', 'dungeon', 'crafted', 'tier', 'catalyst')
                AND NOT (blizzard_item_id = ANY($3::int[]))
@@ -1929,7 +1936,7 @@ async def get_available_items(
                    )
                )
             """,
-            slot_type,
+            slot_types,
             armor_filter,
             excluded_blizzard_ids,
             char_class_id,
