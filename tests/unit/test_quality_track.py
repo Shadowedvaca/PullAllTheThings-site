@@ -138,11 +138,17 @@ class TestNormalizeSlot:
 
 
 class TestSlotOrder:
-    def test_has_16_slots(self):
-        assert len(SLOT_ORDER) == 16
+    def test_has_17_slots(self):
+        # SLOT_ORDER now has 17 entries: main_hand split into main_hand_1h and main_hand_2h
+        assert len(SLOT_ORDER) == 17
 
     def test_ring_and_trinket_pairs_present(self):
         assert "ring_1" in SLOT_ORDER
         assert "ring_2" in SLOT_ORDER
         assert "trinket_1" in SLOT_ORDER
         assert "trinket_2" in SLOT_ORDER
+
+    def test_weapon_variants_present_not_main_hand(self):
+        assert "main_hand_1h" in SLOT_ORDER
+        assert "main_hand_2h" in SLOT_ORDER
+        assert "main_hand" not in SLOT_ORDER

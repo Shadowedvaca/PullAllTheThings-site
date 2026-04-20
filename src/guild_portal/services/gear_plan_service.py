@@ -563,14 +563,14 @@ async def populate_from_bis(
         # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
-            SELECT be.slot, be.priority,
+            SELECT be.slot, be.guide_order,
                    be.blizzard_item_id, i.name AS item_name
               FROM enrichment.bis_entries be
               LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
              WHERE be.source_id = $1
                AND be.spec_id = $2
                AND (be.hero_talent_id = $3 OR be.hero_talent_id IS NULL)
-             ORDER BY be.slot, be.priority
+             ORDER BY be.slot, be.guide_order
             """,
             use_source, spec_id, use_ht,
         )
@@ -1210,7 +1210,7 @@ async def get_plan_detail(
         if spec_id:
             bis_rows = await conn.fetch(
                 """
-                SELECT vbr.slot, vbr.source_id, vbr.hero_talent_id, vbr.priority,
+                SELECT vbr.slot, vbr.source_id, vbr.hero_talent_id, vbr.guide_order,
                        vbr.blizzard_item_id, vbr.name AS item_name, vbr.icon_url,
                        vbr.source_name, vbr.source_short_label AS short_label,
                        vbr.source_origin AS origin, vbr.content_type
@@ -1219,7 +1219,7 @@ async def get_plan_detail(
                  WHERE vbr.spec_id = $1
                    AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
-                 ORDER BY bls.sort_order, vbr.slot, vbr.priority
+                 ORDER BY bls.sort_order, vbr.slot, vbr.guide_order
                 """,
                 spec_id, hero_talent_id,
             )

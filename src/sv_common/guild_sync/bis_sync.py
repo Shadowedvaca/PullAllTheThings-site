@@ -721,10 +721,15 @@ async def sync_target(
     if slots:
         items_found = len(slots)
         extracted_slots = {s.slot for s in slots}
+        # Normalize: any weapon slot (main_hand intermediate or resolved variant)
+        # counts as covering both main_hand_1h and main_hand_2h for coverage purposes.
+        if extracted_slots & {"main_hand", "main_hand_1h", "main_hand_2h"}:
+            extracted_slots = (extracted_slots - {"main_hand"}) | {"main_hand_1h", "main_hand_2h"}
         missing = set(SLOT_ORDER) - extracted_slots
-        # A spec using a 2H weapon never has off_hand — treat off_hand as the only
-        # missing slot → success (green), not partial.
-        if not missing or missing == {"off_hand"}:
+        # A spec using a 2H weapon never has off_hand; both main_hand variants may
+        # legitimately be absent (spec uses only one build).  off_hand + either
+        # weapon variant absent is expected and not a partial failure.
+        if not missing or missing <= {"off_hand", "main_hand_1h", "main_hand_2h"}:
             status = "success"
         else:
             status = "partial"
@@ -1560,7 +1565,20 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         target_inserted = 0
         if slots:
             async with pool.acquire() as conn:
+                weapon_counter = 0
                 for slot_data in slots:
+                    # Resolve main_hand intermediate slot → main_hand_1h or main_hand_2h
+                    if slot_data.slot == "main_hand":
+                        weapon_counter += 1
+                        resolved_slot = await _resolve_weapon_slot(conn, slot_data.blizzard_item_id)
+                        if resolved_slot is None:
+                            continue  # item missing from enrichment.items; error already logged
+                        actual_slot = resolved_slot
+                        guide_order = weapon_counter
+                    else:
+                        actual_slot = slot_data.slot
+                        guide_order = 1
+
                     # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
                     # skip items not yet in the enrichment layer.
                     exists = await conn.fetchval(
@@ -1573,11 +1591,11 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                         await conn.execute(
                             """
                             INSERT INTO enrichment.bis_entries
-                                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
-                            VALUES ($1, $2, $3, $4, $5, 1)
+                                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order)
+                            VALUES ($1, $2, $3, $4, $5, $6)
                             """,
                             source_id, spec_id, hero_talent_id,
-                            slot_data.slot, slot_data.blizzard_item_id,
+                            actual_slot, slot_data.blizzard_item_id, guide_order,
                         )
                         target_inserted += 1
                         total_inserted += 1
@@ -1589,8 +1607,11 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
             rebuild_status = "failed"
         else:
             extracted_slots = {s.slot for s in slots} if slots else set()
+            # Normalize weapon slots for coverage check
+            if extracted_slots & {"main_hand", "main_hand_1h", "main_hand_2h"}:
+                extracted_slots = (extracted_slots - {"main_hand"}) | {"main_hand_1h", "main_hand_2h"}
             missing = set(SLOT_ORDER) - extracted_slots
-            rebuild_status = "success" if missing <= {"off_hand"} else "partial"
+            rebuild_status = "success" if missing <= {"off_hand", "main_hand_1h", "main_hand_2h"} else "partial"
 
         async with pool.acquire() as conn:
             await conn.execute(
@@ -1831,6 +1852,7 @@ def _parse_method_table(
     results: list[SimcSlot] = []
     ring_count = 0
     trinket_count = 0
+    weapon_count = 0  # cap at 2: guide_order=1 (preferred build) and guide_order=2 (alt build)
 
     for row in table_el.find_all("tr")[1:]:  # skip header row
         cells = row.find_all("td")
@@ -1872,6 +1894,12 @@ def _parse_method_table(
                     continue
                 slot_key = "trinket_1" if trinket_count == 1 else "trinket_2"
             else:
+                continue
+
+        # Limit weapon slots to 2: guide_order=1 (preferred build) and =2 (alt build).
+        if slot_key == "main_hand":
+            weapon_count += 1
+            if weapon_count > 2:
                 continue
 
         results.append(SimcSlot(
@@ -2139,6 +2167,35 @@ async def _extract_method(
     return slots, html
 
 
+async def _resolve_weapon_slot(conn: asyncpg.Connection, blizzard_item_id: int) -> Optional[str]:
+    """Resolve a main_hand item to main_hand_2h or main_hand_1h via enrichment.items.slot_type.
+
+    Returns None and logs ERROR if the item is not in enrichment.items — this
+    indicates sp_rebuild_items has not yet run, which is a pipeline ordering bug.
+    """
+    slot_type = await conn.fetchval(
+        "SELECT slot_type FROM enrichment.items WHERE blizzard_item_id = $1",
+        blizzard_item_id,
+    )
+    if slot_type is None:
+        logger.error(
+            "_resolve_weapon_slot: item %d not found in enrichment.items — "
+            "ensure sp_rebuild_items ran before rebuild_bis_from_landing",
+            blizzard_item_id,
+        )
+        return None
+    if slot_type in ("two_hand", "ranged"):
+        return "main_hand_2h"
+    if slot_type == "one_hand":
+        return "main_hand_1h"
+    logger.error(
+        "_resolve_weapon_slot: item %d has unexpected slot_type=%r for a weapon slot — "
+        "defaulting to main_hand_2h",
+        blizzard_item_id, slot_type,
+    )
+    return "main_hand_2h"
+
+
 def _wh_slots_from_section(
     html: str, item_meta: dict, content_type: str
 ) -> list[SimcSlot]:
@@ -2160,6 +2217,7 @@ def _wh_slots_from_section(
     referenced_ids = sorted(pos_map.keys(), key=lambda iid: pos_map[iid])
 
     seen_slots: dict[str, int] = {}
+    weapon_slots: list[int] = []   # item_ids of main_hand weapons in document order
     ring_count = 0
     trinket_count = 0
 
@@ -2191,6 +2249,11 @@ def _wh_slots_from_section(
                 trinket_count += 1
             else:
                 continue
+        elif base_slot == "main_hand":
+            # Collect up to 2 weapon items; type resolved to main_hand_1h/2h downstream.
+            if len(weapon_slots) < 2:
+                weapon_slots.append(item_id)
+            continue
         else:
             slot = base_slot
             if slot in seen_slots:
@@ -2202,6 +2265,10 @@ def _wh_slots_from_section(
         SimcSlot(slot=slot, blizzard_item_id=iid, bonus_ids=[], enchant_id=None,
                  gem_ids=[], quality_track=None)
         for slot, iid in seen_slots.items()
+    ] + [
+        SimcSlot(slot="main_hand", blizzard_item_id=iid, bonus_ids=[], enchant_id=None,
+                 gem_ids=[], quality_track=None)
+        for iid in weapon_slots
     ]
 
 
@@ -2320,7 +2387,7 @@ async def import_simc(
                 await conn.execute(
                     """
                     INSERT INTO enrichment.bis_entries
-                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order)
                     VALUES ($1, $2, $3, $4, $5, 1)
                     """,
                     source_id, spec_id, hero_talent_id,
