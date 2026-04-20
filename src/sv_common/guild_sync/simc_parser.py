@@ -259,8 +259,14 @@ def export_gear_plan(
         key=lambda s: slot_index.get(s.get("slot", ""), 99),
     )
 
+    # Map internal weapon plan slots back to SimC's single 'main_hand' key
+    _SIMC_SLOT_EXPORT: dict[str, str] = {
+        "main_hand_2h": "main_hand",
+        "main_hand_1h": "main_hand",
+    }
+
     for s in sorted_slots:
-        slot = s.get("slot", "")
+        slot = _SIMC_SLOT_EXPORT.get(s.get("slot", ""), s.get("slot", ""))
         item_id = s.get("blizzard_item_id")
         item_name_raw = s.get("item_name", "unknown")
         if not item_id:

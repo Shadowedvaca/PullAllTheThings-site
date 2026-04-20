@@ -1207,7 +1207,8 @@ document.addEventListener("DOMContentLoaded", _init);
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GP_LEFT_BODY_SLOTS   = ['head','neck','shoulder','back','chest','wrist'];
-const GP_LEFT_WEAPON_SLOTS = ['main_hand','off_hand'];
+// Weapon slots: both typed main-hand keys + off_hand; actual display is data-driven
+const GP_LEFT_WEAPON_SLOTS = ['main_hand_2h', 'main_hand_1h', 'off_hand'];
 const GP_LEFT_SLOTS        = [...GP_LEFT_BODY_SLOTS, ...GP_LEFT_WEAPON_SLOTS];
 const GP_RIGHT_SLOTS       = ['hands','waist','legs','feet','ring_1','ring_2','trinket_1','trinket_2'];
 const GP_INACTIVE_SLOTS    = new Set();
@@ -1217,7 +1218,7 @@ const GP_ALL_SLOTS = [
   'head','neck','shoulder','back','chest','wrist',
   'hands','waist','legs','feet',
   'ring_1','ring_2','trinket_1','trinket_2',
-  'main_hand','off_hand',
+  'main_hand_2h','main_hand_1h','off_hand',
 ];
 
 const GP_SLOT_LABELS = {
@@ -1226,7 +1227,7 @@ const GP_SLOT_LABELS = {
   hands:'Hands', waist:'Waist', legs:'Legs', feet:'Feet',
   ring_1:'Ring 1', ring_2:'Ring 2',
   trinket_1:'Trinket 1', trinket_2:'Trinket 2',
-  main_hand:'Main Hand', off_hand:'Off Hand',
+  main_hand_2h:'Main Hand', main_hand_1h:'Main Hand', off_hand:'Off Hand',
 };
 
 // Fallback track colors before API data loads
@@ -1388,10 +1389,11 @@ function _gpResetPaperdolls() {
   const leftEl  = document.getElementById('mcn-left-paperdoll');
   const rightEl = document.getElementById('mcn-right-paperdoll');
   if (leftEl) {
+    // Default placeholder: body slots + weapon separator + main_hand_2h (most specs 2H or no weapon)
     leftEl.innerHTML = '<div class="mcn-paperdoll__placeholder">'
       + GP_LEFT_BODY_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
       + '<div class="mcn-paperdoll__weapon-sep"></div>'
-      + GP_LEFT_WEAPON_SLOTS.map(s => `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS[s]}"></span>`).join('')
+      + `<span class="mcn-paperdoll__slot-ph" title="${GP_SLOT_LABELS['main_hand_2h']}"></span>`
       + '</div>';
   }
   if (rightEl) {
@@ -1551,7 +1553,9 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
 
 // ── Render paperdoll columns ───────────────────────────────────────────────────
 
-function _gpRenderPaperdolls(slots, tc) {
+// weaponBuild: "2h" | "1h" | null  (null = no data → default to 2h)
+// showOffHand: bool (true for 1H builds and Titan's Grip)
+function _gpRenderPaperdolls(slots, tc, weaponBuild, showOffHand) {
   const leftEl  = document.getElementById('mcn-left-paperdoll');
   const rightEl = document.getElementById('mcn-right-paperdoll');
   if (leftEl) {
@@ -1561,7 +1565,13 @@ function _gpRenderPaperdolls(slots, tc) {
     const sep = document.createElement('div');
     sep.className = 'mcn-paperdoll__weapon-sep';
     leftEl.appendChild(sep);
-    GP_LEFT_WEAPON_SLOTS.forEach(k => leftEl.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
+    // Show active main hand slot: 1h build shows main_hand_1h; all others show main_hand_2h
+    const mhSlot = weaponBuild === '1h' ? 'main_hand_1h' : 'main_hand_2h';
+    leftEl.appendChild(_gpBuildSlotCard(mhSlot, slots[mhSlot], tc));
+    // Off hand: 1H builds and Titan's Grip only
+    if (showOffHand) {
+      leftEl.appendChild(_gpBuildSlotCard('off_hand', slots['off_hand'], tc));
+    }
   }
   if (rightEl) {
     rightEl.innerHTML = '';
@@ -1570,22 +1580,23 @@ function _gpRenderPaperdolls(slots, tc) {
   if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
 }
 
-// ── Render weapons in center panel ────────────────────────────────────────────
-
-function _gpRenderWeapons(slots, tc) {
-  const el = document.getElementById('mcn-gp-weapons');
-  if (!el) return;
-  el.innerHTML = '';
-  GP_WEAPON_SLOTS.forEach(k => el.appendChild(_gpBuildSlotCard(k, slots[k], tc)));
-  if (window.$WowheadPower) window.$WowheadPower.refreshLinks();
-}
-
 // ── Gear table (Option C) — full-width slot table ─────────────────────────────
 
-function _gpRenderGearTable(slots, tc) {
-  const allSlots = slots || {};
+function _gpRenderGearTable(data) {
+  const allSlots   = data.slots        || {};
+  const tc         = data.track_colors || {};
+  const weaponBuild  = data.weapon_build  || null;
+  const showOffHand  = !!data.show_off_hand;
 
-  const hasAnyData = GP_ALL_SLOTS.some(k => {
+  // Filter GP_ALL_SLOTS to only show the active weapon slots
+  const visibleSlots = GP_ALL_SLOTS.filter(k => {
+    if (k === 'main_hand_2h') return weaponBuild !== '1h'; // show unless 1H build
+    if (k === 'main_hand_1h') return weaponBuild === '1h'; // only for 1H build
+    if (k === 'off_hand')     return showOffHand;
+    return true;
+  });
+
+  const hasAnyData = visibleSlots.some(k => {
     const sd = allSlots[k];
     return sd && (sd.equipped?.blizzard_item_id || sd.desired?.blizzard_item_id || (sd.bis_recommendations || []).length > 0);
   });
@@ -1597,7 +1608,7 @@ function _gpRenderGearTable(slots, tc) {
     </div>`;
   }
 
-  const rows = GP_ALL_SLOTS.map(slotKey => {
+  const rows = visibleSlots.map(slotKey => {
     const sd      = allSlots[slotKey] || {};
     const eq      = sd.equipped;
     const desired = sd.desired;
@@ -1901,7 +1912,7 @@ function _gpRenderCenterPanel(data) {
       ${bisSection}
     </div>
     <div id="mcn-gp-status" class="mcn-gp-status" hidden></div>
-    ${_gpRenderGearTable(data.slots, data.track_colors)}
+    ${_gpRenderGearTable(data)}
     ${_gpRenderFaq()}
   `;
 
@@ -2007,7 +2018,7 @@ window.mcnGpCloseSlotDetail = function() {
 async function _gpLoadPlan(charId, forceReload) {
   if (!forceReload && _gpCache[charId]) {
     const d = _gpCache[charId];
-    _gpRenderPaperdolls(d.slots, d.track_colors);
+    _gpRenderPaperdolls(d.slots, d.track_colors, d.weapon_build, !!d.show_off_hand);
     _gpRenderCenterPanel(d);
     return;
   }
@@ -2021,7 +2032,7 @@ async function _gpLoadPlan(charId, forceReload) {
 
     _gpCache[charId] = resp.data;
 
-    _gpRenderPaperdolls(resp.data.slots, resp.data.track_colors);
+    _gpRenderPaperdolls(resp.data.slots, resp.data.track_colors, resp.data.weapon_build, !!resp.data.show_off_hand);
     _gpRenderCenterPanel(resp.data);
 
   } catch (err) {
@@ -2702,6 +2713,17 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
         popularity: r.popularity || null,
       });
     }
+    // Sort: guide count (checkmarks visible in current mode) desc → popularity desc → name asc
+    bisItems.sort((a, b) => {
+      const iCtsA = itemOriginCts[a.blizzard_item_id] || {};
+      const iCtsB = itemOriginCts[b.blizzard_item_id] || {};
+      const checksA = guideCols.filter(gc => _gpBisCheck(iCtsA, guideCts, gc.origin)).length;
+      const checksB = guideCols.filter(gc => _gpBisCheck(iCtsB, guideCts, gc.origin)).length;
+      if (checksB !== checksA) return checksB - checksA;
+      const popDiff = (_gpPopularityVal(b.popularity) ?? 0) - (_gpPopularityVal(a.popularity) ?? 0);
+      if (popDiff !== 0) return popDiff;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }
   const bisLabel = 'BIS Recommendations' + (isTrinket && trinketState?.status === 'loading'
     ? ' \u2026' : '');
@@ -2807,20 +2829,29 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
   const CT_TITLE = { overall: 'All Content', raid: 'Raid', mythic_plus: 'Mythic+' };
   const activeCts = CT_ORDER.filter(ct => ctSet.has(ct));
 
-  // Build item map: per item, track which content_types it appears in
+  // Build item map: per item, track content_types, unique guide origins for current mode, popularity.
   const itemMap = new Map();
   for (const r of bis) {
     if (!itemMap.has(r.blizzard_item_id)) {
       itemMap.set(r.blizzard_item_id, {
         bid: r.blizzard_item_id, name: r.item_name, icon: r.icon_url,
         cts: new Set(),
+        guideOrigins:   new Set(),   // unique origins (wowhead/method/ugg/iv) for current mode
+        popularity:     r.popularity     || {},
         target_ilvl:    r.target_ilvl    || null,
         is_equipped:    r.is_equipped    || false,
         is_bis:         r.is_bis         || false,
         source_ratings: r.source_ratings || [],
       });
     }
-    if (r.content_type) itemMap.get(r.blizzard_item_id).cts.add(r.content_type);
+    const it = itemMap.get(r.blizzard_item_id);
+    if (r.content_type) it.cts.add(r.content_type);
+    // Count unique guide origins recommending this item for the active mode.
+    // Always match content_type exactly — the 'overall' short-circuit would
+    // count M+/Raid origins invisible in the current filter, corrupting the sort.
+    if (r.origin && r.content_type === _gpGuideMode) {
+      it.guideOrigins.add(r.origin);
+    }
   }
 
   // Filter items by Guide Mode
@@ -2833,20 +2864,27 @@ function _gpRenderBisGrid(slotKey, bis, tc, primaryBid, dbSlot) {
     return `<div class="mcn-drawer-empty">No ${modeLabel} BIS data for this slot</div>`;
   }
 
+  const isTrinketBis = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
+
   items.sort((a, b) => {
+    // Desired item always first
     if (primaryBid) {
       const d = (b.bid === primaryBid ? 1 : 0) - (a.bid === primaryBid ? 1 : 0);
       if (d !== 0) return d;
     }
-    return b.cts.size !== a.cts.size ? b.cts.size - a.cts.size : a.name.localeCompare(b.name);
+    if (!isTrinketBis) {
+      // Non-trinket: unique guide count desc → overall popularity desc → name asc
+      if (b.guideOrigins.size !== a.guideOrigins.size) return b.guideOrigins.size - a.guideOrigins.size;
+      const popDiff = (b.popularity?.overall ?? 0) - (a.popularity?.overall ?? 0);
+      if (popDiff !== 0) return popDiff;
+    }
+    return a.name.localeCompare(b.name);
   });
 
   const ctHeaders = activeCts.map(ct =>
     `<th class="mcn-bis-grid__src" title="${CT_TITLE[ct]}">${CT_LABEL[ct]}</th>`
   ).join('');
   const thead = `<thead><tr><th class="mcn-bis-grid__name-col">Item</th>${ctHeaders}<th></th></tr></thead>`;
-
-  const isTrinketBis = dbSlot === 'trinket_1' || dbSlot === 'trinket_2';
   const rows = items.map(item => {
     const cells = activeCts.map(ct =>
       item.cts.has(ct)

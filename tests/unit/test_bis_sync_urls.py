@@ -423,8 +423,21 @@ class TestUggItemsToPopularity:
         }
         result = _ugg_items_to_popularity(items_by_slot)
         slots = {r.slot for r in result}
-        assert "main_hand" in slots
+        # weapon1 emits both typed slots so popularity shows for any weapon build mode
+        assert "main_hand_2h" in slots
+        assert "main_hand_1h" in slots
         assert "off_hand" in slots
+
+    def test_weapon1_emits_both_typed_slots(self):
+        items_by_slot = {
+            "weapon1": {"items": [{"item_id": 999, "count": 200, "total": 1000}]},
+        }
+        result = _ugg_items_to_popularity(items_by_slot)
+        by_slot = {r.slot: r for r in result if r.blizzard_item_id == 999}
+        assert "main_hand_2h" in by_slot
+        assert "main_hand_1h" in by_slot
+        assert by_slot["main_hand_2h"].count == 200
+        assert by_slot["main_hand_1h"].count == 200
 
     def test_slot_total_at_slot_level_takes_priority(self):
         items_by_slot = {

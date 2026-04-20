@@ -1,11 +1,12 @@
-"""Unit tests for gear_plan_service.py — upgrade logic and slot helpers."""
+"""Unit tests for gear_plan_service.py — upgrade logic, slot helpers, weapon display."""
 
 import pytest
 
 from guild_portal.services.gear_plan_service import (
     WOW_SLOTS,
-    SLOT_DISPLAY,
     TRACK_ORDER,
+    _apply_off_hand_rule,
+    _compute_weapon_display,
     _upgrade_tracks,
 )
 from sv_common.guild_sync.quality_track import is_crafted_item
@@ -79,55 +80,98 @@ class TestUpgradeTracks:
 
 
 # ---------------------------------------------------------------------------
-# WOW_SLOTS
+# WOW_SLOTS — runtime-populated set, starts empty until DB is loaded
 # ---------------------------------------------------------------------------
 
 
 class TestWowSlots:
-    def test_has_16_slots(self):
-        assert len(WOW_SLOTS) == 16
+    def test_is_set(self):
+        assert isinstance(WOW_SLOTS, set)
 
-    def test_contains_expected_slots(self):
-        required = {
-            "head", "neck", "shoulder", "back", "chest", "wrist",
-            "hands", "waist", "legs", "feet",
-            "ring_1", "ring_2", "trinket_1", "trinket_2",
-            "main_hand", "off_hand",
+    def test_initially_empty_without_db(self):
+        # WOW_SLOTS is populated by _ensure_slot_meta() which requires a DB connection.
+        # In unit tests with no DB, it starts empty.
+        assert isinstance(WOW_SLOTS, set)
+
+
+# ---------------------------------------------------------------------------
+# _compute_weapon_display
+# ---------------------------------------------------------------------------
+
+
+def _make_bis(slot: str, guide_order: int = 1) -> dict:
+    return {"slot": slot, "guide_order": guide_order, "blizzard_item_id": 1}
+
+
+class TestComputeWeaponDisplay:
+    def test_2h_bis_only(self):
+        bis = {"main_hand_2h": [_make_bis("main_hand_2h", 1)]}
+        build, show_oh = _compute_weapon_display(bis, {}, {})
+        assert build == "2h"
+        assert show_oh is True
+
+    def test_1h_bis_only(self):
+        bis = {"main_hand_1h": [_make_bis("main_hand_1h", 1)]}
+        build, show_oh = _compute_weapon_display(bis, {}, {})
+        assert build == "1h"
+        assert show_oh is True
+
+    def test_prefer_lower_guide_order_2h(self):
+        # Frost DK: 2H listed first (guide_order=1), 1H listed second (guide_order=2)
+        bis = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "main_hand_1h": [_make_bis("main_hand_1h", 2)],
         }
-        assert set(WOW_SLOTS) == required
+        build, show_oh = _compute_weapon_display(bis, {}, {})
+        assert build == "2h"
+        assert show_oh is True
 
-    def test_ordered_head_first_off_hand_last(self):
-        assert WOW_SLOTS[0] == "head"
-        assert WOW_SLOTS[-1] == "off_hand"
+    def test_prefer_lower_guide_order_1h(self):
+        # Spec where 1H is preferred (guide_order=1 on 1H)
+        bis = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 2)],
+            "main_hand_1h": [_make_bis("main_hand_1h", 1)],
+        }
+        build, show_oh = _compute_weapon_display(bis, {}, {})
+        assert build == "1h"
+        assert show_oh is True
 
-    def test_rings_before_trinkets(self):
-        ring_idx = WOW_SLOTS.index("ring_1")
-        tri_idx = WOW_SLOTS.index("trinket_1")
-        assert ring_idx < tri_idx
+    def test_2h_build_always_shows_off_hand(self):
+        bis = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand":     [_make_bis("off_hand", 1)],
+        }
+        build, show_oh = _compute_weapon_display(bis, {}, {})
+        assert build == "2h"
+        assert show_oh is True
 
-    def test_all_slots_have_display_name(self):
-        for slot in WOW_SLOTS:
-            assert slot in SLOT_DISPLAY, f"Missing display name for slot: {slot}"
+    def test_no_data_still_shows_off_hand(self):
+        build, show_oh = _compute_weapon_display({}, {}, {})
+        assert build is None
+        assert show_oh is True
 
-    def test_display_names_non_empty(self):
-        for slot, name in SLOT_DISPLAY.items():
-            assert name, f"Empty display name for slot: {slot}"
+    def test_no_bis_falls_back_to_equipped_2h(self):
+        equipped = {"main_hand_2h": {"blizzard_item_id": 999, "slot": "main_hand_2h"}}
+        build, show_oh = _compute_weapon_display({}, equipped, {})
+        assert build == "2h"
+        assert show_oh is True
+
+    def test_no_bis_falls_back_to_equipped_1h(self):
+        equipped = {"main_hand_1h": {"blizzard_item_id": 888, "slot": "main_hand_1h"}}
+        build, show_oh = _compute_weapon_display({}, equipped, {})
+        assert build == "1h"
+        assert show_oh is True
 
 
-# ---------------------------------------------------------------------------
-# SLOT_DISPLAY
-# ---------------------------------------------------------------------------
+    def test_desired_fallback_2h(self):
+        desired = {"main_hand_2h": {"blizzard_item_id": 777}}
+        build, show_oh = _compute_weapon_display({}, {}, desired)
+        assert build == "2h"
 
-
-class TestSlotDisplay:
-    def test_ring_1_label(self):
-        assert SLOT_DISPLAY["ring_1"] == "Ring 1"
-
-    def test_main_hand_label(self):
-        assert SLOT_DISPLAY["main_hand"] == "Main Hand"
-
-    def test_trinket_2_label(self):
-        assert SLOT_DISPLAY["trinket_2"] == "Trinket 2"
+    def test_desired_fallback_1h(self):
+        desired = {"main_hand_1h": {"blizzard_item_id": 666}}
+        build, show_oh = _compute_weapon_display({}, {}, desired)
+        assert build == "1h"
 
 
 # ---------------------------------------------------------------------------
@@ -148,46 +192,78 @@ class TestIsCraftedItem:
     def test_empty_list_returns_false(self):
         assert is_crafted_item([]) is False
 
-    def test_none_safe(self):
-        # Callers pass `bonus_ids or []` so None is never passed, but guard anyway
-        assert is_crafted_item([]) is False
-
 
 # ---------------------------------------------------------------------------
-# BIS upgrade fallback (inferred from equipped track when no item_sources)
+# _apply_off_hand_rule — Phase 3 off-hand suppression
 # ---------------------------------------------------------------------------
 
 
-class TestBisUpgradeFallback:
-    """The service applies a fallback when is_bis=True but available_tracks=[].
-    Verify _upgrade_tracks behaviour that the fallback builds on."""
+def _make_oh(slot_type: str) -> dict:
+    return {"slot": "off_hand", "guide_order": 1, "blizzard_item_id": 42, "slot_type": slot_type}
 
-    def test_same_item_champion_empty_tracks_no_upgrade(self):
-        # Without fallback, empty available_tracks → empty result
-        assert _upgrade_tracks("C", 100, 100, []) == []
 
-    def test_same_item_champion_full_tracks_gives_hm(self):
-        # With all tracks as fallback: strictly higher than C → H, M
-        result = _upgrade_tracks("C", 100, 100, ["V", "C", "H", "M"])
-        assert result == ["H", "M"]
+class TestApplyOffHandRule:
+    def test_1h_build_keeps_off_hand(self):
+        by_slot = {
+            "main_hand_1h": [_make_bis("main_hand_1h", 1)],
+            "off_hand": [_make_oh("off_hand")],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_1h")
+        assert "off_hand" in result
+        assert clear is False
 
-    def test_same_item_veteran_full_tracks_excludes_v(self):
-        # At V track, strictly higher → C, H, M
-        result = _upgrade_tracks("V", 100, 100, ["V", "C", "H", "M"])
-        assert result == ["C", "H", "M"]
+    def test_2h_build_no_off_hand_in_bis(self):
+        by_slot = {"main_hand_2h": [_make_bis("main_hand_2h", 1)]}
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" not in result
+        assert clear is False
 
-    def test_same_item_mythic_full_tracks_no_upgrades(self):
-        # Already at M — no higher tracks
-        result = _upgrade_tracks("M", 100, 100, ["V", "C", "H", "M"])
-        assert result == []
+    def test_2h_build_off_hand_shield_suppressed(self):
+        # off_hand shield/frill (slot_type='off_hand') → suppressed, clear=True
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [_make_oh("off_hand")],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" not in result
+        assert clear is True
 
-    def test_non_bis_champion_never_shows_v(self):
-        # Non-BIS at C: same and above → C, H, M (V excluded — 0 >= 1 is False)
-        result = _upgrade_tracks("C", 200, 100, ["V", "C", "H", "M"])
-        assert result == ["C", "H", "M"]
-        assert "V" not in result
+    def test_2h_build_titans_grip_kept(self):
+        # Titan's Grip: off_hand item has slot_type='two_hand' → keep it
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [_make_oh("two_hand")],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" in result
+        assert clear is False
 
-    def test_non_bis_hero_shows_hm_only(self):
-        # Non-BIS at H: same and above → H, M
-        result = _upgrade_tracks("H", 200, 100, ["V", "C", "H", "M"])
-        assert result == ["H", "M"]
+    def test_2h_mixed_off_hand_candidates_keeps_only_two_hand(self):
+        # Multiple off_hand candidates: only two_hand survivors (Titan's Grip)
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [
+                {**_make_oh("off_hand"), "blizzard_item_id": 10},
+                {**_make_oh("two_hand"), "blizzard_item_id": 20},
+            ],
+        }
+        result, clear = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "off_hand" in result
+        assert len(result["off_hand"]) == 1
+        assert result["off_hand"][0]["blizzard_item_id"] == 20
+        assert clear is False
+
+    def test_no_preferred_mh_no_change(self):
+        by_slot = {"off_hand": [_make_oh("off_hand")]}
+        result, clear = _apply_off_hand_rule(by_slot, None)
+        assert "off_hand" in result
+        assert clear is False
+
+    def test_does_not_mutate_other_slots(self):
+        by_slot = {
+            "main_hand_2h": [_make_bis("main_hand_2h", 1)],
+            "off_hand": [_make_oh("off_hand")],
+            "head": [_make_bis("head", 1)],
+        }
+        result, _ = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert "head" in result

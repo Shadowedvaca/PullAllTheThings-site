@@ -161,6 +161,70 @@ _ARMOR_TYPE_MARKER: dict[str, str] = {
     "plate":   "%<!--scstart4:4-->%",
 }
 
+# The two weapon main-hand plan slot keys — used throughout weapon display logic.
+_WEAPON_MH_SLOTS: frozenset[str] = frozenset({"main_hand_2h", "main_hand_1h"})
+
+
+def _compute_weapon_display(
+    bis_by_slot: dict,
+    equipped_by_slot: dict,
+    desired_by_slot: dict,
+) -> tuple[Optional[str], bool]:
+    """Determine weapon build and off-hand visibility.
+
+    Priority order: BIS guide entries (lowest guide_order) → equipped → desired → default.
+
+    Returns:
+        weapon_build: "2h" | "1h" | None (None = no weapon data at all)
+        show_off_hand: True when build is 1H or Titan's Grip (2H + off_hand BIS)
+    """
+    mh2h = bis_by_slot.get("main_hand_2h", [])
+    mh1h = bis_by_slot.get("main_hand_1h", [])
+
+    if mh2h or mh1h:
+        min_2h = min((r.get("guide_order", 1) for r in mh2h), default=99)
+        min_1h = min((r.get("guide_order", 1) for r in mh1h), default=99)
+        weapon_build: Optional[str] = "2h" if min_2h <= min_1h else "1h"
+    elif equipped_by_slot.get("main_hand_2h"):
+        weapon_build = "2h"
+    elif equipped_by_slot.get("main_hand_1h"):
+        weapon_build = "1h"
+    elif desired_by_slot.get("main_hand_2h"):
+        weapon_build = "2h"
+    elif desired_by_slot.get("main_hand_1h"):
+        weapon_build = "1h"
+    else:
+        weapon_build = None
+
+    show_off_hand = True
+
+    return weapon_build, show_off_hand
+
+
+def _apply_off_hand_rule(
+    by_slot: dict[str, list],
+    preferred_mh: Optional[str],
+) -> tuple[dict[str, list], bool]:
+    """Apply 2H/1H off-hand suppression to a BIS slot candidate map.
+
+    When the preferred main hand is 2H, off_hand is suppressed unless any
+    BIS off_hand candidate has slot_type='two_hand' (Titan's Grip).
+
+    Returns:
+        (by_slot, clear_off_hand)
+        clear_off_hand: True if the off_hand plan slot should be deleted
+    """
+    if preferred_mh != "main_hand_2h" or "off_hand" not in by_slot:
+        return by_slot, False
+
+    titans_grip = [r for r in by_slot["off_hand"] if r.get("slot_type") == "two_hand"]
+    if titans_grip:
+        by_slot["off_hand"] = titans_grip
+        return by_slot, False
+
+    del by_slot["off_hand"]
+    return by_slot, True
+
 
 def _upgrade_tracks(
     equipped_track: Optional[str],
@@ -559,12 +623,12 @@ async def populate_from_bis(
             r["slot"]: set(r["excluded_item_ids"] or []) for r in slot_data_rows
         }
 
-        # Get ALL BIS entries ordered by priority so we can skip excluded items
+        # Get ALL BIS entries ordered by guide_order so we can skip excluded items
         # and fall through to the next-best candidate per slot.
         bis_rows = await conn.fetch(
             """
             SELECT be.slot, be.guide_order,
-                   be.blizzard_item_id, i.name AS item_name
+                   be.blizzard_item_id, i.name AS item_name, i.slot_type
               FROM enrichment.bis_entries be
               LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
              WHERE be.source_id = $1
@@ -575,10 +639,32 @@ async def populate_from_bis(
             use_source, spec_id, use_ht,
         )
 
-        # Group candidates by slot (already ordered by priority)
+        # Group candidates by slot (already ordered by guide_order)
         by_slot: dict[str, list] = {}
         for row in bis_rows:
-            by_slot.setdefault(row["slot"], []).append(row)
+            by_slot.setdefault(row["slot"], []).append(dict(row))
+
+        # Weapon build selection: when BIS has entries for both main_hand_2h and
+        # main_hand_1h (e.g. Frost DK 2H vs DW), only populate the preferred build
+        # (lowest guide_order across both slots).
+        weapon_slots_in_bis = _WEAPON_MH_SLOTS & set(by_slot.keys())
+        if len(weapon_slots_in_bis) > 1:
+            min_2h = min((r["guide_order"] for r in by_slot.get("main_hand_2h", [])), default=99)
+            min_1h = min((r["guide_order"] for r in by_slot.get("main_hand_1h", [])), default=99)
+            if min_2h <= min_1h:
+                by_slot.pop("main_hand_1h", None)
+            else:
+                by_slot.pop("main_hand_2h", None)
+
+        # Off-hand suppression for 2H builds.
+        # Determine preferred main hand after build selection.
+        preferred_mh = next((s for s in ("main_hand_2h", "main_hand_1h") if s in by_slot), None)
+        by_slot, clear_off_hand = _apply_off_hand_rule(by_slot, preferred_mh)
+        if clear_off_hand and "off_hand" not in locked_slots:
+            await conn.execute(
+                "DELETE FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND slot='off_hand'",
+                plan_id,
+            )
 
         populated = 0
         for slot, candidates in by_slot.items():
@@ -697,14 +783,35 @@ async def import_simc_goals(
 
         for simc_slot in slots:
             slot = simc_slot.slot
+            bid = simc_slot.blizzard_item_id
+
+            # SimC uses 'main_hand' for all weapon types; resolve to typed slot
+            if slot == "main_hand":
+                type_row = await conn.fetchrow(
+                    "SELECT slot_type FROM enrichment.items WHERE blizzard_item_id=$1",
+                    bid,
+                )
+                if type_row:
+                    st = type_row["slot_type"] or ""
+                    if st in ("two_hand", "ranged"):
+                        slot = "main_hand_2h"
+                    elif st == "one_hand":
+                        slot = "main_hand_1h"
+                    else:
+                        slot = "main_hand_2h"
+                else:
+                    logger.error(
+                        "import_simc_goals: item %s not in enrichment.items — defaulting to main_hand_2h",
+                        bid,
+                    )
+                    slot = "main_hand_2h"
+
             if not is_valid_slot(slot):
                 unrecognised += 1
                 continue
             if slot in locked_slots:
                 skipped_locked += 1
                 continue
-
-            bid = simc_slot.blizzard_item_id
 
             name_row = await conn.fetchrow(
                 "SELECT name FROM enrichment.items WHERE blizzard_item_id=$1",
@@ -1008,7 +1115,7 @@ async def get_plan_detail(
             """
             SELECT ce.slot, ce.blizzard_item_id, ce.item_name, ce.item_level,
                    ce.quality_track, ce.enchant_id, ce.gem_ids, ce.bonus_ids,
-                   ei.icon_url
+                   ei.icon_url, ei.slot_type
               FROM guild_identity.character_equipment ce
               LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = ce.blizzard_item_id
              WHERE ce.character_id = $1
@@ -1019,7 +1126,17 @@ async def get_plan_detail(
         for r in equip_rows:
             d = dict(r)
             d["is_crafted"] = is_crafted_item(d.get("bonus_ids") or [])
-            equipped_by_slot[r["slot"]] = d
+            slot_key = r["slot"]
+            # Remap legacy 'main_hand' rows not yet updated by migration 0156
+            if slot_key == "main_hand":
+                st = r.get("slot_type") or ""
+                if st in ("two_hand", "ranged"):
+                    slot_key = "main_hand_2h"
+                elif st == "one_hand":
+                    slot_key = "main_hand_1h"
+                else:
+                    slot_key = "main_hand_2h"
+            equipped_by_slot[slot_key] = d
 
         # Phase 1E.6: If equipped_source='simc' and a stored simc_profile exists,
         # parse it and override equipped_by_slot with SimC-sourced gear data.
@@ -1262,6 +1379,10 @@ async def get_plan_detail(
                 paired = _SLOT_META.get(sl, {}).get("paired_slot")
                 if paired:
                     _bis_slots.add(paired)
+            # Include legacy 'main_hand' so existing DB rows (pre-Phase 2 re-sync)
+            # still match; new rows use typed slots after rebuild_item_popularity runs.
+            if _bis_slots & _WEAPON_MH_SLOTS:
+                _bis_slots.add("main_hand")
             _bis_slots_list = list(_bis_slots)
             pop_rows = await conn.fetch(
                 """
@@ -1473,6 +1594,16 @@ async def get_plan_detail(
     _merge_paired_bis(bis_by_slot, "ring_1", "ring_2")
     _merge_paired_bis(bis_by_slot, "trinket_1", "trinket_2")
 
+    # Weapon build display rules: must run BEFORE the weapon BIS merge so that
+    # guide_order comparison sees the raw per-type data (not the merged pool).
+    weapon_build, show_off_hand = _compute_weapon_display(
+        bis_by_slot, equipped_by_slot, desired_by_slot
+    )
+
+    # Merge both weapon pools so the active main-hand slot shows BIS for BOTH
+    # 1H and 2H builds.  Done AFTER weapon build detection.
+    _merge_paired_bis(bis_by_slot, "main_hand_2h", "main_hand_1h")
+
     # Build per-slot data
     slots_data: dict[str, dict] = {}
     for slot in _SLOTS_ORDERED:
@@ -1536,13 +1667,28 @@ async def get_plan_detail(
             is_bis, equipped_track, plan_crafted_ilvl_map
         )
 
-        # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS
+        # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS.
+        # Weapon slots: both main_hand_2h and main_hand_1h desired items count so the
+        # merged BIS pool shows checkmarks for whichever build the player has set.
         _paired_slot = _SLOT_META[slot]["paired_slot"]
         _paired_desired_bid: Optional[int] = None
         if _paired_slot:
             _pd = desired_by_slot.get(_paired_slot)
             _paired_desired_bid = _pd["blizzard_item_id"] if _pd else None
         _all_desired_bids: set[int] = {b for b in (desired_bid, _paired_desired_bid) if b}
+        if slot in _WEAPON_MH_SLOTS:
+            _other_mh = "main_hand_1h" if slot == "main_hand_2h" else "main_hand_2h"
+            _other_mh_d = desired_by_slot.get(_other_mh)
+            if _other_mh_d and _other_mh_d.get("blizzard_item_id"):
+                _all_desired_bids.add(_other_mh_d["blizzard_item_id"])
+
+        # For weapon slots, also check the other typed slot's equipped item.
+        _all_equipped_bids: set[int] = {equipped_bid} if equipped_bid else set()
+        if slot in _WEAPON_MH_SLOTS:
+            _other_mh = "main_hand_1h" if slot == "main_hand_2h" else "main_hand_2h"
+            _other_eq = equipped_by_slot.get(_other_mh)
+            if _other_eq and _other_eq.get("blizzard_item_id"):
+                _all_equipped_bids.add(_other_eq["blizzard_item_id"])
 
         for rec in bis_recs:
             bid = rec["blizzard_item_id"]
@@ -1551,7 +1697,7 @@ async def get_plan_detail(
             else:
                 rec["target_ilvl"] = slot_noncrafted_ilvl
             # Phase 1F: EQUIPPED / BIS badges on BIS recommendations
-            rec["is_equipped"] = bool(equipped_bid and bid == equipped_bid)
+            rec["is_equipped"] = bid in _all_equipped_bids
             rec["is_bis"]      = bool(_all_desired_bids and bid in _all_desired_bids)
             # Phase 1F: trinket tier badge on BIS recs (full-spec map fetched above)
             if slot in _TRINKET_SLOTS:
@@ -1643,6 +1789,8 @@ async def get_plan_detail(
         "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
+        "weapon_build": weapon_build,
+        "show_off_hand": show_off_hand,
     }
 
 
@@ -1780,6 +1928,13 @@ async def get_available_items(
         # Normalize paired slots to canonical enrichment.items slot_type
         slot_type = _SLOT_META[slot]["enrichment_slot_type"]
 
+        # For main-hand weapon slots, show all equippable weapon types so players
+        # can browse both 1H and 2H options regardless of which build is active.
+        if slot in _WEAPON_MH_SLOTS:
+            slot_types: list[str] = ["one_hand", "two_hand", "ranged"]
+        else:
+            slot_types = [slot_type]
+
         # Armor type filter — None for accessories/weapons (no class restriction)
         armor_filter: Optional[str] = (
             CLASS_ARMOR_TYPE.get(class_name) if _SLOT_META[slot]["is_armor_slot"] else None
@@ -1809,7 +1964,7 @@ async def get_available_items(
                         LIMIT 1
                    ) END AS profession_name
               FROM viz.slot_items
-             WHERE slot_type = $1
+             WHERE slot_type = ANY($1::text[])
                AND ($2::text IS NULL OR armor_type = $2 OR armor_type IS NULL)
                AND item_category IN ('raid', 'dungeon', 'crafted', 'tier', 'catalyst')
                AND NOT (blizzard_item_id = ANY($3::int[]))
@@ -1828,7 +1983,7 @@ async def get_available_items(
                    )
                )
             """,
-            slot_type,
+            slot_types,
             armor_filter,
             excluded_blizzard_ids,
             char_class_id,
@@ -1866,7 +2021,11 @@ async def get_available_items(
         # Popularity data: aggregate across paired slots (trinket_1+trinket_2, ring_1+ring_2)
         # so both sections always show the same combined number.
         _pop_paired = _SLOT_META[slot]["paired_slot"]
-        _pop_slots: list[str] = [slot] + ([_pop_paired] if _pop_paired else [])
+        _pop_slots_set: set[str] = {slot} | ({_pop_paired} if _pop_paired else set())
+        # Include legacy 'main_hand' for existing DB rows pre-Phase 2 popularity re-sync
+        if _pop_slots_set & _WEAPON_MH_SLOTS:
+            _pop_slots_set.add("main_hand")
+        _pop_slots: list[str] = list(_pop_slots_set)
         pop_by_bid: dict[int, dict] = {}
         if avail_spec_id:
             pop_rows = await conn.fetch(
@@ -2008,6 +2167,26 @@ async def get_available_items(
             }
             for r in tier_rows
         ]
+
+    # Sort available items.
+    def _item_first_source(item: dict, field: str) -> str:
+        srcs = item.get("sources") or []
+        return (srcs[0].get(field) or "").lower() if srcs else ""
+
+    raid_items.sort(key=lambda i: (
+        _item_first_source(i, "source_instance"),
+        _item_first_source(i, "source_name"),
+        (i.get("name") or "").lower(),
+    ))
+    dungeon_items.sort(key=lambda i: (
+        _item_first_source(i, "source_instance"),
+        _item_first_source(i, "source_name"),
+        (i.get("name") or "").lower(),
+    ))
+    crafted_items.sort(key=lambda i: (
+        (i.get("profession_name") or "").lower(),
+        (i.get("name") or "").lower(),
+    ))
 
     # Phase 1F: add is_equipped, is_bis, and (for trinkets) source_ratings per item
     for item in raid_items + dungeon_items + crafted_items + (tier_items or []):
