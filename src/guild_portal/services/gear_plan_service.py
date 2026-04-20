@@ -1559,15 +1559,16 @@ async def get_plan_detail(
     # ring (or trinket) items, not just those scraped under that specific slot key.
     _merge_paired_bis(bis_by_slot, "ring_1", "ring_2")
     _merge_paired_bis(bis_by_slot, "trinket_1", "trinket_2")
-    # Merge both weapon pools so the active main-hand slot shows BIS for BOTH
-    # 1H and 2H builds.  Balance Druid: 2H staff (guide_order=1) and 1H weapon
-    # (guide_order=2) both appear with their respective checkmarks.
-    _merge_paired_bis(bis_by_slot, "main_hand_2h", "main_hand_1h")
 
-    # Weapon build display rules: determine active main-hand slot and off-hand visibility.
+    # Weapon build display rules: must run BEFORE the weapon BIS merge so that
+    # guide_order comparison sees the raw per-type data (not the merged pool).
     weapon_build, show_off_hand = _compute_weapon_display(
         bis_by_slot, equipped_by_slot, desired_by_slot
     )
+
+    # Merge both weapon pools so the active main-hand slot shows BIS for BOTH
+    # 1H and 2H builds.  Done AFTER weapon build detection.
+    _merge_paired_bis(bis_by_slot, "main_hand_2h", "main_hand_1h")
 
     # Build per-slot data
     slots_data: dict[str, dict] = {}
