@@ -1518,6 +1518,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
             WITH latest AS (
                 SELECT
                     bsr.content, bsr.url, bsr.source,
+                    t.id AS target_id,
                     t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
                     ROW_NUMBER() OVER (
                         PARTITION BY bsr.target_id
@@ -1527,7 +1528,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                  WHERE bsr.target_id IS NOT NULL
             )
-            SELECT content, url, source, source_id, spec_id, hero_talent_id, content_type
+            SELECT content, url, source, target_id, source_id, spec_id, hero_talent_id, content_type
               FROM latest
              WHERE rn = 1
         """)
@@ -1536,10 +1537,12 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         await conn.execute("TRUNCATE enrichment.bis_entries")
 
     total_inserted = 0
+    now = datetime.now(timezone.utc)
     for row in rows:
         html = row["content"]
         url = row["url"]
         source = row["source"]
+        target_id = row["target_id"]
         source_id = row["source_id"]
         spec_id = row["spec_id"]
         hero_talent_id = row["hero_talent_id"]
@@ -1554,32 +1557,50 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         else:
             continue  # icy_veins and others not yet parseable
 
-        if not slots:
-            continue
+        target_inserted = 0
+        if slots:
+            async with pool.acquire() as conn:
+                for slot_data in slots:
+                    # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
+                    # skip items not yet in the enrichment layer.
+                    exists = await conn.fetchval(
+                        "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
+                        slot_data.blizzard_item_id,
+                    )
+                    if not exists:
+                        continue
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO enrichment.bis_entries
+                                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
+                            VALUES ($1, $2, $3, $4, $5, 1)
+                            """,
+                            source_id, spec_id, hero_talent_id,
+                            slot_data.slot, slot_data.blizzard_item_id,
+                        )
+                        target_inserted += 1
+                        total_inserted += 1
+                    except Exception:
+                        pass  # duplicate within this rebuild — silently skip
+
+        # Determine status from coverage and stamp back onto scrape target
+        if target_inserted == 0:
+            rebuild_status = "failed"
+        else:
+            extracted_slots = {s.slot for s in slots} if slots else set()
+            missing = set(SLOT_ORDER) - extracted_slots
+            rebuild_status = "success" if missing <= {"off_hand"} else "partial"
 
         async with pool.acquire() as conn:
-            for slot_data in slots:
-                # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
-                # skip items not yet in the enrichment layer.
-                exists = await conn.fetchval(
-                    "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
-                    slot_data.blizzard_item_id,
-                )
-                if not exists:
-                    continue
-                try:
-                    await conn.execute(
-                        """
-                        INSERT INTO enrichment.bis_entries
-                            (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, priority)
-                        VALUES ($1, $2, $3, $4, $5, 1)
-                        """,
-                        source_id, spec_id, hero_talent_id,
-                        slot_data.slot, slot_data.blizzard_item_id,
-                    )
-                    total_inserted += 1
-                except Exception:
-                    pass  # duplicate within this rebuild — silently skip
+            await conn.execute(
+                """
+                UPDATE config.bis_scrape_targets
+                   SET items_found = $1, status = $2, last_fetched = $3
+                 WHERE id = $4
+                """,
+                target_inserted, rebuild_status, now, target_id,
+            )
 
     logger.info("rebuild_bis_from_landing: %d bis_entries inserted", total_inserted)
     return {"bis_entries_inserted": total_inserted}
