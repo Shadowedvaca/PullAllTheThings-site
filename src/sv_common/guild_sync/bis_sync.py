@@ -1783,13 +1783,19 @@ _METHOD_SLOT_MAP: dict[str, str | None] = {
     "head":       "head",
     "neck":       "neck",
     "shoulders":  "shoulder",
+    "shoulder":   "shoulder",
     "back":       "back",
+    "cloak":      "back",
     "chest":      "chest",
     "wrists":     "wrist",
+    "wrist":      "wrist",
     "hands":      "hands",
+    "gloves":     "hands",
     "waist":      "waist",
+    "belt":       "waist",
     "legs":       "legs",
     "feet":       "feet",
+    "boots":      "feet",
     "ring 1":     "ring_1",
     "ring 2":     "ring_2",
     "ring":       None,      # positional — handled by ring_count
@@ -1798,6 +1804,7 @@ _METHOD_SLOT_MAP: dict[str, str | None] = {
     "trinket":    None,      # positional — handled by trinket_count
     "main hand":  "main_hand",
     "main-hand":  "main_hand",
+    "weapon":     "main_hand",
     "off hand":   "off_hand",
     "off-hand":   "off_hand",
 }
