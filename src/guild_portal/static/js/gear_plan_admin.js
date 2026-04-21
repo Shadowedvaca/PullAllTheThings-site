@@ -2196,3 +2196,224 @@ async function clearMethodOverride(specId, contentType) {
         alert('Clear failed: ' + err.message);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Unified Section Inventory
+// ---------------------------------------------------------------------------
+
+let _siCurrentSource = 'icy_veins';
+
+function toggleSectionInventory() {
+    const content = document.getElementById('gp-section-inventory-content');
+    const icon = document.getElementById('section-inventory-toggle-icon');
+    const hidden = content.style.display === 'none';
+    content.style.display = hidden ? 'block' : 'none';
+    if (icon) icon.textContent = hidden ? '▲' : '▼';
+    if (hidden) loadSectionInventory();
+}
+
+function switchSectionTab(source, btn) {
+    _siCurrentSource = source;
+    ['icy_veins', 'method'].forEach(s => {
+        const b = document.getElementById('si-tab-' + s.replace('_', '-'));
+        if (!b) return;
+        b.className = 'btn-sm btn-secondary';
+        b.style.background = '';
+        b.style.color = '';
+    });
+    btn.className = 'btn-sm';
+    btn.style.background = 'var(--color-accent)';
+    btn.style.color = '#000';
+    const reparseBtn = document.getElementById('si-reparse-btn');
+    if (reparseBtn) reparseBtn.style.display = source === 'method' ? '' : 'none';
+    loadSectionInventory();
+}
+
+async function loadSectionInventory() {
+    const outliersOnly = document.getElementById('si-outliers-only')?.checked ?? true;
+    const tbody = document.getElementById('si-body');
+    const count = document.getElementById('si-count');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">Loading…</td></tr>';
+
+    try {
+        const r = await fetch(`/api/v1/admin/bis/page-sections?source=${_siCurrentSource}&outliers_only=${outliersOnly}&include_gaps=true`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        const rows = d.data;
+        const sectionRows = rows.filter(r => r.row_type === 'section');
+        const gapRows = rows.filter(r => r.row_type === 'gap');
+        if (count) count.textContent = `${sectionRows.length} section${sectionRows.length !== 1 ? 's' : ''}, ${gapRows.length} gap${gapRows.length !== 1 ? 's' : ''}`;
+
+        if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">
+                ${outliersOnly ? 'No issues — all sections classified and all content types covered.' : 'No sections found — run a BIS sync first.'}
+            </td></tr>`;
+            return;
+        }
+
+        const CT_LABELS = { overall: 'Overall', raid: 'Raid', mythic_plus: 'M+' };
+        const ALL_CTS = ['overall', 'raid', 'mythic_plus'];
+        const isIV = _siCurrentSource === 'icy_veins';
+
+        const sectionHtml = sectionRows.map(s => {
+            const ctLabel = s.content_type
+                ? `<span style="color:var(--color-text-muted);">${CT_LABELS[s.content_type] || s.content_type}</span>`
+                : '<span style="color:#f87171;">unknown</span>';
+
+            const trinketBadge = (isIV && s.is_trinket_section)
+                ? ' <span style="font-size:0.68rem;background:#7c3aed;color:#fff;border-radius:3px;padding:1px 4px;">trinket</span>'
+                : '';
+
+            const outlierBadge = s.is_outlier
+                ? `<span style="color:#fbbf24;font-size:0.75rem;">${s.outlier_reason || 'outlier'}</span>`
+                : '—';
+
+            const mappings = s.override_mappings || [];
+            const overrideLabel = mappings.length
+                ? mappings.map(m => `<span style="color:#4ade80;font-size:0.78rem;">${CT_LABELS[m.content_type] || m.content_type}</span>`).join(', ')
+                : '';
+            const overrideForCTs = mappings.map(m => m.content_type);
+
+            const ctOptions = ALL_CTS.map(ct =>
+                `<option value="${ct}" ${overrideForCTs.includes(ct) ? 'selected' : ''}>${CT_LABELS[ct]}</option>`
+            ).join('');
+
+            const safeKey = s.section_key.replace(/[^a-z0-9]/gi, '_');
+            const selectId = `si-override-${s.spec_id}-${s.source_id}-${safeKey}`;
+            const hasOverride = mappings.length > 0;
+            const titleDisplay = isIV ? (s.section_title || s.section_key) : s.section_key;
+
+            return `<tr>
+                <td>${s.class_name}</td>
+                <td>${s.spec_name}</td>
+                <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.section_title || s.section_key}">${titleDisplay}</td>
+                <td>${s.row_count}</td>
+                <td>${ctLabel}${trinketBadge}</td>
+                <td style="font-size:0.78rem;">${outlierBadge}</td>
+                <td>
+                    ${overrideLabel ? overrideLabel + ' ' : ''}
+                    <select id="${selectId}" class="gp-select" style="font-size:0.78rem;padding:2px 4px;">
+                        <option value="">— set override —</option>
+                        ${ctOptions}
+                    </select>
+                </td>
+                <td style="white-space:nowrap;">
+                    <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                        onclick="saveSectionOverride(${s.spec_id}, ${s.source_id}, '${s.section_key.replace(/'/g, "\\'")}', '${selectId}')">
+                        Save
+                    </button>
+                    ${hasOverride ? `<button class="btn-sm" style="font-size:0.75rem;background:var(--color-danger,#7f1d1d);color:#fff;margin-left:4px;"
+                        onclick="clearSectionOverride(${s.spec_id}, ${s.source_id}, '${mappings[0].content_type}')">
+                        Clear
+                    </button>` : ''}
+                </td>
+            </tr>`;
+        }).join('');
+
+        const gapHtml = gapRows.length ? [
+            `<tr><td colspan="8" style="padding:0.5rem 0.6rem;background:rgba(96,165,250,0.07);font-size:0.75rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;">Coverage Gaps — content types with no matching section</td></tr>`,
+            ...gapRows.map(g => {
+                const sectionOptions = (g.available_sections || []).map(sec =>
+                    `<option value="${sec.section_key.replace(/"/g, '&quot;')}">${sec.section_title || sec.section_key} (${sec.row_count} rows)</option>`
+                ).join('');
+                const selectId = `si-gap-${g.spec_id}-${g.source_id}-${g.content_type}`;
+                return `<tr style="opacity:0.85;">
+                    <td>${g.class_name}</td>
+                    <td>${g.spec_name}</td>
+                    <td colspan="2" style="color:#60a5fa;font-size:0.82rem;">
+                        ${g.source_name} — no <strong>${CT_LABELS[g.content_type] || g.content_type}</strong> section
+                    </td>
+                    <td style="color:#60a5fa;font-size:0.82rem;">missing</td>
+                    <td style="font-size:0.78rem;color:#60a5fa;">coverage gap</td>
+                    <td>
+                        <select id="${selectId}" class="gp-select" style="font-size:0.78rem;padding:2px 4px;">
+                            <option value="">— map to section —</option>
+                            ${sectionOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                            onclick="saveGapOverride(${g.spec_id}, ${g.source_id}, '${g.content_type}', '${selectId}')">
+                            Save
+                        </button>
+                    </td>
+                </tr>`;
+            })
+        ].join('') : '';
+
+        tbody.innerHTML = (sectionHtml || '') + (gapHtml || '');
+        if (!tbody.innerHTML.trim()) {
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">No issues found.</td></tr>';
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#f87171;padding:1rem;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function saveSectionOverride(specId, sourceId, sectionKey, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a content type first.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/page-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, source_id: sourceId, content_type: sel.value, section_key: sectionKey }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function saveGapOverride(specId, sourceId, contentType, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a section to map to.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/page-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, source_id: sourceId, content_type: contentType, section_key: sel.value }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function clearSectionOverride(specId, sourceId, contentType) {
+    if (!confirm(`Clear override for spec ${specId} / ${contentType}?`)) return;
+    try {
+        const r = await fetch(
+            `/api/v1/admin/bis/page-sections/override?spec_id=${specId}&source_id=${sourceId}&content_type=${contentType}`,
+            { method: 'DELETE' }
+        );
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Clear failed: ' + err.message);
+    }
+}
+
+async function reparseSections() {
+    const btn = document.getElementById('si-reparse-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Re-parsing…'; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/reparse', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+        const count = document.getElementById('si-count');
+        if (count) count.textContent += ` (re-parsed ${d.specs_processed} specs, ${d.sections_upserted} sections)`;
+    } catch (err) {
+        alert('Re-parse failed: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Re-parse Sections'; }
+    }
+}

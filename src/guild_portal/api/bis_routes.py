@@ -33,6 +33,9 @@ Endpoints:
   GET  /api/v1/admin/bis/method-sections        (GL+ — section inventory with override status)
   POST /api/v1/admin/bis/method-sections/override  (GL+ — upsert override)
   DELETE /api/v1/admin/bis/method-sections/override (GL+ — remove override)
+  GET  /api/v1/admin/bis/page-sections          (GL+ — unified section inventory, ?source=origin)
+  POST /api/v1/admin/bis/page-sections/override (GL+ — upsert override by source_id)
+  DELETE /api/v1/admin/bis/page-sections/override (GL+ — remove override by source_id)
 """
 
 import asyncio
@@ -2151,5 +2154,249 @@ async def delete_method_section_override(
             """,
             spec_id, content_type,
         )
+    deleted = int(result.split()[-1]) if result else 0
+    return JSONResponse({"ok": True, "deleted": deleted})
+
+
+# ---------------------------------------------------------------------------
+# Unified Section Inventory  (GL+ read/write)
+# ---------------------------------------------------------------------------
+
+
+class SectionOverrideBody(BaseModel):
+    spec_id: int
+    source_id: int
+    content_type: str
+    section_key: str
+
+
+@router.get("/page-sections")
+async def page_sections(
+    request: Request,
+    source: str = "icy_veins",
+    outliers_only: bool = False,
+    include_gaps: bool = True,
+    player: Player = Depends(require_rank(5)),
+):
+    """Return BIS page sections and coverage gaps for a given source origin.
+
+    source: origin value from ref.bis_list_sources (e.g. 'icy_veins', 'method').
+    Sections are deduplicated at (spec_id, section_key) level — each unique section
+    appears once regardless of how many source_ids scraped it.
+    """
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        section_rows = await conn.fetch(
+            """
+            SELECT DISTINCT ON (bps.spec_id, bps.section_key)
+                bps.id,
+                bps.spec_id,
+                bps.source_id,
+                sp.name             AS spec_name,
+                c.name              AS class_name,
+                bls.origin          AS source_origin,
+                bps.section_key,
+                bps.section_title,
+                bps.sort_order,
+                bps.row_count,
+                bps.content_type,
+                bps.is_outlier,
+                bps.outlier_reason,
+                bps.is_trinket_section,
+                bps.scraped_at,
+                (
+                    SELECT json_agg(json_build_object(
+                        'source_id', o.source_id,
+                        'content_type', o.content_type
+                    ))
+                    FROM config.bis_section_overrides o
+                    JOIN ref.bis_list_sources s2 ON s2.id = o.source_id
+                    WHERE o.spec_id = bps.spec_id
+                      AND s2.origin = $1
+                      AND o.section_key = bps.section_key
+                ) AS override_mappings
+              FROM landing.bis_page_sections bps
+              JOIN ref.bis_list_sources bls ON bls.id = bps.source_id
+              JOIN ref.specializations sp ON sp.id = bps.spec_id
+              JOIN ref.classes c ON c.id = sp.class_id
+             WHERE bls.origin = $1
+               AND ($2 = FALSE OR bps.is_outlier = TRUE)
+             ORDER BY bps.spec_id, bps.section_key, bps.source_id
+            """,
+            source, outliers_only,
+        )
+
+        gap_rows = await conn.fetch(
+            """
+            SELECT
+                t.spec_id,
+                t.source_id,
+                sp.name           AS spec_name,
+                c.name            AS class_name,
+                bls.name          AS source_name,
+                t.content_type,
+                (
+                    SELECT json_agg(json_build_object(
+                        'section_key', bps.section_key,
+                        'section_title', bps.section_title,
+                        'row_count', bps.row_count
+                    ) ORDER BY bps.sort_order NULLS LAST, bps.section_key)
+                    FROM landing.bis_page_sections bps
+                    WHERE bps.spec_id = t.spec_id AND bps.source_id = t.source_id
+                ) AS available_sections
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources bls ON bls.id = t.source_id
+              JOIN ref.specializations sp ON sp.id = t.spec_id
+              JOIN ref.classes c ON c.id = sp.class_id
+             WHERE bls.origin = $1
+               AND bls.is_active = TRUE
+               AND EXISTS (
+                   SELECT 1 FROM landing.bis_page_sections
+                    WHERE spec_id = t.spec_id AND source_id = t.source_id
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM landing.bis_page_sections
+                    WHERE spec_id = t.spec_id AND source_id = t.source_id
+                      AND content_type = t.content_type
+                      AND NOT is_outlier
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM config.bis_section_overrides
+                    WHERE spec_id = t.spec_id AND source_id = t.source_id
+                      AND content_type = t.content_type
+               )
+             ORDER BY c.name, sp.name, bls.sort_order
+            """,
+            source,
+        ) if include_gaps else []
+
+    import json as _json
+
+    data = []
+    for r in section_rows:
+        raw = r["override_mappings"]
+        mappings = _json.loads(raw) if isinstance(raw, str) else (raw or [])
+        data.append({
+            "row_type": "section",
+            "id": r["id"],
+            "spec_id": r["spec_id"],
+            "source_id": r["source_id"],
+            "spec_name": r["spec_name"],
+            "class_name": r["class_name"],
+            "source_origin": r["source_origin"],
+            "section_key": r["section_key"],
+            "section_title": r["section_title"],
+            "sort_order": r["sort_order"],
+            "row_count": r["row_count"],
+            "content_type": r["content_type"],
+            "is_outlier": r["is_outlier"],
+            "outlier_reason": r["outlier_reason"],
+            "is_trinket_section": r["is_trinket_section"],
+            "scraped_at": r["scraped_at"].isoformat() if r["scraped_at"] else None,
+            "override_mappings": mappings,
+        })
+
+    for g in gap_rows:
+        sections = g["available_sections"]
+        if isinstance(sections, str):
+            sections = _json.loads(sections)
+        data.append({
+            "row_type": "gap",
+            "spec_id": g["spec_id"],
+            "source_id": g["source_id"],
+            "spec_name": g["spec_name"],
+            "class_name": g["class_name"],
+            "source_name": g["source_name"],
+            "content_type": g["content_type"],
+            "available_sections": sections or [],
+        })
+
+    return JSONResponse({"ok": True, "data": data})
+
+
+@router.post("/page-sections/override")
+async def set_section_override(
+    body: SectionOverrideBody,
+    request: Request,
+    player: Player = Depends(require_rank(5)),
+):
+    """Upsert a section override: (spec_id, source_id, content_type) → section_key.
+
+    For Method sources, broadcasts to all Method sources for the spec since all
+    Method sources for a spec parse the same page.
+    For all other origins, upserts directly with the given source_id.
+    """
+    if body.content_type not in ("overall", "raid", "mythic_plus"):
+        raise HTTPException(status_code=422, detail="Invalid content_type")
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        origin = await conn.fetchval(
+            "SELECT origin FROM ref.bis_list_sources WHERE id = $1",
+            body.source_id,
+        )
+        if origin == "method":
+            await conn.execute(
+                """
+                INSERT INTO config.bis_section_overrides
+                    (spec_id, source_id, content_type, section_key)
+                SELECT $1, bt.source_id, $2, $3
+                  FROM config.bis_scrape_targets bt
+                  JOIN ref.bis_list_sources s ON s.id = bt.source_id
+                 WHERE s.origin = 'method' AND bt.spec_id = $1
+                ON CONFLICT (spec_id, source_id, content_type) DO UPDATE SET
+                    section_key = EXCLUDED.section_key,
+                    created_at  = NOW()
+                """,
+                body.spec_id, body.content_type, body.section_key,
+            )
+        else:
+            await conn.execute(
+                """
+                INSERT INTO config.bis_section_overrides
+                    (spec_id, source_id, content_type, section_key)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (spec_id, source_id, content_type) DO UPDATE SET
+                    section_key = EXCLUDED.section_key,
+                    created_at  = NOW()
+                """,
+                body.spec_id, body.source_id, body.content_type, body.section_key,
+            )
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/page-sections/override")
+async def delete_section_override(
+    request: Request,
+    spec_id: int,
+    source_id: int,
+    content_type: str,
+    player: Player = Depends(require_rank(5)),
+):
+    """Remove a section override. For Method, clears across all Method sources."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        origin = await conn.fetchval(
+            "SELECT origin FROM ref.bis_list_sources WHERE id = $1",
+            source_id,
+        )
+        if origin == "method":
+            result = await conn.execute(
+                """
+                DELETE FROM config.bis_section_overrides
+                 WHERE spec_id = $1 AND content_type = $2
+                   AND source_id IN (
+                       SELECT id FROM ref.bis_list_sources WHERE origin = 'method'
+                   )
+                """,
+                spec_id, content_type,
+            )
+        else:
+            result = await conn.execute(
+                """
+                DELETE FROM config.bis_section_overrides
+                 WHERE spec_id = $1 AND source_id = $2 AND content_type = $3
+                """,
+                spec_id, source_id, content_type,
+            )
     deleted = int(result.split()[-1]) if result else 0
     return JSONResponse({"ok": True, "deleted": deleted})

@@ -394,40 +394,47 @@
         </div>
     </div>
 
-    {# ── Method.gg Section Inventory panel ───────────────────────────────────────── #}
+    {# ── Unified Section Inventory panel ─────────────────────────────────────────── #}
     <div class="gp-log-wrap">
-        <h2 class="gp-log__title" onclick="toggleMethodSections()">
-            Method.gg Section Inventory
+        <h2 class="gp-log__title" onclick="toggleSectionInventory()">
+            Section Inventory
             <span style="font-size:0.75rem; color:var(--color-text-muted); font-weight:normal; margin-left:0.5rem;">
-                outlier sections need a manual content-type override
+                outlier sections and coverage gaps — set overrides to fix
             </span>
-            <span class="toggle-icon" id="method-sections-toggle-icon">▼</span>
+            <span class="toggle-icon" id="section-inventory-toggle-icon">▼</span>
         </h2>
-        <div id="gp-method-sections-content" style="display:none;">
+        <div id="gp-section-inventory-content" style="display:none;">
             <div class="gp-log-inner">
+                <div style="display:flex; gap:0.5rem; margin-bottom:0.75rem;">
+                    <button class="btn-sm" id="si-tab-icy-veins"
+                        style="background:var(--color-accent); color:#000;"
+                        onclick="switchSectionTab('icy_veins', this)">Icy Veins</button>
+                    <button class="btn-sm btn-secondary" id="si-tab-method"
+                        onclick="switchSectionTab('method', this)">Method</button>
+                </div>
                 <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
                     <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; cursor:pointer;">
-                        <input type="checkbox" id="method-outliers-only" onchange="loadMethodSections()" checked>
+                        <input type="checkbox" id="si-outliers-only" onchange="loadSectionInventory()" checked>
                         Outliers only
                     </label>
-                    <button class="btn-sm btn-secondary" onclick="loadMethodSections()">Refresh</button>
-                    <button class="btn-sm btn-secondary" id="method-reparse-btn" onclick="reparseMethodSections()">Re-parse Sections</button>
-                    <span id="method-sections-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+                    <button class="btn-sm btn-secondary" onclick="loadSectionInventory()">Refresh</button>
+                    <button class="btn-sm btn-secondary" id="si-reparse-btn" onclick="reparseSections()" style="display:none;">Re-parse Sections</button>
+                    <span id="si-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
                 </div>
                 <div style="overflow:auto; max-height:55vh;">
-                    <table class="gp-log-table" style="min-width:900px;">
+                    <table class="gp-log-table" style="min-width:960px;">
                         <thead>
                             <tr>
                                 <th>Class</th><th>Spec</th>
-                                <th>Section Heading</th>
+                                <th>Section</th>
                                 <th>Rows</th>
-                                <th>Inferred CT</th>
+                                <th>Content Type</th>
                                 <th>Outlier Reason</th>
-                                <th>Override To</th>
+                                <th>Override</th>
                                 <th></th>
                             </tr>
                         </thead>
-                        <tbody id="method-sections-body">
+                        <tbody id="si-body">
                             <tr><td colspan="8" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
                         </tbody>
                     </table>
@@ -469,7 +476,7 @@
 <select id="simc-source-select" style="display:none;"></select>
 <select id="simc-ht-select" style="display:none;"></select>
 
-<script src="/static/js/gear_plan_admin.js?v=1.3.2"></script>
+<script src="/static/js/gear_plan_admin.js?v=1.4.0"></script>
 <script>
 window._isGl = true;
 
