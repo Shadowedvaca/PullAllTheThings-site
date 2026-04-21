@@ -2296,7 +2296,67 @@ async function loadSectionInventory() {
             const hasOverride = mappings.length > 0;
             const titleDisplay = isIV ? (s.section_title || s.section_key) : s.section_key;
 
-            return `<tr>
+            // Merge config — only shown when an override exists
+            const rowId = `${s.spec_id}-${safeKey}`;
+            const mergeOverride = hasOverride ? mappings[0] : null;
+            const hasMerge = !!(mergeOverride?.secondary_section_key);
+
+            let mergeRowHtml = '';
+            if (hasOverride) {
+                const curSecKey = mergeOverride.secondary_section_key || '';
+                const curPNote = (mergeOverride.primary_note || '').replace(/"/g, '&quot;');
+                const curMNote = (mergeOverride.match_note || '').replace(/"/g, '&quot;');
+                const curSNote = (mergeOverride.secondary_note || '').replace(/"/g, '&quot;');
+                const mergeContentType = mergeOverride.content_type;
+                const mergeSectionKey = mergeOverride.section_key || s.section_key;
+
+                const specSectionOpts = (s.spec_sections || [])
+                    .filter(sec => sec.section_key !== s.section_key)
+                    .map(sec => {
+                        const sk = sec.section_key.replace(/"/g, '&quot;');
+                        const label = (sec.section_title || sec.section_key).replace(/"/g, '&quot;');
+                        const selected = sec.section_key === curSecKey ? ' selected' : '';
+                        return `<option value="${sk}"${selected}>${label} (${sec.row_count})</option>`;
+                    }).join('');
+
+                mergeRowHtml = `<tr id="si-merge-${rowId}" style="display:none;">
+                    <td colspan="8" style="padding:0;">
+                        <div style="padding:0.7rem 1.2rem 0.8rem;background:rgba(212,168,75,0.05);border-left:3px solid var(--color-accent);border-bottom:1px solid var(--color-border);">
+                            <div style="font-size:0.78rem;font-weight:600;color:var(--color-accent);margin-bottom:0.5rem;">Merge Configuration</div>
+                            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Secondary section
+                                    <select id="si-sec-${rowId}" class="gp-select" style="display:block;margin-top:3px;min-width:180px;font-size:0.78rem;">
+                                        <option value="">— none (basic override) —</option>
+                                        ${specSectionOpts}
+                                    </select>
+                                </label>
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Primary note
+                                    <input id="si-pnote-${rowId}" type="text" value="${curPNote}" placeholder="e.g. Deathbringer build"
+                                        style="display:block;margin-top:3px;background:#1a1a1e;border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.28rem 0.45rem;font-size:0.78rem;width:155px;">
+                                </label>
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Match note
+                                    <input id="si-mnote-${rowId}" type="text" value="${curMNote}" placeholder="optional"
+                                        style="display:block;margin-top:3px;background:#1a1a1e;border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.28rem 0.45rem;font-size:0.78rem;width:155px;">
+                                </label>
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Secondary note
+                                    <input id="si-snote-${rowId}" type="text" value="${curSNote}" placeholder="e.g. San'layn build"
+                                        style="display:block;margin-top:3px;background:#1a1a1e;border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.28rem 0.45rem;font-size:0.78rem;width:155px;">
+                                </label>
+                                <button class="btn-sm" style="background:var(--color-accent);color:#000;font-size:0.75rem;"
+                                    onclick="saveMergeConfig(${s.spec_id}, ${s.source_id}, '${mergeContentType}', '${mergeSectionKey.replace(/'/g, "\\'")}', '${rowId}')">
+                                    Save Merge
+                                </button>
+                            </div>
+                            <p style="font-size:0.72rem;color:var(--color-text-muted);margin:0.45rem 0 0;">
+                                Setting a secondary section merges that section's items into this content type during Enrich &amp; Classify.
+                                Items unique to the secondary build receive the secondary note; items in both receive the match note.
+                            </p>
+                        </div>
+                    </td>
+                </tr>`;
+            }
+
+            const mainRow = `<tr>
                 <td>${s.class_name}</td>
                 <td>${s.spec_name}</td>
                 <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.section_title || s.section_key}">${titleDisplay}</td>
@@ -2315,12 +2375,18 @@ async function loadSectionInventory() {
                         onclick="saveSectionOverride(${s.spec_id}, ${s.source_id}, '${s.section_key.replace(/'/g, "\\'")}', '${selectId}')">
                         Save
                     </button>
+                    ${hasOverride ? `<button class="btn-sm btn-secondary" style="font-size:0.75rem;margin-left:4px;" title="Configure merge"
+                        onclick="toggleMergeRow('${rowId}')">
+                        ${hasMerge ? 'Merge ✓' : 'Merge'}
+                    </button>` : ''}
                     ${hasOverride ? `<button class="btn-sm" style="font-size:0.75rem;background:var(--color-danger,#7f1d1d);color:#fff;margin-left:4px;"
                         onclick="clearSectionOverride(${s.spec_id}, ${s.source_id}, '${mappings[0].content_type}')">
                         Clear
                     </button>` : ''}
                 </td>
             </tr>`;
+
+            return mainRow + mergeRowHtml;
         }).join('');
 
         const gapHtml = gapRows.length ? [
@@ -2409,6 +2475,43 @@ async function clearSectionOverride(specId, sourceId, contentType) {
         await loadSectionInventory();
     } catch (err) {
         alert('Clear failed: ' + err.message);
+    }
+}
+
+function toggleMergeRow(rowId) {
+    const row = document.getElementById('si-merge-' + rowId);
+    if (!row) return;
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+async function saveMergeConfig(specId, sourceId, contentType, sectionKey, rowId) {
+    const secSel  = document.getElementById('si-sec-'   + rowId);
+    const pNote   = document.getElementById('si-pnote-' + rowId);
+    const mNote   = document.getElementById('si-mnote-' + rowId);
+    const sNote   = document.getElementById('si-snote-' + rowId);
+
+    const body = {
+        spec_id:               specId,
+        source_id:             sourceId,
+        content_type:          contentType,
+        section_key:           sectionKey,
+        secondary_section_key: secSel?.value  || null,
+        primary_note:          pNote?.value?.trim()  || null,
+        match_note:            mNote?.value?.trim()  || null,
+        secondary_note:        sNote?.value?.trim()  || null,
+    };
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/page-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Save merge failed: ' + err.message);
     }
 }
 

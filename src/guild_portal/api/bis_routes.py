@@ -2210,15 +2210,39 @@ async def page_sections(
                 bps.scraped_at,
                 (
                     SELECT json_agg(json_build_object(
-                        'source_id', o.source_id,
-                        'content_type', o.content_type
+                        'source_id',           o.source_id,
+                        'content_type',        o.content_type,
+                        'section_key',         o.section_key,
+                        'secondary_section_key', o.secondary_section_key,
+                        'primary_note',        o.primary_note,
+                        'match_note',          o.match_note,
+                        'secondary_note',      o.secondary_note
                     ))
                     FROM config.bis_section_overrides o
                     JOIN ref.bis_list_sources s2 ON s2.id = o.source_id
                     WHERE o.spec_id = bps.spec_id
                       AND s2.origin = $1
                       AND o.section_key = bps.section_key
-                ) AS override_mappings
+                ) AS override_mappings,
+                (
+                    SELECT json_agg(json_build_object(
+                        'section_key',   ss.section_key,
+                        'section_title', ss.section_title,
+                        'row_count',     ss.row_count
+                    ) ORDER BY ss.sort_order NULLS LAST, ss.section_key)
+                    FROM (
+                        SELECT DISTINCT ON (bps2.section_key)
+                            bps2.section_key,
+                            bps2.section_title,
+                            bps2.row_count,
+                            bps2.sort_order
+                        FROM landing.bis_page_sections bps2
+                        JOIN ref.bis_list_sources bls2 ON bls2.id = bps2.source_id
+                        WHERE bps2.spec_id = bps.spec_id
+                          AND bls2.origin = $1
+                        ORDER BY bps2.section_key, bps2.sort_order NULLS LAST
+                    ) ss
+                ) AS spec_sections
               FROM landing.bis_page_sections bps
               JOIN ref.bis_list_sources bls ON bls.id = bps.source_id
               JOIN ref.specializations sp ON sp.id = bps.spec_id
@@ -2276,10 +2300,15 @@ async def page_sections(
 
     import json as _json
 
+    def _parse_json_col(raw):
+        if raw is None:
+            return []
+        return _json.loads(raw) if isinstance(raw, str) else (raw or [])
+
     data = []
     for r in section_rows:
-        raw = r["override_mappings"]
-        mappings = _json.loads(raw) if isinstance(raw, str) else (raw or [])
+        mappings = _parse_json_col(r["override_mappings"])
+        spec_sections = _parse_json_col(r["spec_sections"])
         data.append({
             "row_type": "section",
             "id": r["id"],
@@ -2298,6 +2327,7 @@ async def page_sections(
             "is_trinket_section": r["is_trinket_section"],
             "scraped_at": r["scraped_at"].isoformat() if r["scraped_at"] else None,
             "override_mappings": mappings,
+            "spec_sections": spec_sections,
         })
 
     for g in gap_rows:
