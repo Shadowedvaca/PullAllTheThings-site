@@ -123,9 +123,15 @@ class TestParseJsonCol:
 # set_section_override handler (mocked pool)
 # ---------------------------------------------------------------------------
 
-def _make_pool(origin="icy_veins", execute_side_effect=None):
+def _make_pool(origin="icy_veins", execute_side_effect=None, iv_correct_source_id=None):
     conn = MagicMock()
-    conn.fetchval = AsyncMock(return_value=origin)
+    # For icy_veins the handler makes two fetchval calls:
+    #   1. origin lookup  →  origin string
+    #   2. correct source_id lookup  →  iv_correct_source_id (or body source_id as fallback)
+    if origin == "icy_veins":
+        conn.fetchval = AsyncMock(side_effect=[origin, iv_correct_source_id or 2])
+    else:
+        conn.fetchval = AsyncMock(return_value=origin)
     conn.execute = AsyncMock(side_effect=execute_side_effect)
     pool = MagicMock()
     pool.acquire = MagicMock()
@@ -142,8 +148,9 @@ def _make_request(pool):
 
 class TestSetSectionOverride:
     @pytest.mark.asyncio
-    async def test_non_method_upsert_includes_merge_fields(self):
-        pool, conn = _make_pool(origin="icy_veins")
+    async def test_iv_upsert_includes_merge_fields(self):
+        # iv_correct_source_id=2 simulates DB returning same source (no correction needed)
+        pool, conn = _make_pool(origin="icy_veins", iv_correct_source_id=2)
         request = _make_request(pool)
         body = SectionOverrideBody(
             spec_id=1, source_id=2, content_type="overall", section_key="area_1",
@@ -154,24 +161,38 @@ class TestSetSectionOverride:
         )
 
         from guild_portal.api.bis_routes import set_section_override
-        from fastapi import HTTPException
 
         result = await set_section_override(body=body, request=request, player=MagicMock())
         assert result.body == b'{"ok":true}'
 
-        # execute should have been called once with the non-method INSERT
         conn.execute.assert_awaited_once()
         call_args = conn.execute.call_args[0]
-        # Parameters: spec_id, source_id, content_type, section_key,
-        #             secondary_section_key, primary_note, match_note, secondary_note
-        assert call_args[1] == 1       # spec_id
-        assert call_args[2] == 2       # source_id
+        assert call_args[1] == 1         # spec_id
+        assert call_args[2] == 2         # correct_source_id (same in this case)
         assert call_args[3] == "overall"
         assert call_args[4] == "area_1"
-        assert call_args[5] == "area_2"         # secondary_section_key
+        assert call_args[5] == "area_2"              # secondary_section_key
         assert call_args[6] == "Deathbringer build"  # primary_note
-        assert call_args[7] is None              # match_note
-        assert call_args[8] == "San'layn build"  # secondary_note
+        assert call_args[7] is None                  # match_note
+        assert call_args[8] == "San'layn build"      # secondary_note
+
+    @pytest.mark.asyncio
+    async def test_iv_corrects_source_id_from_targets(self):
+        # body has source_id=16 (Raid) but content_type=overall — DB lookup returns 18 (Overall)
+        pool, conn = _make_pool(origin="icy_veins", iv_correct_source_id=18)
+        request = _make_request(pool)
+        body = SectionOverrideBody(
+            spec_id=6, source_id=16, content_type="overall", section_key="area_1",
+        )
+
+        from guild_portal.api.bis_routes import set_section_override
+
+        result = await set_section_override(body=body, request=request, player=MagicMock())
+        assert result.body == b'{"ok":true}'
+
+        call_args = conn.execute.call_args[0]
+        # source_id in INSERT must be 18 (from DB lookup), NOT 16 (from body)
+        assert call_args[2] == 18
 
     @pytest.mark.asyncio
     async def test_invalid_content_type_raises_422(self):

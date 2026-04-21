@@ -2422,6 +2422,40 @@ async def set_section_override(
                 body.secondary_section_key, body.primary_note,
                 body.match_note, body.secondary_note,
             )
+        elif origin == "icy_veins":
+            # IV has separate sources per content_type (Raid/M+/Overall each have their
+            # own source_id).  The section row DISTINCT ON may surface any of the three
+            # source_ids, so re-derive the correct one from bis_scrape_targets.
+            correct_source_id = await conn.fetchval(
+                """
+                SELECT t.source_id
+                  FROM config.bis_scrape_targets t
+                  JOIN ref.bis_list_sources s ON s.id = t.source_id
+                 WHERE t.spec_id = $1
+                   AND s.origin = 'icy_veins'
+                   AND t.content_type = $2
+                 LIMIT 1
+                """,
+                body.spec_id, body.content_type,
+            ) or body.source_id
+            await conn.execute(
+                """
+                INSERT INTO config.bis_section_overrides
+                    (spec_id, source_id, content_type, section_key,
+                     secondary_section_key, primary_note, match_note, secondary_note)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (spec_id, source_id, content_type) DO UPDATE SET
+                    section_key           = EXCLUDED.section_key,
+                    secondary_section_key = EXCLUDED.secondary_section_key,
+                    primary_note          = EXCLUDED.primary_note,
+                    match_note            = EXCLUDED.match_note,
+                    secondary_note        = EXCLUDED.secondary_note,
+                    created_at            = NOW()
+                """,
+                body.spec_id, correct_source_id, body.content_type, body.section_key,
+                body.secondary_section_key, body.primary_note,
+                body.match_note, body.secondary_note,
+            )
         else:
             await conn.execute(
                 """
