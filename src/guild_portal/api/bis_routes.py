@@ -2311,6 +2311,8 @@ async def page_sections(
             "available_sections": sections or [],
         })
 
+    data.sort(key=lambda r: (r.get("class_name") or "", r.get("spec_name") or "", r.get("section_key") or r.get("content_type") or ""))
+
     return JSONResponse({"ok": True, "data": data})
 
 
