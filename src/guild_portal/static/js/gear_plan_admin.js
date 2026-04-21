@@ -67,6 +67,7 @@ function _updateButtonStates() {
         'sync-source-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
         'sync-all-btn':       { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
         'resync-errors-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
+        'sync-gaps-btn':      { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
         'import-simc-btn':    { disabled: !canImport, title: !canImport ? 'Sync in progress — please wait.' : '' },
     };
 
@@ -692,24 +693,62 @@ async function syncAll() {
 async function syncGaps() {
     if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
 
+    // Fetch all targets and filter client-side to gap-eligible ones
+    // (missing raw data or last fetched > 7 days ago)
+    let gapTargets;
+    setStatusHtml('<span class="spinner"></span> Gap fill — identifying missing/stale targets…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/targets');
+        const d = await r.json();
+        if (!d.ok) { setStatus('Could not load targets: ' + (d.error || 'unknown error'), 'error'); return; }
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        gapTargets = (d.targets || []).filter(t => {
+            if (!t.last_fetched) return true;
+            return new Date(t.last_fetched).getTime() < cutoff;
+        });
+    } catch (err) {
+        setStatus('Could not load targets: ' + err.message, 'error');
+        return;
+    }
+
+    if (!gapTargets.length) { setStatus('No gap targets — all targets have fresh data.', 'success'); return; }
+
     const btn = document.getElementById('sync-gaps-btn');
     _setBtnRunning(btn);
     _syncInProgress = true;
     _updateButtonStates();
-    setStatusHtml('<span class="spinner"></span> Gap fill — fetching missing/stale targets…', 'running');
+
+    let totalItems = 0, totalErrors = 0, processed = 0;
 
     try {
-        const r = await fetch('/api/v1/admin/bis/sync-gaps', { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus('Gap fill started in background — refresh the matrix in a few minutes to see results.', 'success');
-    } catch (err) {
-        setStatus('Gap fill failed: ' + err.message, 'error');
+        for (const t of gapTargets) {
+            const label = `${t.class_name} ${t.spec_name}${t.hero_talent_name ? ' ' + t.hero_talent_name : ''} — ${t.source_name} ${t.content_type}`;
+            setStatusHtml(
+                `<span class="spinner"></span> Gap fill — ${label} (${++processed}/${gapTargets.length})…`,
+                'running'
+            );
+            try {
+                const r = await fetch(`/api/v1/admin/bis/sync/target/${t.id}`, { method: 'POST' });
+                const d = await r.json();
+                if (d.ok) {
+                    totalItems  += d.items_found || 0;
+                    if (d.status === 'failed') totalErrors++;
+                } else {
+                    totalErrors++;
+                }
+            } catch (_) { totalErrors++; }
+            await new Promise(res => setTimeout(res, 2000));
+        }
     } finally {
         _syncInProgress = false;
         _updateButtonStates();
         _setBtnDone(btn);
     }
+
+    await loadMatrix();
+    const msg = `Gap fill complete — ${processed} targets, ${totalItems} items found, ${totalErrors} errors.`;
+    setStatus(msg, totalErrors > 0 ? 'error' : 'success');
+    if (_targetsVisible) loadTargets();
 }
 
 async function resyncErrors() {
