@@ -248,6 +248,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **BIS Note & Guide Folding — Phase 3 COMPLETE** (migration 0164, on dev, branch `feature/iv-bis-extraction`). `config.bis_section_overrides` gains `secondary_section_key`, `primary_note`, `match_note`, `secondary_note` columns. New `merge_bis_sections(ctx, primary, secondary, override_row)` function handles the merge pass: matching items stamped with `match_note`; new secondary items inserted with `secondary_note` at next guide_order. `_fetch_section_items()` helper fetches named section items from raw HTML (IV or Method). `rebuild_bis_from_landing()` now two-pass: skips merge targets in pass 1, calls `merge_bis_sections()` in pass 2. `SectionOverrideBody` + `set_section_override()` accept the 4 new merge columns. 18 new tests in `tests/unit/test_bis_merge_engine.py`; 1621/1627 suite-wide. Deployed to dev.
 - **BIS Note & Guide Folding — Phase 2 COMPLETE** (no migration, on dev, branch `feature/iv-bis-extraction`). Insertion engine extracted from `rebuild_bis_from_landing()` into `insert_bis_items(ctx, items, note, guide_order_start)` + `BisInsertionContext` dataclass. Engine handles weapon resolution, slot counter–based guide_order, FK validation, and bis_note stamping. `rebuild_bis_from_landing()` now delegates to the engine — zero behavior change. 22 new unit tests in `tests/unit/test_bis_insertion_engine.py`; 1603/1609 suite-wide (6 pre-existing healer URL stale tests). Deployed to dev.
 - **BIS Note & Guide Folding — Phase 1 COMPLETE** (on dev, migration 0163, branch `feature/iv-bis-extraction`). `bis_note VARCHAR(100)` added to `enrichment.bis_entries`; `viz.bis_recommendations` updated to expose it; gear_plan_service SELECT includes `vbr.bis_note`; my_characters.js v3.1.0 renders it as `.mcn-bis-note` below item name; CSS v2.5.0. 43/43 gear plan service tests pass; 1581/1587 suite-wide (6 pre-existing healer URL stale tests). **Section Inventory sort fix** (no migration): `page_sections` endpoint now sorts combined data by `(class_name, spec_name, section_key)` in Python after building the response — fixes alphabetical order (was returning in spec_id order from DISTINCT ON).
 - **IV BIS Extraction — Phase Z COMPLETE** (on dev, migrations 0159–0162, branch `feature/iv-bis-extraction`). Ready for PR → main → prod.
@@ -277,10 +278,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0163 (on dev only — not yet on prod); prod is at 0158
+- **Last migration:** 0164 (on dev only — not yet on prod); prod is at 0158
 - **Last prod tag:** `prod-v0.21.1`
 - **Active branch:** `feature/iv-bis-extraction`
-- **Next planned:** Phase 1.5 Phase 3 (merge columns on `config.bis_section_overrides` + `merge_bis_sections()` — migration needed), then Phase 4 (admin UI for merge fields), then PR → main → prod
+- **Next planned:** Phase 1.5 Phase 4 (admin UI for merge fields in Section Inventory), then Phase 5 (IV classifier raid instance name detection), then PR → main → prod
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
