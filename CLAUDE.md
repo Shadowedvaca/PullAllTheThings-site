@@ -248,10 +248,11 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **IV BIS Extraction — Phase Z.1 COMPLETE** (on dev, migrations 0159–0161, branch `feature/iv-bis-extraction`).
+- **IV BIS Extraction — Phase Z.2 COMPLETE** (on dev, no migration, branch `feature/iv-bis-extraction`).
   - **Z.0** (migrations 0159–0160): Unified slot label tables. Dropped `config.method_slot_labels`. Created `config.slot_labels(page_label PK, slot_key)` — 43 universal text labels, no origin column. Created `config.wowhead_invtypes(invtype_id PK, slot_key)` — 20 Blizzard invtype codes (Wowhead-specific). Removed `_UGG_SLOT_MAP` + `_WOWHEAD_SLOT_MAP` hardcoded dicts from `bis_sync.py`. Added `_resolve_text_slot()` shared helper for positional ring/trinket resolution. All text-label parsers (UGG, Method) use `_load_slot_labels(conn)`; Wowhead uses `_load_wowhead_invtypes(conn)`. 1534 unit tests pass.
   - **Z.1** (migration 0161): Created `landing.iv_page_sections(id, spec_id FK→ref.specializations, source_id FK→ref.bis_list_sources, page_url, section_h3_id, section_title, content_type VARCHAR(20), is_trinket_section BOOL, row_count INT, is_outlier BOOL, outlier_reason TEXT, scraped_at TIMESTAMPTZ, UNIQUE(spec_id, source_id, section_h3_id))`. No items column — raw HTML in `landing.bis_scrape_raw`; items re-parsed during enrichment rebuild.
-  - **Next:** Z.2 — `_extract_icy_veins()` rewrite + dead code removal (no migration)
+  - **Z.2** (no migration): `_extract_icy_veins()` rewrite + dead code removal. Removed: `discover_iv_areas()`, `_fetch_iv_areas()`, `_IV_AREA_LINK_RE`, `_HTML_TAG_RE`, `_categorize_iv_area()`, `_IV_ITEM_*_RE` regexes, old stub. Added: `IVSection` dataclass, `_iv_classify_section()`, `_iv_extract_regular_rows()`, `_iv_extract_trinket_rows()`, `_iv_is_outlier()`, `_iv_parse_sections()`, `_upsert_iv_sections()`, new `_extract_icy_veins(url, content_type, spec_id, source_id, pool)`. Removed IV skip blocks from `sync_source()` and `sync_target()`. Added `source_id` to `_extract()` dispatcher. 1550 unit tests pass (88 new IV tests in `test_bis_sync_iv.py`).
+  - **Next:** Z.3 — Admin section inventory UI + API endpoint (`GET /api/v1/admin/bis/iv-sections`)
 - **Previous: Weapon Build Variant — COMPLETE** (prod-v0.21.1, migrations 0155–0158). Full 3-phase feature shipped.
   - **Phase 1** (migration 0155): `main_hand` split into `main_hand_2h`/`main_hand_1h`; `priority` → `guide_order` on `enrichment.bis_entries`. Shipped prod-v0.21.0.
   - **Phase 2** (migrations 0156–0158): gear plan display rules (`_compute_weapon_display`, `_merge_paired_bis`, `show_off_hand` always True); paperdoll/gear table show active weapon slot only; available items drawer shows all weapon types; BIS sort fixed in `_gpRenderUnifiedTable`; Method parser handles multi-link pool rows + alternative items (guide_order 2+); one-hand/two-hand weapon labels added to `config.method_slot_labels`. 1527 unit tests pass.
@@ -271,7 +272,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Last migration:** 0161 (on dev only — not yet on prod); prod is at 0158
 - **Last prod tag:** `prod-v0.21.1`
 - **Active branch:** `feature/iv-bis-extraction`
-- **Next planned:** Z.2 — `_extract_icy_veins()` rewrite + dead code removal (no migration)
+- **Next planned:** Z.3 — Admin section inventory UI + API endpoint
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
