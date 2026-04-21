@@ -1,9 +1,9 @@
 # gear-plan-1.4-icyveins — Icy Veins BIS Extraction
 
-> **Status:** Plan updated 2026-04-20 — Z.0 through Z.2b complete; Z.2.5 next.
+> **Status:** Plan updated 2026-04-20 — Z.0 through Z.3 complete; Z.4 next.
 > Branch: `feature/iv-bis-extraction` off `main`.
 > Check `alembic/versions/` for the latest migration number before writing new ones.
-> Last migration on dev: **0161**. Next migration number: **0162**.
+> Last migration on dev: **0162**. Next migration number: **0163**.
 
 ---
 
@@ -153,8 +153,8 @@ All slot label → slot key mappings live in `config.slot_labels` (see Phase Z.0
 | Z.1 | `landing.iv_page_sections` metadata table | **0161 — COMPLETE** |
 | Z.2 | `_extract_icy_veins()` rewrite + dead code removal | **No — COMPLETE** |
 | Z.2b | image_block tab parsing; `_iv_classify_tab_label` + `_iv_parse_from_image_blocks` | **No — COMPLETE** |
-| Z.2.5 | Unified `landing.bis_page_sections` + `config.bis_section_overrides`; override support for IV | **0162** |
-| Z.3 | Admin section inventory UI + API endpoint (reads `bis_page_sections`) | No |
+| Z.2.5 | Unified `landing.bis_page_sections` + `config.bis_section_overrides`; override support for IV | **0162 — COMPLETE** |
+| Z.3 | Admin section inventory UI + API endpoint (reads `bis_page_sections`); removed IV Coming Soon placeholders from matrix/targets/xref | **No — COMPLETE** |
 | Z.4 | `rebuild_bis_from_landing()` + `rebuild_trinket_ratings_from_landing()` IV branches | No |
 
 ---
