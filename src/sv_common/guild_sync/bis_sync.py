@@ -2575,18 +2575,24 @@ def _iv_parse_from_image_blocks(
         if not buttons_div:
             continue
 
-        # Build area_id → (content_type, label) from button spans
-        area_map: dict[str, tuple[str, str]] = {}
+        # Build area_id → (content_type, label) from button spans.
+        # Unclassified tabs (ct=None) are kept so they appear in Section Inventory
+        # as outliers and can be targeted by section overrides.  The block is
+        # skipped only when *no* tab is classifiable — that guards against
+        # non-BIS image_blocks (talent trees, skill grids, etc.).
+        area_map: dict[str, tuple[Optional[str], str]] = {}
+        has_classified = False
         for span in buttons_div.find_all(
             "span", id=lambda x: x and x.endswith("_button")
         ):
             area_id = span["id"][:-7]  # strip "_button"
             label = span.get_text(strip=True)
             ct = _iv_classify_tab_label(label, raid_instance_names)
+            area_map[area_id] = (ct, label)
             if ct:
-                area_map[area_id] = (ct, label)
+                has_classified = True
 
-        if not area_map:
+        if not has_classified:
             continue
 
         for content_div in image_block.find_all("div", class_="image_block_content"):

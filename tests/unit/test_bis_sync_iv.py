@@ -547,7 +547,10 @@ class TestIvParseSections:
         assert by_type["overall"].h3_id == "area_1"
         assert by_type["mythic_plus"].h3_id == "area_2"
 
-    def test_image_block_skips_unclassifiable_tabs(self):
+    def test_image_block_includes_unclassifiable_tabs_as_outliers(self):
+        # Unclassified tabs (no keyword, no instance name match) are now included
+        # as outlier sections so they appear in Section Inventory and can be
+        # targeted by section overrides.
         table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
         page = _make_iv_image_block(
             ("Overall BiS List", "", table),
@@ -555,9 +558,26 @@ class TestIvParseSections:
             ("Mythic+", "", table),
         )
         sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        assert len(sections) == 3
         types = {s.content_type for s in sections}
-        assert types == {"overall", "mythic_plus"}
-        assert len(sections) == 2
+        assert "overall" in types
+        assert "mythic_plus" in types
+        assert None in types  # the unclassified tab is present
+        unclassified = [s for s in sections if s.content_type is None]
+        assert len(unclassified) == 1
+        assert unclassified[0].is_outlier is True
+
+    def test_image_block_skips_block_with_no_classified_tabs(self):
+        # An image_block where ALL tabs are unclassifiable (e.g. a talent tree)
+        # is still skipped entirely — only blocks with at least one classified
+        # tab are included.
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("San'layn Talents", "", table),
+            ("Deathbringer Talents", "", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        assert sections == []
 
     # --- Phase 5: raid instance name detection via _iv_parse_sections ---
 
