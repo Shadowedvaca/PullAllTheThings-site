@@ -21,6 +21,7 @@ discover_targets(pool)                  — generate missing config.bis_scrape_t
 sync_source(pool, source_id, spec_ids)  — run extraction for one source (optionally filtered)
 sync_all(pool)                          — run extraction for every active source
 sync_target(pool, target_id)            — re-sync a single scrape target
+insert_bis_items(ctx, items, note, start)— insert List[SimcSlot] via the shared insertion engine
 rebuild_bis_from_landing(pool)          — rebuild enrichment.bis_entries from landing HTML
 rebuild_trinket_ratings_from_landing(pool) — rebuild enrichment.trinket_ratings from landing HTML
 rebuild_item_popularity_from_landing(pool) — rebuild enrichment.item_popularity from u.gg landing HTML
@@ -48,6 +49,16 @@ from .simc_parser import SimcSlot, parse_gear_slots
 from .quality_track import SLOT_ORDER
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BisInsertionContext:
+    """Shared context passed to the BIS insertion engine for one target."""
+    pool: asyncpg.Pool
+    spec_id: int
+    source_id: int
+    hero_talent_id: Optional[int]
+    content_type: str
 
 
 @dataclass
@@ -1384,6 +1395,70 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
     return {"specs_processed": specs_processed, "sections_upserted": sections_upserted}
 
 
+async def insert_bis_items(
+    ctx: BisInsertionContext,
+    items: list[SimcSlot],
+    note: str | None = None,
+    guide_order_start: int = 1,
+) -> dict:
+    """Insert a List[SimcSlot] into enrichment.bis_entries for one target.
+
+    Handles weapon variant resolution (main_hand → main_hand_1h/2h),
+    guide_order assignment per slot, FK validation against enrichment.items,
+    and optional bis_note stamping.  Returns {"inserted": N, "skipped": N}.
+    """
+    if not items:
+        return {"inserted": 0, "skipped": 0}
+
+    inserted = 0
+    skipped = 0
+
+    async with ctx.pool.acquire() as conn:
+        weapon_counter = guide_order_start - 1
+        slot_counters: dict[str, int] = {}
+
+        for slot_data in items:
+            # Resolve main_hand intermediate slot → main_hand_1h or main_hand_2h
+            if slot_data.slot == "main_hand":
+                weapon_counter += 1
+                resolved_slot = await _resolve_weapon_slot(conn, slot_data.blizzard_item_id)
+                if resolved_slot is None:
+                    skipped += 1
+                    continue
+                actual_slot = resolved_slot
+                guide_order = weapon_counter
+            else:
+                actual_slot = slot_data.slot
+                slot_counters[actual_slot] = slot_counters.get(actual_slot, guide_order_start - 1) + 1
+                guide_order = slot_counters[actual_slot]
+
+            # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
+            # skip items not yet in the enrichment layer.
+            exists = await conn.fetchval(
+                "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
+                slot_data.blizzard_item_id,
+            )
+            if not exists:
+                skipped += 1
+                continue
+
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO enrichment.bis_entries
+                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order, bis_note)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """,
+                    ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
+                    actual_slot, slot_data.blizzard_item_id, guide_order, note,
+                )
+                inserted += 1
+            except Exception:
+                skipped += 1  # duplicate within rebuild — silently skip
+
+    return {"inserted": inserted, "skipped": skipped}
+
+
 async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     """Rebuild enrichment.bis_entries by re-parsing landing.bis_scrape_raw.
 
@@ -1445,47 +1520,16 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         else:
             continue
 
-        target_inserted = 0
-        if slots:
-            async with pool.acquire() as conn:
-                weapon_counter = 0
-                slot_counters: dict[str, int] = {}
-                for slot_data in slots:
-                    # Resolve main_hand intermediate slot → main_hand_1h or main_hand_2h
-                    if slot_data.slot == "main_hand":
-                        weapon_counter += 1
-                        resolved_slot = await _resolve_weapon_slot(conn, slot_data.blizzard_item_id)
-                        if resolved_slot is None:
-                            continue  # item missing from enrichment.items; error already logged
-                        actual_slot = resolved_slot
-                        guide_order = weapon_counter
-                    else:
-                        actual_slot = slot_data.slot
-                        slot_counters[actual_slot] = slot_counters.get(actual_slot, 0) + 1
-                        guide_order = slot_counters[actual_slot]
-
-                    # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
-                    # skip items not yet in the enrichment layer.
-                    exists = await conn.fetchval(
-                        "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
-                        slot_data.blizzard_item_id,
-                    )
-                    if not exists:
-                        continue
-                    try:
-                        await conn.execute(
-                            """
-                            INSERT INTO enrichment.bis_entries
-                                (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order)
-                            VALUES ($1, $2, $3, $4, $5, $6)
-                            """,
-                            source_id, spec_id, hero_talent_id,
-                            actual_slot, slot_data.blizzard_item_id, guide_order,
-                        )
-                        target_inserted += 1
-                        total_inserted += 1
-                    except Exception:
-                        pass  # duplicate within this rebuild — silently skip
+        ctx = BisInsertionContext(
+            pool=pool,
+            spec_id=spec_id,
+            source_id=source_id,
+            hero_talent_id=hero_talent_id,
+            content_type=content_type,
+        )
+        result = await insert_bis_items(ctx, slots or [])
+        target_inserted = result["inserted"]
+        total_inserted += target_inserted
 
         # Determine status from coverage and stamp back onto scrape target
         if target_inserted == 0:
