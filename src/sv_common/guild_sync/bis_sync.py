@@ -685,7 +685,7 @@ async def _extract(
             )
             return slots, [], None, raw_content
         elif technique == "html_parse_method":
-            slots, raw_content = await _extract_method(url, content_type, spec_id=spec_id, pool=pool)
+            slots, raw_content = await _extract_method(url, content_type, spec_id=spec_id, source_id=source_id, pool=pool)
             return slots, [], None, raw_content
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
@@ -1351,9 +1351,9 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
             WITH latest AS (
-                SELECT bsr.content, t.spec_id,
+                SELECT bsr.content, t.spec_id, t.source_id, t.url AS page_url,
                     ROW_NUMBER() OVER (
-                        PARTITION BY t.spec_id
+                        PARTITION BY t.spec_id, t.source_id
                         ORDER BY bsr.fetched_at DESC
                     ) AS rn
                   FROM landing.bis_scrape_raw bsr
@@ -1362,7 +1362,7 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
                  WHERE s.origin = 'method'
                    AND bsr.content IS NOT NULL
             )
-            SELECT content, spec_id FROM latest WHERE rn = 1
+            SELECT content, spec_id, source_id, page_url FROM latest WHERE rn = 1
         """)
         slot_map = await _load_slot_labels(conn)
 
@@ -1373,7 +1373,7 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
         if not sections:
             continue
         async with pool.acquire() as conn:
-            await _upsert_method_sections(conn, row["spec_id"], sections)
+            await _upsert_method_sections(conn, row["spec_id"], row["source_id"], row["page_url"], sections)
         specs_processed += 1
         sections_upserted += len(sections)
 
@@ -1438,7 +1438,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         elif source == "wowhead":
             slots, _ = _parse_wowhead_html(html, url, content_type, wh_invtype_map)
         elif source == "method":
-            slots = await _resolve_method_bis_from_db(pool, spec_id, content_type)
+            slots = await _resolve_method_bis_from_db(pool, spec_id, source_id, content_type)
         else:
             continue  # icy_veins and others not yet parseable
 
@@ -1948,9 +1948,11 @@ def _resolve_method_section_local(
 async def _upsert_method_sections(
     conn: asyncpg.Connection,
     spec_id: int,
+    source_id: int,
+    page_url: str,
     sections: list[MethodSection],
 ) -> None:
-    """Upsert section heading metadata to landing.method_page_sections.
+    """Upsert section heading metadata to landing.bis_page_sections.
 
     Only stores metadata used by the override UI (heading, classification,
     outlier status).  Slots are NOT stored here — they live in
@@ -1961,20 +1963,25 @@ async def _upsert_method_sections(
     for s in sections:
         await conn.execute(
             """
-            INSERT INTO landing.method_page_sections
-                (spec_id, section_heading, table_index, row_count,
-                 inferred_content_type, is_outlier, outlier_reason, fetched_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            ON CONFLICT (spec_id, section_heading) DO UPDATE SET
-                table_index           = EXCLUDED.table_index,
-                row_count             = EXCLUDED.row_count,
-                inferred_content_type = EXCLUDED.inferred_content_type,
-                is_outlier            = EXCLUDED.is_outlier,
-                outlier_reason        = EXCLUDED.outlier_reason,
-                fetched_at            = EXCLUDED.fetched_at
+            INSERT INTO landing.bis_page_sections
+                (spec_id, source_id, page_url, section_key, section_title,
+                 sort_order, content_type, is_trinket_section, row_count,
+                 is_outlier, outlier_reason, scraped_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE, $8, $9, $10, $11)
+            ON CONFLICT (spec_id, source_id, section_key) DO UPDATE SET
+                page_url      = EXCLUDED.page_url,
+                section_title = EXCLUDED.section_title,
+                sort_order    = EXCLUDED.sort_order,
+                content_type  = EXCLUDED.content_type,
+                row_count     = EXCLUDED.row_count,
+                is_outlier    = EXCLUDED.is_outlier,
+                outlier_reason = EXCLUDED.outlier_reason,
+                scraped_at    = EXCLUDED.scraped_at
             """,
-            spec_id, s.heading, s.table_index, s.row_count,
-            s.inferred_content_type, s.is_outlier, s.outlier_reason, now,
+            spec_id, source_id, page_url,
+            s.heading, s.heading,
+            s.table_index, s.inferred_content_type,
+            s.row_count, s.is_outlier, s.outlier_reason, now,
         )
 
 
@@ -1982,31 +1989,32 @@ async def _resolve_method_section(
     pool: asyncpg.Pool,
     sections: list[MethodSection],
     spec_id: int,
+    source_id: int,
     content_type: str,
 ) -> list[SimcSlot]:
     """Resolve which section to use for content_type, consulting DB overrides.
 
-    If an override row exists in config.method_section_overrides for this
-    (spec_id, content_type), use the section matching that heading.
+    If an override row exists in config.bis_section_overrides for this
+    (spec_id, source_id, content_type), use the section matching that heading.
     Otherwise fall back to auto-classification via _resolve_method_section_local.
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT section_heading
-              FROM config.method_section_overrides
-             WHERE spec_id = $1 AND content_type = $2
+            SELECT section_key
+              FROM config.bis_section_overrides
+             WHERE spec_id = $1 AND source_id = $2 AND content_type = $3
             """,
-            spec_id, content_type,
+            spec_id, source_id, content_type,
         )
     if row:
-        target_heading = row["section_heading"]
+        target_heading = row["section_key"]
         for s in sections:
             if s.heading == target_heading:
                 return s.slots
         logger.warning(
-            "_resolve_method_section: override heading %r not found in sections for spec %d / %s",
-            target_heading, spec_id, content_type,
+            "_resolve_method_section: override heading %r not found in sections for spec %d source %d / %s",
+            target_heading, spec_id, source_id, content_type,
         )
         return []
     return _resolve_method_section_local(sections, content_type)
@@ -2015,13 +2023,14 @@ async def _resolve_method_section(
 async def _resolve_method_bis_from_db(
     pool: asyncpg.Pool,
     spec_id: int,
+    source_id: int,
     content_type: str,
 ) -> list[SimcSlot]:
     """Resolve BIS slots for a Method target by re-parsing raw HTML.
 
     Used by rebuild_bis_from_landing() — reads the latest raw HTML for this
     spec from landing.bis_scrape_raw, re-parses sections with the current
-    classifier, then resolves via config.method_section_overrides or
+    classifier, then resolves via config.bis_section_overrides or
     auto-classification.  No pre-parsed slot data is read from landing.
     """
     async with pool.acquire() as conn:
@@ -2044,11 +2053,11 @@ async def _resolve_method_bis_from_db(
 
         override = await conn.fetchrow(
             """
-            SELECT section_heading
-              FROM config.method_section_overrides
-             WHERE spec_id = $1 AND content_type = $2
+            SELECT section_key
+              FROM config.bis_section_overrides
+             WHERE spec_id = $1 AND source_id = $2 AND content_type = $3
             """,
-            spec_id, content_type,
+            spec_id, source_id, content_type,
         )
         slot_map = await _load_slot_labels(conn)
 
@@ -2057,13 +2066,13 @@ async def _resolve_method_bis_from_db(
         return []
 
     if override:
-        target_heading = override["section_heading"]
+        target_heading = override["section_key"]
         for s in sections:
             if s.heading == target_heading:
                 return s.slots
         logger.warning(
-            "_resolve_method_bis_from_db: override heading %r not found for spec %d / %s",
-            target_heading, spec_id, content_type,
+            "_resolve_method_bis_from_db: override heading %r not found for spec %d source %d / %s",
+            target_heading, spec_id, source_id, content_type,
         )
         return []
 
@@ -2074,14 +2083,15 @@ async def _extract_method(
     url: str,
     content_type: str = "overall",
     spec_id: int = 0,
+    source_id: int = 0,
     pool: Optional[asyncpg.Pool] = None,
 ) -> tuple[list[SimcSlot], Optional[str]]:
     """Fetch Method.gg gearing page and extract BIS items.
 
     Returns (slots, raw_html).  raw_html written to landing.bis_scrape_raw.
 
-    When spec_id and pool are provided, parsed sections are upserted to
-    landing.method_page_sections and DB overrides are consulted for resolution.
+    When spec_id, source_id, and pool are provided, parsed sections are upserted
+    to landing.bis_page_sections and DB overrides are consulted for resolution.
     Otherwise falls back to pure auto-classification (used in tests).
     """
     async with httpx.AsyncClient(
@@ -2091,12 +2101,12 @@ async def _extract_method(
         response.raise_for_status()
         html = response.text
 
-    if pool and spec_id:
+    if pool and spec_id and source_id:
         async with pool.acquire() as conn:
             slot_map = await _load_slot_labels(conn)
             sections = _extract_method_sections(html, slot_map)
-            await _upsert_method_sections(conn, spec_id, sections)
-        slots = await _resolve_method_section(pool, sections, spec_id, content_type)
+            await _upsert_method_sections(conn, spec_id, source_id, url, sections)
+        slots = await _resolve_method_section(pool, sections, spec_id, source_id, content_type)
     else:
         sections = _extract_method_sections(html, {})
         slots = _resolve_method_section_local(sections, content_type)
@@ -2531,17 +2541,17 @@ async def _upsert_iv_sections(
     page_url: str,
     sections: list["IVSection"],
 ) -> None:
-    """Upsert section metadata to landing.iv_page_sections."""
+    """Upsert section metadata to landing.bis_page_sections."""
     now = datetime.now(timezone.utc)
     for s in sections:
         await conn.execute(
             """
-            INSERT INTO landing.iv_page_sections
-                (spec_id, source_id, page_url, section_h3_id, section_title,
-                 content_type, is_trinket_section, row_count,
+            INSERT INTO landing.bis_page_sections
+                (spec_id, source_id, page_url, section_key, section_title,
+                 sort_order, content_type, is_trinket_section, row_count,
                  is_outlier, outlier_reason, scraped_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (spec_id, source_id, section_h3_id) DO UPDATE SET
+            VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (spec_id, source_id, section_key) DO UPDATE SET
                 page_url           = EXCLUDED.page_url,
                 section_title      = EXCLUDED.section_title,
                 content_type       = EXCLUDED.content_type,
@@ -2557,6 +2567,45 @@ async def _upsert_iv_sections(
         )
 
 
+async def _resolve_iv_section(
+    pool: asyncpg.Pool,
+    sections: list["IVSection"],
+    spec_id: int,
+    source_id: int,
+    content_type: str,
+) -> list[SimcSlot]:
+    """Resolve which IV section to use for content_type, consulting DB overrides.
+
+    If an override row exists in config.bis_section_overrides for this
+    (spec_id, source_id, content_type), use the section matching that section_key.
+    Otherwise falls back to the first non-outlier, non-trinket section with
+    matching content_type (auto-classification).
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT section_key
+              FROM config.bis_section_overrides
+             WHERE spec_id = $1 AND source_id = $2 AND content_type = $3
+            """,
+            spec_id, source_id, content_type,
+        )
+    if row:
+        target_key = row["section_key"]
+        for s in sections:
+            if s.h3_id == target_key and not s.is_trinket_section:
+                return s.slots
+        logger.warning(
+            "_resolve_iv_section: override key %r not found in sections for spec %d source %d / %s",
+            target_key, spec_id, source_id, content_type,
+        )
+        return []
+    for section in sections:
+        if section.content_type == content_type and not section.is_trinket_section and not section.is_outlier:
+            return section.slots
+    return []
+
+
 async def _extract_icy_veins(
     url: str,
     content_type: str = "overall",
@@ -2565,7 +2614,7 @@ async def _extract_icy_veins(
     pool: Optional[asyncpg.Pool] = None,
 ) -> tuple[list[SimcSlot], Optional[str]]:
     """Fetch one IV BIS page, extract all sections, upsert metadata to
-    landing.iv_page_sections, store raw HTML in landing.bis_scrape_raw.
+    landing.bis_page_sections, store raw HTML in landing.bis_scrape_raw.
 
     Returns (slots_for_this_content_type, raw_html).
     """
@@ -2581,15 +2630,13 @@ async def _extract_icy_veins(
             slot_map = await _load_slot_labels(conn)
             sections = _iv_parse_sections(html, slot_map)
             await _upsert_iv_sections(conn, spec_id, source_id, url, sections)
-    else:
-        slot_map: dict[str, str | None] = {}
-        sections = _iv_parse_sections(html, slot_map)
+        return await _resolve_iv_section(pool, sections, spec_id, source_id, content_type), html
 
-    # Return slots for the requested content_type from non-outlier sections
+    slot_map: dict[str, str | None] = {}
+    sections = _iv_parse_sections(html, slot_map)
     for section in sections:
         if section.content_type == content_type and not section.is_trinket_section and not section.is_outlier:
             return section.slots, html
-
     return [], html
 
 
