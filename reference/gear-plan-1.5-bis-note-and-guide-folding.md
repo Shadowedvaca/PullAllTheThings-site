@@ -8,12 +8,45 @@
 
 ## Problem Statement
 
-The BIS system has grown to four guide sources (u.gg, Wowhead, Method, Icy Veins), each with custom scraping code. The logic for *what to do with extracted items* — ring/trinket pairing, 2H/1H weapon handling, multi-item slots, guide_order — is scattered between per-source branches and the shared upsert function. It works today, but adding the next capability (guide folding with notes) would mean duplicating that logic again across four code paths.
+The BIS system has grown to four guide sources (u.gg, Wowhead, Method, Icy Veins). The logic
+for *what to do with extracted items* — ring/trinket pairing, 2H/1H weapon handling, multi-item
+slots, guide_order — is scattered between per-source branches and the shared upsert function.
+Adding the next capability (guide merging with notes) would mean duplicating that logic again
+across four code paths.
 
-There are also structural gaps that merging can solve:
-- Blood DK IV has no 'overall' section — the page only has raid-specific and M+-specific tabs
-- Resto Shaman IV has no 'raid' section — same issue
-- Synthesizing an 'overall' from two sub-guides is the right answer for these cases
+There are also structural gaps that guide folding can solve:
+- **Blood DK IV** — area_1 and area_2 are hero-talent-specific Overall lists (different
+  preferred stats/talents per hero tree). area_3 is Raid, area_4 is M+. IV did something unusual
+  here: instead of one Overall BIS, they gave two hero-talent-tuned overalls. The system needs a
+  way to let an admin declare "fold area_1 and area_2 into a single Overall, noting items that
+  differ between the two builds."
+- **Resto Shaman IV** and others — some specs have a raid section named after the actual raid
+  wing instances rather than the word "raid" (e.g., "Dreamrift, Voidspire, and March on
+  Quel'Danas BiS List"). This is a classifiable pattern that can be recognized automatically in
+  the IV classifier.
+
+The Raid and M+ specific guides on IV are genuinely different from Overall — they reflect
+different talent builds, stat priorities, and item preferences for players who specialize in that
+content. The point is to give those players more targeted advice, not just a filtered item list.
+
+---
+
+## Core Design Principle
+
+**The cut from specific to generic is: extraction → `List[SimcSlot]`.**
+
+- **Per-guide (stays custom forever):** HTML parsing, section classification, item ID extraction,
+  returning `List[SimcSlot]`. Human-written guides will always have structural edge cases —
+  section naming, layout quirks, hero-talent splits. This layer handles that.
+- **Generic (universal engine):** Everything from `List[SimcSlot]` into `enrichment.bis_entries`.
+  Ring/trinket pairing, weapon variant handling, multi-item ordering, note injection, merge
+  conflict resolution. Same logic regardless of which guide produced the items.
+- **Admin config (one place):** Section mapping, merge rules, and notes all live in the same
+  table and UI. In the same place you say "area_3 = raid", you can also say "merge area_1 into
+  area_2 for Overall, secondary note = San'layn variant".
+
+This means: as IV or any guide changes structure each season, the fix is almost always a config
+change in Section Inventory — not a code change.
 
 ---
 
@@ -21,56 +54,70 @@ There are also structural gaps that merging can solve:
 
 ### 1. `bis_note` Field
 
-A short nullable text field on `enrichment.bis_entries`. Displays in the gear plan UI below the BIS checkmark in a smaller font. Intended for things like:
-- "Raid variant" / "M+ variant"
-- "2H build" / "1H build"
+A short nullable text field on `enrichment.bis_entries`. Displays in the gear plan UI below the
+BIS checkmark in a smaller font. Intended for things like:
+- "San'layn build" / "Deathbringer build"
+- "M+ variant"
 - "Alt pick"
 
-Admin-configured at the merge-rule level, stamped onto entries at insert time. Not a user-editable field — it comes from the data pipeline.
+Admin-configured at the merge-rule level in `bis_section_overrides`, stamped onto entries at
+insert time. Not user-editable — it comes from the data pipeline.
 
-### 2. Insertion Engine Abstraction
+### 2. Guide Merge Config in `bis_section_overrides`
 
-Extract the shared insertion logic from `rebuild_bis_from_landing()` into a standalone engine. This separates:
+Rather than a separate merge table, merge behavior is added as optional columns on
+`config.bis_section_overrides`. In the same Section Inventory UI where you map a section key to
+a content_type, you can also declare a secondary section to merge in and the notes to apply.
 
-**What stays per-guide (scraper layer):**
-- HTML parsing
-- Section classification
-- Item ID extraction
-- `List[SimcSlot]` output
+**Merge logic (per slot, during Enrich & Classify):**
+1. Items from the primary section insert normally, with `primary_note` if set
+2. For each item in the secondary section:
+   - Item ID already present in that slot → skip insertion; optionally stamp `match_note` on
+     the existing entry
+   - Item ID not present → add it with `secondary_note` at the next guide_order position
+3. Result: the content_type is populated with a merged view; items unique to the secondary
+   build carry a note identifying the variant
 
-**What moves to the engine (universal layer):**
+**Weapons follow the same generic logic as today** — if primary has a 2H and 1H, and secondary
+also has a 2H and 1H, those four items go through the normal slot-pairing engine. No
+weapon-specific merge code needed.
+
+### 3. Insertion Engine Abstraction
+
+Extract the shared insertion logic from `rebuild_bis_from_landing()` into a standalone function.
+
+**What moves to the engine:**
 - Ring/trinket slot pairing (ring_1 vs ring_2, trinket_1 vs trinket_2)
 - 2H/1H weapon variant handling
 - Multi-item-per-slot ordering (guide_order)
 - FK validation (item must exist in enrichment.items)
 - Note injection
-- Guide merge conflict resolution
+- Merge conflict resolution (secondary pass)
 
-The engine receives a typed input and a rule set; the scraper is irrelevant to it.
+**What stays in the per-guide scraper:**
+- HTML parsing
+- Section classification
+- Item ID extraction
+- Returning `List[SimcSlot]`
 
-### 3. Guide Folding
+### 4. IV Classifier: Raid Instance Name Pattern
 
-Allows two guides to be merged into a single content_type (e.g., raid + M+ → overall). Admin-configured via a new table.
+Icy Veins sometimes names the raid section after the actual raid wing instances rather than
+using the word "raid" (e.g., "Dreamrift, Voidspire, and March on Quel'Danas BiS List"). This is
+a recognizable season-specific pattern. The IV classifier (`_iv_classify_tab_label`) should be
+extended to detect this:
 
-**Merge logic (per slot):**
-1. Primary guide items insert normally, with an optional `primary_note`
-2. For each secondary guide item in a slot:
-   - If that item ID is already present in that slot → nothing added (or optionally stamp `match_note` on the existing entry)
-   - If item is not present → add it with `secondary_note`
-3. Result: a combined list where items unique to secondary carry a note distinguishing them
+- If the tab label contains names that match known raid instance names for the current season
+  → classify as `raid`
+- Season raid instance names are already in `landing.blizzard_journal_instances`
+  (instance_type = 'raid')
 
-**Weapons are handled correctly:** if primary has a 2H and 1H, and secondary also has a 2H and 1H, those four items follow the same slot-pairing logic as today — the engine handles this generically, not with weapon-specific code.
-
-**Example — Blood DK IV Overall (synthesized):**
-- Primary: IV Raid guide → inserts as normal
-- Secondary: IV M+ guide
-  - Item already in Raid list → skip (no note needed, it's the consensus pick)
-  - Item unique to M+ → add with note "M+ variant"
-- Result: `overall` content_type is populated synthetically; any M+-specific picks are noted
+This reduces the number of manual overrides needed for this pattern and handles it correctly
+for future seasons automatically.
 
 ---
 
-## Proposed Schema
+## Schema Changes
 
 ### Migration A: `bis_note` on `enrichment.bis_entries`
 
@@ -79,31 +126,29 @@ ALTER TABLE enrichment.bis_entries
     ADD COLUMN bis_note VARCHAR(100);
 ```
 
-No data migration needed — NULL = no note, which is the correct default for all existing entries.
+NULL = no note. All existing entries default to NULL with no data migration needed.
 
-### Migration B: `config.bis_merge_rules`
+The note must also propagate through `viz.bis_recommendations` (the view the API reads) — the
+view definition needs `be.bis_note` in the SELECT.
+
+### Migration B: Merge columns on `config.bis_section_overrides`
 
 ```sql
-CREATE TABLE config.bis_merge_rules (
-    id              SERIAL PRIMARY KEY,
-    spec_id         INTEGER NOT NULL REFERENCES ref.specializations(id),
-    source_id       INTEGER NOT NULL REFERENCES ref.bis_list_sources(id),
-    content_type    VARCHAR(20) NOT NULL,           -- the synthetic output content_type
-    primary_target_id   INTEGER NOT NULL REFERENCES config.bis_scrape_targets(id),
-    secondary_target_id INTEGER NOT NULL REFERENCES config.bis_scrape_targets(id),
-    primary_note    VARCHAR(100),                   -- stamped on primary-only items (NULL = no note)
-    match_note      VARCHAR(100),                   -- stamped when item appears in both (NULL = no note)
-    secondary_note  VARCHAR(100) NOT NULL,          -- stamped on secondary-only items
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (spec_id, source_id, content_type)
-);
+ALTER TABLE config.bis_section_overrides
+    ADD COLUMN secondary_section_key VARCHAR(100),   -- if set, merge this section in
+    ADD COLUMN primary_note          VARCHAR(100),   -- note on primary-only items (NULL = no note)
+    ADD COLUMN match_note            VARCHAR(100),   -- note when item appears in both (NULL = no note)
+    ADD COLUMN secondary_note        VARCHAR(100);   -- note on secondary-only items
 ```
 
-One row per synthetic content_type per spec. The UNIQUE constraint enforces that a given spec+source+content_type can only have one merge rule (the same constraint as `bis_section_overrides`).
+A row without `secondary_section_key` behaves exactly as today — just a section redirect.
+A row with `secondary_section_key` triggers the merge pass.
+
+No new table. No change to the PRIMARY KEY or UNIQUE constraint.
 
 ---
 
-## Proposed Code Architecture
+## Code Architecture
 
 ### `BisInsertionContext`
 
@@ -114,54 +159,44 @@ class BisInsertionContext:
     spec_id: int
     source_id: int
     content_type: str
-    slot_map: dict[str, str | None]   # slot label → slot key
+    slot_map: dict[str, str | None]
 ```
 
-### `BisInsertionRules`
-
-```python
-@dataclass
-class BisInsertionRules:
-    note: str | None = None           # applied to all inserted items
-    guide_order_start: int = 1        # for secondary items in a merge
-```
-
-### `insert_bis_items(ctx, items, rules)`
-
-Core function of the engine. Receives `List[SimcSlot]`, applies pairing/FK/ordering/note logic, upserts into `enrichment.bis_entries`. Returns `{inserted, skipped, errors}`.
-
-Handles today's concerns generically:
-- Rings: first unoccupied of ring_1/ring_2 (existing logic, centralized here)
-- Trinkets: same
-- Weapons: existing 2H/1H logic, centralized here
-- Note: stamps `rules.note` on each inserted row
-
-### `merge_bis_guides(ctx, primary_items, secondary_items, merge_rule)`
-
-Runs the folding logic:
-1. Calls `insert_bis_items(ctx, primary_items, rules=BisInsertionRules(note=merge_rule.primary_note))`
-2. Queries what was just inserted for this spec/source/content_type
-3. For each secondary item:
-   - If item_id already in inserted set for that slot → optionally update bis_note to match_note (if not already noted)
-   - If item_id not present → calls insert_bis_items for just that item with `note=merge_rule.secondary_note` and incremented guide_order
-
-### `rebuild_bis_from_landing()` after refactor
+### Core functions
 
 ```
-for each target row:
-    extract items → List[SimcSlot]   (per-source custom code, unchanged)
-    
-    check if merge rule exists for (spec_id, source_id, content_type):
-        → if yes: skip (will be handled in merge pass)
-    
-    ctx = BisInsertionContext(...)
-    insert_bis_items(ctx, items, BisInsertionRules())
+insert_bis_items(ctx, items, note=None, guide_order_start=1)
+    → upserts List[SimcSlot] into enrichment.bis_entries
+    → handles ring/trinket pairing, weapon variants, FK checks, note stamping
+    → returns {inserted, skipped}
+
+merge_bis_sections(ctx, primary_items, secondary_items, override_row)
+    → runs insert_bis_items for primary with primary_note
+    → for each secondary item: checks existing; adds with secondary_note or stamps match_note
+    → returns combined stats
+```
+
+### `rebuild_bis_from_landing()` structure after refactor
+
+```
+TRUNCATE enrichment.bis_entries
+
+for each target row in bis_scrape_raw:
+    items = scraper_for_source(html, content_type, slot_map)  # per-guide, unchanged
+    override = lookup bis_section_overrides(spec_id, source_id, content_type)
+
+    if override and override.secondary_section_key:
+        skip — handled in merge pass
+    else:
+        insert_bis_items(ctx, items)
 
 # second pass: merge rules
-for each merge rule:
-    primary_items  = extract from primary target's raw HTML
-    secondary_items = extract from secondary target's raw HTML
-    merge_bis_guides(ctx, primary_items, secondary_items, rule)
+for each override row where secondary_section_key IS NOT NULL:
+    primary_html   = raw HTML for primary target
+    secondary_html = raw HTML for secondary target
+    primary_items   = scraper_for_source(primary_html, ...)
+    secondary_items = scraper_for_source(secondary_html, ...)
+    merge_bis_sections(ctx, primary_items, secondary_items, override)
 ```
 
 ---
@@ -170,19 +205,32 @@ for each merge rule:
 
 ### Gear Plan — BIS item display
 
-Currently each BIS item in the slot list shows a checkmark and item name. With `bis_note`:
+Currently each BIS item shows a checkmark and item name. With `bis_note`:
 
 ```
 ✓ [Item Name]              ← existing
-  M+ variant               ← new, smaller font, muted color
+  San'layn build           ← new, smaller font, muted color (var(--color-text-muted))
 ```
 
 Applies wherever BIS items are shown:
 - BIS recs panel (slot drawer)
-- Available items list (when item is BIS)
-- Paperdoll BIS badge tooltip (lower priority)
+- Available items list (when item is flagged as BIS)
+- The note is returned in the API response from `viz.bis_recommendations`
 
-Note is returned from `viz.bis_recommendations` → needs `bis_note` column propagated through the view and API response.
+---
+
+## Admin UI
+
+Section Inventory gains merge fields when you expand a section row override:
+
+- **Primary section** — existing section_key override (already there)
+- **Secondary section** — new; triggers merge for this content_type
+- **Primary note** — applied to items only in primary
+- **Match note** — applied to items in both (optional)
+- **Secondary note** — applied to items only in secondary
+
+These fields are only shown/relevant when a secondary section is set. The "save override" API
+call (`POST /api/v1/admin/bis/page-sections/override`) is extended to accept the new columns.
 
 ---
 
@@ -190,22 +238,29 @@ Note is returned from `viz.bis_recommendations` → needs `bis_note` column prop
 
 | Phase | Scope | Migration |
 |-------|-------|-----------|
-| 1 | `bis_note` column + display in frontend | Yes — add column |
-| 2 | Insertion engine extraction (refactor only, no behavior change) | No |
-| 3 | Merge rule table + `merge_bis_guides()` | Yes — new table |
-| 4 | Admin UI for merge rules (Section Inventory or new panel) | No |
-| 5 | Seed Blood DK Overall + Resto Shaman Raid merge rules | No |
+| 1 | `bis_note` column, propagate through viz view + API, display in frontend | Yes |
+| 2 | Insertion engine extraction — pure refactor, no behavior change | No |
+| 3 | Merge columns on `bis_section_overrides` + `merge_bis_sections()` | Yes |
+| 4 | Admin UI for merge fields in Section Inventory | No |
+| 5 | IV classifier: raid instance name pattern detection | No |
 
-Phases 1 and 2 are independent and can be done in either order. Phase 3 depends on Phase 2 (engine must exist before merge logic is added). Phase 4 and 5 can overlap.
+Phases 1 and 2 are independent. Phase 3 requires Phase 2. Phases 4 and 5 can be done in any
+order after Phase 3.
+
+Phase 2 (engine extraction) is a refactor with zero behavior change — it can be validated by
+confirming BIS entry counts are identical before and after. This makes it safe to land
+independently before adding merge logic on top.
 
 ---
 
-## What This Doesn't Change
+## What Does Not Change
 
-- Scraper code per guide — stays exactly as-is
-- `config.bis_scrape_targets` structure — unchanged
-- `config.bis_section_overrides` — unchanged
-- The `partial`/`success`/`failed` status logic — unchanged
-- u.gg, Wowhead, Method scrapers — no changes needed
+- Per-guide scraper code (bis_sync.py per-source parsing functions)
+- `config.bis_scrape_targets` structure
+- The `partial`/`success`/`failed` status logic
+- The `_resolve_iv_section()` / `_resolve_method_section()` override lookup (these still work
+  the same; the merge pass adds behavior on top)
+- u.gg, Wowhead, Method scrapers — no changes to HTML parsing code
 
-The extraction layer is already well-separated (each scraper returns `List[SimcSlot]`). The refactor only touches what happens *after* extraction.
+The extraction layer is already well-separated. The refactor only touches what happens after
+extraction.
