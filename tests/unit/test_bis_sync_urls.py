@@ -1,6 +1,6 @@
 """Unit tests for BIS sync URL generation helpers.
 
-Covers _iv_base_url, _iv_bis_role, _build_url, and _categorize_iv_area.
+Covers _iv_base_url, _iv_bis_role, _build_url, and u.gg URL helpers.
 All URLs that are "known good" were manually verified against the live sites.
 """
 
@@ -8,7 +8,6 @@ import pytest
 
 from sv_common.guild_sync.bis_sync import (
     _build_url,
-    _categorize_iv_area,
     _iv_base_url,
     _iv_bis_role,
     _parse_ugg_ssr,
@@ -205,33 +204,6 @@ class TestSlugToPascal:
 
     def test_mixed_separators(self):
         assert _slug_to_pascal("death_knight") == "DeathKnight"
-
-
-# ---------------------------------------------------------------------------
-# _categorize_iv_area (kept for reference — no longer used in discovery)
-# ---------------------------------------------------------------------------
-
-
-class TestCategorizeIvArea:
-    def test_mythic_in_label(self):
-        ct, ht = _categorize_iv_area("Mythic+", ["San'layn", "Deathbringer"])
-        assert ct == "mythic_plus"
-        assert ht is None
-
-    def test_raid_in_label(self):
-        ct, ht = _categorize_iv_area("Raiding", ["San'layn", "Deathbringer"])
-        assert ct == "raid"
-        assert ht is None
-
-    def test_ht_name_in_label(self):
-        ct, ht = _categorize_iv_area("San'layn Overall", ["San'layn", "Deathbringer"])
-        assert ct == "overall"
-        assert ht == "San'layn"
-
-    def test_no_match_defaults_to_overall_no_ht(self):
-        ct, ht = _categorize_iv_area("General BiS", ["San'layn", "Deathbringer"])
-        assert ct == "overall"
-        assert ht is None
 
 
 # ---------------------------------------------------------------------------
