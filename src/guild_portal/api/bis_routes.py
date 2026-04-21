@@ -2168,6 +2168,10 @@ class SectionOverrideBody(BaseModel):
     source_id: int
     content_type: str
     section_key: str
+    secondary_section_key: Optional[str] = None
+    primary_note: Optional[str] = None
+    match_note: Optional[str] = None
+    secondary_note: Optional[str] = None
 
 
 @router.get("/page-sections")
@@ -2340,28 +2344,42 @@ async def set_section_override(
             await conn.execute(
                 """
                 INSERT INTO config.bis_section_overrides
-                    (spec_id, source_id, content_type, section_key)
-                SELECT $1, bt.source_id, $2, $3
+                    (spec_id, source_id, content_type, section_key,
+                     secondary_section_key, primary_note, match_note, secondary_note)
+                SELECT $1, bt.source_id, $2, $3, $4, $5, $6, $7
                   FROM config.bis_scrape_targets bt
                   JOIN ref.bis_list_sources s ON s.id = bt.source_id
                  WHERE s.origin = 'method' AND bt.spec_id = $1
                 ON CONFLICT (spec_id, source_id, content_type) DO UPDATE SET
-                    section_key = EXCLUDED.section_key,
-                    created_at  = NOW()
+                    section_key           = EXCLUDED.section_key,
+                    secondary_section_key = EXCLUDED.secondary_section_key,
+                    primary_note          = EXCLUDED.primary_note,
+                    match_note            = EXCLUDED.match_note,
+                    secondary_note        = EXCLUDED.secondary_note,
+                    created_at            = NOW()
                 """,
                 body.spec_id, body.content_type, body.section_key,
+                body.secondary_section_key, body.primary_note,
+                body.match_note, body.secondary_note,
             )
         else:
             await conn.execute(
                 """
                 INSERT INTO config.bis_section_overrides
-                    (spec_id, source_id, content_type, section_key)
-                VALUES ($1, $2, $3, $4)
+                    (spec_id, source_id, content_type, section_key,
+                     secondary_section_key, primary_note, match_note, secondary_note)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (spec_id, source_id, content_type) DO UPDATE SET
-                    section_key = EXCLUDED.section_key,
-                    created_at  = NOW()
+                    section_key           = EXCLUDED.section_key,
+                    secondary_section_key = EXCLUDED.secondary_section_key,
+                    primary_note          = EXCLUDED.primary_note,
+                    match_note            = EXCLUDED.match_note,
+                    secondary_note        = EXCLUDED.secondary_note,
+                    created_at            = NOW()
                 """,
                 body.spec_id, body.source_id, body.content_type, body.section_key,
+                body.secondary_section_key, body.primary_note,
+                body.match_note, body.secondary_note,
             )
     return JSONResponse({"ok": True})
 

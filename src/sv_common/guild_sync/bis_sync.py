@@ -1462,8 +1462,13 @@ async def insert_bis_items(
 async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     """Rebuild enrichment.bis_entries by re-parsing landing.bis_scrape_raw.
 
-    For each target, takes the most recent raw HTML and parses it using
-    _parse_ugg_html() or _parse_wowhead_html() — whichever matches the source.
+    Two-pass rebuild:
+      Pass 1 — normal targets: parse per-source HTML and call insert_bis_items().
+               Targets that have a merge override with secondary_section_key are
+               skipped here and handled in pass 2.
+      Pass 2 — merge targets: for each override row with secondary_section_key set,
+               fetch both sections, call merge_bis_sections() to fold them together.
+
     Only inserts items that already exist in enrichment.items (the FK requires it).
 
     Called by enrich-and-classify in bis_routes after sp_rebuild_all() so that
@@ -1492,12 +1497,36 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
               FROM latest
              WHERE rn = 1
         """)
+        # Load merge override rows for pass 2 before the TRUNCATE.
+        merge_override_rows = await conn.fetch("""
+            SELECT
+                o.spec_id, o.source_id, o.content_type,
+                o.section_key, o.secondary_section_key,
+                o.primary_note, o.match_note, o.secondary_note,
+                s.origin,
+                t.id            AS target_id,
+                t.hero_talent_id
+              FROM config.bis_section_overrides o
+              JOIN ref.bis_list_sources s ON s.id = o.source_id
+              LEFT JOIN config.bis_scrape_targets t
+                     ON t.spec_id = o.spec_id
+                    AND t.source_id = o.source_id
+                    AND COALESCE(t.content_type, 'overall') = o.content_type
+             WHERE o.secondary_section_key IS NOT NULL
+        """)
         # TRUNCATE first — clean-slate rebuild.  enrichment.bis_entries has no
         # dependents so CASCADE is not needed.
         await conn.execute("TRUNCATE enrichment.bis_entries")
 
+    merge_keys: set[tuple[int, int, str]] = {
+        (r["spec_id"], r["source_id"], r["content_type"])
+        for r in merge_override_rows
+    }
+
     total_inserted = 0
     now = datetime.now(timezone.utc)
+
+    # Pass 1: normal targets
     for row in rows:
         html = row["content"]
         url = row["url"]
@@ -1507,6 +1536,9 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         spec_id = row["spec_id"]
         hero_talent_id = row["hero_talent_id"]
         content_type = row["content_type"] or "overall"
+
+        if (spec_id, source_id, content_type) in merge_keys:
+            continue
 
         if source == "ugg":
             slots = _parse_ugg_html(html, url, slot_map)
@@ -1551,6 +1583,59 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                 """,
                 target_inserted, rebuild_status, now, target_id,
             )
+
+    # Pass 2: merge targets
+    for mo in merge_override_rows:
+        spec_id = mo["spec_id"]
+        source_id = mo["source_id"]
+        content_type = mo["content_type"]
+        origin = mo["origin"]
+
+        async with pool.acquire() as conn:
+            primary_items = await _fetch_section_items(
+                conn, spec_id, source_id, origin, mo["section_key"], slot_map,
+            )
+            secondary_items = await _fetch_section_items(
+                conn, spec_id, source_id, origin, mo["secondary_section_key"], slot_map,
+            )
+
+        ctx = BisInsertionContext(
+            pool=pool,
+            spec_id=spec_id,
+            source_id=source_id,
+            hero_talent_id=mo["hero_talent_id"],
+            content_type=content_type,
+        )
+        result = await merge_bis_sections(ctx, primary_items, secondary_items, dict(mo))
+        total_inserted += result["inserted"]
+
+        # Status update for the corresponding scrape target
+        target_id = mo["target_id"]
+        if target_id:
+            target_inserted = result["inserted"]
+            if target_inserted == 0:
+                rebuild_status = "failed"
+            else:
+                all_items = list(primary_items) + list(secondary_items)
+                extracted_slots = {s.slot for s in all_items}
+                if extracted_slots & {"main_hand", "main_hand_1h", "main_hand_2h"}:
+                    extracted_slots = (extracted_slots - {"main_hand"}) | {"main_hand_1h", "main_hand_2h"}
+                missing = set(SLOT_ORDER) - extracted_slots
+                rebuild_status = "success" if missing <= {"off_hand", "main_hand_1h", "main_hand_2h"} else "partial"
+
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE config.bis_scrape_targets
+                       SET items_found = $1, status = $2, last_fetched = $3
+                     WHERE id = $4
+                    """,
+                    target_inserted, rebuild_status, now, target_id,
+                )
+        logger.info(
+            "rebuild_bis_from_landing merge: spec %d source %d %s → %d inserted",
+            spec_id, source_id, content_type, result["inserted"],
+        )
 
     logger.info("rebuild_bis_from_landing: %d bis_entries inserted", total_inserted)
     return {"bis_entries_inserted": total_inserted}
@@ -2707,6 +2792,221 @@ async def _resolve_iv_section(
         if section.content_type == content_type and not section.is_trinket_section and not section.is_outlier:
             return section.slots
     return []
+
+
+async def _fetch_section_items(
+    conn: asyncpg.Connection,
+    spec_id: int,
+    source_id: int,
+    origin: str,
+    section_key: str,
+    slot_map: dict,
+) -> list[SimcSlot]:
+    """Return SimcSlot list for a named section, fetching raw HTML from landing.
+
+    Used by the merge pass in rebuild_bis_from_landing() to resolve both the
+    primary and secondary section for a merge override row.  The function reads
+    the latest bis_scrape_raw entry for the given spec/source, re-parses it, and
+    returns the slots for the section identified by section_key.
+
+    For 'icy_veins':  section_key matches IVSection.h3_id (e.g. "area_1").
+    For 'method':     section_key matches MethodSection.heading (e.g. "Overall").
+    """
+    if origin == "icy_veins":
+        raw_row = await conn.fetchrow(
+            """
+            SELECT bsr.content
+              FROM landing.bis_scrape_raw bsr
+              JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+             WHERE t.spec_id = $1 AND t.source_id = $2
+               AND bsr.content IS NOT NULL
+             ORDER BY bsr.fetched_at DESC
+             LIMIT 1
+            """,
+            spec_id, source_id,
+        )
+        if not raw_row:
+            logger.warning(
+                "_fetch_section_items: no IV raw HTML for spec %d source %d",
+                spec_id, source_id,
+            )
+            return []
+        sections = _iv_parse_sections(raw_row["content"], slot_map)
+        for s in sections:
+            if s.h3_id == section_key and not s.is_trinket_section:
+                return s.slots
+
+    elif origin == "method":
+        raw_row = await conn.fetchrow(
+            """
+            SELECT bsr.content
+              FROM landing.bis_scrape_raw bsr
+              JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+             WHERE s.origin = 'method' AND t.spec_id = $1
+               AND bsr.content IS NOT NULL
+             ORDER BY bsr.fetched_at DESC
+             LIMIT 1
+            """,
+            spec_id,
+        )
+        if not raw_row:
+            logger.warning(
+                "_fetch_section_items: no Method raw HTML for spec %d", spec_id,
+            )
+            return []
+        sections = _extract_method_sections(raw_row["content"], slot_map)
+        for s in sections:
+            if s.heading == section_key:
+                return s.slots
+
+    logger.warning(
+        "_fetch_section_items: section_key %r not found for spec %d source %d origin %s",
+        section_key, spec_id, source_id, origin,
+    )
+    return []
+
+
+async def merge_bis_sections(
+    ctx: BisInsertionContext,
+    primary_items: list[SimcSlot],
+    secondary_items: list[SimcSlot],
+    override_row: dict,
+) -> dict:
+    """Merge primary + secondary guide sections into enrichment.bis_entries.
+
+    Calls insert_bis_items() for primary items with primary_note, then walks
+    secondary items and for each:
+      - Already present in the same slot family for this target → stamp match_note
+        on the existing entry (if match_note is not None); count as skipped.
+      - Not present → INSERT at the next available guide_order with secondary_note.
+
+    Paired slots (ring_1/ring_2, trinket_1/trinket_2) are treated as a family —
+    a secondary ring item is considered "present" if it appears in either ring slot.
+
+    Returns {"inserted": N, "skipped": N} summing both primary and secondary passes.
+    """
+    primary_note = override_row.get("primary_note")
+    match_note = override_row.get("match_note")
+    secondary_note = override_row.get("secondary_note")
+
+    primary_result = await insert_bis_items(ctx, primary_items, note=primary_note)
+
+    if not secondary_items:
+        return primary_result
+
+    sec_inserted = 0
+    sec_skipped = 0
+
+    async with ctx.pool.acquire() as conn:
+        for slot_data in secondary_items:
+            # Resolve main_hand → main_hand_1h / main_hand_2h
+            if slot_data.slot == "main_hand":
+                resolved = await _resolve_weapon_slot(conn, slot_data.blizzard_item_id)
+                if resolved is None:
+                    sec_skipped += 1
+                    continue
+                actual_slot = resolved
+            else:
+                actual_slot = slot_data.slot
+
+            # FK gate — item must exist in enrichment.items
+            exists = await conn.fetchval(
+                "SELECT 1 FROM enrichment.items WHERE blizzard_item_id = $1",
+                slot_data.blizzard_item_id,
+            )
+            if not exists:
+                sec_skipped += 1
+                continue
+
+            # Check whether item is already present for this target.
+            # Ring/trinket use a prefix LIKE so both paired slots are covered.
+            base = actual_slot.split("_")[0]
+            if base in ("ring", "trinket"):
+                existing = await conn.fetchrow(
+                    """
+                    SELECT slot FROM enrichment.bis_entries
+                     WHERE source_id = $1 AND spec_id = $2
+                       AND hero_talent_id IS NOT DISTINCT FROM $3
+                       AND blizzard_item_id = $4
+                       AND slot LIKE $5
+                    """,
+                    ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
+                    slot_data.blizzard_item_id, base + "%",
+                )
+            else:
+                existing = await conn.fetchrow(
+                    """
+                    SELECT slot FROM enrichment.bis_entries
+                     WHERE source_id = $1 AND spec_id = $2
+                       AND hero_talent_id IS NOT DISTINCT FROM $3
+                       AND blizzard_item_id = $4
+                       AND slot = $5
+                    """,
+                    ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
+                    slot_data.blizzard_item_id, actual_slot,
+                )
+
+            if existing:
+                # Item already present — optionally stamp match_note
+                if match_note is not None:
+                    await conn.execute(
+                        """
+                        UPDATE enrichment.bis_entries
+                           SET bis_note = $1
+                         WHERE source_id = $2 AND spec_id = $3
+                           AND hero_talent_id IS NOT DISTINCT FROM $4
+                           AND blizzard_item_id = $5
+                           AND slot = $6
+                        """,
+                        match_note, ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
+                        slot_data.blizzard_item_id, existing["slot"],
+                    )
+                sec_skipped += 1
+            else:
+                # Item is new — find next guide_order and insert
+                if base in ("ring", "trinket"):
+                    max_order = await conn.fetchval(
+                        """
+                        SELECT COALESCE(MAX(guide_order), 0)
+                          FROM enrichment.bis_entries
+                         WHERE source_id = $1 AND spec_id = $2
+                           AND hero_talent_id IS NOT DISTINCT FROM $3
+                           AND slot LIKE $4
+                        """,
+                        ctx.source_id, ctx.spec_id, ctx.hero_talent_id, base + "%",
+                    )
+                else:
+                    max_order = await conn.fetchval(
+                        """
+                        SELECT COALESCE(MAX(guide_order), 0)
+                          FROM enrichment.bis_entries
+                         WHERE source_id = $1 AND spec_id = $2
+                           AND hero_talent_id IS NOT DISTINCT FROM $3
+                           AND slot = $4
+                        """,
+                        ctx.source_id, ctx.spec_id, ctx.hero_talent_id, actual_slot,
+                    )
+                try:
+                    await conn.execute(
+                        """
+                        INSERT INTO enrichment.bis_entries
+                            (source_id, spec_id, hero_talent_id, slot,
+                             blizzard_item_id, guide_order, bis_note)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """,
+                        ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
+                        actual_slot, slot_data.blizzard_item_id,
+                        (max_order or 0) + 1, secondary_note,
+                    )
+                    sec_inserted += 1
+                except Exception:
+                    sec_skipped += 1
+
+    return {
+        "inserted": primary_result["inserted"] + sec_inserted,
+        "skipped": primary_result["skipped"] + sec_skipped,
+    }
 
 
 async def _extract_icy_veins(
