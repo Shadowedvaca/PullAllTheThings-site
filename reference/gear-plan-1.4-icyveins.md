@@ -1,8 +1,9 @@
 # gear-plan-1.4-icyveins — Icy Veins BIS Extraction
 
-> **Status:** Plan updated 2026-04-19 — ready to build.
+> **Status:** Plan updated 2026-04-20 — Z.0 through Z.2b complete; Z.2.5 next.
 > Branch: `feature/iv-bis-extraction` off `main`.
 > Check `alembic/versions/` for the latest migration number before writing new ones.
+> Last migration on dev: **0161**. Next migration number: **0162**.
 
 ---
 
@@ -23,37 +24,61 @@ That was wrong. Confirmed via view-source:
 
 ## Page Structure
 
-### Section Headers
+### Section Structure (confirmed after Z.2b investigation)
 
-Every BIS list section is preceded by a heading div:
+All IV pages use an **image_block tab structure** as the outer wrapper:
 
 ```html
-<div class="heading_container heading_number_3">
-  <span>2.1.</span>
-  <h3 id="overall-bis-list-for-specspec-specclass">Overall BiS List for Balance Druid</h3>
-</div>
-<div class="heading_container heading_number_3">
-  <span>2.2.</span>
-  <h3 id="raid-bis-list-for-specspec-specclass">Raid BiS List for Balance Druid</h3>
-</div>
-<div class="heading_container heading_number_3">
-  <span>2.3.</span>
-  <h3 id="mythic-gear-bis-list-for-specspec-specclass">Mythic+ Gear BiS List for Balance Druid</h3>
+<div class="image_block">
+  <div class="image_block_header">
+    <div class="image_block_header_buttons">
+      <span id="area_1_button">Overall BiS List</span>
+      <span id="area_2_button">Raid Gear BiS List</span>
+      <span id="area_3_button">Mythic+ Gear BiS List</span>
+    </div>
+  </div>
+  <div class="image_block_content" id="area_1">
+    <div class="heading_container heading_number_3">
+      <h3 id="overall-bis-list-for-specspec-specclass">Overall BiS List for Balance Druid</h3>
+    </div>
+    <table>...</table>
+  </div>
+  <div class="image_block_content" id="area_2">...</div>
+  <div class="image_block_content" id="area_3">...</div>
 </div>
 ```
 
-The `id` attribute on `<h3>` is the machine-readable section key.
+**The h3 inside each area_N pane is NOT always present** (Blood DK, Vengeance DH, Marksmanship, Protection Paladin, Survival Hunter have no h3). The primary classification source is the **button label** on `area_N_button`.
 
-### Section ID → Content Type Mapping
+### Button Label → Content Type Mapping
 
-| h3 id prefix | content_type | Notes |
+`_iv_classify_tab_label(label)` — keyword matching on button text:
+
+| Keyword in label | content_type |
+|---|---|
+| `mythic` | `mythic_plus` |
+| `raid` | `raid` |
+| `overall`, `bis`, `best` | `overall` |
+| none of the above | `NULL` — tab skipped |
+
+### Section Key
+
+The `section_key` (stored in `landing.bis_page_sections`) is:
+- The h3's `id` attribute when present — backward-compatible with existing DB rows
+- The `area_N` id when no h3 exists (Blood DK etc.)
+
+### Blood DK — 4 Tabs
+
+Blood DK has an unusual 4-tab layout:
+
+| Tab | Label | content_type |
 |---|---|---|
-| `overall-bis-list-for-` | `overall` | |
-| `raid-bis-list-for-` | `raid` | |
-| `mythic-gear-bis-list-for-` | `dungeon` | "Mythic+" = M+ = dungeon in our schema |
-| anything else | `NULL` | Flagged as outlier |
+| area_1 | "BiS Raid (San'layn)" | `raid` |
+| area_2 | "BiS Raid (Deathbringer)" | `raid` |
+| area_3 | "Dreamrift, Voidspire, and March on Quel'Danas Gear" | `NULL` — skipped (no keyword) |
+| area_4 | "Mythic+" | `mythic_plus` |
 
-Strip everything after `-for-` to get the canonical prefix.
+This produces two `raid` sections (area_1 and area_2) and no `overall`. Blood DK is the primary driver for needing **section overrides** in Z.2.5 — an admin will manually assign one of the raid tabs as the canonical `overall` or `raid` source.
 
 ### Regular BIS Table Row
 
@@ -109,7 +134,8 @@ Extraction per row:
 **Landing = raw. Enrichment = parsed.**
 
 - `landing.bis_scrape_raw` — raw page HTML (same as every other source)
-- `landing.iv_page_sections` — section metadata only (h3 id, title, classification, outlier flag, row count). **No items JSONB.** Items are re-parsed from raw HTML during `rebuild_bis_from_landing()`, same pattern as Method.
+- `landing.bis_page_sections` — unified section metadata for **all** sources (Method + IV + any future source). Section key, title, classification, outlier flag, row count. **No items JSONB.** Items are re-parsed from raw HTML during `rebuild_bis_from_landing()`. Replaces `landing.method_page_sections` and `landing.iv_page_sections` (Z.2.5).
+- `config.bis_section_overrides` — manual content_type → section_key mappings for any source. Replaces `config.method_section_overrides` (Z.2.5).
 - `enrichment.bis_entries` — final parsed slot → item assignments
 - `enrichment.trinket_ratings` — trinket tier ratings, parsed from raw HTML during `rebuild_trinket_ratings_from_landing()`
 
@@ -124,9 +150,11 @@ All slot label → slot key mappings live in `config.slot_labels` (see Phase Z.0
 | Phase | Scope | Migrations |
 |---|---|---|
 | Z.0 | Unified slot label tables; shared `_resolve_text_slot` helper; remove hardcoded dicts | **0159, 0160 — COMPLETE** |
-| Z.1 | `landing.iv_page_sections` metadata table | Yes (next) |
-| Z.2 | `_extract_icy_veins()` rewrite + dead code removal | No |
-| Z.3 | Admin section inventory UI + API endpoint | No |
+| Z.1 | `landing.iv_page_sections` metadata table | **0161 — COMPLETE** |
+| Z.2 | `_extract_icy_veins()` rewrite + dead code removal | **No — COMPLETE** |
+| Z.2b | image_block tab parsing; `_iv_classify_tab_label` + `_iv_parse_from_image_blocks` | **No — COMPLETE** |
+| Z.2.5 | Unified `landing.bis_page_sections` + `config.bis_section_overrides`; override support for IV | **0162** |
+| Z.3 | Admin section inventory UI + API endpoint (reads `bis_page_sections`) | No |
 | Z.4 | `rebuild_bis_from_landing()` + `rebuild_trinket_ratings_from_landing()` IV branches | No |
 
 ---
@@ -295,13 +323,141 @@ Update the comment; behavior is now real.
 
 ---
 
+## Phase Z.2.5 — Unified Section Inventory Tables (migration 0162)
+
+### Goal
+
+Consolidate `landing.method_page_sections` and `landing.iv_page_sections` into a single `landing.bis_page_sections` table, and consolidate `config.method_section_overrides` into `config.bis_section_overrides`. Any future source (u.gg if we ever add section tracking, Wowhead, etc.) writes to the same table. The admin UI in Z.3 reads from one place.
+
+### `landing.bis_page_sections` (replaces both existing tables)
+
+```sql
+CREATE TABLE landing.bis_page_sections (
+    id                 BIGSERIAL PRIMARY KEY,
+    spec_id            INTEGER NOT NULL REFERENCES ref.specializations(id),
+    source_id          INTEGER NOT NULL REFERENCES ref.bis_list_sources(id),
+    page_url           TEXT NOT NULL,
+    section_key        TEXT NOT NULL,      -- h3 id attr for IV; heading text for Method
+    section_title      TEXT NOT NULL,      -- human-readable display name
+    sort_order         INTEGER,            -- table_index for Method; NULL for IV
+    content_type       VARCHAR(20),        -- 'overall'/'raid'/'mythic_plus'/NULL
+    is_trinket_section BOOLEAN NOT NULL DEFAULT FALSE,
+    row_count          INTEGER NOT NULL DEFAULT 0,
+    is_outlier         BOOLEAN NOT NULL DEFAULT FALSE,
+    outlier_reason     TEXT,
+    scraped_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (spec_id, source_id, section_key)
+);
+```
+
+**Column notes:**
+- `section_key` — the stable identifier within a scrape result. For IV: h3 id when present, area_N when not. For Method: heading text. The UNIQUE constraint uses this; the override table references it by the same value.
+- `sort_order` — Method uses this for table_index (position order among tables on the page). IV leaves it NULL.
+- `is_trinket_section` — IV-specific; always FALSE for Method since Method doesn't have a separate trinket structure.
+
+### `config.bis_section_overrides` (replaces `config.method_section_overrides`)
+
+```sql
+CREATE TABLE config.bis_section_overrides (
+    spec_id      INTEGER NOT NULL REFERENCES ref.specializations(id),
+    source_id    INTEGER NOT NULL REFERENCES ref.bis_list_sources(id),
+    content_type VARCHAR(20) NOT NULL CHECK (content_type IN ('overall','raid','mythic_plus')),
+    section_key  TEXT NOT NULL,   -- which section_key to use for this content_type
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (spec_id, source_id, content_type)
+);
+```
+
+**Key difference from `method_section_overrides`:** adds `source_id`. Method previously only had one source per spec so `(spec_id, content_type)` was sufficient. IV has three sources per spec (Overall/Raid/M+) pointing to the same page URL, so `source_id` is needed to disambiguate.
+
+### Migration 0162 Steps
+
+1. Create `landing.bis_page_sections`
+2. Create `config.bis_section_overrides`
+3. Migrate Method data:
+   ```sql
+   INSERT INTO landing.bis_page_sections
+       (spec_id, source_id, page_url, section_key, section_title, sort_order,
+        content_type, is_trinket_section, row_count, is_outlier, outlier_reason, scraped_at)
+   SELECT
+       mps.spec_id,
+       bt.source_id,
+       bsr.url,
+       mps.section_heading,      -- section_key = heading text for Method
+       mps.section_heading,      -- section_title same as key for Method
+       mps.table_index,
+       mps.inferred_content_type,
+       FALSE,
+       mps.row_count,
+       mps.is_outlier,
+       mps.outlier_reason,
+       mps.fetched_at
+   FROM landing.method_page_sections mps
+   JOIN config.bis_scrape_targets bt ON bt.spec_id = mps.spec_id
+       AND bt.source_id IN (SELECT id FROM ref.bis_list_sources WHERE name ILIKE '%method%')
+   JOIN landing.bis_scrape_raw bsr ON bsr.target_id = bt.id
+   ON CONFLICT (spec_id, source_id, section_key) DO NOTHING;
+   ```
+4. Migrate IV data:
+   ```sql
+   INSERT INTO landing.bis_page_sections
+       (spec_id, source_id, page_url, section_key, section_title, sort_order,
+        content_type, is_trinket_section, row_count, is_outlier, outlier_reason, scraped_at)
+   SELECT
+       spec_id, source_id, page_url,
+       section_h3_id,   -- section_key = h3 id (or area_N) for IV
+       section_title,
+       NULL,            -- sort_order not used by IV
+       content_type,
+       is_trinket_section,
+       row_count, is_outlier, outlier_reason, scraped_at
+   FROM landing.iv_page_sections
+   ON CONFLICT (spec_id, source_id, section_key) DO NOTHING;
+   ```
+5. Migrate overrides:
+   ```sql
+   INSERT INTO config.bis_section_overrides
+       (spec_id, source_id, content_type, section_key, created_at)
+   SELECT
+       mso.spec_id,
+       bt.source_id,
+       mso.content_type,
+       mso.section_heading,
+       mso.created_at
+   FROM config.method_section_overrides mso
+   JOIN config.bis_scrape_targets bt ON bt.spec_id = mso.spec_id
+       AND bt.source_id IN (SELECT id FROM ref.bis_list_sources WHERE name ILIKE '%method%')
+   ON CONFLICT DO NOTHING;
+   ```
+6. Drop old tables: `landing.method_page_sections`, `landing.iv_page_sections`, `config.method_section_overrides`
+
+### Code Changes
+
+**`_upsert_method_sections()`** — change target table from `landing.method_page_sections` to `landing.bis_page_sections`. Column renames: `section_heading` → `section_key`+`section_title`, `table_index` → `sort_order`, `fetched_at` → `scraped_at`, `inferred_content_type` → `content_type`.
+
+**`_upsert_iv_sections()`** — change target table from `landing.iv_page_sections` to `landing.bis_page_sections`. Column rename: `section_h3_id` → `section_key`.
+
+**`_resolve_method_section()`** — change override lookup from `config.method_section_overrides` to `config.bis_section_overrides` (add `source_id` to WHERE clause).
+
+**New: `_resolve_iv_section(pool, sections, spec_id, source_id, content_type)`** — same pattern as `_resolve_method_section`. Checks `config.bis_section_overrides` first; falls back to auto-classification from `_iv_classify_tab_label`. Used by `_extract_icy_veins` to pick the right section when overrides exist (Blood DK's dual-raid case).
+
+### Override Semantics for IV
+
+For Blood DK, an admin will set:
+- `(spec_id=blood_dk, source_id=iv_overall, content_type='overall') → section_key='area_3'` — maps "Dreamrift, Voidspire, and March..." as the overall BIS list
+- No override needed for raid — `_extract_icy_veins` with `content_type='raid'` will just use the first matching raid section (area_1)
+
+---
+
 ## Phase Z.3 — Admin Section Inventory
+
+Reads from `landing.bis_page_sections` (post-Z.2.5 unified table).
 
 ### API Endpoint
 
-`GET /api/v1/admin/bis/iv-sections?outliers_only=false`
+`GET /api/v1/admin/bis/page-sections?source=icy_veins&outliers_only=false`
 
-Returns rows from `landing.iv_page_sections` joined to `ref.specializations` and `ref.bis_list_sources`.
+Returns rows from `landing.bis_page_sections` joined to `ref.specializations` and `ref.bis_list_sources`. `source` param filters by `bis_list_sources.origin` ('icy_veins', 'method', etc.).
 
 Response shape:
 ```json
@@ -312,30 +468,66 @@ Response shape:
       "spec_name": "Balance",
       "class_name": "Druid",
       "source_name": "Icy Veins Overall",
-      "section_h3_id": "overall-bis-list-for-balance-druid",
+      "source_origin": "icy_veins",
+      "section_key": "overall-bis-list-for-specspec-specclass",
       "section_title": "Overall BiS List for Balance Druid",
       "content_type": "overall",
       "is_trinket_section": false,
       "row_count": 16,
       "is_outlier": false,
       "outlier_reason": null,
+      "override": null,
       "scraped_at": "2026-04-20T12:00:00Z"
+    }
+  ],
+  "gaps": [
+    {
+      "spec_id": 5,
+      "spec_name": "Blood",
+      "class_name": "Death Knight",
+      "source_id": 3,
+      "content_type": "overall",
+      "available_sections": [
+        {"section_key": "area_1", "section_title": "BiS Raid (San'layn)", "row_count": 14},
+        {"section_key": "area_2", "section_title": "BiS Raid (Deathbringer)", "row_count": 15}
+      ]
     }
   ]
 }
 ```
 
+`gaps` — (spec, source, content_type) triples where a scrape target exists but no non-outlier section matches AND no override is set. Lists available sections that could be assigned.
+
+### POST Endpoint
+
+`POST /api/v1/admin/bis/page-sections/override`
+
+```json
+{
+  "spec_id": 5,
+  "source_id": 3,
+  "content_type": "overall",
+  "section_key": "area_3"
+}
+```
+
+Upserts to `config.bis_section_overrides`. Returns `{"ok": true}`.
+
+`DELETE /api/v1/admin/bis/page-sections/override` — removes an override by (spec_id, source_id, content_type).
+
 ### UI Panel
 
-New collapsible panel in `gear_plan_admin.html` — **"IV Section Inventory"** — below the existing BIS sync matrix.
+Replaces the existing Method.gg Section Inventory panel and adds IV — both shown in one unified **"Section Inventory"** panel in `gear_plan_admin.html`.
 
-Columns: Spec | Source | Section Title | Content Type | Rows | Outlier | Reason | Scraped
+Source tabs: **Icy Veins | Method**
 
-Filters:
-- Outliers only toggle
-- Source filter (IV Raid / IV M+ / IV Overall)
+Per tab:
+- Table: Spec | Section Title | Rows | Content Type | Outlier Reason | Override | Actions
+- "Outliers only" toggle
+- Coverage Gaps section below the table (same as Method panel today)
+- Per-gap: dropdown of available sections → "Set Override" button
 
-Read-only in v1. Outlier decisions feed back into code updates to `_iv_classify_section()`.
+**IV-specific:** show `is_trinket_section` badge on trinket rows.
 
 ---
 
@@ -391,14 +583,13 @@ Upsert to `enrichment.trinket_ratings`:
 
 | File | Current State | Change |
 |---|---|---|
-| `src/sv_common/guild_sync/bis_sync.py` | `_extract_icy_veins()` stub, dead code; hardcoded dicts removed (**Z.0 done**) | Z.2: rewrite extraction, remove dead code |
-| `src/sv_common/guild_sync/bis_sync.py` | `_load_slot_labels(conn)` — no origin param, reads `config.slot_labels` (**Z.0 done**) | Z.2: call from `_extract_icy_veins` |
-| `src/sv_common/guild_sync/bis_sync.py` | `_load_wowhead_invtypes(conn)` — reads `config.wowhead_invtypes` (**Z.0 done**) | No further change needed |
-| `src/sv_common/guild_sync/bis_sync.py` | `_resolve_text_slot(raw_label, slot_map, ring_count, trinket_count)` — shared helper (**Z.0 done**) | Z.2: must be called from `_iv_extract_regular_rows` |
-| `alembic/versions/` | 0160 is latest (**Z.0 done**) | Z.1: 0161 (iv_page_sections) |
-| `src/guild_portal/api/bis_routes.py` | IV targets skipped in sync | Z.3: new `/iv-sections` endpoint |
-| `src/guild_portal/templates/admin/gear_plan_admin.html` | IV cells show coming-soon | Z.3: IV Section Inventory panel |
-| `src/guild_portal/static/js/gear_plan_admin.js` | IV cells show coming-soon indicator | Z.3: fetch + render iv-sections |
+| `src/sv_common/guild_sync/bis_sync.py` | `_extract_icy_veins()` full impl; `_iv_parse_from_image_blocks` primary parser (**Z.2b done**) | Z.2.5: `_upsert_iv_sections` → `bis_page_sections`; add `_resolve_iv_section` |
+| `src/sv_common/guild_sync/bis_sync.py` | `_upsert_method_sections()` writes to `landing.method_page_sections` | Z.2.5: retarget to `landing.bis_page_sections` |
+| `src/sv_common/guild_sync/bis_sync.py` | `_resolve_method_section()` reads `config.method_section_overrides` | Z.2.5: retarget to `config.bis_section_overrides` (add source_id) |
+| `alembic/versions/` | 0161 is latest (**Z.1 done**) | Z.2.5: 0162 (bis_page_sections + bis_section_overrides) |
+| `src/guild_portal/api/bis_routes.py` | Method section inventory endpoints exist; IV not wired | Z.3: unified `/page-sections` endpoint + override POST/DELETE |
+| `src/guild_portal/templates/admin/gear_plan_admin.html` | Method Section Inventory panel exists; IV not wired | Z.3: replace with unified panel + source tabs |
+| `src/guild_portal/static/js/gear_plan_admin.js` | Method section inventory JS exists | Z.3: extend for unified table + IV tab |
 
 ---
 
