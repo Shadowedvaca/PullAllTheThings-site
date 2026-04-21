@@ -14,7 +14,9 @@ from sv_common.guild_sync.bis_sync import (
     _iv_extract_regular_rows,
     _iv_extract_trinket_rows,
     _iv_is_outlier,
+    _iv_parse_bis_from_raw,
     _iv_parse_sections,
+    _iv_parse_trinkets_from_raw,
 )
 
 # Mirrors config.slot_labels seed data (relevant subset for IV)
@@ -512,6 +514,21 @@ class TestIvParseSections:
         assert types == {"overall", "mythic_plus"}
         assert len(sections) == 2
 
+    def test_image_block_parses_trinket_tab(self):
+        details_html = _make_trinket_details(
+            ("S Tier", [111111, 222222]),
+            ("A Tier", [333333]),
+        )
+        page = _make_iv_image_block(
+            ("Overall BiS List", "overall-specspec", _make_iv_table(*[("Head", i) for i in range(1, 17)])),
+            ("Mythic+ Trinket Rankings", "", details_html),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        trinket_secs = [s for s in sections if s.is_trinket_section]
+        assert len(trinket_secs) == 1
+        assert trinket_secs[0].content_type == "mythic_plus"
+        assert len(trinket_secs[0].trinket_rows) == 3
+
     def test_image_block_takes_priority_over_heading_container(self):
         # When image_block tabs are present, they should be used even if
         # the page also has bare heading_container divs outside the block.
@@ -530,3 +547,107 @@ class TestIvParseSections:
         # Should use image_block result only (1 section, not 2)
         assert len(sections) == 1
         assert sections[0].content_type == "overall"
+
+
+# ---------------------------------------------------------------------------
+# _iv_parse_bis_from_raw
+# ---------------------------------------------------------------------------
+
+
+class TestIvParseBisFromRaw:
+    def _make_page(self, content_type: str, n_rows: int = 16) -> str:
+        table = _make_iv_table(*[("Head", i) for i in range(1, n_rows + 1)])
+        label = {"overall": "Overall BiS List", "raid": "Raid Gear BiS List", "mythic_plus": "Mythic+ Gear BiS List"}[content_type]
+        return _make_iv_image_block((label, f"{content_type}-specspec", table))
+
+    def test_returns_slots_for_matching_content_type(self):
+        page = self._make_page("overall")
+        slots = _iv_parse_bis_from_raw(page, "overall", _TEST_SLOT_MAP)
+        assert len(slots) == 16
+        assert all(s.slot == "head" for s in slots)
+
+    def test_returns_empty_for_missing_content_type(self):
+        page = self._make_page("raid")
+        slots = _iv_parse_bis_from_raw(page, "overall", _TEST_SLOT_MAP)
+        assert slots == []
+
+    def test_skips_outlier_sections(self):
+        # Only 2 rows → flagged as outlier → should be skipped
+        table = _make_iv_table(("Head", 1), ("Neck", 2))
+        page = _make_iv_image_block(("Overall BiS List", "overall-specspec", table))
+        slots = _iv_parse_bis_from_raw(page, "overall", _TEST_SLOT_MAP)
+        assert slots == []
+
+    def test_skips_trinket_sections(self):
+        details = _make_trinket_details(("S Tier", [111, 222]))
+        page = _make_iv_image_block(("Overall BiS List", "", details))
+        slots = _iv_parse_bis_from_raw(page, "overall", _TEST_SLOT_MAP)
+        assert slots == []
+
+    def test_multi_tab_page_picks_correct_section(self):
+        table_overall = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        table_raid = _make_iv_table(*[("Neck", i) for i in range(100, 116)])
+        page = _make_iv_image_block(
+            ("Overall BiS List", "overall-spec", table_overall),
+            ("Raid Gear BiS List", "raid-spec", table_raid),
+        )
+        overall_slots = _iv_parse_bis_from_raw(page, "overall", _TEST_SLOT_MAP)
+        raid_slots = _iv_parse_bis_from_raw(page, "raid", _TEST_SLOT_MAP)
+        assert all(s.slot == "head" for s in overall_slots)
+        assert all(s.slot == "neck" for s in raid_slots)
+
+    def test_empty_html_returns_empty(self):
+        assert _iv_parse_bis_from_raw("", "overall", _TEST_SLOT_MAP) == []
+
+
+# ---------------------------------------------------------------------------
+# _iv_parse_trinkets_from_raw
+# ---------------------------------------------------------------------------
+
+
+class TestIvParseTrinketsFromRaw:
+    def _make_page_with_trinkets(self, *tiers: tuple[str, list[int]]) -> str:
+        details = _make_trinket_details(*tiers)
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        return _make_iv_image_block(
+            ("Overall BiS List", "overall-spec", table),
+            ("Trinket Rankings", "", details),
+        )
+
+    def test_extracts_trinket_rows(self):
+        page = self._make_page_with_trinkets(
+            ("S Tier", [111111, 222222]),
+            ("A Tier", [333333]),
+        )
+        rows = _iv_parse_trinkets_from_raw(page)
+        by_tier: dict[str, list[int]] = {}
+        for r in rows:
+            by_tier.setdefault(r["tier"], []).append(r["item_id"])
+        assert 111111 in by_tier["S"]
+        assert 222222 in by_tier["S"]
+        assert 333333 in by_tier["A"]
+
+    def test_empty_html_returns_empty(self):
+        assert _iv_parse_trinkets_from_raw("") == []
+
+    def test_no_trinket_dropdown_returns_empty(self):
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(("Overall BiS List", "overall-spec", table))
+        rows = _iv_parse_trinkets_from_raw(page)
+        assert rows == []
+
+    def test_multiple_dropdowns_combined(self):
+        # Two separate trinket-dropdown sections (unusual but possible)
+        d1 = _make_trinket_details(("S Tier", [111]))
+        d2 = _make_trinket_details(("A Tier", [222]))
+        html = f"<html><body>{d1}{d2}</body></html>"
+        rows = _iv_parse_trinkets_from_raw(html)
+        item_ids = [r["item_id"] for r in rows]
+        assert 111 in item_ids
+        assert 222 in item_ids
+
+    def test_sort_order_preserved(self):
+        page = self._make_page_with_trinkets(("S Tier", [10, 20, 30]))
+        rows = _iv_parse_trinkets_from_raw(page)
+        s_rows = [r for r in rows if r["tier"] == "S"]
+        assert [r["sort_order"] for r in s_rows] == [0, 1, 2]

@@ -1439,8 +1439,11 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
             slots, _ = _parse_wowhead_html(html, url, content_type, wh_invtype_map)
         elif source == "method":
             slots = await _resolve_method_bis_from_db(pool, spec_id, source_id, content_type)
+        elif source == "icy_veins":
+            sections = _iv_parse_sections(html, slot_map)
+            slots = await _resolve_iv_section(pool, sections, spec_id, source_id, content_type)
         else:
-            continue  # icy_veins and others not yet parseable
+            continue
 
         target_inserted = 0
         if slots:
@@ -1538,7 +1541,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
         rows = await conn.fetch("""
             WITH ranked AS (
                 SELECT
-                    bsr.content, bsr.url,
+                    bsr.content, bsr.url, bsr.source AS bsr_source,
                     t.source_id, t.spec_id, t.hero_talent_id,
                     ROW_NUMBER() OVER (
                         PARTITION BY
@@ -1553,9 +1556,9 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                   JOIN ref.bis_list_sources sc ON sc.id = t.source_id
                  WHERE bsr.target_id IS NOT NULL
-                   AND bsr.source = 'wowhead'
+                   AND bsr.source IN ('wowhead', 'icy_veins')
             )
-            SELECT content, url, source_id, spec_id, hero_talent_id
+            SELECT content, url, bsr_source, source_id, spec_id, hero_talent_id
               FROM ranked
              WHERE rn = 1
         """)
@@ -1566,11 +1569,26 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
     for row in rows:
         html = row["content"]
         url = row["url"]
+        bsr_source = row["bsr_source"]
         source_id = row["source_id"]
         spec_id = row["spec_id"]
         hero_talent_id = row["hero_talent_id"]
 
-        _, trinket_ratings = _parse_wowhead_html(html, url, slot_map=wh_invtype_map)
+        if bsr_source == "wowhead":
+            _, trinket_ratings = _parse_wowhead_html(html, url, slot_map=wh_invtype_map)
+        elif bsr_source == "icy_veins":
+            raw_rows = _iv_parse_trinkets_from_raw(html)
+            trinket_ratings = [
+                ExtractedTrinketRating(
+                    blizzard_item_id=r["item_id"],
+                    item_name="",
+                    tier=r["tier"],
+                    sort_order=r["sort_order"],
+                )
+                for r in raw_rows
+            ]
+        else:
+            continue
 
         if not trinket_ratings:
             continue
@@ -2532,6 +2550,47 @@ def _iv_parse_sections(
         sections.append(section)
 
     return sections
+
+
+def _iv_parse_bis_from_raw(
+    html: str,
+    content_type: str,
+    slot_map: dict[str, str | None],
+) -> list[SimcSlot]:
+    """Parse IV BIS slots from stored raw HTML for a specific content_type.
+
+    Pure function — no DB access.  Override support requires _resolve_iv_section.
+    Returns the first non-outlier, non-trinket section matching content_type,
+    or an empty list if none found.
+    """
+    sections = _iv_parse_sections(html, slot_map)
+    for section in sections:
+        if (
+            section.content_type == content_type
+            and not section.is_trinket_section
+            and not section.is_outlier
+        ):
+            return section.slots
+    return []
+
+
+def _iv_parse_trinkets_from_raw(html: str) -> list[dict]:
+    """Extract all trinket tier rows from IV raw HTML.
+
+    Finds every <details class="trinket-dropdown"> element and collects
+    [{tier, item_id, sort_order}] dicts.  Pure function — no DB access.
+    """
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return []
+    if not html:
+        return []
+    soup = BeautifulSoup(html, "html.parser")
+    results: list[dict] = []
+    for details in soup.find_all("details", class_="trinket-dropdown"):
+        results.extend(_iv_extract_trinket_rows(details))
+    return results
 
 
 async def _upsert_iv_sections(
