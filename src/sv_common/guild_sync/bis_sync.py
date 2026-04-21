@@ -294,7 +294,7 @@ def _iv_bis_role(role_name: str) -> str:
     if "tank" in r:
         return "tank"
     if "heal" in r:
-        return "healer"
+        return "healing"
     return "dps"
 
 
