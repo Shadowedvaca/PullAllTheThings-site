@@ -215,7 +215,7 @@ class TestPageSectionsResponse:
     """Verify that section rows in the response include spec_sections and full
     override_mappings fields. Uses a mocked pool with two fetch calls."""
 
-    def _make_section_row(self, override_mappings_json=None, spec_sections_json=None):
+    def _make_section_row(self, override_mappings_json=None, spec_sections_json=None, secondary_of_json=None):
         import datetime
         row = MagicMock()
         row.__getitem__ = MagicMock(side_effect=lambda k: {
@@ -236,6 +236,7 @@ class TestPageSectionsResponse:
             "scraped_at": datetime.datetime(2026, 4, 20, 12, 0, 0),
             "override_mappings": override_mappings_json,
             "spec_sections": spec_sections_json,
+            "secondary_of_mappings": secondary_of_json,
         }[k])
         return row
 
@@ -288,6 +289,10 @@ class TestPageSectionsResponse:
         assert om["match_note"] is None
         assert om["secondary_note"] == "San'layn build"
 
+        # secondary_of_mappings is present (empty for a primary section)
+        assert "secondary_of_mappings" in row
+        assert isinstance(row["secondary_of_mappings"], list)
+
     @pytest.mark.asyncio
     async def test_section_row_no_override_has_empty_spec_sections(self):
         section_row = self._make_section_row(None, None)
@@ -309,3 +314,4 @@ class TestPageSectionsResponse:
         row = data["data"][0]
         assert row["spec_sections"] == []
         assert row["override_mappings"] == []
+        assert row["secondary_of_mappings"] == []

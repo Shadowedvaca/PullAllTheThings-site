@@ -2242,7 +2242,18 @@ async def page_sections(
                           AND bls2.origin = $1
                         ORDER BY bps2.section_key, bps2.sort_order NULLS LAST
                     ) ss
-                ) AS spec_sections
+                ) AS spec_sections,
+                (
+                    SELECT json_agg(json_build_object(
+                        'content_type',      o.content_type,
+                        'primary_section_key', o.section_key
+                    ))
+                    FROM config.bis_section_overrides o
+                    JOIN ref.bis_list_sources s2 ON s2.id = o.source_id
+                    WHERE o.spec_id = bps.spec_id
+                      AND s2.origin = $1
+                      AND o.secondary_section_key = bps.section_key
+                ) AS secondary_of_mappings
               FROM landing.bis_page_sections bps
               JOIN ref.bis_list_sources bls ON bls.id = bps.source_id
               JOIN ref.specializations sp ON sp.id = bps.spec_id
@@ -2257,6 +2268,13 @@ async def page_sections(
                         WHERE o.spec_id = bps.spec_id
                           AND s2.origin = $1
                           AND o.section_key = bps.section_key
+                   )
+                   OR EXISTS (
+                       SELECT 1 FROM config.bis_section_overrides o
+                         JOIN ref.bis_list_sources s2 ON s2.id = o.source_id
+                        WHERE o.spec_id = bps.spec_id
+                          AND s2.origin = $1
+                          AND o.secondary_section_key = bps.section_key
                    )
                )
              ORDER BY bps.spec_id, bps.section_key, bps.source_id
@@ -2319,6 +2337,7 @@ async def page_sections(
     for r in section_rows:
         mappings = _parse_json_col(r["override_mappings"])
         spec_sections = _parse_json_col(r["spec_sections"])
+        secondary_of = _parse_json_col(r["secondary_of_mappings"])
         data.append({
             "row_type": "section",
             "id": r["id"],
@@ -2338,6 +2357,7 @@ async def page_sections(
             "scraped_at": r["scraped_at"].isoformat() if r["scraped_at"] else None,
             "override_mappings": mappings,
             "spec_sections": spec_sections,
+            "secondary_of_mappings": secondary_of,
         })
 
     for g in gap_rows:

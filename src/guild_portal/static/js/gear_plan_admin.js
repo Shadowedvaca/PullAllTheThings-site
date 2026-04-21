@@ -2269,9 +2269,27 @@ async function loadSectionInventory() {
         const isIV = _siCurrentSource === 'icy_veins';
 
         const sectionHtml = sectionRows.map(s => {
-            const ctLabel = s.content_type
-                ? `<span style="color:var(--color-text-muted);">${CT_LABELS[s.content_type] || s.content_type}</span>`
-                : '<span style="color:#f87171;">unknown</span>';
+            const mappings = s.override_mappings || [];
+            const secondaryOf = s.secondary_of_mappings || [];
+
+            // Content type: show auto-classified value; if overridden to a different
+            // type, show "auto → override"; if used as secondary, show that too.
+            const autoCtLabel = s.content_type
+                ? (CT_LABELS[s.content_type] || s.content_type)
+                : 'unknown';
+            const overrideCt = mappings.length ? (CT_LABELS[mappings[0].content_type] || mappings[0].content_type) : null;
+            const secondaryCt = secondaryOf.length ? (CT_LABELS[secondaryOf[0].content_type] || secondaryOf[0].content_type) : null;
+
+            let ctLabel;
+            if (overrideCt && overrideCt !== autoCtLabel) {
+                ctLabel = `<span style="color:var(--color-text-muted);">${autoCtLabel}</span> <span style="color:#4ade80;font-size:0.8rem;">→ ${overrideCt}</span>`;
+            } else if (secondaryCt) {
+                ctLabel = `<span style="color:var(--color-text-muted);">${autoCtLabel}</span> <span style="color:var(--color-accent);font-size:0.78rem;">↗ merged into ${secondaryCt}</span>`;
+            } else if (s.content_type) {
+                ctLabel = `<span style="color:var(--color-text-muted);">${autoCtLabel}</span>`;
+            } else {
+                ctLabel = '<span style="color:#f87171;">unknown</span>';
+            }
 
             const trinketBadge = (isIV && s.is_trinket_section)
                 ? ' <span style="font-size:0.68rem;background:#7c3aed;color:#fff;border-radius:3px;padding:1px 4px;">trinket</span>'
@@ -2279,9 +2297,8 @@ async function loadSectionInventory() {
 
             const outlierBadge = s.is_outlier
                 ? `<span style="color:#fbbf24;font-size:0.75rem;">${s.outlier_reason || 'outlier'}</span>`
-                : '—';
+                : (secondaryOf.length ? `<span style="color:var(--color-accent);font-size:0.75rem;">merge secondary</span>` : '—');
 
-            const mappings = s.override_mappings || [];
             const overrideLabel = mappings.length
                 ? mappings.map(m => `<span style="color:#4ade80;font-size:0.78rem;">${CT_LABELS[m.content_type] || m.content_type}</span>`).join(', ')
                 : '';
