@@ -2231,21 +2231,21 @@ class IVSection:
 def _iv_classify_section(h3_id: str) -> tuple[Optional[str], bool]:
     """Map an IV h3 id to (content_type, is_trinket_section).
 
-    h3 id prefix → content_type:
-      overall-bis-list-for-      → overall
-      raid-bis-list-for-         → raid
-      mythic-gear-bis-list-for-  → mythic_plus
-      anything else              → None (flagged as outlier)
+    Uses keyword matching because IV uses many h3 id variants across specs:
+      contains "mythic"            → mythic_plus  (checked first)
+      contains "raid"              → raid
+      contains "bis" or "overall"  → overall
+      none of the above            → None (flagged as outlier)
 
     is_trinket_section is set by the caller based on DOM structure, not the id.
     """
     h = h3_id.lower()
-    if h.startswith("overall-bis-list-for-"):
-        return "overall", False
-    if h.startswith("raid-bis-list-for-"):
-        return "raid", False
-    if h.startswith("mythic-gear-bis-list-for-"):
+    if "mythic" in h:
         return "mythic_plus", False
+    if "raid" in h:
+        return "raid", False
+    if "bis" in h or "overall" in h:
+        return "overall", False
     return None, False
 
 
