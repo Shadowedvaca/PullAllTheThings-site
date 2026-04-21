@@ -491,7 +491,7 @@ async def sync_gaps(
       - its most recent fetched_at is older than stale_days
 
     Targets are processed oldest-first (missing first, then by fetched_at ASC)
-    so the biggest gaps are filled first.  Skips Icy Veins targets.
+    so the biggest gaps are filled first.
 
     Returns {targets_run, items_found, errors}.
     """
@@ -514,7 +514,6 @@ async def sync_gaps(
                    GROUP BY target_id
               ) latest ON latest.target_id = t.id
              WHERE s.is_active = TRUE
-               AND s.origin != 'icy_veins'
                AND t.url IS NOT NULL
                AND (latest.latest_at IS NULL OR latest.latest_at < $1)
              ORDER BY latest.latest_at ASC NULLS FIRST
