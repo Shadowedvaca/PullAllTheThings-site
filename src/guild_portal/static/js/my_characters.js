@@ -2624,6 +2624,8 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
+    const noteHtml = item.bis_note
+      ? `<div class="mcn-bis-note">${_gpEsc(item.bis_note)}</div>` : '';
     const srcSub   = _gpRenderSourceSub(item.sources || []);
     const popVal   = _gpPopularityVal(item.popularity || null);
     const popCell  = popVal != null
@@ -2652,7 +2654,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
         onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
     return `<tr class="mcn-ut__item-row"${startOpen ? '' : ' hidden'} data-group="${_gpEsc(groupKey)}">
       <td class="mcn-ut__item-cell">
-        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
+        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${noteHtml}${srcSub}
       </td>
       ${guideCells}
       ${popCell}
@@ -2710,7 +2712,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
         icon_url: r.icon_url || '', sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, ratings: {},
-        popularity: r.popularity || null,
+        popularity: r.popularity || null, bis_note: r.bis_note || null,
       });
     }
     // Sort: guide count (checkmarks visible in current mode) desc → popularity desc → name asc

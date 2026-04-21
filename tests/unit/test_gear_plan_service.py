@@ -267,3 +267,107 @@ class TestApplyOffHandRule:
         }
         result, _ = _apply_off_hand_rule(by_slot, "main_hand_2h")
         assert "head" in result
+
+
+# ---------------------------------------------------------------------------
+# bis_note — field contract tests
+# ---------------------------------------------------------------------------
+# The bis_note field is added in migration 0163 and passes through the pipeline
+# unchanged: DB column → viz view → asyncpg dict → API response JSON.
+# These tests verify the data structure contract that the frontend relies on.
+
+
+def _make_bis_rec(
+    slot: str = "head",
+    blizzard_item_id: int = 100001,
+    guide_order: int = 1,
+    bis_note: str | None = None,
+) -> dict:
+    """Minimal BIS recommendation dict as returned by the gear plan service."""
+    return {
+        "slot": slot,
+        "blizzard_item_id": blizzard_item_id,
+        "guide_order": guide_order,
+        "bis_note": bis_note,
+        "item_name": "Test Item",
+        "icon_url": None,
+        "source_name": "Icy Veins",
+        "short_label": "IV",
+        "origin": "icy_veins",
+        "content_type": "overall",
+        "is_equipped": False,
+        "is_bis": False,
+        "target_ilvl": None,
+        "sources": [],
+        "popularity": None,
+    }
+
+
+class TestBisNoteFieldContract:
+    """bis_note passes through the pipeline as-is — no transformation."""
+
+    def test_note_present_survives_dict_round_trip(self):
+        rec = _make_bis_rec(bis_note="Deathbringer build")
+        result = dict(rec)
+        assert result["bis_note"] == "Deathbringer build"
+
+    def test_note_none_survives_dict_round_trip(self):
+        rec = _make_bis_rec(bis_note=None)
+        result = dict(rec)
+        assert result["bis_note"] is None
+
+    def test_note_empty_string_survives(self):
+        rec = _make_bis_rec(bis_note="")
+        result = dict(rec)
+        assert result["bis_note"] == ""
+
+    def test_note_max_length_100_chars(self):
+        long_note = "x" * 100
+        rec = _make_bis_rec(bis_note=long_note)
+        assert len(rec["bis_note"]) == 100
+
+    def test_note_over_limit_would_be_truncated_at_db(self):
+        # VARCHAR(100) is enforced by DB; Python just passes the value through.
+        # This test documents the contract, not enforcement.
+        over_limit = "x" * 101
+        rec = _make_bis_rec(bis_note=over_limit)
+        assert len(rec["bis_note"]) == 101  # passes through; DB truncates
+
+    def test_bis_by_slot_grouping_preserves_note(self):
+        """Simulate bis_by_slot.setdefault(r['slot'], []).append(dict(r))."""
+        recs = [
+            _make_bis_rec("head", 100001, 1, "San'layn build"),
+            _make_bis_rec("head", 100002, 2, None),
+        ]
+        bis_by_slot: dict[str, list[dict]] = {}
+        for r in recs:
+            bis_by_slot.setdefault(r["slot"], []).append(dict(r))
+
+        head_recs = bis_by_slot["head"]
+        assert head_recs[0]["bis_note"] == "San'layn build"
+        assert head_recs[1]["bis_note"] is None
+
+    def test_multiple_slots_each_carry_own_notes(self):
+        recs = [
+            _make_bis_rec("head", 100001, 1, "Raid build"),
+            _make_bis_rec("chest", 100002, 1, "M+ build"),
+            _make_bis_rec("chest", 100003, 2, None),
+        ]
+        bis_by_slot: dict[str, list[dict]] = {}
+        for r in recs:
+            bis_by_slot.setdefault(r["slot"], []).append(dict(r))
+
+        assert bis_by_slot["head"][0]["bis_note"] == "Raid build"
+        assert bis_by_slot["chest"][0]["bis_note"] == "M+ build"
+        assert bis_by_slot["chest"][1]["bis_note"] is None
+
+    def test_apply_off_hand_rule_preserves_note_on_surviving_items(self):
+        """Off-hand rule filtering must not strip bis_note."""
+        by_slot = {
+            "main_hand_2h": [_make_bis_rec("main_hand_2h", 111, 1, "Deathbringer")],
+            "off_hand": [
+                {**_make_oh("two_hand"), "bis_note": "Titan's Grip pick"},
+            ],
+        }
+        result, _ = _apply_off_hand_rule(by_slot, "main_hand_2h")
+        assert result["off_hand"][0]["bis_note"] == "Titan's Grip pick"

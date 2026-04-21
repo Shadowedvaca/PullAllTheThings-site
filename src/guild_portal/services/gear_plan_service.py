@@ -1330,7 +1330,7 @@ async def get_plan_detail(
                 SELECT vbr.slot, vbr.source_id, vbr.hero_talent_id, vbr.guide_order,
                        vbr.blizzard_item_id, vbr.name AS item_name, vbr.icon_url,
                        vbr.source_name, vbr.source_short_label AS short_label,
-                       vbr.source_origin AS origin, vbr.content_type
+                       vbr.source_origin AS origin, vbr.content_type, vbr.bis_note
                   FROM viz.bis_recommendations vbr
                   JOIN ref.bis_list_sources bls ON bls.id = vbr.source_id
                  WHERE vbr.spec_id = $1
