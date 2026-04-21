@@ -2350,14 +2350,111 @@ def _iv_is_outlier(section: "IVSection") -> tuple[bool, Optional[str]]:
     return False, None
 
 
+def _iv_classify_tab_label(label: str) -> Optional[str]:
+    """Map an image_block tab button label → content_type.
+
+    Uses keyword matching on the human-readable label text, which is more
+    reliable than h3 id strings (which vary wildly across spec pages).
+    """
+    l = label.lower()
+    if "mythic" in l:
+        return "mythic_plus"
+    if "raid" in l:
+        return "raid"
+    if "overall" in l or "bis" in l or "best" in l:
+        return "overall"
+    return None
+
+
+def _iv_parse_from_image_blocks(
+    soup,
+    slot_map: dict[str, str | None],
+) -> list["IVSection"]:
+    """Parse IV BIS sections from image_block tab structure.
+
+    IV pages wrap each BIS table in a div.image_block with tab buttons
+    (div.image_block_header_buttons) and tab content panes
+    (div.image_block_content[id="area_N"]).  Button labels provide reliable
+    content_type classification.  The h3 id inside each pane is used as the
+    section identifier when present for backward compatibility; otherwise the
+    area_N id is used.
+    """
+    sections: list[IVSection] = []
+
+    for image_block in soup.find_all("div", class_="image_block"):
+        buttons_div = image_block.find("div", class_="image_block_header_buttons")
+        if not buttons_div:
+            continue
+
+        # Build area_id → (content_type, label) from button spans
+        area_map: dict[str, tuple[str, str]] = {}
+        for span in buttons_div.find_all(
+            "span", id=lambda x: x and x.endswith("_button")
+        ):
+            area_id = span["id"][:-7]  # strip "_button"
+            label = span.get_text(strip=True)
+            ct = _iv_classify_tab_label(label)
+            if ct:
+                area_map[area_id] = (ct, label)
+
+        if not area_map:
+            continue
+
+        for content_div in image_block.find_all("div", class_="image_block_content"):
+            area_id = content_div.get("id", "")
+            if area_id not in area_map:
+                continue
+            ct, label = area_map[area_id]
+
+            # Prefer h3 id as section identifier (backward compat with existing rows)
+            h3 = content_div.find("h3")
+            h3_id = h3.get("id", "") if h3 else area_id
+            section_title = h3.get_text(strip=True) if h3 else label
+
+            table = content_div.find("table")
+            details = content_div.find("details", class_="trinket-dropdown")
+
+            if details:
+                is_trinket = True
+                trinket_rows = _iv_extract_trinket_rows(details)
+                row_count = len(trinket_rows)
+                slots: list[SimcSlot] = []
+            elif table:
+                is_trinket = False
+                slots = _iv_extract_regular_rows(table, slot_map)
+                trinket_rows = []
+                row_count = len(slots)
+            else:
+                continue
+
+            section = IVSection(
+                h3_id=h3_id,
+                section_title=section_title,
+                content_type=ct,
+                is_trinket_section=is_trinket,
+                row_count=row_count,
+                slots=slots,
+                trinket_rows=trinket_rows,
+                is_outlier=False,
+                outlier_reason=None,
+            )
+            is_out, reason = _iv_is_outlier(section)
+            section.is_outlier = is_out
+            section.outlier_reason = reason
+            sections.append(section)
+
+    return sections
+
+
 def _iv_parse_sections(
     html: str,
     slot_map: dict[str, str | None],
 ) -> list["IVSection"]:
     """Parse IV BIS page HTML into a list of IVSection objects.
 
-    Finds all heading_container divs (which wrap h3 tags), then looks for
-    the next table or trinket-dropdown details sibling.  Pure function.
+    Primary path: image_block tab structure (universal across IV spec pages).
+    Fallback path: heading_container divs wrapping h3 tags (used for tests
+    and any edge-case pages that lack the image_block wrapper).
     """
     try:
         from bs4 import BeautifulSoup
@@ -2369,8 +2466,14 @@ def _iv_parse_sections(
         return []
 
     soup = BeautifulSoup(html, "html.parser")
-    sections: list[IVSection] = []
 
+    # PRIMARY: image_block tab structure
+    sections = _iv_parse_from_image_blocks(soup, slot_map)
+    if sections:
+        return sections
+
+    # FALLBACK: heading_container / sibling-table approach
+    sections = []
     for container in soup.find_all("div", class_="heading_container"):
         h3 = container.find("h3")
         if not h3:
@@ -2380,7 +2483,6 @@ def _iv_parse_sections(
         section_title = h3.get_text(strip=True)
         content_type, _ = _iv_classify_section(h3_id)
 
-        # Walk siblings to find the next table or trinket-dropdown details
         sibling = container.find_next_sibling()
         while sibling and sibling.name not in ("table", "details"):
             sibling = sibling.find_next_sibling()

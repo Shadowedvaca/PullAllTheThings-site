@@ -1,7 +1,7 @@
 """Unit tests for Icy Veins BIS extraction helpers.
 
-Covers _iv_classify_section, _iv_parse_sections, _iv_extract_regular_rows,
-_iv_extract_trinket_rows, and _iv_is_outlier.
+Covers _iv_classify_section, _iv_classify_tab_label, _iv_parse_sections,
+_iv_extract_regular_rows, _iv_extract_trinket_rows, and _iv_is_outlier.
 All item IDs are synthetic.
 """
 
@@ -10,6 +10,7 @@ import pytest
 from sv_common.guild_sync.bis_sync import (
     IVSection,
     _iv_classify_section,
+    _iv_classify_tab_label,
     _iv_extract_regular_rows,
     _iv_extract_trinket_rows,
     _iv_is_outlier,
@@ -88,6 +89,78 @@ def _make_trinket_details(*tiers: tuple[str, list[int]]) -> str:
             f'<td><ul>{items_html}</ul></td></tr>'
         )
     return f'<details class="trinket-dropdown" open><table>{trs}</table></details>'
+
+
+def _make_iv_image_block(*areas: tuple[str, str, str]) -> str:
+    """Build a minimal IV image_block tab page.
+
+    areas: list of (button_label, h3_id_or_empty, table_html)
+    If h3_id is empty, the area has no h3 (simulates Blood DK / Vengeance DH).
+    """
+    buttons = "".join(
+        f'<span id="area_{i+1}_button">{label}</span>'
+        for i, (label, _, _) in enumerate(areas)
+    )
+    contents = "".join(
+        (
+            f'<div class="image_block_content" id="area_{i+1}">'
+            f'<div class="heading_container heading_number_3">'
+            f'<h3 id="{h3_id}">{label}</h3></div>'
+            f"{table_html}</div>"
+            if h3_id else
+            f'<div class="image_block_content" id="area_{i+1}">'
+            f"{table_html}</div>"
+        )
+        for i, (label, h3_id, table_html) in enumerate(areas)
+    )
+    return (
+        f"<html><body>"
+        f'<div class="image_block">'
+        f'<div class="image_block_header">'
+        f'<div class="image_block_header_buttons">{buttons}</div>'
+        f"</div>"
+        f"{contents}"
+        f"</div>"
+        f"</body></html>"
+    )
+
+
+# ---------------------------------------------------------------------------
+# _iv_classify_tab_label
+# ---------------------------------------------------------------------------
+
+
+class TestIvClassifyTabLabel:
+    def test_overall_label(self):
+        assert _iv_classify_tab_label("Overall BiS List") == "overall"
+
+    def test_bis_label(self):
+        assert _iv_classify_tab_label("BiS List for Season 1") == "overall"
+
+    def test_best_in_slot_label(self):
+        assert _iv_classify_tab_label("Overall Best-in-Slot") == "overall"
+
+    def test_raid_label(self):
+        assert _iv_classify_tab_label("Raid Gear BiS List") == "raid"
+
+    def test_raid_specific_label(self):
+        # "BiS Raid (San'layn)" — raid takes precedence over bis
+        assert _iv_classify_tab_label("BiS Raid (San'layn)") == "raid"
+
+    def test_mythic_label(self):
+        assert _iv_classify_tab_label("Mythic+ Gear BiS List") == "mythic_plus"
+
+    def test_mythic_plus_label(self):
+        assert _iv_classify_tab_label("Mythic + Best-in-Slot") == "mythic_plus"
+
+    def test_unrecognised_label_returns_none(self):
+        assert _iv_classify_tab_label("Dreamrift, Voidspire, and March Gear") is None
+
+    def test_empty_label_returns_none(self):
+        assert _iv_classify_tab_label("") is None
+
+    def test_case_insensitive(self):
+        assert _iv_classify_tab_label("RAID GEAR BIS LIST") == "raid"
 
 
 # ---------------------------------------------------------------------------
@@ -389,3 +462,71 @@ class TestIvParseSections:
         sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
         assert sections[0].is_outlier is True
         assert sections[0].content_type is None
+
+    # --- image_block tab path ---
+
+    def test_image_block_parses_overall(self):
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Overall BiS List", "overall-bis-list-for-specspec", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        assert len(sections) == 1
+        assert sections[0].content_type == "overall"
+        assert not sections[0].is_outlier
+
+    def test_image_block_parses_three_tabs(self):
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Overall BiS List", "overall-bis-list-for-specspec", table),
+            ("Raid Gear BiS List", "raid-bis-list-for-specspec", table),
+            ("Mythic+ Gear BiS List", "mythic-gear-bis-list-for-specspec", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        assert len(sections) == 3
+        types = {s.content_type for s in sections}
+        assert types == {"overall", "raid", "mythic_plus"}
+
+    def test_image_block_no_h3_uses_area_id(self):
+        # Simulates Vengeance DH / Blood DK style: no h3 inside the content div
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Overall BiS List", "", table),
+            ("Mythic+", "", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        assert len(sections) == 2
+        by_type = {s.content_type: s for s in sections}
+        assert by_type["overall"].h3_id == "area_1"
+        assert by_type["mythic_plus"].h3_id == "area_2"
+
+    def test_image_block_skips_unclassifiable_tabs(self):
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Overall BiS List", "", table),
+            ("Dreamrift, Voidspire, and March Gear", "", table),  # no keyword
+            ("Mythic+", "", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        types = {s.content_type for s in sections}
+        assert types == {"overall", "mythic_plus"}
+        assert len(sections) == 2
+
+    def test_image_block_takes_priority_over_heading_container(self):
+        # When image_block tabs are present, they should be used even if
+        # the page also has bare heading_container divs outside the block.
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Overall BiS List", "overall-specspec", table),
+        )
+        # Also append a bare heading_container that would parse via fallback
+        page = page.replace(
+            "</body>",
+            '<div class="heading_container"><h3 id="some-random">X</h3></div>'
+            + table
+            + "</body>",
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        # Should use image_block result only (1 section, not 2)
+        assert len(sections) == 1
+        assert sections[0].content_type == "overall"
