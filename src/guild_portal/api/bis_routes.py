@@ -2248,7 +2248,17 @@ async def page_sections(
               JOIN ref.specializations sp ON sp.id = bps.spec_id
               JOIN ref.classes c ON c.id = sp.class_id
              WHERE bls.origin = $1
-               AND ($2 = FALSE OR bps.is_outlier = TRUE)
+               AND (
+                   $2 = FALSE
+                   OR bps.is_outlier = TRUE
+                   OR EXISTS (
+                       SELECT 1 FROM config.bis_section_overrides o
+                         JOIN ref.bis_list_sources s2 ON s2.id = o.source_id
+                        WHERE o.spec_id = bps.spec_id
+                          AND s2.origin = $1
+                          AND o.section_key = bps.section_key
+                   )
+               )
              ORDER BY bps.spec_id, bps.section_key, bps.source_id
             """,
             source, outliers_only,

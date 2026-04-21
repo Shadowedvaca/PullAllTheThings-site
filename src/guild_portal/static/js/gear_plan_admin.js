@@ -2375,7 +2375,7 @@ async function loadSectionInventory() {
                         onclick="saveSectionOverride(${s.spec_id}, ${s.source_id}, '${s.section_key.replace(/'/g, "\\'")}', '${selectId}')">
                         Save
                     </button>
-                    ${hasOverride ? `<button class="btn-sm btn-secondary" style="font-size:0.75rem;margin-left:4px;" title="Configure merge"
+                    ${hasOverride ? `<button class="btn-sm btn-secondary" style="font-size:0.75rem;margin-left:4px;${hasMerge ? 'background:rgba(212,168,75,0.2);border-color:var(--color-accent);color:var(--color-accent);' : ''}" title="Configure merge"
                         onclick="toggleMergeRow('${rowId}')">
                         ${hasMerge ? 'Merge ✓' : 'Merge'}
                     </button>` : ''}
