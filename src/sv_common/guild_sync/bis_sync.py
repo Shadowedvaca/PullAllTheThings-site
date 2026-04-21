@@ -1479,6 +1479,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     async with pool.acquire() as conn:
         slot_map = await _load_slot_labels(conn)
         wh_invtype_map = await _load_wowhead_invtypes(conn)
+        raid_instance_names = await _load_raid_instance_names(conn)
         rows = await conn.fetch("""
             WITH latest AS (
                 SELECT
@@ -1547,7 +1548,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         elif source == "method":
             slots = await _resolve_method_bis_from_db(pool, spec_id, source_id, content_type)
         elif source == "icy_veins":
-            sections = _iv_parse_sections(html, slot_map)
+            sections = _iv_parse_sections(html, slot_map, raid_instance_names)
             slots = await _resolve_iv_section(pool, sections, spec_id, source_id, content_type)
         else:
             continue
@@ -1593,10 +1594,10 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
 
         async with pool.acquire() as conn:
             primary_items = await _fetch_section_items(
-                conn, spec_id, source_id, origin, mo["section_key"], slot_map,
+                conn, spec_id, source_id, origin, mo["section_key"], slot_map, raid_instance_names,
             )
             secondary_items = await _fetch_section_items(
-                conn, spec_id, source_id, origin, mo["secondary_section_key"], slot_map,
+                conn, spec_id, source_id, origin, mo["secondary_section_key"], slot_map, raid_instance_names,
             )
 
         ctx = BisInsertionContext(
@@ -1870,6 +1871,19 @@ async def _load_wowhead_invtypes(conn: asyncpg.Connection) -> dict[int, str]:
     """Load Blizzard inventory_type code → slot_key from config.wowhead_invtypes."""
     rows = await conn.fetch("SELECT invtype_id, slot_key FROM config.wowhead_invtypes")
     return {r["invtype_id"]: r["slot_key"] for r in rows}
+
+
+async def _load_raid_instance_names(conn: asyncpg.Connection) -> frozenset[str]:
+    """Load current-season raid instance names from landing.blizzard_journal_instances.
+
+    Used by the IV classifier to detect tab labels that name raid wings instead
+    of using the generic keyword "raid".  Returns empty frozenset if the table
+    has no raid rows (e.g. before the first Blizzard API sync).
+    """
+    rows = await conn.fetch(
+        "SELECT instance_name FROM landing.blizzard_journal_instances WHERE instance_type = 'raid'"
+    )
+    return frozenset(r["instance_name"] for r in rows)
 
 
 def _resolve_text_slot(
@@ -2507,17 +2521,31 @@ def _iv_is_outlier(section: "IVSection") -> tuple[bool, Optional[str]]:
     return False, None
 
 
-def _iv_classify_tab_label(label: str) -> Optional[str]:
+def _iv_classify_tab_label(
+    label: str,
+    raid_instance_names: frozenset[str] = frozenset(),
+) -> Optional[str]:
     """Map an image_block tab button label → content_type.
 
     Uses keyword matching on the human-readable label text, which is more
     reliable than h3 id strings (which vary wildly across spec pages).
+
+    raid_instance_names — frozenset of current-season raid instance names from
+    landing.blizzard_journal_instances.  When provided, labels that contain a
+    known raid instance name are classified as 'raid' even if the word "raid"
+    doesn't appear (e.g. "Dreamrift, Voidspire, and March on Quel'Danas BiS List").
+    The instance name check runs after the "mythic"/"raid" fast paths but before
+    the generic "bis"/"overall" fallback so that raid-named sections aren't
+    misclassified as overall.
     """
     l = label.lower()
     if "mythic" in l:
         return "mythic_plus"
     if "raid" in l:
         return "raid"
+    for name in raid_instance_names:
+        if name.lower() in l:
+            return "raid"
     if "overall" in l or "bis" in l or "best" in l:
         return "overall"
     return None
@@ -2526,6 +2554,7 @@ def _iv_classify_tab_label(label: str) -> Optional[str]:
 def _iv_parse_from_image_blocks(
     soup,
     slot_map: dict[str, str | None],
+    raid_instance_names: frozenset[str] = frozenset(),
 ) -> list["IVSection"]:
     """Parse IV BIS sections from image_block tab structure.
 
@@ -2535,6 +2564,9 @@ def _iv_parse_from_image_blocks(
     content_type classification.  The h3 id inside each pane is used as the
     section identifier when present for backward compatibility; otherwise the
     area_N id is used.
+
+    raid_instance_names — passed through to _iv_classify_tab_label for
+    season-specific raid wing name detection.
     """
     sections: list[IVSection] = []
 
@@ -2550,7 +2582,7 @@ def _iv_parse_from_image_blocks(
         ):
             area_id = span["id"][:-7]  # strip "_button"
             label = span.get_text(strip=True)
-            ct = _iv_classify_tab_label(label)
+            ct = _iv_classify_tab_label(label, raid_instance_names)
             if ct:
                 area_map[area_id] = (ct, label)
 
@@ -2606,12 +2638,16 @@ def _iv_parse_from_image_blocks(
 def _iv_parse_sections(
     html: str,
     slot_map: dict[str, str | None],
+    raid_instance_names: frozenset[str] = frozenset(),
 ) -> list["IVSection"]:
     """Parse IV BIS page HTML into a list of IVSection objects.
 
     Primary path: image_block tab structure (universal across IV spec pages).
     Fallback path: heading_container divs wrapping h3 tags (used for tests
     and any edge-case pages that lack the image_block wrapper).
+
+    raid_instance_names — passed through to the tab classifier for season-specific
+    raid wing name detection (Phase 5).
     """
     try:
         from bs4 import BeautifulSoup
@@ -2625,7 +2661,7 @@ def _iv_parse_sections(
     soup = BeautifulSoup(html, "html.parser")
 
     # PRIMARY: image_block tab structure
-    sections = _iv_parse_from_image_blocks(soup, slot_map)
+    sections = _iv_parse_from_image_blocks(soup, slot_map, raid_instance_names)
     if sections:
         return sections
 
@@ -2685,6 +2721,7 @@ def _iv_parse_bis_from_raw(
     html: str,
     content_type: str,
     slot_map: dict[str, str | None],
+    raid_instance_names: frozenset[str] = frozenset(),
 ) -> list[SimcSlot]:
     """Parse IV BIS slots from stored raw HTML for a specific content_type.
 
@@ -2692,7 +2729,7 @@ def _iv_parse_bis_from_raw(
     Returns the first non-outlier, non-trinket section matching content_type,
     or an empty list if none found.
     """
-    sections = _iv_parse_sections(html, slot_map)
+    sections = _iv_parse_sections(html, slot_map, raid_instance_names)
     for section in sections:
         if (
             section.content_type == content_type
@@ -2801,6 +2838,7 @@ async def _fetch_section_items(
     origin: str,
     section_key: str,
     slot_map: dict,
+    raid_instance_names: frozenset[str] = frozenset(),
 ) -> list[SimcSlot]:
     """Return SimcSlot list for a named section, fetching raw HTML from landing.
 
@@ -2831,7 +2869,7 @@ async def _fetch_section_items(
                 spec_id, source_id,
             )
             return []
-        sections = _iv_parse_sections(raw_row["content"], slot_map)
+        sections = _iv_parse_sections(raw_row["content"], slot_map, raid_instance_names)
         for s in sections:
             if s.h3_id == section_key and not s.is_trinket_section:
                 return s.slots
@@ -3031,7 +3069,8 @@ async def _extract_icy_veins(
     if pool and spec_id and source_id:
         async with pool.acquire() as conn:
             slot_map = await _load_slot_labels(conn)
-            sections = _iv_parse_sections(html, slot_map)
+            raid_instance_names = await _load_raid_instance_names(conn)
+            sections = _iv_parse_sections(html, slot_map, raid_instance_names)
             await _upsert_iv_sections(conn, spec_id, source_id, url, sections)
         return await _resolve_iv_section(pool, sections, spec_id, source_id, content_type), html
 

@@ -156,6 +156,7 @@ class TestIvClassifyTabLabel:
         assert _iv_classify_tab_label("Mythic + Best-in-Slot") == "mythic_plus"
 
     def test_unrecognised_label_returns_none(self):
+        # Without instance names the label stays unclassified
         assert _iv_classify_tab_label("Dreamrift, Voidspire, and March Gear") is None
 
     def test_empty_label_returns_none(self):
@@ -163,6 +164,50 @@ class TestIvClassifyTabLabel:
 
     def test_case_insensitive(self):
         assert _iv_classify_tab_label("RAID GEAR BIS LIST") == "raid"
+
+    # --- Phase 5: raid instance name detection ---
+
+    def test_instance_name_classifies_as_raid(self):
+        names = frozenset({"Dreamrift", "Voidspire", "March on Quel'Danas"})
+        assert _iv_classify_tab_label("Dreamrift BiS List", names) == "raid"
+
+    def test_instance_name_takes_priority_over_bis_keyword(self):
+        # Label has "BiS" (would normally → overall) but also contains a raid
+        # instance name → should be classified as raid, not overall.
+        names = frozenset({"Liberation of Undermine"})
+        assert _iv_classify_tab_label("Liberation of Undermine BiS List", names) == "raid"
+
+    def test_instance_name_case_insensitive(self):
+        names = frozenset({"Dreamrift"})
+        assert _iv_classify_tab_label("DREAMRIFT GEAR BIS", names) == "raid"
+
+    def test_instance_name_partial_label(self):
+        # Instance name embedded in a longer label
+        names = frozenset({"Voidspire"})
+        assert _iv_classify_tab_label("Dreamrift, Voidspire, and March Gear", names) == "raid"
+
+    def test_multiple_instance_names_any_match(self):
+        names = frozenset({"Dreamrift", "Voidspire"})
+        assert _iv_classify_tab_label("Voidspire BiS", names) == "raid"
+
+    def test_empty_instance_names_falls_through(self):
+        # Empty set → no instance name check, label with "BiS" → overall
+        assert _iv_classify_tab_label("Liberation of Undermine BiS List", frozenset()) == "overall"
+
+    def test_mythic_still_takes_precedence(self):
+        # Even if "Mythic" appears AND there's an instance name match, mythic wins
+        names = frozenset({"Mythic Overland"})
+        assert _iv_classify_tab_label("Mythic Overland BiS", names) == "mythic_plus"
+
+    def test_raid_keyword_still_wins_before_instance_check(self):
+        # The "raid" keyword path fires before instance name check
+        names = frozenset({"Dreamrift"})
+        assert _iv_classify_tab_label("Raid: Dreamrift BiS", names) == "raid"
+
+    def test_non_raid_instance_name_no_false_positive(self):
+        # Instance names that don't appear in label → no match → None
+        names = frozenset({"Nerub-ar Palace", "Liberation of Undermine"})
+        assert _iv_classify_tab_label("Overall Best-in-Slot Gear", names) == "overall"
 
 
 # ---------------------------------------------------------------------------
@@ -513,6 +558,45 @@ class TestIvParseSections:
         types = {s.content_type for s in sections}
         assert types == {"overall", "mythic_plus"}
         assert len(sections) == 2
+
+    # --- Phase 5: raid instance name detection via _iv_parse_sections ---
+
+    def test_image_block_classifies_instance_name_tab_as_raid(self):
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        names = frozenset({"Dreamrift", "Voidspire"})
+        page = _make_iv_image_block(
+            ("Overall BiS List", "", table),
+            ("Dreamrift, Voidspire, and March Gear", "", table),
+            ("Mythic+", "", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP, names)
+        types = {s.content_type for s in sections}
+        assert "raid" in types
+        assert types == {"overall", "raid", "mythic_plus"}
+        assert len(sections) == 3
+
+    def test_image_block_instance_name_bis_label_classifies_as_raid(self):
+        # Simulates "Liberation of Undermine BiS List" — contains "BiS" but the
+        # instance name check fires first and classifies as raid.
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        names = frozenset({"Liberation of Undermine"})
+        page = _make_iv_image_block(
+            ("Overall BiS List", "", table),
+            ("Liberation of Undermine BiS List", "", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP, names)
+        types = {s.content_type for s in sections}
+        assert types == {"overall", "raid"}
+
+    def test_image_block_no_instance_names_bis_label_not_raid(self):
+        # Without instance names, "Liberation of Undermine BiS List" is classified
+        # as "overall" (via "bis" keyword) — not "raid".
+        table = _make_iv_table(*[("Head", i) for i in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Liberation of Undermine BiS List", "", table),
+        )
+        sections = _iv_parse_sections(page, _TEST_SLOT_MAP)
+        assert all(s.content_type != "raid" for s in sections)
 
     def test_image_block_parses_trinket_tab(self):
         details_html = _make_trinket_details(
