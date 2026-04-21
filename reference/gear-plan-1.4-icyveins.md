@@ -155,7 +155,7 @@ All slot label → slot key mappings live in `config.slot_labels` (see Phase Z.0
 | Z.2b | image_block tab parsing; `_iv_classify_tab_label` + `_iv_parse_from_image_blocks` | **No — COMPLETE** |
 | Z.2.5 | Unified `landing.bis_page_sections` + `config.bis_section_overrides`; override support for IV | **0162 — COMPLETE** |
 | Z.3 | Admin section inventory UI + API endpoint (reads `bis_page_sections`); removed IV Coming Soon placeholders from matrix/targets/xref | **No — COMPLETE** |
-| Z.4 | `rebuild_bis_from_landing()` + `rebuild_trinket_ratings_from_landing()` IV branches | No |
+| Z.4 | `rebuild_bis_from_landing()` + `rebuild_trinket_ratings_from_landing()` IV branches | **No — COMPLETE** |
 
 ---
 
