@@ -190,13 +190,8 @@ function renderMatrix() {
         const th = document.createElement('th');
         th.colSpan = srcs.length;
         const label = _ORIGIN_LABELS[origin] || origin;
-        th.textContent = origin === 'icy_veins' ? label + ' — Coming Soon' : label;
-        if (origin === 'icy_veins') {
-            th.title = 'Auto-extraction not yet implemented — see reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md';
-            th.style.cssText = 'text-align:center; border-left:1px solid #333; color:var(--color-text-muted);';
-        } else {
-            th.style.cssText = 'text-align:center; border-left:1px solid #333;';
-        }
+        th.textContent = label;
+        th.style.cssText = 'text-align:center; border-left:1px solid #333;';
         row1.appendChild(th);
     }
 
@@ -421,16 +416,6 @@ function _applyCollapsedState(body) {
 }
 
 function renderCell(specId, sourceId, htId) {
-    // Icy Veins extraction is stubbed — show Coming Soon placeholder regardless of target status
-    const source = _sources.find(s => s.id == sourceId);
-    if (source && source.origin === 'icy_veins') {
-        const wrapper = document.createElement('span');
-        wrapper.className = 'gp-cell gp-cell--empty';
-        wrapper.title = 'Icy Veins — auto-extraction coming in a future release';
-        wrapper.textContent = '—';
-        return wrapper;
-    }
-
     // _cells keyed by spec_id → source_id → ht_key (per-HT accuracy).
     // Fall back to "null" key for sources (Wowhead, IV) that use a shared
     // per-spec target (hero_talent_id=NULL) rather than per-HT targets.
@@ -531,13 +516,7 @@ function populateSourceSelector() {
         for (const origin of origins) {
             const opt = document.createElement('option');
             opt.value = origin;
-            if (origin === 'icy_veins') {
-                opt.textContent = (_ORIGIN_LABELS[origin] || origin) + ' — Coming Soon';
-                opt.disabled = true;
-                opt.style.color = 'var(--color-text-muted)';
-            } else {
-                opt.textContent = _ORIGIN_LABELS[origin] || origin;
-            }
+            opt.textContent = _ORIGIN_LABELS[origin] || origin;
             originSel.appendChild(opt);
         }
 
@@ -1007,8 +986,7 @@ function renderXref(bySlot) {
         return;
     }
 
-    // Filter to non-IV sources only (IV is always Coming Soon)
-    const activeSources = _sources.filter(s => s.origin !== 'icy_veins');
+    const activeSources = _sources;
 
     const table = document.createElement('table');
     table.className = 'gp-xref-table';
@@ -1263,14 +1241,8 @@ function _renderTargets() {
             const syncBtn = document.createElement('button');
             syncBtn.className = 'btn-sm btn-secondary';
             syncBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem;';
-            if (isIV) {
-                syncBtn.textContent = 'Coming Soon';
-                syncBtn.disabled = true;
-                syncBtn.title = 'Icy Veins extraction not yet implemented';
-            } else {
-                syncBtn.textContent = 'Sync';
-                syncBtn.onclick = () => resyncSingleTarget(t.id, tr, syncBtn, statusTd, itemsTd);
-            }
+            syncBtn.textContent = 'Sync';
+            syncBtn.onclick = () => resyncSingleTarget(t.id, tr, syncBtn, statusTd, itemsTd);
             actTd.appendChild(syncBtn);
         }
         tr.appendChild(actTd);
