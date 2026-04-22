@@ -248,7 +248,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Archon BIS Extraction — Phase B COMPLETE** (no migration, dev only, branch `feature/archon-bis-extraction`). `_build_url()` archon branch (spec-first/class-second slug order, M+/raid paths); `_TECHNIQUE_ORDER` + `discover_targets()` archon elif; `_parse_archon_page()` pure function (gear-tables section, JSX regex extraction, paired-slot expansion for trinket+rings); `_extract_archon()` (httpx → __NEXT_DATA__ → parse); `_extract()` dispatcher `json_embed_archon` branch; `sync_target()` writes `source_updated_at` for archon; `rebuild_bis_from_landing()` archon branch in pass 1; `rebuild_item_popularity_from_landing()` extended to include archon; `run_archon_sync()` weekly job (Monday 6AM UTC) registered in scheduler. 30 new tests; 1688/1694 suite-wide.
+- **Archon BIS Extraction — Phase B COMPLETE** (migration 0174, dev only, branch `feature/archon-bis-extraction`). `_build_url()` archon branch (spec-first/class-second slug order, M+/raid paths); `_TECHNIQUE_ORDER` + `discover_targets()` archon elif; `_parse_archon_page()` pure function (gear-tables section, JSX regex extraction, paired-slot expansion for trinket+rings); `_extract_archon()` (httpx → __NEXT_DATA__ → parse); `_extract()` dispatcher `json_embed_archon` branch; `sync_target()` writes `source_updated_at` for archon; `rebuild_bis_from_landing()` archon branch in pass 1; `rebuild_item_popularity_from_landing()` extended to include archon; `run_archon_sync()` weekly job (Monday 6AM UTC) registered in scheduler. 30 new tests; 1688/1694 suite-wide.
 - **Archon BIS Extraction — Phase A COMPLETE** (migration 0173, dev only). `landing.bis_scrape_raw` +`source_updated_at TIMESTAMPTZ`; `config.slot_labels` seeded with `rings`/`Rings` → NULL; `ref.bis_list_sources` seeded with Archon M+ (dungeon, sort 40) + Archon Raid (sort 41), `origin='archon'`.
 - **prod-v0.22.0 — COMPLETE** (migrations 0159–0172, merged PR #35, tagged prod-v0.22.0). Full IV BIS extraction pipeline + slot label fixes + Wowhead off-hand fix + adaptive primary_stats. **After deploying to prod: run Enrich & Classify, then Sync BIS Lists.**
 - **BIS Note & Guide Folding — Phase 5 COMPLETE** (no migration). `_iv_classify_tab_label` extended with `raid_instance_names: frozenset[str]`. 12 new tests; 1648/1654 suite-wide.
@@ -282,7 +282,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0173 (dev only — feature/archon-bis-extraction)
+- **Last migration:** 0174 (dev only — feature/archon-bis-extraction)
 - **Last prod tag:** `prod-v0.22.0`
 - **Active branch:** `feature/archon-bis-extraction`
 - **Next planned:** Archon BIS Extraction Phase C (_parse_archon_page already in Phase B; Phase C = verify on live data, admin UI archon columns, popularity in gear plan)
