@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stat Priority Mock 2 — Source Tabs</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0b;
+    color: #e8e0d0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-family: Cinzel, 'Times New Roman', serif; color: #d4a84b; font-size: 1.1rem; margin-bottom: 6px; }
+  .concept-label {
+    background: #1a1a2e;
+    border: 1px solid #d4a84b55;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    font-size: 0.8rem;
+    color: #a89060;
+  }
+  .concept-label strong { color: #d4a84b; }
+
+  .page-context {
+    background: #141416;
+    border: 1px solid #2a2a2f;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .char-header {
+    background: #1c1c1f;
+    padding: 14px 20px;
+    border-bottom: 1px solid #2a2a2f;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .char-avatar {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, #3a2a10, #6a4820);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+  }
+  .char-name { font-size: 1.1rem; font-weight: 700; color: #fbbf24; }
+  .char-sub { font-size: 0.8rem; color: #8a8a8a; }
+  .char-mode-tabs { margin-left: auto; display: flex; gap: 4px; }
+  .mode-tab {
+    padding: 5px 14px; border-radius: 4px; font-size: 0.8rem;
+    cursor: pointer; border: 1px solid #3a3a40;
+    background: transparent; color: #8a8a8a;
+  }
+  .mode-tab.active { background: #d4a84b22; border-color: #d4a84b; color: #d4a84b; }
+
+  /* ── Sticky stat priority strip ── */
+  .stat-priority-strip {
+    background: #18181b;
+    border-bottom: 1px solid #2a2a2f;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  /* Source tabs */
+  .source-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #2a2a2f;
+    padding: 0 20px;
+    overflow-x: auto;
+  }
+  .source-tab {
+    padding: 8px 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #6a6a70;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: -1px;
+  }
+  .source-tab:hover { color: #c0b8a8; }
+  .source-tab.active { color: #d4a84b; border-bottom-color: #d4a84b; }
+  .source-tab .source-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* Hero talent sub-tabs (shown for Icy Veins) */
+  .hero-talent-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 8px 20px;
+    background: #141416;
+    border-bottom: 1px solid #2a2a2f;
+    align-items: center;
+  }
+  .ht-label { font-size: 0.72rem; color: #6a6a70; margin-right: 4px; }
+  .ht-tab {
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    border-radius: 12px;
+    border: 1px solid #3a3a40;
+    cursor: pointer;
+    color: #8a8a8a;
+    background: transparent;
+  }
+  .ht-tab.active { border-color: #d4a84b88; color: #d4a84b; background: #d4a84b11; }
+
+  /* Strip body */
+  .strip-body {
+    padding: 12px 20px 14px;
+  }
+  .strip-meta {
+    font-size: 0.7rem;
+    color: #6a6a70;
+    margin-bottom: 9px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .strip-meta a { color: #d4a84b88; font-size: 0.68rem; text-decoration: none; }
+  .strip-meta a:hover { color: #d4a84b; }
+
+  /* Stat blocks */
+  .stat-row { display: flex; align-items: center; }
+  .stat-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 92px;
+    padding: 8px 10px 6px;
+    background: #252529;
+    border: 1px solid #3a3a40;
+    border-radius: 6px;
+    gap: 3px;
+  }
+  .stat-block.primary-stat { border-color: #d4a84b88; background: #252218; }
+  .stat-icon { font-size: 1.1rem; line-height: 1; }
+  .stat-name { font-size: 0.78rem; font-weight: 600; color: #e8e0d0; white-space: nowrap; }
+  .stat-target { font-size: 0.67rem; color: #6a6a70; }
+
+  .operator { padding: 0 8px; font-size: 1.3rem; color: #d4a84b; font-weight: 700; line-height: 1; flex-shrink: 0; align-self: center; position: relative; top: -4px; }
+  .operator.much-greater { font-size: 1.0rem; letter-spacing: -1px; color: #e8c060; }
+  .operator.approx { color: #a89060; font-size: 1.1rem; }
+
+  /* Archon weight bars */
+  .stat-weight-bar {
+    width: 100%;
+    height: 3px;
+    background: #3a3a40;
+    border-radius: 2px;
+    margin-top: 2px;
+    overflow: hidden;
+  }
+  .stat-weight-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #d4a84b, #e8c060);
+    border-radius: 2px;
+  }
+  .stat-target.weight { color: #c0a840; }
+
+  /* Archon summary callout */
+  .archon-summary {
+    background: #1a1408;
+    border: 1px solid #d4a84b33;
+    border-radius: 5px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-size: 0.75rem;
+    color: #a89060;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+  .archon-summary strong { color: #d4a84b; }
+
+  /* Gear content */
+  .gear-content { padding: 20px; min-height: 160px; }
+  .gear-placeholder {
+    background: #1c1c1f; border: 1px dashed #2a2a2f; border-radius: 6px;
+    padding: 30px; text-align: center; color: #3a3a40; font-size: 0.85rem;
+  }
+
+  .annotation {
+    background: #0a1a2a; border-left: 3px solid #60a5fa;
+    padding: 8px 12px; margin: 16px 0; font-size: 0.78rem;
+    color: #90b8d8; border-radius: 0 4px 4px 0;
+  }
+
+  /* Two side-by-side examples */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .example-label {
+    font-size: 0.72rem;
+    color: #d4a84b;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Mock 2 — Source Tabs</h1>
+<div class="concept-label">
+  <strong>Concept:</strong> A tab row lets the user pick which guide's stat priority they want to see.
+  All sources are visible; you pick the one you trust. When Icy Veins is active, hero talent sub-tabs
+  appear since IV splits by hero talent path. The Archon tab adds weight bars and a summary target line.
+  The strip is <strong>sticky</strong>; the full tab row + stat strip scroll-pins together.
+</div>
+
+<!-- EXAMPLE A: Icy Veins selected (shows hero talent sub-tabs) -->
+<div class="two-col">
+  <div>
+    <div class="example-label">Example A — Icy Veins selected (hero talent sub-tabs appear)</div>
+    <div class="page-context">
+      <div class="char-header">
+        <div class="char-avatar">🌙</div>
+        <div><div class="char-name">Trogmoon</div><div class="char-sub">Balance Druid · Raid</div></div>
+        <div class="char-mode-tabs"><button class="mode-tab active">Raid</button><button class="mode-tab">M+</button></div>
+      </div>
+      <div class="stat-priority-strip">
+        <div class="source-tabs">
+          <div class="source-tab"><span class="source-dot"></span>Wowhead</div>
+          <div class="source-tab active"><span class="source-dot"></span>Icy Veins</div>
+          <div class="source-tab"><span class="source-dot"></span>u.gg</div>
+          <div class="source-tab"><span class="source-dot"></span>Method</div>
+          <div class="source-tab"><span class="source-dot"></span>Archon</div>
+        </div>
+        <!-- Hero talent sub-tabs appear because IV has HT splits -->
+        <div class="hero-talent-tabs">
+          <span class="ht-label">Hero Talent:</span>
+          <button class="ht-tab active">Elune's Chosen</button>
+          <button class="ht-tab">Keeper of the Grove</button>
+        </div>
+        <div class="strip-body">
+          <div class="strip-meta">
+            Icy Veins · Balance Druid · Raid · Elune's Chosen
+            <a href="#">↗ View full guide</a>
+          </div>
+          <div class="stat-row">
+            <div class="stat-block primary-stat">
+              <div class="stat-icon">✨</div>
+              <div class="stat-name">Intellect</div>
+              <div class="stat-target">primary</div>
+            </div>
+            <div class="operator much-greater">&gt;&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">⚡</div>
+              <div class="stat-name">Haste</div>
+              <div class="stat-target">~2,200 rtg</div>
+            </div>
+            <div class="operator">&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">🌙</div>
+              <div class="stat-name">Mastery</div>
+              <div class="stat-target">~2,000 rtg</div>
+            </div>
+            <div class="operator">&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">⚔️</div>
+              <div class="stat-name">Critical Strike</div>
+              <div class="stat-target">~1,600 rtg</div>
+            </div>
+            <div class="operator">&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">🛡️</div>
+              <div class="stat-name">Versatility</div>
+              <div class="stat-target">~1,200 rtg</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="gear-content">
+        <div class="gear-placeholder">Gear plan content scrolls here ↓</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXAMPLE B: Archon selected (shows weight bars + summary) -->
+  <div>
+    <div class="example-label">Example B — Archon selected (weight bars + target summary)</div>
+    <div class="page-context">
+      <div class="char-header">
+        <div class="char-avatar">🌙</div>
+        <div><div class="char-name">Trogmoon</div><div class="char-sub">Balance Druid · M+</div></div>
+        <div class="char-mode-tabs"><button class="mode-tab">Raid</button><button class="mode-tab active">M+</button></div>
+      </div>
+      <div class="stat-priority-strip">
+        <div class="source-tabs">
+          <div class="source-tab"><span class="source-dot"></span>Wowhead</div>
+          <div class="source-tab"><span class="source-dot"></span>Icy Veins</div>
+          <div class="source-tab"><span class="source-dot"></span>u.gg</div>
+          <div class="source-tab"><span class="source-dot"></span>Method</div>
+          <div class="source-tab active"><span class="source-dot"></span>Archon</div>
+        </div>
+        <!-- No hero talent sub-tabs for Archon (no HT split) -->
+        <div class="strip-body">
+          <div class="strip-meta">
+            Archon.gg · Balance Druid · M+ · This week
+            <a href="#">↗ View full guide</a>
+          </div>
+          <div class="stat-row">
+            <div class="stat-block primary-stat">
+              <div class="stat-icon">✨</div>
+              <div class="stat-name">Intellect</div>
+              <div class="stat-target weight">28%</div>
+              <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:100%"></div></div>
+            </div>
+            <div class="operator much-greater">&gt;&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">⚡</div>
+              <div class="stat-name">Haste</div>
+              <div class="stat-target weight">24%</div>
+              <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:86%"></div></div>
+            </div>
+            <div class="operator">&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">🌙</div>
+              <div class="stat-name">Mastery</div>
+              <div class="stat-target weight">21%</div>
+              <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:75%"></div></div>
+            </div>
+            <div class="operator">&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">⚔️</div>
+              <div class="stat-name">Critical Strike</div>
+              <div class="stat-target weight">16%</div>
+              <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:57%"></div></div>
+            </div>
+            <div class="operator">&gt;</div>
+            <div class="stat-block">
+              <div class="stat-icon">🛡️</div>
+              <div class="stat-name">Versatility</div>
+              <div class="stat-target weight">11%</div>
+              <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:39%"></div></div>
+            </div>
+          </div>
+          <!-- Archon target summary line -->
+          <div class="archon-summary">
+            <div>📊 Archon targets: <strong>Haste ~2,450</strong> · <strong>Mastery ~2,150</strong> · Crit ~1,650 · Vers ~1,100</div>
+          </div>
+        </div>
+      </div>
+      <div class="gear-content">
+        <div class="gear-placeholder">Gear plan content scrolls here ↓</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Pros:</strong> Each source is always visible and selectable. Easy to compare by tab-switching.
+  Archon's quantitative data is surfaced naturally on its own tab. Hero talent sub-tabs only appear when relevant.
+  Player controls exactly which guide opinion they're seeing.<br>
+  <strong>Cons:</strong> Requires the user to know which source to trust. No "summary" view —
+  they must tab through to compare. Sources with no data for a given content type need graceful empty states.
+  Two rows of tabs (source + hero talent) adds height to the sticky area.
+</div>
+
+</body>
+</html>

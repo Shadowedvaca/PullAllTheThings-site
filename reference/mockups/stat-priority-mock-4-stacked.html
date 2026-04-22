@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stat Priority Mock 4 — Stacked Per-Source</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0b;
+    color: #e8e0d0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-family: Cinzel, 'Times New Roman', serif; color: #d4a84b; font-size: 1.1rem; margin-bottom: 6px; }
+  .concept-label {
+    background: #1a1a2e;
+    border: 1px solid #d4a84b55;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    font-size: 0.8rem;
+    color: #a89060;
+  }
+  .concept-label strong { color: #d4a84b; }
+
+  .page-context {
+    background: #141416;
+    border: 1px solid #2a2a2f;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .char-header {
+    background: #1c1c1f;
+    padding: 14px 20px;
+    border-bottom: 1px solid #2a2a2f;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .char-avatar {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, #3a2a10, #6a4820);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+  }
+  .char-name { font-size: 1.1rem; font-weight: 700; color: #fbbf24; }
+  .char-sub { font-size: 0.8rem; color: #8a8a8a; }
+  .char-mode-tabs { margin-left: auto; display: flex; gap: 4px; }
+  .mode-tab {
+    padding: 5px 14px; border-radius: 4px; font-size: 0.8rem;
+    cursor: pointer; border: 1px solid #3a3a40;
+    background: transparent; color: #8a8a8a;
+  }
+  .mode-tab.active { background: #d4a84b22; border-color: #d4a84b; color: #d4a84b; }
+
+  /* ── Sticky stat priority strip ── */
+  .stat-priority-strip {
+    background: #18181b;
+    border-bottom: 1px solid #2a2a2f;
+    padding: 12px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .strip-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .strip-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6a6a70;
+  }
+  .strip-select {
+    background: #252529;
+    border: 1px solid #3a3a40;
+    color: #c0b8a8;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .controls-label { font-size: 0.75rem; color: #6a6a70; }
+
+  /* Source row layout */
+  .source-strip-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: #141416;
+    position: relative;
+  }
+  .source-strip-row:last-child { margin-bottom: 0; }
+  .source-strip-row:hover { background: #1a1a1f; }
+
+  .source-label-col {
+    min-width: 130px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    padding-right: 10px;
+  }
+  .source-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #c0b8a8;
+  }
+  .source-meta {
+    font-size: 0.65rem;
+    color: #5a5a60;
+  }
+  .source-link {
+    font-size: 0.65rem;
+    color: #d4a84b66;
+    text-decoration: none;
+    margin-top: 1px;
+  }
+  .source-link:hover { color: #d4a84b; }
+
+  /* Mini hero-talent toggle for Icy Veins row */
+  .ht-toggle {
+    display: flex;
+    gap: 3px;
+    margin-top: 3px;
+  }
+  .ht-btn {
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 8px;
+    border: 1px solid #3a3a40;
+    background: transparent;
+    color: #6a6a70;
+    cursor: pointer;
+  }
+  .ht-btn.active { border-color: #d4a84b88; color: #d4a84b; background: #d4a84b0d; }
+
+  /* Compact stat blocks */
+  .stat-row { display: flex; align-items: center; }
+  .stat-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
+    padding: 6px 8px 5px;
+    background: #252529;
+    border: 1px solid #3a3a40;
+    border-radius: 5px;
+    gap: 2px;
+  }
+  .stat-block.primary-stat { border-color: #d4a84b66; background: #22201a; }
+  .stat-icon { font-size: 0.9rem; line-height: 1; }
+  .stat-name { font-size: 0.7rem; font-weight: 600; color: #e8e0d0; white-space: nowrap; }
+  .stat-target { font-size: 0.6rem; color: #6a6a70; }
+  .stat-weight { font-size: 0.62rem; color: #c0a840; }
+
+  /* Weight bar variant (Archon row) */
+  .stat-weight-bar {
+    width: 100%;
+    height: 2px;
+    background: #3a3a40;
+    border-radius: 1px;
+    margin-top: 1px;
+    overflow: hidden;
+  }
+  .stat-weight-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #d4a84b, #e8c060);
+    border-radius: 1px;
+  }
+
+  .operator {
+    padding: 0 6px;
+    font-size: 1.1rem;
+    color: #d4a84b;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    align-self: center;
+    position: relative;
+    top: -3px;
+  }
+  .operator.much-greater { font-size: 0.9rem; letter-spacing: -1px; color: #e8c060; }
+  .operator.approx { color: #a89060; font-size: 1rem; }
+
+  /* Diff highlighting: when a stat is in a different position vs the first row, mark it */
+  .stat-block.differs { border-color: #f8717166; }
+
+  /* Divider between rows */
+  .source-divider {
+    border: none;
+    border-top: 1px solid #2a2a2f;
+    margin: 6px 0;
+  }
+
+  /* Archon summary */
+  .archon-targets {
+    font-size: 0.7rem;
+    color: #a89060;
+    margin-top: 5px;
+    padding-left: 130px;
+  }
+  .archon-targets strong { color: #d4a84b; }
+
+  /* Gear content */
+  .gear-content { padding: 20px; min-height: 140px; }
+  .gear-placeholder {
+    background: #1c1c1f; border: 1px dashed #2a2a2f; border-radius: 6px;
+    padding: 30px; text-align: center; color: #3a3a40; font-size: 0.85rem;
+  }
+
+  .annotation {
+    background: #0a1a2a; border-left: 3px solid #60a5fa;
+    padding: 8px 12px; margin: 16px 0; font-size: 0.78rem;
+    color: #90b8d8; border-radius: 0 4px 4px 0;
+  }
+
+  /* Height note callout */
+  .height-callout {
+    background: #1a0a0a;
+    border: 1px solid #f8717155;
+    border-radius: 5px;
+    padding: 8px 12px;
+    margin: 12px 20px;
+    font-size: 0.75rem;
+    color: #f87171;
+  }
+</style>
+</head>
+<body>
+
+<h1>Mock 4 — Stacked Per-Source Rows</h1>
+<div class="concept-label">
+  <strong>Concept:</strong> Every source gets its own compact row with its name and a stat strip.
+  All sources are visible at once for direct comparison. Icy Veins gets an inline hero talent
+  toggle since it has hero talent splits. Archon gets weight bars under each block and a stat
+  target summary line. Stats that differ in position from Wowhead (the "baseline") get a subtle
+  red border highlight so differences jump out immediately.
+  The entire stacked section is <strong>sticky</strong>.
+</div>
+
+<div class="page-context">
+  <div class="char-header">
+    <div class="char-avatar">🌙</div>
+    <div><div class="char-name">Trogmoon</div><div class="char-sub">Balance Druid · Sen'jin · 632 ilvl</div></div>
+    <div class="char-mode-tabs">
+      <button class="mode-tab active">Raid</button>
+      <button class="mode-tab">M+</button>
+    </div>
+  </div>
+
+  <div class="stat-priority-strip">
+    <div class="strip-header">
+      <span class="strip-label">Stat Priority</span>
+      <span class="controls-label">Hero Talent:</span>
+      <select class="strip-select">
+        <option>Elune's Chosen</option>
+        <option>Keeper of the Grove</option>
+      </select>
+      <span class="controls-label">· Raid</span>
+    </div>
+
+    <!-- Wowhead -->
+    <div class="source-strip-row">
+      <div class="source-label-col">
+        <div class="source-name">Wowhead</div>
+        <div class="source-meta">Raid · general</div>
+        <a href="#" class="source-link">↗ View guide</a>
+      </div>
+      <div class="stat-row">
+        <div class="stat-block primary-stat"><div class="stat-icon">✨</div><div class="stat-name">Intellect</div><div class="stat-target">primary</div></div>
+        <div class="operator much-greater">&gt;&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🌙</div><div class="stat-name">Mastery</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">⚡</div><div class="stat-name">Haste</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">⚔️</div><div class="stat-name">Critical Strike</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🛡️</div><div class="stat-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <hr class="source-divider">
+
+    <!-- Icy Veins with hero talent toggle -->
+    <div class="source-strip-row">
+      <div class="source-label-col">
+        <div class="source-name">Icy Veins</div>
+        <div class="source-meta">Raid · hero talent</div>
+        <a href="#" class="source-link">↗ View guide</a>
+        <div class="ht-toggle">
+          <button class="ht-btn active">Elune's</button>
+          <button class="ht-btn">KotG</button>
+        </div>
+      </div>
+      <!-- Icy Veins Elune's: Haste before Mastery — differs from Wowhead -->
+      <div class="stat-row">
+        <div class="stat-block primary-stat"><div class="stat-icon">✨</div><div class="stat-name">Intellect</div><div class="stat-target">primary</div></div>
+        <div class="operator much-greater">&gt;&gt;</div>
+        <div class="stat-block differs"><div class="stat-icon">⚡</div><div class="stat-name">Haste</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block differs"><div class="stat-icon">🌙</div><div class="stat-name">Mastery</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">⚔️</div><div class="stat-name">Critical Strike</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🛡️</div><div class="stat-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <hr class="source-divider">
+
+    <!-- u.gg -->
+    <div class="source-strip-row">
+      <div class="source-label-col">
+        <div class="source-name">u.gg</div>
+        <div class="source-meta">Raid · this patch</div>
+        <a href="#" class="source-link">↗ View guide</a>
+      </div>
+      <div class="stat-row">
+        <div class="stat-block primary-stat"><div class="stat-icon">✨</div><div class="stat-name">Intellect</div><div class="stat-target">primary</div></div>
+        <div class="operator much-greater">&gt;&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🌙</div><div class="stat-name">Mastery</div></div>
+        <div class="operator approx">≈</div>
+        <div class="stat-block"><div class="stat-icon">⚡</div><div class="stat-name">Haste</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">⚔️</div><div class="stat-name">Critical Strike</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🛡️</div><div class="stat-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <hr class="source-divider">
+
+    <!-- Method -->
+    <div class="source-strip-row">
+      <div class="source-label-col">
+        <div class="source-name">Method.gg</div>
+        <div class="source-meta">Raid · general</div>
+        <a href="#" class="source-link">↗ View guide</a>
+      </div>
+      <!-- Method: Crit before Haste — both differ from Wowhead -->
+      <div class="stat-row">
+        <div class="stat-block primary-stat"><div class="stat-icon">✨</div><div class="stat-name">Intellect</div><div class="stat-target">primary</div></div>
+        <div class="operator much-greater">&gt;&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🌙</div><div class="stat-name">Mastery</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block differs"><div class="stat-icon">⚔️</div><div class="stat-name">Critical Strike</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block differs"><div class="stat-icon">⚡</div><div class="stat-name">Haste</div></div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block"><div class="stat-icon">🛡️</div><div class="stat-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <hr class="source-divider">
+
+    <!-- Archon with weight bars -->
+    <div class="source-strip-row">
+      <div class="source-label-col">
+        <div class="source-name">Archon.gg</div>
+        <div class="source-meta">M+ · this week</div>
+        <a href="#" class="source-link">↗ View guide</a>
+      </div>
+      <div class="stat-row">
+        <div class="stat-block primary-stat">
+          <div class="stat-icon">✨</div>
+          <div class="stat-name">Intellect</div>
+          <div class="stat-weight">28%</div>
+          <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:100%"></div></div>
+        </div>
+        <div class="operator much-greater">&gt;&gt;</div>
+        <div class="stat-block differs">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-name">Haste</div>
+          <div class="stat-weight">24%</div>
+          <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:86%"></div></div>
+        </div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block differs">
+          <div class="stat-icon">🌙</div>
+          <div class="stat-name">Mastery</div>
+          <div class="stat-weight">21%</div>
+          <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:75%"></div></div>
+        </div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block">
+          <div class="stat-icon">⚔️</div>
+          <div class="stat-name">Critical Strike</div>
+          <div class="stat-weight">16%</div>
+          <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:57%"></div></div>
+        </div>
+        <div class="operator">&gt;</div>
+        <div class="stat-block">
+          <div class="stat-icon">🛡️</div>
+          <div class="stat-name">Versatility</div>
+          <div class="stat-weight">11%</div>
+          <div class="stat-weight-bar"><div class="stat-weight-fill" style="width:39%"></div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Archon target line -->
+    <div class="archon-targets">
+      📊 Archon targets: <strong>Haste ~2,450</strong> · <strong>Mastery ~2,150</strong> · Crit ~1,650 · Vers ~1,100
+    </div>
+
+    <div style="margin-top:8px; padding-top:8px; border-top:1px solid #2a2a2f; font-size:0.67rem; color:#4a4a50;">
+      ⬛ Blocks with red border differ from Wowhead's order
+    </div>
+
+  </div><!-- /stat-priority-strip -->
+
+  <!-- Height warning callout -->
+  <div class="height-callout">
+    ⚠ Note: with 5 sources, this sticky strip is ~280px tall — about 25% of a typical viewport height.
+    This is the most information-dense option but takes the most sticky real estate.
+    A "collapse" button could reduce it when not needed.
+  </div>
+
+  <div class="gear-content">
+    <div class="gear-placeholder">
+      ↑ Sticky strips remain pinned above as you scroll ↑<br><br>
+      Gear plan slot table appears below.
+    </div>
+  </div>
+</div>
+
+<!-- Compact collapsed variant -->
+<div style="margin-bottom:8px; margin-top:20px; font-size:0.8rem; color:#a89060">
+  Variant — collapsed/minimized state to reclaim screen space (user toggled):
+</div>
+<div class="page-context">
+  <div class="stat-priority-strip" style="border-bottom:none; padding: 8px 20px">
+    <div style="display:flex; align-items:center; gap:12px; font-size:0.75rem; color:#6a6a70;">
+      <span style="text-transform:uppercase; letter-spacing:0.06em;">Stat Priority</span>
+      <span style="color:#4a4a50">Wowhead: Int &gt;&gt; Mastery &gt; Haste &gt; Crit &gt; Vers  ·  Archon: Int &gt;&gt; Haste &gt; Mastery &gt; Crit &gt; Vers</span>
+      <button style="margin-left:auto; background:#252529; border:1px solid #3a3a40; color:#a89060; border-radius:4px; padding:2px 10px; font-size:0.7rem; cursor:pointer;">Expand ▾</button>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Pros:</strong> Maximum information density — every source visible simultaneously.
+  Differences are immediately obvious by scanning vertically. Archon's quantitative data integrates naturally.
+  No interaction required to compare. Direct links to each guide are right there.<br>
+  <strong>Cons:</strong> Tallest sticky strip — eats significant viewport. Cognitive load from 5 strips at once.
+  Requires good alignment to make vertical comparison effective (stats must be in same visual column,
+  which breaks when operators like ≈ shift positions). The collapsed variant addresses height but
+  loses the value of always-visible comparison.
+</div>
+
+</body>
+</html>

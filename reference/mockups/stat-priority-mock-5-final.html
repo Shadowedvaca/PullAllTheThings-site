@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stat Priority Mock 5 - Consensus + Source Drill</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0b; color: #e8e0d0; font-family: 'Segoe UI', system-ui, sans-serif; padding: 24px; max-width: 1100px; margin: 0 auto; }
+  h1 { font-family: Cinzel, 'Times New Roman', serif; color: #d4a84b; font-size: 1.1rem; margin-bottom: 6px; }
+  .concept-label { background: #1a1a2e; border: 1px solid #d4a84b55; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 0.8rem; color: #a89060; line-height: 1.5; }
+  .concept-label strong { color: #d4a84b; }
+  .page-context { background: #141416; border: 1px solid #2a2a2f; border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .char-header { background: #1c1c1f; padding: 14px 20px; border-bottom: 1px solid #2a2a2f; display: flex; align-items: center; gap: 16px; }
+  .char-avatar { width: 48px; height: 48px; background: linear-gradient(135deg, #3a2a10, #6a4820); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-family: Cinzel, serif; color: #d4a84b; font-weight: 700; }
+  .char-name { font-size: 1.1rem; font-weight: 700; color: #fbbf24; }
+  .char-sub { font-size: 0.8rem; color: #8a8a8a; }
+  .char-mode-badge { margin-left: auto; background: #d4a84b22; border: 1px solid #d4a84b88; border-radius: 4px; padding: 4px 12px; font-size: 0.8rem; color: #d4a84b; }
+  .page-note { font-size: 0.68rem; color: #4a4a50; padding: 5px 20px 6px; background: #1a1a1d; border-bottom: 1px solid #2a2a2f; font-style: italic; }
+  /* Sticky strip */
+  .stat-priority-strip { background: #18181b; border-bottom: 1px solid #2a2a2f; position: sticky; top: 0; z-index: 10; }
+  .strip-top { display: flex; align-items: center; gap: 12px; padding: 10px 20px 0; }
+  .strip-section-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #5a5a62; font-weight: 600; }
+  .ht-flipper { display: flex; gap: 2px; background: #0e0e11; border: 1px solid #2e2e34; border-radius: 5px; padding: 2px; }
+  .ht-btn { padding: 3px 10px; border-radius: 3px; font-size: 0.72rem; cursor: pointer; border: none; background: transparent; color: #6a6a72; }
+  .ht-btn.active { background: #252529; color: #d4a84b; }
+  .strip-context-note { font-size: 0.68rem; color: #4a4a50; }
+  .detail-toggle { background: transparent; border: 1px solid #2e2e34; border-radius: 4px; color: #6a6a72; font-size: 0.7rem; padding: 3px 10px; cursor: pointer; margin-left: auto; }
+  .detail-toggle.open { border-color: #d4a84b66; color: #d4a84b; background: #d4a84b0d; }
+  /* Consensus row */
+  .strip-main { padding: 10px 20px 8px; display: flex; align-items: flex-start; gap: 0; }
+  .stat-wrapper { display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+  .stat-block { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 88px; padding: 8px 10px 6px; background: #202025; border: 1.5px solid #30303a; border-radius: 6px; gap: 2px; cursor: default; }
+  .stat-block.primary-stat { border-color: #d4a84b66; background: #20201a; }
+  .stat-block.tier-full    { border-color: #4ade80;   background: #0e1a12; }
+  .stat-block.tier-most    { border-color: #86efac;   background: #0d1710; }
+  .stat-block.tier-partial { border-color: #fbbf24;   background: #1a180a; }
+  .stat-block.tier-split   { border-color: #f87171;   background: #1a0e0e; }
+  .stat-name-text   { font-size: 0.77rem; font-weight: 600; color: #ddd8c8; white-space: nowrap; }
+  .stat-target-text { font-size: 0.63rem; color: #5a5a62; }
+  .pip-row { display: flex; gap: 2px; }
+  .pip { width: 10px; height: 3px; border-radius: 1.5px; }
+  .pip.on   { background: #4ade80; }
+  .pip.half { background: #fbbf24; }
+  .pip.off  { background: #2a2a32; }
+  .agree-label              { font-size: 0.6rem; color: #4a4a52; }
+  .agree-label.tier-full    { color: #4ade8088; }
+  .agree-label.tier-most    { color: #86efac88; }
+  .agree-label.tier-partial { color: #fbbf2488; }
+  .agree-label.tier-split   { color: #f8717188; }
+  /* Operators */
+  .op-wrapper { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 6px; flex-shrink: 0; align-self: flex-end; padding-bottom: 24px; }
+  .op-symbol { font-size: 1.2rem; font-weight: 700; line-height: 1; }
+  .op-symbol.tier-full    { color: #4ade80; }
+  .op-symbol.tier-most    { color: #d4a84b; }
+  .op-symbol.tier-partial { color: #fbbf24; }
+  .op-symbol.tier-split   { color: #f87171; }
+  .op-symbol.much   { font-size: 0.95rem; letter-spacing: -1px; }
+  .op-symbol.approx { font-size: 1.05rem; }
+  .op-disagree-dot { width: 5px; height: 5px; border-radius: 50%; background: #fbbf24; display: none; }
+  .op-disagree-dot.show { display: block; }
+  /* Color band legend */
+  .strip-legend { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; flex-wrap: wrap; }
+  .legend-band-label { font-size: 0.65rem; color: #4a4a52; white-space: nowrap; }
+  .legend-band { display: flex; height: 16px; border-radius: 4px; overflow: hidden; border: 1px solid #1a1a22; width: 200px; flex-shrink: 0; }
+  .band-seg { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; color: rgba(0,0,0,0.55); border-right: 1px solid rgba(0,0,0,0.15); }
+  .band-seg:last-child { border-right: none; }
+  .seg-5 { background: #4ade80; }
+  .seg-4 { background: #86efac; }
+  .seg-3 { background: #fbbf24; }
+  .seg-2 { background: #f97316; }
+  .seg-1 { background: #f87171; }
+  /* Hover tooltips */
+  .stat-tooltip { display: none; position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); background: #26262e; border: 1px solid #3a3a46; border-radius: 6px; padding: 9px 13px; min-width: 190px; font-size: 0.72rem; color: #c0b8a8; z-index: 100; white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,0.6); }
+  .stat-wrapper:hover .stat-tooltip { display: block; }
+  .stat-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #3a3a46; }
+  .tt-title   { font-weight: 700; color: #d4a84b; margin-bottom: 6px; font-size: 0.74rem; border-bottom: 1px solid #3a3a40; padding-bottom: 5px; }
+  .tt-row     { display: flex; gap: 8px; align-items: baseline; margin-bottom: 3px; }
+  .tt-row:last-child { margin-bottom: 0; }
+  .tt-rank    { font-weight: 700; color: #e8e0d0; min-width: 22px; font-size: 0.73rem; }
+  .tt-sources { color: #7a7a82; font-size: 0.7rem; }
+  .tt-note    { font-size: 0.67rem; color: #5a5a60; margin-top: 5px; padding-top: 5px; border-top: 1px solid #3a3a40; }
+  /* Detail drill panel */
+  .detail-panel  { background: #111114; border-top: 1px solid #2a2a2f; padding: 12px 20px 14px; }
+  .detail-header { font-size: 0.67rem; text-transform: uppercase; letter-spacing: 0.08em; color: #4a4a52; margin-bottom: 10px; }
+  .source-row { display: flex; align-items: center; gap: 0; margin-bottom: 6px; padding: 5px 8px; border-radius: 5px; background: #17171b; }
+  .source-row:last-child { margin-bottom: 0; }
+  .source-row:hover { background: #1c1c22; }
+  .src-label { min-width: 120px; flex-shrink: 0; padding-right: 10px; }
+  .src-name  { font-size: 0.74rem; font-weight: 700; color: #b0a890; }
+  .src-meta  { font-size: 0.62rem; color: #4a4a52; margin-top: 1px; }
+  .mini-stat-row { display: flex; align-items: center; }
+  .mini-block { display: flex; flex-direction: column; align-items: center; padding: 4px 8px 3px; background: #202025; border: 1px solid #2e2e36; border-radius: 4px; min-width: 72px; gap: 1px; }
+  .mini-block.primary-stat { border-color: #d4a84b44; background: #1c1c16; }
+  .mini-block.differs      { border-color: #f8717166; }
+  .mini-name { font-size: 0.68rem; font-weight: 600; color: #d0c8b8; white-space: nowrap; }
+  .mini-weight-bar  { width: 100%; height: 2px; background: #2a2a32; border-radius: 1px; overflow: hidden; margin-top: 1px; }
+  .mini-weight-fill { height: 100%; background: linear-gradient(90deg, #c4983b, #d8b050); border-radius: 1px; }
+  .mini-weight-pct  { font-size: 0.58rem; color: #a08830; }
+  .mini-op            { padding: 0 4px; font-size: 0.9rem; font-weight: 700; color: #c4983b; flex-shrink: 0; align-self: center; }
+  .mini-op.much       { font-size: 0.72rem; letter-spacing: -1px; }
+  .mini-op.approx     { color: #90805a; }
+  .mini-op.differs-op { color: #f8717188; }
+  .archon-target-line { font-size: 0.69rem; color: #6a6030; margin-top: 4px; padding-left: 120px; }
+  .archon-target-line strong { color: #c4983b; }
+  .gear-content { padding: 20px; }
+  .gear-placeholder { background: #1c1c1f; border: 1px dashed #2a2a2f; border-radius: 6px; padding: 30px; text-align: center; color: #3a3a40; font-size: 0.85rem; line-height: 1.7; }
+  .annotation { background: #0a1a2a; border-left: 3px solid #60a5fa; padding: 10px 14px; margin: 16px 0; font-size: 0.78rem; color: #90b8d8; border-radius: 0 4px 4px 0; line-height: 1.5; }
+  .example-label { font-size: 0.72rem; color: #d4a84b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Mock 5 &mdash; Consensus (Option 3) + Source Drill-Down (Option 4)</h1>
+<div class="concept-label">
+  <strong>Concept:</strong> Sticky consensus strip with color-coded agreement blocks, pip indicators, and hover tooltips.
+  Operators are also color-coded by agreement. A small amber dot under an operator signals when sources use a different operator symbol.
+  "Sources" expands the Option 4 stacked detail panel. <strong>Only the hero talent flipper lives in this section</strong> &mdash;
+  content type and guide links are already on the page.
+</div>
+
+<!-- EXAMPLE A: detail open, Raid, sources disagree -->
+<div class="example-label">Example A &mdash; Detail open &middot; Raid &middot; Haste vs Mastery split (hover the yellow blocks)</div>
+<div class="page-context">
+  <div class="char-header">
+    <div class="char-avatar">T</div>
+    <div><div class="char-name">Trogmoon</div><div class="char-sub">Balance Druid &middot; 632 ilvl</div></div>
+    <div class="char-mode-badge">Raid</div>
+  </div>
+  <div class="page-note">Content type (Raid / M+ / Overall) and guide links are already elsewhere on this page &mdash; not duplicated here.</div>
+
+  <div class="stat-priority-strip">
+    <div class="strip-top">
+      <span class="strip-section-label">Stat Priority</span>
+      <div class="ht-flipper">
+        <button class="ht-btn active">Elune's Chosen</button>
+        <button class="ht-btn">Keeper of the Grove</button>
+      </div>
+      <span class="strip-context-note">Raid &middot; 5 sources</span>
+      <button class="detail-toggle open">Sources &#9652;</button>
+    </div>
+
+    <div class="strip-main">
+
+      <div class="stat-wrapper">
+        <div class="stat-block primary-stat tier-full">
+          <div class="stat-name-text">Intellect</div><div class="stat-target-text">primary</div>
+        </div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Intellect</div>
+          <div class="tt-row"><span class="tt-rank">#1</span><span class="tt-sources">Wowhead, Icy Veins, u.gg, Method, Archon</span></div>
+          <div class="tt-note">All 5 sources agree on rank and operator (&gt;&gt;)</div>
+        </div>
+      </div>
+
+      <div class="op-wrapper"><div class="op-symbol much tier-full">&gt;&gt;</div></div>
+
+      <div class="stat-wrapper">
+        <div class="stat-block tier-partial">
+          <div class="stat-name-text">Mastery</div><div class="stat-target-text">~2,200 rtg</div>
+        </div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip half"></div><div class="pip off"></div></div>
+        <div class="agree-label tier-partial">3/5 rank #2</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Mastery &mdash; position varies</div>
+          <div class="tt-row"><span class="tt-rank">#2</span><span class="tt-sources">Wowhead, u.gg, Method</span></div>
+          <div class="tt-row"><span class="tt-rank">#3</span><span class="tt-sources">Icy Veins (Elune's), Archon</span></div>
+          <div class="tt-note">u.gg uses &ge; before Haste rather than &gt;</div>
+        </div>
+      </div>
+
+      <div class="op-wrapper">
+        <div class="op-symbol tier-most">&gt;</div>
+        <div class="op-disagree-dot show"></div>
+      </div>
+
+      <div class="stat-wrapper">
+        <div class="stat-block tier-partial">
+          <div class="stat-name-text">Haste</div><div class="stat-target-text">~2,000 rtg</div>
+        </div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip half"></div><div class="pip off"></div></div>
+        <div class="agree-label tier-partial">3/5 rank #3</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Haste &mdash; position varies</div>
+          <div class="tt-row"><span class="tt-rank">#2</span><span class="tt-sources">Icy Veins (Elune's), Archon</span></div>
+          <div class="tt-row"><span class="tt-rank">#3</span><span class="tt-sources">Wowhead, u.gg, Method</span></div>
+        </div>
+      </div>
+
+      <div class="op-wrapper"><div class="op-symbol approx tier-full">&#x2248;</div></div>
+
+      <div class="stat-wrapper">
+        <div class="stat-block tier-most">
+          <div class="stat-name-text">Critical Strike</div><div class="stat-target-text">~1,700 rtg</div>
+        </div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip half"></div></div>
+        <div class="agree-label tier-most">4/5 rank #4</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Critical Strike</div>
+          <div class="tt-row"><span class="tt-rank">#4</span><span class="tt-sources">Wowhead, Icy Veins, u.gg, Archon</span></div>
+          <div class="tt-row"><span class="tt-rank">#3</span><span class="tt-sources">Method</span></div>
+          <div class="tt-note">Method ranks Crit ahead of Haste</div>
+        </div>
+      </div>
+
+      <div class="op-wrapper"><div class="op-symbol tier-full">&gt;</div></div>
+
+      <div class="stat-wrapper">
+        <div class="stat-block tier-full">
+          <div class="stat-name-text">Versatility</div><div class="stat-target-text">~1,300 rtg</div>
+        </div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Versatility</div>
+          <div class="tt-row"><span class="tt-rank">#5</span><span class="tt-sources">All 5 sources</span></div>
+          <div class="tt-note">Dump stat &mdash; all sources agree</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="strip-legend">
+      <span class="legend-band-label">Source agreement:</span>
+      <div class="legend-band">
+        <div class="band-seg seg-5">5/5</div>
+        <div class="band-seg seg-4">4/5</div>
+        <div class="band-seg seg-3">3/5</div>
+        <div class="band-seg seg-2">2/5</div>
+        <div class="band-seg seg-1">1/5</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;margin-left:8px;font-size:0.65rem;color:#5a5050;">
+        <div style="width:6px;height:6px;border-radius:50%;background:#fbbf24;flex-shrink:0;"></div>
+        Operator varies by source
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-panel">
+    <div class="detail-header">Per-source breakdown &mdash; red border = differs from majority order</div>
+
+    <div class="source-row">
+      <div class="src-label"><div class="src-name">Wowhead</div><div class="src-meta">Raid</div></div>
+      <div class="mini-stat-row">
+        <div class="mini-block primary-stat"><div class="mini-name">Intellect</div></div>
+        <div class="mini-op much">&gt;&gt;</div>
+        <div class="mini-block"><div class="mini-name">Mastery</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Haste</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Critical Strike</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <div class="source-row">
+      <div class="src-label"><div class="src-name">Icy Veins</div><div class="src-meta">Raid &middot; Elune's Chosen</div></div>
+      <div class="mini-stat-row">
+        <div class="mini-block primary-stat"><div class="mini-name">Intellect</div></div>
+        <div class="mini-op much">&gt;&gt;</div>
+        <div class="mini-block differs"><div class="mini-name">Haste</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block differs"><div class="mini-name">Mastery</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Critical Strike</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <div class="source-row">
+      <div class="src-label"><div class="src-name">u.gg</div><div class="src-meta">Raid</div></div>
+      <div class="mini-stat-row">
+        <div class="mini-block primary-stat"><div class="mini-name">Intellect</div></div>
+        <div class="mini-op much">&gt;&gt;</div>
+        <div class="mini-block"><div class="mini-name">Mastery</div></div>
+        <div class="mini-op differs-op">&ge;</div>
+        <div class="mini-block"><div class="mini-name">Haste</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Critical Strike</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <div class="source-row">
+      <div class="src-label"><div class="src-name">Method.gg</div><div class="src-meta">Raid</div></div>
+      <div class="mini-stat-row">
+        <div class="mini-block primary-stat"><div class="mini-name">Intellect</div></div>
+        <div class="mini-op much">&gt;&gt;</div>
+        <div class="mini-block"><div class="mini-name">Mastery</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block differs"><div class="mini-name">Critical Strike</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block differs"><div class="mini-name">Haste</div></div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block"><div class="mini-name">Versatility</div></div>
+      </div>
+    </div>
+
+    <div class="source-row">
+      <div class="src-label"><div class="src-name">Archon.gg</div><div class="src-meta">Raid</div></div>
+      <div class="mini-stat-row">
+        <div class="mini-block primary-stat">
+          <div class="mini-name">Intellect</div>
+          <div class="mini-weight-pct">28%</div>
+          <div class="mini-weight-bar"><div class="mini-weight-fill" style="width:100%"></div></div>
+        </div>
+        <div class="mini-op much">&gt;&gt;</div>
+        <div class="mini-block differs">
+          <div class="mini-name">Haste</div>
+          <div class="mini-weight-pct">24%</div>
+          <div class="mini-weight-bar"><div class="mini-weight-fill" style="width:86%"></div></div>
+        </div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block differs">
+          <div class="mini-name">Mastery</div>
+          <div class="mini-weight-pct">21%</div>
+          <div class="mini-weight-bar"><div class="mini-weight-fill" style="width:75%"></div></div>
+        </div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block">
+          <div class="mini-name">Critical Strike</div>
+          <div class="mini-weight-pct">16%</div>
+          <div class="mini-weight-bar"><div class="mini-weight-fill" style="width:57%"></div></div>
+        </div>
+        <div class="mini-op">&gt;</div>
+        <div class="mini-block">
+          <div class="mini-name">Versatility</div>
+          <div class="mini-weight-pct">11%</div>
+          <div class="mini-weight-bar"><div class="mini-weight-fill" style="width:39%"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="archon-target-line">
+      Archon targets: <strong>Haste ~2,450</strong> &nbsp;&middot;&nbsp; <strong>Mastery ~2,150</strong> &nbsp;&middot;&nbsp; Critical Strike ~1,650 &nbsp;&middot;&nbsp; Versatility ~1,100
+    </div>
+  </div>
+
+  <div class="gear-content">
+    <div class="gear-placeholder">Sticky strip (+ optional detail panel) stays pinned here as you scroll down.<br>Gear plan slot table continues below.</div>
+  </div>
+</div>
+
+
+<!-- EXAMPLE B: closed, M+, all agree -->
+<div class="example-label" style="margin-top:24px">Example B &mdash; Detail closed &middot; M+ &middot; All 5 sources agree (hover any block)</div>
+<div class="page-context">
+  <div class="char-header">
+    <div class="char-avatar">T</div>
+    <div><div class="char-name">Trogmoon</div><div class="char-sub">Balance Druid &middot; 632 ilvl</div></div>
+    <div class="char-mode-badge">M+</div>
+  </div>
+  <div class="page-note">Page mode switched to M+ &mdash; strip updates automatically.</div>
+
+  <div class="stat-priority-strip">
+    <div class="strip-top">
+      <span class="strip-section-label">Stat Priority</span>
+      <div class="ht-flipper">
+        <button class="ht-btn active">Elune's Chosen</button>
+        <button class="ht-btn">Keeper of the Grove</button>
+      </div>
+      <span class="strip-context-note">M+ &middot; 5 sources</span>
+      <button class="detail-toggle">Sources &#9662;</button>
+    </div>
+
+    <div class="strip-main">
+      <div class="stat-wrapper">
+        <div class="stat-block primary-stat tier-full"><div class="stat-name-text">Intellect</div><div class="stat-target-text">primary</div></div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Intellect</div>
+          <div class="tt-row"><span class="tt-rank">#1</span><span class="tt-sources">All 5 sources</span></div>
+          <div class="tt-note">Primary stat &mdash; always #1</div>
+        </div>
+      </div>
+      <div class="op-wrapper"><div class="op-symbol much tier-full">&gt;&gt;</div></div>
+      <div class="stat-wrapper">
+        <div class="stat-block tier-full"><div class="stat-name-text">Haste</div><div class="stat-target-text">~2,450 rtg</div></div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Haste</div>
+          <div class="tt-row"><span class="tt-rank">#2</span><span class="tt-sources">All 5 sources</span></div>
+          <div class="tt-note">M+ favors Haste over Mastery &mdash; opposite of Raid</div>
+        </div>
+      </div>
+      <div class="op-wrapper"><div class="op-symbol tier-full">&gt;</div></div>
+      <div class="stat-wrapper">
+        <div class="stat-block tier-full"><div class="stat-name-text">Mastery</div><div class="stat-target-text">~2,150 rtg</div></div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Mastery</div>
+          <div class="tt-row"><span class="tt-rank">#3</span><span class="tt-sources">All 5 sources</span></div>
+        </div>
+      </div>
+      <div class="op-wrapper"><div class="op-symbol tier-full">&gt;</div></div>
+      <div class="stat-wrapper">
+        <div class="stat-block tier-full"><div class="stat-name-text">Critical Strike</div><div class="stat-target-text">~1,650 rtg</div></div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Critical Strike</div>
+          <div class="tt-row"><span class="tt-rank">#4</span><span class="tt-sources">All 5 sources</span></div>
+        </div>
+      </div>
+      <div class="op-wrapper"><div class="op-symbol tier-full">&gt;</div></div>
+      <div class="stat-wrapper">
+        <div class="stat-block tier-full"><div class="stat-name-text">Versatility</div><div class="stat-target-text">~1,100 rtg</div></div>
+        <div class="pip-row"><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div><div class="pip on"></div></div>
+        <div class="agree-label tier-full">5/5</div>
+        <div class="stat-tooltip">
+          <div class="tt-title">Versatility</div>
+          <div class="tt-row"><span class="tt-rank">#5</span><span class="tt-sources">All 5 sources</span></div>
+          <div class="tt-note">Dump stat &mdash; all sources agree</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="strip-legend">
+      <span class="legend-band-label">Source agreement:</span>
+      <div class="legend-band">
+        <div class="band-seg seg-5">5/5</div>
+        <div class="band-seg seg-4">4/5</div>
+        <div class="band-seg seg-3">3/5</div>
+        <div class="band-seg seg-2">2/5</div>
+        <div class="band-seg seg-1">1/5</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gear-content">
+    <div class="gear-placeholder">All green = every source agrees. Strip is compact with no noise.<br>"Sources" is still there to drill into if the player is curious.</div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Tooltips:</strong> Hovering any block shows which sources rank it at which position, plus any operator notes.
+  Green consensus blocks still get a confirming tooltip for the curious player.<br><br>
+  <strong>Color band legend:</strong> One horizontal bar, five segments from green (5/5) through yellow to red (1/5).
+  Faster to read than individual swatches &mdash; your eye maps the block border color directly to its band segment.<br><br>
+  <strong>Operator dot:</strong> Amber dot below a consensus operator means at least one source uses a different symbol there.
+  The adjacent block tooltip names the offending source. The detail drill shows each source's actual operator.
+</div>
+
+</body>
+</html>

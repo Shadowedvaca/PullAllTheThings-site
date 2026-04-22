@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stat Priority Mock 3 — Layered Consensus with Color Coding</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0b;
+    color: #e8e0d0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 { font-family: Cinzel, 'Times New Roman', serif; color: #d4a84b; font-size: 1.1rem; margin-bottom: 6px; }
+  .concept-label {
+    background: #1a1a2e;
+    border: 1px solid #d4a84b55;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+    font-size: 0.8rem;
+    color: #a89060;
+  }
+  .concept-label strong { color: #d4a84b; }
+
+  .page-context {
+    background: #141416;
+    border: 1px solid #2a2a2f;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .char-header {
+    background: #1c1c1f;
+    padding: 14px 20px;
+    border-bottom: 1px solid #2a2a2f;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .char-avatar {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, #3a2a10, #6a4820);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+  }
+  .char-name { font-size: 1.1rem; font-weight: 700; color: #fbbf24; }
+  .char-sub { font-size: 0.8rem; color: #8a8a8a; }
+  .char-mode-tabs { margin-left: auto; display: flex; gap: 4px; }
+  .mode-tab {
+    padding: 5px 14px; border-radius: 4px; font-size: 0.8rem;
+    cursor: pointer; border: 1px solid #3a3a40;
+    background: transparent; color: #8a8a8a;
+  }
+  .mode-tab.active { background: #d4a84b22; border-color: #d4a84b; color: #d4a84b; }
+
+  /* ── Sticky stat priority strip ── */
+  .stat-priority-strip {
+    background: #18181b;
+    border-bottom: 1px solid #2a2a2f;
+    padding: 12px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .strip-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .strip-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6a6a70;
+  }
+  .strip-select {
+    background: #252529;
+    border: 1px solid #3a3a40;
+    color: #c0b8a8;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .controls-label { font-size: 0.75rem; color: #6a6a70; }
+  .legend {
+    margin-left: auto;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 0.7rem;
+    color: #6a6a70;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    border: 2px solid;
+  }
+  .legend-dot.full { border-color: #4ade80; background: #4ade8022; }
+  .legend-dot.partial { border-color: #fbbf24; background: #fbbf2422; }
+  .legend-dot.split { border-color: #f87171; background: #f8717122; }
+
+  /* Stat blocks */
+  .stat-row { display: flex; align-items: flex-start; gap: 0; }
+  .stat-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .stat-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 92px;
+    padding: 8px 10px 6px;
+    background: #252529;
+    border: 1.5px solid #3a3a40;
+    border-radius: 6px;
+    gap: 3px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .stat-block:hover { filter: brightness(1.1); }
+  .stat-block.primary-stat { border-color: #d4a84b88; background: #252218; }
+  /* Agreement levels */
+  .stat-block.agree-full { border-color: #4ade80; background: #4ade8008; }
+  .stat-block.agree-most { border-color: #4ade8088; background: #4ade8006; }
+  .stat-block.agree-partial { border-color: #fbbf24; background: #fbbf2408; }
+  .stat-block.agree-split { border-color: #f8717188; background: #f8717108; }
+
+  .stat-icon { font-size: 1.1rem; line-height: 1; }
+  .stat-name { font-size: 0.78rem; font-weight: 600; color: #e8e0d0; white-space: nowrap; }
+  .stat-target { font-size: 0.67rem; color: #6a6a70; }
+
+  /* Agreement indicator bar under block */
+  .agree-bar {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+  }
+  .agree-pip {
+    width: 10px; height: 4px;
+    border-radius: 2px;
+  }
+  .agree-pip.filled { background: #4ade80; }
+  .agree-pip.partial { background: #fbbf24; }
+  .agree-pip.empty { background: #2a2a2f; }
+  .agree-count {
+    font-size: 0.62rem;
+    color: #6a6a70;
+  }
+
+  .operator {
+    padding: 0 8px;
+    font-size: 1.3rem;
+    color: #d4a84b;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    align-self: center;
+    position: relative;
+    top: -4px;
+  }
+  .operator.much-greater { font-size: 1.0rem; letter-spacing: -1px; color: #e8c060; }
+  .operator.approx { color: #a89060; font-size: 1.1rem; }
+
+  /* Tooltip callout (simulated — shown statically for mockup) */
+  .tooltip-callout {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2a2a30;
+    border: 1px solid #3a3a40;
+    border-radius: 6px;
+    padding: 8px 12px;
+    min-width: 180px;
+    font-size: 0.72rem;
+    color: #c0b8a8;
+    z-index: 100;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tooltip-callout::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #3a3a40;
+  }
+  .tooltip-source-row { display: flex; gap: 6px; align-items: center; margin-bottom: 3px; }
+  .tooltip-source-row:last-child { margin-bottom: 0; }
+  .tooltip-rank {
+    font-weight: 700;
+    color: #e8e0d0;
+    min-width: 16px;
+  }
+  .tooltip-src-name { color: #8a8a8a; }
+
+  .stat-wrapper.has-tooltip { position: relative; }
+
+  /* Gear content */
+  .gear-content { padding: 20px; min-height: 160px; }
+  .gear-placeholder {
+    background: #1c1c1f; border: 1px dashed #2a2a2f; border-radius: 6px;
+    padding: 30px; text-align: center; color: #3a3a40; font-size: 0.85rem;
+  }
+
+  .annotation {
+    background: #0a1a2a; border-left: 3px solid #60a5fa;
+    padding: 8px 12px; margin: 16px 0; font-size: 0.78rem;
+    color: #90b8d8; border-radius: 0 4px 4px 0;
+  }
+
+  /* Source key at bottom of strip */
+  .source-key {
+    margin-top: 10px;
+    font-size: 0.68rem;
+    color: #4a4a50;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .source-key span { color: #6a6a70; }
+  .pips-inline { display: flex; gap: 2px; }
+  .pips-inline .pip { width: 8px; height: 3px; border-radius: 1px; }
+</style>
+</head>
+<body>
+
+<h1>Mock 3 — Layered Consensus with Color-Coded Agreement</h1>
+<div class="concept-label">
+  <strong>Concept:</strong> Stats are shown in majority-agreed order. Each block is color-coded by
+  how strongly sources agree on its position: <span style="color:#4ade80">green border = strong consensus</span>,
+  <span style="color:#fbbf24">yellow = most agree</span>,
+  <span style="color:#f87171">red = sources split</span>.
+  Small pip indicators below each block show how many sources (out of 5) placed the stat in that position.
+  Hovering a split block shows which sources placed it where — simulated as a visible callout here.
+</div>
+
+<div class="page-context">
+  <div class="char-header">
+    <div class="char-avatar">🌙</div>
+    <div><div class="char-name">Trogmoon</div><div class="char-sub">Balance Druid · Sen'jin · 632 ilvl</div></div>
+    <div class="char-mode-tabs">
+      <button class="mode-tab active">Raid</button>
+      <button class="mode-tab">M+</button>
+    </div>
+  </div>
+
+  <div class="stat-priority-strip">
+    <div class="strip-header">
+      <span class="strip-label">Stat Priority</span>
+      <span class="controls-label">Hero Talent:</span>
+      <select class="strip-select">
+        <option>Elune's Chosen</option>
+        <option>Keeper of the Grove</option>
+      </select>
+      <span class="controls-label" style="margin-left:4px">· Raid · 5 sources</span>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot full"></div> All agree</div>
+        <div class="legend-item"><div class="legend-dot partial"></div> Most agree</div>
+        <div class="legend-item"><div class="legend-dot split"></div> Sources split</div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+
+      <!-- Intellect: all sources agree it's #1 -->
+      <div class="stat-wrapper">
+        <div class="stat-block primary-stat agree-full">
+          <div class="stat-icon">✨</div>
+          <div class="stat-name">Intellect</div>
+          <div class="stat-target">primary</div>
+        </div>
+        <div class="agree-bar">
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+        </div>
+        <div class="agree-count">5/5</div>
+      </div>
+
+      <div class="operator much-greater">&gt;&gt;</div>
+
+      <!-- Mastery: 3/5 say it's #2 — most agree, some split -->
+      <div class="stat-wrapper has-tooltip">
+        <div class="stat-block agree-partial">
+          <div class="stat-icon">🌙</div>
+          <div class="stat-name">Mastery</div>
+          <div class="stat-target">~2,200 rtg</div>
+        </div>
+        <div class="agree-bar">
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip partial"></div>
+          <div class="agree-pip empty"></div>
+        </div>
+        <div class="agree-count" style="color:#fbbf24">3/5 rank #2</div>
+        <!-- Simulated hover tooltip -->
+        <div class="tooltip-callout">
+          <div style="color:#d4a84b; margin-bottom:5px; font-weight:600">Mastery — position varies</div>
+          <div class="tooltip-source-row"><span class="tooltip-rank">#2</span><span class="tooltip-src-name">Wowhead, u.gg, Method</span></div>
+          <div class="tooltip-source-row"><span class="tooltip-rank">#3</span><span class="tooltip-src-name">Icy Veins (Elune's), Archon</span></div>
+        </div>
+      </div>
+
+      <div class="operator">&gt;</div>
+
+      <!-- Haste: 3/5 say it's #3, some say #2 -->
+      <div class="stat-wrapper">
+        <div class="stat-block agree-partial">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-name">Haste</div>
+          <div class="stat-target">~2,000 rtg</div>
+        </div>
+        <div class="agree-bar">
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip partial"></div>
+          <div class="agree-pip empty"></div>
+        </div>
+        <div class="agree-count" style="color:#fbbf24">3/5 rank #3</div>
+      </div>
+
+      <div class="operator approx">≈</div>
+
+      <!-- Critical Strike: 4/5 agree on position #4 -->
+      <div class="stat-wrapper">
+        <div class="stat-block agree-most">
+          <div class="stat-icon">⚔️</div>
+          <div class="stat-name">Critical Strike</div>
+          <div class="stat-target">~1,600 rtg</div>
+        </div>
+        <div class="agree-bar">
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip empty"></div>
+        </div>
+        <div class="agree-count" style="color:#7ad87a">4/5 rank #4</div>
+      </div>
+
+      <div class="operator">&gt;</div>
+
+      <!-- Versatility: all 5 agree it's last -->
+      <div class="stat-wrapper">
+        <div class="stat-block agree-full">
+          <div class="stat-icon">🛡️</div>
+          <div class="stat-name">Versatility</div>
+          <div class="stat-target">~1,200 rtg</div>
+        </div>
+        <div class="agree-bar">
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+          <div class="agree-pip filled"></div>
+        </div>
+        <div class="agree-count">5/5 rank #5</div>
+      </div>
+
+    </div><!-- /stat-row -->
+
+    <div class="source-key">
+      <span>Sources:</span>
+      Wowhead · Icy Veins · u.gg · Method · Archon
+      <span style="color:#4a4a50">— hover a split stat (yellow/red) to see per-source breakdown</span>
+    </div>
+
+  </div><!-- /stat-priority-strip -->
+
+  <div class="gear-content">
+    <div class="gear-placeholder">
+      ↑ Sticky strip stays pinned above this as you scroll ↑<br><br>
+      Gear plan slot table scrolls here.
+    </div>
+  </div>
+</div>
+
+<!-- Show the same strip when sources agree more strongly (M+ example) -->
+<div style="margin-bottom:8px; font-size:0.8rem; color:#a89060">
+  Comparison — same layout when sources are in strong agreement (M+ example, most sources agree):
+</div>
+<div class="page-context">
+  <div class="stat-priority-strip" style="border-bottom:none">
+    <div class="strip-header">
+      <span class="strip-label">Stat Priority</span>
+      <span class="controls-label">Hero Talent: Elune's Chosen · M+ · 5 sources</span>
+      <div class="legend" style="margin-left:auto">
+        <div class="legend-item"><div class="legend-dot full"></div> All agree</div>
+        <div class="legend-item"><div class="legend-dot partial"></div> Most agree</div>
+        <div class="legend-item"><div class="legend-dot split"></div> Sources split</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-wrapper">
+        <div class="stat-block primary-stat agree-full">
+          <div class="stat-icon">✨</div>
+          <div class="stat-name">Intellect</div>
+          <div class="stat-target">primary</div>
+        </div>
+        <div class="agree-bar"><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div></div>
+        <div class="agree-count">5/5</div>
+      </div>
+      <div class="operator much-greater">&gt;&gt;</div>
+      <div class="stat-wrapper">
+        <div class="stat-block agree-full">
+          <div class="stat-icon">⚡</div>
+          <div class="stat-name">Haste</div>
+          <div class="stat-target">~2,400 rtg</div>
+        </div>
+        <div class="agree-bar"><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div></div>
+        <div class="agree-count">5/5</div>
+      </div>
+      <div class="operator">&gt;</div>
+      <div class="stat-wrapper">
+        <div class="stat-block agree-full">
+          <div class="stat-icon">🌙</div>
+          <div class="stat-name">Mastery</div>
+          <div class="stat-target">~2,100 rtg</div>
+        </div>
+        <div class="agree-bar"><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div></div>
+        <div class="agree-count">5/5</div>
+      </div>
+      <div class="operator">&gt;</div>
+      <div class="stat-wrapper">
+        <div class="stat-block agree-full">
+          <div class="stat-icon">⚔️</div>
+          <div class="stat-name">Critical Strike</div>
+          <div class="stat-target">~1,700 rtg</div>
+        </div>
+        <div class="agree-bar"><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div></div>
+        <div class="agree-count">5/5</div>
+      </div>
+      <div class="operator">&gt;</div>
+      <div class="stat-wrapper">
+        <div class="stat-block agree-full">
+          <div class="stat-icon">🛡️</div>
+          <div class="stat-name">Versatility</div>
+          <div class="stat-target">~1,300 rtg</div>
+        </div>
+        <div class="agree-bar"><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div><div class="agree-pip filled"></div></div>
+        <div class="agree-count">5/5</div>
+      </div>
+    </div>
+    <div class="source-key"><span>Sources:</span> Wowhead · Icy Veins · u.gg · Method · Archon</div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Pros:</strong> Rich at-a-glance signal about consensus quality without adding a tab row or expand panel.
+  When all guides agree, the strip looks clean and fully gold. Disagreements are visible but not alarming.
+  The pip row is compact — doesn't add much height.<br>
+  <strong>Cons:</strong> Color meaning (green/yellow/red) requires a legend. The tooltip detail (which source says what)
+  requires interaction. Pip row adds a second line under each block — the strip is slightly taller than options 1 or 2.
+  "3/5 rank #2" requires understanding the scale.
+</div>
+
+</body>
+</html>
