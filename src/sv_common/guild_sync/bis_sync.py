@@ -3644,7 +3644,10 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
             """
             SELECT t.source_id, t.spec_id, t.hero_talent_id,
                    t.status, t.items_found, t.last_fetched, t.preferred_technique,
-                   t.content_type, t.id AS target_id
+                   t.content_type, t.id AS target_id,
+                   (SELECT MAX(r.source_updated_at)
+                      FROM landing.bis_scrape_raw r
+                     WHERE r.target_id = t.id) AS source_updated_at
               FROM config.bis_scrape_targets t
             """
         )
@@ -3671,6 +3674,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
             "last_fetched": t["last_fetched"].isoformat() if t["last_fetched"] else None,
             "technique": t["preferred_technique"],
             "target_id": t["target_id"],
+            "source_updated_at": t["source_updated_at"].isoformat() if t["source_updated_at"] else None,
         }
 
     return {
