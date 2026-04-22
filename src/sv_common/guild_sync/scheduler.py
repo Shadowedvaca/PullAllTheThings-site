@@ -14,6 +14,7 @@ The Discord bot also handles real-time events (joins, leaves, role changes)
 which don't need scheduling.
 """
 
+import asyncio
 import logging
 import os
 import time
@@ -48,6 +49,7 @@ from .sync_logger import SyncLogEntry
 from .bis_sync import (
     discover_targets as _bis_discover_targets,
     sync_source as _bis_sync_source,
+    sync_target as _bis_sync_target,
     rebuild_bis_from_landing as _rebuild_bis_from_landing,
     rebuild_item_popularity_from_landing as _rebuild_item_popularity_from_landing,
 )
@@ -1329,12 +1331,95 @@ class GuildSyncScheduler:
     async def run_bis_daily_sync(self, triggered_by: str = "scheduled"):
         """Daily BIS scrape + enrichment rebuild. Runs at 04:00 UTC.
 
-        Phase 1.7-B stub — scrape loop and delta capture wired in Phase 1.7-C/D.
+        Fetches all active scrape targets whose next_check_at is due, calls
+        sync_target() for each (with 2s intra-source rate limiting), then
+        records a bis_daily_runs row with scrape stats.
+
+        Enrichment rebuild and delta capture wired in Phase 1.7-D.
         """
-        logger.info(
-            "BIS daily sync job triggered (triggered_by=%s) — not yet implemented",
-            triggered_by,
-        )
+        from datetime import datetime, timezone
+
+        start_t = time.monotonic()
+        logger.info("BIS daily sync: starting (triggered_by=%s)", triggered_by)
+
+        counts = {"checked": 0, "changed": 0, "unchanged": 0, "failed": 0, "skipped": 0}
+        notes_parts: list[str] = []
+
+        try:
+            async with self.db_pool.acquire() as conn:
+                all_targets = await conn.fetch(
+                    """
+                    SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
+                           t.content_type, t.url, t.preferred_technique,
+                           t.check_interval_days, t.items_found,
+                           t.next_check_at, s.origin
+                      FROM config.bis_scrape_targets t
+                      JOIN ref.bis_list_sources s ON s.id = t.source_id
+                     WHERE t.is_active = TRUE
+                     ORDER BY t.source_id, t.spec_id
+                    """
+                )
+
+            now = datetime.now(timezone.utc)
+            due_targets = []
+            for t in all_targets:
+                t_dict = dict(t)
+                if t_dict.get("next_check_at") is None or t_dict["next_check_at"] <= now:
+                    due_targets.append(t_dict)
+                else:
+                    counts["skipped"] += 1
+
+            prev_source_id = None
+            for target in due_targets:
+                try:
+                    if prev_source_id is not None and target["source_id"] == prev_source_id:
+                        await asyncio.sleep(2.0)
+                    result = await _bis_sync_target(
+                        self.db_pool, target["id"], _target_row=target
+                    )
+                    counts["checked"] += 1
+                    status = result.get("status", "failed")
+                    if status in ("success", "partial"):
+                        counts["changed"] += 1
+                    elif status in ("unchanged", "skipped"):
+                        counts["unchanged"] += 1
+                    else:
+                        counts["failed"] += 1
+                except Exception as exc:
+                    logger.error(
+                        "BIS daily sync: error on target %d: %s",
+                        target["id"], exc, exc_info=True,
+                    )
+                    counts["checked"] += 1
+                    counts["failed"] += 1
+                prev_source_id = target["source_id"]
+
+            duration = round(time.monotonic() - start_t, 2)
+
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO landing.bis_daily_runs
+                        (triggered_by, targets_checked, targets_changed, targets_unchanged,
+                         targets_failed, targets_skipped, duration_seconds, notes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    """,
+                    triggered_by,
+                    counts["checked"], counts["changed"], counts["unchanged"],
+                    counts["failed"], counts["skipped"],
+                    duration,
+                    "\n".join(notes_parts) if notes_parts else None,
+                )
+
+            logger.info(
+                "BIS daily sync: complete — checked=%d changed=%d unchanged=%d "
+                "failed=%d skipped=%d (%.1fs)",
+                counts["checked"], counts["changed"], counts["unchanged"],
+                counts["failed"], counts["skipped"], duration,
+            )
+
+        except Exception as exc:
+            logger.error("BIS daily sync: pipeline failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""
