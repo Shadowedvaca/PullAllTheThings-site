@@ -284,10 +284,10 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
   - **Post-ship cleanup** (migrations 0138–0140): retired "Gear Plan / BIS" admin nav tab (0138); dropped `common.guild_members` + `common.characters` (0139); restored `enrichment.item_set_members` incorrectly dropped in 0139 (0140).
   - **Prod baseline captured**: `reference/archive/prod-baseline-2026-04-13/` — 9 CSVs. Dev backup: `reference/archive/dev-backup-2026-04-13.sql`.
 - **Previous: Phase 0 (patch fix)** — `prod-v0.19.1`. Pure sort fix for Roster Needs drill panel.
-- **Last migration:** 0174 (dev only — feature/archon-bis-extraction)
-- **Last prod tag:** `prod-v0.22.0`
-- **Active branch:** `feature/archon-bis-extraction`
-- **Next planned:** PR → main → prod (feature/archon-bis-extraction complete — Phases A–D done; no outstanding backend work; consider archon drill-down support or section inventory as future enhancement)
+- **Last migration:** 0174 (included in prod-v0.22.1)
+- **Last prod tag:** `prod-v0.22.1`
+- **Active branch:** `main` (feature/archon-bis-extraction merged PR #36)
+- **Next planned:** After prod-v0.22.1 deploys — run **Discover URLs** (Archon) → **Sync All** → **Enrich & Classify** in Admin → Gear Plan. Future: archon drill-down or section inventory enhancements.
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
