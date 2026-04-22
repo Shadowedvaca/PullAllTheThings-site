@@ -1330,7 +1330,8 @@ async def get_plan_detail(
                 SELECT vbr.slot, vbr.source_id, vbr.hero_talent_id, vbr.guide_order,
                        vbr.blizzard_item_id, vbr.name AS item_name, vbr.icon_url,
                        vbr.source_name, vbr.source_short_label AS short_label,
-                       vbr.source_origin AS origin, vbr.content_type, vbr.bis_note
+                       vbr.source_origin AS origin, vbr.content_type, vbr.bis_note,
+                       vbr.item_category
                   FROM viz.bis_recommendations vbr
                   JOIN ref.bis_list_sources bls ON bls.id = vbr.source_id
                  WHERE vbr.spec_id = $1
@@ -1705,6 +1706,8 @@ async def get_plan_detail(
             # Item drop sources for drawer list display
             # Tier pieces have no enrichment.item_sources rows — use viz.tier_piece_sources data.
             rec["sources"] = bis_sources_by_bid.get(bid) or sources_by_item.get(bid, [])
+            if not rec["sources"] and rec.get("item_category") == "catalyst":
+                rec["sources"] = [{"instance_type": "catalyst", "instance_name": "", "encounter_name": ""}]
             # Popularity percentages from viz.item_popularity
             rec["popularity"] = bis_popularity.get(bid, {})
 

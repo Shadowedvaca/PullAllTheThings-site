@@ -2566,7 +2566,11 @@ function _gpMergeTrinketBis(bis, trinketItems) {
   const seenBis = new Set();
   for (const r of (bis || [])) {
     const bid = r.blizzard_item_id;
-    if (seenBis.has(bid)) continue;
+    if (seenBis.has(bid)) {
+      if (r.bis_note && itemMap.has(bid) && !itemMap.get(bid).bis_note)
+        itemMap.get(bid).bis_note = r.bis_note;
+      continue;
+    }
     seenBis.add(bid);
     if (itemMap.has(bid)) {
       const ex = itemMap.get(bid);
@@ -2574,12 +2578,14 @@ function _gpMergeTrinketBis(bis, trinketItems) {
       if (r.is_equipped) ex.is_equipped = true;
       if (!ex.target_ilvl && r.target_ilvl) ex.target_ilvl = r.target_ilvl;
       if (!ex.popularity && r.popularity) ex.popularity = r.popularity;
+      if (r.bis_note && !ex.bis_note) ex.bis_note = r.bis_note;
     } else {
       itemMap.set(bid, {
         blizzard_item_id: bid, name: r.item_name || '', icon_url: r.icon_url || '',
         ratings: {}, content_types: [], sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, popularity: r.popularity || null,
+        bis_note: r.bis_note || null,
       });
     }
   }
@@ -2709,21 +2715,26 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
   if (isTrinket) {
     bisItems = _gpMergeTrinketBis(bis, trinketItems);
   } else {
-    const seen = new Set();
+    const seenMap = new Map();
     bisItems = [];
     for (const r of bis) {
-      if (seen.has(r.blizzard_item_id)) continue;
-      seen.add(r.blizzard_item_id);
+      const bid = r.blizzard_item_id;
+      if (seenMap.has(bid)) {
+        if (r.bis_note && !seenMap.get(bid).bis_note) seenMap.get(bid).bis_note = r.bis_note;
+        continue;
+      }
       // Guide mode filter: keep if at least one guide recommends this item in current mode
-      const iCts = itemOriginCts[r.blizzard_item_id] || {};
+      const iCts = itemOriginCts[bid] || {};
       if (!guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
-      bisItems.push({
-        blizzard_item_id: r.blizzard_item_id, name: r.item_name || '',
+      const entry = {
+        blizzard_item_id: bid, name: r.item_name || '',
         icon_url: r.icon_url || '', sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, ratings: {},
         popularity: r.popularity || null, bis_note: r.bis_note || null,
-      });
+      };
+      seenMap.set(bid, entry);
+      bisItems.push(entry);
     }
     // Sort: guide count (checkmarks visible in current mode) desc → popularity desc → name asc
     bisItems.sort((a, b) => {
