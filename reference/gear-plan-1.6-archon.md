@@ -344,13 +344,13 @@ for archon sources (same functions, archon branch now active).
 
 ## Build Phases
 
-| Phase | Scope | Migration | Prerequisite |
+| Phase | Scope | Migration | Status |
 |---|---|---|---|
-| A | Migration 0173: `source_updated_at` on `landing.bis_scrape_raw`; `config.slot_labels` "rings"/"Rings" seed rows; `ref.bis_list_sources` 2 archon rows | Yes | None (slot_labels table exists since 0160) |
-| B | `_extract_archon()` + archon elif in `_build_url()` in `bis_sync.py`; archon branch in `discover_targets()` | No | |
-| C | `_parse_archon_page()` pure function; archon branch in `rebuild_bis_from_landing()` + `rebuild_item_popularity_from_landing()` | No | |
-| D | Weekly scheduler job + change detection wired end-to-end | No | |
-| E | Admin UI: archon columns in BIS matrix; popularity % visible in gear plan | No | |
+| A | Migration 0173: `source_updated_at` on `landing.bis_scrape_raw`; `config.slot_labels` "rings"/"Rings" seed rows; `ref.bis_list_sources` 2 archon rows | Yes | **COMPLETE** |
+| B | `_extract_archon()` + archon elif in `_build_url()` in `bis_sync.py`; archon branch in `discover_targets()` + `_parse_archon_page()` + `rebuild_*_from_landing()` + `run_archon_sync()` weekly scheduler | No | **COMPLETE** (migration 0174) |
+| C | Admin UI polish: `gear_plan_admin.js` v1.6.0 — Archon.gg origin label, tech icon, hide Overall, source_updated_at in matrix tooltip | No | **COMPLETE** |
+| D | Change detection end-to-end: `_archon_source_ts_from_raw()` + `_archon_is_unchanged()` helpers; `sync_target()` skips landing insert + sets `status='skipped'` when `lastUpdated` unchanged | No | **COMPLETE** |
+| E | (was Admin UI — absorbed into Phase C) | — | **COMPLETE** |
 
 ---
 
