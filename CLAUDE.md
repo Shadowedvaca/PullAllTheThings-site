@@ -248,7 +248,8 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Archon BIS Extraction — Phase A COMPLETE** (migration 0173, dev only, branch `feature/archon-bis-extraction`). `landing.bis_scrape_raw` +`source_updated_at TIMESTAMPTZ`; `config.slot_labels` seeded with `rings`/`Rings` → NULL (expand to ring_1+ring_2); `ref.bis_list_sources` seeded with Archon M+ (dungeon, sort 40) + Archon Raid (sort 41), `origin='archon'`. No code changes yet — schema only. Deployed to dev.
+- **Archon BIS Extraction — Phase B COMPLETE** (no migration, dev only, branch `feature/archon-bis-extraction`). `_build_url()` archon branch (spec-first/class-second slug order, M+/raid paths); `_TECHNIQUE_ORDER` + `discover_targets()` archon elif; `_parse_archon_page()` pure function (gear-tables section, JSX regex extraction, paired-slot expansion for trinket+rings); `_extract_archon()` (httpx → __NEXT_DATA__ → parse); `_extract()` dispatcher `json_embed_archon` branch; `sync_target()` writes `source_updated_at` for archon; `rebuild_bis_from_landing()` archon branch in pass 1; `rebuild_item_popularity_from_landing()` extended to include archon; `run_archon_sync()` weekly job (Monday 6AM UTC) registered in scheduler. 30 new tests; 1688/1694 suite-wide.
+- **Archon BIS Extraction — Phase A COMPLETE** (migration 0173, dev only). `landing.bis_scrape_raw` +`source_updated_at TIMESTAMPTZ`; `config.slot_labels` seeded with `rings`/`Rings` → NULL; `ref.bis_list_sources` seeded with Archon M+ (dungeon, sort 40) + Archon Raid (sort 41), `origin='archon'`.
 - **prod-v0.22.0 — COMPLETE** (migrations 0159–0172, merged PR #35, tagged prod-v0.22.0). Full IV BIS extraction pipeline + slot label fixes + Wowhead off-hand fix + adaptive primary_stats. **After deploying to prod: run Enrich & Classify, then Sync BIS Lists.**
 - **BIS Note & Guide Folding — Phase 5 COMPLETE** (no migration). `_iv_classify_tab_label` extended with `raid_instance_names: frozenset[str]`. 12 new tests; 1648/1654 suite-wide.
 - **BIS Note & Guide Folding — Phase 4 COMPLETE** (no migration, on dev, branch `feature/iv-bis-extraction`). Section Inventory admin UI now exposes merge config for existing overrides. GET `/page-sections` returns full override fields (`secondary_section_key`, `primary_note`, `match_note`, `secondary_note`) in `override_mappings` entries plus `spec_sections` (all distinct sections for the spec+origin) for the secondary dropdown. `gear_plan_admin.js` v1.5.0: section rows with an override show a "Merge" toggle button; clicking expands a sub-row with secondary section dropdown and 3 note inputs, pre-populated from saved override; `saveMergeConfig()` POSTs all 8 fields to the existing `/override` endpoint. 15 new tests in `tests/unit/test_section_inventory_api.py`; 1636/1642 suite-wide. Deployed to dev.
@@ -284,7 +285,7 @@ GUILD_SYNC_API_KEY=generate-a-strong-random-key
 - **Last migration:** 0173 (dev only — feature/archon-bis-extraction)
 - **Last prod tag:** `prod-v0.22.0`
 - **Active branch:** `feature/archon-bis-extraction`
-- **Next planned:** Archon BIS Extraction Phase B (scraper + URL builder + discover_targets)
+- **Next planned:** Archon BIS Extraction Phase C (_parse_archon_page already in Phase B; Phase C = verify on live data, admin UI archon columns, popularity in gear plan)
 - **Post-Phase E patch migrations (0108–0140):**
   - **0108** — `sp_rebuild_items()` fix: used `'unknown'` instead of `'unclassified'`; caused CHECK constraint violation.
   - **0109** — Tier classification fix: removed `OR target_slot='any'` wildcard; added NOT EXISTS guard for real raid/dungeon source rows.
