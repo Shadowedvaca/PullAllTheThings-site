@@ -25,7 +25,7 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncpg
 import discord
 
-from sv_common.config_cache import get_site_config
+from sv_common.config_cache import get_site_config, get_bis_encounter_baseline, set_bis_encounter_baseline
 from .blizzard_client import BlizzardClient, get_rank_name_map
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
@@ -254,6 +254,24 @@ class GuildSyncScheduler:
             self.run_archon_sync,
             CronTrigger(day_of_week="mon", hour=6, minute=0),
             id="archon_bis_sync",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+
+        # Encounter patch probe: hourly at :05 — detects new raid content, resets backoff
+        self.scheduler.add_job(
+            self.run_encounter_probe,
+            CronTrigger(minute=5),
+            id="encounter_probe",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+
+        # BIS daily sync: 04:00 UTC — scrape due targets, rebuild enrichment, send email
+        self.scheduler.add_job(
+            self.run_bis_daily_sync,
+            CronTrigger(hour=4, minute=0),
+            id="bis_daily_sync",
             replace_existing=True,
             misfire_grace_time=3600,
         )
@@ -1247,6 +1265,76 @@ class GuildSyncScheduler:
             )
         except Exception as exc:
             logger.error("Archon BIS sync: pipeline failed: %s", exc, exc_info=True)
+
+    async def run_encounter_probe(self):
+        """Hourly patch-signal probe. Runs at :05 past each hour.
+
+        Counts raid encounters in landing.blizzard_journal_encounters and compares
+        to the cached baseline in site_config.bis_encounter_count.  When the count
+        rises, all non-u.gg is_active scrape targets are reset to 1-day backoff so
+        the daily sync picks them up immediately after a patch.
+        """
+        try:
+            async with self.db_pool.acquire() as conn:
+                count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM landing.blizzard_journal_encounters"
+                    " WHERE instance_type = 'raid'"
+                )
+
+            baseline = get_bis_encounter_baseline()
+
+            if baseline is None:
+                # First probe run — record the baseline without triggering a reset
+                async with self.db_pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE common.site_config SET bis_encounter_count = $1",
+                        count,
+                    )
+                set_bis_encounter_baseline(count)
+                logger.info("Encounter probe: baseline initialised to %d raid encounters", count)
+                return
+
+            if count <= baseline:
+                return  # no-op — no log spam on steady-state runs
+
+            new_encounters = count - baseline
+            logger.info(
+                "Patch signal: %d new raid encounter(s) detected (was %d, now %d)"
+                " — resetting non-u.gg scrape targets to daily",
+                new_encounters, baseline, count,
+            )
+
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE config.bis_scrape_targets
+                       SET check_interval_days = 1,
+                           next_check_at       = NOW()
+                     WHERE is_active = TRUE
+                       AND source_id NOT IN (
+                               SELECT id FROM ref.bis_list_sources WHERE origin = 'ugg'
+                           )
+                    """
+                )
+                await conn.execute(
+                    "UPDATE common.site_config SET bis_encounter_count = $1",
+                    count,
+                )
+
+            set_bis_encounter_baseline(count)
+
+        except Exception as exc:
+            logger.error("Encounter probe failed: %s", exc, exc_info=True)
+
+    async def run_bis_daily_sync(self, triggered_by: str = "scheduled"):
+        """Daily BIS scrape + enrichment rebuild. Runs at 04:00 UTC.
+
+        Phase 1.7-B stub — scrape loop and delta capture wired in Phase 1.7-C/D.
+        """
+        logger.info(
+            "BIS daily sync job triggered (triggered_by=%s) — not yet implemented",
+            triggered_by,
+        )
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""
