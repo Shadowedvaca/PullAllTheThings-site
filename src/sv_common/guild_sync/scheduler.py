@@ -45,6 +45,12 @@ from .equipment_sync import load_characters_for_equipment_sync, sync_equipment
 from .raiderio_client import RaiderIOClient
 from .reporter import send_new_issues_report, send_sync_summary, send_error
 from .sync_logger import SyncLogEntry
+from .bis_sync import (
+    discover_targets as _bis_discover_targets,
+    sync_source as _bis_sync_source,
+    rebuild_bis_from_landing as _rebuild_bis_from_landing,
+    rebuild_item_popularity_from_landing as _rebuild_item_popularity_from_landing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +247,13 @@ class GuildSyncScheduler:
             self.run_weekly_error_digest,
             CronTrigger(day_of_week="sun", hour=8, minute=0),
             id="weekly_error_digest",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+        self.scheduler.add_job(
+            self.run_archon_sync,
+            CronTrigger(day_of_week="mon", hour=6, minute=0),
+            id="archon_bis_sync",
             replace_existing=True,
             misfire_grace_time=3600,
         )
@@ -1187,6 +1200,53 @@ class GuildSyncScheduler:
                 await audit_channel.send(embeds=embeds[i:i + 10])
         except Exception as exc:
             logger.error("Weekly error digest: failed to post to Discord: %s", exc)
+
+    async def run_archon_sync(self):
+        """Weekly Archon.gg BIS sync pipeline.
+
+        Runs Monday 6:00 AM UTC (after the Sunday weekly reset).
+        Syncs all active Archon scrape targets, then rebuilds BIS entries and
+        item popularity from the updated landing data.
+
+        Change detection in _extract_archon() short-circuits fetches when the
+        source page hasn't updated since the last scrape.
+        """
+        logger.info("Archon BIS sync: starting weekly scrape")
+        try:
+            async with self.db_pool.acquire() as conn:
+                source_rows = await conn.fetch(
+                    """
+                    SELECT id FROM ref.bis_list_sources
+                     WHERE origin = 'archon' AND is_active = TRUE
+                    """
+                )
+            archon_source_ids = [r["id"] for r in source_rows]
+
+            if not archon_source_ids:
+                logger.info("Archon BIS sync: no active archon sources — skipping")
+                return
+
+            total_targets = 0
+            total_errors = 0
+            for source_id in archon_source_ids:
+                stats = await _bis_sync_source(self.db_pool, source_id)
+                total_targets += stats.get("targets_run", 0)
+                total_errors  += stats.get("errors", 0)
+
+            logger.info(
+                "Archon BIS sync: scrape complete — %d targets, %d errors",
+                total_targets, total_errors,
+            )
+
+            bis_result = await _rebuild_bis_from_landing(self.db_pool)
+            pop_result = await _rebuild_item_popularity_from_landing(self.db_pool)
+            logger.info(
+                "Archon BIS sync: rebuild complete — %d bis_entries, %d popularity rows",
+                bis_result.get("bis_entries_inserted", 0),
+                pop_result.get("rows_inserted", 0),
+            )
+        except Exception as exc:
+            logger.error("Archon BIS sync: pipeline failed: %s", exc, exc_info=True)
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""
