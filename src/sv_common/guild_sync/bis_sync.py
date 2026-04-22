@@ -93,6 +93,7 @@ _TECHNIQUE_ORDER: dict[str, list[str]] = {
     "wowhead":   ["wh_gatherer"],
     "icy_veins": ["html_parse"],
     "method":    ["html_parse_method"],
+    "archon":    ["json_embed_archon"],
     "manual":    ["manual"],
 }
 
@@ -250,6 +251,33 @@ async def discover_targets(pool: asyncpg.Pool) -> dict:
                     else:
                         skipped += 1
 
+                elif origin == "archon":
+                    # One target per spec per content_type; no hero talent split.
+                    # Archon has Raid and M+ (content_type='dungeon') only.
+                    if content_type not in ("raid", "dungeon"):
+                        continue
+                    url = _build_url(origin, class_name, spec_name, "", content_type)
+                    if not url:
+                        continue
+                    technique = _TECHNIQUE_ORDER["archon"][0]
+                    expected += 1
+                    result = await conn.fetchrow(
+                        """
+                        INSERT INTO config.bis_scrape_targets
+                            (source_id, spec_id, hero_talent_id, content_type,
+                             url, preferred_technique, status)
+                        VALUES ($1, $2, NULL, $3, $4, $5, 'pending')
+                        ON CONFLICT (source_id, spec_id, url)
+                        DO NOTHING
+                        RETURNING id
+                        """,
+                        source_id, spec_id, content_type, url, technique,
+                    )
+                    if result:
+                        inserted += 1
+                    else:
+                        skipped += 1
+
                 else:
                     spec_hero_talents = ht_by_spec.get(spec_id, [])
                     if not spec_hero_talents:
@@ -348,6 +376,22 @@ def _build_url(
         cls_m  = _slug(class_name, "-")
         spec_m = _slug(spec_name,  "-")
         return f"https://www.method.gg/guides/{spec_m}-{cls_m}/gearing"
+
+    elif origin == "archon":
+        # Archon.gg — spec-first, class-second in the URL path.
+        cls_a  = _slug(class_name, "-")
+        spec_a = _slug(spec_name,  "-")
+        if content_type in ("dungeon", "mythic_plus"):
+            return (
+                f"https://www.archon.gg/wow/builds/{spec_a}/{cls_a}"
+                f"/mythic-plus/gear-and-tier-set/10/all-dungeons/this-week"
+            )
+        elif content_type == "raid":
+            return (
+                f"https://www.archon.gg/wow/builds/{spec_a}/{cls_a}"
+                f"/raid/gear-and-tier-set/mythic/all-bosses"
+            )
+        return None
 
     # Icy Veins — targets come from _iv_base_url via discover_targets.
     # Other unknown origins fall through to None.
@@ -609,8 +653,34 @@ async def sync_target(
 
     now = datetime.now(timezone.utc)
 
+    # Change detection for archon targets: skip landing insert if page hasn't updated.
+    _archon_unchanged = False
+    if origin == "archon" and raw_content:
+        try:
+            new_source_ts = _archon_source_ts_from_raw(raw_content)
+            if new_source_ts is not None:
+                async with pool.acquire() as _cd_conn:
+                    existing_source_ts = await _cd_conn.fetchval(
+                        """
+                        SELECT MAX(source_updated_at)
+                          FROM landing.bis_scrape_raw
+                         WHERE target_id = $1
+                        """,
+                        target_id,
+                    )
+                if _archon_is_unchanged(new_source_ts, existing_source_ts):
+                    _archon_unchanged = True
+                    logger.debug(
+                        "archon skip target=%d: unchanged since %s", target_id, new_source_ts
+                    )
+        except Exception:
+            pass  # on error, fall through and insert normally
+
     # Determine status from slot coverage (no guild_identity writes — enrichment layer handles that)
-    if slots:
+    if _archon_unchanged:
+        items_found = 0
+        status = "skipped"
+    elif slots:
         items_found = len(slots)
         extracted_slots = {s.slot for s in slots}
         # Normalize: any weapon slot (main_hand intermediate or resolved variant)
@@ -648,14 +718,16 @@ async def sync_target(
             """,
             status, items_found, now, target_id,
         )
-        if raw_content:
+        if raw_content and not _archon_unchanged:
             try:
+                source_updated_at = _archon_source_ts_from_raw(raw_content) if origin == "archon" else None
                 await conn.execute(
                     """
-                    INSERT INTO landing.bis_scrape_raw (source, url, content, target_id)
-                    VALUES ($1, $2, $3, $4)
+                    INSERT INTO landing.bis_scrape_raw
+                        (source, url, content, target_id, source_updated_at)
+                    VALUES ($1, $2, $3, $4, $5)
                     """,
-                    origin, url, raw_content, target_id,
+                    origin, url, raw_content, target_id, source_updated_at,
                 )
             except Exception:
                 pass  # landing write is best-effort
@@ -697,6 +769,9 @@ async def _extract(
             return slots, [], None, raw_content
         elif technique == "html_parse_method":
             slots, raw_content = await _extract_method(url, content_type, spec_id=spec_id, source_id=source_id, pool=pool)
+            return slots, [], None, raw_content
+        elif technique == "json_embed_archon":
+            slots, raw_content = await _extract_archon(url, pool=pool)
             return slots, [], None, raw_content
         elif technique == "manual":
             # Manual entries are written directly via the API — never scraped
@@ -775,6 +850,193 @@ async def _extract_ugg(
             slot_map = await _load_slot_labels(conn)
 
     return _parse_ugg_html(html, url, slot_map), html
+
+
+# ---------------------------------------------------------------------------
+# Archon.gg extractor  (json_embed_archon)
+# ---------------------------------------------------------------------------
+
+
+def _parse_archon_page(
+    page: dict,
+    slot_map: dict[str, str | None],
+    total_parses: int,
+) -> tuple[list[SimcSlot], list[UggPopularityItem]]:
+    """Parse Archon __NEXT_DATA__ page object → BIS slots + popularity rows.
+
+    Finds the BuildsGearTablesSection (navigationId='gear-tables') in
+    page['sections'].  For each table: extracts the slot label, item IDs, and
+    popularity percentages from the JSX strings embedded in the data rows.
+
+    Paired slots where slot_map returns None (trinket → trinket_1+trinket_2,
+    rings → ring_1+ring_2) are expanded: every item in the table is written for
+    both paired slots with the same guide_order.
+
+    Returns (slots, popularity_items).  Slots are ordered so that insert_bis_items()
+    assigns guide_order=1 to the most popular item (row index 0) per slot.
+    """
+    slots: list[SimcSlot] = []
+    popularity_items: list[UggPopularityItem] = []
+
+    # Find the gear tables section
+    gear_section: dict | None = None
+    for sec in (page.get("sections") or []):
+        if sec.get("navigationId") == "gear-tables":
+            gear_section = sec
+            break
+
+    if gear_section is None:
+        logger.warning("_parse_archon_page: no 'gear-tables' section found in page")
+        return slots, popularity_items
+
+    tables = ((gear_section.get("props") or {}).get("tables")) or []
+
+    for table in tables:
+        columns = table.get("columns") or {}
+        item_col = columns.get("item") or {}
+        raw_label = item_col.get("header") or ""
+        if not raw_label:
+            continue
+
+        # Header may be a JSX string: "<ImageIcon ...>Head</ImageIcon>" — strip tags
+        raw_label = re.sub(r"<[^>]+>", "", raw_label).strip()
+        if not raw_label:
+            continue
+
+        label_lower = raw_label.lower()
+        # Look up in slot_map (try lowercased first, then original)
+        if label_lower in slot_map:
+            slot_key = slot_map[label_lower]
+            known = True
+        elif raw_label in slot_map:
+            slot_key = slot_map[raw_label]
+            known = True
+        else:
+            slot_key = None
+            known = False
+
+        # Determine the target slot(s) for this table
+        if slot_key is not None:
+            target_slots = [slot_key]
+        elif known:
+            # NULL in slot_map = paired slot; expand to both
+            if "trinket" in label_lower:
+                target_slots = ["trinket_1", "trinket_2"]
+            elif "ring" in label_lower:
+                target_slots = ["ring_1", "ring_2"]
+            else:
+                logger.warning(
+                    "_parse_archon_page: NULL slot_key for unexpected label %r", raw_label
+                )
+                continue
+        else:
+            logger.warning("_parse_archon_page: unrecognised slot label %r", raw_label)
+            continue
+
+        for row in (table.get("data") or []):
+            item_jsx = row.get("item") or ""
+            pop_jsx  = row.get("popularity") or ""
+
+            m_id = re.search(r"id=\{(\d+)\}", item_jsx)
+            if not m_id:
+                continue
+            item_id = int(m_id.group(1))
+            if item_id == 0:
+                continue
+
+            m_pct = re.search(r"([\d.]+)%", pop_jsx)
+            pct = float(m_pct.group(1)) if m_pct else 0.0
+            count = round(pct / 100.0 * total_parses)
+
+            for slot in target_slots:
+                slots.append(SimcSlot(slot=slot, blizzard_item_id=item_id))
+                popularity_items.append(
+                    UggPopularityItem(
+                        slot=slot,
+                        blizzard_item_id=item_id,
+                        count=count,
+                        total=total_parses,
+                    )
+                )
+
+    return slots, popularity_items
+
+
+async def _extract_archon(
+    url: str,
+    pool: Optional[asyncpg.Pool] = None,
+) -> tuple[list[SimcSlot], Optional[str]]:
+    """Fetch Archon.gg gear page and extract BIS items.
+
+    Archon embeds all item data as JSON in a <script id="__NEXT_DATA__"> block —
+    no Playwright or SSR workaround needed; a plain httpx GET returns everything.
+
+    Returns (slots, raw_json) where raw_json is json.dumps(page) — the extracted
+    page object from __NEXT_DATA__, suitable for storage in landing.bis_scrape_raw.
+    raw_json is None on extraction failure.
+
+    Parsing is delegated to _parse_archon_page() for reuse in
+    rebuild_bis_from_landing().
+    """
+    async with httpx.AsyncClient(
+        follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
+    ) as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        html = response.text
+
+    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if not m:
+        logger.warning("_extract_archon: __NEXT_DATA__ not found in %s", url)
+        return [], None
+
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError as exc:
+        logger.warning("_extract_archon: JSON parse error for %s: %s", url, exc)
+        return [], None
+
+    try:
+        page = data["props"]["pageProps"]["page"]
+    except (KeyError, TypeError) as exc:
+        logger.warning("_extract_archon: unexpected page structure for %s: %s", url, exc)
+        return [], None
+
+    slot_map: dict[str, str | None] = {}
+    if pool:
+        async with pool.acquire() as conn:
+            slot_map = await _load_slot_labels(conn)
+
+    total_parses = page.get("totalParses", 0)
+    slots, _ = _parse_archon_page(page, slot_map, total_parses)
+
+    return slots, json.dumps(page)
+
+
+def _archon_source_ts_from_raw(raw_content: str) -> Optional[datetime]:
+    """Return the page.lastUpdated timestamp embedded in an archon raw_content JSON string.
+
+    Returns None if parsing fails or the key is absent.
+    """
+    try:
+        page_data = json.loads(raw_content)
+        ts_str = page_data.get("lastUpdated")
+        if ts_str:
+            return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except Exception:
+        pass
+    return None
+
+
+def _archon_is_unchanged(
+    new_ts: Optional[datetime],
+    stored_ts: Optional[datetime],
+) -> bool:
+    """True when the archon page hasn't changed since the last stored scrape.
+
+    Both timestamps must be present; stored_ts >= new_ts means no new data.
+    """
+    return stored_ts is not None and new_ts is not None and stored_ts >= new_ts
 
 
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:
@@ -1147,7 +1409,7 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
         rows = await conn.fetch("""
             WITH latest AS (
                 SELECT
-                    bsr.content, bsr.url,
+                    bsr.content, bsr.url, bsr.source,
                     t.source_id, t.spec_id,
                     ROW_NUMBER() OVER (
                         PARTITION BY bsr.target_id
@@ -1156,9 +1418,9 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
                   FROM landing.bis_scrape_raw bsr
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                  WHERE bsr.target_id IS NOT NULL
-                   AND bsr.source = 'ugg'
+                   AND bsr.source IN ('ugg', 'archon')
             )
-            SELECT content, url, source_id, spec_id
+            SELECT content, url, source, source_id, spec_id
               FROM latest
              WHERE rn = 1
         """)
@@ -1168,7 +1430,15 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
     specs_processed = 0
 
     for row in rows:
-        items = _parse_ugg_popularity(row["content"], row["url"], ugg_slot_map)
+        source = row["source"]
+        if source == "ugg":
+            items = _parse_ugg_popularity(row["content"], row["url"], ugg_slot_map)
+        elif source == "archon":
+            page = json.loads(row["content"])
+            total_parses = page.get("totalParses", 0)
+            _, items = _parse_archon_page(page, ugg_slot_map, total_parses)
+        else:
+            continue
         if not items:
             continue
 
@@ -1558,6 +1828,10 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         elif source == "icy_veins":
             sections = _iv_parse_sections(html, slot_map, raid_instance_names)
             slots = await _resolve_iv_section(pool, sections, spec_id, source_id, content_type)
+        elif source == "archon":
+            page = json.loads(html)
+            total_parses = page.get("totalParses", 0)
+            slots, _ = _parse_archon_page(page, slot_map, total_parses)
         else:
             continue
 
@@ -3411,7 +3685,10 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
             """
             SELECT t.source_id, t.spec_id, t.hero_talent_id,
                    t.status, t.items_found, t.last_fetched, t.preferred_technique,
-                   t.content_type, t.id AS target_id
+                   t.content_type, t.id AS target_id,
+                   (SELECT MAX(r.source_updated_at)
+                      FROM landing.bis_scrape_raw r
+                     WHERE r.target_id = t.id) AS source_updated_at
               FROM config.bis_scrape_targets t
             """
         )
@@ -3438,6 +3715,7 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
             "last_fetched": t["last_fetched"].isoformat() if t["last_fetched"] else None,
             "technique": t["preferred_technique"],
             "target_id": t["target_id"],
+            "source_updated_at": t["source_updated_at"].isoformat() if t["source_updated_at"] else None,
         }
 
     return {

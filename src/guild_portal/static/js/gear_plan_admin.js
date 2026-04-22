@@ -449,21 +449,29 @@ function renderCell(specId, sourceId, htId) {
         wrapper.appendChild(tech);
     }
 
+    const titleParts = [];
     if (cellData.last_fetched) {
-        const d = new Date(cellData.last_fetched);
-        wrapper.title = `Last synced: ${d.toLocaleString()} • ${cellData.technique || ''}`;
+        titleParts.push(`Last synced: ${new Date(cellData.last_fetched).toLocaleString()}`);
     }
+    if (cellData.source_updated_at) {
+        titleParts.push(`Source updated: ${new Date(cellData.source_updated_at).toLocaleString()}`);
+    }
+    if (cellData.technique) {
+        titleParts.push(cellData.technique);
+    }
+    if (titleParts.length) wrapper.title = titleParts.join(' • ');
 
     return wrapper;
 }
 
 function _techIcon(technique) {
     const icons = {
-        json_embed: '[JSON]',
-        wh_gatherer: '[WH]',
-        html_parse: '[HTML]',
-        simc: '[SimC]',
-        manual: '[Manual]',
+        json_embed:        '[JSON]',
+        json_embed_archon: '[JSON]',
+        wh_gatherer:       '[WH]',
+        html_parse:        '[HTML]',
+        simc:              '[SimC]',
+        manual:            '[Manual]',
     };
     return icons[technique] || technique;
 }
@@ -499,6 +507,8 @@ const _ORIGIN_LABELS = {
     ugg:       'u.gg',
     wowhead:   'Wowhead',
     icy_veins: 'Icy Veins',
+    archon:    'Archon.gg',
+    method:    'Method.gg',
 };
 
 function populateSourceSelector() {
@@ -521,18 +531,18 @@ function populateSourceSelector() {
             originSel.appendChild(opt);
         }
 
-        // Hide "Overall" plan type when u.gg is selected (no overall page)
+        // Hide "Overall" plan type for sources that have no overall page (u.gg, archon)
         originSel.addEventListener('change', () => {
             const planTypeSel = document.getElementById('sync-plan-type-select');
             if (!planTypeSel) return;
-            const isUgg = originSel.value === 'ugg';
+            const noOverall = ['ugg', 'archon'].includes(originSel.value);
             for (const opt of planTypeSel.options) {
                 if (opt.value === 'overall') {
-                    opt.disabled = isUgg;
-                    opt.style.display = isUgg ? 'none' : '';
+                    opt.disabled = noOverall;
+                    opt.style.display = noOverall ? 'none' : '';
                 }
             }
-            if (isUgg && planTypeSel.value === 'overall') planTypeSel.value = 'raid';
+            if (noOverall && planTypeSel.value === 'overall') planTypeSel.value = 'raid';
         });
     }
 
@@ -855,12 +865,12 @@ async function drillDown(specId, sourceId) {
     }
 }
 
-// Canonical slot order
+// Canonical slot order — mirrors quality_track.SLOT_ORDER (main_hand split in migration 0155)
 const SLOT_ORDER = [
     'head', 'neck', 'shoulder', 'back', 'chest', 'wrist',
     'hands', 'waist', 'legs', 'feet',
     'ring_1', 'ring_2', 'trinket_1', 'trinket_2',
-    'main_hand', 'off_hand',
+    'main_hand_2h', 'main_hand_1h', 'off_hand',
 ];
 
 function renderDrillDown(entries, specId, sourceId) {
@@ -921,7 +931,7 @@ function _slotLabel(slot) {
         chest: 'Chest', wrist: 'Wrist', hands: 'Hands', waist: 'Waist',
         legs: 'Legs', feet: 'Feet', ring_1: 'Ring 1', ring_2: 'Ring 2',
         trinket_1: 'Trinket 1', trinket_2: 'Trinket 2',
-        main_hand: 'Main Hand', off_hand: 'Off Hand',
+        main_hand_2h: 'Main Hand (2H)', main_hand_1h: 'Main Hand (1H)', off_hand: 'Off Hand',
     };
     return labels[slot] || slot;
 }

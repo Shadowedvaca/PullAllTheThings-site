@@ -1,7 +1,7 @@
 # gear-plan-1.6-archon — Archon.gg BIS Extraction
 
-> **Status:** Implementation plan — build after Icy Veins (gear-plan-1.4) is complete.
-> Branch: new `feature/archon-bis-extraction` off `main` after IV branch merges.
+> **Status:** Ready to build — IV BIS extraction (gear-plan-1.4/1.5) shipped as prod-v0.22.0.
+> Branch: new `feature/archon-bis-extraction` off `main`.
 
 ---
 
@@ -83,7 +83,7 @@ props.pageProps.page
 
 **Item ID:** regex `id=\{(\d+)\}` on the `item` JSX string  
 **Popularity %:** regex `([\d.]+)%` on the `popularity` JSX string  
-**BIS determination:** row index 0 in each table = highest popularity = BIS (priority=1)
+**BIS determination:** row index 0 in each table = highest popularity = BIS (guide_order=1)
 
 ### Paired Slot Handling
 
@@ -92,7 +92,7 @@ Expand both to both paired slots during enrichment:
 - Trinket → `trinket_1` + `trinket_2`
 - Rings → `ring_1` + `ring_2`
 
-Same item, same priority, same popularity data written for each.
+Same item, same guide_order, same popularity data written for each.
 
 ---
 
@@ -102,10 +102,12 @@ Same item, same priority, same popularity data written for each.
 
 - `landing.bis_scrape_raw` stores `json.dumps(page)` — the extracted `page` object from
   `__NEXT_DATA__` (not full HTML). This is the smallest self-contained unit of source data.
-- Slot label → slot key mapping lives in `config.slot_labels` (origin='archon') — seeded
-  in migration, not hardcoded in Python.
+- Slot label → slot key mapping lives in `config.slot_labels` — the universal text-label
+  table (no origin column). Archon labels are lowercased before lookup, so most already
+  resolve without new seed rows (see Schema Changes below).
 - Enrichment rebuild is Python (`rebuild_bis_from_landing()` in `bis_sync.py`), same as
-  all other sources. There is no stored proc that processes BIS entries.
+  all other sources. Uses `BisInsertionContext` + `insert_bis_items()` (extraction added in
+  Phase 1.5-2). There is no stored proc that processes BIS entries.
 - Popularity data goes to `enrichment.item_popularity` (existing, migration 0148), not to
   a new column on `enrichment.bis_entries`.
 
@@ -114,6 +116,8 @@ Same item, same priority, same popularity data written for each.
 ## Schema Changes
 
 ### `ref.bis_list_sources` — 2 new rows (seeded in migration)
+
+Currently 5 rows (u.gg Raid/M+/Overall, Method, Icy Veins). Adding:
 
 | name | short_label | origin | content_type | is_default | is_active |
 |---|---|---|---|---|---|
@@ -136,34 +140,43 @@ not derived data.
 The scraper checks `MAX(source_updated_at)` for the target URL before inserting a new row.
 If unchanged, skip — no new landing row, no enrichment rebuild triggered.
 
-### `config.slot_labels` — archon seed rows
+### `config.slot_labels` — minimal archon additions
 
-Seeded in the same migration (Phase A). Depends on IV Z.0 having already created
-`config.slot_labels`. Run after IV branch merges.
+**`config.slot_labels` has no `origin` column** (migration 0160 redesigned it to a
+universal `(page_label PK, slot_key)` table). Archon labels are lowercased before lookup,
+so most already resolve:
 
-| page_label | slot_key | Notes |
-|---|---|---|
-| Head | head | |
-| Neck | neck | |
-| Shoulders | shoulder | |
-| Back | back | |
-| Chest | chest | |
-| Wrist | wrist | |
-| Gloves | hands | |
-| Belt | waist | |
-| Legs | legs | |
-| Feet | feet | |
-| Trinket | NULL | Expand to trinket_1 + trinket_2 in code |
-| Rings | NULL | Expand to ring_1 + ring_2 in code |
-| Main-Hand | main_hand | |
-| Off-Hand | off_hand | |
+| Archon header | lowercased | In table? | Resolves to |
+|---|---|---|---|
+| Head | head | ✓ | head |
+| Neck | neck | ✓ | neck |
+| Shoulders | shoulders | ✓ | shoulder |
+| Back | back | ✓ | back |
+| Chest | chest | ✓ | chest |
+| Wrist | wrist | ✓ | wrist |
+| Gloves | gloves | ✓ | hands |
+| Belt | belt | ✓ | waist |
+| Legs | legs | ✓ | legs |
+| Feet | feet | ✓ | feet |
+| Trinket | trinket | ✓ | NULL → expand to trinket_1 + trinket_2 |
+| Rings | rings | ✗ — needs seed | NULL → expand to ring_1 + ring_2 |
+| Main-Hand | main-hand | ✓ | main_hand (engine resolves → 1h/2h) |
+| Off-Hand | off-hand | ✓ | off_hand |
+
+Phase A migration only needs to seed:
+```sql
+INSERT INTO config.slot_labels (page_label, slot_key)
+VALUES ('rings', NULL), ('Rings', NULL)
+ON CONFLICT (page_label) DO NOTHING;
+```
 
 `NULL` slot_key signals "expand to both paired slots" in `_parse_archon_page()`.
 
 ### No change to `enrichment.bis_entries`
 
 Do not add `popularity_pct` to `enrichment.bis_entries`. That table tracks ranking order
-(priority). Popularity statistics belong in `enrichment.item_popularity`.
+(guide_order). Popularity statistics belong in `enrichment.item_popularity`.
+`bis_note` is passed as `None` for archon — no section-override merge system.
 
 ### Popularity → `enrichment.item_popularity` (existing, migration 0148)
 
@@ -178,9 +191,7 @@ total = totalParses
 Using the actual `totalParses` from the page gives real absolute counts, not synthetic
 fractions. The `viz.item_popularity` view aggregates all sources via `SUM(count)/SUM(total)`,
 so archon and u.gg combine naturally into the Overall popularity % shown in the gear plan UI.
-No weighting — both sources contribute their raw parse counts. Since Archon and u.gg draw
-from overlapping but not identical player populations, combining them gives a more complete
-picture than either alone.
+No weighting — both sources contribute their raw parse counts.
 
 ---
 
@@ -207,13 +218,31 @@ Two-phase (no DB held during HTTP):
    - `target_id = target_id`
    - `source_updated_at = datetime.fromisoformat(page['lastUpdated'].replace('Z', '+00:00'))`
 
-### `_archon_gear_url(spec_slug, class_slug, content_type)` in `bis_sync.py`
+### `_build_url()` — add archon elif branch
 
-Called by `discover_targets()` for `origin='archon'`. Archon targets are one per spec per
-content type, `hero_talent_id = NULL` (one page covers all builds).
+Archon URL generation belongs in `_build_url()` alongside ugg/wowhead/method.
+URL patterns confirmed against Balance Druid, Blood DK, Restoration Shaman pages (2026-04):
 
-**Verify the raid URL pattern against a real page before writing this function.**
-M+ pattern is confirmed: `mythic-plus/gear-and-tier-set/10/all-dungeons/this-week`
+```python
+elif origin == "archon":
+    cls_a  = _slug(class_name, "-")   # e.g. "death-knight", "druid"
+    spec_a = _slug(spec_name,  "-")   # e.g. "blood", "balance", "restoration"
+    if content_type in ("dungeon", "mythic_plus"):
+        return (
+            f"https://www.archon.gg/wow/builds/{spec_a}/{cls_a}"
+            f"/mythic-plus/gear-and-tier-set/10/all-dungeons/this-week"
+        )
+    elif content_type == "raid":
+        return (
+            f"https://www.archon.gg/wow/builds/{spec_a}/{cls_a}"
+            f"/raid/gear-and-tier-set/mythic/all-bosses"
+        )
+    return None
+```
+
+Note: slug order is **spec-first, class-second** (opposite of what you might expect).
+Raid URLs do not end with `/this-week`. `_slug(name, "-")` produces the correct
+hyphenated lowercase format for multi-word class names (Death Knight → `death-knight`).
 
 ### `_parse_archon_page(page, slot_map, total_parses)` — pure function
 
@@ -237,15 +266,19 @@ def _parse_archon_page(
         For each row in table['data']:
             item_id = int(re.search(r'id=\\{(\\d+)\\}', row['item']).group(1))
             pct = float(re.search(r'([\\d.]+)%', row['popularity']).group(1))
-            priority = row_index + 1  (1-based)
+            guide_order = row_index + 1  (1-based)
             count = round(pct / 100 * total_parses)
             
-            Append SimcSlot(slot_key, item_id, ..., priority=priority)
+            Append SimcSlot(slot_key, item_id, ..., guide_order=guide_order)
             Append ArchonPopularityItem(slot_key, item_id, count, total_parses)
     
     Returns (slots, popularity_items)
     """
 ```
+
+`main_hand` returned from the slot_map is correct — `insert_bis_items()` calls
+`_resolve_weapon_slot()` internally to convert it to `main_hand_1h` or `main_hand_2h`
+based on `enrichment.items.slot_type`.
 
 ### `rebuild_bis_from_landing()` — add archon branch
 
@@ -253,15 +286,23 @@ def _parse_archon_page(
 elif source == 'archon':
     page = json.loads(content)
     total_parses = page.get('totalParses', 0)
-    slot_map = await _load_slot_labels(conn, 'archon')
+    slot_map = await _load_slot_labels(conn)  # universal table, no origin param
     slots, popularity_items = _parse_archon_page(page, slot_map, total_parses)
-    # slots → enrichment.bis_entries (same upsert path as all other sources)
+    # slots → insert_bis_items (same engine as all other sources)
+    ctx = BisInsertionContext(
+        pool=pool, spec_id=spec_id, source_id=source_id,
+        hero_talent_id=hero_talent_id, content_type=content_type,
+    )
+    result = await insert_bis_items(ctx, slots or [])
     # popularity_items → enrichment.item_popularity (same upsert path as u.gg)
 ```
 
-### `_load_slot_labels(conn, origin)` — already exists (IV Z.0)
+`bis_note` defaults to `None` (pass no `note=` argument to `insert_bis_items()`).
 
-No change needed. Pass `origin='archon'` to load archon seed rows from `config.slot_labels`.
+### `_load_slot_labels(conn)` — already exists, no changes
+
+No origin parameter. Loads the universal `config.slot_labels` table. All sources
+share the same table; archon's lowercase labels resolve through it directly.
 
 ---
 
@@ -271,13 +312,19 @@ No change needed. Pass `origin='archon'` to load archon seed rows from `config.s
 elif origin == 'archon':
     for spec in specs:
         for content_type in ('raid', 'dungeon'):
-            url = _archon_gear_url(spec.spec_slug, spec.class_slug, content_type)
+            url = _build_url('archon', spec.class_name, spec.spec_name, '', content_type)
             if url is None:
                 continue
-            technique = 'json_embed_archon'  # or reuse 'json_embed' with source dispatch
-            hero_talent_id = None  # one page covers all builds
+            technique = 'json_embed_archon'
+            hero_talent_id = None  # one page covers all hero talent builds
             INSERT config.bis_scrape_targets ... ON CONFLICT DO NOTHING
 ```
+
+Archon targets are NOT seeded in the Phase A migration. They are populated via the
+"Discover URLs" admin button (calls `discover_targets()`), same as all other origins.
+
+`technique = 'json_embed'` — reuse the existing technique string; dispatch on `origin`
+inside `sync_target()` rather than adding a new technique variant.
 
 ---
 
@@ -297,13 +344,13 @@ for archon sources (same functions, archon branch now active).
 
 ## Build Phases
 
-| Phase | Scope | Migration | Prerequisite |
+| Phase | Scope | Migration | Status |
 |---|---|---|---|
-| A | Migration: `source_updated_at` on `landing.bis_scrape_raw`; `config.slot_labels` archon rows; `ref.bis_list_sources` archon rows; `config.bis_scrape_targets` archon targets | Yes | IV Z.0 merged (slot_labels table exists) |
-| B | `_extract_archon()` + `_archon_gear_url()` in `bis_sync.py`; archon branch in `discover_targets()` | No | |
-| C | `_parse_archon_page()` pure function; archon branch in `rebuild_bis_from_landing()` + `rebuild_item_popularity_from_landing()` | No | |
-| D | Weekly scheduler job + change detection wired end-to-end | No | |
-| E | Admin UI: archon columns in BIS matrix; popularity % visible in gear plan | No | |
+| A | Migration 0173: `source_updated_at` on `landing.bis_scrape_raw`; `config.slot_labels` "rings"/"Rings" seed rows; `ref.bis_list_sources` 2 archon rows | Yes | **COMPLETE** |
+| B | `_extract_archon()` + archon elif in `_build_url()` in `bis_sync.py`; archon branch in `discover_targets()` + `_parse_archon_page()` + `rebuild_*_from_landing()` + `run_archon_sync()` weekly scheduler | No | **COMPLETE** (migration 0174) |
+| C | Admin UI polish: `gear_plan_admin.js` v1.6.0 — Archon.gg origin label, tech icon, hide Overall, source_updated_at in matrix tooltip | No | **COMPLETE** |
+| D | Change detection end-to-end: `_archon_source_ts_from_raw()` + `_archon_is_unchanged()` helpers; `sync_target()` skips landing insert + sets `status='skipped'` when `lastUpdated` unchanged | No | **COMPLETE** |
+| E | (was Admin UI — absorbed into Phase C) | — | **COMPLETE** |
 
 ---
 
@@ -311,26 +358,18 @@ for archon sources (same functions, archon branch now active).
 
 | File | Current state | Change |
 |---|---|---|
-| `src/sv_common/guild_sync/bis_sync.py` | No archon code (all renamed to ugg) | Add `_extract_archon()`, `_archon_gear_url()`, `_parse_archon_page()`; archon branches in `rebuild_*_from_landing()` and `discover_targets()` |
+| `src/sv_common/guild_sync/bis_sync.py` | No archon code (all renamed to ugg) | Add `_extract_archon()`, archon elif in `_build_url()`, `_parse_archon_page()`; archon branches in `rebuild_*_from_landing()` and `discover_targets()`; use existing `BisInsertionContext` + `insert_bis_items()` |
 | `src/sv_common/guild_sync/scheduler.py` | `run_bis_sync()` daily job | Add `run_archon_sync()` weekly job |
-| `alembic/versions/` | Check latest before writing | Phase A migration |
+| `alembic/versions/` | Last migration: 0172 | Phase A = 0173 |
 | `src/guild_portal/static/js/gear_plan_admin.js` | No archon columns | Phase E: archon columns in BIS matrix |
 
 ---
 
 ## Open Questions for Build Session
 
-1. **Raid URL pattern** — M+ is confirmed: `mythic-plus/gear-and-tier-set/10/all-dungeons/this-week`.
-   Fetch one Archon raid page and confirm the difficulty/encounter slug segments before writing
-   `_archon_gear_url()`.
-
-2. **Spec/class slug format** — confirm slugs for all 40 specs. Some class names use hyphens
-   (`death-knight`, `demon-hunter`). Build a mapping in `discover_targets()` analogous to how
-   `_iv_bis_role()` handles IV's role-based URL variation.
-
-3. **Rows per slot table** — the Balance Druid sample had 12 rows per table. Confirm whether
+1. **Rows per slot table** — the Balance Druid sample had 12 rows per table. Confirm whether
    12 is a hard Archon cap or varies. All rows are stored in `enrichment.item_popularity`;
-   only row 0 (priority=1) feeds `enrichment.bis_entries` as BIS.
+   only row 0 (guide_order=1) feeds `enrichment.bis_entries` as BIS.
 
-4. **Embellishments and crafted gear sections** — `BuildsCraftedGearSection` and
+2. **Embellishments and crafted gear sections** — `BuildsCraftedGearSection` and
    `BuildsEmbellishmentsSection` are present on the gear page. Out of scope for v1.
