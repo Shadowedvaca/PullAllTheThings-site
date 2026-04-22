@@ -2473,7 +2473,7 @@ const _GP_ORIGIN_LABELS = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy 
 const _GP_ORIGIN_ORDER  = ['archon', 'icy_veins', 'wowhead'];
 const _GP_TIER_VAL      = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 // Point values for trinket sort: combined score = sum of best-per-source; ties by best individual then pop %
-const _GP_TIER_SCORE    = { S: 10, A: 8, B: 6, C: 4, D: 3, E: 2, F: 1 };
+const _GP_TIER_SCORE    = { S: 20, A: 15, B: 10, C: 5, D: 1, E: 0.5, F: 0.25 };
 
 // Ordered guide columns — always derived from global bis_sources so columns are consistent across slots.
 // globalSources: data.bis_sources (array with .origin); trinketItems adds any extra rating origins.
