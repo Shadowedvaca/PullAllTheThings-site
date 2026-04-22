@@ -488,3 +488,311 @@ class TestSyncTargetHashDedup:
         assert len(insert_sqls) == 1, "Expected one bis_scrape_raw insert"
         # content_hash should be the 6th parameter in the INSERT VALUES ($1..$6)
         assert "content_hash" in insert_sqls[0]
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.7-D — _snapshot_bis_entries + _compute_delta
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotBisEntries:
+    @pytest.mark.asyncio
+    async def test_returns_keyed_dict(self):
+        """_snapshot_bis_entries returns {(spec_id, source_id, slot, item_id): name}."""
+        from sv_common.guild_sync.bis_sync import _snapshot_bis_entries
+
+        rows = [
+            {"blizzard_item_id": 100, "spec_id": 1, "source_id": 2, "slot": "head", "name": "Helm of Test"},
+            {"blizzard_item_id": 200, "spec_id": 1, "source_id": 2, "slot": "chest", "name": "Chest of Test"},
+        ]
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=rows)
+
+        result = await _snapshot_bis_entries(conn)
+
+        assert (1, 2, "head", 100) in result
+        assert result[(1, 2, "head", 100)] == "Helm of Test"
+        assert (1, 2, "chest", 200) in result
+
+    @pytest.mark.asyncio
+    async def test_empty_enrichment_returns_empty_dict(self):
+        from sv_common.guild_sync.bis_sync import _snapshot_bis_entries
+
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=[])
+
+        result = await _snapshot_bis_entries(conn)
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_all_rows_captured(self):
+        from sv_common.guild_sync.bis_sync import _snapshot_bis_entries
+
+        rows = [
+            {"blizzard_item_id": i, "spec_id": 1, "source_id": 1, "slot": "head", "name": f"Item{i}"}
+            for i in range(10)
+        ]
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=rows)
+
+        result = await _snapshot_bis_entries(conn)
+        assert len(result) == 10
+
+
+class TestComputeDelta:
+    def _make_before(self):
+        return {
+            (1, 2, "head", 100): "Old Helm",
+            (1, 2, "chest", 200): "Shared Chest",
+            (1, 2, "legs", 300): "Old Legs",
+        }
+
+    def _make_after(self):
+        return {
+            (1, 2, "head", 101): "New Helm",       # item_id changed — appears as add+remove
+            (1, 2, "chest", 200): "Shared Chest",  # unchanged
+            (1, 2, "ring_1", 400): "New Ring",     # newly added slot
+        }
+
+    def test_added_items_identified(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        before = self._make_before()
+        after = self._make_after()
+        added, removed = _compute_delta(before, after)
+
+        added_items = {(a["slot"], a["blizzard_item_id"]) for a in added}
+        assert ("head", 101) in added_items
+        assert ("ring_1", 400) in added_items
+
+    def test_removed_items_identified(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        before = self._make_before()
+        after = self._make_after()
+        added, removed = _compute_delta(before, after)
+
+        removed_items = {(r["slot"], r["blizzard_item_id"]) for r in removed}
+        assert ("head", 100) in removed_items
+        assert ("legs", 300) in removed_items
+
+    def test_unchanged_items_in_neither_list(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        before = self._make_before()
+        after = self._make_after()
+        added, removed = _compute_delta(before, after)
+
+        added_ids = {a["blizzard_item_id"] for a in added}
+        removed_ids = {r["blizzard_item_id"] for r in removed}
+        assert 200 not in added_ids
+        assert 200 not in removed_ids
+
+    def test_empty_before_all_added(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        after = {(1, 1, "head", 50): "Helm"}
+        added, removed = _compute_delta({}, after)
+        assert len(added) == 1
+        assert len(removed) == 0
+
+    def test_empty_after_all_removed(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        before = {(1, 1, "head", 50): "Helm"}
+        added, removed = _compute_delta(before, {})
+        assert len(added) == 0
+        assert len(removed) == 1
+
+    def test_both_empty_no_delta(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        added, removed = _compute_delta({}, {})
+        assert added == []
+        assert removed == []
+
+    def test_item_dict_structure(self):
+        from sv_common.guild_sync.bis_sync import _compute_delta
+
+        before = {}
+        after = {(3, 4, "trinket_1", 999): "Cool Trinket"}
+        added, _ = _compute_delta(before, after)
+
+        assert len(added) == 1
+        item = added[0]
+        assert item["spec_id"] == 3
+        assert item["source_id"] == 4
+        assert item["slot"] == "trinket_1"
+        assert item["blizzard_item_id"] == 999
+        assert item["item_name"] == "Cool Trinket"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.7-D — run_bis_daily_sync enrichment integration
+# ---------------------------------------------------------------------------
+
+
+class TestBisDailySyncEnrichmentIntegration:
+    """Verify that run_bis_daily_sync calls enrichment rebuilds and persists delta."""
+
+    def _make_scheduler_with_pool(self, fetch_rows=None, fetchval_side=None):
+        """Build scheduler + a multi-call-aware mock pool."""
+        scheduler = _make_scheduler()
+
+        fetchval_call_count = {"n": 0}
+        fetchval_values = fetchval_side or [0, 0, 0, 0]  # before_trinket, after_bis, after_trinket...
+
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=fetch_rows or [])
+
+        async def fetchval_side_fn(*args, **kwargs):
+            idx = fetchval_call_count["n"]
+            fetchval_call_count["n"] += 1
+            if idx < len(fetchval_values):
+                return fetchval_values[idx]
+            return 0
+        conn.fetchval = AsyncMock(side_effect=fetchval_side_fn)
+        conn.execute = AsyncMock()
+
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+        scheduler.db_pool = pool
+        return scheduler, conn
+
+    @pytest.mark.asyncio
+    async def test_calls_rebuild_bis_from_landing(self):
+        scheduler, _ = self._make_scheduler_with_pool()
+
+        with patch("sv_common.guild_sync.scheduler._snapshot_bis_entries",
+                   new_callable=AsyncMock, return_value={}), \
+             patch("sv_common.guild_sync.scheduler._compute_delta",
+                   return_value=([], [])), \
+             patch("sv_common.guild_sync.scheduler._rebuild_bis_from_landing",
+                   new_callable=AsyncMock) as mock_rebuild_bis, \
+             patch("sv_common.guild_sync.scheduler._rebuild_trinket_ratings_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_item_popularity_from_landing",
+                   new_callable=AsyncMock):
+            await scheduler.run_bis_daily_sync()
+
+        mock_rebuild_bis.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_calls_rebuild_trinket_ratings(self):
+        scheduler, _ = self._make_scheduler_with_pool()
+
+        with patch("sv_common.guild_sync.scheduler._snapshot_bis_entries",
+                   new_callable=AsyncMock, return_value={}), \
+             patch("sv_common.guild_sync.scheduler._compute_delta",
+                   return_value=([], [])), \
+             patch("sv_common.guild_sync.scheduler._rebuild_bis_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_trinket_ratings_from_landing",
+                   new_callable=AsyncMock) as mock_trinket, \
+             patch("sv_common.guild_sync.scheduler._rebuild_item_popularity_from_landing",
+                   new_callable=AsyncMock):
+            await scheduler.run_bis_daily_sync()
+
+        mock_trinket.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_calls_rebuild_item_popularity(self):
+        scheduler, _ = self._make_scheduler_with_pool()
+
+        with patch("sv_common.guild_sync.scheduler._snapshot_bis_entries",
+                   new_callable=AsyncMock, return_value={}), \
+             patch("sv_common.guild_sync.scheduler._compute_delta",
+                   return_value=([], [])), \
+             patch("sv_common.guild_sync.scheduler._rebuild_bis_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_trinket_ratings_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_item_popularity_from_landing",
+                   new_callable=AsyncMock) as mock_pop:
+            await scheduler.run_bis_daily_sync()
+
+        mock_pop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_inserts_enrichment_counts_in_daily_runs(self):
+        """bis_daily_runs INSERT includes bis_entries_before/after and trinket counts."""
+        scheduler, _ = self._make_scheduler_with_pool()
+
+        execute_calls = []
+
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=[])
+        conn.fetchval = AsyncMock(return_value=0)
+
+        async def capture_execute(*args, **kwargs):
+            execute_calls.append(args)
+        conn.execute = AsyncMock(side_effect=capture_execute)
+
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+        scheduler.db_pool = pool
+
+        before = {(1, 1, "head", 100): "Helm"}
+        after = {(1, 1, "head", 101): "New Helm", (1, 1, "chest", 200): "Chest"}
+
+        with patch("sv_common.guild_sync.scheduler._snapshot_bis_entries",
+                   new_callable=AsyncMock, side_effect=[before, after]), \
+             patch("sv_common.guild_sync.scheduler._rebuild_bis_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_trinket_ratings_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_item_popularity_from_landing",
+                   new_callable=AsyncMock):
+            await scheduler.run_bis_daily_sync()
+
+        insert_calls = [c for c in execute_calls if "bis_daily_runs" in c[0]]
+        assert len(insert_calls) == 1
+        sql = insert_calls[0][0]
+        assert "bis_entries_before" in sql
+        assert "bis_entries_after" in sql
+        assert "trinket_ratings_before" in sql
+        assert "trinket_ratings_after" in sql
+        assert "delta_added" in sql
+        assert "delta_removed" in sql
+
+    @pytest.mark.asyncio
+    async def test_enrichment_failure_does_not_crash_job(self):
+        """If enrichment rebuild raises, the job still inserts a bis_daily_runs row."""
+        scheduler, _ = self._make_scheduler_with_pool()
+
+        execute_calls = []
+
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=[])
+        conn.fetchval = AsyncMock(return_value=0)
+
+        async def capture_execute(*args, **kwargs):
+            execute_calls.append(args)
+        conn.execute = AsyncMock(side_effect=capture_execute)
+
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+        scheduler.db_pool = pool
+
+        with patch("sv_common.guild_sync.scheduler._snapshot_bis_entries",
+                   new_callable=AsyncMock, side_effect=RuntimeError("DB exploded")), \
+             patch("sv_common.guild_sync.scheduler._rebuild_bis_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_trinket_ratings_from_landing",
+                   new_callable=AsyncMock), \
+             patch("sv_common.guild_sync.scheduler._rebuild_item_popularity_from_landing",
+                   new_callable=AsyncMock):
+            await scheduler.run_bis_daily_sync()
+
+        # Job should still insert a bis_daily_runs row
+        insert_calls = [c for c in execute_calls if "bis_daily_runs" in c[0]]
+        assert len(insert_calls) == 1

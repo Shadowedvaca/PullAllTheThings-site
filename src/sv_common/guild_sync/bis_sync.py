@@ -3790,3 +3790,63 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         ],
         "cells": cells,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.7-D — Delta capture helpers for run_bis_daily_sync()
+# ---------------------------------------------------------------------------
+
+
+async def _snapshot_bis_entries(conn) -> dict:
+    """Snapshot current enrichment.bis_entries as a keyed dict.
+
+    Returns {(spec_id, source_id, slot, blizzard_item_id): item_name}.
+    Called before rebuild (TRUNCATE) so delta can be computed afterwards.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT be.blizzard_item_id, be.spec_id, be.source_id, be.slot,
+               bi.name
+          FROM enrichment.bis_entries be
+          JOIN landing.blizzard_items bi ON bi.id = be.blizzard_item_id
+        """
+    )
+    return {
+        (row["spec_id"], row["source_id"], row["slot"], row["blizzard_item_id"]): row["name"]
+        for row in rows
+    }
+
+
+def _compute_delta(
+    before: dict,
+    after: dict,
+) -> tuple[list[dict], list[dict]]:
+    """Compare two _snapshot_bis_entries dicts and return (added, removed) lists.
+
+    Each item: {spec_id, source_id, slot, blizzard_item_id, item_name}.
+    Items present in both before and after are not included in either list.
+    """
+    before_keys = set(before.keys())
+    after_keys = set(after.keys())
+
+    added = [
+        {
+            "spec_id": k[0],
+            "source_id": k[1],
+            "slot": k[2],
+            "blizzard_item_id": k[3],
+            "item_name": after[k],
+        }
+        for k in sorted(after_keys - before_keys)
+    ]
+    removed = [
+        {
+            "spec_id": k[0],
+            "source_id": k[1],
+            "slot": k[2],
+            "blizzard_item_id": k[3],
+            "item_name": before[k],
+        }
+        for k in sorted(before_keys - after_keys)
+    ]
+    return added, removed

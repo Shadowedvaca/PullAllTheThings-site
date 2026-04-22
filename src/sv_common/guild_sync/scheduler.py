@@ -15,6 +15,7 @@ which don't need scheduling.
 """
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -51,7 +52,10 @@ from .bis_sync import (
     sync_source as _bis_sync_source,
     sync_target as _bis_sync_target,
     rebuild_bis_from_landing as _rebuild_bis_from_landing,
+    rebuild_trinket_ratings_from_landing as _rebuild_trinket_ratings_from_landing,
     rebuild_item_popularity_from_landing as _rebuild_item_popularity_from_landing,
+    _snapshot_bis_entries,
+    _compute_delta,
 )
 
 logger = logging.getLogger(__name__)
@@ -1332,10 +1336,9 @@ class GuildSyncScheduler:
         """Daily BIS scrape + enrichment rebuild. Runs at 04:00 UTC.
 
         Fetches all active scrape targets whose next_check_at is due, calls
-        sync_target() for each (with 2s intra-source rate limiting), then
-        records a bis_daily_runs row with scrape stats.
-
-        Enrichment rebuild and delta capture wired in Phase 1.7-D.
+        sync_target() for each (with 2s intra-source rate limiting), rebuilds
+        enrichment from landing data, captures a before/after delta, and records
+        a bis_daily_runs row with full stats.
         """
         from datetime import datetime, timezone
 
@@ -1394,6 +1397,47 @@ class GuildSyncScheduler:
                     counts["failed"] += 1
                 prev_source_id = target["source_id"]
 
+            # --- Phase 1.7-D: enrichment rebuild + delta capture ---
+            before_snapshot: dict = {}
+            after_snapshot: dict = {}
+            before_trinket_count = 0
+            after_bis_count = 0
+            after_trinket_count = 0
+            delta_added: list = []
+            delta_removed: list = []
+
+            try:
+                async with self.db_pool.acquire() as conn:
+                    before_snapshot = await _snapshot_bis_entries(conn)
+                    before_trinket_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM enrichment.trinket_ratings"
+                    ) or 0
+
+                await _rebuild_bis_from_landing(self.db_pool)
+                await _rebuild_trinket_ratings_from_landing(self.db_pool)
+                await _rebuild_item_popularity_from_landing(self.db_pool)
+
+                async with self.db_pool.acquire() as conn:
+                    after_snapshot = await _snapshot_bis_entries(conn)
+                    after_bis_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM enrichment.bis_entries"
+                    ) or 0
+                    after_trinket_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM enrichment.trinket_ratings"
+                    ) or 0
+
+                delta_added, delta_removed = _compute_delta(before_snapshot, after_snapshot)
+                logger.info(
+                    "BIS daily sync: enrichment rebuilt — %d bis_entries (%+d), "
+                    "%d trinket_ratings (%+d); delta +%d/-%d items",
+                    after_bis_count, after_bis_count - len(before_snapshot),
+                    after_trinket_count, after_trinket_count - before_trinket_count,
+                    len(delta_added), len(delta_removed),
+                )
+            except Exception as exc:
+                notes_parts.append(f"enrichment rebuild failed: {exc}")
+                logger.error("BIS daily sync: enrichment rebuild failed: %s", exc, exc_info=True)
+
             duration = round(time.monotonic() - start_t, 2)
 
             async with self.db_pool.acquire() as conn:
@@ -1401,12 +1445,20 @@ class GuildSyncScheduler:
                     """
                     INSERT INTO landing.bis_daily_runs
                         (triggered_by, targets_checked, targets_changed, targets_unchanged,
-                         targets_failed, targets_skipped, duration_seconds, notes)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                         targets_failed, targets_skipped,
+                         bis_entries_before, bis_entries_after,
+                         trinket_ratings_before, trinket_ratings_after,
+                         delta_added, delta_removed,
+                         duration_seconds, notes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                     """,
                     triggered_by,
                     counts["checked"], counts["changed"], counts["unchanged"],
                     counts["failed"], counts["skipped"],
+                    len(before_snapshot), after_bis_count,
+                    before_trinket_count, after_trinket_count,
+                    json.dumps(delta_added) if delta_added else None,
+                    json.dumps(delta_removed) if delta_removed else None,
                     duration,
                     "\n".join(notes_parts) if notes_parts else None,
                 )
