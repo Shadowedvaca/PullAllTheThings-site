@@ -1827,7 +1827,7 @@ function _gpRenderCenterPanel(data) {
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
     )).join('');
 
-  const ORIGIN_LABEL       = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+  const ORIGIN_LABEL       = { archon: 'Archon', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
   const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
   const CONTENT_TYPE_ORDER = { overall: 0, raid: 1, mythic_plus: 2 };
   const srcByOrigin = [];
@@ -2469,7 +2469,7 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
 
 // ── Guide-aware unified table rendering ──────────────────────────────────────
 
-const _GP_ORIGIN_LABELS = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
+const _GP_ORIGIN_LABELS = { archon: 'Archon', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
 const _GP_ORIGIN_ORDER  = ['archon', 'icy_veins', 'wowhead'];
 const _GP_TIER_VAL      = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 // Point values for trinket sort: combined score = sum of best-per-source; ties by best individual then pop %

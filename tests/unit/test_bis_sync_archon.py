@@ -161,8 +161,8 @@ class TestParseArchonPageNormalSlots:
         assert slots[0].slot == "head"
         assert slots[0].blizzard_item_id == 237846
 
-    def test_multiple_rows_preserve_order(self):
-        """Row order determines guide_order via insert_bis_items(); first = guide_order 1."""
+    def test_multiple_rows_only_top_item_returned(self):
+        """Regular slots are limited to 1 item — the most popular (first row)."""
         page = _make_page([
             _make_table("Head", [
                 _make_row(111, 60.0),
@@ -171,7 +171,8 @@ class TestParseArchonPageNormalSlots:
             ])
         ])
         slots, _ = _parse_archon_page(page, _ARCHON_SLOT_MAP, 1000)
-        assert [s.blizzard_item_id for s in slots] == [111, 222, 333]
+        assert len(slots) == 1
+        assert slots[0].blizzard_item_id == 111
 
     def test_all_standard_archon_labels_resolve(self):
         labels = ["Head", "Neck", "Shoulders", "Back", "Chest",
@@ -270,11 +271,13 @@ class TestParseArchonPagePairedSlots:
         assert "ring_1" in slot_keys
         assert "ring_2" in slot_keys
 
-    def test_multiple_trinket_rows_each_expand_to_pair(self):
+    def test_paired_slots_limited_to_top_two_items(self):
+        """Trinket/ring tables return top 2 items (one per socket), not all rows."""
         page = _make_page([
             _make_table("Trinket", [
                 _make_row(501, 45.0),
                 _make_row(502, 30.0),
+                _make_row(503, 15.0),  # 3rd item — must be excluded
             ])
         ])
         slots, _ = _parse_archon_page(page, _ARCHON_SLOT_MAP, 1000)
@@ -282,6 +285,20 @@ class TestParseArchonPagePairedSlots:
         t2_ids = [s.blizzard_item_id for s in slots if s.slot == "trinket_2"]
         assert t1_ids == [501, 502]
         assert t2_ids == [501, 502]
+
+    def test_ring_paired_slots_limited_to_top_two_items(self):
+        page = _make_page([
+            _make_table("Rings", [
+                _make_row(601, 50.0),
+                _make_row(602, 30.0),
+                _make_row(603, 10.0),  # 3rd item — must be excluded
+            ])
+        ])
+        slots, _ = _parse_archon_page(page, _ARCHON_SLOT_MAP, 1000)
+        r1_ids = [s.blizzard_item_id for s in slots if s.slot == "ring_1"]
+        r2_ids = [s.blizzard_item_id for s in slots if s.slot == "ring_2"]
+        assert r1_ids == [601, 602]
+        assert r2_ids == [601, 602]
 
 
 # ---------------------------------------------------------------------------
@@ -321,12 +338,15 @@ class TestParseArchonPagePopularity:
             assert p.count == round(0.45 * 10000)
             assert p.total == 10000
 
-    def test_multiple_rows_all_have_same_total(self):
+    def test_top_item_has_correct_total(self):
+        """Regular slot: only top item is returned; its total matches page totalParses."""
         page = _make_page([
             _make_table("Head", [_make_row(111, 60.0), _make_row(222, 30.0)])
         ], total_parses=5000)
         _, pop = _parse_archon_page(page, _ARCHON_SLOT_MAP, 5000)
-        assert all(p.total == 5000 for p in pop)
+        assert len(pop) == 1
+        assert pop[0].blizzard_item_id == 111
+        assert pop[0].total == 5000
 
 
 # ---------------------------------------------------------------------------
