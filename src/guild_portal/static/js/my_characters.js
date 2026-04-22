@@ -2472,6 +2472,8 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
 const _GP_ORIGIN_LABELS = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
 const _GP_ORIGIN_ORDER  = ['archon', 'icy_veins', 'wowhead'];
 const _GP_TIER_VAL      = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
+// Point values for trinket sort: combined score = sum of best-per-source; ties by best individual then pop %
+const _GP_TIER_SCORE    = { S: 10, A: 8, B: 6, C: 4, D: 3, E: 2, F: 1 };
 
 // Ordered guide columns — always derived from global bis_sources so columns are consistent across slots.
 // globalSources: data.bis_sources (array with .origin); trinketItems adds any extra rating origins.
@@ -2582,21 +2584,29 @@ function _gpMergeTrinketBis(bis, trinketItems) {
     }
   }
   const items = [...itemMap.values()];
-  const bestTier = it => {
-    let b = 99;
-    for (const byCt of Object.values(it.ratings || {}))
-      for (const r of Object.values(byCt)) { const v = _GP_TIER_VAL[r.tier] ?? 99; if (v < b) b = v; }
-    return b;
+  // Combined score: sum of best-per-source scores (S=10 A=8 B=6 C=4 D=3 E=2 F=1).
+  // Tie-break 1: highest single mark.  Tie-break 2: popularity %.  Tie-break 3: name.
+  const combinedScore = it => {
+    let total = 0;
+    for (const byCt of Object.values(it.ratings || {})) {
+      let best = 0;
+      for (const r of Object.values(byCt)) { const v = _GP_TIER_SCORE[r.tier] ?? 0; if (v > best) best = v; }
+      total += best;
+    }
+    return total;
   };
-  const bestPos = it => {
-    let b = 999999;
+  const bestScore = it => {
+    let best = 0;
     for (const byCt of Object.values(it.ratings || {}))
-      for (const r of Object.values(byCt)) { if ((r.position ?? 999999) < b) b = r.position ?? 999999; }
-    return b;
+      for (const r of Object.values(byCt)) { const v = _GP_TIER_SCORE[r.tier] ?? 0; if (v > best) best = v; }
+    return best;
   };
   items.sort((a, b) => {
-    const td = bestTier(a) - bestTier(b); if (td) return td;
-    const pd = bestPos(a) - bestPos(b);   if (pd) return pd;
+    const sd = combinedScore(b) - combinedScore(a); if (sd) return sd;
+    const bd = bestScore(b)     - bestScore(a);     if (bd) return bd;
+    const pa = _gpPopularityVal(a.popularity) ?? -1;
+    const pb = _gpPopularityVal(b.popularity) ?? -1;
+    const pd = pb - pa;                             if (pd) return pd;
     return (a.name || '').localeCompare(b.name || '');
   });
   return items;
