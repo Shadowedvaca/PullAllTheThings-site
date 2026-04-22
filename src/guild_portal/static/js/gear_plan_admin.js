@@ -865,12 +865,12 @@ async function drillDown(specId, sourceId) {
     }
 }
 
-// Canonical slot order
+// Canonical slot order — mirrors quality_track.SLOT_ORDER (main_hand split in migration 0155)
 const SLOT_ORDER = [
     'head', 'neck', 'shoulder', 'back', 'chest', 'wrist',
     'hands', 'waist', 'legs', 'feet',
     'ring_1', 'ring_2', 'trinket_1', 'trinket_2',
-    'main_hand', 'off_hand',
+    'main_hand_2h', 'main_hand_1h', 'off_hand',
 ];
 
 function renderDrillDown(entries, specId, sourceId) {
@@ -931,7 +931,7 @@ function _slotLabel(slot) {
         chest: 'Chest', wrist: 'Wrist', hands: 'Hands', waist: 'Waist',
         legs: 'Legs', feet: 'Feet', ring_1: 'Ring 1', ring_2: 'Ring 2',
         trinket_1: 'Trinket 1', trinket_2: 'Trinket 2',
-        main_hand: 'Main Hand', off_hand: 'Off Hand',
+        main_hand_2h: 'Main Hand (2H)', main_hand_1h: 'Main Hand (1H)', off_hand: 'Off Hand',
     };
     return labels[slot] || slot;
 }
