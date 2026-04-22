@@ -2567,8 +2567,10 @@ function _gpMergeTrinketBis(bis, trinketItems) {
   for (const r of (bis || [])) {
     const bid = r.blizzard_item_id;
     if (seenBis.has(bid)) {
-      if (r.bis_note && itemMap.has(bid) && !itemMap.get(bid).bis_note)
+      if (r.bis_note && itemMap.has(bid) && !itemMap.get(bid).bis_note) {
         itemMap.get(bid).bis_note = r.bis_note;
+        itemMap.get(bid).bis_note_origin = r.origin || null;
+      }
       continue;
     }
     seenBis.add(bid);
@@ -2578,14 +2580,14 @@ function _gpMergeTrinketBis(bis, trinketItems) {
       if (r.is_equipped) ex.is_equipped = true;
       if (!ex.target_ilvl && r.target_ilvl) ex.target_ilvl = r.target_ilvl;
       if (!ex.popularity && r.popularity) ex.popularity = r.popularity;
-      if (r.bis_note && !ex.bis_note) ex.bis_note = r.bis_note;
+      if (r.bis_note && !ex.bis_note) { ex.bis_note = r.bis_note; ex.bis_note_origin = r.origin || null; }
     } else {
       itemMap.set(bid, {
         blizzard_item_id: bid, name: r.item_name || '', icon_url: r.icon_url || '',
         ratings: {}, content_types: [], sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, popularity: r.popularity || null,
-        bis_note: r.bis_note || null,
+        bis_note: r.bis_note || null, bis_note_origin: r.origin || null,
       });
     }
   }
@@ -2640,8 +2642,6 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
       : `<span class="mcn-bis-grid__icon-ph"></span>`;
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
-    const noteHtml = item.bis_note
-      ? `<div class="mcn-bis-note">${_gpEsc(item.bis_note)}</div>` : '';
     const srcSub   = _gpRenderSourceSub(item.sources || []);
     const popVal   = _gpPopularityVal(item.popularity || null);
     const popCell  = popVal != null
@@ -2651,6 +2651,8 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
 
     const guideCells = guideCols.map(gc => {
       const hasCheck = _gpBisCheck(itemBisCts, guideCts, gc.origin);
+      const noteForCol = (item.bis_note && item.bis_note_origin === gc.origin && hasCheck)
+        ? `<div class="mcn-bis-note">${_gpEsc(item.bis_note)}</div>` : '';
       if (isTrinket) {
         const rating = _gpTrinketRating(item.ratings, gc.origin);
         const letter = rating?.tier || '';
@@ -2658,11 +2660,11 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
           ? `<span class="gp-tier-badge gp-tier-${letter.toLowerCase()}">${letter}</span>` : '';
         const checkInner = hasCheck ? `<span class="mcn-bis-check">&#10003;</span>` : '';
         return (letter || hasCheck)
-          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes"><span class="gp-guide-cell"><span class="gp-guide-letter">${letterInner}</span><span class="gp-guide-check">${checkInner}</span></span></td>`
+          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes"><span class="gp-guide-cell"><span class="gp-guide-letter">${letterInner}</span><span class="gp-guide-check">${checkInner}</span></span>${noteForCol}</td>`
           : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
       }
       return hasCheck
-        ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;</td>`
+        ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;${noteForCol}</td>`
         : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
     }).join('');
 
@@ -2670,7 +2672,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
         onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
     return `<tr class="mcn-ut__item-row"${startOpen ? '' : ' hidden'} data-group="${_gpEsc(groupKey)}">
       <td class="mcn-ut__item-cell">
-        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${noteHtml}${srcSub}
+        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
       </td>
       ${guideCells}
       ${popCell}
@@ -2720,7 +2722,8 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
     for (const r of bis) {
       const bid = r.blizzard_item_id;
       if (seenMap.has(bid)) {
-        if (r.bis_note && !seenMap.get(bid).bis_note) seenMap.get(bid).bis_note = r.bis_note;
+        const ex = seenMap.get(bid);
+        if (r.bis_note && !ex.bis_note) { ex.bis_note = r.bis_note; ex.bis_note_origin = r.origin || null; }
         continue;
       }
       // Guide mode filter: keep if at least one guide recommends this item in current mode
@@ -2732,6 +2735,7 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, ratings: {},
         popularity: r.popularity || null, bis_note: r.bis_note || null,
+        bis_note_origin: r.origin || null,
       };
       seenMap.set(bid, entry);
       bisItems.push(entry);

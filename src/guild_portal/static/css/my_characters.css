@@ -2745,8 +2745,8 @@ details[open].mcn-avail-section > .mcn-avail-section__toggle::before {
 .mcn-bis-note {
   font-size: 0.72rem;
   color: var(--color-text-muted, rgba(255,255,255,0.45));
-  margin-top: 0.1rem;
-  margin-left: 0.1rem;
+  text-align: center;
+  margin-top: 0.15rem;
 }
 
 /* Guide check cells — reuse mcn-bis-grid__check styles */

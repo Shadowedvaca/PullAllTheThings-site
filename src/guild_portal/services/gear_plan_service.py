@@ -1706,8 +1706,12 @@ async def get_plan_detail(
             # Item drop sources for drawer list display
             # Tier pieces have no enrichment.item_sources rows — use viz.tier_piece_sources data.
             rec["sources"] = bis_sources_by_bid.get(bid) or sources_by_item.get(bid, [])
-            if not rec["sources"] and rec.get("item_category") == "catalyst":
-                rec["sources"] = [{"instance_type": "catalyst", "instance_name": "", "encounter_name": ""}]
+            if not rec["sources"]:
+                cat = rec.get("item_category")
+                if cat == "catalyst":
+                    rec["sources"] = [{"instance_type": "catalyst", "instance_name": "", "encounter_name": ""}]
+                elif cat == "crafted":
+                    rec["sources"] = [{"instance_type": "crafted", "instance_name": "", "encounter_name": ""}]
             # Popularity percentages from viz.item_popularity
             rec["popularity"] = bis_popularity.get(bid, {})
 
