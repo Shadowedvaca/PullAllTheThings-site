@@ -1804,14 +1804,15 @@ async def get_plan_detail(
 # ── Available items (Phase 1E.4) ──────────────────────────────────────────────
 
 def _filter_by_primary_stat(items: list[dict], primary_stat: str) -> list[dict]:
-    """Filter weapon items by primary stat using the pre-computed primary_stat column.
+    """Filter items by primary stat using the pre-computed primary_stats array.
 
-    Includes the item when uncertain (primary_stat is None).
+    Passes the item when primary_stats is None/empty (unknown) or when the
+    spec's primary stat is one of the item's listed primary stats.
     """
     result = []
     for item in items:
-        ps = item.get("primary_stat")
-        if not ps or ps == primary_stat:
+        ps_list = item.get("primary_stats")
+        if not ps_list or primary_stat in ps_list:
             result.append(item)
     return result
 
@@ -1960,7 +1961,7 @@ async def get_available_items(
             """
             SELECT blizzard_item_id, name, icon_url, item_category,
                    tier_set_suffix, instance_type, encounter_name, instance_name,
-                   blizzard_instance_id, quality_tracks, primary_stat, armor_type,
+                   blizzard_instance_id, quality_tracks, primary_stats, armor_type,
                    CASE WHEN item_category = 'crafted' THEN (
                        SELECT p.name
                          FROM enrichment.item_recipes ir
@@ -2094,7 +2095,7 @@ async def get_available_items(
                     "blizzard_item_id": bid,
                     "name": r["name"],
                     "icon_url": r["icon_url"],
-                    "primary_stat": r["primary_stat"],
+                    "primary_stats": r["primary_stats"],
                     "sources": [],
                     "popularity": pop_by_bid.get(bid, {}),
                 }
@@ -2115,7 +2116,7 @@ async def get_available_items(
                     "blizzard_item_id": bid,
                     "name": r["name"],
                     "icon_url": r["icon_url"],
-                    "primary_stat": r["primary_stat"],
+                    "primary_stats": r["primary_stats"],
                     "profession_name": r["profession_name"],
                     "popularity": pop_by_bid.get(bid, {}),
                 })
@@ -2138,16 +2139,16 @@ async def get_available_items(
     raid_items    = list(raid_map.values())
     dungeon_items = list(dungeon_map.values())
 
-    # Apply primary-stat filter — items with NULL primary_stat always pass through
+    # Apply primary-stat filter — items with NULL/empty primary_stats always pass through
     primary_stat_filter: Optional[str] = char_row["spec_primary_stat"]
     if primary_stat_filter:
         raid_items    = _filter_by_primary_stat(raid_items, primary_stat_filter)
         dungeon_items = _filter_by_primary_stat(dungeon_items, primary_stat_filter)
         crafted_items = _filter_by_primary_stat(crafted_items, primary_stat_filter)
 
-    # Strip primary_stat from items before returning (internal filter field)
+    # Strip primary_stats from items before returning (internal filter field)
     for item in raid_items + dungeon_items + crafted_items:
-        item.pop("primary_stat", None)
+        item.pop("primary_stats", None)
 
     # ── Phase 2C: compute target_ilvl per item ─────────────────────────────────
     noncrafted_ilvl = _noncrafted_target_ilvl(is_bis, equipped_ilvl, equipped_track, quality_ilvl_map)
