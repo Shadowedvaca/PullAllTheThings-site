@@ -653,8 +653,34 @@ async def sync_target(
 
     now = datetime.now(timezone.utc)
 
+    # Change detection for archon targets: skip landing insert if page hasn't updated.
+    _archon_unchanged = False
+    if origin == "archon" and raw_content:
+        try:
+            new_source_ts = _archon_source_ts_from_raw(raw_content)
+            if new_source_ts is not None:
+                async with pool.acquire() as _cd_conn:
+                    existing_source_ts = await _cd_conn.fetchval(
+                        """
+                        SELECT MAX(source_updated_at)
+                          FROM landing.bis_scrape_raw
+                         WHERE target_id = $1
+                        """,
+                        target_id,
+                    )
+                if _archon_is_unchanged(new_source_ts, existing_source_ts):
+                    _archon_unchanged = True
+                    logger.debug(
+                        "archon skip target=%d: unchanged since %s", target_id, new_source_ts
+                    )
+        except Exception:
+            pass  # on error, fall through and insert normally
+
     # Determine status from slot coverage (no guild_identity writes — enrichment layer handles that)
-    if slots:
+    if _archon_unchanged:
+        items_found = 0
+        status = "skipped"
+    elif slots:
         items_found = len(slots)
         extracted_slots = {s.slot for s in slots}
         # Normalize: any weapon slot (main_hand intermediate or resolved variant)
@@ -692,20 +718,9 @@ async def sync_target(
             """,
             status, items_found, now, target_id,
         )
-        if raw_content:
+        if raw_content and not _archon_unchanged:
             try:
-                # For archon: extract source_updated_at from the page JSON
-                source_updated_at = None
-                if origin == "archon":
-                    try:
-                        page_data = json.loads(raw_content)
-                        ts_str = page_data.get("lastUpdated")
-                        if ts_str:
-                            source_updated_at = datetime.fromisoformat(
-                                ts_str.replace("Z", "+00:00")
-                            )
-                    except Exception:
-                        pass
+                source_updated_at = _archon_source_ts_from_raw(raw_content) if origin == "archon" else None
                 await conn.execute(
                     """
                     INSERT INTO landing.bis_scrape_raw
@@ -996,6 +1011,32 @@ async def _extract_archon(
     slots, _ = _parse_archon_page(page, slot_map, total_parses)
 
     return slots, json.dumps(page)
+
+
+def _archon_source_ts_from_raw(raw_content: str) -> Optional[datetime]:
+    """Return the page.lastUpdated timestamp embedded in an archon raw_content JSON string.
+
+    Returns None if parsing fails or the key is absent.
+    """
+    try:
+        page_data = json.loads(raw_content)
+        ts_str = page_data.get("lastUpdated")
+        if ts_str:
+            return datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except Exception:
+        pass
+    return None
+
+
+def _archon_is_unchanged(
+    new_ts: Optional[datetime],
+    stored_ts: Optional[datetime],
+) -> bool:
+    """True when the archon page hasn't changed since the last stored scrape.
+
+    Both timestamps must be present; stored_ts >= new_ts means no new data.
+    """
+    return stored_ts is not None and new_ts is not None and stored_ts >= new_ts
 
 
 def _ugg_to_stats2_url(page_url: str) -> Optional[str]:

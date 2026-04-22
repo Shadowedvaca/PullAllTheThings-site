@@ -1,14 +1,20 @@
-"""Unit tests for Archon.gg BIS extraction — Phase B.
+"""Unit tests for Archon.gg BIS extraction — Phase B + Phase D.
 
 Covers:
   - _build_url() for origin='archon'
   - _parse_archon_page() — pure function, no DB or network
+  - _archon_source_ts_from_raw() — timestamp extraction from raw JSON
+  - _archon_is_unchanged() — change detection comparison
 """
 
 import json
+from datetime import datetime, timezone
+
 import pytest
 
 from sv_common.guild_sync.bis_sync import (
+    _archon_is_unchanged,
+    _archon_source_ts_from_raw,
     _build_url,
     _parse_archon_page,
 )
@@ -343,3 +349,63 @@ class TestExtractNextDataStructure:
         slots, _ = _parse_archon_page(extracted_page, _ARCHON_SLOT_MAP, page["totalParses"])
         assert slots[0].slot == "head"
         assert slots[0].blizzard_item_id == 237846
+
+
+# ---------------------------------------------------------------------------
+# Phase D — change detection helpers
+# ---------------------------------------------------------------------------
+
+_TS_STR = "2026-04-16T12:00:00Z"
+_TS_DT = datetime(2026, 4, 16, 12, 0, 0, tzinfo=timezone.utc)
+_TS_DT_NEWER = datetime(2026, 4, 23, 12, 0, 0, tzinfo=timezone.utc)
+_TS_DT_OLDER = datetime(2026, 4, 9, 12, 0, 0, tzinfo=timezone.utc)
+
+
+class TestArchonSourceTsFromRaw:
+    def test_extracts_timestamp_from_valid_json(self):
+        page = _make_page([_make_table("Head", [_make_row(100, 50.0)])])
+        raw = json.dumps(page)
+        ts = _archon_source_ts_from_raw(raw)
+        assert ts == _TS_DT
+
+    def test_returns_none_when_last_updated_missing(self):
+        page = {"totalParses": 1000, "sections": []}
+        raw = json.dumps(page)
+        assert _archon_source_ts_from_raw(raw) is None
+
+    def test_returns_none_on_invalid_json(self):
+        assert _archon_source_ts_from_raw("not json at all") is None
+
+    def test_returns_none_on_empty_string(self):
+        assert _archon_source_ts_from_raw("") is None
+
+    def test_handles_z_suffix_timezone(self):
+        page = {"lastUpdated": "2026-01-01T00:00:00Z"}
+        ts = _archon_source_ts_from_raw(json.dumps(page))
+        assert ts == datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    def test_handles_explicit_utc_offset(self):
+        page = {"lastUpdated": "2026-01-01T00:00:00+00:00"}
+        ts = _archon_source_ts_from_raw(json.dumps(page))
+        assert ts == datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+
+class TestArchonIsUnchanged:
+    def test_same_timestamp_is_unchanged(self):
+        assert _archon_is_unchanged(_TS_DT, _TS_DT) is True
+
+    def test_stored_newer_than_fetched_is_unchanged(self):
+        # Shouldn't normally happen, but stored >= new → no new data
+        assert _archon_is_unchanged(_TS_DT, _TS_DT_NEWER) is True
+
+    def test_stored_older_than_fetched_is_changed(self):
+        assert _archon_is_unchanged(_TS_DT, _TS_DT_OLDER) is False
+
+    def test_no_stored_ts_is_changed(self):
+        assert _archon_is_unchanged(_TS_DT, None) is False
+
+    def test_no_new_ts_is_changed(self):
+        assert _archon_is_unchanged(None, _TS_DT) is False
+
+    def test_both_none_is_changed(self):
+        assert _archon_is_unchanged(None, None) is False
