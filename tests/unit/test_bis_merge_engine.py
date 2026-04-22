@@ -7,7 +7,7 @@ Coverage:
 - Empty secondary list → returns primary result unchanged
 - Secondary item not in primary → inserted with secondary_note at next guide_order
 - Secondary item already present → stamped with match_note, counted as skipped
-- Secondary item already present, match_note=None → UPDATE not called
+- Secondary item already present, match_note=None → UPDATE called with NULL (clears primary_note)
 - Mixed: some secondary items match, some are new
 - primary_note is forwarded to insert_bis_items()
 - secondary_note=None → INSERT with NULL note
@@ -216,7 +216,7 @@ class TestMergeBisSectionsMatchingItem:
 
     @pytest.mark.asyncio
     async def test_matching_item_no_match_note_no_update(self):
-        """match_note=None → UPDATE not called even when item matches."""
+        """match_note=None → UPDATE still called to clear primary_note on match items."""
         existing_row = MagicMock()
         existing_row.__getitem__ = lambda self, k: "head"
 
@@ -233,7 +233,8 @@ class TestMergeBisSectionsMatchingItem:
                 _override(match_note=None),
             )
         assert result["skipped"] == 1
-        conn.execute.assert_not_called()
+        conn.execute.assert_awaited_once()
+        assert conn.execute.call_args[0][1] is None  # bis_note set to NULL
 
     @pytest.mark.asyncio
     async def test_matching_item_counted_as_skipped(self):

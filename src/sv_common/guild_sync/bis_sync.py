@@ -2992,20 +2992,19 @@ async def merge_bis_sections(
                 )
 
             if existing:
-                # Item already present — optionally stamp match_note
-                if match_note is not None:
-                    await conn.execute(
-                        """
-                        UPDATE enrichment.bis_entries
-                           SET bis_note = $1
-                         WHERE source_id = $2 AND spec_id = $3
-                           AND hero_talent_id IS NOT DISTINCT FROM $4
-                           AND blizzard_item_id = $5
-                           AND slot = $6
-                        """,
-                        match_note, ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
-                        slot_data.blizzard_item_id, existing["slot"],
-                    )
+                # Item already present — always stamp match_note (clears primary_note when None)
+                await conn.execute(
+                    """
+                    UPDATE enrichment.bis_entries
+                       SET bis_note = $1
+                     WHERE source_id = $2 AND spec_id = $3
+                       AND hero_talent_id IS NOT DISTINCT FROM $4
+                       AND blizzard_item_id = $5
+                       AND slot = $6
+                    """,
+                    match_note, ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
+                    slot_data.blizzard_item_id, existing["slot"],
+                )
                 sec_skipped += 1
             else:
                 # Item is new — find next guide_order and insert
