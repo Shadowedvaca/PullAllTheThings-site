@@ -1211,6 +1211,14 @@ _WH_GATHERER_RE = re.compile(
     re.DOTALL,
 )
 _ITEM_MARKUP_RE = re.compile(r"\[item=(\d+)[^\]]*\]")
+# Wowhead BBcode table row where slot label is "Offhand" or "Off Hand".
+# Wowhead stores BBcode with escaped forward slashes ([\/td]), so we accept
+# both [/td] and [\/td].  Captures the full cell content so all items in
+# multi-option rows (e.g. "item A or item B") are collected.
+_WH_OFFHAND_ROW_RE = re.compile(
+    r"\[td\]off[\s\-]?hand\[\\?/td\]\[td\](.*?)\[\\?/td\]",
+    re.IGNORECASE | re.DOTALL,
+)
 # Raid/M+ "highlight" sections use [icon-badge=N] instead of [item=N]
 _ICON_BADGE_RE = re.compile(r"\[icon-badge=(\d+)")
 
@@ -2316,6 +2324,16 @@ def _wh_slots_from_section(
     """
     section_html = _wh_section_for_content_type(html, content_type)
 
+    # Pre-pass: detect items explicitly labeled "Offhand" in the BBcode table.
+    # Wowhead invtype for glaives/one-handers is 13 (INVTYPE_WEAPON = main_hand),
+    # so off-hand dual-wield items must be identified by their row label instead.
+    # A cell may list multiple options ("item A or item B"), so scan all [item=N]
+    # within the matched cell content.
+    explicit_offhand_ids: set[int] = set()
+    for row_m in _WH_OFFHAND_ROW_RE.finditer(section_html):
+        for item_m in _ITEM_MARKUP_RE.finditer(row_m.group(1)):
+            explicit_offhand_ids.add(int(item_m.group(1)))
+
     # Collect item IDs in document order, deduped, across both markup patterns
     pos_map: dict[int, int] = {}
     for pat in (_ITEM_MARKUP_RE, _ICON_BADGE_RE):
@@ -2359,9 +2377,14 @@ def _wh_slots_from_section(
             else:
                 continue
         elif base_slot == "main_hand":
-            # Collect up to 2 weapon items; type resolved to main_hand_1h/2h downstream.
-            if len(weapon_slots) < 2:
-                weapon_slots.append(item_id)
+            if item_id in explicit_offhand_ids:
+                # Explicit off-hand label in BBcode table overrides invtype classification.
+                if "off_hand" not in seen_slots:
+                    seen_slots["off_hand"] = item_id
+            else:
+                # Collect up to 2 weapon items; type resolved to main_hand_1h/2h downstream.
+                if len(weapon_slots) < 2:
+                    weapon_slots.append(item_id)
             continue
         else:
             slot = base_slot
