@@ -5,7 +5,19 @@ Populated during app lifespan startup (load_site_config in app.py).
 Provides zero-import-cycle access to guild-specific config for all modules.
 """
 
+from dataclasses import dataclass
+from typing import Optional
+
 _cache: dict = {}
+
+
+@dataclass
+class SmtpConfig:
+    host: str
+    port: int
+    user: str
+    password: str
+    from_address: str
 
 
 def set_site_config(config: dict) -> None:
@@ -94,3 +106,32 @@ def set_program_name(name: str) -> None:
 def get_program_name() -> str:
     """Return the program name (e.g. 'patt-guild-portal')."""
     return _program_name
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.7-A — BIS daily email + patch probe getters
+# ---------------------------------------------------------------------------
+
+
+def get_smtp_config() -> Optional[SmtpConfig]:
+    """Return SMTP config if all required fields are set, else None."""
+    host = _cache.get("smtp_host")
+    user = _cache.get("smtp_user")
+    password = _cache.get("smtp_password_encrypted")  # caller decrypts
+    from_addr = _cache.get("smtp_from_address")
+    if not (host and user and password and from_addr):
+        return None
+    port = int(_cache.get("smtp_port") or 587)
+    return SmtpConfig(host=host, port=port, user=user, password=password, from_address=from_addr)
+
+
+def get_bis_report_email() -> Optional[str]:
+    """Return the recipient address for daily BIS email reports, or None."""
+    val = _cache.get("bis_report_email")
+    return val if val else None
+
+
+def get_bis_encounter_baseline() -> Optional[int]:
+    """Return the cached raid encounter count baseline for the patch probe, or None."""
+    val = _cache.get("bis_encounter_count")
+    return int(val) if val is not None else None

@@ -207,6 +207,14 @@ class SiteConfig(Base):
     active_connected_realm_ids: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, server_default="{}"
     )
+    # Phase 1.7-A — daily BIS email + patch probe
+    bis_encounter_count: Mapped[Optional[int]] = mapped_column(Integer)
+    bis_report_email: Mapped[Optional[str]] = mapped_column(String(255))
+    smtp_host: Mapped[Optional[str]] = mapped_column(String(255))
+    smtp_port: Mapped[Optional[int]] = mapped_column(Integer, server_default="587")
+    smtp_user: Mapped[Optional[str]] = mapped_column(String(255))
+    smtp_password_encrypted: Mapped[Optional[str]] = mapped_column(Text)
+    smtp_from_address: Mapped[Optional[str]] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
@@ -1756,6 +1764,10 @@ class BisScrapeTarget(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="pending")
     items_found: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     last_fetched: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    # Phase 1.7-A — adaptive backoff + active flag
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    check_interval_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="3")
+    next_check_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
 
     source: Mapped["BisListSource"] = relationship()
     log_entries: Mapped[list["BisScrapeLog"]] = relationship(
@@ -1810,3 +1822,33 @@ class TierTokenAttrs(Base):
     )
     override_notes: Mapped[Optional[str]] = mapped_column(Text)
     last_processed: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
+class BisDailyRun(Base):
+    """Record of a single daily BIS scrape + enrichment rebuild run (Phase 1.7)."""
+
+    __tablename__ = "bis_daily_runs"
+    __table_args__ = {"schema": "landing"}
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    run_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    triggered_by: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="scheduled"
+    )
+    patch_signal: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    targets_checked: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    targets_changed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    targets_unchanged: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    targets_failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    targets_skipped: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    bis_entries_before: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    bis_entries_after: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    trinket_ratings_before: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    trinket_ratings_after: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    delta_added: Mapped[Optional[list]] = mapped_column(JSONB)
+    delta_removed: Mapped[Optional[list]] = mapped_column(JSONB)
+    duration_seconds: Mapped[Optional[Decimal]] = mapped_column(Numeric(8, 2))
+    email_sent_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
