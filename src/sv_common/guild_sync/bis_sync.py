@@ -918,6 +918,7 @@ def _parse_archon_page(
         # Determine the target slot(s) for this table
         if slot_key is not None:
             target_slots = [slot_key]
+            is_paired = False
         elif known:
             # NULL in slot_map = paired slot; expand to both
             if "trinket" in label_lower:
@@ -929,11 +930,16 @@ def _parse_archon_page(
                     "_parse_archon_page: NULL slot_key for unexpected label %r", raw_label
                 )
                 continue
+            is_paired = True
         else:
             logger.warning("_parse_archon_page: unrecognised slot label %r", raw_label)
             continue
 
-        for row in (table.get("data") or []):
+        # Archon tables are ranked by popularity; limit to top picks only.
+        # Paired slots (trinket/ring) get 2 items (one per socket); all others get 1.
+        max_items = 2 if is_paired else 1
+
+        for row in (table.get("data") or [])[:max_items]:
             item_jsx = row.get("item") or ""
             pop_jsx  = row.get("popularity") or ""
 
