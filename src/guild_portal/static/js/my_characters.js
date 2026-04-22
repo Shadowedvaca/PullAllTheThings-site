@@ -2472,6 +2472,8 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
 const _GP_ORIGIN_LABELS = { archon: 'u.gg', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
 const _GP_ORIGIN_ORDER  = ['archon', 'icy_veins', 'wowhead'];
 const _GP_TIER_VAL      = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
+// Point values for trinket sort: combined score = sum of best-per-source; ties by best individual then pop %
+const _GP_TIER_SCORE    = { S: 20, A: 15, B: 10, C: 5, D: 1, E: 0.5, F: 0.25 };
 
 // Ordered guide columns — always derived from global bis_sources so columns are consistent across slots.
 // globalSources: data.bis_sources (array with .origin); trinketItems adds any extra rating origins.
@@ -2564,7 +2566,13 @@ function _gpMergeTrinketBis(bis, trinketItems) {
   const seenBis = new Set();
   for (const r of (bis || [])) {
     const bid = r.blizzard_item_id;
-    if (seenBis.has(bid)) continue;
+    if (seenBis.has(bid)) {
+      if (r.bis_note && itemMap.has(bid) && !itemMap.get(bid).bis_note) {
+        itemMap.get(bid).bis_note = r.bis_note;
+        itemMap.get(bid).bis_note_origin = r.origin || null;
+      }
+      continue;
+    }
     seenBis.add(bid);
     if (itemMap.has(bid)) {
       const ex = itemMap.get(bid);
@@ -2572,31 +2580,41 @@ function _gpMergeTrinketBis(bis, trinketItems) {
       if (r.is_equipped) ex.is_equipped = true;
       if (!ex.target_ilvl && r.target_ilvl) ex.target_ilvl = r.target_ilvl;
       if (!ex.popularity && r.popularity) ex.popularity = r.popularity;
+      if (r.bis_note && !ex.bis_note) { ex.bis_note = r.bis_note; ex.bis_note_origin = r.origin || null; }
     } else {
       itemMap.set(bid, {
         blizzard_item_id: bid, name: r.item_name || '', icon_url: r.icon_url || '',
         ratings: {}, content_types: [], sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, popularity: r.popularity || null,
+        bis_note: r.bis_note || null, bis_note_origin: r.origin || null,
       });
     }
   }
   const items = [...itemMap.values()];
-  const bestTier = it => {
-    let b = 99;
-    for (const byCt of Object.values(it.ratings || {}))
-      for (const r of Object.values(byCt)) { const v = _GP_TIER_VAL[r.tier] ?? 99; if (v < b) b = v; }
-    return b;
+  // Combined score: sum of best-per-source scores (S=10 A=8 B=6 C=4 D=3 E=2 F=1).
+  // Tie-break 1: highest single mark.  Tie-break 2: popularity %.  Tie-break 3: name.
+  const combinedScore = it => {
+    let total = 0;
+    for (const byCt of Object.values(it.ratings || {})) {
+      let best = 0;
+      for (const r of Object.values(byCt)) { const v = _GP_TIER_SCORE[r.tier] ?? 0; if (v > best) best = v; }
+      total += best;
+    }
+    return total;
   };
-  const bestPos = it => {
-    let b = 999999;
+  const bestScore = it => {
+    let best = 0;
     for (const byCt of Object.values(it.ratings || {}))
-      for (const r of Object.values(byCt)) { if ((r.position ?? 999999) < b) b = r.position ?? 999999; }
-    return b;
+      for (const r of Object.values(byCt)) { const v = _GP_TIER_SCORE[r.tier] ?? 0; if (v > best) best = v; }
+    return best;
   };
   items.sort((a, b) => {
-    const td = bestTier(a) - bestTier(b); if (td) return td;
-    const pd = bestPos(a) - bestPos(b);   if (pd) return pd;
+    const sd = combinedScore(b) - combinedScore(a); if (sd) return sd;
+    const bd = bestScore(b)     - bestScore(a);     if (bd) return bd;
+    const pa = _gpPopularityVal(a.popularity) ?? -1;
+    const pb = _gpPopularityVal(b.popularity) ?? -1;
+    const pd = pb - pa;                             if (pd) return pd;
     return (a.name || '').localeCompare(b.name || '');
   });
   return items;
@@ -2633,6 +2651,8 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
 
     const guideCells = guideCols.map(gc => {
       const hasCheck = _gpBisCheck(itemBisCts, guideCts, gc.origin);
+      const noteForCol = (item.bis_note && item.bis_note_origin === gc.origin && hasCheck)
+        ? `<div class="mcn-bis-note">${_gpEsc(item.bis_note)}</div>` : '';
       if (isTrinket) {
         const rating = _gpTrinketRating(item.ratings, gc.origin);
         const letter = rating?.tier || '';
@@ -2640,11 +2660,11 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
           ? `<span class="gp-tier-badge gp-tier-${letter.toLowerCase()}">${letter}</span>` : '';
         const checkInner = hasCheck ? `<span class="mcn-bis-check">&#10003;</span>` : '';
         return (letter || hasCheck)
-          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes"><span class="gp-guide-cell"><span class="gp-guide-letter">${letterInner}</span><span class="gp-guide-check">${checkInner}</span></span></td>`
+          ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes"><span class="gp-guide-cell"><span class="gp-guide-letter">${letterInner}</span><span class="gp-guide-check">${checkInner}</span></span>${noteForCol}</td>`
           : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
       }
       return hasCheck
-        ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;</td>`
+        ? `<td class="mcn-bis-grid__check mcn-bis-grid__check--yes">&#10003;${noteForCol}</td>`
         : `<td class="mcn-bis-grid__check mcn-bis-grid__check--no"></td>`;
     }).join('');
 
@@ -2697,21 +2717,28 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
   if (isTrinket) {
     bisItems = _gpMergeTrinketBis(bis, trinketItems);
   } else {
-    const seen = new Set();
+    const seenMap = new Map();
     bisItems = [];
     for (const r of bis) {
-      if (seen.has(r.blizzard_item_id)) continue;
-      seen.add(r.blizzard_item_id);
+      const bid = r.blizzard_item_id;
+      if (seenMap.has(bid)) {
+        const ex = seenMap.get(bid);
+        if (r.bis_note && !ex.bis_note) { ex.bis_note = r.bis_note; ex.bis_note_origin = r.origin || null; }
+        continue;
+      }
       // Guide mode filter: keep if at least one guide recommends this item in current mode
-      const iCts = itemOriginCts[r.blizzard_item_id] || {};
+      const iCts = itemOriginCts[bid] || {};
       if (!guideCols.some(gc => _gpBisCheck(iCts, guideCts, gc.origin))) continue;
-      bisItems.push({
-        blizzard_item_id: r.blizzard_item_id, name: r.item_name || '',
+      const entry = {
+        blizzard_item_id: bid, name: r.item_name || '',
         icon_url: r.icon_url || '', sources: r.sources || [],
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, ratings: {},
-        popularity: r.popularity || null,
-      });
+        popularity: r.popularity || null, bis_note: r.bis_note || null,
+        bis_note_origin: r.origin || null,
+      };
+      seenMap.set(bid, entry);
+      bisItems.push(entry);
     }
     // Sort: guide count (checkmarks visible in current mode) desc → popularity desc → name asc
     bisItems.sort((a, b) => {

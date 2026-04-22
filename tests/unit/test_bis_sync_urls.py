@@ -1,15 +1,13 @@
 """Unit tests for BIS sync URL generation helpers.
 
-Covers _iv_base_url, _iv_bis_role, _build_url, and _categorize_iv_area.
+Covers _iv_base_url, _iv_bis_role, _build_url, and u.gg URL helpers.
 All URLs that are "known good" were manually verified against the live sites.
 """
 
 import pytest
 
 from sv_common.guild_sync.bis_sync import (
-    _WOWHEAD_SLOT_MAP,
     _build_url,
-    _categorize_iv_area,
     _iv_base_url,
     _iv_bis_role,
     _parse_ugg_ssr,
@@ -20,6 +18,18 @@ from sv_common.guild_sync.bis_sync import (
     _ugg_url_to_section,
     _ugg_url_to_spec_key,
 )
+
+# Slot maps for unit tests — mirrors the seed data in migration 0159
+_UGG_TEST_MAP: dict[str, str | None] = {
+    "head": "head", "neck": "neck", "shoulder": "shoulder",
+    "back": "back", "cape": "back", "chest": "chest",
+    "wrist": "wrist", "gloves": "hands", "hands": "hands",
+    "belt": "waist", "waist": "waist", "legs": "legs", "feet": "feet",
+    "ring1": "ring_1", "ring2": "ring_2",
+    "trinket1": "trinket_1", "trinket2": "trinket_2",
+    "weapon1": "main_hand", "weapon2": "off_hand",
+    "main_hand": "main_hand", "off_hand": "off_hand",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -197,33 +207,6 @@ class TestSlugToPascal:
 
 
 # ---------------------------------------------------------------------------
-# _categorize_iv_area (kept for reference — no longer used in discovery)
-# ---------------------------------------------------------------------------
-
-
-class TestCategorizeIvArea:
-    def test_mythic_in_label(self):
-        ct, ht = _categorize_iv_area("Mythic+", ["San'layn", "Deathbringer"])
-        assert ct == "mythic_plus"
-        assert ht is None
-
-    def test_raid_in_label(self):
-        ct, ht = _categorize_iv_area("Raiding", ["San'layn", "Deathbringer"])
-        assert ct == "raid"
-        assert ht is None
-
-    def test_ht_name_in_label(self):
-        ct, ht = _categorize_iv_area("San'layn Overall", ["San'layn", "Deathbringer"])
-        assert ct == "overall"
-        assert ht == "San'layn"
-
-    def test_no_match_defaults_to_overall_no_ht(self):
-        ct, ht = _categorize_iv_area("General BiS", ["San'layn", "Deathbringer"])
-        assert ct == "overall"
-        assert ht is None
-
-
-# ---------------------------------------------------------------------------
 # _ugg_url_to_spec_key
 # ---------------------------------------------------------------------------
 
@@ -310,7 +293,7 @@ class TestParseArchonSsr:
             affixes_weapon_id=193716,
         )
         url = "https://u.gg/wow/blood/death_knight/gear/raid"
-        slots = _parse_ugg_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url, _UGG_TEST_MAP)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("main_hand") == 237846, "Should use raid[all] items_table, not affixes"
 
@@ -320,7 +303,7 @@ class TestParseArchonSsr:
             {"head": _make_items_table_entry(249970)},
         )
         url = "https://u.gg/wow/frost/mage/gear"
-        slots = _parse_ugg_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url, _UGG_TEST_MAP)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("head") == 249970
 
@@ -330,7 +313,7 @@ class TestParseArchonSsr:
             {"head": _make_items_table_entry(249970)},
         )
         url = "https://u.gg/wow/arcane/mage/gear"
-        slots = _parse_ugg_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url, _UGG_TEST_MAP)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("head") == 249970
 
@@ -342,7 +325,7 @@ class TestParseArchonSsr:
             affixes_weapon_id=237846,
         )
         url = "https://u.gg/wow/arms/warrior/gear?role=raid"  # looks for "raid" section
-        slots = _parse_ugg_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url, _UGG_TEST_MAP)
         ids = {s.slot: s.blizzard_item_id for s in slots}
         assert ids.get("main_hand") == 237846, "Should fall back to affixes"
 
@@ -352,7 +335,7 @@ class TestParseArchonSsr:
             {"weapon2": _make_items_table_entry(0)},
         )
         url = "https://u.gg/wow/blood/death_knight/gear?role=raid"
-        slots = _parse_ugg_ssr(ssr, url)
+        slots = _parse_ugg_ssr(ssr, url, _UGG_TEST_MAP)
         assert not any(s.slot == "off_hand" for s in slots)
 
 
@@ -372,7 +355,7 @@ class TestUggItemsToPopularity:
                 {"item_id": 222, "perc": 0.4, "count": 400, "total": 1000},
             ]}
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         by_id = {r.blizzard_item_id: r for r in result}
         assert by_id[111].count == 600
         assert by_id[111].total == 1000
@@ -385,7 +368,7 @@ class TestUggItemsToPopularity:
                 {"item_id": 111, "perc": 0.5, "count": 500, "total": 1000},
             ]}
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         assert result[0].total == 1000
 
     def test_derives_count_from_perc_when_missing(self):
@@ -394,7 +377,7 @@ class TestUggItemsToPopularity:
                 {"item_id": 111, "perc": 0.5, "total": 1000},  # no count
             ]}
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         assert result[0].count == 500
         assert result[0].total == 1000
 
@@ -404,7 +387,7 @@ class TestUggItemsToPopularity:
                 {"item_id": 0, "count": 100, "total": 1000},
             ]}
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         assert result == []
 
     def test_skips_unknown_slot(self):
@@ -413,7 +396,7 @@ class TestUggItemsToPopularity:
                 {"item_id": 111, "count": 100, "total": 1000},
             ]}
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         assert result == []
 
     def test_normalises_slot_names(self):
@@ -421,7 +404,7 @@ class TestUggItemsToPopularity:
             "weapon1": {"items": [{"item_id": 123, "count": 100, "total": 500}]},
             "weapon2": {"items": [{"item_id": 456, "count": 50, "total": 500}]},
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         slots = {r.slot for r in result}
         # weapon1 emits both typed slots so popularity shows for any weapon build mode
         assert "main_hand_2h" in slots
@@ -432,7 +415,7 @@ class TestUggItemsToPopularity:
         items_by_slot = {
             "weapon1": {"items": [{"item_id": 999, "count": 200, "total": 1000}]},
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         by_slot = {r.slot: r for r in result if r.blizzard_item_id == 999}
         assert "main_hand_2h" in by_slot
         assert "main_hand_1h" in by_slot
@@ -446,7 +429,7 @@ class TestUggItemsToPopularity:
                 "items": [{"item_id": 111, "count": 600, "total": 999}],  # per-item total ignored
             }
         }
-        result = _ugg_items_to_popularity(items_by_slot)
+        result = _ugg_items_to_popularity(items_by_slot, _UGG_TEST_MAP)
         assert result[0].total == 2000
 
 
@@ -485,7 +468,7 @@ class TestParseUggPopularity:
                 ]}
             }
         )
-        result = _parse_ugg_popularity(html, "https://u.gg/wow/blood/death_knight/gear/raid")
+        result = _parse_ugg_popularity(html, "https://u.gg/wow/blood/death_knight/gear/raid", _UGG_TEST_MAP)
         by_id = {r.blizzard_item_id: r for r in result}
         assert 111 in by_id
         assert 222 in by_id
@@ -498,7 +481,7 @@ class TestParseUggPopularity:
             "mythic", "Mage-Frost",
             {"head": {"items": [{"item_id": 999, "count": 100, "total": 200}]}}
         )
-        result = _parse_ugg_popularity(html, "https://u.gg/wow/frost/mage/gear")
+        result = _parse_ugg_popularity(html, "https://u.gg/wow/frost/mage/gear", _UGG_TEST_MAP)
         assert any(r.blizzard_item_id == 999 for r in result)
 
     def test_wrong_section_returns_empty(self):
@@ -506,34 +489,10 @@ class TestParseUggPopularity:
             "single_target", "Warrior-Arms",
             {"head": {"items": [{"item_id": 111, "count": 100, "total": 500}]}}
         )
-        result = _parse_ugg_popularity(html, "https://u.gg/wow/arms/warrior/gear/raid")
+        result = _parse_ugg_popularity(html, "https://u.gg/wow/arms/warrior/gear/raid", _UGG_TEST_MAP)
         assert result == []
 
     def test_no_ssr_marker_returns_empty(self):
         result = _parse_ugg_popularity("<html>no SSR data here</html>", "https://u.gg/wow/blood/death_knight/gear/raid")
         assert result == []
 
-
-# ---------------------------------------------------------------------------
-# _WOWHEAD_SLOT_MAP — invtype coverage
-# ---------------------------------------------------------------------------
-
-
-class TestWowheadSlotMap:
-    """Spot-checks that critical invtype IDs map to the expected slot names."""
-
-    def test_ranged_weapon_maps_to_main_hand(self):
-        # INVTYPE_RANGED (15) = bows, guns, crossbows — Hunter ranged slot
-        assert _WOWHEAD_SLOT_MAP[15] == "main_hand"
-
-    def test_2h_weapon_maps_to_main_hand(self):
-        assert _WOWHEAD_SLOT_MAP[17] == "main_hand"
-
-    def test_1h_weapon_maps_to_main_hand(self):
-        assert _WOWHEAD_SLOT_MAP[13] == "main_hand"
-
-    def test_shield_maps_to_off_hand(self):
-        assert _WOWHEAD_SLOT_MAP[14] == "off_hand"
-
-    def test_cloak_maps_to_back(self):
-        assert _WOWHEAD_SLOT_MAP[16] == "back"

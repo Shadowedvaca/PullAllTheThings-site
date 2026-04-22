@@ -67,6 +67,7 @@ function _updateButtonStates() {
         'sync-source-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
         'sync-all-btn':       { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
         'resync-errors-btn':  { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
+        'sync-gaps-btn':      { disabled: !canSync,  title: !_hasTargets() ? 'Run Discover URLs first.' : (busy ? 'Operation in progress — please wait.' : '') },
         'import-simc-btn':    { disabled: !canImport, title: !canImport ? 'Sync in progress — please wait.' : '' },
     };
 
@@ -190,13 +191,8 @@ function renderMatrix() {
         const th = document.createElement('th');
         th.colSpan = srcs.length;
         const label = _ORIGIN_LABELS[origin] || origin;
-        th.textContent = origin === 'icy_veins' ? label + ' — Coming Soon' : label;
-        if (origin === 'icy_veins') {
-            th.title = 'Auto-extraction not yet implemented — see reference/PHASE_Z_ICY_VEINS_SCRAPE-idea-only.md';
-            th.style.cssText = 'text-align:center; border-left:1px solid #333; color:var(--color-text-muted);';
-        } else {
-            th.style.cssText = 'text-align:center; border-left:1px solid #333;';
-        }
+        th.textContent = label;
+        th.style.cssText = 'text-align:center; border-left:1px solid #333;';
         row1.appendChild(th);
     }
 
@@ -421,16 +417,6 @@ function _applyCollapsedState(body) {
 }
 
 function renderCell(specId, sourceId, htId) {
-    // Icy Veins extraction is stubbed — show Coming Soon placeholder regardless of target status
-    const source = _sources.find(s => s.id == sourceId);
-    if (source && source.origin === 'icy_veins') {
-        const wrapper = document.createElement('span');
-        wrapper.className = 'gp-cell gp-cell--empty';
-        wrapper.title = 'Icy Veins — auto-extraction coming in a future release';
-        wrapper.textContent = '—';
-        return wrapper;
-    }
-
     // _cells keyed by spec_id → source_id → ht_key (per-HT accuracy).
     // Fall back to "null" key for sources (Wowhead, IV) that use a shared
     // per-spec target (hero_talent_id=NULL) rather than per-HT targets.
@@ -531,13 +517,7 @@ function populateSourceSelector() {
         for (const origin of origins) {
             const opt = document.createElement('option');
             opt.value = origin;
-            if (origin === 'icy_veins') {
-                opt.textContent = (_ORIGIN_LABELS[origin] || origin) + ' — Coming Soon';
-                opt.disabled = true;
-                opt.style.color = 'var(--color-text-muted)';
-            } else {
-                opt.textContent = _ORIGIN_LABELS[origin] || origin;
-            }
+            opt.textContent = _ORIGIN_LABELS[origin] || origin;
             originSel.appendChild(opt);
         }
 
@@ -713,24 +693,62 @@ async function syncAll() {
 async function syncGaps() {
     if (_syncInProgress || _discoveryInProgress) { setStatus('Operation in progress — please wait.', 'error'); return; }
 
+    // Fetch all targets and filter client-side to gap-eligible ones
+    // (missing raw data or last fetched > 7 days ago)
+    let gapTargets;
+    setStatusHtml('<span class="spinner"></span> Gap fill — identifying missing/stale targets…', 'running');
+    try {
+        const r = await fetch('/api/v1/admin/bis/targets');
+        const d = await r.json();
+        if (!d.ok) { setStatus('Could not load targets: ' + (d.error || 'unknown error'), 'error'); return; }
+        const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        gapTargets = (d.targets || []).filter(t => {
+            if (!t.last_fetched) return true;
+            return new Date(t.last_fetched).getTime() < cutoff;
+        });
+    } catch (err) {
+        setStatus('Could not load targets: ' + err.message, 'error');
+        return;
+    }
+
+    if (!gapTargets.length) { setStatus('No gap targets — all targets have fresh data.', 'success'); return; }
+
     const btn = document.getElementById('sync-gaps-btn');
     _setBtnRunning(btn);
     _syncInProgress = true;
     _updateButtonStates();
-    setStatusHtml('<span class="spinner"></span> Gap fill — fetching missing/stale targets…', 'running');
+
+    let totalItems = 0, totalErrors = 0, processed = 0;
 
     try {
-        const r = await fetch('/api/v1/admin/bis/sync-gaps', { method: 'POST' });
-        const d = await r.json();
-        if (!d.ok) throw new Error(d.error || 'Failed');
-        setStatus('Gap fill started in background — refresh the matrix in a few minutes to see results.', 'success');
-    } catch (err) {
-        setStatus('Gap fill failed: ' + err.message, 'error');
+        for (const t of gapTargets) {
+            const label = `${t.class_name} ${t.spec_name}${t.hero_talent_name ? ' ' + t.hero_talent_name : ''} — ${t.source_name} ${t.content_type}`;
+            setStatusHtml(
+                `<span class="spinner"></span> Gap fill — ${label} (${++processed}/${gapTargets.length})…`,
+                'running'
+            );
+            try {
+                const r = await fetch(`/api/v1/admin/bis/sync/target/${t.id}`, { method: 'POST' });
+                const d = await r.json();
+                if (d.ok) {
+                    totalItems  += d.items_found || 0;
+                    if (d.status === 'failed') totalErrors++;
+                } else {
+                    totalErrors++;
+                }
+            } catch (_) { totalErrors++; }
+            await new Promise(res => setTimeout(res, 2000));
+        }
     } finally {
         _syncInProgress = false;
         _updateButtonStates();
         _setBtnDone(btn);
     }
+
+    await loadMatrix();
+    const msg = `Gap fill complete — ${processed} targets, ${totalItems} items found, ${totalErrors} errors.`;
+    setStatus(msg, totalErrors > 0 ? 'error' : 'success');
+    if (_targetsVisible) loadTargets();
 }
 
 async function resyncErrors() {
@@ -1007,8 +1025,7 @@ function renderXref(bySlot) {
         return;
     }
 
-    // Filter to non-IV sources only (IV is always Coming Soon)
-    const activeSources = _sources.filter(s => s.origin !== 'icy_veins');
+    const activeSources = _sources;
 
     const table = document.createElement('table');
     table.className = 'gp-xref-table';
@@ -1263,14 +1280,8 @@ function _renderTargets() {
             const syncBtn = document.createElement('button');
             syncBtn.className = 'btn-sm btn-secondary';
             syncBtn.style.cssText = 'padding:0.2rem 0.5rem; font-size:0.75rem;';
-            if (isIV) {
-                syncBtn.textContent = 'Coming Soon';
-                syncBtn.disabled = true;
-                syncBtn.title = 'Icy Veins extraction not yet implemented';
-            } else {
-                syncBtn.textContent = 'Sync';
-                syncBtn.onclick = () => resyncSingleTarget(t.id, tr, syncBtn, statusTd, itemsTd);
-            }
+            syncBtn.textContent = 'Sync';
+            syncBtn.onclick = () => resyncSingleTarget(t.id, tr, syncBtn, statusTd, itemsTd);
             actTd.appendChild(syncBtn);
         }
         tr.appendChild(actTd);
@@ -2194,5 +2205,346 @@ async function clearMethodOverride(specId, contentType) {
         await loadMethodSections();
     } catch (err) {
         alert('Clear failed: ' + err.message);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Unified Section Inventory
+// ---------------------------------------------------------------------------
+
+let _siCurrentSource = 'icy_veins';
+
+function toggleSectionInventory() {
+    const content = document.getElementById('gp-section-inventory-content');
+    const icon = document.getElementById('section-inventory-toggle-icon');
+    const hidden = content.style.display === 'none';
+    content.style.display = hidden ? 'block' : 'none';
+    if (icon) icon.textContent = hidden ? '▲' : '▼';
+    if (hidden) loadSectionInventory();
+}
+
+function switchSectionTab(source, btn) {
+    _siCurrentSource = source;
+    ['icy_veins', 'method'].forEach(s => {
+        const b = document.getElementById('si-tab-' + s.replace('_', '-'));
+        if (!b) return;
+        b.className = 'btn-sm btn-secondary';
+        b.style.background = '';
+        b.style.color = '';
+    });
+    btn.className = 'btn-sm';
+    btn.style.background = 'var(--color-accent)';
+    btn.style.color = '#000';
+    const reparseBtn = document.getElementById('si-reparse-btn');
+    if (reparseBtn) reparseBtn.style.display = source === 'method' ? '' : 'none';
+    loadSectionInventory();
+}
+
+async function loadSectionInventory() {
+    const outliersOnly = document.getElementById('si-outliers-only')?.checked ?? true;
+    const tbody = document.getElementById('si-body');
+    const count = document.getElementById('si-count');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">Loading…</td></tr>';
+
+    try {
+        const r = await fetch(`/api/v1/admin/bis/page-sections?source=${_siCurrentSource}&outliers_only=${outliersOnly}&include_gaps=true`);
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+
+        const rows = d.data;
+        const sectionRows = rows.filter(r => r.row_type === 'section');
+        const gapRows = rows.filter(r => r.row_type === 'gap');
+        if (count) count.textContent = `${sectionRows.length} section${sectionRows.length !== 1 ? 's' : ''}, ${gapRows.length} gap${gapRows.length !== 1 ? 's' : ''}`;
+
+        if (!rows.length) {
+            tbody.innerHTML = `<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">
+                ${outliersOnly ? 'No issues — all sections classified and all content types covered.' : 'No sections found — run a BIS sync first.'}
+            </td></tr>`;
+            return;
+        }
+
+        const CT_LABELS = { overall: 'Overall', raid: 'Raid', mythic_plus: 'M+' };
+        const ALL_CTS = ['overall', 'raid', 'mythic_plus'];
+        const isIV = _siCurrentSource === 'icy_veins';
+
+        const sectionHtml = sectionRows.map(s => {
+            const mappings = s.override_mappings || [];
+            const secondaryOf = s.secondary_of_mappings || [];
+
+            // Content type: show auto-classified value; if overridden to a different
+            // type, show "auto → override"; if used as secondary, show that too.
+            const autoCtLabel = s.content_type
+                ? (CT_LABELS[s.content_type] || s.content_type)
+                : 'unknown';
+            const overrideCt = mappings.length ? (CT_LABELS[mappings[0].content_type] || mappings[0].content_type) : null;
+            const secondaryCt = secondaryOf.length ? (CT_LABELS[secondaryOf[0].content_type] || secondaryOf[0].content_type) : null;
+
+            let ctLabel;
+            if (overrideCt && overrideCt !== autoCtLabel) {
+                ctLabel = `<span style="color:var(--color-text-muted);">${autoCtLabel}</span> <span style="color:#4ade80;font-size:0.8rem;">→ ${overrideCt}</span>`;
+            } else if (secondaryCt) {
+                ctLabel = `<span style="color:var(--color-text-muted);">${autoCtLabel}</span> <span style="color:var(--color-accent);font-size:0.78rem;">↗ merged into ${secondaryCt}</span>`;
+            } else if (s.content_type) {
+                ctLabel = `<span style="color:var(--color-text-muted);">${autoCtLabel}</span>`;
+            } else {
+                ctLabel = '<span style="color:#f87171;">unknown</span>';
+            }
+
+            const trinketBadge = (isIV && s.is_trinket_section)
+                ? ' <span style="font-size:0.68rem;background:#7c3aed;color:#fff;border-radius:3px;padding:1px 4px;">trinket</span>'
+                : '';
+
+            const outlierBadge = s.is_outlier
+                ? `<span style="color:#fbbf24;font-size:0.75rem;">${s.outlier_reason || 'outlier'}</span>`
+                : (secondaryOf.length ? `<span style="color:var(--color-accent);font-size:0.75rem;">merge secondary</span>` : '—');
+
+            const overrideLabel = mappings.length
+                ? mappings.map(m => `<span style="color:#4ade80;font-size:0.78rem;">${CT_LABELS[m.content_type] || m.content_type}</span>`).join(', ')
+                : '';
+            const overrideForCTs = mappings.map(m => m.content_type);
+
+            const ctOptions = ALL_CTS.map(ct =>
+                `<option value="${ct}" ${overrideForCTs.includes(ct) ? 'selected' : ''}>${CT_LABELS[ct]}</option>`
+            ).join('');
+
+            const safeKey = s.section_key.replace(/[^a-z0-9]/gi, '_');
+            const selectId = `si-override-${s.spec_id}-${s.source_id}-${safeKey}`;
+            const hasOverride = mappings.length > 0;
+            const titleDisplay = isIV ? (s.section_title || s.section_key) : s.section_key;
+
+            // Merge config — only shown when an override exists
+            const rowId = `${s.spec_id}-${safeKey}`;
+            const mergeOverride = hasOverride ? mappings[0] : null;
+            const hasMerge = !!(mergeOverride?.secondary_section_key);
+
+            let mergeRowHtml = '';
+            if (hasOverride) {
+                const curSecKey = mergeOverride.secondary_section_key || '';
+                const curPNote = (mergeOverride.primary_note || '').replace(/"/g, '&quot;');
+                const curMNote = (mergeOverride.match_note || '').replace(/"/g, '&quot;');
+                const curSNote = (mergeOverride.secondary_note || '').replace(/"/g, '&quot;');
+                const mergeContentType = mergeOverride.content_type;
+                const mergeSectionKey = mergeOverride.section_key || s.section_key;
+
+                const specSectionOpts = (s.spec_sections || [])
+                    .filter(sec => sec.section_key !== s.section_key)
+                    .map(sec => {
+                        const sk = sec.section_key.replace(/"/g, '&quot;');
+                        const label = (sec.section_title || sec.section_key).replace(/"/g, '&quot;');
+                        const selected = sec.section_key === curSecKey ? ' selected' : '';
+                        return `<option value="${sk}"${selected}>${label} (${sec.row_count})</option>`;
+                    }).join('');
+
+                mergeRowHtml = `<tr id="si-merge-${rowId}" style="display:none;">
+                    <td colspan="8" style="padding:0;">
+                        <div style="padding:0.7rem 1.2rem 0.8rem;background:rgba(212,168,75,0.05);border-left:3px solid var(--color-accent);border-bottom:1px solid var(--color-border);">
+                            <div style="font-size:0.78rem;font-weight:600;color:var(--color-accent);margin-bottom:0.5rem;">Merge Configuration</div>
+                            <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Secondary section
+                                    <select id="si-sec-${rowId}" class="gp-select" style="display:block;margin-top:3px;min-width:180px;font-size:0.78rem;">
+                                        <option value="">— none (basic override) —</option>
+                                        ${specSectionOpts}
+                                    </select>
+                                </label>
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Primary note
+                                    <input id="si-pnote-${rowId}" type="text" value="${curPNote}" placeholder="e.g. Deathbringer build"
+                                        style="display:block;margin-top:3px;background:#1a1a1e;border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.28rem 0.45rem;font-size:0.78rem;width:155px;">
+                                </label>
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Match note
+                                    <input id="si-mnote-${rowId}" type="text" value="${curMNote}" placeholder="optional"
+                                        style="display:block;margin-top:3px;background:#1a1a1e;border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.28rem 0.45rem;font-size:0.78rem;width:155px;">
+                                </label>
+                                <label style="font-size:0.75rem;color:var(--color-text-muted);">Secondary note
+                                    <input id="si-snote-${rowId}" type="text" value="${curSNote}" placeholder="e.g. San'layn build"
+                                        style="display:block;margin-top:3px;background:#1a1a1e;border:1px solid var(--color-border);border-radius:4px;color:var(--color-text);padding:0.28rem 0.45rem;font-size:0.78rem;width:155px;">
+                                </label>
+                                <button class="btn-sm" style="background:var(--color-accent);color:#000;font-size:0.75rem;"
+                                    onclick="saveMergeConfig(${s.spec_id}, ${s.source_id}, '${mergeContentType}', '${mergeSectionKey.replace(/'/g, "\\'")}', '${rowId}')">
+                                    Save Merge
+                                </button>
+                            </div>
+                            <p style="font-size:0.72rem;color:var(--color-text-muted);margin:0.45rem 0 0;">
+                                Setting a secondary section merges that section's items into this content type during Enrich &amp; Classify.
+                                Items unique to the secondary build receive the secondary note; items in both receive the match note.
+                            </p>
+                        </div>
+                    </td>
+                </tr>`;
+            }
+
+            const mainRow = `<tr>
+                <td>${s.class_name}</td>
+                <td>${s.spec_name}</td>
+                <td style="max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${s.section_title || s.section_key}">${titleDisplay}</td>
+                <td>${s.row_count}</td>
+                <td>${ctLabel}${trinketBadge}</td>
+                <td style="font-size:0.78rem;">${outlierBadge}</td>
+                <td>
+                    ${overrideLabel ? overrideLabel + ' ' : ''}
+                    <select id="${selectId}" class="gp-select" style="font-size:0.78rem;padding:2px 4px;">
+                        <option value="">— set override —</option>
+                        ${ctOptions}
+                    </select>
+                </td>
+                <td style="white-space:nowrap;">
+                    <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                        onclick="saveSectionOverride(${s.spec_id}, ${s.source_id}, '${s.section_key.replace(/'/g, "\\'")}', '${selectId}')">
+                        Save
+                    </button>
+                    ${hasOverride ? `<button class="btn-sm btn-secondary" style="font-size:0.75rem;margin-left:4px;${hasMerge ? 'background:rgba(212,168,75,0.2);border-color:var(--color-accent);color:var(--color-accent);' : ''}" title="Configure merge"
+                        onclick="toggleMergeRow('${rowId}')">
+                        ${hasMerge ? 'Merge ✓' : 'Merge'}
+                    </button>` : ''}
+                    ${hasOverride ? `<button class="btn-sm" style="font-size:0.75rem;background:var(--color-danger,#7f1d1d);color:#fff;margin-left:4px;"
+                        onclick="clearSectionOverride(${s.spec_id}, ${s.source_id}, '${mappings[0].content_type}')">
+                        Clear
+                    </button>` : ''}
+                </td>
+            </tr>`;
+
+            return mainRow + mergeRowHtml;
+        }).join('');
+
+        const gapHtml = gapRows.length ? [
+            `<tr><td colspan="8" style="padding:0.5rem 0.6rem;background:rgba(96,165,250,0.07);font-size:0.75rem;color:var(--color-text-muted);text-transform:uppercase;letter-spacing:.05em;">Coverage Gaps — content types with no matching section</td></tr>`,
+            ...gapRows.map(g => {
+                const sectionOptions = (g.available_sections || []).map(sec =>
+                    `<option value="${sec.section_key.replace(/"/g, '&quot;')}">${sec.section_title || sec.section_key} (${sec.row_count} rows)</option>`
+                ).join('');
+                const selectId = `si-gap-${g.spec_id}-${g.source_id}-${g.content_type}`;
+                return `<tr style="opacity:0.85;">
+                    <td>${g.class_name}</td>
+                    <td>${g.spec_name}</td>
+                    <td colspan="2" style="color:#60a5fa;font-size:0.82rem;">
+                        ${g.source_name} — no <strong>${CT_LABELS[g.content_type] || g.content_type}</strong> section
+                    </td>
+                    <td style="color:#60a5fa;font-size:0.82rem;">missing</td>
+                    <td style="font-size:0.78rem;color:#60a5fa;">coverage gap</td>
+                    <td>
+                        <select id="${selectId}" class="gp-select" style="font-size:0.78rem;padding:2px 4px;">
+                            <option value="">— map to section —</option>
+                            ${sectionOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <button class="btn-sm btn-secondary" style="font-size:0.75rem;"
+                            onclick="saveGapOverride(${g.spec_id}, ${g.source_id}, '${g.content_type}', '${selectId}')">
+                            Save
+                        </button>
+                    </td>
+                </tr>`;
+            })
+        ].join('') : '';
+
+        tbody.innerHTML = (sectionHtml || '') + (gapHtml || '');
+        if (!tbody.innerHTML.trim()) {
+            tbody.innerHTML = '<tr><td colspan="8" style="color:var(--color-text-muted);padding:1rem;">No issues found.</td></tr>';
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#f87171;padding:1rem;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function saveSectionOverride(specId, sourceId, sectionKey, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a content type first.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/page-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, source_id: sourceId, content_type: sel.value, section_key: sectionKey }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function saveGapOverride(specId, sourceId, contentType, selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel || !sel.value) { alert('Select a section to map to.'); return; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/page-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spec_id: specId, source_id: sourceId, content_type: contentType, section_key: sel.value }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function clearSectionOverride(specId, sourceId, contentType) {
+    if (!confirm(`Clear override for spec ${specId} / ${contentType}?`)) return;
+    try {
+        const r = await fetch(
+            `/api/v1/admin/bis/page-sections/override?spec_id=${specId}&source_id=${sourceId}&content_type=${contentType}`,
+            { method: 'DELETE' }
+        );
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Clear failed: ' + err.message);
+    }
+}
+
+function toggleMergeRow(rowId) {
+    const row = document.getElementById('si-merge-' + rowId);
+    if (!row) return;
+    row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
+async function saveMergeConfig(specId, sourceId, contentType, sectionKey, rowId) {
+    const secSel  = document.getElementById('si-sec-'   + rowId);
+    const pNote   = document.getElementById('si-pnote-' + rowId);
+    const mNote   = document.getElementById('si-mnote-' + rowId);
+    const sNote   = document.getElementById('si-snote-' + rowId);
+
+    const body = {
+        spec_id:               specId,
+        source_id:             sourceId,
+        content_type:          contentType,
+        section_key:           sectionKey,
+        secondary_section_key: secSel?.value  || null,
+        primary_note:          pNote?.value?.trim()  || null,
+        match_note:            mNote?.value?.trim()  || null,
+        secondary_note:        sNote?.value?.trim()  || null,
+    };
+
+    try {
+        const r = await fetch('/api/v1/admin/bis/page-sections/override', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+    } catch (err) {
+        alert('Save merge failed: ' + err.message);
+    }
+}
+
+async function reparseSections() {
+    const btn = document.getElementById('si-reparse-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Re-parsing…'; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/method-sections/reparse', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        await loadSectionInventory();
+        const count = document.getElementById('si-count');
+        if (count) count.textContent += ` (re-parsed ${d.specs_processed} specs, ${d.sections_upserted} sections)`;
+    } catch (err) {
+        alert('Re-parse failed: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Re-parse Sections'; }
     }
 }
