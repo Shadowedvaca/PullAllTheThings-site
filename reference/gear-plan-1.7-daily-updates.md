@@ -1,8 +1,8 @@
 # Phase 1.7 — Daily BIS Updates
 
-> **Branch:** `feature/iv-bis-extraction` (continues from Phase 1.5/Phase Z)
+> **Branch:** `feature/daily-bis-updates`
 > **Migrations:** 1.7-A introduces the only migrations; subsequent phases are code-only
-> **Status:** Planning — not yet started
+> **Status:** Phase 1.7-A COMPLETE — branch pushed, deploying to dev
 
 ---
 
