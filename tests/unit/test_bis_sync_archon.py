@@ -197,6 +197,28 @@ class TestParseArchonPageNormalSlots:
         slots, _ = _parse_archon_page(page, _ARCHON_SLOT_MAP, 1000)
         assert slots == []
 
+    def test_header_jsx_tags_stripped(self):
+        """Real Archon headers are JSX: <ImageIcon ...>Head</ImageIcon> — tags must be stripped."""
+        jsx_header = "<ImageIcon lazyload='1' src='inv_helmet_02.jpg'>Head</ImageIcon>"
+        table = {
+            "columns": {"item": {"header": jsx_header}},
+            "data": [_make_row(237846, 59.6)],
+        }
+        slots, _ = _parse_archon_page(_make_page([table]), _ARCHON_SLOT_MAP, 1000)
+        assert len(slots) == 1
+        assert slots[0].slot == "head"
+
+    def test_trinket_header_jsx_stripped_and_expanded(self):
+        jsx_header = "<ImageIcon lazyload='1' src='inv_jewelry_trinketpvp_02.jpg'>Trinket</ImageIcon>"
+        table = {
+            "columns": {"item": {"header": jsx_header}},
+            "data": [_make_row(500, 45.0)],
+        }
+        slots, _ = _parse_archon_page(_make_page([table]), _ARCHON_SLOT_MAP, 1000)
+        slot_keys = {s.slot for s in slots}
+        assert "trinket_1" in slot_keys
+        assert "trinket_2" in slot_keys
+
     def test_unknown_slot_label_skipped(self):
         page = _make_page([_make_table("Mystery Slot", [_make_row(999, 50.0)])])
         slots, _ = _parse_archon_page(page, _ARCHON_SLOT_MAP, 1000)

@@ -883,6 +883,11 @@ def _parse_archon_page(
         if not raw_label:
             continue
 
+        # Header may be a JSX string: "<ImageIcon ...>Head</ImageIcon>" — strip tags
+        raw_label = re.sub(r"<[^>]+>", "", raw_label).strip()
+        if not raw_label:
+            continue
+
         label_lower = raw_label.lower()
         # Look up in slot_map (try lowercased first, then original)
         if label_lower in slot_map:
