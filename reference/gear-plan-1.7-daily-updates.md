@@ -2,7 +2,7 @@
 
 > **Branch:** `feature/daily-bis-updates`
 > **Migrations:** 1.7-A introduces the only migrations; subsequent phases are code-only
-> **Status:** Phase 1.7-C COMPLETE — branch pushed, deployed to dev
+> **Status:** Phase 1.7-D COMPLETE — branch pushed, deployed to dev
 
 ---
 
