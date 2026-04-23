@@ -27,7 +27,16 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncpg
 import discord
 
-from sv_common.config_cache import get_site_config, get_bis_encounter_baseline, set_bis_encounter_baseline
+from sv_common.config_cache import (
+    get_site_config,
+    get_bis_encounter_baseline,
+    set_bis_encounter_baseline,
+    get_smtp_config,
+    get_bis_report_email,
+    get_guild_name,
+    get_app_url,
+    SmtpConfig,
+)
 from .blizzard_client import BlizzardClient, get_rank_name_map
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
@@ -1439,9 +1448,11 @@ class GuildSyncScheduler:
                 logger.error("BIS daily sync: enrichment rebuild failed: %s", exc, exc_info=True)
 
             duration = round(time.monotonic() - start_t, 2)
+            notes_str = "\n".join(notes_parts) if notes_parts else None
 
+            run_id: int | None = None
             async with self.db_pool.acquire() as conn:
-                await conn.execute(
+                run_id = await conn.fetchval(
                     """
                     INSERT INTO landing.bis_daily_runs
                         (triggered_by, targets_checked, targets_changed, targets_unchanged,
@@ -1451,6 +1462,7 @@ class GuildSyncScheduler:
                          delta_added, delta_removed,
                          duration_seconds, notes)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                    RETURNING id
                     """,
                     triggered_by,
                     counts["checked"], counts["changed"], counts["unchanged"],
@@ -1460,7 +1472,7 @@ class GuildSyncScheduler:
                     json.dumps(delta_added) if delta_added else None,
                     json.dumps(delta_removed) if delta_removed else None,
                     duration,
-                    "\n".join(notes_parts) if notes_parts else None,
+                    notes_str,
                 )
 
             logger.info(
@@ -1470,8 +1482,117 @@ class GuildSyncScheduler:
                 counts["failed"], counts["skipped"], duration,
             )
 
+            # --- Phase 1.7-E: email report ---
+            await self._send_bis_daily_email(
+                run_id=run_id,
+                triggered_by=triggered_by,
+                counts=counts,
+                before_snapshot=before_snapshot,
+                after_bis_count=after_bis_count,
+                before_trinket_count=before_trinket_count,
+                after_trinket_count=after_trinket_count,
+                delta_added=delta_added,
+                delta_removed=delta_removed,
+                duration=duration,
+                notes_str=notes_str,
+            )
+
         except Exception as exc:
             logger.error("BIS daily sync: pipeline failed: %s", exc, exc_info=True)
+
+    async def _send_bis_daily_email(
+        self,
+        run_id: int | None,
+        triggered_by: str,
+        counts: dict,
+        before_snapshot: dict,
+        after_bis_count: int,
+        before_trinket_count: int,
+        after_trinket_count: int,
+        delta_added: list,
+        delta_removed: list,
+        duration: float,
+        notes_str: str | None,
+    ) -> None:
+        """Compose and send the BIS daily sync email. Errors are logged but never propagate."""
+        from datetime import datetime, timezone
+
+        try:
+            smtp_cfg = get_smtp_config()
+            report_email = get_bis_report_email()
+            if not (smtp_cfg and report_email):
+                return
+
+            # Decrypt SMTP password (stored encrypted in site_config)
+            jwt_secret = os.environ.get("JWT_SECRET_KEY", "")
+            from sv_common.crypto import decrypt_secret
+            try:
+                plaintext_pw = decrypt_secret(smtp_cfg.password, jwt_secret)
+            except Exception:
+                plaintext_pw = smtp_cfg.password  # will fail at send if still encrypted
+
+            smtp_decrypted = SmtpConfig(
+                host=smtp_cfg.host,
+                port=smtp_cfg.port,
+                user=smtp_cfg.user,
+                password=plaintext_pw,
+                from_address=smtp_cfg.from_address,
+            )
+
+            from sv_common.guild_sync.bis_email import compose_bis_report
+            from sv_common.email import send_email, EmailSendError
+
+            run_data = {
+                "run_at": datetime.now(timezone.utc),
+                "triggered_by": triggered_by,
+                "targets_checked": counts["checked"],
+                "targets_changed": counts["changed"],
+                "targets_failed": counts["failed"],
+                "targets_skipped": counts["skipped"],
+                "bis_entries_before": len(before_snapshot),
+                "bis_entries_after": after_bis_count,
+                "trinket_ratings_before": before_trinket_count,
+                "trinket_ratings_after": after_trinket_count,
+                "delta_added": delta_added,
+                "delta_removed": delta_removed,
+                "patch_signal": False,
+                "duration_seconds": duration,
+                "notes": notes_str,
+            }
+
+            subject, html_body = compose_bis_report(
+                run_data=run_data,
+                guild_name=get_guild_name(),
+                app_url=get_app_url(),
+            )
+
+            await send_email(smtp_decrypted, report_email, subject, html_body)
+            logger.info("BIS daily sync: email sent to %s", report_email)
+
+            if run_id is not None:
+                async with self.db_pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE landing.bis_daily_runs SET email_sent_at = NOW() WHERE id = $1",
+                        run_id,
+                    )
+
+        except Exception as exc:
+            logger.error("BIS daily sync: email failed: %s", exc, exc_info=True)
+            if run_id is not None:
+                try:
+                    async with self.db_pool.acquire() as conn:
+                        await conn.execute(
+                            """UPDATE landing.bis_daily_runs
+                               SET notes = CASE
+                                   WHEN notes IS NULL THEN $2
+                                   ELSE notes || E'\\n' || $2
+                               END
+                               WHERE id = $1""",
+                            run_id,
+                            f"email failed: {exc}",
+                        )
+                except Exception:
+                    pass  # don't cascade errors
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

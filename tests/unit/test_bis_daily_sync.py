@@ -292,8 +292,15 @@ class TestBisDailySyncLoop:
 
         records = [FakeRecord(skipped_target), FakeRecord({**skipped_target, "id": 2})]
 
+        fetchval_calls = []
+
+        async def capture_fetchval(*args, **kwargs):
+            fetchval_calls.append(args)
+            return 1  # run_id for RETURNING id; 0 for COUNT queries
+
         conn = AsyncMock()
         conn.fetch = AsyncMock(return_value=records)
+        conn.fetchval = AsyncMock(side_effect=capture_fetchval)
         conn.execute = AsyncMock(side_effect=capture_execute)
 
         pool = MagicMock()
@@ -310,9 +317,9 @@ class TestBisDailySyncLoop:
         mock_sync.assert_not_called()
 
         # bis_daily_runs INSERT should include targets_skipped=2
-        insert_calls = [c for c in execute_calls if "bis_daily_runs" in c[0]]
+        insert_calls = [c for c in fetchval_calls if "bis_daily_runs" in c[0]]
         assert len(insert_calls) == 1
-        # Parameters: triggered_by, checked, changed, unchanged, failed, skipped, duration, notes
+        # Parameters: triggered_by, checked, changed, unchanged, failed, skipped, ...
         args = insert_calls[0]
         assert args[6] == 2  # targets_skipped
 
@@ -320,14 +327,16 @@ class TestBisDailySyncLoop:
     async def test_inserts_bis_daily_runs_row(self):
         """run_bis_daily_sync inserts a row into landing.bis_daily_runs."""
         scheduler = _make_scheduler()
-        execute_calls = []
+        fetchval_calls = []
 
-        async def capture_execute(*args, **kwargs):
-            execute_calls.append(args)
+        async def capture_fetchval(*args, **kwargs):
+            fetchval_calls.append(args)
+            return 1  # run_id for INSERT RETURNING id
 
         conn = AsyncMock()
         conn.fetch = AsyncMock(return_value=[])
-        conn.execute = AsyncMock(side_effect=capture_execute)
+        conn.fetchval = AsyncMock(side_effect=capture_fetchval)
+        conn.execute = AsyncMock()
 
         pool = MagicMock()
         cm = AsyncMock()
@@ -338,7 +347,7 @@ class TestBisDailySyncLoop:
 
         await scheduler.run_bis_daily_sync(triggered_by="manual")
 
-        insert_calls = [c for c in execute_calls if "bis_daily_runs" in c[0]]
+        insert_calls = [c for c in fetchval_calls if "bis_daily_runs" in c[0]]
         assert len(insert_calls) == 1
         # triggered_by is first param
         assert insert_calls[0][1] == "manual"
@@ -721,15 +730,16 @@ class TestBisDailySyncEnrichmentIntegration:
         """bis_daily_runs INSERT includes bis_entries_before/after and trinket counts."""
         scheduler, _ = self._make_scheduler_with_pool()
 
-        execute_calls = []
+        fetchval_calls = []
 
         conn = AsyncMock()
         conn.fetch = AsyncMock(return_value=[])
-        conn.fetchval = AsyncMock(return_value=0)
 
-        async def capture_execute(*args, **kwargs):
-            execute_calls.append(args)
-        conn.execute = AsyncMock(side_effect=capture_execute)
+        async def capture_fetchval(*args, **kwargs):
+            fetchval_calls.append(args)
+            return 1  # run_id for INSERT RETURNING id; 0 is fine for COUNT queries
+        conn.fetchval = AsyncMock(side_effect=capture_fetchval)
+        conn.execute = AsyncMock()
 
         pool = MagicMock()
         cm = AsyncMock()
@@ -751,7 +761,7 @@ class TestBisDailySyncEnrichmentIntegration:
                    new_callable=AsyncMock):
             await scheduler.run_bis_daily_sync()
 
-        insert_calls = [c for c in execute_calls if "bis_daily_runs" in c[0]]
+        insert_calls = [c for c in fetchval_calls if "bis_daily_runs" in c[0]]
         assert len(insert_calls) == 1
         sql = insert_calls[0][0]
         assert "bis_entries_before" in sql
@@ -766,15 +776,16 @@ class TestBisDailySyncEnrichmentIntegration:
         """If enrichment rebuild raises, the job still inserts a bis_daily_runs row."""
         scheduler, _ = self._make_scheduler_with_pool()
 
-        execute_calls = []
+        fetchval_calls = []
 
         conn = AsyncMock()
         conn.fetch = AsyncMock(return_value=[])
-        conn.fetchval = AsyncMock(return_value=0)
 
-        async def capture_execute(*args, **kwargs):
-            execute_calls.append(args)
-        conn.execute = AsyncMock(side_effect=capture_execute)
+        async def capture_fetchval(*args, **kwargs):
+            fetchval_calls.append(args)
+            return 1
+        conn.fetchval = AsyncMock(side_effect=capture_fetchval)
+        conn.execute = AsyncMock()
 
         pool = MagicMock()
         cm = AsyncMock()
@@ -794,5 +805,5 @@ class TestBisDailySyncEnrichmentIntegration:
             await scheduler.run_bis_daily_sync()
 
         # Job should still insert a bis_daily_runs row
-        insert_calls = [c for c in execute_calls if "bis_daily_runs" in c[0]]
+        insert_calls = [c for c in fetchval_calls if "bis_daily_runs" in c[0]]
         assert len(insert_calls) == 1

@@ -1388,6 +1388,13 @@ class SiteConfigUpdate(BaseModel):
     enable_guild_quotes: bool | None = None
     enable_contests: bool | None = None
     current_mplus_season_id: int | None = None
+    # Email / Notifications (Phase 1.7-E)
+    bis_report_email: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None  # plaintext; encrypted before storing
+    smtp_from_address: str | None = None
 
 
 @router.patch(
@@ -1413,6 +1420,15 @@ async def update_site_config(
 
     # Apply updates for fields explicitly provided
     payload = body.model_dump(exclude_unset=True)
+
+    # smtp_password is plaintext from the client — encrypt before storing
+    if "smtp_password" in payload:
+        raw_pw = payload.pop("smtp_password")
+        if raw_pw:
+            from sv_common.crypto import encrypt_secret
+            from guild_portal.config import get_settings as _get_settings
+            payload["smtp_password_encrypted"] = encrypt_secret(raw_pw, _get_settings().jwt_secret_key)
+
     for field, value in payload.items():
         setattr(cfg, field, value)
 
