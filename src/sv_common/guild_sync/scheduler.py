@@ -14,6 +14,8 @@ The Discord bot also handles real-time events (joins, leaves, role changes)
 which don't need scheduling.
 """
 
+import asyncio
+import json
 import logging
 import os
 import time
@@ -25,7 +27,16 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncpg
 import discord
 
-from sv_common.config_cache import get_site_config
+from sv_common.config_cache import (
+    get_site_config,
+    get_bis_encounter_baseline,
+    set_bis_encounter_baseline,
+    get_smtp_config,
+    get_bis_report_email,
+    get_guild_name,
+    get_app_url,
+    SmtpConfig,
+)
 from .blizzard_client import BlizzardClient, get_rank_name_map
 from .db_sync import sync_blizzard_roster, sync_addon_data
 from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
@@ -48,8 +59,12 @@ from .sync_logger import SyncLogEntry
 from .bis_sync import (
     discover_targets as _bis_discover_targets,
     sync_source as _bis_sync_source,
+    sync_target as _bis_sync_target,
     rebuild_bis_from_landing as _rebuild_bis_from_landing,
+    rebuild_trinket_ratings_from_landing as _rebuild_trinket_ratings_from_landing,
     rebuild_item_popularity_from_landing as _rebuild_item_popularity_from_landing,
+    _snapshot_bis_entries,
+    _compute_delta,
 )
 
 logger = logging.getLogger(__name__)
@@ -254,6 +269,24 @@ class GuildSyncScheduler:
             self.run_archon_sync,
             CronTrigger(day_of_week="mon", hour=6, minute=0),
             id="archon_bis_sync",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+
+        # Encounter patch probe: hourly at :05 — detects new raid content, resets backoff
+        self.scheduler.add_job(
+            self.run_encounter_probe,
+            CronTrigger(minute=5),
+            id="encounter_probe",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+
+        # BIS daily sync: 04:00 UTC — scrape due targets, rebuild enrichment, send email
+        self.scheduler.add_job(
+            self.run_bis_daily_sync,
+            CronTrigger(hour=4, minute=0),
+            id="bis_daily_sync",
             replace_existing=True,
             misfire_grace_time=3600,
         )
@@ -1247,6 +1280,330 @@ class GuildSyncScheduler:
             )
         except Exception as exc:
             logger.error("Archon BIS sync: pipeline failed: %s", exc, exc_info=True)
+
+    async def run_encounter_probe(self):
+        """Hourly patch-signal probe. Runs at :05 past each hour.
+
+        Counts raid encounters in landing.blizzard_journal_encounters and compares
+        to the cached baseline in site_config.bis_encounter_count.  When the count
+        rises, all non-u.gg is_active scrape targets are reset to 1-day backoff so
+        the daily sync picks them up immediately after a patch.
+        """
+        try:
+            async with self.db_pool.acquire() as conn:
+                count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM landing.blizzard_journal_encounters"
+                    " WHERE instance_type = 'raid'"
+                )
+
+            baseline = get_bis_encounter_baseline()
+
+            if baseline is None:
+                # First probe run — record the baseline without triggering a reset
+                async with self.db_pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE common.site_config SET bis_encounter_count = $1",
+                        count,
+                    )
+                set_bis_encounter_baseline(count)
+                logger.info("Encounter probe: baseline initialised to %d raid encounters", count)
+                return
+
+            if count <= baseline:
+                return  # no-op — no log spam on steady-state runs
+
+            new_encounters = count - baseline
+            logger.info(
+                "Patch signal: %d new raid encounter(s) detected (was %d, now %d)"
+                " — resetting non-u.gg scrape targets to daily",
+                new_encounters, baseline, count,
+            )
+
+            async with self.db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE config.bis_scrape_targets
+                       SET check_interval_days = 1,
+                           next_check_at       = NOW()
+                     WHERE is_active = TRUE
+                       AND source_id NOT IN (
+                               SELECT id FROM ref.bis_list_sources WHERE origin = 'ugg'
+                           )
+                    """
+                )
+                await conn.execute(
+                    "UPDATE common.site_config SET bis_encounter_count = $1",
+                    count,
+                )
+
+            set_bis_encounter_baseline(count)
+
+        except Exception as exc:
+            logger.error("Encounter probe failed: %s", exc, exc_info=True)
+
+    async def run_bis_daily_sync(self, triggered_by: str = "scheduled"):
+        """Daily BIS scrape + enrichment rebuild. Runs at 04:00 UTC.
+
+        Fetches all active scrape targets whose next_check_at is due, calls
+        sync_target() for each (with 2s intra-source rate limiting), rebuilds
+        enrichment from landing data, captures a before/after delta, and records
+        a bis_daily_runs row with full stats.
+        """
+        from datetime import datetime, timezone
+
+        start_t = time.monotonic()
+        logger.info("BIS daily sync: starting (triggered_by=%s)", triggered_by)
+
+        counts = {"checked": 0, "changed": 0, "unchanged": 0, "failed": 0, "skipped": 0}
+        notes_parts: list[str] = []
+
+        try:
+            async with self.db_pool.acquire() as conn:
+                all_targets = await conn.fetch(
+                    """
+                    SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
+                           t.content_type, t.url, t.preferred_technique,
+                           t.check_interval_days, t.items_found,
+                           t.next_check_at, s.origin
+                      FROM config.bis_scrape_targets t
+                      JOIN ref.bis_list_sources s ON s.id = t.source_id
+                     WHERE t.is_active = TRUE
+                     ORDER BY t.source_id, t.spec_id
+                    """
+                )
+
+            now = datetime.now(timezone.utc)
+            due_targets = []
+            for t in all_targets:
+                t_dict = dict(t)
+                if t_dict.get("next_check_at") is None or t_dict["next_check_at"] <= now:
+                    due_targets.append(t_dict)
+                else:
+                    counts["skipped"] += 1
+
+            prev_source_id = None
+            for target in due_targets:
+                try:
+                    if prev_source_id is not None and target["source_id"] == prev_source_id:
+                        await asyncio.sleep(2.0)
+                    result = await _bis_sync_target(
+                        self.db_pool, target["id"], _target_row=target
+                    )
+                    counts["checked"] += 1
+                    status = result.get("status", "failed")
+                    if status in ("success", "partial"):
+                        counts["changed"] += 1
+                    elif status in ("unchanged", "skipped"):
+                        counts["unchanged"] += 1
+                    else:
+                        counts["failed"] += 1
+                except Exception as exc:
+                    logger.error(
+                        "BIS daily sync: error on target %d: %s",
+                        target["id"], exc, exc_info=True,
+                    )
+                    counts["checked"] += 1
+                    counts["failed"] += 1
+                prev_source_id = target["source_id"]
+
+            # --- Phase 1.7-D: enrichment rebuild + delta capture ---
+            before_snapshot: dict = {}
+            after_snapshot: dict = {}
+            before_trinket_count = 0
+            after_bis_count = 0
+            after_trinket_count = 0
+            delta_added: list = []
+            delta_removed: list = []
+
+            try:
+                async with self.db_pool.acquire() as conn:
+                    before_snapshot = await _snapshot_bis_entries(conn)
+                    before_trinket_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM enrichment.trinket_ratings"
+                    ) or 0
+
+                await _rebuild_bis_from_landing(self.db_pool)
+                await _rebuild_trinket_ratings_from_landing(self.db_pool)
+                await _rebuild_item_popularity_from_landing(self.db_pool)
+
+                async with self.db_pool.acquire() as conn:
+                    after_snapshot = await _snapshot_bis_entries(conn)
+                    after_bis_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM enrichment.bis_entries"
+                    ) or 0
+                    after_trinket_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM enrichment.trinket_ratings"
+                    ) or 0
+
+                delta_added, delta_removed = _compute_delta(before_snapshot, after_snapshot)
+                logger.info(
+                    "BIS daily sync: enrichment rebuilt — %d bis_entries (%+d), "
+                    "%d trinket_ratings (%+d); delta +%d/-%d items",
+                    after_bis_count, after_bis_count - len(before_snapshot),
+                    after_trinket_count, after_trinket_count - before_trinket_count,
+                    len(delta_added), len(delta_removed),
+                )
+            except Exception as exc:
+                notes_parts.append(f"enrichment rebuild failed: {exc}")
+                logger.error("BIS daily sync: enrichment rebuild failed: %s", exc, exc_info=True)
+
+            duration = round(time.monotonic() - start_t, 2)
+            notes_str = "\n".join(notes_parts) if notes_parts else None
+
+            run_id: int | None = None
+            async with self.db_pool.acquire() as conn:
+                run_id = await conn.fetchval(
+                    """
+                    INSERT INTO landing.bis_daily_runs
+                        (triggered_by, targets_checked, targets_changed, targets_unchanged,
+                         targets_failed, targets_skipped,
+                         bis_entries_before, bis_entries_after,
+                         trinket_ratings_before, trinket_ratings_after,
+                         delta_added, delta_removed,
+                         duration_seconds, notes)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                    RETURNING id
+                    """,
+                    triggered_by,
+                    counts["checked"], counts["changed"], counts["unchanged"],
+                    counts["failed"], counts["skipped"],
+                    len(before_snapshot), after_bis_count,
+                    before_trinket_count, after_trinket_count,
+                    json.dumps(delta_added) if delta_added else None,
+                    json.dumps(delta_removed) if delta_removed else None,
+                    duration,
+                    notes_str,
+                )
+
+            logger.info(
+                "BIS daily sync: complete — checked=%d changed=%d unchanged=%d "
+                "failed=%d skipped=%d (%.1fs)",
+                counts["checked"], counts["changed"], counts["unchanged"],
+                counts["failed"], counts["skipped"], duration,
+            )
+
+            # --- Phase 1.7-E: email report ---
+            await self._send_bis_daily_email(
+                run_id=run_id,
+                triggered_by=triggered_by,
+                counts=counts,
+                before_snapshot=before_snapshot,
+                after_bis_count=after_bis_count,
+                before_trinket_count=before_trinket_count,
+                after_trinket_count=after_trinket_count,
+                delta_added=delta_added,
+                delta_removed=delta_removed,
+                duration=duration,
+                notes_str=notes_str,
+            )
+
+        except Exception as exc:
+            logger.error("BIS daily sync: pipeline failed: %s", exc, exc_info=True)
+
+    async def _send_bis_daily_email(
+        self,
+        run_id: int | None,
+        triggered_by: str,
+        counts: dict,
+        before_snapshot: dict,
+        after_bis_count: int,
+        before_trinket_count: int,
+        after_trinket_count: int,
+        delta_added: list,
+        delta_removed: list,
+        duration: float,
+        notes_str: str | None,
+    ) -> None:
+        """Compose and send the BIS daily sync email. Errors are logged but never propagate."""
+        from datetime import datetime, timezone
+
+        try:
+            smtp_cfg = get_smtp_config()
+            report_email = get_bis_report_email()
+            if not (smtp_cfg and report_email):
+                return
+
+            # Decrypt SMTP password (stored encrypted in site_config)
+            jwt_secret = os.environ.get("JWT_SECRET_KEY", "")
+            from sv_common.crypto import decrypt_secret
+            try:
+                plaintext_pw = decrypt_secret(smtp_cfg.password, jwt_secret)
+            except Exception:
+                plaintext_pw = smtp_cfg.password  # will fail at send if still encrypted
+
+            smtp_decrypted = SmtpConfig(
+                host=smtp_cfg.host,
+                port=smtp_cfg.port,
+                user=smtp_cfg.user,
+                password=plaintext_pw,
+                from_address=smtp_cfg.from_address,
+            )
+
+            from sv_common.guild_sync.bis_email import compose_bis_report
+            from sv_common.email import send_email, EmailSendError
+
+            run_data = {
+                "run_at": datetime.now(timezone.utc),
+                "triggered_by": triggered_by,
+                "targets_checked": counts["checked"],
+                "targets_changed": counts["changed"],
+                "targets_failed": counts["failed"],
+                "targets_skipped": counts["skipped"],
+                "bis_entries_before": len(before_snapshot),
+                "bis_entries_after": after_bis_count,
+                "trinket_ratings_before": before_trinket_count,
+                "trinket_ratings_after": after_trinket_count,
+                "delta_added": delta_added,
+                "delta_removed": delta_removed,
+                "patch_signal": False,
+                "duration_seconds": duration,
+                "notes": notes_str,
+            }
+
+            async with self.db_pool.acquire() as _lconn:
+                spec_rows = await _lconn.fetch(
+                    "SELECT s.id, s.name AS spec_name, c.name AS class_name"
+                    " FROM ref.specializations s JOIN ref.classes c ON c.id = s.class_id"
+                )
+                source_rows = await _lconn.fetch("SELECT id, name FROM ref.bis_list_sources")
+            spec_map = {r["id"]: {"spec_name": r["spec_name"], "class_name": r["class_name"]} for r in spec_rows}
+            source_map = {r["id"]: r["name"] for r in source_rows}
+
+            subject, html_body = compose_bis_report(
+                run_data=run_data,
+                guild_name=get_guild_name(),
+                app_url=get_app_url(),
+                spec_map=spec_map,
+                source_map=source_map,
+            )
+
+            await send_email(smtp_decrypted, report_email, subject, html_body)
+            logger.info("BIS daily sync: email sent to %s", report_email)
+
+            if run_id is not None:
+                async with self.db_pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE landing.bis_daily_runs SET email_sent_at = NOW() WHERE id = $1",
+                        run_id,
+                    )
+
+        except Exception as exc:
+            logger.error("BIS daily sync: email failed: %s", exc, exc_info=True)
+            if run_id is not None:
+                try:
+                    async with self.db_pool.acquire() as conn:
+                        await conn.execute(
+                            """UPDATE landing.bis_daily_runs
+                               SET notes = CASE
+                                   WHEN notes IS NULL THEN $2
+                                   ELSE notes || E'\\n' || $2
+                               END
+                               WHERE id = $1""",
+                            run_id,
+                            f"email failed: {exc}",
+                        )
+                except Exception:
+                    pass  # don't cascade errors
 
     async def trigger_full_report(self):
         """Manual trigger: send a full report of ALL unresolved issues."""

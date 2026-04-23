@@ -1160,7 +1160,7 @@ function toggleTargets() {
 async function loadTargets() {
     const tbody = document.getElementById('gp-targets-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="10" style="color:var(--color-text-muted);">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="color:var(--color-text-muted);">Loading…</td></tr>';
 
     try {
         const r = await fetch('/api/v1/admin/bis/targets');
@@ -1170,7 +1170,7 @@ async function loadTargets() {
         _populateTargetsSourceFilter();
         _renderTargets();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="10" style="color:#f87171;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="color:#f87171;">Error: ${err.message}</td></tr>`;
     }
 }
 
@@ -1205,8 +1205,10 @@ function _renderTargets() {
 
     const filterOrigin = document.getElementById('targets-filter-source')?.value || '';
     const filterStatus = document.getElementById('targets-filter-status')?.value || '';
+    const showInactive = document.getElementById('targets-filter-inactive')?.checked || false;
 
     const filtered = _allTargets.filter(t => {
+        if (!showInactive && t.is_active === false) return false;
         if (filterOrigin && t.origin !== filterOrigin) return false;
         if (filterStatus && t.status !== filterStatus) return false;
         return true;
@@ -1216,29 +1218,40 @@ function _renderTargets() {
 
     tbody.innerHTML = '';
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
         return;
     }
 
     for (const t of filtered) {
         const tr = document.createElement('tr');
         tr.dataset.targetId = t.id;
+        if (t.is_active === false) tr.style.opacity = '0.45';
 
         const ts = t.last_fetched ? new Date(t.last_fetched).toLocaleDateString() : '—';
+        const nextTs = t.next_check_at ? new Date(t.next_check_at).toLocaleDateString() : '—';
         const statusClass = `gp-log-status-${t.status || 'pending'}`;
         const isIV = t.origin === 'icy_veins';
+
+        // Active toggle cell (GL only)
+        const activeTd = document.createElement('td');
+        activeTd.style.cssText = 'text-align:center;';
+        if (window._isGl) {
+            const tog = document.createElement('button');
+            tog.className = 'btn-sm ' + (t.is_active !== false ? 'btn-secondary' : 'btn-secondary');
+            tog.style.cssText = 'padding:0.1rem 0.45rem; font-size:0.75rem; min-width:2.4rem;';
+            tog.textContent = t.is_active !== false ? '✓' : '✗';
+            tog.title = t.is_active !== false ? 'Active — click to deactivate' : 'Inactive — click to activate';
+            tog.onclick = () => toggleIsActive(t.id, t.is_active !== false, tog, tr);
+            activeTd.appendChild(tog);
+        } else {
+            activeTd.textContent = t.is_active !== false ? '✓' : '✗';
+        }
+        tr.appendChild(activeTd);
 
         // Spec cell
         const specTd = document.createElement('td');
         specTd.textContent = `${t.class_name || ''} ${t.spec_name || ''}`;
         tr.appendChild(specTd);
-
-        // Area Label cell
-        const areaLabelTd = document.createElement('td');
-        areaLabelTd.className = 'gp-area-label';
-        areaLabelTd.title = t.area_label || '';
-        areaLabelTd.textContent = t.area_label || '—';
-        tr.appendChild(areaLabelTd);
 
         // Source cell
         const srcTd = document.createElement('td');
@@ -1255,12 +1268,6 @@ function _renderTargets() {
         }
         tr.appendChild(ctTd);
 
-        // URL cell
-        const urlTd = document.createElement('td');
-        urlTd.style.maxWidth = '340px';
-        _renderTargetUrlCell(urlTd, t);
-        tr.appendChild(urlTd);
-
         // Status, Items, Last Synced
         const statusTd = document.createElement('td');
         statusTd.className = statusClass;
@@ -1275,6 +1282,24 @@ function _renderTargets() {
         tsTd.style.fontSize = '0.75rem';
         tsTd.textContent = ts;
         tr.appendChild(tsTd);
+
+        // Next Check cell
+        const nextTd = document.createElement('td');
+        nextTd.style.fontSize = '0.75rem';
+        nextTd.textContent = nextTs;
+        tr.appendChild(nextTd);
+
+        // Interval cell
+        const intTd = document.createElement('td');
+        intTd.style.fontSize = '0.75rem';
+        intTd.textContent = t.check_interval_days != null ? t.check_interval_days + 'd' : '—';
+        tr.appendChild(intTd);
+
+        // URL cell
+        const urlTd = document.createElement('td');
+        urlTd.style.maxWidth = '280px';
+        _renderTargetUrlCell(urlTd, t);
+        tr.appendChild(urlTd);
 
         // Actions cell (GL only)
         const actTd = document.createElement('td');
@@ -2556,5 +2581,175 @@ async function reparseSections() {
         alert('Re-parse failed: ' + err.message);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = 'Re-parse Sections'; }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Daily Run History  (Phase 1.7-F)
+// ---------------------------------------------------------------------------
+
+let _dailyRunsVisible = false;
+
+function toggleDailyRuns() {
+    _dailyRunsVisible = !_dailyRunsVisible;
+    document.getElementById('gp-daily-runs-content').style.display = _dailyRunsVisible ? 'block' : 'none';
+    document.getElementById('daily-runs-toggle-icon').textContent = _dailyRunsVisible ? '▲' : '▼';
+    if (_dailyRunsVisible) loadDailyRuns();
+}
+
+async function loadDailyRuns() {
+    const tbody = document.getElementById('gp-daily-runs-body');
+    const countEl = document.getElementById('daily-runs-count');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted);">Loading…</td></tr>';
+    try {
+        const r = await fetch('/api/v1/admin/bis/daily-runs?limit=10');
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        const runs = d.runs || [];
+        if (countEl) countEl.textContent = runs.length + ' runs';
+        if (runs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="color:var(--color-text-muted); padding:1rem;">No runs recorded yet.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = '';
+        for (const run of runs) {
+            _appendDailyRunRow(tbody, run);
+        }
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:#f87171;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+function _appendDailyRunRow(tbody, run) {
+    const runTime = run.run_at ? new Date(run.run_at).toLocaleString() : '—';
+    const duration = run.duration_seconds != null ? run.duration_seconds.toFixed(1) + 's' : '—';
+    const emailSent = run.email_sent_at ? '✓' : '—';
+    const triggeredBy = run.triggered_by || 'scheduled';
+    const changed = run.targets_changed || 0;
+    const failed = run.targets_failed || 0;
+    const targetsText = `${run.targets_checked || 0} checked, ${changed} changed` + (failed ? `, ${failed} failed` : '');
+    const bisBefore = run.bis_entries_before || 0;
+    const bisAfter = run.bis_entries_after || 0;
+    const bisText = bisBefore === bisAfter ? String(bisAfter) : `${bisBefore} → ${bisAfter}`;
+    const addedCount = Array.isArray(run.delta_added) ? run.delta_added.length : 0;
+    const removedCount = Array.isArray(run.delta_removed) ? run.delta_removed.length : 0;
+    const deltaText = addedCount || removedCount ? `+${addedCount}/-${removedCount}` : '—';
+    const patchBadge = run.patch_signal ? ' <span title="Patch signal detected" style="color:#fbbf24;">⚡</span>' : '';
+    const notes = run.notes || '';
+
+    // Main row
+    const tr = document.createElement('tr');
+    tr.style.cursor = (addedCount || removedCount) ? 'pointer' : '';
+    tr.innerHTML = `
+        <td style="font-size:0.78rem;">${runTime}${patchBadge}</td>
+        <td style="font-size:0.78rem;">${triggeredBy}</td>
+        <td style="font-size:0.78rem;">${targetsText}</td>
+        <td style="font-size:0.78rem;">${bisText} <span style="color:var(--color-text-muted);">(${deltaText})</span></td>
+        <td style="font-size:0.78rem;">${duration}</td>
+        <td style="font-size:0.78rem; text-align:center;">${emailSent}</td>
+        <td style="font-size:0.78rem; color:var(--color-text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${notes}">${notes || '—'}</td>
+    `;
+    tbody.appendChild(tr);
+
+    // Expandable delta detail row
+    if (addedCount || removedCount) {
+        const detailTr = document.createElement('tr');
+        detailTr.style.display = 'none';
+        detailTr.style.background = 'rgba(255,255,255,0.03)';
+
+        let detailHtml = '<td colspan="7" style="padding:0.5rem 1rem 0.75rem; font-size:0.78rem;">';
+        if (addedCount) {
+            detailHtml += '<strong style="color:#4ade80;">Added (' + addedCount + '):</strong><br>';
+            for (const item of run.delta_added) {
+                detailHtml += `&nbsp;&nbsp;${item.spec_name || ''} / ${item.source_name || ''} / ${item.slot || ''}: ${item.item_name || item.blizzard_item_id}<br>`;
+            }
+        }
+        if (removedCount) {
+            if (addedCount) detailHtml += '<br>';
+            detailHtml += '<strong style="color:#f87171;">Removed (' + removedCount + '):</strong><br>';
+            for (const item of run.delta_removed) {
+                detailHtml += `&nbsp;&nbsp;${item.spec_name || ''} / ${item.source_name || ''} / ${item.slot || ''}: ${item.item_name || item.blizzard_item_id}<br>`;
+            }
+        }
+        detailHtml += '</td>';
+        detailTr.innerHTML = detailHtml;
+        tbody.appendChild(detailTr);
+
+        tr.addEventListener('click', () => {
+            detailTr.style.display = detailTr.style.display === 'none' ? 'table-row' : 'none';
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Patch Signal  (Phase 1.7-F)
+// ---------------------------------------------------------------------------
+
+async function loadPatchSignal() {
+    try {
+        const r = await fetch('/api/v1/admin/bis/patch-signal');
+        const d = await r.json();
+        if (!d.ok) return;
+        const dot = document.getElementById('patch-signal-dot');
+        const label = document.getElementById('patch-signal-label');
+        if (!dot || !label) return;
+        if (d.monitoring) {
+            dot.style.background = '#4ade80';
+            label.textContent = 'Monitoring';
+            label.title = 'Post-patch mode: guide targets at 1-day interval';
+        } else {
+            dot.style.background = '#6b7280';
+            const baseline = d.encounter_baseline != null ? ` (${d.encounter_baseline} encounters)` : '';
+            label.textContent = 'Quiet' + baseline;
+            label.title = d.last_probe_at ? 'Last probed: ' + new Date(d.last_probe_at).toLocaleString() : 'No probe data yet';
+        }
+    } catch (_) { /* non-critical */ }
+}
+
+// ---------------------------------------------------------------------------
+// is_active toggle  (Phase 1.7-F)
+// ---------------------------------------------------------------------------
+
+async function toggleIsActive(targetId, currentlyActive, btn, tr) {
+    const newActive = !currentlyActive;
+    btn.disabled = true;
+    try {
+        const r = await fetch(`/api/v1/admin/bis/targets/${targetId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: newActive }),
+        });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        // Update local cache
+        const target = _allTargets.find(t => t.id === targetId);
+        if (target) target.is_active = newActive;
+        // Update row visual state
+        btn.textContent = newActive ? '✓' : '✗';
+        btn.title = newActive ? 'Active — click to deactivate' : 'Inactive — click to activate';
+        btn.onclick = () => toggleIsActive(targetId, newActive, btn, tr);
+        if (tr) tr.style.opacity = newActive ? '' : '0.45';
+    } catch (err) {
+        alert('Toggle failed: ' + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function reactivateAll() {
+    const btn = document.getElementById('reactivate-all-btn');
+    if (!confirm('Re-activate all targets and reset next_check_at to NOW?')) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
+    try {
+        const r = await fetch('/api/v1/admin/bis/targets/reactivate-all', { method: 'POST' });
+        const d = await r.json();
+        if (!d.ok) throw new Error(d.error || 'Failed');
+        setStatus(`Re-activated ${d.updated} targets.`, 'success');
+        await loadTargets();
+    } catch (err) {
+        setStatus('Re-activate failed: ' + err.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Re-activate All'; }
     }
 }

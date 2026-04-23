@@ -135,3 +135,8 @@ def get_bis_encounter_baseline() -> Optional[int]:
     """Return the cached raid encounter count baseline for the patch probe, or None."""
     val = _cache.get("bis_encounter_count")
     return int(val) if val is not None else None
+
+
+def set_bis_encounter_baseline(count: int) -> None:
+    """Update the in-process cache after the encounter probe writes a new baseline."""
+    _cache["bis_encounter_count"] = count

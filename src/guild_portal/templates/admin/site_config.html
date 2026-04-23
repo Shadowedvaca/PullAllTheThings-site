@@ -36,6 +36,9 @@
 }
 .sc-field input[type="text"],
 .sc-field input[type="url"],
+.sc-field input[type="number"],
+.sc-field input[type="password"],
+.sc-field input[type="email"],
 .sc-field input[type="color"],
 .sc-field textarea {
     width: 100%;
@@ -242,6 +245,53 @@ input:checked + .sc-slider::before {
     </div>
 </div>
 
+{# Email / Notifications Card #}
+<div class="sc-card">
+    <h2 class="sc-card__title">Email / Notifications</h2>
+    <p class="sc-card__subtitle">SMTP settings for the daily BIS sync email report. Password is encrypted at rest.</p>
+
+    <div class="sc-field">
+        <label>BIS Report Recipient</label>
+        <input type="email" id="sc-bis-email" value="{{ config.bis_report_email or '' }}" placeholder="admin@example.com">
+    </div>
+    <div class="sc-field">
+        <label>SMTP Host</label>
+        <input type="text" id="sc-smtp-host" value="{{ config.smtp_host or '' }}" placeholder="smtp.gmail.com">
+    </div>
+    <div class="sc-field">
+        <label>SMTP Port</label>
+        <input type="number" id="sc-smtp-port" value="{{ config.smtp_port or 587 }}" min="1" max="65535" placeholder="587">
+    </div>
+    <div class="sc-field">
+        <label>SMTP Username</label>
+        <input type="text" id="sc-smtp-user" value="{{ config.smtp_user or '' }}" placeholder="you@example.com">
+    </div>
+    <div class="sc-field">
+        <label>SMTP Password <span style="color:var(--color-text-muted);font-weight:400">(write-only — leave blank to keep current)</span></label>
+        <input type="password" id="sc-smtp-password" value="" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <div class="sc-field">
+        <label>From Address</label>
+        <input type="text" id="sc-smtp-from" value="{{ config.smtp_from_address or '' }}" placeholder="PATT Guild &lt;noreply@example.com&gt;">
+    </div>
+
+    <div style="font-size:0.8rem;color:var(--color-text-muted);margin-bottom:1rem">
+        {% if config.smtp_password_encrypted %}
+            <span style="color:#4ade80">&#10003; Password is set</span>
+        {% else %}
+            <span>No password set</span>
+        {% endif %}
+        {% if config.smtp_host and config.smtp_user %}
+            &mdash; SMTP configured ({{ config.smtp_host }}:{{ config.smtp_port or 587 }})
+        {% endif %}
+    </div>
+
+    <div class="sc-actions">
+        <button class="btn btn--primary" onclick="saveEmail()">Save Email Config</button>
+        <span class="sc-status" id="email-status"></span>
+    </div>
+</div>
+
 <script>
 function syncColorPicker(hex) {
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
@@ -305,6 +355,20 @@ function saveFeatures() {
         enable_guild_quotes: document.getElementById('sc-guild-quotes').checked,
         enable_contests: document.getElementById('sc-contests').checked,
     }, 'features-status');
+}
+
+function saveEmail() {
+    const pw = document.getElementById('sc-smtp-password').value;
+    const portVal = document.getElementById('sc-smtp-port').value;
+    const payload = {
+        bis_report_email: document.getElementById('sc-bis-email').value.trim() || null,
+        smtp_host: document.getElementById('sc-smtp-host').value.trim() || null,
+        smtp_port: portVal ? parseInt(portVal, 10) : null,
+        smtp_user: document.getElementById('sc-smtp-user').value.trim() || null,
+        smtp_from_address: document.getElementById('sc-smtp-from').value.trim() || null,
+    };
+    if (pw) payload.smtp_password = pw;
+    patchConfig(payload, 'email-status');
 }
 </script>
 {% endblock %}

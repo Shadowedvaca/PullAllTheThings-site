@@ -594,6 +594,35 @@ async def sync_gaps(
     return stats
 
 
+async def _update_target_backoff(
+    conn: asyncpg.Connection,
+    target_id: int,
+    changed: bool,
+    origin: str,
+    current_interval: int,
+) -> None:
+    """Update check_interval_days and next_check_at after a sync attempt.
+
+    u.gg is always daily.  Changed content resets to 1-day interval.
+    Unchanged content doubles the interval (capped at 14 days).
+    """
+    if origin == "ugg":
+        new_interval = 1
+    elif changed:
+        new_interval = 1
+    else:
+        new_interval = min(current_interval * 2, 14)
+    await conn.execute(
+        """
+        UPDATE config.bis_scrape_targets
+           SET check_interval_days = $1,
+               next_check_at = NOW() + ($2 * INTERVAL '1 day')
+         WHERE id = $3
+        """,
+        new_interval, new_interval, target_id,
+    )
+
+
 async def sync_target(
     pool: asyncpg.Pool,
     target_id: int,
@@ -614,6 +643,7 @@ async def sync_target(
                 """
                 SELECT t.id, t.url, t.preferred_technique, t.source_id,
                        t.spec_id, t.hero_talent_id, t.content_type,
+                       t.check_interval_days, t.items_found,
                        s.origin
                   FROM config.bis_scrape_targets t
                   JOIN ref.bis_list_sources s ON s.id = t.source_id
@@ -639,6 +669,7 @@ async def sync_target(
     spec_id = _target_row["spec_id"]
     hero_talent_id = _target_row.get("hero_talent_id")
     source_id = _target_row["source_id"]
+    current_interval = _target_row.get("check_interval_days", 1)
 
     if not url:
         return {"items_found": 0, "technique": technique, "status": "failed", "error": "No URL"}
@@ -652,6 +683,9 @@ async def sync_target(
     )
 
     now = datetime.now(timezone.utc)
+
+    # Compute SHA-256 hash of raw content for deduplication
+    content_hash = hashlib.sha256(raw_content.encode()).hexdigest() if raw_content else None
 
     # Change detection for archon targets: skip landing insert if page hasn't updated.
     _archon_unchanged = False
@@ -676,10 +710,28 @@ async def sync_target(
         except Exception:
             pass  # on error, fall through and insert normally
 
+    # Change detection for non-archon sources: hash-based dedup
+    _content_unchanged = False
+    if not _archon_unchanged and content_hash and origin != "archon":
+        async with pool.acquire() as _hash_conn:
+            existing_hash = await _hash_conn.fetchval(
+                """
+                SELECT content_hash FROM landing.bis_scrape_raw
+                 WHERE target_id = $1 AND content_hash IS NOT NULL
+                 ORDER BY fetched_at DESC LIMIT 1
+                """,
+                target_id,
+            )
+        if existing_hash is not None and existing_hash == content_hash:
+            _content_unchanged = True
+            logger.debug("hash skip target=%d: content unchanged", target_id)
+
+    _skip_insert = _archon_unchanged or _content_unchanged
+
     # Determine status from slot coverage (no guild_identity writes — enrichment layer handles that)
-    if _archon_unchanged:
-        items_found = 0
-        status = "skipped"
+    if _skip_insert:
+        items_found = _target_row.get("items_found", 0)
+        status = "unchanged" if _content_unchanged else "skipped"
     elif slots:
         items_found = len(slots)
         extracted_slots = {s.slot for s in slots}
@@ -718,19 +770,20 @@ async def sync_target(
             """,
             status, items_found, now, target_id,
         )
-        if raw_content and not _archon_unchanged:
+        if raw_content and not _skip_insert:
             try:
                 source_updated_at = _archon_source_ts_from_raw(raw_content) if origin == "archon" else None
                 await conn.execute(
                     """
                     INSERT INTO landing.bis_scrape_raw
-                        (source, url, content, target_id, source_updated_at)
-                    VALUES ($1, $2, $3, $4, $5)
+                        (source, url, content, target_id, source_updated_at, content_hash)
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     """,
-                    origin, url, raw_content, target_id, source_updated_at,
+                    origin, url, raw_content, target_id, source_updated_at, content_hash,
                 )
             except Exception:
                 pass  # landing write is best-effort
+        await _update_target_backoff(conn, target_id, not _skip_insert, origin, current_interval)
 
     return {
         "items_found": items_found,
@@ -3737,3 +3790,63 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
         ],
         "cells": cells,
     }
+
+
+# ---------------------------------------------------------------------------
+# Phase 1.7-D — Delta capture helpers for run_bis_daily_sync()
+# ---------------------------------------------------------------------------
+
+
+async def _snapshot_bis_entries(conn) -> dict:
+    """Snapshot current enrichment.bis_entries as a keyed dict.
+
+    Returns {(spec_id, source_id, slot, blizzard_item_id): item_name}.
+    Called before rebuild (TRUNCATE) so delta can be computed afterwards.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT be.blizzard_item_id, be.spec_id, be.source_id, be.slot,
+               COALESCE(ei.name, be.blizzard_item_id::text) AS name
+          FROM enrichment.bis_entries be
+          LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = be.blizzard_item_id
+        """
+    )
+    return {
+        (row["spec_id"], row["source_id"], row["slot"], row["blizzard_item_id"]): row["name"]
+        for row in rows
+    }
+
+
+def _compute_delta(
+    before: dict,
+    after: dict,
+) -> tuple[list[dict], list[dict]]:
+    """Compare two _snapshot_bis_entries dicts and return (added, removed) lists.
+
+    Each item: {spec_id, source_id, slot, blizzard_item_id, item_name}.
+    Items present in both before and after are not included in either list.
+    """
+    before_keys = set(before.keys())
+    after_keys = set(after.keys())
+
+    added = [
+        {
+            "spec_id": k[0],
+            "source_id": k[1],
+            "slot": k[2],
+            "blizzard_item_id": k[3],
+            "item_name": after[k],
+        }
+        for k in sorted(after_keys - before_keys)
+    ]
+    removed = [
+        {
+            "spec_id": k[0],
+            "source_id": k[1],
+            "slot": k[2],
+            "blizzard_item_id": k[3],
+            "item_name": before[k],
+        }
+        for k in sorted(before_keys - after_keys)
+    ]
+    return added, removed
