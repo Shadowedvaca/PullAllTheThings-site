@@ -274,6 +274,68 @@
 }
 .ua-modal__actions .btn { font-size: 0.875rem; }
 
+/* ------------------------------------------------------------------ activity stat pills */
+.ua-stat--week .ua-stat__num  { color: #60a5fa; }
+.ua-stat--never .ua-stat__num { color: var(--color-text-muted); }
+
+/* ------------------------------------------------------------------ activity columns */
+.ua-td-activity {
+    font-size: 0.82rem;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+}
+.ua-td-activity--recent { color: var(--color-text); }
+.ua-td-mono {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+}
+.ua-td-mono--nonzero { color: var(--color-text); }
+
+/* ------------------------------------------------------------------ expand toggle */
+.ua-expand-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    font-size: 0.65rem;
+    padding: 0.25rem;
+    line-height: 1;
+    transition: color 0.15s, transform 0.15s;
+}
+.ua-expand-btn:hover { color: var(--color-accent); }
+.ua-expand-btn.is-open { transform: rotate(90deg); color: var(--color-accent); }
+
+/* ------------------------------------------------------------------ expand detail row */
+.ua-expand-row td {
+    padding: 0.6rem 1rem 0.8rem 2.5rem;
+    background: var(--color-bg-card);
+    border-bottom: 1px solid var(--color-border);
+}
+.ua-expand-content {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.ua-expand-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--color-text-muted);
+    margin-right: 0.25rem;
+    white-space: nowrap;
+}
+.ua-page-tag {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    background: rgba(212, 168, 75, 0.08);
+    border: 1px solid rgba(212, 168, 75, 0.2);
+    color: var(--color-accent);
+    border-radius: var(--radius-sm);
+    padding: 0.15rem 0.5rem;
+}
+
 /* ------------------------------------------------------------------ bnet cell */
 .ua-bnet-tag {
     font-family: var(--font-mono);
@@ -353,6 +415,16 @@
         <div class="ua-stat__num">{{ active }}</div>
         <div class="ua-stat__label">Active</div>
     </div>
+    <div class="ua-stat ua-stat--week">
+        <div class="ua-stat__num">{{ active_week }}</div>
+        <div class="ua-stat__label">Active This Week</div>
+    </div>
+    {% if never_logged_in %}
+    <div class="ua-stat ua-stat--never">
+        <div class="ua-stat__num">{{ never_logged_in }}</div>
+        <div class="ua-stat__label">Never Logged In</div>
+    </div>
+    {% endif %}
     {% if disabled %}
     <div class="ua-stat ua-stat--disabled">
         <div class="ua-stat__num">{{ disabled }}</div>
@@ -372,11 +444,16 @@
     <table class="ua-table">
         <thead>
             <tr>
+                <th style="width:1.5rem"></th>
                 <th>Email</th>
                 <th>Player</th>
                 <th>Rank</th>
                 <th>Battle.net</th>
                 <th>Status</th>
+                <th>Last Active</th>
+                <th>Last Login</th>
+                <th>Logins</th>
+                <th>7d Views</th>
                 <th>Joined</th>
                 <th></th>
             </tr>
@@ -384,6 +461,15 @@
         <tbody>
         {% for u in users %}
         <tr id="user-row-{{ u.id }}">
+            <td style="padding:0.75rem 0.25rem 0.75rem 0.75rem">
+                {% if u.pages_7d %}
+                <button class="ua-expand-btn"
+                        id="expand-btn-{{ u.id }}"
+                        onclick="toggleExpand({{ u.id }})"
+                        aria-expanded="false"
+                        title="Show pages visited this week">&#9658;</button>
+                {% endif %}
+            </td>
             <td class="ua-td-email">{{ u.email or '—' }}</td>
             <td class="ua-td-player">
                 {% if u.player_id %}
@@ -413,6 +499,20 @@
                     <span class="ua-badge__dot"></span>
                     {% if u.is_active %}Active{% else %}Disabled{% endif %}
                 </span>
+            </td>
+            <td class="ua-td-activity{% if u.last_active_rel not in ('never',) %} ua-td-activity--recent{% endif %}"
+                title="{{ u.last_active_at.strftime('%Y-%m-%d %H:%M UTC') if u.last_active_at else '' }}">
+                {{ u.last_active_rel }}
+            </td>
+            <td class="ua-td-activity"
+                title="{{ u.last_login_at.strftime('%Y-%m-%d %H:%M UTC') if u.last_login_at else '' }}">
+                {{ u.last_login_rel }}
+            </td>
+            <td class="ua-td-mono{% if u.login_count %} ua-td-mono--nonzero{% endif %}">
+                {{ u.login_count }}
+            </td>
+            <td class="ua-td-mono{% if u.views_7d %} ua-td-mono--nonzero{% endif %}">
+                {{ u.views_7d }}
             </td>
             <td class="ua-td-joined">
                 {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}
@@ -449,6 +549,16 @@
                         onclick="deleteUser(this)">
                     Delete
                 </button>
+            </td>
+        </tr>
+        <tr id="user-expand-{{ u.id }}" class="ua-expand-row" hidden>
+            <td colspan="12">
+                <div class="ua-expand-content">
+                    <span class="ua-expand-label">Pages this week:</span>
+                    {% for path in u.pages_7d %}
+                    <span class="ua-page-tag">{{ path }}</span>
+                    {% endfor %}
+                </div>
             </td>
         </tr>
         {% endfor %}
@@ -505,6 +615,16 @@
 
 {% block scripts %}
 <script>
+function toggleExpand(userId) {
+    const row = document.getElementById(`user-expand-${userId}`);
+    const btn = document.getElementById(`expand-btn-${userId}`);
+    if (!row || !btn) return;
+    const opening = row.hidden;
+    row.hidden = !opening;
+    btn.classList.toggle('is-open', opening);
+    btn.setAttribute('aria-expanded', opening);
+}
+
 function showToast(msg, type) {
     const t = document.getElementById('ua-toast');
     t.textContent = msg;
