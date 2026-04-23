@@ -1160,7 +1160,7 @@ function toggleTargets() {
 async function loadTargets() {
     const tbody = document.getElementById('gp-targets-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="12" style="color:var(--color-text-muted);">Loading…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="color:var(--color-text-muted);">Loading…</td></tr>';
 
     try {
         const r = await fetch('/api/v1/admin/bis/targets');
@@ -1170,7 +1170,7 @@ async function loadTargets() {
         _populateTargetsSourceFilter();
         _renderTargets();
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="12" style="color:#f87171;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="color:#f87171;">Error: ${err.message}</td></tr>`;
     }
 }
 
@@ -1218,7 +1218,7 @@ function _renderTargets() {
 
     tbody.innerHTML = '';
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="color:var(--color-text-muted); padding:1rem;">No targets match filter.</td></tr>';
         return;
     }
 
@@ -1252,13 +1252,6 @@ function _renderTargets() {
         const specTd = document.createElement('td');
         specTd.textContent = `${t.class_name || ''} ${t.spec_name || ''}`;
         tr.appendChild(specTd);
-
-        // Area Label cell
-        const areaLabelTd = document.createElement('td');
-        areaLabelTd.className = 'gp-area-label';
-        areaLabelTd.title = t.area_label || '';
-        areaLabelTd.textContent = t.area_label || '—';
-        tr.appendChild(areaLabelTd);
 
         // Source cell
         const srcTd = document.createElement('td');

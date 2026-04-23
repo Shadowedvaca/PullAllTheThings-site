@@ -299,6 +299,7 @@ async def list_targets(
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
                    t.content_type, t.url, t.area_label, t.preferred_technique,
                    t.status, t.items_found, t.last_fetched,
+                   t.is_active, t.check_interval_days, t.next_check_at,
                    s.name AS source_name, s.origin,
                    ht.name AS hero_talent_name, ht.slug AS hero_talent_slug,
                    sp.name AS spec_name, c.name AS class_name
