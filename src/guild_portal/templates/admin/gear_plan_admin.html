@@ -199,6 +199,10 @@
         <h1 style="font-family:'Cinzel',serif; color:var(--color-gold); margin:0; font-size:1.4rem; flex:1;">
             Gear Plan Admin
         </h1>
+        <span id="patch-signal-badge" style="font-size:0.8rem; display:inline-flex; align-items:center; gap:0.35rem; color:var(--color-text-muted);">
+            <span id="patch-signal-dot" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#6b7280;"></span>
+            <span id="patch-signal-label">Checking…</span>
+        </span>
         <button class="btn-sm btn-secondary" onclick="loadMatrix()">Refresh Matrix</button>
     </div>
     <p style="color:var(--color-text-muted); margin:0; font-size:0.88rem;">
@@ -208,6 +212,39 @@
     {# ── Status bar ───────────────────────────────────────────────────────────── #}
     <div class="gp-status-bar" id="gp-status">
         <span class="gp-status-bar__msg">Ready.</span>
+    </div>
+
+    {# ── Daily Run History ────────────────────────────────────────────────────── #}
+    <div class="gp-log-wrap">
+        <h2 class="gp-log__title" onclick="toggleDailyRuns()">
+            Daily Run History <span class="toggle-icon" id="daily-runs-toggle-icon">▼</span>
+        </h2>
+        <div id="gp-daily-runs-content" style="display:none;">
+            <div class="gp-log-inner">
+                <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; align-items:center;">
+                    <button class="btn-sm btn-secondary" onclick="loadDailyRuns()">Refresh</button>
+                    <span id="daily-runs-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
+                </div>
+                <div style="overflow:auto; max-height:50vh;">
+                    <table class="gp-log-table" style="min-width:750px;">
+                        <thead>
+                            <tr>
+                                <th>Run Time</th>
+                                <th>Triggered By</th>
+                                <th>Targets</th>
+                                <th>BIS Entries</th>
+                                <th>Duration</th>
+                                <th>Email</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gp-daily-runs-body">
+                            <tr><td colspan="7" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     {# ── Section A — Raw Data Refresh ─────────────────────────────────────────── #}
@@ -312,23 +349,29 @@
         <div id="gp-targets-content" style="display:none;">
             <div class="gp-log-inner">
                 <div style="display:flex; gap:0.75rem; margin-bottom:0.75rem; flex-wrap:wrap; align-items:center;">
-                    <select class="gp-select" id="targets-filter-source" onchange="loadTargets()">
+                    <select class="gp-select" id="targets-filter-source" onchange="_renderTargets()">
                         <option value="">All websites</option>
                     </select>
-                    <select class="gp-select" id="targets-filter-status" onchange="loadTargets()">
+                    <select class="gp-select" id="targets-filter-status" onchange="_renderTargets()">
                         <option value="">All statuses</option>
                         <option value="pending">Pending</option>
                         <option value="success">Success</option>
                         <option value="partial">Partial</option>
                         <option value="failed">Failed</option>
+                        <option value="unchanged">Unchanged</option>
                     </select>
+                    <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.82rem; color:var(--color-text-muted); cursor:pointer;">
+                        <input type="checkbox" id="targets-filter-inactive" onchange="_renderTargets()"> Show inactive
+                    </label>
                     <button class="btn-sm btn-secondary" onclick="loadTargets()">Refresh</button>
+                    <button id="reactivate-all-btn" class="btn-sm btn-secondary" onclick="reactivateAll()">Re-activate All</button>
                     <span id="targets-count" style="color:var(--color-text-muted); font-size:0.82rem;"></span>
                 </div>
                 <div style="overflow:auto; max-height:55vh;">
-                    <table class="gp-log-table" style="min-width:900px;">
+                    <table class="gp-log-table" style="min-width:1050px;">
                         <thead>
                             <tr>
+                                <th>Active</th>
                                 <th>Spec</th>
                                 <th>Hero Talent</th>
                                 <th>Source</th>
@@ -336,12 +379,14 @@
                                 <th>Status</th>
                                 <th>Items</th>
                                 <th>Last Fetched</th>
+                                <th>Next Check</th>
+                                <th>Interval</th>
                                 <th>URL</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody id="gp-targets-body">
-                            <tr><td colspan="9" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
+                            <tr><td colspan="12" style="color:var(--color-text-muted); padding:1rem;">Click header to expand.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -478,7 +523,7 @@
 <select id="simc-source-select" style="display:none;"></select>
 <select id="simc-ht-select" style="display:none;"></select>
 
-<script src="/static/js/gear_plan_admin.js?v=1.6.1"></script>
+<script src="/static/js/gear_plan_admin.js?v=1.7.0"></script>
 <script>
 window._isGl = true;
 
@@ -693,6 +738,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadMatrix();
     loadSources();
     loadLog();
+    loadPatchSignal();
 
     // If a background task was already running before page load, reconnect polls
     fetch('/api/v1/admin/bis/landing-status').then(r => r.json()).then(d => {

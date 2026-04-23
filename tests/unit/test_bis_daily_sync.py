@@ -366,8 +366,9 @@ class TestUpdateTargetBackoff:
         captured = {}
 
         conn = AsyncMock()
-        async def capture_execute(sql, new_interval, target_id):
-            captured["interval"] = new_interval
+        async def capture_execute(sql, *args):
+            # First positional param is always check_interval_days
+            captured["interval"] = args[0] if args else None
         conn.execute = AsyncMock(side_effect=capture_execute)
 
         await _update_target_backoff(conn, target_id=1, changed=changed, origin=origin,

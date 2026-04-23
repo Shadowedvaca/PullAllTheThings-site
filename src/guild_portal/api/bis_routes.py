@@ -30,6 +30,10 @@ Endpoints:
   POST /api/v1/admin/bis/sync-crafted-items  (start job)
   GET  /api/v1/admin/bis/trinket-ratings-status
   POST /api/v1/admin/bis/run-daily-sync
+  GET  /api/v1/admin/bis/daily-runs        (last N daily run records)
+  GET  /api/v1/admin/bis/patch-signal      (monitoring vs quiet state)
+  PATCH /api/v1/admin/bis/targets/{id}     (GL+ — toggle is_active, interval, next_check_at)
+  POST /api/v1/admin/bis/targets/reactivate-all  (GL+ — bulk reset all targets)
   POST /api/v1/admin/bis/rebuild-enrichment
   GET  /api/v1/admin/bis/method-sections        (GL+ — section inventory with override status)
   POST /api/v1/admin/bis/method-sections/override  (GL+ — upsert override)
@@ -125,6 +129,12 @@ class TargetUpdate(BaseModel):
     hero_talent_id: Optional[int] = None
     content_type: Optional[str] = None
     area_label: Optional[str] = None
+
+
+class TargetStatusUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    check_interval_days: Optional[int] = None
+    next_check_at: Optional[str] = None  # ISO datetime string, or omit to leave unchanged
 
 
 class SimcImport(BaseModel):
@@ -342,6 +352,114 @@ async def update_target(target_id: int, body: TargetUpdate, request: Request):
             target_id, *values,
         )
     return {"ok": True}
+
+
+@router.patch("/targets/{target_id}", dependencies=[Depends(require_rank(5))])
+async def patch_target_status(target_id: int, body: TargetStatusUpdate, request: Request):
+    """Toggle is_active, check_interval_days, or next_check_at on a scrape target (GL only)."""
+    pool = _pool(request)
+    updates: dict = {}
+    if body.is_active is not None:
+        updates["is_active"] = body.is_active
+    if body.check_interval_days is not None:
+        updates["check_interval_days"] = body.check_interval_days
+    if body.next_check_at is not None:
+        from datetime import datetime
+        updates["next_check_at"] = datetime.fromisoformat(body.next_check_at)
+    if not updates:
+        return {"ok": True}
+    set_clauses = ", ".join(f"{k} = ${i+2}" for i, k in enumerate(updates))
+    values = list(updates.values())
+    async with pool.acquire() as conn:
+        await conn.execute(
+            f"UPDATE config.bis_scrape_targets SET {set_clauses} WHERE id = $1",
+            target_id, *values,
+        )
+    return {"ok": True}
+
+
+@router.post("/targets/reactivate-all", dependencies=[Depends(require_rank(5))])
+async def reactivate_all_targets(request: Request):
+    """Set is_active = TRUE and reset scheduling fields for all scrape targets (GL only)."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE config.bis_scrape_targets SET is_active = TRUE, next_check_at = NOW(), check_interval_days = 1"
+        )
+    count = int(result.split()[-1]) if result else 0
+    return {"ok": True, "updated": count}
+
+
+@router.get("/daily-runs")
+async def get_daily_runs(request: Request, limit: int = 10):
+    """Return last N daily BIS sync run records, most recent first."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, run_at, triggered_by, patch_signal,
+                   targets_checked, targets_changed, targets_failed, targets_skipped,
+                   bis_entries_before, bis_entries_after,
+                   trinket_ratings_before, trinket_ratings_after,
+                   delta_added, delta_removed,
+                   duration_seconds, email_sent_at, notes
+              FROM landing.bis_daily_runs
+             ORDER BY run_at DESC
+             LIMIT $1
+            """,
+            limit,
+        )
+    import json as _json
+    runs = []
+    for r in rows:
+        row = dict(r)
+        for col in ("run_at", "email_sent_at"):
+            if row.get(col) is not None:
+                row[col] = row[col].isoformat()
+        for col in ("delta_added", "delta_removed"):
+            if row.get(col) and isinstance(row[col], str):
+                try:
+                    row[col] = _json.loads(row[col])
+                except Exception:
+                    row[col] = []
+        runs.append(row)
+    return {"ok": True, "runs": runs}
+
+
+@router.get("/patch-signal")
+async def get_patch_signal(request: Request):
+    """Return current patch signal state: whether post-patch monitoring is active."""
+    pool = _pool(request)
+    async with pool.acquire() as conn:
+        monitoring = await conn.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM config.bis_scrape_targets t
+                  JOIN ref.bis_list_sources s ON s.id = t.source_id
+                 WHERE t.is_active = TRUE
+                   AND t.check_interval_days = 1
+                   AND s.origin != 'ugg'
+                   AND t.last_fetched > NOW() - INTERVAL '2 days'
+            )
+            """
+        )
+        sc = await conn.fetchrow(
+            "SELECT bis_encounter_count FROM common.site_config LIMIT 1"
+        )
+        last_probe = await conn.fetchval(
+            """
+            SELECT MAX(t.last_fetched)
+              FROM config.bis_scrape_targets t
+              JOIN ref.bis_list_sources s ON s.id = t.source_id
+             WHERE t.is_active = TRUE AND s.origin != 'ugg'
+            """
+        )
+    return {
+        "ok": True,
+        "monitoring": bool(monitoring),
+        "encounter_baseline": sc["bis_encounter_count"] if sc else None,
+        "last_probe_at": last_probe.isoformat() if last_probe else None,
+    }
 
 
 # ---------------------------------------------------------------------------
