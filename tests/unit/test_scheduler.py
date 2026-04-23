@@ -64,7 +64,9 @@ class TestSchedulerRegistersDigestJob:
     async def test_start_registers_weekly_digest_job(self):
         scheduler = _make_scheduler()
 
-        with patch.object(scheduler.blizzard_client, "initialize", new_callable=AsyncMock):
+        import os
+        with patch.object(scheduler.blizzard_client, "initialize", new_callable=AsyncMock), \
+             patch.dict(os.environ, {"APP_ENV": "production"}):
             await scheduler.start()
 
         job_ids = [call_args[1].get("id") or call_args[0][1] if len(call_args[0]) > 1 else None

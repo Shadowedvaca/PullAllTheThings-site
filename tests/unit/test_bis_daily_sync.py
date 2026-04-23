@@ -80,7 +80,8 @@ class TestSchedulerRegistersNewJobs:
     @pytest.mark.asyncio
     async def test_registers_encounter_probe_job(self):
         scheduler = _make_scheduler()
-        with patch.object(scheduler.blizzard_client, "initialize", new_callable=AsyncMock):
+        with patch.object(scheduler.blizzard_client, "initialize", new_callable=AsyncMock), \
+             patch.dict(os.environ, {"APP_ENV": "production"}):
             await scheduler.start()
 
         ids = [c.kwargs.get("id") for c in scheduler.scheduler.add_job.call_args_list]
@@ -89,7 +90,8 @@ class TestSchedulerRegistersNewJobs:
     @pytest.mark.asyncio
     async def test_registers_bis_daily_sync_job(self):
         scheduler = _make_scheduler()
-        with patch.object(scheduler.blizzard_client, "initialize", new_callable=AsyncMock):
+        with patch.object(scheduler.blizzard_client, "initialize", new_callable=AsyncMock), \
+             patch.dict(os.environ, {"APP_ENV": "production"}):
             await scheduler.start()
 
         ids = [c.kwargs.get("id") for c in scheduler.scheduler.add_job.call_args_list]

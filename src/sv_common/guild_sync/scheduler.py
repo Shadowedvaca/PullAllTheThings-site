@@ -165,6 +165,12 @@ class GuildSyncScheduler:
         """Initialize clients and start the scheduler."""
         await self.blizzard_client.initialize()
 
+        is_prod = os.environ.get("APP_ENV", "development") == "production"
+        if not is_prod:
+            logger.info("Guild sync scheduler started (dev/test — all periodic jobs disabled, manual triggers only)")
+            self.scheduler.start()
+            return
+
         # Blizzard sync: 4x/day (every 6 hours, offset to avoid midnight)
         self.scheduler.add_job(
             self.run_blizzard_sync,
@@ -265,6 +271,8 @@ class GuildSyncScheduler:
             replace_existing=True,
             misfire_grace_time=3600,
         )
+
+        # Archon BIS sync: weekly on Monday at 6 AM UTC
         self.scheduler.add_job(
             self.run_archon_sync,
             CronTrigger(day_of_week="mon", hour=6, minute=0),
@@ -292,7 +300,7 @@ class GuildSyncScheduler:
         )
 
         self.scheduler.start()
-        logger.info("Guild sync scheduler started")
+        logger.info("Guild sync scheduler started (%d jobs registered)", len(self.scheduler.get_jobs()))
 
     async def stop(self):
         """Shut down scheduler and clients."""
