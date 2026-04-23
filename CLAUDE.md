@@ -243,8 +243,8 @@ Key design gotchas (read before writing any DB query):
 - **Phase 1.8 — User Activity Logging** — IN PROGRESS on `feature/user-activity-logging`
   - **Phase A COMPLETE** (commit 312ca88, migration 0178): `common.users` +`last_active_at/last_login_at/login_count`; `common.user_activity` daily rollup table; login stamping in `POST /api/v1/auth/login`
   - **Phase B COMPLETE** (commit c43a34a): `ActivityMiddleware` in `src/guild_portal/middleware/activity.py`; registered in `app.py`; fires background upsert after each authenticated response; skips static/polling paths; 25 unit tests. 1841/1847 suite-wide (6 pre-existing).
-  - **Phase C NEXT**: Admin Users page — extend query + new columns + expand row
-  - **Phase D**: Retention pruning scheduler job
+  - **Phase C COMPLETE** (commit 0baafeb): Admin Users page — extended query with activity data; `_rel_time()` helper; new stat pills (Active This Week, Never Logged In); new columns (Last Active, Last Login, Logins, 7d Views); expand row showing pages visited this week as tag chips; default sort by `last_active_at DESC NULLS LAST`; 31 unit tests. 1872/1878 suite-wide.
+  - **Phase D NEXT**: Retention pruning scheduler job
 - **prod-v0.22.4 — COMPLETE** (no migration, PR #38 + patch). Phase 1.7 daily BIS pipeline fully shipped.
 - **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
 - **Last prod tag:** `prod-v0.22.4`

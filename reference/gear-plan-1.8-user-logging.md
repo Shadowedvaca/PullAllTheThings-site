@@ -182,7 +182,7 @@ If the response already has a background task (rare), we chain them.
 
 ---
 
-### Phase C — Admin Users page UI
+### Phase C — Admin Users page UI ✅ COMPLETE (commit 0baafeb, branch feature/user-activity-logging)
 
 **Files touched:**
 - `src/guild_portal/pages/admin_pages.py` — extend the `/admin/users` query
