@@ -220,10 +220,12 @@
             Populate the landing tables from the Blizzard API and Wowhead.
             <strong>Flush &amp; Fill</strong> truncates all landing tables before refilling — use at season start.
             <strong>Catch Up</strong> skips the truncate and only pulls new/missing items.
+            <strong>Run Daily Sync</strong> manually triggers the scheduled BIS scrape + enrichment rebuild + email report.
         </p>
         <div class="gpa-section__controls">
             <button id="flush-fill-btn" class="btn-sm btn-primary" onclick="landingFlushFill()">Flush &amp; Fill</button>
             <button id="catch-up-btn" class="btn-sm btn-secondary" onclick="landingCatchUp()">Catch Up</button>
+            <button id="daily-sync-btn" class="btn-sm btn-secondary" onclick="runDailySync()">Run Daily Sync</button>
         </div>
         <div id="landing-progress-wrap" style="display:none;">
             <div class="gpa-progress"><div class="gpa-progress__fill" id="landing-progress-fill" style="width:0%"></div></div>
@@ -486,8 +488,10 @@ let _landingPollInterval = null;
 function _landingSetBtn(running) {
     const ff = document.getElementById('flush-fill-btn');
     const cu = document.getElementById('catch-up-btn');
+    const ds = document.getElementById('daily-sync-btn');
     if (ff) { ff.disabled = running; if (running) ff.dataset.origText = ff.textContent; }
     if (cu) { cu.disabled = running; }
+    if (ds && !_dailySyncRunning) { ds.disabled = running; }
 }
 
 function _landingShowProgress(pct) {
@@ -525,6 +529,30 @@ async function _landingPost(endpoint) {
 
 function landingFlushFill() { _landingPost('landing-flush-fill'); }
 function landingCatchUp()   { _landingPost('landing-catch-up'); }
+
+// ── Daily BIS Sync ─────────────────────────────────────────────────────────────
+let _dailySyncRunning = false;
+
+async function runDailySync() {
+    if (_dailySyncRunning || _landingPollInterval) {
+        setStatus('Another operation is in progress — please wait.', 'error');
+        return;
+    }
+    const btn = document.getElementById('daily-sync-btn');
+    if (btn) { btn.disabled = true; btn._origHtml = btn.innerHTML; btn.innerHTML = '<span class="spinner"></span> Starting…'; }
+    _dailySyncRunning = true;
+    try {
+        const res = await fetch('/api/v1/admin/bis/run-daily-sync', { method: 'POST' });
+        const d = await res.json();
+        if (!d.ok) throw new Error(d.error || 'Unknown error');
+        setStatus('Daily sync started in background — check your email when it completes.', 'success');
+    } catch (e) {
+        setStatus('Failed to start daily sync: ' + e.message, 'error');
+    } finally {
+        _dailySyncRunning = false;
+        if (btn) { btn.innerHTML = btn._origHtml || 'Run Daily Sync'; btn.disabled = false; }
+    }
+}
 
 function _startLandingPoll() {
     if (_landingPollInterval) return;
