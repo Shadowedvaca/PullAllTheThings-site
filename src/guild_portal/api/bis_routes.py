@@ -29,6 +29,7 @@ Endpoints:
   GET  /api/v1/admin/bis/sync-crafted-items  (poll status)
   POST /api/v1/admin/bis/sync-crafted-items  (start job)
   GET  /api/v1/admin/bis/trinket-ratings-status
+  POST /api/v1/admin/bis/run-daily-sync
   POST /api/v1/admin/bis/rebuild-enrichment
   GET  /api/v1/admin/bis/method-sections        (GL+ — section inventory with override status)
   POST /api/v1/admin/bis/method-sections/override  (GL+ — upsert override)
@@ -909,6 +910,16 @@ async def process_tier_tokens(
     from sv_common.guild_sync.item_source_sync import process_tier_tokens as _process
     result = await _process(pool)
     return {"ok": True, **result}
+
+
+@router.post("/run-daily-sync", dependencies=[Depends(require_rank(5))])
+async def run_daily_sync_now(request: Request):
+    """Manually trigger the BIS daily sync job (GL only). Returns immediately; job runs in background."""
+    scheduler = getattr(request.app.state, "guild_sync_scheduler", None)
+    if scheduler is None:
+        return {"ok": False, "error": "Scheduler not available"}
+    asyncio.create_task(scheduler.run_bis_daily_sync(triggered_by="manual"))
+    return {"ok": True, "message": "Daily sync started in background"}
 
 
 @router.post("/rebuild-enrichment")
