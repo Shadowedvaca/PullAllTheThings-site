@@ -140,7 +140,7 @@
     <!-- Season Info Card -->
     <div class="cs-card">
         <h2 class="cs-card__title">Current Season</h2>
-        <p class="cs-card__subtitle">Cadence is computed from the active raid season's start date.</p>
+        <p class="cs-card__subtitle">Sync runs every 6 hours during active seasons, weekly off-season.</p>
 
         <div id="cs-season-box" class="cs-season-box" style="display:none">
             <p class="cs-season-box__name" id="cs-season-name">—</p>
@@ -156,7 +156,7 @@
         <p class="cs-season-hint">
             Season name, start date, and the "first of expansion" flag are managed in
             <a href="/admin/raid-tools">Admin → Raid Tools</a>.
-            The crafting sync cadence updates automatically when the active season changes.
+            The sync switches to weekly automatically when no active season is configured.
         </p>
     </div>
 
@@ -298,10 +298,9 @@
                             'Started: ' + fmtDateOnly(c.season_start_date);
                         if (c.is_new_expansion) {
                             document.getElementById('cs-season-flags').innerHTML =
-                                '<span class="cs-badge cs-badge--new-exp">New Expansion</span> 28-day daily window';
+                                '<span class="cs-badge cs-badge--new-exp">New Expansion</span>';
                         } else {
-                            document.getElementById('cs-season-flags').textContent =
-                                '14-day daily window';
+                            document.getElementById('cs-season-flags').textContent = '';
                         }
                     } else {
                         document.getElementById('cs-no-season').style.display = 'block';
@@ -315,9 +314,7 @@
                     const s = status.data;
                     const cadEl = document.getElementById('cs-cadence-val');
                     if (s.current_cadence === 'daily') {
-                        cadEl.innerHTML = '<span class="cs-badge cs-badge--daily">Daily</span>' +
-                            (s.daily_days_remaining > 0
-                                ? ' &nbsp;' + s.daily_days_remaining + ' days remaining' : '');
+                        cadEl.innerHTML = '<span class="cs-badge cs-badge--daily">Every 6 hours</span>';
                     } else {
                         cadEl.innerHTML = '<span class="cs-badge cs-badge--weekly">Weekly</span>';
                     }

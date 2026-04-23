@@ -563,8 +563,7 @@
             lastEl.innerHTML = '&#x1f504; Last sync: ' + fmtDate(s.last_sync_at);
             const cadEl = document.getElementById('cc-cadence-info');
             if (s.current_cadence === 'daily') {
-                cadEl.innerHTML = '<span class="cc-cadence-badge">Daily</span> ' +
-                    (s.daily_days_remaining > 0 ? s.daily_days_remaining + ' days remaining' : '');
+                cadEl.innerHTML = '<span class="cc-cadence-badge">~Every 6 hrs</span>';
             } else {
                 cadEl.innerHTML = '<span class="cc-cadence-badge cc-cadence-badge--weekly">Weekly</span>';
             }

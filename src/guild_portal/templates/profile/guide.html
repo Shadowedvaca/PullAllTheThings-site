@@ -308,7 +308,7 @@
         <p>If you're a crafter, go to your Profile (Settings → My Profile) and enable <strong>Crafting notifications</strong>. When that's on, the bot will @mention you specifically when someone requests something you can make.</p>
 
         <h4>Recipe data</h4>
-        <p>The recipe directory is synced automatically from the Blizzard API. It stays current as guild members learn new recipes.</p>
+        <p>The recipe directory is synced automatically from the Blizzard API approximately every 6 hours. New recipes typically appear within a few hours of being learned, accounting for Blizzard's own API cache.</p>
       </div>
     </details>
 
@@ -556,12 +556,7 @@
         <p>This page manages the automated profession data sync from the Blizzard API.</p>
 
         <h4>Sync Cadence</h4>
-        <p>The sync cadence adapts automatically based on the season:</p>
-        <ul>
-          <li><strong>New expansion:</strong> Daily for 28 days after season start (recipes change frequently)</li>
-          <li><strong>Established season:</strong> Daily for 14 days after season start, then weekly</li>
-          <li><strong>Ongoing:</strong> Weekly</li>
-        </ul>
+        <p>During an active season, profession data syncs approximately every 6 hours. Only characters that have logged in since the last sync are checked, so the actual number of API calls per run is small. Note that Blizzard's API may take a few hours to reflect in-game changes after a character logs in.</p>
 
         <h4>Season Configuration</h4>
         <p>Set the current expansion name, season number, and season start date. This drives the adaptive cadence logic.</p>

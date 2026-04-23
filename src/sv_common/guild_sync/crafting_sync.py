@@ -419,9 +419,7 @@ async def run_crafting_sync(
     async with pool.acquire() as conn:
         now = datetime.now(timezone.utc)
         cadence_after, _ = compute_sync_cadence(config, season)
-        next_sync_delta = timedelta(days=1 if cadence_after == "daily" else 7)
-        next_sync = datetime(now.year, now.month, now.day, 3, 0, 0, tzinfo=timezone.utc)
-        next_sync = next_sync + next_sync_delta
+        next_sync = now + (timedelta(hours=6) if cadence_after == "daily" else timedelta(days=7))
 
         await conn.execute(
             """UPDATE guild_identity.crafting_sync_config SET
