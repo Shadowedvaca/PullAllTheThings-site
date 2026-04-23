@@ -3,8 +3,10 @@
 Tests:
 1. run_activity_prune: executes DELETE with correct SQL
 2. run_activity_prune: logs completion message with result
-3. run_activity_prune: handles DB exception without propagating
-4. start() registers activity_prune job in production
+3. run_activity_prune: DB exception does not propagate
+4. run_activity_prune: DB exception calls report_error with warning severity
+5. run_activity_prune: DB exception calls maybe_notify_discord
+6. start() registers activity_prune job in production
 """
 
 import os
@@ -41,7 +43,7 @@ def _make_scheduler():
 
 
 # ---------------------------------------------------------------------------
-# 1–3. run_activity_prune behaviour
+# 1–5. run_activity_prune behaviour
 # ---------------------------------------------------------------------------
 
 
@@ -90,12 +92,50 @@ class TestRunActivityPrune:
         mock_pool_ctx.__aexit__ = AsyncMock(return_value=False)
         scheduler.db_pool.acquire = MagicMock(return_value=mock_pool_ctx)
 
-        # Should not raise
-        await scheduler.run_activity_prune()
+        with patch("sv_common.errors.report_error", new_callable=AsyncMock,
+                   return_value={"is_first_occurrence": True}), \
+             patch("guild_portal.services.error_routing.maybe_notify_discord", new_callable=AsyncMock):
+            # Should not raise
+            await scheduler.run_activity_prune()
+
+    @pytest.mark.asyncio
+    async def test_exception_calls_report_error_as_warning(self):
+        scheduler = _make_scheduler()
+
+        mock_pool_ctx = MagicMock()
+        mock_pool_ctx.__aenter__ = AsyncMock(side_effect=Exception("connection refused"))
+        mock_pool_ctx.__aexit__ = AsyncMock(return_value=False)
+        scheduler.db_pool.acquire = MagicMock(return_value=mock_pool_ctx)
+
+        with patch("sv_common.errors.report_error", new_callable=AsyncMock,
+                   return_value={"is_first_occurrence": True}) as mock_report, \
+             patch("guild_portal.services.error_routing.maybe_notify_discord", new_callable=AsyncMock):
+            await scheduler.run_activity_prune()
+
+        mock_report.assert_called_once()
+        args = mock_report.call_args[0]
+        assert args[1] == "activity_prune_failed"
+        assert args[2] == "warning"
+
+    @pytest.mark.asyncio
+    async def test_exception_calls_maybe_notify_discord(self):
+        scheduler = _make_scheduler()
+
+        mock_pool_ctx = MagicMock()
+        mock_pool_ctx.__aenter__ = AsyncMock(side_effect=Exception("connection refused"))
+        mock_pool_ctx.__aexit__ = AsyncMock(return_value=False)
+        scheduler.db_pool.acquire = MagicMock(return_value=mock_pool_ctx)
+
+        with patch("sv_common.errors.report_error", new_callable=AsyncMock,
+                   return_value={"is_first_occurrence": True}), \
+             patch("guild_portal.services.error_routing.maybe_notify_discord", new_callable=AsyncMock) as mock_notify:
+            await scheduler.run_activity_prune()
+
+        mock_notify.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
-# 4. start() registers activity_prune job
+# 6. start() registers activity_prune job
 # ---------------------------------------------------------------------------
 
 

@@ -740,6 +740,22 @@ class GuildSyncScheduler:
             logger.info("Activity prune complete: %s", result)
         except Exception as exc:
             logger.error("Activity prune failed: %s", exc, exc_info=True)
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "activity_prune_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "activity_prune_failed", "warning",
+                f"The user activity retention prune job failed: {exc}",
+                result["is_first_occurrence"],
+            )
 
     async def run_weekly_progression_sweep(self):
         """Weekly full progression sweep: snapshots + achievement sync (all characters).
