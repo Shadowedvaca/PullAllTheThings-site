@@ -245,11 +245,10 @@ Key design gotchas (read before writing any DB query):
   - **Phase B COMPLETE** (commit c43a34a): `ActivityMiddleware` in `src/guild_portal/middleware/activity.py`; registered in `app.py`; fires background upsert after each authenticated response; skips static/polling paths; 25 unit tests. 1841/1847 suite-wide (6 pre-existing).
   - **Phase C COMPLETE** (commit 0baafeb): Admin Users page — extended query with activity data; `_rel_time()` helper; new stat pills (Active This Week, Never Logged In); new columns (Last Active, Last Login, Logins, 7d Views); expand row showing pages visited this week as tag chips; default sort by `last_active_at DESC NULLS LAST`; 31 unit tests. 1872/1878 suite-wide.
   - **Phase D COMPLETE** (commit 8259b6c): `run_activity_prune()` in `scheduler.py`; deletes `common.user_activity` rows older than 90 days; registered as weekly Sunday 3:30 AM UTC; 4 unit tests. 1876/1882 suite-wide.
-- **prod-v0.22.4 — COMPLETE** (no migration, PR #38 + patch). Phase 1.7 daily BIS pipeline fully shipped.
+- **prod-v0.22.5 — COMPLETE** (migration 0178, PR #39). Phase 1.8 User Activity Logging fully shipped.
 - **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
-- **Last prod tag:** `prod-v0.22.4`
-- **Active branch:** `feature/user-activity-logging`
-- **Next step:** PR `feature/user-activity-logging` → `main` → tag `prod-v0.23.0` (MINOR bump — new feature)
+- **Last prod tag:** `prod-v0.22.5`
+- **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
