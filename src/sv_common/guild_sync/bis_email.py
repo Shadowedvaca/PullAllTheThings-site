@@ -80,6 +80,102 @@ body { margin: 0; padding: 0; background: #0a0a0b; color: #c0b48a; font-family: 
 """
 
 
+_SOURCE_ABBREV = {
+    "u.gg Raid":        "ugg<br>Ra",
+    "u.gg M+":          "ugg<br>M+",
+    "u.gg Overall":     "ugg<br>Ov",
+    "Wowhead Raid":     "WH<br>Ra",
+    "Wowhead M+":       "WH<br>M+",
+    "Wowhead Overall":  "WH<br>Ov",
+    "Icy Veins Raid":   "IV<br>Ra",
+    "Icy Veins M+":     "IV<br>M+",
+    "Icy Veins Overall":"IV<br>Ov",
+    "Method Overall":   "Me<br>Ov",
+    "Method Raid":      "Me<br>Ra",
+    "Method M+":        "Me<br>M+",
+    "Archon M+":        "Ar<br>M+",
+    "Archon Raid":      "Ar<br>Ra",
+}
+
+
+def _delta_matrix(
+    delta_added: list[dict],
+    delta_removed: list[dict],
+    spec_map: dict[int, dict],
+    source_map: dict[int, str],
+) -> str:
+    """Return an HTML table: rows = class/spec, columns = source, cells = +added/-removed."""
+    if not delta_added and not delta_removed:
+        return ""
+
+    counts: dict[tuple, list[int]] = {}
+    for item in delta_added:
+        k = (item.get("spec_id"), item.get("source_id"))
+        counts.setdefault(k, [0, 0])[0] += 1
+    for item in delta_removed:
+        k = (item.get("spec_id"), item.get("source_id"))
+        counts.setdefault(k, [0, 0])[1] += 1
+
+    source_ids = sorted({k[1] for k in counts if k[1] is not None})
+    spec_ids = sorted(
+        {k[0] for k in counts if k[0] is not None},
+        key=lambda s: (spec_map.get(s, {}).get("class_name", "z"), spec_map.get(s, {}).get("spec_name", "z")),
+    )
+    if not source_ids or not spec_ids:
+        return ""
+
+    class_groups: dict[str, list] = {}
+    for spec_id in spec_ids:
+        cls = spec_map.get(spec_id, {}).get("class_name", "Unknown")
+        class_groups.setdefault(cls, []).append(spec_id)
+
+    n = len(source_ids)
+    TH  = "padding:4px 2px;font-size:0.7rem;color:#888;text-align:center;border:1px solid #2a2a2e;background:#0e0e10;line-height:1.3"
+    THL = "padding:4px 6px;font-size:0.72rem;color:#888;text-align:left;border:1px solid #2a2a2e;background:#0e0e10"
+    CLS = "padding:3px 6px;font-size:0.76rem;font-weight:bold;color:#d4a84b;background:#1a1a1e;border:1px solid #2a2a2e"
+    SPE = "padding:3px 6px;font-size:0.76rem;color:#c0b48a;border:1px solid #1e1e22;white-space:nowrap"
+    CEL = "padding:3px 2px;font-size:0.73rem;text-align:center;border:1px solid #1e1e22"
+
+    header = f'<th style="{THL}">Spec</th>'
+    for sid in source_ids:
+        name = source_map.get(sid, f"Src {sid}")
+        label = _SOURCE_ABBREV.get(name, name.replace(" ", "<br>", 1))
+        header += f'<th style="{TH}">{label}</th>'
+
+    body = ""
+    for cls_name, cls_specs in sorted(class_groups.items()):
+        body += f'<tr><td colspan="{n + 1}" style="{CLS}">{cls_name}</td></tr>'
+        for spec_id in cls_specs:
+            spec_name = spec_map.get(spec_id, {}).get("spec_name", f"Spec {spec_id}")
+            row = f'<td style="{SPE}">{spec_name}</td>'
+            for sid in source_ids:
+                added, removed = counts.get((spec_id, sid), [0, 0])
+                if added == 0 and removed == 0:
+                    cell = '<span style="color:#333">—</span>'
+                else:
+                    parts = []
+                    if added:
+                        parts.append(f'<span style="color:#4ade80">+{added}</span>')
+                    if removed:
+                        parts.append(f'<span style="color:#f87171">-{removed}</span>')
+                    cell = "/".join(parts)
+                row += f'<td style="{CEL}">{cell}</td>'
+            body += f"<tr>{row}</tr>"
+
+    col_w = f"calc((100% - 88px) / {n})"
+    colgroup = '<col style="width:88px">' + f'<col style="width:{col_w}">' * n
+
+    return (
+        '<div class="section"><h2>Changes by Spec &amp; Source</h2>'
+        '<div style="overflow-x:auto">'
+        f'<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
+        f'<colgroup>{colgroup}</colgroup>'
+        f'<thead><tr>{header}</tr></thead>'
+        f'<tbody>{body}</tbody>'
+        '</table></div></div>'
+    )
+
+
 def _group_items(
     items: list[dict],
     spec_map: dict[int, dict],
@@ -178,6 +274,7 @@ def _build_html(
             '</div>'
         )
 
+    matrix_html = _delta_matrix(delta_added, delta_removed, spec_map, source_map)
     added_html = _delta_section(f"New BIS Items (+{len(delta_added)})", delta_added, spec_map, source_map)
     removed_html = _delta_section(f"Removed BIS Items (\u2212{len(delta_removed)})", delta_removed, spec_map, source_map)
 
@@ -211,6 +308,7 @@ def _build_html(
   {patch_html}
   {stats_html}
   {quiet_html}
+  {matrix_html}
   {added_html}
   {removed_html}
   {failures_html}
