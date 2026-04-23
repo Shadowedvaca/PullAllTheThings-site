@@ -1560,10 +1560,21 @@ class GuildSyncScheduler:
                 "notes": notes_str,
             }
 
+            async with self.db_pool.acquire() as _lconn:
+                spec_rows = await _lconn.fetch(
+                    "SELECT s.id, s.name AS spec_name, c.name AS class_name"
+                    " FROM ref.specializations s JOIN ref.classes c ON c.id = s.class_id"
+                )
+                source_rows = await _lconn.fetch("SELECT id, name FROM ref.bis_list_sources")
+            spec_map = {r["id"]: {"spec_name": r["spec_name"], "class_name": r["class_name"]} for r in spec_rows}
+            source_map = {r["id"]: r["name"] for r in source_rows}
+
             subject, html_body = compose_bis_report(
                 run_data=run_data,
                 guild_name=get_guild_name(),
                 app_url=get_app_url(),
+                spec_map=spec_map,
+                source_map=source_map,
             )
 
             await send_email(smtp_decrypted, report_email, subject, html_body)

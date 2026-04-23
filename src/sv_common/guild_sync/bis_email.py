@@ -9,6 +9,8 @@ def compose_bis_report(
     run_data: dict[str, Any],
     guild_name: str,
     app_url: str,
+    spec_map: dict[int, dict] | None = None,
+    source_map: dict[int, str] | None = None,
 ) -> tuple[str, str]:
     """Return (subject, html_body) for a BIS daily sync run report."""
     delta_added = run_data.get("delta_added") or []
@@ -45,6 +47,8 @@ def compose_bis_report(
     html = _build_html(
         run_data, delta_added, delta_removed,
         guild_name, app_url, time_str, patch_signal, has_changes,
+        spec_map=spec_map or {},
+        source_map=source_map or {},
     )
     return subject, html
 
@@ -76,30 +80,55 @@ body { margin: 0; padding: 0; background: #0a0a0b; color: #c0b48a; font-family: 
 """
 
 
-def _group_by_spec(items: list[dict]) -> dict[str, list[dict]]:
-    groups: dict[str, list[dict]] = {}
+def _group_items(
+    items: list[dict],
+    spec_map: dict[int, dict],
+    source_map: dict[int, str],
+) -> dict[str, dict[str, dict[str, list[dict]]]]:
+    """Return {source_name: {class_name: {spec_name: [items]}}} sorted at each level."""
+    tree: dict[str, dict[str, dict[str, list[dict]]]] = {}
     for item in items:
-        key = f"Spec {item.get('spec_id', '?')} / Source {item.get('source_id', '?')}"
-        groups.setdefault(key, []).append(item)
-    return groups
+        sid = item.get("source_id")
+        spid = item.get("spec_id")
+        source_name = source_map.get(sid, f"Source {sid}") if sid is not None else "Unknown Source"
+        spec_info = spec_map.get(spid, {}) if spid is not None else {}
+        class_name = spec_info.get("class_name", f"Class ?")
+        spec_name = spec_info.get("spec_name", f"Spec {spid}")
+        tree.setdefault(source_name, {}).setdefault(class_name, {}).setdefault(spec_name, []).append(item)
+    return {
+        src: {
+            cls: dict(sorted(specs.items()))
+            for cls, specs in sorted(classes.items())
+        }
+        for src, classes in sorted(tree.items())
+    }
 
 
-def _delta_section(title: str, items: list[dict]) -> str:
+def _delta_section(
+    title: str,
+    items: list[dict],
+    spec_map: dict[int, dict],
+    source_map: dict[int, str],
+) -> str:
     if not items:
         return ""
-    groups = _group_by_spec(items)
+    tree = _group_items(items, spec_map, source_map)
     rows = ""
-    for group_label, group_items in groups.items():
-        rows += f'<div class="spec-group">{group_label}</div>'
-        for item in group_items:
-            slot = item.get("slot", "")
-            name = item.get("item_name", f"Item {item.get('blizzard_item_id', '?')}")
-            rows += (
-                f'<div class="item-row">'
-                f'<span>{name}</span>'
-                f'<span class="item-slot">{slot}</span>'
-                f'</div>'
-            )
+    for source_name, classes in tree.items():
+        rows += f'<div style="font-size:0.8rem;color:#888;text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #2a2a2e">{source_name}</div>'
+        for class_name, specs in classes.items():
+            rows += f'<div style="font-weight:bold;color:#d4a84b;margin:8px 0 2px;font-size:0.85rem">{class_name}</div>'
+            for spec_name, spec_items in specs.items():
+                rows += f'<div class="spec-group">{spec_name}</div>'
+                for item in spec_items:
+                    slot = item.get("slot", "")
+                    name = item.get("item_name", f"Item {item.get('blizzard_item_id', '?')}")
+                    rows += (
+                        f'<div class="item-row">'
+                        f'<span>{name}</span>'
+                        f'<span class="item-slot">{slot}</span>'
+                        f'</div>'
+                    )
     return f'<div class="section"><h2>{title}</h2>{rows}</div>'
 
 
@@ -112,7 +141,11 @@ def _build_html(
     time_str: str,
     patch_signal: bool,
     has_changes: bool,
+    spec_map: dict[int, dict] | None = None,
+    source_map: dict[int, str] | None = None,
 ) -> str:
+    spec_map = spec_map or {}
+    source_map = source_map or {}
     targets_checked = run_data.get("targets_checked", 0)
     targets_changed = run_data.get("targets_changed", 0)
     targets_failed = run_data.get("targets_failed", 0)
@@ -145,8 +178,8 @@ def _build_html(
             '</div>'
         )
 
-    added_html = _delta_section(f"New BIS Items (+{len(delta_added)})", delta_added)
-    removed_html = _delta_section(f"Removed BIS Items (\u2212{len(delta_removed)})", delta_removed)
+    added_html = _delta_section(f"New BIS Items (+{len(delta_added)})", delta_added, spec_map, source_map)
+    removed_html = _delta_section(f"Removed BIS Items (\u2212{len(delta_removed)})", delta_removed, spec_map, source_map)
 
     quiet_html = ""
     if not has_changes and not patch_signal:
