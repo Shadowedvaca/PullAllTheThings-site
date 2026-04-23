@@ -1,6 +1,7 @@
 """Authentication API — register, login, profile."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -139,6 +140,10 @@ async def login(body: LoginBody, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="No player account linked.")
 
     rank_level = player.guild_rank.level if player.guild_rank else 1
+
+    user.last_login_at = datetime.now(timezone.utc)
+    user.login_count = (user.login_count or 0) + 1
+    await db.flush()
 
     token = create_access_token(
         user_id=user.id,
