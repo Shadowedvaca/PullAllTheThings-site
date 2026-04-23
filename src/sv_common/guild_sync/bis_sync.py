@@ -3806,9 +3806,9 @@ async def _snapshot_bis_entries(conn) -> dict:
     rows = await conn.fetch(
         """
         SELECT be.blizzard_item_id, be.spec_id, be.source_id, be.slot,
-               bi.name
+               COALESCE(ei.name, be.blizzard_item_id::text) AS name
           FROM enrichment.bis_entries be
-          JOIN landing.blizzard_items bi ON bi.id = be.blizzard_item_id
+          LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = be.blizzard_item_id
         """
     )
     return {
