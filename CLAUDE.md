@@ -240,12 +240,16 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.22.4 — COMPLETE** (no migration, PR #38 + patch). Phase 1.7 daily BIS pipeline fully shipped. Patch v0.22.4 disables all scheduler jobs on dev/test (`APP_ENV != 'production'` → skip all `add_job` calls, log warning, start empty scheduler). All periodic jobs prod-only; manual triggers work everywhere.
-- **prod-v0.22.3 — COMPLETE** (migration 0177, PR #38). Full Phase 1.7 daily BIS pipeline: scheduled scrape (content-hash dedup, adaptive backoff, u.gg always-daily), hourly patch probe, delta tracking, HTML email report (spec×source delta matrix), Admin UI (Daily Run History, Patch Signal badge, is_active toggle, Re-activate All, Next Check/Interval columns). `gear_plan_admin.js v1.7.1`. 1801/1807 suite-wide (6 pre-existing failures). **Post-deploy: configure SMTP in Admin → Site Config, then Run Daily Sync to validate email.**
-- **Last migration:** 0177 (`'unchanged'` added to `log.bis_scrape_log` status CHECK)
+- **Phase 1.8 — User Activity Logging** — IN PROGRESS on `feature/user-activity-logging`
+  - **Phase A COMPLETE** (commit 312ca88, migration 0178): `common.users` +`last_active_at/last_login_at/login_count`; `common.user_activity` daily rollup table; login stamping in `POST /api/v1/auth/login`
+  - **Phase B COMPLETE** (commit c43a34a): `ActivityMiddleware` in `src/guild_portal/middleware/activity.py`; registered in `app.py`; fires background upsert after each authenticated response; skips static/polling paths; 25 unit tests. 1841/1847 suite-wide (6 pre-existing).
+  - **Phase C NEXT**: Admin Users page — extend query + new columns + expand row
+  - **Phase D**: Retention pruning scheduler job
+- **prod-v0.22.4 — COMPLETE** (no migration, PR #38 + patch). Phase 1.7 daily BIS pipeline fully shipped.
+- **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
 - **Last prod tag:** `prod-v0.22.4`
-- **Active branch:** `main`
-- **Next planned:** TBD
+- **Active branch:** `feature/user-activity-logging`
+- **Next planned:** Phase 1.8-C (Admin Users UI)
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
