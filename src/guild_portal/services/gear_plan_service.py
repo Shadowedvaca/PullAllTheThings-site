@@ -1110,14 +1110,18 @@ async def get_plan_detail(
         hero_talent_id = plan_row["hero_talent_id"]
         bis_source_id = plan_row["bis_source_id"]
 
-        # Equipped gear
+        # Equipped gear — COALESCE icon_url from enrichment (post-rebuild) then
+        # landing.blizzard_item_icons (populated during equipment sync) so newly
+        # equipped items show icons immediately without requiring a manual rebuild.
         equip_rows = await conn.fetch(
             """
             SELECT ce.slot, ce.blizzard_item_id, ce.item_name, ce.item_level,
                    ce.quality_track, ce.enchant_id, ce.gem_ids, ce.bonus_ids,
-                   ei.icon_url, ei.slot_type
+                   COALESCE(ei.icon_url, bii.icon_url) AS icon_url,
+                   ei.slot_type
               FROM guild_identity.character_equipment ce
               LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = ce.blizzard_item_id
+              LEFT JOIN landing.blizzard_item_icons bii ON bii.blizzard_item_id = ce.blizzard_item_id
              WHERE ce.character_id = $1
             """,
             character_id,

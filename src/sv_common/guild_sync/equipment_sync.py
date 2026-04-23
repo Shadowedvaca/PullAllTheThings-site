@@ -144,6 +144,8 @@ async def _sync_one_character(
         logger.debug("No equipment data for %s/%s", realm_slug, char_name)
         return False
 
+    item_ids = [s.blizzard_item_id for s in slots if s.blizzard_item_id]
+
     async with pool.acquire() as conn:
         async with conn.transaction():
             for slot_data in slots:
@@ -186,4 +188,51 @@ async def _sync_one_character(
                 now, char_id,
             )
 
+    # Best-effort: fetch icons for any equipped item not yet in landing.blizzard_item_icons
+    await _fetch_missing_item_icons(pool, blizzard_client, item_ids, char_name)
+
     return True
+
+
+async def _fetch_missing_item_icons(
+    pool: asyncpg.Pool,
+    blizzard_client: BlizzardClient,
+    item_ids: list[int],
+    char_name: str,
+) -> None:
+    """Fetch and cache Blizzard media icons for equipped items not yet in landing."""
+    if not item_ids:
+        return
+
+    async with pool.acquire() as conn:
+        existing = await conn.fetch(
+            "SELECT blizzard_item_id FROM landing.blizzard_item_icons WHERE blizzard_item_id = ANY($1::int[])",
+            item_ids,
+        )
+    already_cached = {r["blizzard_item_id"] for r in existing}
+    missing = [iid for iid in item_ids if iid not in already_cached]
+
+    if not missing:
+        return
+
+    logger.debug(
+        "Fetching icons for %d uncached equipped items on %s", len(missing), char_name
+    )
+    for item_id in missing:
+        try:
+            icon_url = await blizzard_client.get_item_media(item_id)
+            if icon_url:
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO landing.blizzard_item_icons (blizzard_item_id, icon_url)
+                        VALUES ($1, $2)
+                        ON CONFLICT (blizzard_item_id)
+                        DO UPDATE SET icon_url = EXCLUDED.icon_url, fetched_at = NOW()
+                        """,
+                        item_id, icon_url,
+                    )
+        except Exception as exc:
+            logger.warning(
+                "Icon fetch failed for item %d (char %s): %s", item_id, char_name, exc
+            )
