@@ -238,7 +238,7 @@ Sorting by `last_active_at DESC` by default — most recently active users at th
 
 ---
 
-### Phase D — Retention pruning job
+### Phase D — Retention pruning job ✅ COMPLETE (commit 8259b6c, branch feature/user-activity-logging)
 
 **Files touched:**
 - `src/sv_common/guild_sync/scheduler.py` — add weekly prune job
