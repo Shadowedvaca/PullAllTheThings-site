@@ -114,6 +114,11 @@ async def login_post(
     if player is None:
         return render_error("No player account linked to this login.")
 
+    from datetime import datetime, timezone
+    user.last_login_at = datetime.now(timezone.utc)
+    user.login_count = (user.login_count or 0) + 1
+    await db.flush()
+
     token = create_access_token(
         user_id=user.id,
         member_id=player.id,

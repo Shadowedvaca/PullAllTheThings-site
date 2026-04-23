@@ -2447,6 +2447,28 @@ async def admin_audit_resolve(
 # ---------------------------------------------------------------------------
 
 
+def _rel_time(dt: datetime | None) -> str:
+    """Return a human-readable relative time string for a UTC datetime."""
+    if dt is None:
+        return "never"
+    now = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    secs = int((now - dt).total_seconds())
+    if secs < 60:
+        return "just now"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    days = secs // 86400
+    if days < 30:
+        return f"{days}d ago"
+    if days < 365:
+        return f"{days // 30}mo ago"
+    return f"{days // 365}y ago"
+
+
 @router.get("/users", response_class=HTMLResponse)
 async def admin_users(
     request: Request,
@@ -2459,17 +2481,39 @@ async def admin_users(
     rows = await db.execute(
         text("""
             SELECT u.id, u.email, u.is_active, u.created_at,
+                   u.last_login_at, u.last_active_at, u.login_count,
                    p.id                    AS player_id,
                    p.display_name,
                    gr.name                 AS rank_name,
                    ba.battletag            AS battletag,
                    ba.last_character_sync  AS last_bnet_sync,
-                   ba.token_expires_at     AS bnet_token_expires_at
+                   ba.token_expires_at     AS bnet_token_expires_at,
+                   COALESCE((
+                       SELECT SUM(ua.page_views)
+                       FROM common.user_activity ua
+                       WHERE ua.user_id = u.id AND ua.activity_date >= CURRENT_DATE - 6
+                   ), 0)::integer AS views_7d,
+                   COALESCE((
+                       SELECT SUM(ua.page_views)
+                       FROM common.user_activity ua
+                       WHERE ua.user_id = u.id
+                   ), 0)::integer AS views_total,
+                   (
+                       SELECT MAX(ua.activity_date)
+                       FROM common.user_activity ua
+                       WHERE ua.user_id = u.id
+                   ) AS last_activity_date,
+                   (
+                       SELECT array_agg(DISTINCT path ORDER BY path)
+                       FROM common.user_activity ua,
+                            unnest(ua.pages_visited) AS path
+                       WHERE ua.user_id = u.id AND ua.activity_date >= CURRENT_DATE - 6
+                   ) AS pages_7d
             FROM common.users u
             LEFT JOIN guild_identity.players p ON p.website_user_id = u.id
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
             LEFT JOIN guild_identity.battlenet_accounts ba ON ba.player_id = p.id
-            ORDER BY u.created_at DESC
+            ORDER BY u.last_active_at DESC NULLS LAST
         """)
     )
     now = datetime.now(timezone.utc)
@@ -2480,10 +2524,22 @@ async def admin_users(
         u["bnet_token_expired"] = bool(
             expires_at and expires_at <= now
         )
+        u["last_active_rel"] = _rel_time(u.get("last_active_at"))
+        u["last_login_rel"] = _rel_time(u.get("last_login_at"))
+        u["pages_7d"] = u.get("pages_7d") or []
         users.append(u)
+
+    active_week = sum(
+        1 for u in users
+        if u.get("last_active_at") is not None
+        and (now - (u["last_active_at"].replace(tzinfo=timezone.utc) if u["last_active_at"].tzinfo is None else u["last_active_at"])).days < 7
+    )
+    never_logged_in = sum(1 for u in users if not u.get("login_count"))
 
     ctx = await _base_ctx(request, player, db)
     ctx["users"] = users
+    ctx["active_week"] = active_week
+    ctx["never_logged_in"] = never_logged_in
     return templates.TemplateResponse("admin/users.html", ctx)
 
 

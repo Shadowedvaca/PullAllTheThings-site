@@ -240,12 +240,16 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **prod-v0.22.4 — COMPLETE** (no migration, PR #38 + patch). Phase 1.7 daily BIS pipeline fully shipped. Patch v0.22.4 disables all scheduler jobs on dev/test (`APP_ENV != 'production'` → skip all `add_job` calls, log warning, start empty scheduler). All periodic jobs prod-only; manual triggers work everywhere.
-- **prod-v0.22.3 — COMPLETE** (migration 0177, PR #38). Full Phase 1.7 daily BIS pipeline: scheduled scrape (content-hash dedup, adaptive backoff, u.gg always-daily), hourly patch probe, delta tracking, HTML email report (spec×source delta matrix), Admin UI (Daily Run History, Patch Signal badge, is_active toggle, Re-activate All, Next Check/Interval columns). `gear_plan_admin.js v1.7.1`. 1801/1807 suite-wide (6 pre-existing failures). **Post-deploy: configure SMTP in Admin → Site Config, then Run Daily Sync to validate email.**
-- **Last migration:** 0177 (`'unchanged'` added to `log.bis_scrape_log` status CHECK)
+- **Phase 1.8 — User Activity Logging** — **ALL PHASES COMPLETE** on `feature/user-activity-logging` — ready to merge + tag
+  - **Phase A COMPLETE** (commit 312ca88, migration 0178): `common.users` +`last_active_at/last_login_at/login_count`; `common.user_activity` daily rollup table; login stamping in `POST /api/v1/auth/login` **and** `POST /login` (form handler in `auth_pages.py` — fixed commit d533675; both must stamp or browser logins won't record)`
+  - **Phase B COMPLETE** (commit c43a34a): `ActivityMiddleware` in `src/guild_portal/middleware/activity.py`; registered in `app.py`; fires background upsert after each authenticated response; skips static/polling paths; 25 unit tests. 1841/1847 suite-wide (6 pre-existing).
+  - **Phase C COMPLETE** (commit 0baafeb): Admin Users page — extended query with activity data; `_rel_time()` helper; new stat pills (Active This Week, Never Logged In); new columns (Last Active, Last Login, Logins, 7d Views); expand row showing pages visited this week as tag chips; default sort by `last_active_at DESC NULLS LAST`; 31 unit tests. 1872/1878 suite-wide.
+  - **Phase D COMPLETE** (commit 8259b6c): `run_activity_prune()` in `scheduler.py`; deletes `common.user_activity` rows older than 90 days; registered as weekly Sunday 3:30 AM UTC; 4 unit tests. 1876/1882 suite-wide.
+- **prod-v0.22.4 — COMPLETE** (no migration, PR #38 + patch). Phase 1.7 daily BIS pipeline fully shipped.
+- **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
 - **Last prod tag:** `prod-v0.22.4`
-- **Active branch:** `main`
-- **Next planned:** TBD
+- **Active branch:** `feature/user-activity-logging`
+- **Next step:** PR `feature/user-activity-logging` → `main` → tag `prod-v0.23.0` (MINOR bump — new feature)
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 

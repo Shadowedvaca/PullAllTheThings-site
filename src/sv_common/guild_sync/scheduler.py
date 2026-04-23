@@ -272,6 +272,15 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # User activity data retention prune: weekly Sunday at 3:30 AM UTC
+        self.scheduler.add_job(
+            self.run_activity_prune,
+            CronTrigger(day_of_week="sun", hour=3, minute=30),
+            id="activity_prune",
+            name="User Activity Data Retention Prune",
+            misfire_grace_time=3600,
+        )
+
         # Archon BIS sync: weekly on Monday at 6 AM UTC
         self.scheduler.add_job(
             self.run_archon_sync,
@@ -720,6 +729,33 @@ class GuildSyncScheduler:
                     "Roleless Member Prune Failed",
                     f"The roleless member prune encountered an unexpected error:\n```{exc}```",
                 )
+
+    async def run_activity_prune(self):
+        """Prune user_activity rows older than 90 days. Runs weekly on Sunday at 3:30 AM UTC."""
+        try:
+            async with self.db_pool.acquire() as conn:
+                result = await conn.execute(
+                    "DELETE FROM common.user_activity WHERE activity_date < CURRENT_DATE - 90"
+                )
+            logger.info("Activity prune complete: %s", result)
+        except Exception as exc:
+            logger.error("Activity prune failed: %s", exc, exc_info=True)
+            from sv_common.errors import report_error
+            from guild_portal.services.error_routing import maybe_notify_discord
+            result = await report_error(
+                self.db_pool,
+                "activity_prune_failed",
+                "warning",
+                str(exc),
+                "scheduler",
+                details={"error": str(exc)},
+            )
+            await maybe_notify_discord(
+                self.db_pool, self.discord_bot, self.audit_channel_id,
+                "activity_prune_failed", "warning",
+                f"The user activity retention prune job failed: {exc}",
+                result["is_first_occurrence"],
+            )
 
     async def run_weekly_progression_sweep(self):
         """Weekly full progression sweep: snapshots + achievement sync (all characters).
