@@ -130,40 +130,65 @@ def _delta_matrix(
         class_groups.setdefault(cls, []).append(spec_id)
 
     n = len(source_ids)
-    TH  = "padding:4px 2px;font-size:0.7rem;color:#888;text-align:center;border:1px solid #2a2a2e;background:#0e0e10;line-height:1.3"
-    THL = "padding:4px 6px;font-size:0.72rem;color:#888;text-align:left;border:1px solid #2a2a2e;background:#0e0e10"
-    CLS = "padding:3px 6px;font-size:0.76rem;font-weight:bold;color:#d4a84b;background:#1a1a1e;border:1px solid #2a2a2e"
-    SPE = "padding:3px 6px;font-size:0.76rem;color:#c0b48a;border:1px solid #1e1e22;white-space:nowrap"
-    CEL = "padding:3px 2px;font-size:0.73rem;text-align:center;border:1px solid #1e1e22"
+    TH   = "padding:4px 2px;font-size:0.7rem;color:#888;text-align:center;border:1px solid #2a2a2e;background:#0e0e10;line-height:1.3"
+    THL  = "padding:4px 6px;font-size:0.72rem;color:#888;text-align:left;border:1px solid #2a2a2e;background:#0e0e10"
+    THTL = "padding:4px 2px;font-size:0.7rem;color:#d4a84b;text-align:center;border:1px solid #2a2a2e;background:#0e0e10;font-weight:bold"
+    CLS  = "padding:3px 6px;font-size:0.76rem;font-weight:bold;color:#d4a84b;background:#1a1a1e;border:1px solid #2a2a2e"
+    SPE  = "padding:3px 6px;font-size:0.76rem;color:#c0b48a;border:1px solid #1e1e22;white-space:nowrap"
+    CEL  = "padding:3px 2px;font-size:0.73rem;text-align:center;border:1px solid #1e1e22"
+    TOT  = "padding:3px 2px;font-size:0.73rem;text-align:center;border:1px solid #2a2a2e;background:#1a1a1e;font-weight:bold"
+    TOTL = "padding:3px 6px;font-size:0.73rem;color:#d4a84b;border:1px solid #2a2a2e;background:#1a1a1e;font-weight:bold"
+
+    def _cell(added: int, removed: int, style: str) -> str:
+        if added == 0 and removed == 0:
+            return f'<td style="{style}"><span style="color:#333">—</span></td>'
+        parts = []
+        if added:
+            parts.append(f'<span style="color:#4ade80">+{added}</span>')
+        if removed:
+            parts.append(f'<span style="color:#f87171">-{removed}</span>')
+        return f'<td style="{style}">{"/" .join(parts)}</td>'
+
+    # Pre-compute per-source totals and per-spec totals
+    src_totals: dict[int, list[int]] = {sid: [0, 0] for sid in source_ids}
+    spec_totals: dict[int, list[int]] = {spid: [0, 0] for spid in spec_ids}
+    for (spid, sid), (a, r) in counts.items():
+        if sid in src_totals:
+            src_totals[sid][0] += a
+            src_totals[sid][1] += r
+        if spid in spec_totals:
+            spec_totals[spid][0] += a
+            spec_totals[spid][1] += r
+    grand_added   = sum(v[0] for v in src_totals.values())
+    grand_removed = sum(v[1] for v in src_totals.values())
 
     header = f'<th style="{THL}">Spec</th>'
     for sid in source_ids:
         name = source_map.get(sid, f"Src {sid}")
         label = _SOURCE_ABBREV.get(name, name.replace(" ", "<br>", 1))
         header += f'<th style="{TH}">{label}</th>'
+    header += f'<th style="{THTL}">Total</th>'
 
     body = ""
     for cls_name, cls_specs in sorted(class_groups.items()):
-        body += f'<tr><td colspan="{n + 1}" style="{CLS}">{cls_name}</td></tr>'
+        body += f'<tr><td colspan="{n + 2}" style="{CLS}">{cls_name}</td></tr>'
         for spec_id in cls_specs:
             spec_name = spec_map.get(spec_id, {}).get("spec_name", f"Spec {spec_id}")
             row = f'<td style="{SPE}">{spec_name}</td>'
             for sid in source_ids:
-                added, removed = counts.get((spec_id, sid), [0, 0])
-                if added == 0 and removed == 0:
-                    cell = '<span style="color:#333">—</span>'
-                else:
-                    parts = []
-                    if added:
-                        parts.append(f'<span style="color:#4ade80">+{added}</span>')
-                    if removed:
-                        parts.append(f'<span style="color:#f87171">-{removed}</span>')
-                    cell = "/".join(parts)
-                row += f'<td style="{CEL}">{cell}</td>'
+                row += _cell(*counts.get((spec_id, sid), [0, 0]), CEL)
+            row += _cell(*spec_totals[spec_id], TOT)
             body += f"<tr>{row}</tr>"
 
-    col_w = f"calc((100% - 88px) / {n})"
-    colgroup = '<col style="width:88px">' + f'<col style="width:{col_w}">' * n
+    # Totals footer row
+    footer_row = f'<td style="{TOTL}">Total</td>'
+    for sid in source_ids:
+        footer_row += _cell(*src_totals[sid], TOT)
+    footer_row += _cell(grand_added, grand_removed, TOT)
+    body += f"<tr>{footer_row}</tr>"
+
+    col_w = f"calc((100% - 88px) / {n + 1})"
+    colgroup = '<col style="width:88px">' + f'<col style="width:{col_w}">' * (n + 1)
 
     return (
         '<div class="section"><h2>Changes by Spec &amp; Source</h2>'
