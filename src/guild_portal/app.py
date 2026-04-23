@@ -308,6 +308,10 @@ def create_app() -> FastAPI:
     # Security headers on every response
     app.add_middleware(SecurityHeadersMiddleware)
 
+    # Activity tracking — records page views per authenticated user (post-response, no latency)
+    from guild_portal.middleware.activity import ActivityMiddleware
+    app.add_middleware(ActivityMiddleware)
+
     # ---------------------------------------------------------------------------
     # Exception handlers
     # ---------------------------------------------------------------------------
