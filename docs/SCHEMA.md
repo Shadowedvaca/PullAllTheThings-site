@@ -1,50 +1,120 @@
 # PATT Database Schema
 
-> **This document covers the core identity, activity, and configuration schemas through
-> approximately migration 0044.** The actual database is current through migration 0103+.
-> Tables added after 0044 (gear plan, WCL parse, BIS pipeline, etc.) are documented in
-> `CLAUDE.md` (Database Schema section) and in the plan files under `reference/`.
->
-> **Planned architectural overhaul:** The gear plan data pipeline is being redesigned into
-> three new schemas (`landing`, `enrichment`, `viz`). See
-> `reference/gear-plan-1-schema-overhaul.md` for the full plan.
-
-Three operational PostgreSQL schemas: `common` (shared infrastructure), `guild_identity` (guild sync + identity), `patt` (app features).
+> **Canonical schema reference — current through migration 0177.**
+> Detailed DDL for the original core tables (migrations 0001–0044) is below.
+> Newer tables are documented in the schema overview section immediately below.
 
 ---
 
-## Gear Plan Tables (added migrations 0066–0103)
+## Schema Overview (current through migration 0177)
 
-The gear plan feature added the following tables to `guild_identity`. These are current as of migration 0103 and are candidates to migrate into the `enrichment`/`viz` schemas in a future overhaul.
+Nine schemas in use. `enrichment`, `landing`, `viz`, `ref`, `config`, `log` were added during the Gear Plan Schema Overhaul (prod-v0.20.0+).
 
-```
-guild_identity.wow_items          — item catalog (blizzard_item_id, name, icon_url, slot_type,
-                                     armor_type, wowhead_tooltip_html, quality_track)
-guild_identity.item_sources       — where items drop (instance_type, encounter_name,
-                                     instance_name, blizzard_encounter_id, is_suspected_junk)
-guild_identity.hero_talents       — spec hero talent trees (spec_id, name, slug)
-guild_identity.bis_list_sources   — BIS recommendation sources (Archon, Wowhead, Icy Veins)
-guild_identity.bis_list_entries   — per-spec BIS item recommendations (source, spec, slot, item)
-guild_identity.bis_scrape_targets — scrape job config (source, spec, url, status)
-guild_identity.bis_scrape_log     — scrape job history
-guild_identity.character_equipment — equipped items per character per slot
-guild_identity.gear_plans         — player gear plans (player, character, spec, BIS source)
-guild_identity.gear_plan_slots    — per-slot goal items and lock state
-guild_identity.item_recipe_links  — item → craftable recipe relationships
-guild_identity.trinket_tier_ratings — trinket tier ratings per spec/source
-```
+### `common` — shared infrastructure
+`guild_ranks`, `users`, `invite_codes`, `screen_permissions`, `rank_wow_mapping`, `error_log`, `error_routing`, `feedback_submissions`, `guide_sites`
 
-`item_sources.instance_type` CHECK: `('raid', 'dungeon', 'world_boss', 'catalyst')` — 'catalyst' added in migration 0103.
+`discord_config` — single-row bot config; columns include `bot_token_encrypted`, 7 attendance toggle columns, `attendance_excuse_if_unavailable BOOL`, `attendance_excuse_if_discord_absent BOOL`, `landing_zone_channel_id`
 
-`wow_items.quality_track VARCHAR(1)` — tags catalyst-only items with `'C'` (migration 0096).
+`site_config` — single-row app config; loaded at startup into `config_cache`. Columns include `blizzard_client_id/secret_encrypted`, `current_mplus_season_id`, `enable_onboarding`, `connected_realm_id`, `active_connected_realm_ids`, 7 SMTP/email fields (added 0175).
 
-`patt.raid_seasons` gained `quality_ilvl_map JSONB` and `crafted_ilvl_map JSONB` in migration 0099 — season ilvl bands by quality track, seeded for Midnight S1.
+> `common.guild_members` and `common.characters` **DROPPED** (migration 0139).
+
+### `guild_identity` — identity + guild sync
+
+**Identity:**
+- `players` — central entity; `discord_user_id FK→discord_users.id` (**FK is on players, not discord_users**)
+- `discord_users` — `discord_id, username`; **no `player_id` column**; join via `players.discord_user_id`
+- `wow_characters` — `+in_guild BOOL`, `+last_equipment_sync TIMESTAMPTZ` (0066), `+race VARCHAR(40)` (0080), `+last_progression_sync`, `+last_profession_sync`
+- `player_characters` — bridge table; `+link_source`, `+confidence`
+- `roles`, `onboarding_sessions`, `audit_issues`, `sync_log`
+
+**Gear plan:**
+- `gear_plans` — `+simc_imported_at TIMESTAMPTZ`, `+equipped_source VARCHAR(10) DEFAULT 'blizzard'` (0094)
+- `gear_plan_slots` — `blizzard_item_id` (no item_id FK — dropped Phase E); slot values use `main_hand_2h`/`main_hand_1h`, never `main_hand`; `excluded_item_ids INTEGER[]`
+- `character_equipment` — `blizzard_item_id NOT NULL` (no item_id FK)
+- `item_sources` — `blizzard_item_id NOT NULL`, `UNIQUE(blizzard_item_id, instance_type, encounter_name)`; no item_id FK
+- `item_recipe_links` — `blizzard_item_id NOT NULL`, `recipe_id FK→recipes`, `UNIQUE(blizzard_item_id, recipe_id)`; no item_id FK
+- `tier_token_attrs` — `blizzard_item_id` is PK (not FK)
+
+**WCL / progression / market:**
+`raiderio_profiles`, `character_parses`, `raid_reports`, `character_report_parses`, `character_raid_progress`, `character_mythic_plus`, `tracked_achievements`, `character_achievements`, `progression_snapshots`, `tracked_items`, `item_price_history`, `raid_boss_counts`
+
+**Crafting:**
+`professions`, `profession_tiers`, `recipes`, `character_recipes`, `crafting_sync_config`
+
+**Discord:**
+`discord_channels`, `battlenet_accounts`, `wcl_config`
+
+> **Dropped:** `wow_items` (0146), `v_tier_piece_sources` (0145), `bis_list_entries` + `trinket_tier_ratings` (0131), `specializations` + `hero_talents` + `bis_list_sources` moved to `ref` (0130)
+
+### `ref` — static WoW reference data
+- `classes` — `+blizzard_class_id` (0127)
+- `specializations` — moved from `guild_identity` (0130)
+- `hero_talents` — moved from `guild_identity` (0130)
+- `bis_list_sources` — u.gg Raid/M+/Overall (`origin='ugg'`); Method Overall/Raid/M+; Archon M+ + Archon Raid (`origin='archon'`, `content_type dungeon/raid` — 0173)
+
+### `patt` — app features
+`campaigns`, `campaign_entries`, `votes`, `campaign_results`, `contest_agent_log`, `guild_quotes` (`+subject_id`), `guild_quote_titles` (`+subject_id`), `quote_subjects`, `player_availability`, `recurring_events`, `voice_attendance_log`
+
+`raid_seasons` — `+blizzard_mplus_season_id`, `+quality_ilvl_map JSONB`, `+crafted_ilvl_map JSONB` (0099), `+tier_set_ids INTEGER[]`
+
+`raid_events` — `+voice_channel_id`, `+voice_tracking_enabled`, `+attendance_processed_at`, `+is_deleted BOOLEAN` (0062), `+signup_snapshot_at` (0063)
+
+`raid_attendance` — `+minutes_present`, `+first_join_at`, `+last_leave_at`, `+joined_late`, `+left_early`, `+was_available BOOLEAN`, `+raid_helper_status VARCHAR(20)` (0063)
+
+`attendance_rules` — `id, name, group_label, group_type CHECK('promotion'/'warning'/'info'), is_active, target_rank_ids INTEGER[], result_rank_id FK→guild_ranks ON DELETE SET NULL, conditions JSONB, sort_order` (0064)
+
+### `config` — scraping + slot configuration
+`bis_scrape_targets` — `source_id FK→ref.bis_list_sources`, `spec_id FK→ref.specializations`, `hero_talent_id FK→ref.hero_talents`, `content_type`, `url`, `preferred_technique CHECK` (includes `json_embed_archon` — 0174), `status`, `items_found`, `last_fetched`, `is_active`, `check_interval_days`, `next_check_at` (0175); `UNIQUE(source_id, spec_id, url)`
+
+`slot_labels` — `page_label PK VARCHAR(40)`, `slot_key VARCHAR(20)`; 65+ labels; `NULL slot_key` = expand to paired slots (rings, trinkets)
+
+`wowhead_invtypes` — `invtype_id PK INTEGER`, `slot_key VARCHAR(20) NOT NULL`; 20 Blizzard invtype codes (Wowhead-specific)
+
+`bis_section_overrides` — `spec_id, source_id, content_type, section_key, secondary_section_key VARCHAR(100), primary_note, match_note, secondary_note VARCHAR(100)`; `PK(spec_id, source_id, content_type)`; `secondary_section_key` triggers merge pass in `rebuild_bis_from_landing`
+
+### `landing` — raw ingest from Blizzard API + Wowhead
+`blizzard_items`, `blizzard_item_sources`, `blizzard_item_icons`, `blizzard_item_sets`, `blizzard_journal_instances`, `blizzard_journal_encounters`, `blizzard_item_quality_tracks`, `blizzard_appearances`, `crafted_items`, `wowhead_tooltips`
+
+`bis_scrape_raw` — `+content_hash VARCHAR(64)` (0175), `+source_updated_at TIMESTAMPTZ` (0173; stores Archon page.lastUpdated)
+
+`bis_page_sections` — `spec_id, source_id, page_url, section_key, section_title, sort_order, content_type, is_trinket_section, row_count, is_outlier, outlier_reason, scraped_at`; `UNIQUE(spec_id, source_id, section_key)`
+
+`bis_daily_runs` — added 0175; scrape job run stats
+
+### `enrichment` — processed + classified items (TRUNCATE-rebuilt by stored procs)
+- `items` — ~11,700 rows; `primary_stats TEXT[]` (0172)
+- `item_sources` — ~8,150 rows
+- `item_recipes` — ~200 rows
+- `item_seasons` — ~970 rows
+- `item_set_members` — ~4,900 rows; **used by stored procs only, no Python refs**
+- `tier_tokens` — 21 rows
+- `bis_entries` — ~6,500 rows; `guide_order SMALLINT NOT NULL DEFAULT 1`; `bis_note VARCHAR(100)` nullable; weapon slots are `main_hand_2h` or `main_hand_1h`
+- `trinket_ratings` — ~1,200 rows
+- `item_popularity`
+
+### `viz` — read-only views over enrichment
+`slot_items` (`+primary_stats TEXT[]`, `+weapon_plan_slot`), `tier_piece_sources`, `crafters_by_item`, `bis_recommendations`, `item_popularity`
+
+### `log` — operational logs
+`bis_scrape_log` — status CHECK includes `'unchanged'` (added 0177)
 
 ---
+
+## Key Design Notes
+
+- `guild_identity.players` is the central identity entity — 1:1 FK to `discord_users` and `common.users`
+- The FK is `players.discord_user_id → discord_users.id` — **always join as `LEFT JOIN discord_users du ON du.id = p.discord_user_id`**, never the other direction
+- All Discord channel IDs in `common.discord_config` (Admin UI), not `.env`
+- `site_config` is single-row, loaded at startup into `sv_common.config_cache`; all modules read from cache
+- `rank_wow_mapping` maps WoW guild rank indices (0–9) to platform rank IDs
+- `enrichment.*` tables are TRUNCATE-rebuilt by stored procs — never FK target from stable tables
 
 ---
 
 ## guild_identity schema — Reference Tables
+
+> **Note:** `classes`, `specializations`, and `hero_talents` moved to the `ref` schema (migration 0130). The DDL below reflects the original structure; the tables now live under `ref.*`.
 
 ```sql
 -- Combat roles (4 values)
