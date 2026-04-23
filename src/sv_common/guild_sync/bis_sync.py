@@ -616,10 +616,10 @@ async def _update_target_backoff(
         """
         UPDATE config.bis_scrape_targets
            SET check_interval_days = $1,
-               next_check_at = NOW() + ($1 * INTERVAL '1 day')
-         WHERE id = $2
+               next_check_at = NOW() + ($2 * INTERVAL '1 day')
+         WHERE id = $3
         """,
-        new_interval, target_id,
+        new_interval, new_interval, target_id,
     )
 
 
