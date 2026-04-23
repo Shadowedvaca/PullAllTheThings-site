@@ -272,6 +272,15 @@ class GuildSyncScheduler:
             misfire_grace_time=3600,
         )
 
+        # User activity data retention prune: weekly Sunday at 3:30 AM UTC
+        self.scheduler.add_job(
+            self.run_activity_prune,
+            CronTrigger(day_of_week="sun", hour=3, minute=30),
+            id="activity_prune",
+            name="User Activity Data Retention Prune",
+            misfire_grace_time=3600,
+        )
+
         # Archon BIS sync: weekly on Monday at 6 AM UTC
         self.scheduler.add_job(
             self.run_archon_sync,
@@ -720,6 +729,17 @@ class GuildSyncScheduler:
                     "Roleless Member Prune Failed",
                     f"The roleless member prune encountered an unexpected error:\n```{exc}```",
                 )
+
+    async def run_activity_prune(self):
+        """Prune user_activity rows older than 90 days. Runs weekly on Sunday at 3:30 AM UTC."""
+        try:
+            async with self.db_pool.acquire() as conn:
+                result = await conn.execute(
+                    "DELETE FROM common.user_activity WHERE activity_date < CURRENT_DATE - 90"
+                )
+            logger.info("Activity prune complete: %s", result)
+        except Exception as exc:
+            logger.error("Activity prune failed: %s", exc, exc_info=True)
 
     async def run_weekly_progression_sweep(self):
         """Weekly full progression sweep: snapshots + achievement sync (all characters).
