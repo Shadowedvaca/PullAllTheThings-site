@@ -198,10 +198,11 @@ class GuildSyncScheduler:
             misfire_grace_time=300,
         )
 
-        # Crafting sync: runs daily at 3 AM, checks cadence internally
+        # Crafting sync: runs every 6 hours; weekly cadence guard inside run_crafting_sync
+        # skips characters that haven't logged in since the last sync, so extra runs are cheap.
         self.scheduler.add_job(
             self.run_crafting_sync,
-            CronTrigger(hour=3, minute=0),
+            CronTrigger(hour="0,6,12,18", minute=0),
             id="crafting_sync",
             name="Crafting Professions Sync",
             misfire_grace_time=3600,
