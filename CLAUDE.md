@@ -246,8 +246,9 @@ Key design gotchas (read before writing any DB query):
   - **Phase C COMPLETE** (commit 0baafeb): Admin Users page — extended query with activity data; `_rel_time()` helper; new stat pills (Active This Week, Never Logged In); new columns (Last Active, Last Login, Logins, 7d Views); expand row showing pages visited this week as tag chips; default sort by `last_active_at DESC NULLS LAST`; 31 unit tests. 1872/1878 suite-wide.
   - **Phase D COMPLETE** (commit 8259b6c): `run_activity_prune()` in `scheduler.py`; deletes `common.user_activity` rows older than 90 days; registered as weekly Sunday 3:30 AM UTC; 4 unit tests. 1876/1882 suite-wide.
 - **prod-v0.22.5 — COMPLETE** (migration 0178, PR #39). Phase 1.8 User Activity Logging fully shipped.
+- **prod-v0.22.6 — COMPLETE** (hotfix/crafting-sync-6hr). Crafting sync changed from daily to every 6 hours (0/6/12/18 UTC); weekly cadence guard removed; display updated in admin, Crafting Corner, and guide.
 - **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
-- **Last prod tag:** `prod-v0.22.5`
+- **Last prod tag:** `prod-v0.22.6`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
