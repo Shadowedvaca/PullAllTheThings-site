@@ -292,16 +292,6 @@ async def run_crafting_sync(
         season = await _load_current_season(conn)
         cadence, _ = compute_sync_cadence(config, season)
 
-        # Skip if weekly cadence and not enough time has passed
-        if not force and cadence == "weekly" and config.last_sync_at:
-            days_since = (datetime.now(timezone.utc) - config.last_sync_at).days
-            if days_since < 7:
-                logger.info(
-                    "Crafting sync skipped: weekly cadence, only %d days since last sync",
-                    days_since,
-                )
-                return {"skipped": True, "reason": "cadence_weekly"}
-
         all_characters = await conn.fetch(
             """SELECT id, character_name, realm_slug,
                       last_login_timestamp, last_profession_sync
@@ -418,8 +408,7 @@ async def run_crafting_sync(
     # Update config with sync stats
     async with pool.acquire() as conn:
         now = datetime.now(timezone.utc)
-        cadence_after, _ = compute_sync_cadence(config, season)
-        next_sync = now + (timedelta(hours=6) if cadence_after == "daily" else timedelta(days=7))
+        next_sync = now + timedelta(hours=6)
 
         await conn.execute(
             """UPDATE guild_identity.crafting_sync_config SET

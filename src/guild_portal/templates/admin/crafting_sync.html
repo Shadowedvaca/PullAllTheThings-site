@@ -140,7 +140,7 @@
     <!-- Season Info Card -->
     <div class="cs-card">
         <h2 class="cs-card__title">Current Season</h2>
-        <p class="cs-card__subtitle">Sync runs every 6 hours during active seasons, weekly off-season.</p>
+        <p class="cs-card__subtitle">Current crafting recipe data for all guild characters.</p>
 
         <div id="cs-season-box" class="cs-season-box" style="display:none">
             <p class="cs-season-box__name" id="cs-season-name">—</p>
@@ -313,11 +313,7 @@
                 if (status.ok) {
                     const s = status.data;
                     const cadEl = document.getElementById('cs-cadence-val');
-                    if (s.current_cadence === 'daily') {
-                        cadEl.innerHTML = '<span class="cs-badge cs-badge--daily">Every 6 hours</span>';
-                    } else {
-                        cadEl.innerHTML = '<span class="cs-badge cs-badge--weekly">Weekly</span>';
-                    }
+                    cadEl.innerHTML = '<span class="cs-badge cs-badge--daily">Every 6 hours</span>';
                 }
             }
         } catch (e) {

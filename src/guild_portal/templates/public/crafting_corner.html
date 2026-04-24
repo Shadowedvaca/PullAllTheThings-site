@@ -562,11 +562,7 @@
             lastEl.textContent = '&#x1f504; Last sync: ' + fmtDate(s.last_sync_at);
             lastEl.innerHTML = '&#x1f504; Last sync: ' + fmtDate(s.last_sync_at);
             const cadEl = document.getElementById('cc-cadence-info');
-            if (s.current_cadence === 'daily') {
-                cadEl.innerHTML = '<span class="cc-cadence-badge">~Every 6 hrs</span>';
-            } else {
-                cadEl.innerHTML = '<span class="cc-cadence-badge cc-cadence-badge--weekly">Weekly</span>';
-            }
+            cadEl.innerHTML = '<span class="cc-cadence-badge">~Every 6 hrs</span>';
             document.getElementById('cc-sync-meta').style.display = 'flex';
         } catch (e) {
             console.warn('Could not load sync status', e);
