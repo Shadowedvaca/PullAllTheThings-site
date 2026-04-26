@@ -260,6 +260,153 @@ async def test_renamed_character_not_marked_removed():
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# sync_blizzard_roster — stale-row eviction before rename/realm-transfer UPDATE
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rename_evicts_stale_removed_row():
+    """Rename detected + stale removed row at target name/realm → row deleted before UPDATE."""
+    from sv_common.guild_sync.db_sync import sync_blizzard_roster
+
+    pool, conn = _make_pool()
+
+    fetchrow_calls = []
+
+    async def fake_fetchrow(query, *args):
+        fetchrow_calls.append((query, args))
+        if "blizzard_character_id = $1" in query:
+            return {"id": 10, "character_name": "Oldname", "realm_slug": "bloodscalp", "removed_at": None}
+        if "LOWER(character_name)" in query and "id != $3" in query:
+            # Conflict check: stale removed row with target name+realm
+            from datetime import datetime, timezone
+            return {"id": 99, "removed_at": datetime(2025, 1, 1, tzinfo=timezone.utc)}
+        if "classes" in query:
+            return {"id": 11}
+        if "specializations" in query:
+            return {"id": 3}
+        return None
+
+    conn.fetch.side_effect = [
+        [{"wow_rank_index": 3, "id": 50}],  # _build_rank_index_map
+        [{"id": 10, "character_name": "Maplehoof", "realm_slug": "bloodscalp"}],  # all_active
+    ]
+    conn.fetchrow.side_effect = fake_fetchrow
+
+    chars = [_char(name="Maplehoof", realm="bloodscalp", blizzard_id=42)]
+    stats = await sync_blizzard_roster(pool, chars)
+
+    assert stats["updated"] == 1
+
+    # Stale row id=99 must have been deleted
+    delete_calls = [c for c in conn.execute.call_args_list if "DELETE" in str(c)]
+    assert len(delete_calls) == 1
+    assert 99 in delete_calls[0].args
+
+
+@pytest.mark.asyncio
+async def test_realm_transfer_back_evicts_stale_removed_row():
+    """Character transfers back to original realm; stale removed row evicted before UPDATE."""
+    from sv_common.guild_sync.db_sync import sync_blizzard_roster
+
+    pool, conn = _make_pool()
+
+    async def fake_fetchrow(query, *args):
+        if "blizzard_character_id = $1" in query:
+            # Found by stable ID, but currently on a different realm
+            return {"id": 10, "character_name": "Maplehoof", "realm_slug": "other-realm", "removed_at": None}
+        if "LOWER(character_name)" in query and "id != $3" in query:
+            # Conflict check: stale removed row on bloodscalp
+            from datetime import datetime, timezone
+            return {"id": 77, "removed_at": datetime(2025, 6, 1, tzinfo=timezone.utc)}
+        if "classes" in query:
+            return {"id": 11}
+        if "specializations" in query:
+            return {"id": 3}
+        return None
+
+    conn.fetch.side_effect = [
+        [{"wow_rank_index": 3, "id": 50}],
+        [{"id": 10, "character_name": "Maplehoof", "realm_slug": "bloodscalp"}],
+    ]
+    conn.fetchrow.side_effect = fake_fetchrow
+
+    chars = [_char(name="Maplehoof", realm="bloodscalp", blizzard_id=42)]
+    stats = await sync_blizzard_roster(pool, chars)
+
+    assert stats["updated"] == 1
+
+    delete_calls = [c for c in conn.execute.call_args_list if "DELETE" in str(c)]
+    assert len(delete_calls) == 1
+    assert 77 in delete_calls[0].args
+
+
+@pytest.mark.asyncio
+async def test_no_conflict_no_eviction():
+    """Rename detected but no conflicting row exists — no DELETE issued."""
+    from sv_common.guild_sync.db_sync import sync_blizzard_roster
+
+    pool, conn = _make_pool()
+
+    async def fake_fetchrow(query, *args):
+        if "blizzard_character_id = $1" in query:
+            return {"id": 10, "character_name": "Oldname", "realm_slug": "senjin", "removed_at": None}
+        if "LOWER(character_name)" in query and "id != $3" in query:
+            return None  # no conflict
+        if "classes" in query:
+            return {"id": 11}
+        if "specializations" in query:
+            return {"id": 3}
+        return None
+
+    conn.fetch.side_effect = [
+        [{"wow_rank_index": 3, "id": 50}],
+        [{"id": 10, "character_name": "Newname", "realm_slug": "senjin"}],
+    ]
+    conn.fetchrow.side_effect = fake_fetchrow
+
+    chars = [_char(name="Newname", realm="senjin", blizzard_id=42)]
+    stats = await sync_blizzard_roster(pool, chars)
+
+    assert stats["updated"] == 1
+    delete_calls = [c for c in conn.execute.call_args_list if "DELETE" in str(c)]
+    assert len(delete_calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_no_name_or_realm_change_skips_conflict_check():
+    """Stable ID found, name and realm unchanged — conflict check query not issued."""
+    from sv_common.guild_sync.db_sync import sync_blizzard_roster
+
+    pool, conn = _make_pool()
+
+    conflict_queries = []
+
+    async def fake_fetchrow(query, *args):
+        if "blizzard_character_id = $1" in query:
+            return {"id": 10, "character_name": "Testchar", "realm_slug": "senjin", "removed_at": None}
+        if "id != $3" in query:
+            conflict_queries.append(query)
+            return None
+        if "classes" in query:
+            return {"id": 11}
+        if "specializations" in query:
+            return {"id": 3}
+        return None
+
+    conn.fetch.side_effect = [
+        [{"wow_rank_index": 3, "id": 50}],
+        [{"id": 10, "character_name": "Testchar", "realm_slug": "senjin"}],
+    ]
+    conn.fetchrow.side_effect = fake_fetchrow
+
+    chars = [_char(name="Testchar", realm="senjin", blizzard_id=42)]
+    await sync_blizzard_roster(pool, chars)
+
+    assert len(conflict_queries) == 0
+
+
 @pytest.mark.asyncio
 async def test_no_blizzard_id_falls_back_to_name_lookup():
     """Character with no blizzard_character_id still matches by name+realm."""
