@@ -110,6 +110,38 @@ async def sync_blizzard_roster(
                         old_key = (renamed_from.lower(), existing["realm_slug"].lower())
                         current_keys.discard(old_key)
 
+                    # If character_name or realm_slug is changing (rename or realm transfer),
+                    # evict any row that already holds the target (name, realm) combination.
+                    # Without this, the UPDATE below raises a unique constraint violation when
+                    # a soft-deleted row from a prior stint exists with the same name+realm.
+                    target_name_changed = char.character_name.lower() != existing["character_name"].lower()
+                    target_realm_changed = char.realm_slug.lower() != existing["realm_slug"].lower()
+                    if target_name_changed or target_realm_changed:
+                        conflict = await conn.fetchrow(
+                            """SELECT id, removed_at FROM guild_identity.wow_characters
+                               WHERE LOWER(character_name) = $1 AND LOWER(realm_slug) = $2
+                                 AND id != $3""",
+                            char.character_name.lower(), char.realm_slug.lower(), existing["id"],
+                        )
+                        if conflict:
+                            change_type = "rename" if target_name_changed else "realm transfer"
+                            if conflict["removed_at"] is not None:
+                                logger.info(
+                                    "Evicting stale removed row id=%s (%s/%s) ahead of %s update",
+                                    conflict["id"], char.character_name, char.realm_slug, change_type,
+                                )
+                            else:
+                                logger.warning(
+                                    "Evicting unexpected live duplicate row id=%s (%s/%s) "
+                                    "ahead of %s; stable-ID row id=%s takes precedence",
+                                    conflict["id"], char.character_name, char.realm_slug,
+                                    change_type, existing["id"],
+                                )
+                            await conn.execute(
+                                "DELETE FROM guild_identity.wow_characters WHERE id = $1",
+                                conflict["id"],
+                            )
+
                     await conn.execute(
                         """UPDATE guild_identity.wow_characters SET
                             character_name = $2,
