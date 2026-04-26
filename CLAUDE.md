@@ -247,8 +247,9 @@ Key design gotchas (read before writing any DB query):
   - **Phase D COMPLETE** (commit 8259b6c): `run_activity_prune()` in `scheduler.py`; deletes `common.user_activity` rows older than 90 days; registered as weekly Sunday 3:30 AM UTC; 4 unit tests. 1876/1882 suite-wide.
 - **prod-v0.22.5 — COMPLETE** (migration 0178, PR #39). Phase 1.8 User Activity Logging fully shipped.
 - **prod-v0.22.6 — COMPLETE** (hotfix/crafting-sync-6hr). Crafting sync changed from daily to every 6 hours (0/6/12/18 UTC); weekly cadence guard removed; display updated in admin, Crafting Corner, and guide.
+- **prod-v0.22.7 — COMPLETE** (hotfix/roster-sync-duplicate-key). Fixed `duplicate key value violates unique constraint "wow_characters_character_name_realm_slug_key"` crash in Blizzard roster sync. Root cause: UPDATE setting new name/realm on stable-ID row collided with old soft-deleted row. Fix: detect conflict before UPDATE and delete the stale row. No migration.
 - **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
-- **Last prod tag:** `prod-v0.22.6`
+- **Last prod tag:** `prod-v0.22.7`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
