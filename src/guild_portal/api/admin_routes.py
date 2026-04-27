@@ -1030,7 +1030,7 @@ class RaidEventCreate(BaseModel):
 async def create_raid_event(
     body: RaidEventCreate,
     db: AsyncSession = Depends(get_db),
-    admin: Player = Depends(require_rank(4)),
+    admin: Player = Depends(require_rank(3)),
 ):
     """Create a raid event in Raid-Helper and store in patt.raid_events."""
     import zoneinfo
