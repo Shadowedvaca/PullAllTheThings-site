@@ -249,8 +249,9 @@ Key design gotchas (read before writing any DB query):
 - **prod-v0.22.6 — COMPLETE** (hotfix/crafting-sync-6hr). Crafting sync changed from daily to every 6 hours (0/6/12/18 UTC); weekly cadence guard removed; display updated in admin, Crafting Corner, and guide.
 - **prod-v0.22.7 — COMPLETE** (hotfix/roster-sync-duplicate-key). Fixed `duplicate key value violates unique constraint "wow_characters_character_name_realm_slug_key"` crash in Blizzard roster sync. Root cause: UPDATE setting new name/realm on stable-ID row collided with old soft-deleted row. Fix: detect conflict before UPDATE and delete the stale row. No migration.
 - **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Fixed rank-3 (Veteran) users getting a silent 403 when creating events. Raid Tools page was accessible at rank 3 but the POST endpoint required rank 4. Lowered to `require_rank(3)`. No migration.
+- **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed all gear plan API calls returning 401 after 24 hours. Cookie `max_age` was 30 days but `JWT_EXPIRE_MINUTES` defaulted to 1440 (24 hours) — JWT expired while cookie stayed valid, causing every API call to fail silently. Changed default to 43200 (30 days). No migration. Dev/test `.env` keep 1440.
 - **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
-- **Last prod tag:** `prod-v0.22.8`
+- **Last prod tag:** `prod-v0.22.9`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
