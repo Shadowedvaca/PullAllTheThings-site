@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Recruiting Contest — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+.rc-hero {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.75rem 2rem;
+  margin-bottom: 1.5rem;
+}
+.rc-hero__title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  color: var(--color-gold);
+  margin: 0 0 0.4rem;
+}
+.rc-hero__meta {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+}
+.rc-hero__pill {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.rc-hero__pill--open   { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+.rc-hero__pill--closed { background: color-mix(in srgb, #94a3b8 12%, transparent); color: #94a3b8; border: 1px solid #94a3b8; }
+.rc-hero__desc { color: var(--color-text-muted); font-size: 0.9rem; line-height: 1.55; margin: 0; }
+.rc-hero__rules {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+.rc-bounty-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+.rc-bounty-card__label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted); display: block; margin-bottom: 0.2rem; }
+.rc-bounty-card__value { font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--color-gold); font-weight: 700; }
+
+/* Section header */
+.rc-section { margin-bottom: 1.5rem; }
+.rc-section__title { font-family: 'Cinzel', serif; font-size: 1rem; color: var(--color-gold); margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--color-border); }
+
+/* Leaderboard table */
+.rc-table-wrap { overflow-x: auto; }
+.rc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.rc-table th {
+  text-align: left;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 1rem;
+  border-bottom: 2px solid var(--color-border);
+  white-space: nowrap;
+}
+.rc-table td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+  vertical-align: middle;
+}
+.rc-table tbody tr:last-child td { border-bottom: none; }
+.rc-table tbody tr:hover td { background: color-mix(in srgb, var(--color-gold) 4%, transparent); }
+
+.rc-rank-col { width: 3rem; }
+.rc-rank { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; color: var(--color-gold); }
+.rc-rank-1 { font-size: 1.25rem; }
+.rc-reward { font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 700; color: var(--color-gold); }
+.rc-num { color: var(--color-text-muted); }
+
+/* Gallery */
+.rc-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+.rc-gallery__item {
+  display: block;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  transition: border-color 0.15s;
+  text-decoration: none;
+}
+.rc-gallery__item:hover { border-color: var(--color-gold); }
+.rc-gallery__img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--color-bg); }
+.rc-gallery__cap { padding: 0.4rem 0.55rem; background: var(--color-bg); }
+.rc-gallery__recruit { font-size: 0.78rem; font-weight: 600; color: var(--color-text); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-gallery__via { font-size: 0.7rem; color: var(--color-text-muted); display: block; }
+
+/* Empty state */
+.rc-empty { text-align: center; padding: 4rem 1rem; }
+.rc-empty__title { font-family: 'Cinzel', serif; font-size: 1.4rem; color: var(--color-gold); margin-bottom: 0.5rem; }
+.rc-empty__sub { color: var(--color-text-muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:860px;margin:0 auto;padding:2rem 1rem;">
+
+  {% if not contest %}
+  <div class="rc-empty">
+    <h1 class="rc-empty__title">No Active Contest</h1>
+    <p class="rc-empty__sub">There's no recruiting contest running right now. Check back later!</p>
+  </div>
+
+  {% else %}
+
+  {# ── Contest hero ─────────────────────────────────────────────── #}
+  <div class="rc-hero">
+    <h1 class="rc-hero__title">{{ contest.title }}</h1>
+    <div class="rc-hero__meta">
+      <span class="rc-hero__pill rc-hero__pill--{{ contest.status }}">{{ contest.status }}</span>
+      {% if contest.deadline %}
+      <span>Ends <strong>{{ contest.deadline.strftime('%B %d, %Y') }}</strong></span>
+      {% endif %}
+    </div>
+    {% if contest.description %}
+    <p class="rc-hero__desc">{{ contest.description }}</p>
+    {% endif %}
+    <div class="rc-hero__rules">
+      <div class="rc-bounty-card">
+        <span class="rc-bounty-card__label">Recruit Bounty</span>
+        <span class="rc-bounty-card__value">{{ contest.bounty_per_recruit | format_gold }}</span>
+      </div>
+      <div class="rc-bounty-card">
+        <span class="rc-bounty-card__label">Promotion Bonus</span>
+        <span class="rc-bounty-card__value">{{ contest.promotion_bounty | format_gold }}</span>
+      </div>
+      <div class="rc-bounty-card">
+        <span class="rc-bounty-card__label">Leader Bonus</span>
+        <span class="rc-bounty-card__value">{{ contest.leader_bonus | format_gold }}</span>
+      </div>
+    </div>
+  </div>
+
+  {# ── Leaderboard ──────────────────────────────────────────────── #}
+  <div class="rc-section">
+    <h2 class="rc-section__title">Leaderboard</h2>
+    {% if standings %}
+    <div class="rc-table-wrap">
+      <table class="rc-table">
+        <thead>
+          <tr>
+            <th class="rc-rank-col">#</th>
+            <th>Recruiter</th>
+            <th>Recruited</th>
+            <th>Promoted</th>
+            <th>Total Reward</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in standings %}
+          <tr>
+            <td>
+              <span class="rc-rank {% if loop.index == 1 %}rc-rank-1{% endif %}">
+                {% if loop.index == 1 %}🥇
+                {% elif loop.index == 2 %}🥈
+                {% elif loop.index == 3 %}🥉
+                {% else %}{{ loop.index }}
+                {% endif %}
+              </span>
+            </td>
+            <td style="font-weight:500;">{{ row.display_name }}</td>
+            <td class="rc-num">{{ row.total_recruited }}</td>
+            <td class="rc-num">{{ row.total_promoted }}</td>
+            <td class="rc-reward">{{ row.total_earned | format_gold }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color:var(--color-text-muted);font-size:0.9rem;">
+      No approved submissions yet — be the first to recruit someone!
+    </p>
+    {% endif %}
+  </div>
+
+  {# ── Screenshot Gallery ───────────────────────────────────────── #}
+  {% if gallery_items %}
+  <div class="rc-section">
+    <h2 class="rc-section__title">Hall of Recruits</h2>
+    <div class="rc-gallery">
+      {% for item in gallery_items %}
+      <a href="{{ item.screenshot_url }}" target="_blank" rel="noopener" class="rc-gallery__item">
+        <img class="rc-gallery__img" src="{{ item.screenshot_url }}"
+             alt="{{ item.recruit_display_name }}" loading="lazy" referrerpolicy="no-referrer">
+        <div class="rc-gallery__cap">
+          <span class="rc-gallery__recruit">{{ item.recruit_display_name }}</span>
+          <span class="rc-gallery__via">
+            via {{ item.recruiter_name }}{% if item.payout_type == 'promotion' %} · Promoted{% endif %}
+          </span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# end contest exists #}
+
+</div>
+{% endblock %}
