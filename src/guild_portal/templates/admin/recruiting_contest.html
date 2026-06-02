@@ -12,16 +12,17 @@
 .rc-contest-meta { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: var(--color-text-muted); }
 .rc-contest-header__actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
 
-/* Status pill */
+/* Pills */
 .rc-pill { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
-.rc-pill--open    { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
-.rc-pill--closed  { background: color-mix(in srgb, #94a3b8 12%, transparent); color: #94a3b8; border: 1px solid #94a3b8; }
-.rc-pill--recruit { background: color-mix(in srgb, #60a5fa 12%, transparent); color: #60a5fa; border: 1px solid #60a5fa; }
-.rc-pill--promo   { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+.rc-pill--open     { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+.rc-pill--closed   { background: color-mix(in srgb, #94a3b8 12%, transparent); color: #94a3b8; border: 1px solid #94a3b8; }
+.rc-pill--recruit  { background: color-mix(in srgb, #60a5fa 12%, transparent); color: #60a5fa; border: 1px solid #60a5fa; }
+.rc-pill--bonus    { background: color-mix(in srgb, var(--color-gold) 12%, transparent); color: var(--color-gold); border: 1px solid var(--color-gold); }
+.rc-pill--promo    { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
 .rc-pill--approved { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
 .rc-pill--pending  { background: color-mix(in srgb, #94a3b8 12%, transparent); color: #94a3b8; border: 1px solid #94a3b8; }
-.rc-pill--paid    { background: color-mix(in srgb, var(--color-gold) 12%, transparent); color: var(--color-gold); border: 1px solid var(--color-gold); }
-.rc-pill--unpaid  { background: color-mix(in srgb, #f87171 12%, transparent); color: #f87171; border: 1px solid #f87171; }
+.rc-pill--paid     { background: color-mix(in srgb, var(--color-gold) 12%, transparent); color: var(--color-gold); border: 1px solid var(--color-gold); }
+.rc-pill--unpaid   { background: color-mix(in srgb, #f87171 12%, transparent); color: #f87171; border: 1px solid #f87171; }
 
 /* Edit panel */
 .rc-edit-panel { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 8px; padding: 1.25rem; }
@@ -30,8 +31,15 @@
 .rc-form-label { display: block; font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
 .rc-form-input { width: 100%; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.4rem 0.6rem; color: var(--color-text); font-size: 0.875rem; box-sizing: border-box; }
 .rc-form-input:focus { outline: none; border-color: var(--color-gold); }
-.rc-form-textarea { resize: vertical; min-height: 4rem; }
+.rc-form-textarea { resize: vertical; min-height: 3.5rem; }
 .rc-form-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
+
+/* Multi-select recruiter checklist */
+.rc-recruiter-list { max-height: 140px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); padding: 0.25rem 0; }
+.rc-recruiter-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.875rem; color: var(--color-text); transition: background 0.1s; }
+.rc-recruiter-item:hover { background: color-mix(in srgb, var(--color-gold) 6%, transparent); }
+.rc-recruiter-item input[type="checkbox"] { accent-color: var(--color-gold); cursor: pointer; }
+.rc-selected-hint { font-size: 0.72rem; color: var(--color-text-muted); margin-top: 0.25rem; min-height: 1rem; }
 
 /* Two-column grid */
 .rc-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
@@ -61,18 +69,17 @@
 /* Standings rank */
 .rc-rank { font-family: 'Cinzel', serif; font-weight: 700; color: var(--color-gold); font-size: 0.95rem; }
 
-/* Sub action buttons */
+/* Action buttons */
 .rc-actions { display: flex; gap: 0.3rem; align-items: center; }
 .rc-btn { padding: 0.2rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; border: 1px solid; cursor: pointer; transition: opacity 0.15s; background: transparent; white-space: nowrap; }
 .rc-btn:hover { opacity: 0.75; }
-.rc-btn--approve  { border-color: #4ade80; color: #4ade80; }
+.rc-btn--approve   { border-color: #4ade80; color: #4ade80; }
 .rc-btn--unapprove { border-color: #94a3b8; color: #94a3b8; }
-.rc-btn--pay      { border-color: var(--color-gold); color: var(--color-gold); }
-.rc-btn--unpay    { border-color: #94a3b8; color: #94a3b8; }
-.rc-btn--delete   { border-color: #f87171; color: #f87171; }
-.rc-btn--payall   { border-color: var(--color-gold); color: var(--color-gold); font-size: 0.72rem; }
+.rc-btn--pay       { border-color: var(--color-gold); color: var(--color-gold); }
+.rc-btn--unpay     { border-color: #94a3b8; color: #94a3b8; }
+.rc-btn--delete    { border-color: #f87171; color: #f87171; }
+.rc-btn--payall    { border-color: var(--color-gold); color: var(--color-gold); font-size: 0.72rem; }
 
-/* Screenshot link */
 .rc-shot-link { color: var(--color-gold); text-decoration: none; font-size: 1rem; }
 .rc-shot-link:hover { opacity: 0.75; }
 
@@ -89,7 +96,7 @@
 .rc-empty { text-align: center; padding: 3rem 1rem; }
 .rc-empty__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 1.2rem; margin-bottom: 0.5rem; }
 .rc-empty__sub { color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
-.rc-create-card { max-width: 620px; margin: 0 auto; text-align: left; }
+.rc-create-card { max-width: 640px; margin: 0 auto; text-align: left; }
 .rc-msg { font-size: 0.82rem; }
 </style>
 {% endblock %}
@@ -97,8 +104,9 @@
 {% block content %}
 <div class="rc-page">
 
-  <div class="admin-page-header">
-    <h1 class="admin-page-title">Recruiting Contest</h1>
+  <div class="admin-page-header" style="display:flex;align-items:center;gap:1rem;">
+    <h1 class="admin-page-title" style="margin:0;">Recruiting Contest</h1>
+    <a href="/recruiting-contest" target="_blank" class="btn btn-secondary btn-sm">Member View ↗</a>
   </div>
 
   {# ── No Contest ───────────────────────────────────────────────── #}
@@ -126,6 +134,10 @@
           <input class="rc-form-input" type="number" id="new-bounty" value="10000" min="0" />
         </div>
         <div>
+          <label class="rc-form-label">First Recruit Bonus (gold)</label>
+          <input class="rc-form-input" type="number" id="new-first" value="5000" min="0" />
+        </div>
+        <div>
           <label class="rc-form-label">Promotion Bounty (gold)</label>
           <input class="rc-form-input" type="number" id="new-promo" value="10000" min="0" />
         </div>
@@ -144,7 +156,6 @@
   {% else %}
   {# ── Contest Exists ───────────────────────────────────────────── #}
 
-  {# Contest header #}
   <div class="rc-contest-header">
     <div class="rc-contest-header__left">
       <h2 class="rc-contest-title">{{ contest.title }}</h2>
@@ -154,6 +165,7 @@
           <span>Deadline: <strong>{{ contest.deadline.strftime('%b %d, %Y') }}</strong></span>
         {% endif %}
         <span>Recruit: <strong>{{ contest.bounty_per_recruit | format_gold }}</strong></span>
+        <span>First recruit bonus: <strong>{{ contest.first_recruit_bonus | format_gold }}</strong></span>
         <span>Promo: <strong>{{ contest.promotion_bounty | format_gold }}</strong></span>
         <span>Leader bonus: <strong>{{ contest.leader_bonus | format_gold }}</strong></span>
       </div>
@@ -172,7 +184,6 @@
     </div>
   </div>
 
-  {# Edit settings panel (hidden by default) #}
   <div class="rc-edit-panel" id="rc-edit-panel" style="display:none;">
     <h3 class="rc-edit-panel__title">Edit Settings</h3>
     <div class="rc-edit-grid">
@@ -194,6 +205,10 @@
         <input class="rc-form-input" type="number" id="edit-bounty" value="{{ contest.bounty_per_recruit }}" min="0" />
       </div>
       <div>
+        <label class="rc-form-label">First Recruit Bonus (gold)</label>
+        <input class="rc-form-input" type="number" id="edit-first" value="{{ contest.first_recruit_bonus }}" min="0" />
+      </div>
+      <div>
         <label class="rc-form-label">Promotion Bounty (gold)</label>
         <input class="rc-form-input" type="number" id="edit-promo" value="{{ contest.promotion_bounty }}" min="0" />
       </div>
@@ -209,7 +224,6 @@
     </div>
   </div>
 
-  {# ── Two-col: Add Submission + Payout Tracker ─────────────────── #}
   <div class="rc-two-col">
 
     {# Add Submission #}
@@ -218,13 +232,16 @@
       {% if contest.status == 'open' %}
       <div style="display:flex;flex-direction:column;gap:0.6rem;">
         <div>
-          <label class="rc-form-label">Recruiter</label>
-          <select class="rc-form-input" id="sub-recruiter">
-            <option value="">— select —</option>
+          <label class="rc-form-label">Recruiters (check all who were in the run)</label>
+          <div class="rc-recruiter-list" id="sub-recruiter-list">
             {% for p in players %}
-            <option value="{{ p.id }}">{{ p.display_name }}</option>
+            <label class="rc-recruiter-item">
+              <input type="checkbox" class="rc-recruiter-check" value="{{ p.id }}">
+              {{ p.display_name }}
+            </label>
             {% endfor %}
-          </select>
+          </div>
+          <div class="rc-selected-hint" id="sub-recruiter-hint">None selected</div>
         </div>
         <div>
           <label class="rc-form-label">Recruit Name (Discord)</label>
@@ -233,12 +250,13 @@
         <div>
           <label class="rc-form-label">Type</label>
           <select class="rc-form-input" id="sub-type" onchange="rcAutoFillGold()">
-            <option value="recruit_raid">Recruit Attended Raid</option>
-            <option value="promotion">Recruit Promoted to Member</option>
+            <option value="recruit">Recruit</option>
+            <option value="first_recruit_bonus">First Recruit Bonus</option>
+            <option value="promotion">Promote to Member</option>
           </select>
         </div>
         <div>
-          <label class="rc-form-label">Gold Amount</label>
+          <label class="rc-form-label">Gold per Recruiter</label>
           <input class="rc-form-input" type="number" id="sub-gold" value="{{ contest.bounty_per_recruit }}" min="0" />
         </div>
         <div>
@@ -267,21 +285,13 @@
         {% set total_paid   = standings | sum(attribute='total_paid') %}
         {% set outstanding  = total_earned - total_paid %}
         {% if outstanding > 0 %}
-        <div class="rc-alert rc-alert--warn">
-          Outstanding: <strong>{{ outstanding | format_gold }}</strong>
-        </div>
+        <div class="rc-alert rc-alert--warn">Outstanding: <strong>{{ outstanding | format_gold }}</strong></div>
         {% else %}
         <div class="rc-alert rc-alert--ok">All rewards paid out ✓</div>
         {% endif %}
         <table class="rc-table">
           <thead>
-            <tr>
-              <th>Recruiter</th>
-              <th>Earned</th>
-              <th>Paid</th>
-              <th>Outstanding</th>
-              <th></th>
-            </tr>
+            <tr><th>Recruiter</th><th>Earned</th><th>Paid</th><th>Outstanding</th><th></th></tr>
           </thead>
           <tbody>
             {% for row in standings %}
@@ -315,31 +325,21 @@
       {% endif %}
     </div>
 
-  </div>{# /.rc-two-col #}
+  </div>
 
-  {# ── Standings ────────────────────────────────────────────────── #}
+  {# Standings #}
   <div class="rc-card">
     <h3 class="rc-card__title">Standings</h3>
     {% if standings %}
     <table class="rc-table">
       <thead>
-        <tr>
-          <th>#</th>
-          <th>Recruiter</th>
-          <th>Recruited</th>
-          <th>Promoted</th>
-          <th>Total Reward</th>
-        </tr>
+        <tr><th>#</th><th>Recruiter</th><th>Recruited</th><th>Promoted</th><th>Total Reward</th></tr>
       </thead>
       <tbody>
         {% for row in standings %}
         <tr>
           <td class="rc-rank">
-            {% if loop.index == 1 %}🥇
-            {% elif loop.index == 2 %}🥈
-            {% elif loop.index == 3 %}🥉
-            {% else %}{{ loop.index }}
-            {% endif %}
+            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
           </td>
           <td>{{ row.display_name }}</td>
           <td>{{ row.total_recruited }}</td>
@@ -354,7 +354,7 @@
     {% endif %}
   </div>
 
-  {# ── All Submissions ───────────────────────────────────────────── #}
+  {# All Submissions #}
   <div class="rc-card">
     <h3 class="rc-card__title">All Submissions ({{ submissions | length }})</h3>
     {% if submissions %}
@@ -362,24 +362,21 @@
       <table class="rc-table" style="min-width:740px;">
         <thead>
           <tr>
-            <th>Type</th>
-            <th>Recruiter</th>
-            <th>Recruit</th>
-            <th>Gold</th>
-            <th>Status</th>
-            <th>Paid</th>
-            <th>Shot</th>
-            <th>Notes</th>
-            <th>Actions</th>
+            <th>Type</th><th>Recruiter</th><th>Recruit</th><th>Gold</th>
+            <th>Status</th><th>Paid</th><th>Shot</th><th>Notes</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for sub in submissions %}
-          <tr id="sub-row-{{ sub.id }}">
+          <tr>
             <td>
-              <span class="rc-pill rc-pill--{{ 'recruit' if sub.payout_type == 'recruit_raid' else 'promo' }}">
-                {{ 'Recruit' if sub.payout_type == 'recruit_raid' else 'Promo' }}
-              </span>
+              {% if sub.payout_type == 'recruit' %}
+                <span class="rc-pill rc-pill--recruit">Recruit</span>
+              {% elif sub.payout_type == 'first_recruit_bonus' %}
+                <span class="rc-pill rc-pill--bonus">First Recruit</span>
+              {% else %}
+                <span class="rc-pill rc-pill--promo">Promo</span>
+              {% endif %}
             </td>
             <td>{{ sub.recruiter_name }}</td>
             <td>{{ sub.recruit_display_name }}</td>
@@ -400,7 +397,7 @@
             </td>
             <td>
               {% if sub.screenshot_url %}
-              <a href="{{ sub.screenshot_url }}" target="_blank" rel="noopener" class="rc-shot-link" title="{{ sub.recruit_display_name }}">📷</a>
+              <a href="{{ sub.screenshot_url }}" target="_blank" rel="noopener" class="rc-shot-link">📷</a>
               {% else %}
               <span style="color:var(--color-text-muted);">—</span>
               {% endif %}
@@ -419,7 +416,7 @@
                 {% else %}
                   <button class="rc-btn rc-btn--approve" onclick="rcPatch({{ sub.id }}, {approved:true})">Approve</button>
                 {% endif %}
-                <button class="rc-btn rc-btn--delete" onclick="rcDeleteSub({{ sub.id }})" title="Delete">✕</button>
+                <button class="rc-btn rc-btn--delete" onclick="rcDeleteSub({{ sub.id }})">✕</button>
               </div>
             </td>
           </tr>
@@ -432,7 +429,7 @@
     {% endif %}
   </div>
 
-  {# ── Screenshot Gallery ───────────────────────────────────────── #}
+  {# Screenshot Gallery #}
   {% set gallery = submissions | selectattr('approved') | selectattr('screenshot_url') | list %}
   {% if gallery %}
   <div class="rc-card">
@@ -454,101 +451,116 @@
 
   {% endif %}{# end contest exists #}
 
-</div>{# /.rc-page #}
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-const RC_CONTEST_ID    = {{ contest.id if contest else 'null' }};
-const RC_BOUNTY_RECRUIT = {{ contest.bounty_per_recruit if contest else 10000 }};
-const RC_BOUNTY_PROMO   = {{ contest.promotion_bounty   if contest else 10000 }};
+const RC_CONTEST_ID          = {{ contest.id if contest else 'null' }};
+const RC_BOUNTY_RECRUIT      = {{ contest.bounty_per_recruit   if contest else 10000 }};
+const RC_BOUNTY_PROMO        = {{ contest.promotion_bounty     if contest else 10000 }};
+const RC_FIRST_RECRUIT_BONUS = {{ contest.first_recruit_bonus  if contest else 5000 }};
 
-function rcMsg(id, text, ok) {
+function rcMsg(id, msg, ok) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.textContent = text;
+  el.textContent = msg;
   el.style.color = ok ? '#4ade80' : '#f87171';
   if (ok) setTimeout(() => { el.textContent = ''; }, 2000);
 }
 
 async function rcApi(method, path, body) {
   const r = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: body ? {'Content-Type': 'application/json'} : {},
-    body: body ? JSON.stringify(body) : undefined,
+    method, credentials: 'same-origin',
+    headers: body !== undefined ? {'Content-Type': 'application/json'} : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   return r.json();
 }
 
-function rcToggleEdit() {
-  const panel = document.getElementById('rc-edit-panel');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.rc-recruiter-check').forEach(cb => cb.addEventListener('change', rcUpdateHint));
+});
+
+function rcUpdateHint() {
+  const checked = Array.from(document.querySelectorAll('.rc-recruiter-check:checked'));
+  const hint = document.getElementById('sub-recruiter-hint');
+  if (!hint) return;
+  hint.textContent = checked.length === 0
+    ? 'None selected'
+    : `${checked.length} selected: ${checked.map(c => c.closest('label').textContent.trim()).join(', ')}`;
 }
 
 function rcAutoFillGold() {
   const type = document.getElementById('sub-type')?.value;
-  const goldEl = document.getElementById('sub-gold');
-  if (goldEl) goldEl.value = type === 'recruit_raid' ? RC_BOUNTY_RECRUIT : RC_BOUNTY_PROMO;
+  const el = document.getElementById('sub-gold');
+  if (!el) return;
+  if (type === 'recruit')                el.value = RC_BOUNTY_RECRUIT;
+  else if (type === 'first_recruit_bonus') el.value = RC_FIRST_RECRUIT_BONUS;
+  else if (type === 'promotion')         el.value = RC_BOUNTY_PROMO;
+}
+
+function rcToggleEdit() {
+  const p = document.getElementById('rc-edit-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
 async function rcCreateContest() {
   const title = document.getElementById('new-title').value.trim();
   if (!title) { rcMsg('create-msg', 'Title is required.', false); return; }
-  const deadlineRaw = document.getElementById('new-deadline').value;
-  const body = {
+  const dl = document.getElementById('new-deadline').value;
+  const data = await rcApi('POST', '/api/v1/admin/recruiting-contest', {
     title,
-    description: document.getElementById('new-desc').value.trim() || null,
-    deadline: deadlineRaw ? new Date(deadlineRaw).toISOString() : null,
-    bounty_per_recruit: parseInt(document.getElementById('new-bounty').value) || 10000,
-    promotion_bounty:   parseInt(document.getElementById('new-promo').value)  || 10000,
-    leader_bonus:       parseInt(document.getElementById('new-leader').value)  || 100000,
-  };
-  const data = await rcApi('POST', '/api/v1/admin/recruiting-contest', body);
-  if (data.ok) { location.reload(); }
-  else { rcMsg('create-msg', data.detail || 'Error creating contest.', false); }
+    description:         document.getElementById('new-desc').value.trim() || null,
+    deadline:            dl ? new Date(dl).toISOString() : null,
+    bounty_per_recruit:  parseInt(document.getElementById('new-bounty').value) || 10000,
+    first_recruit_bonus: parseInt(document.getElementById('new-first').value)  || 5000,
+    promotion_bounty:    parseInt(document.getElementById('new-promo').value)   || 10000,
+    leader_bonus:        parseInt(document.getElementById('new-leader').value)  || 100000,
+  });
+  if (data.ok) location.reload();
+  else rcMsg('create-msg', data.detail || 'Error creating contest.', false);
 }
 
 async function rcSaveSettings() {
-  const deadlineRaw = document.getElementById('edit-deadline').value;
-  const body = {
-    title:              document.getElementById('edit-title').value.trim(),
-    description:        document.getElementById('edit-desc').value.trim() || null,
-    deadline:           deadlineRaw ? new Date(deadlineRaw).toISOString() : null,
-    bounty_per_recruit: parseInt(document.getElementById('edit-bounty').value),
-    promotion_bounty:   parseInt(document.getElementById('edit-promo').value),
-    leader_bonus:       parseInt(document.getElementById('edit-leader').value),
-  };
-  if (!body.title) { rcMsg('edit-msg', 'Title is required.', false); return; }
-  const data = await rcApi('PATCH', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}`, body);
+  const title = document.getElementById('edit-title').value.trim();
+  if (!title) { rcMsg('edit-msg', 'Title is required.', false); return; }
+  const dl = document.getElementById('edit-deadline').value;
+  const data = await rcApi('PATCH', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}`, {
+    title,
+    description:         document.getElementById('edit-desc').value.trim() || null,
+    deadline:            dl ? new Date(dl).toISOString() : null,
+    bounty_per_recruit:  parseInt(document.getElementById('edit-bounty').value),
+    first_recruit_bonus: parseInt(document.getElementById('edit-first').value),
+    promotion_bounty:    parseInt(document.getElementById('edit-promo').value),
+    leader_bonus:        parseInt(document.getElementById('edit-leader').value),
+  });
   if (data.ok) { rcMsg('edit-msg', 'Saved!', true); setTimeout(() => location.reload(), 900); }
-  else { rcMsg('edit-msg', data.detail || 'Save failed.', false); }
+  else rcMsg('edit-msg', data.detail || 'Save failed.', false);
 }
 
 async function rcSetStatus(status) {
-  const verb = status === 'closed' ? 'Close' : 'Reopen';
-  if (!confirm(`${verb} this contest?`)) return;
+  if (!confirm(`${status === 'closed' ? 'Close' : 'Reopen'} this contest?`)) return;
   const data = await rcApi('PATCH', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}`, {status});
   if (data.ok) location.reload();
   else alert(data.detail || 'Failed to update status.');
 }
 
 async function rcAddSubmission() {
-  const recruiterId = parseInt(document.getElementById('sub-recruiter').value);
+  const recruiterIds = Array.from(document.querySelectorAll('.rc-recruiter-check:checked')).map(el => parseInt(el.value));
+  if (!recruiterIds.length) { rcMsg('sub-msg', 'Select at least one recruiter.', false); return; }
   const recruitName = document.getElementById('sub-recruit').value.trim();
-  if (!recruiterId) { rcMsg('sub-msg', 'Select a recruiter.', false); return; }
   if (!recruitName) { rcMsg('sub-msg', 'Recruit name is required.', false); return; }
-  const body = {
-    recruiter_player_id:  recruiterId,
+  const data = await rcApi('POST', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}/submissions`, {
+    recruiter_player_ids: recruiterIds,
     recruit_display_name: recruitName,
     payout_type:          document.getElementById('sub-type').value,
     gold_amount:          parseInt(document.getElementById('sub-gold').value) || 0,
     screenshot_url:       document.getElementById('sub-screenshot').value.trim() || null,
     notes:                document.getElementById('sub-notes').value.trim() || null,
-  };
-  const data = await rcApi('POST', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}/submissions`, body);
-  if (data.ok) { rcMsg('sub-msg', 'Added!', true); setTimeout(() => location.reload(), 600); }
-  else { rcMsg('sub-msg', data.detail || 'Error adding submission.', false); }
+  });
+  if (data.ok) { rcMsg('sub-msg', `Added ${data.ids.length} submission(s)!`, true); setTimeout(() => location.reload(), 600); }
+  else rcMsg('sub-msg', data.detail || 'Error adding submission.', false);
 }
 
 async function rcPatch(subId, patch) {

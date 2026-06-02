@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/admin/recruiting-contest", tags=["recruiting"])
 
+_VALID_PAYOUT_TYPES = {"recruit", "promotion", "first_recruit_bonus"}
+
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
@@ -37,6 +39,7 @@ class ContestCreate(BaseModel):
     bounty_per_recruit: int = 10000
     promotion_bounty: int = 10000
     leader_bonus: int = 100000
+    first_recruit_bonus: int = 5000
 
 
 class ContestUpdate(BaseModel):
@@ -46,14 +49,15 @@ class ContestUpdate(BaseModel):
     bounty_per_recruit: int | None = None
     promotion_bounty: int | None = None
     leader_bonus: int | None = None
+    first_recruit_bonus: int | None = None
     status: str | None = None
 
 
 class SubmissionCreate(BaseModel):
-    recruiter_player_id: int
+    recruiter_player_ids: list[int]       # one submission row created per player
     recruit_display_name: str
     screenshot_url: str | None = None
-    payout_type: str  # 'recruit_raid' or 'promotion'
+    payout_type: str                      # 'recruit' | 'promotion' | 'first_recruit_bonus'
     gold_amount: int = 0
     notes: str | None = None
 
@@ -70,14 +74,13 @@ class SubmissionUpdate(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-async def _get_contest_or_404(db: AsyncSession, contest_id: int) -> dict:
+async def _get_contest_or_404(db: AsyncSession, contest_id: int) -> None:
     row = await db.execute(
         text("SELECT id FROM patt.recruiting_contests WHERE id = :id"),
         {"id": contest_id},
     )
     if not row.one_or_none():
         raise HTTPException(status_code=404, detail="Contest not found.")
-    return {"id": contest_id}
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +97,11 @@ async def create_contest(
     result = await db.execute(
         text("""
             INSERT INTO patt.recruiting_contests
-                (title, description, deadline, bounty_per_recruit, promotion_bounty, leader_bonus)
+                (title, description, deadline, bounty_per_recruit, promotion_bounty,
+                 leader_bonus, first_recruit_bonus)
             VALUES
-                (:title, :description, :deadline, :bounty_per_recruit, :promotion_bounty, :leader_bonus)
+                (:title, :description, :deadline, :bounty_per_recruit, :promotion_bounty,
+                 :leader_bonus, :first_recruit_bonus)
             RETURNING id
         """),
         {
@@ -106,6 +111,7 @@ async def create_contest(
             "bounty_per_recruit": body.bounty_per_recruit,
             "promotion_bounty": body.promotion_bounty,
             "leader_bonus": body.leader_bonus,
+            "first_recruit_bonus": body.first_recruit_bonus,
         },
     )
     await db.commit()
@@ -143,32 +149,40 @@ async def add_submission(
     db: AsyncSession = Depends(get_db),
     player: Player = Depends(require_rank(5)),
 ):
+    """Create one submission row per recruiter in recruiter_player_ids."""
     await _get_contest_or_404(db, contest_id)
-    if body.payout_type not in ("recruit_raid", "promotion"):
-        raise HTTPException(status_code=400, detail="Invalid payout_type.")
 
-    result = await db.execute(
-        text("""
-            INSERT INTO patt.recruiting_submissions
-                (contest_id, recruiter_player_id, recruit_display_name,
-                 screenshot_url, payout_type, gold_amount, notes)
-            VALUES
-                (:contest_id, :recruiter_player_id, :recruit_display_name,
-                 :screenshot_url, :payout_type, :gold_amount, :notes)
-            RETURNING id
-        """),
-        {
-            "contest_id": contest_id,
-            "recruiter_player_id": body.recruiter_player_id,
-            "recruit_display_name": body.recruit_display_name,
-            "screenshot_url": body.screenshot_url or None,
-            "payout_type": body.payout_type,
-            "gold_amount": body.gold_amount,
-            "notes": body.notes,
-        },
-    )
+    if body.payout_type not in _VALID_PAYOUT_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid payout_type.")
+    if not body.recruiter_player_ids:
+        raise HTTPException(status_code=400, detail="At least one recruiter required.")
+
+    inserted_ids = []
+    for pid in body.recruiter_player_ids:
+        result = await db.execute(
+            text("""
+                INSERT INTO patt.recruiting_submissions
+                    (contest_id, recruiter_player_id, recruit_display_name,
+                     screenshot_url, payout_type, gold_amount, notes)
+                VALUES
+                    (:contest_id, :pid, :recruit_display_name,
+                     :screenshot_url, :payout_type, :gold_amount, :notes)
+                RETURNING id
+            """),
+            {
+                "contest_id": contest_id,
+                "pid": pid,
+                "recruit_display_name": body.recruit_display_name,
+                "screenshot_url": body.screenshot_url or None,
+                "payout_type": body.payout_type,
+                "gold_amount": body.gold_amount,
+                "notes": body.notes,
+            },
+        )
+        inserted_ids.append(result.scalar_one())
+
     await db.commit()
-    return {"ok": True, "id": result.scalar_one()}
+    return {"ok": True, "ids": inserted_ids}
 
 
 @router.patch("/submissions/{sub_id}")
@@ -245,5 +259,4 @@ async def pay_all_for_recruiter(
         {"now": now, "contest_id": contest_id, "player_id": player_id},
     )
     await db.commit()
-    paid_ids = [r[0] for r in result.fetchall()]
-    return {"ok": True, "paid_count": len(paid_ids)}
+    return {"ok": True, "paid_count": len(result.fetchall())}
