@@ -240,18 +240,18 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
-- **Phase 1.8 — User Activity Logging** — **ALL PHASES COMPLETE** on `feature/user-activity-logging` — ready to merge + tag
-  - **Phase A COMPLETE** (commit 312ca88, migration 0178): `common.users` +`last_active_at/last_login_at/login_count`; `common.user_activity` daily rollup table; login stamping in `POST /api/v1/auth/login` **and** `POST /login` (form handler in `auth_pages.py` — fixed commit d533675; both must stamp or browser logins won't record)`
-  - **Phase B COMPLETE** (commit c43a34a): `ActivityMiddleware` in `src/guild_portal/middleware/activity.py`; registered in `app.py`; fires background upsert after each authenticated response; skips static/polling paths; 25 unit tests. 1841/1847 suite-wide (6 pre-existing).
-  - **Phase C COMPLETE** (commit 0baafeb): Admin Users page — extended query with activity data; `_rel_time()` helper; new stat pills (Active This Week, Never Logged In); new columns (Last Active, Last Login, Logins, 7d Views); expand row showing pages visited this week as tag chips; default sort by `last_active_at DESC NULLS LAST`; 31 unit tests. 1872/1878 suite-wide.
-  - **Phase D COMPLETE** (commit 8259b6c): `run_activity_prune()` in `scheduler.py`; deletes `common.user_activity` rows older than 90 days; registered as weekly Sunday 3:30 AM UTC; 4 unit tests. 1876/1882 suite-wide.
-- **prod-v0.22.5 — COMPLETE** (migration 0178, PR #39). Phase 1.8 User Activity Logging fully shipped.
-- **prod-v0.22.6 — COMPLETE** (hotfix/crafting-sync-6hr). Crafting sync changed from daily to every 6 hours (0/6/12/18 UTC); weekly cadence guard removed; display updated in admin, Crafting Corner, and guide.
-- **prod-v0.22.7 — COMPLETE** (hotfix/roster-sync-duplicate-key). Fixed `duplicate key value violates unique constraint "wow_characters_character_name_realm_slug_key"` crash in Blizzard roster sync. Root cause: UPDATE setting new name/realm on stable-ID row collided with old soft-deleted row. Fix: detect conflict before UPDATE and delete the stale row. No migration.
-- **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Fixed rank-3 (Veteran) users getting a silent 403 when creating events. Raid Tools page was accessible at rank 3 but the POST endpoint required rank 4. Lowered to `require_rank(3)`. No migration.
-- **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed all gear plan API calls returning 401 after 24 hours. Cookie `max_age` was 30 days but `JWT_EXPIRE_MINUTES` defaulted to 1440 (24 hours) — JWT expired while cookie stayed valid, causing every API call to fail silently. Changed default to 43200 (30 days). No migration. Dev/test `.env` keep 1440.
-- **Last migration:** 0178 (`common.user_activity` table + `common.users` activity columns)
-- **Last prod tag:** `prod-v0.22.9`
+- **prod-v0.23.0 — COMPLETE** (feature/recruiting-contest, migrations 0179+0180). Recruiting Contest tracker.
+  - `patt.recruiting_contests` — contest config (title, deadline, bounties: recruit 10k, first_recruit_bonus 5k, promotion 10k, leader 100k, status open/closed)
+  - `patt.recruiting_submissions` — one row per bounty event per recruiter; payout_type IN ('recruit','first_recruit_bonus','promotion'); approved/paid flags with timestamps; approved_by_player_id FK
+  - GL-only admin page (`/admin/recruiting-contest`, Social Tools sidebar, screen_key `recruiting_contest` min_rank 5): create/edit contest, multi-recruiter checkbox form (one submission row per player), approve/unapprove, mark paid/unpay, Pay All per recruiter, payout tracker (earned/paid/outstanding), screenshot gallery
+  - Member leaderboard at `/recruiting-contest` (rank 1+): standings table (Recruited/Promoted/Total Reward) + Hall of Recruits screenshot gallery
+  - "Contest" nav link in `base.html` for logged-in members; "Member View ↗" button in admin header
+  - `format_gold` Jinja2 filter added to `app.py` (formats int gold as "10,000g")
+  - Routes: `src/guild_portal/api/recruiting_routes.py` (GL admin CRUD + pay-all); member display in `public_pages.py`
+- **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed gear plan 401s after 24h. Changed JWT default to 43200 (30 days). No migration.
+- **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Lowered raid event creation to require_rank(3). No migration.
+- **Last migration:** 0180 (`patt.recruiting_submissions` payout_type constraint + `first_recruit_bonus` column on contests)
+- **Last prod tag:** `prod-v0.23.0`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
@@ -264,9 +264,9 @@ Key design gotchas (read before writing any DB query):
 
 **Public pages:** `/` (index), `/roster` (Avg Raid Parse + Roster Needs), `/crafting-corner`, `/guide`, `/feedback`
 
-**Member pages:** `/my-characters` (unified character sheet — Gear/Raid/M+/Parses/Profs/Market tabs), `/profile` (Battle.net link/unlink)
+**Member pages:** `/my-characters` (unified character sheet — Gear/Raid/M+/Parses/Profs/Market tabs), `/profile` (Battle.net link/unlink), `/recruiting-contest` (leaderboard + screenshot gallery, rank 1+)
 
-**Admin pages (Officer+):** campaigns, players, users, availability, raid-tools, data-quality, crafting-sync, bot-settings, reference-tables, audit-log, attendance, quotes, error-routing, progression, warcraft-logs, ah-pricing. GL-only: site-config, gear-plan (BIS sync dashboard), blizzard-api
+**Admin pages (Officer+):** campaigns, players, users, availability, raid-tools, data-quality, crafting-sync, bot-settings, reference-tables, audit-log, attendance, quotes, error-routing, progression, warcraft-logs, ah-pricing. GL-only: site-config, gear-plan (BIS sync dashboard), blizzard-api, recruiting-contest
 
 **Background systems:** Discord bot (role sync, DMs, onboarding, contest agent), GuildSync WoW addon + companion app, setup wizard (`/setup`), auto-booking (`raid_booking_service.py`), Battle.net OAuth + daily token refresh
 
