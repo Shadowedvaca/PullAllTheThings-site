@@ -71,7 +71,8 @@ _PATH_TO_SCREEN: list[tuple[str, str]] = [
     ("/admin/attendance",      "attendance_report"),
     ("/admin/quotes",          "quotes"),
     ("/admin/error-routing",   "error_routing"),
-    ("/admin/gear-plan-admin", "gear_plan_admin"),
+    ("/admin/gear-plan-admin",       "gear_plan_admin"),
+    ("/admin/recruiting-contest",    "recruiting_contest"),
 ]
 
 
@@ -4149,3 +4150,82 @@ async def admin_gear_plan_admin_page(
         return RedirectResponse("/login?next=/admin/gear-plan-admin")
     ctx = await _base_ctx(request, player, db)
     return templates.TemplateResponse("admin/gear_plan_admin.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# Recruiting Contest  (GL only — screen_key "recruiting_contest")
+# ---------------------------------------------------------------------------
+
+
+@router.get("/recruiting-contest", response_class=HTMLResponse)
+async def admin_recruiting_contest_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Recruiting contest management — GL only."""
+    player = await _require_screen("recruiting_contest", request, db)
+    if player is None:
+        return RedirectResponse("/login?next=/admin/recruiting-contest")
+
+    # Most recent contest (open preferred)
+    contest_row = await db.execute(text("""
+        SELECT * FROM patt.recruiting_contests
+        ORDER BY (status = 'open') DESC, created_at DESC
+        LIMIT 1
+    """))
+    contest = contest_row.mappings().one_or_none()
+    contest = dict(contest) if contest else None
+
+    standings: list[dict] = []
+    submissions: list[dict] = []
+
+    if contest:
+        rows = await db.execute(text("""
+            SELECT
+                p.id                                                                    AS player_id,
+                p.display_name,
+                COUNT(*) FILTER (WHERE rs.payout_type = 'recruit_raid' AND rs.approved) AS total_recruited,
+                COUNT(*) FILTER (WHERE rs.payout_type = 'promotion'    AND rs.approved) AS total_promoted,
+                COALESCE(SUM(rs.gold_amount) FILTER (WHERE rs.approved),          0)   AS total_earned,
+                COALESCE(SUM(rs.gold_amount) FILTER (WHERE rs.approved AND rs.paid), 0) AS total_paid
+            FROM patt.recruiting_submissions rs
+            JOIN guild_identity.players p ON p.id = rs.recruiter_player_id
+            WHERE rs.contest_id = :cid
+            GROUP BY p.id, p.display_name
+            ORDER BY total_earned DESC, total_recruited DESC
+        """), {"cid": contest["id"]})
+        standings = [dict(r) for r in rows.mappings()]
+
+        rows = await db.execute(text("""
+            SELECT
+                rs.id, rs.recruiter_player_id, rs.recruit_display_name,
+                rs.screenshot_url, rs.payout_type, rs.gold_amount,
+                rs.approved, rs.approved_at, rs.paid, rs.paid_at,
+                rs.notes, rs.submitted_at,
+                p.display_name  AS recruiter_name,
+                pa.display_name AS approved_by_name
+            FROM patt.recruiting_submissions rs
+            JOIN guild_identity.players p  ON p.id  = rs.recruiter_player_id
+            LEFT JOIN guild_identity.players pa ON pa.id = rs.approved_by_player_id
+            WHERE rs.contest_id = :cid
+            ORDER BY rs.submitted_at DESC
+        """), {"cid": contest["id"]})
+        submissions = [dict(r) for r in rows.mappings()]
+
+    # Players for the recruiter dropdown
+    players_result = await db.execute(text("""
+        SELECT id, display_name
+        FROM guild_identity.players
+        WHERE website_user_id IS NOT NULL
+        ORDER BY display_name
+    """))
+    players = [dict(r) for r in players_result.mappings()]
+
+    ctx = await _base_ctx(request, player, db)
+    ctx.update({
+        "contest": contest,
+        "standings": standings,
+        "submissions": submissions,
+        "players": players,
+    })
+    return templates.TemplateResponse("admin/recruiting_contest.html", ctx)

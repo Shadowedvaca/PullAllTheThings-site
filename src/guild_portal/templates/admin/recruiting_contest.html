@@ -1,0 +1,586 @@
+{% extends "base_admin.html" %}
+{% block title %}Recruiting Contest — Admin — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<style>
+.rc-page { display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem; overflow-y: auto; height: 100%; box-sizing: border-box; }
+
+/* Contest header */
+.rc-contest-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.rc-contest-header__left { display: flex; flex-direction: column; gap: 0.4rem; }
+.rc-contest-title { font-family: 'Cinzel', serif; font-size: 1.4rem; color: var(--color-gold); margin: 0; }
+.rc-contest-meta { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: var(--color-text-muted); }
+.rc-contest-header__actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
+
+/* Pills */
+.rc-pill { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.rc-pill--open     { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+.rc-pill--closed   { background: color-mix(in srgb, #94a3b8 12%, transparent); color: #94a3b8; border: 1px solid #94a3b8; }
+.rc-pill--recruit  { background: color-mix(in srgb, #60a5fa 12%, transparent); color: #60a5fa; border: 1px solid #60a5fa; }
+.rc-pill--bonus    { background: color-mix(in srgb, var(--color-gold) 12%, transparent); color: var(--color-gold); border: 1px solid var(--color-gold); }
+.rc-pill--promo    { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+.rc-pill--approved { background: color-mix(in srgb, #4ade80 12%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+.rc-pill--pending  { background: color-mix(in srgb, #94a3b8 12%, transparent); color: #94a3b8; border: 1px solid #94a3b8; }
+.rc-pill--paid     { background: color-mix(in srgb, var(--color-gold) 12%, transparent); color: var(--color-gold); border: 1px solid var(--color-gold); }
+.rc-pill--unpaid   { background: color-mix(in srgb, #f87171 12%, transparent); color: #f87171; border: 1px solid #f87171; }
+
+/* Edit panel */
+.rc-edit-panel { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 8px; padding: 1.25rem; }
+.rc-edit-panel__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 0.9rem; margin: 0 0 1rem; }
+.rc-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.rc-form-label { display: block; font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+.rc-form-input { width: 100%; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 4px; padding: 0.4rem 0.6rem; color: var(--color-text); font-size: 0.875rem; box-sizing: border-box; }
+.rc-form-input:focus { outline: none; border-color: var(--color-gold); }
+.rc-form-textarea { resize: vertical; min-height: 3.5rem; }
+.rc-form-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem; }
+
+/* Multi-select recruiter checklist */
+.rc-recruiter-list { max-height: 140px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); padding: 0.25rem 0; }
+.rc-recruiter-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.6rem; cursor: pointer; font-size: 0.875rem; color: var(--color-text); transition: background 0.1s; }
+.rc-recruiter-item:hover { background: color-mix(in srgb, var(--color-gold) 6%, transparent); }
+.rc-recruiter-item input[type="checkbox"] { accent-color: var(--color-gold); cursor: pointer; }
+.rc-selected-hint { font-size: 0.72rem; color: var(--color-text-muted); margin-top: 0.25rem; min-height: 1rem; }
+
+/* Two-column grid */
+.rc-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+@media (max-width: 900px) { .rc-two-col { grid-template-columns: 1fr; } }
+
+/* Cards */
+.rc-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 8px; padding: 1.25rem; }
+.rc-card__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 0.9rem; margin: 0 0 1rem; }
+.rc-card__empty { color: var(--color-text-muted); font-size: 0.85rem; margin: 0; }
+
+/* Tables */
+.rc-table-wrap { overflow-x: auto; }
+.rc-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.rc-table th { text-align: left; color: var(--color-text-muted); font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.rc-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent); vertical-align: middle; }
+.rc-table tbody tr:last-child td { border-bottom: none; }
+.rc-table tbody tr:hover td { background: color-mix(in srgb, var(--color-gold) 4%, transparent); }
+.rc-table tfoot td { font-weight: 600; border-top: 2px solid var(--color-border); border-bottom: none; }
+
+/* Payout / outstanding */
+.rc-outstanding { color: #f87171; font-weight: 600; }
+.rc-zero { color: var(--color-text-muted); }
+.rc-alert { padding: 0.6rem 0.9rem; border-radius: 6px; font-size: 0.85rem; margin-bottom: 0.75rem; }
+.rc-alert--warn { background: color-mix(in srgb, #f87171 10%, transparent); color: #f87171; border: 1px solid #f87171; }
+.rc-alert--ok   { background: color-mix(in srgb, #4ade80 10%, transparent); color: #4ade80; border: 1px solid #4ade80; }
+
+/* Standings rank */
+.rc-rank { font-family: 'Cinzel', serif; font-weight: 700; color: var(--color-gold); font-size: 0.95rem; }
+
+/* Action buttons */
+.rc-actions { display: flex; gap: 0.3rem; align-items: center; }
+.rc-btn { padding: 0.2rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; border: 1px solid; cursor: pointer; transition: opacity 0.15s; background: transparent; white-space: nowrap; }
+.rc-btn:hover { opacity: 0.75; }
+.rc-btn--approve   { border-color: #4ade80; color: #4ade80; }
+.rc-btn--unapprove { border-color: #94a3b8; color: #94a3b8; }
+.rc-btn--pay       { border-color: var(--color-gold); color: var(--color-gold); }
+.rc-btn--unpay     { border-color: #94a3b8; color: #94a3b8; }
+.rc-btn--delete    { border-color: #f87171; color: #f87171; }
+.rc-btn--payall    { border-color: var(--color-gold); color: var(--color-gold); font-size: 0.72rem; }
+
+.rc-shot-link { color: var(--color-gold); text-decoration: none; font-size: 1rem; }
+.rc-shot-link:hover { opacity: 0.75; }
+
+/* Gallery */
+.rc-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; }
+.rc-gallery__item { display: block; border-radius: 6px; overflow: hidden; border: 1px solid var(--color-border); transition: border-color 0.15s; text-decoration: none; }
+.rc-gallery__item:hover { border-color: var(--color-gold); }
+.rc-gallery__img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--color-bg); }
+.rc-gallery__cap { padding: 0.35rem 0.5rem; background: var(--color-bg); }
+.rc-gallery__recruit { font-size: 0.75rem; font-weight: 600; color: var(--color-text); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-gallery__via { font-size: 0.68rem; color: var(--color-text-muted); display: block; }
+
+/* No-contest empty state */
+.rc-empty { text-align: center; padding: 3rem 1rem; }
+.rc-empty__title { font-family: 'Cinzel', serif; color: var(--color-gold); font-size: 1.2rem; margin-bottom: 0.5rem; }
+.rc-empty__sub { color: var(--color-text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+.rc-create-card { max-width: 640px; margin: 0 auto; text-align: left; }
+.rc-msg { font-size: 0.82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rc-page">
+
+  <div class="admin-page-header" style="display:flex;align-items:center;gap:1rem;">
+    <h1 class="admin-page-title" style="margin:0;">Recruiting Contest</h1>
+    <a href="/recruiting-contest" target="_blank" class="btn btn-secondary btn-sm">Member View ↗</a>
+  </div>
+
+  {# ── No Contest ───────────────────────────────────────────────── #}
+  {% if not contest %}
+  <div class="rc-empty">
+    <h2 class="rc-empty__title">No Contest Active</h2>
+    <p class="rc-empty__sub">Create a contest to start tracking recruits and payouts.</p>
+    <div class="rc-card rc-create-card">
+      <h3 class="rc-card__title">Create Contest</h3>
+      <div class="rc-edit-grid">
+        <div style="grid-column:1/-1;">
+          <label class="rc-form-label">Title</label>
+          <input class="rc-form-input" id="new-title" placeholder="Recruiting Push — Patch 12.0.7" />
+        </div>
+        <div style="grid-column:1/-1;">
+          <label class="rc-form-label">Description</label>
+          <textarea class="rc-form-input rc-form-textarea" id="new-desc" placeholder="Optional description…"></textarea>
+        </div>
+        <div>
+          <label class="rc-form-label">Deadline</label>
+          <input class="rc-form-input" type="datetime-local" id="new-deadline" />
+        </div>
+        <div>
+          <label class="rc-form-label">Recruit Bounty (gold)</label>
+          <input class="rc-form-input" type="number" id="new-bounty" value="10000" min="0" />
+        </div>
+        <div>
+          <label class="rc-form-label">First Recruit Bonus (gold)</label>
+          <input class="rc-form-input" type="number" id="new-first" value="5000" min="0" />
+        </div>
+        <div>
+          <label class="rc-form-label">Promotion Bounty (gold)</label>
+          <input class="rc-form-input" type="number" id="new-promo" value="10000" min="0" />
+        </div>
+        <div>
+          <label class="rc-form-label">Leader Bonus (gold)</label>
+          <input class="rc-form-input" type="number" id="new-leader" value="100000" min="0" />
+        </div>
+      </div>
+      <div class="rc-form-row">
+        <button class="btn btn-primary btn-sm" onclick="rcCreateContest()">Create Contest</button>
+        <span class="rc-msg" id="create-msg"></span>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  {# ── Contest Exists ───────────────────────────────────────────── #}
+
+  <div class="rc-contest-header">
+    <div class="rc-contest-header__left">
+      <h2 class="rc-contest-title">{{ contest.title }}</h2>
+      <div class="rc-contest-meta">
+        <span class="rc-pill rc-pill--{{ contest.status }}">{{ contest.status }}</span>
+        {% if contest.deadline %}
+          <span>Deadline: <strong>{{ contest.deadline.strftime('%b %d, %Y') }}</strong></span>
+        {% endif %}
+        <span>Recruit: <strong>{{ contest.bounty_per_recruit | format_gold }}</strong></span>
+        <span>First recruit bonus: <strong>{{ contest.first_recruit_bonus | format_gold }}</strong></span>
+        <span>Promo: <strong>{{ contest.promotion_bounty | format_gold }}</strong></span>
+        <span>Leader bonus: <strong>{{ contest.leader_bonus | format_gold }}</strong></span>
+      </div>
+      {% if contest.description %}
+        <p style="color:var(--color-text-muted);font-size:0.85rem;margin:0.25rem 0 0;">{{ contest.description }}</p>
+      {% endif %}
+    </div>
+    <div class="rc-contest-header__actions">
+      <button class="btn btn-secondary btn-sm" onclick="rcToggleEdit()">Edit Settings</button>
+      {% if contest.status == 'open' %}
+        <button class="btn btn-sm" style="border-color:#f87171;color:#f87171;background:transparent;"
+                onclick="rcSetStatus('closed')">Close Contest</button>
+      {% else %}
+        <button class="btn btn-primary btn-sm" onclick="rcSetStatus('open')">Reopen Contest</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="rc-edit-panel" id="rc-edit-panel" style="display:none;">
+    <h3 class="rc-edit-panel__title">Edit Settings</h3>
+    <div class="rc-edit-grid">
+      <div style="grid-column:1/-1;">
+        <label class="rc-form-label">Title</label>
+        <input class="rc-form-input" id="edit-title" value="{{ contest.title | e }}" />
+      </div>
+      <div style="grid-column:1/-1;">
+        <label class="rc-form-label">Description</label>
+        <textarea class="rc-form-input rc-form-textarea" id="edit-desc">{{ contest.description or '' }}</textarea>
+      </div>
+      <div>
+        <label class="rc-form-label">Deadline</label>
+        <input class="rc-form-input" type="datetime-local" id="edit-deadline"
+               value="{{ contest.deadline.strftime('%Y-%m-%dT%H:%M') if contest.deadline else '' }}" />
+      </div>
+      <div>
+        <label class="rc-form-label">Recruit Bounty (gold)</label>
+        <input class="rc-form-input" type="number" id="edit-bounty" value="{{ contest.bounty_per_recruit }}" min="0" />
+      </div>
+      <div>
+        <label class="rc-form-label">First Recruit Bonus (gold)</label>
+        <input class="rc-form-input" type="number" id="edit-first" value="{{ contest.first_recruit_bonus }}" min="0" />
+      </div>
+      <div>
+        <label class="rc-form-label">Promotion Bounty (gold)</label>
+        <input class="rc-form-input" type="number" id="edit-promo" value="{{ contest.promotion_bounty }}" min="0" />
+      </div>
+      <div>
+        <label class="rc-form-label">Leader Bonus (gold)</label>
+        <input class="rc-form-input" type="number" id="edit-leader" value="{{ contest.leader_bonus }}" min="0" />
+      </div>
+    </div>
+    <div class="rc-form-row">
+      <button class="btn btn-primary btn-sm" onclick="rcSaveSettings()">Save</button>
+      <button class="btn btn-secondary btn-sm" onclick="rcToggleEdit()">Cancel</button>
+      <span class="rc-msg" id="edit-msg"></span>
+    </div>
+  </div>
+
+  <div class="rc-two-col">
+
+    {# Add Submission #}
+    <div class="rc-card">
+      <h3 class="rc-card__title">Add Submission</h3>
+      {% if contest.status == 'open' %}
+      <div style="display:flex;flex-direction:column;gap:0.6rem;">
+        <div>
+          <label class="rc-form-label">Recruiters (check all who were in the run)</label>
+          <div class="rc-recruiter-list" id="sub-recruiter-list">
+            {% for p in players %}
+            <label class="rc-recruiter-item">
+              <input type="checkbox" class="rc-recruiter-check" value="{{ p.id }}">
+              {{ p.display_name }}
+            </label>
+            {% endfor %}
+          </div>
+          <div class="rc-selected-hint" id="sub-recruiter-hint">None selected</div>
+        </div>
+        <div>
+          <label class="rc-form-label">Recruit Name (Discord)</label>
+          <input class="rc-form-input" id="sub-recruit" placeholder="Their Discord display name" />
+        </div>
+        <div>
+          <label class="rc-form-label">Type</label>
+          <select class="rc-form-input" id="sub-type" onchange="rcAutoFillGold()">
+            <option value="recruit">Recruit</option>
+            <option value="first_recruit_bonus">First Recruit Bonus</option>
+            <option value="promotion">Promote to Member</option>
+          </select>
+        </div>
+        <div>
+          <label class="rc-form-label">Gold per Recruiter</label>
+          <input class="rc-form-input" type="number" id="sub-gold" value="{{ contest.bounty_per_recruit }}" min="0" />
+        </div>
+        <div>
+          <label class="rc-form-label">Screenshot URL</label>
+          <input class="rc-form-input" id="sub-screenshot" placeholder="https://…" />
+        </div>
+        <div>
+          <label class="rc-form-label">Notes</label>
+          <input class="rc-form-input" id="sub-notes" placeholder="Optional" />
+        </div>
+        <div class="rc-form-row" style="margin-top:0.25rem;">
+          <button class="btn btn-primary btn-sm" onclick="rcAddSubmission()">Add</button>
+          <span class="rc-msg" id="sub-msg"></span>
+        </div>
+      </div>
+      {% else %}
+      <p class="rc-card__empty">Contest is closed — no new submissions.</p>
+      {% endif %}
+    </div>
+
+    {# Payout Tracker #}
+    <div class="rc-card">
+      <h3 class="rc-card__title">Payout Tracker</h3>
+      {% if standings %}
+        {% set total_earned = standings | sum(attribute='total_earned') %}
+        {% set total_paid   = standings | sum(attribute='total_paid') %}
+        {% set outstanding  = total_earned - total_paid %}
+        {% if outstanding > 0 %}
+        <div class="rc-alert rc-alert--warn">Outstanding: <strong>{{ outstanding | format_gold }}</strong></div>
+        {% else %}
+        <div class="rc-alert rc-alert--ok">All rewards paid out ✓</div>
+        {% endif %}
+        <table class="rc-table">
+          <thead>
+            <tr><th>Recruiter</th><th>Earned</th><th>Paid</th><th>Outstanding</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for row in standings %}
+            {% set owed = row.total_earned - row.total_paid %}
+            <tr>
+              <td>{{ row.display_name }}</td>
+              <td>{{ row.total_earned | format_gold }}</td>
+              <td>{{ row.total_paid | format_gold }}</td>
+              <td class="{{ 'rc-outstanding' if owed > 0 else 'rc-zero' }}">{{ owed | format_gold }}</td>
+              <td>
+                {% if owed > 0 %}
+                <button class="rc-btn rc-btn--payall"
+                        onclick="rcPayAll({{ row.player_id }}, '{{ row.display_name | e }}')">Pay All</button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td>{{ total_earned | format_gold }}</td>
+              <td>{{ total_paid | format_gold }}</td>
+              <td class="{{ 'rc-outstanding' if outstanding > 0 else 'rc-zero' }}">{{ outstanding | format_gold }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      {% else %}
+      <p class="rc-card__empty">No approved submissions yet.</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# Standings #}
+  <div class="rc-card">
+    <h3 class="rc-card__title">Standings</h3>
+    {% if standings %}
+    <table class="rc-table">
+      <thead>
+        <tr><th>#</th><th>Recruiter</th><th>Recruited</th><th>Promoted</th><th>Total Reward</th></tr>
+      </thead>
+      <tbody>
+        {% for row in standings %}
+        <tr>
+          <td class="rc-rank">
+            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+          </td>
+          <td>{{ row.display_name }}</td>
+          <td>{{ row.total_recruited }}</td>
+          <td>{{ row.total_promoted }}</td>
+          <td style="font-weight:600;">{{ row.total_earned | format_gold }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="rc-card__empty">No approved submissions yet.</p>
+    {% endif %}
+  </div>
+
+  {# All Submissions #}
+  <div class="rc-card">
+    <h3 class="rc-card__title">All Submissions ({{ submissions | length }})</h3>
+    {% if submissions %}
+    <div class="rc-table-wrap">
+      <table class="rc-table" style="min-width:740px;">
+        <thead>
+          <tr>
+            <th>Type</th><th>Recruiter</th><th>Recruit</th><th>Gold</th>
+            <th>Status</th><th>Paid</th><th>Shot</th><th>Notes</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sub in submissions %}
+          <tr>
+            <td>
+              {% if sub.payout_type == 'recruit' %}
+                <span class="rc-pill rc-pill--recruit">Recruit</span>
+              {% elif sub.payout_type == 'first_recruit_bonus' %}
+                <span class="rc-pill rc-pill--bonus">First Recruit</span>
+              {% else %}
+                <span class="rc-pill rc-pill--promo">Promo</span>
+              {% endif %}
+            </td>
+            <td>{{ sub.recruiter_name }}</td>
+            <td>{{ sub.recruit_display_name }}</td>
+            <td style="white-space:nowrap;">{{ sub.gold_amount | format_gold }}</td>
+            <td>
+              <span class="rc-pill rc-pill--{{ 'approved' if sub.approved else 'pending' }}">
+                {{ 'Approved' if sub.approved else 'Pending' }}
+              </span>
+            </td>
+            <td>
+              {% if sub.approved %}
+              <span class="rc-pill rc-pill--{{ 'paid' if sub.paid else 'unpaid' }}">
+                {{ 'Paid' if sub.paid else 'Unpaid' }}
+              </span>
+              {% else %}
+              <span style="color:var(--color-text-muted);">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if sub.screenshot_url %}
+              <a href="{{ sub.screenshot_url }}" target="_blank" rel="noopener" class="rc-shot-link">📷</a>
+              {% else %}
+              <span style="color:var(--color-text-muted);">—</span>
+              {% endif %}
+            </td>
+            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                title="{{ sub.notes or '' }}">{{ sub.notes or '—' }}</td>
+            <td>
+              <div class="rc-actions">
+                {% if sub.approved %}
+                  <button class="rc-btn rc-btn--unapprove" onclick="rcPatch({{ sub.id }}, {approved:false})">Unapprove</button>
+                  {% if sub.paid %}
+                    <button class="rc-btn rc-btn--unpay" onclick="rcPatch({{ sub.id }}, {paid:false})">Unpay</button>
+                  {% else %}
+                    <button class="rc-btn rc-btn--pay" onclick="rcPatch({{ sub.id }}, {paid:true})">Mark Paid</button>
+                  {% endif %}
+                {% else %}
+                  <button class="rc-btn rc-btn--approve" onclick="rcPatch({{ sub.id }}, {approved:true})">Approve</button>
+                {% endif %}
+                <button class="rc-btn rc-btn--delete" onclick="rcDeleteSub({{ sub.id }})">✕</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="rc-card__empty">No submissions yet.</p>
+    {% endif %}
+  </div>
+
+  {# Screenshot Gallery #}
+  {% set gallery = submissions | selectattr('approved') | selectattr('screenshot_url') | list %}
+  {% if gallery %}
+  <div class="rc-card">
+    <h3 class="rc-card__title">Screenshots ({{ gallery | length }})</h3>
+    <div class="rc-gallery">
+      {% for sub in gallery %}
+      <a href="{{ sub.screenshot_url }}" target="_blank" rel="noopener" class="rc-gallery__item">
+        <img class="rc-gallery__img" src="{{ sub.screenshot_url }}"
+             alt="{{ sub.recruit_display_name }}" loading="lazy" referrerpolicy="no-referrer">
+        <div class="rc-gallery__cap">
+          <span class="rc-gallery__recruit">{{ sub.recruit_display_name }}</span>
+          <span class="rc-gallery__via">via {{ sub.recruiter_name }}</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}{# end contest exists #}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const RC_CONTEST_ID          = {{ contest.id if contest else 'null' }};
+const RC_BOUNTY_RECRUIT      = {{ contest.bounty_per_recruit   if contest else 10000 }};
+const RC_BOUNTY_PROMO        = {{ contest.promotion_bounty     if contest else 10000 }};
+const RC_FIRST_RECRUIT_BONUS = {{ contest.first_recruit_bonus  if contest else 5000 }};
+
+function rcMsg(id, msg, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = ok ? '#4ade80' : '#f87171';
+  if (ok) setTimeout(() => { el.textContent = ''; }, 2000);
+}
+
+async function rcApi(method, path, body) {
+  const r = await fetch(path, {
+    method, credentials: 'same-origin',
+    headers: body !== undefined ? {'Content-Type': 'application/json'} : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return r.json();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.rc-recruiter-check').forEach(cb => cb.addEventListener('change', rcUpdateHint));
+});
+
+function rcUpdateHint() {
+  const checked = Array.from(document.querySelectorAll('.rc-recruiter-check:checked'));
+  const hint = document.getElementById('sub-recruiter-hint');
+  if (!hint) return;
+  hint.textContent = checked.length === 0
+    ? 'None selected'
+    : `${checked.length} selected: ${checked.map(c => c.closest('label').textContent.trim()).join(', ')}`;
+}
+
+function rcAutoFillGold() {
+  const type = document.getElementById('sub-type')?.value;
+  const el = document.getElementById('sub-gold');
+  if (!el) return;
+  if (type === 'recruit')                el.value = RC_BOUNTY_RECRUIT;
+  else if (type === 'first_recruit_bonus') el.value = RC_FIRST_RECRUIT_BONUS;
+  else if (type === 'promotion')         el.value = RC_BOUNTY_PROMO;
+}
+
+function rcToggleEdit() {
+  const p = document.getElementById('rc-edit-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+async function rcCreateContest() {
+  const title = document.getElementById('new-title').value.trim();
+  if (!title) { rcMsg('create-msg', 'Title is required.', false); return; }
+  const dl = document.getElementById('new-deadline').value;
+  const data = await rcApi('POST', '/api/v1/admin/recruiting-contest', {
+    title,
+    description:         document.getElementById('new-desc').value.trim() || null,
+    deadline:            dl ? new Date(dl).toISOString() : null,
+    bounty_per_recruit:  parseInt(document.getElementById('new-bounty').value) || 10000,
+    first_recruit_bonus: parseInt(document.getElementById('new-first').value)  || 5000,
+    promotion_bounty:    parseInt(document.getElementById('new-promo').value)   || 10000,
+    leader_bonus:        parseInt(document.getElementById('new-leader').value)  || 100000,
+  });
+  if (data.ok) location.reload();
+  else rcMsg('create-msg', data.detail || 'Error creating contest.', false);
+}
+
+async function rcSaveSettings() {
+  const title = document.getElementById('edit-title').value.trim();
+  if (!title) { rcMsg('edit-msg', 'Title is required.', false); return; }
+  const dl = document.getElementById('edit-deadline').value;
+  const data = await rcApi('PATCH', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}`, {
+    title,
+    description:         document.getElementById('edit-desc').value.trim() || null,
+    deadline:            dl ? new Date(dl).toISOString() : null,
+    bounty_per_recruit:  parseInt(document.getElementById('edit-bounty').value),
+    first_recruit_bonus: parseInt(document.getElementById('edit-first').value),
+    promotion_bounty:    parseInt(document.getElementById('edit-promo').value),
+    leader_bonus:        parseInt(document.getElementById('edit-leader').value),
+  });
+  if (data.ok) { rcMsg('edit-msg', 'Saved!', true); setTimeout(() => location.reload(), 900); }
+  else rcMsg('edit-msg', data.detail || 'Save failed.', false);
+}
+
+async function rcSetStatus(status) {
+  if (!confirm(`${status === 'closed' ? 'Close' : 'Reopen'} this contest?`)) return;
+  const data = await rcApi('PATCH', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}`, {status});
+  if (data.ok) location.reload();
+  else alert(data.detail || 'Failed to update status.');
+}
+
+async function rcAddSubmission() {
+  const recruiterIds = Array.from(document.querySelectorAll('.rc-recruiter-check:checked')).map(el => parseInt(el.value));
+  if (!recruiterIds.length) { rcMsg('sub-msg', 'Select at least one recruiter.', false); return; }
+  const recruitName = document.getElementById('sub-recruit').value.trim();
+  if (!recruitName) { rcMsg('sub-msg', 'Recruit name is required.', false); return; }
+  const data = await rcApi('POST', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}/submissions`, {
+    recruiter_player_ids: recruiterIds,
+    recruit_display_name: recruitName,
+    payout_type:          document.getElementById('sub-type').value,
+    gold_amount:          parseInt(document.getElementById('sub-gold').value) || 0,
+    screenshot_url:       document.getElementById('sub-screenshot').value.trim() || null,
+    notes:                document.getElementById('sub-notes').value.trim() || null,
+  });
+  if (data.ok) { rcMsg('sub-msg', `Added ${data.ids.length} submission(s)!`, true); setTimeout(() => location.reload(), 600); }
+  else rcMsg('sub-msg', data.detail || 'Error adding submission.', false);
+}
+
+async function rcPatch(subId, patch) {
+  const data = await rcApi('PATCH', `/api/v1/admin/recruiting-contest/submissions/${subId}`, patch);
+  if (data.ok) location.reload();
+  else alert(data.detail || 'Update failed.');
+}
+
+async function rcDeleteSub(subId) {
+  if (!confirm('Delete this submission? This cannot be undone.')) return;
+  const data = await rcApi('DELETE', `/api/v1/admin/recruiting-contest/submissions/${subId}`);
+  if (data.ok) location.reload();
+  else alert(data.detail || 'Delete failed.');
+}
+
+async function rcPayAll(playerId, name) {
+  if (!confirm(`Mark all outstanding rewards for ${name} as paid?`)) return;
+  const data = await rcApi('POST', `/api/v1/admin/recruiting-contest/${RC_CONTEST_ID}/pay-all/${playerId}`, {});
+  if (data.ok) location.reload();
+  else alert(data.detail || 'Pay All failed.');
+}
+</script>
+{% endblock %}
