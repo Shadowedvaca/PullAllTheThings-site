@@ -240,6 +240,11 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **prod-v0.23.1 — COMPLETE** (feature/seasonal-reset). Seasonal roster reset + always-tentative auto-booking. No migration.
+  - `POST /admin/players/{player_id}/season-reset` and `POST /admin/players/season-reset-all` (`admin_pages.py`) — clear `main_character_id`/`offspec_character_id`/`main_spec_id`/`offspec_spec_id` and `on_raid_hiatus`; characters stay linked via `player_characters`, only the main/offspec designation is cleared. Gated by `player_manager` screen permission.
+  - Player Manager UI: per-player `↺` reset button next to Delete; page-level "↺ Season Reset" button opens a type-`RESET`-to-confirm modal for the bulk action (`players.js`/`players.html`/`players.css`)
+  - `raid_booking_service._build_signups()` no longer reads `patt.player_availability` or grants officer auto-accept — hiatus players stay `"absence"` (fully excluded), everyone else is always `"tentative"`
+  - `players.js`/`players.css` now use `?v=1.0.0` cache-buster query strings (previously unversioned — nginx serves `/static/` with `immutable`+7d `expires`, so un-versioned assets don't update in browsers after deploy)
 - **prod-v0.23.0 — COMPLETE** (feature/recruiting-contest, migrations 0179+0180). Recruiting Contest tracker.
   - `patt.recruiting_contests` — contest config (title, deadline, bounties: recruit 10k, first_recruit_bonus 5k, promotion 10k, leader 100k, status open/closed)
   - `patt.recruiting_submissions` — one row per bounty event per recruiter; payout_type IN ('recruit','first_recruit_bonus','promotion'); approved/paid flags with timestamps; approved_by_player_id FK
@@ -251,7 +256,7 @@ Key design gotchas (read before writing any DB query):
 - **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed gear plan 401s after 24h. Changed JWT default to 43200 (30 days). No migration.
 - **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Lowered raid event creation to require_rank(3). No migration.
 - **Last migration:** 0180 (`patt.recruiting_submissions` payout_type constraint + `first_recruit_bonus` column on contests)
-- **Last prod tag:** `prod-v0.23.0`
+- **Last prod tag:** `prod-v0.23.1`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
