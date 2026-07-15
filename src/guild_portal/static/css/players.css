@@ -237,6 +237,19 @@
 }
 .pm-delete-player-btn:hover { color: var(--color-danger); }
 
+.pm-season-reset-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 2px;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+.pm-season-reset-btn:hover { color: var(--color-accent); }
+
 .pm-invite-btn {
     background: none;
     border: none;
@@ -912,3 +925,44 @@
     margin: 0 2px;
     vertical-align: middle;
     cursor: help;
+}
+
+/* ── Season Reset modal ────────────────────────────────────────────────── */
+.pm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.pm-modal {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.5rem;
+    max-width: 420px;
+    width: 90%;
+}
+
+.pm-modal__title {
+    font-family: var(--font-display);
+    color: var(--color-accent);
+    margin: 0 0 0.75rem;
+}
+
+.pm-modal__body {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.75rem;
+    line-height: 1.4;
+}
+
+.pm-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}

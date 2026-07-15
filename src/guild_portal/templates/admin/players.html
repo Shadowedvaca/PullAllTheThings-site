@@ -52,6 +52,27 @@
     <button class="pm-drill-clear" onclick="clearDrill()">✕ Clear filter</button>
 </div>
 
+{# ── Season Reset (all players) confirmation modal ── #}
+<div id="season-reset-modal" class="pm-modal-overlay" style="display:none;">
+    <div class="pm-modal">
+        <h3 class="pm-modal__title">Reset Entire Roster</h3>
+        <p class="pm-modal__body">
+            This clears the main/alt designation and hiatus flag for
+            <strong id="season-reset-count">0</strong> player(s). Characters stay linked —
+            players will need to re-declare their main/alt for the new season.
+            This cannot be undone.
+        </p>
+        <p class="pm-modal__body">Type <strong>RESET</strong> to confirm:</p>
+        <input type="text" id="season-reset-input" class="form-control"
+               oninput="checkSeasonResetInput()" autocomplete="off">
+        <div class="pm-modal__actions">
+            <button class="btn btn-secondary" onclick="closeSeasonResetModal()">Cancel</button>
+            <button class="btn btn-danger" id="season-reset-confirm-btn" disabled
+                    onclick="seasonResetAll()">Reset Roster</button>
+        </div>
+    </div>
+</div>
+
 <div class="pm-three-col">
 
     {# ── Col 1: Discord Users ── #}
@@ -78,6 +99,8 @@
             <span class="pm-pane__title">Players</span>
             <span class="pm-count" id="player-count"></span>
             <button class="btn btn-primary btn-sm pm-new-player-btn" onclick="showNewPlayerForm()">+ New</button>
+            <button class="btn btn-secondary btn-sm" onclick="openSeasonResetModal()"
+                    title="Clear main/alt and hiatus for every player">↺ Season Reset</button>
         </div>
         <div class="pm-pane__toolbar">
             <input type="search" id="player-search" class="form-control"

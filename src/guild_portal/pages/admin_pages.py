@@ -1220,6 +1220,55 @@ async def admin_toggle_raid_hiatus(
     return JSONResponse({"ok": True, "data": {"on_raid_hiatus": enabled}})
 
 
+@router.post("/players/{player_id}/season-reset")
+async def admin_season_reset_player(
+    request: Request,
+    player_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear a player's main/offspec designation and hiatus flag for a new season."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(select(Player).where(Player.id == player_id))
+    player = result.scalar_one_or_none()
+    if player is None:
+        return JSONResponse({"ok": False, "error": "Player not found"}, status_code=404)
+
+    player.main_character_id = None
+    player.offspec_character_id = None
+    player.main_spec_id = None
+    player.offspec_spec_id = None
+    player.on_raid_hiatus = False
+    await db.commit()
+
+    return JSONResponse({"ok": True, "data": {"player_id": player_id}})
+
+
+@router.post("/players/season-reset-all")
+async def admin_season_reset_all(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear main/offspec designation and hiatus flag for every player (new-season reset)."""
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(text("""
+        UPDATE guild_identity.players
+        SET main_character_id = NULL,
+            offspec_character_id = NULL,
+            main_spec_id = NULL,
+            offspec_spec_id = NULL,
+            on_raid_hiatus = FALSE
+    """))
+    await db.commit()
+
+    return JSONResponse({"ok": True, "data": {"reset_count": result.rowcount}})
+
+
 @router.post("/players/{player_id}/send-invite")
 async def admin_send_invite_json(
     request: Request,

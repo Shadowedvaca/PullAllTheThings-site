@@ -4,7 +4,7 @@ creates next week's Raid-Helper event, and posts a Discord announcement.
 """
 import json
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import asyncpg
 
@@ -87,7 +87,7 @@ async def book_next_occurrence(
         return None
 
     # Build player signups
-    signups = await _build_signups(conn, next_date)
+    signups = await _build_signups(conn)
 
     # Call Raid-Helper API
     try:
@@ -163,10 +163,8 @@ async def book_next_occurrence(
     return result["event_id"]
 
 
-async def _build_signups(conn: asyncpg.Connection, event_date: date) -> list[dict]:
-    """Build signup list using auto-invite rules and availability."""
-    raid_dow = event_date.weekday()  # 0=Mon, 6=Sun
-
+async def _build_signups(conn: asyncpg.Connection) -> list[dict]:
+    """Build signup list — hiatus players are excluded, everyone else is tentative."""
     players = await conn.fetch(
         """
         SELECT p.id, p.auto_invite_events, p.on_raid_hiatus,
@@ -183,20 +181,12 @@ async def _build_signups(conn: asyncpg.Connection, event_date: date) -> list[dic
         """
     )
 
-    avail_rows = await conn.fetch(
-        "SELECT player_id FROM patt.player_availability WHERE day_of_week = $1", raid_dow
-    )
-    available_on_day = {row["player_id"] for row in avail_rows}
-
     signups = []
     for p in players:
-        rank_level = p["rank_level"]
         pid = p["id"]
 
-        if p["on_raid_hiatus"] or pid not in available_on_day:
+        if p["on_raid_hiatus"]:
             status = "absence"
-        elif rank_level >= 2 and p["auto_invite_events"]:
-            status = "accepted"
         else:
             status = "tentative"
 
