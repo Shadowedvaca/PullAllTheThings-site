@@ -300,6 +300,8 @@ function renderPlayers() {
                 ${!p.registered && p.discord_id ? `<button class="pm-invite-btn" onclick="sendInvite(event,${p.id},'${escAttr(effectiveName)}')" title="Send Discord invite DM">✉</button>` : ''}
                 <button class="pm-delete-player-btn" onclick="deletePlayer(event,${p.id},'${escAttr(effectiveName)}')"
                         title="Delete player">🗑</button>
+                <button class="pm-season-reset-btn" onclick="seasonResetPlayer(event,${p.id},'${escAttr(effectiveName)}')"
+                        title="Season reset — clears main/alt and hiatus">↺</button>
                 <label class="pm-hiatus-toggle" title="Raid Hiatus — hides player from public roster and calendar">
                     <input type="checkbox" class="pm-hiatus-cb" ${p.on_raid_hiatus ? 'checked' : ''}
                            onchange="toggleRaidHiatus(${p.id}, this.checked)">
@@ -908,6 +910,68 @@ async function toggleRaidHiatus(playerId, enabled) {
     if (!data.ok) {
         alert('Failed to update hiatus status');
         loadData();
+    }
+}
+
+// ── Season reset ──────────────────────────────────────────────────────────
+
+function clearPlayerSeasonFields(p) {
+    p.main_character_id = null;
+    p.offspec_character_id = null;
+    p.main_spec_id = null;
+    p.offspec_spec_id = null;
+    p.on_raid_hiatus = false;
+}
+
+async function seasonResetPlayer(event, playerId, name) {
+    event.stopPropagation();
+    if (!confirm(`Reset "${name}" for the new season?\n\nThis clears their main/alt designation and hiatus flag.`)) return;
+    try {
+        const res = await fetch(`/admin/players/${playerId}/season-reset`, { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            const p = players.find(pl => pl.id === playerId);
+            if (p) clearPlayerSeasonFields(p);
+            render();
+            showStatus(`"${name}" reset for the new season`, 'success');
+        } else {
+            showStatus('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showStatus('Network error resetting player', 'error');
+    }
+}
+
+function openSeasonResetModal() {
+    document.getElementById('season-reset-count').textContent = players.length;
+    document.getElementById('season-reset-input').value = '';
+    document.getElementById('season-reset-confirm-btn').disabled = true;
+    document.getElementById('season-reset-modal').style.display = 'flex';
+}
+
+function closeSeasonResetModal() {
+    document.getElementById('season-reset-modal').style.display = 'none';
+}
+
+function checkSeasonResetInput() {
+    const val = document.getElementById('season-reset-input').value;
+    document.getElementById('season-reset-confirm-btn').disabled = (val !== 'RESET');
+}
+
+async function seasonResetAll() {
+    try {
+        const res = await fetch('/admin/players/season-reset-all', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            players.forEach(clearPlayerSeasonFields);
+            render();
+            closeSeasonResetModal();
+            showStatus(`Reset ${data.data.reset_count} player(s) for the new season`, 'success');
+        } else {
+            showStatus('Error: ' + (data.error || '?'), 'error');
+        }
+    } catch (e) {
+        showStatus('Network error resetting roster', 'error');
     }
 }
 
