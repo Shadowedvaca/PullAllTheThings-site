@@ -757,7 +757,7 @@ Routes are gated by `rank_level` extracted from the JWT payload:
 
 ```
 Public         — No auth required (/, /roster, /crafting-corner, /guide, /feedback)
-Member         — Any logged-in user (/my-characters, /profile, /availability)
+Member         — Any logged-in user (/my-characters, /spec-wheel, /profile, /availability)
 Officer        — rank_level >= officer threshold (/admin/*, most admin APIs)
 Guild Leader   — rank_level >= GL threshold (/admin/site-config, GL-only features)
 ```

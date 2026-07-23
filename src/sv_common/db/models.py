@@ -5,7 +5,7 @@ common schema: guild_ranks, users, discord_config, invite_codes,
 patt schema: campaigns, campaign_entries, votes, campaign_results,
              contest_agent_log, guild_quotes, guild_quote_titles, quote_subjects,
              player_availability, raid_seasons, raid_events, raid_attendance,
-             recurring_events, voice_attendance_log
+             recurring_events, voice_attendance_log, spec_wheel_rolls
 guild_identity schema: roles, classes, specializations, players,
                        wow_characters, discord_users, player_characters,
                        player_note_aliases, audit_issues, sync_log,
@@ -602,6 +602,49 @@ class RaidSeason(Base):
         if self.expansion_name and self.season_number is not None:
             return f"{self.expansion_name} Season {self.season_number}"
         return self.expansion_name or "Unknown Season"
+
+
+class SpecWheelRoll(Base):
+    """A player's first/latest spec-wheel results for one seasonal slot."""
+
+    __tablename__ = "spec_wheel_rolls"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id",
+            "season_id",
+            "slot",
+            name="uq_spec_wheel_rolls_player_season_slot",
+        ),
+        CheckConstraint("slot IN ('main', 'offspec')", name="ck_spec_wheel_rolls_slot"),
+        CheckConstraint("roll_count >= 1", name="ck_spec_wheel_rolls_count"),
+        {"schema": "patt"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    player_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("guild_identity.players.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    season_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("patt.raid_seasons.id", ondelete="CASCADE"), nullable=False
+    )
+    slot: Mapped[str] = mapped_column(String(10), nullable=False)
+    first_spec_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ref.specializations.id"), nullable=False
+    )
+    first_rolled_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    latest_spec_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ref.specializations.id"), nullable=False
+    )
+    latest_rolled_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
+    )
+    roll_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1"
+    )
 
 
 class RaidEvent(Base):

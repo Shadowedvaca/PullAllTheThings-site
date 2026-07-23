@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from guild_portal.deps import get_db, get_page_member
 from guild_portal.services import campaign_service
+from guild_portal.services.roster_needs_service import get_open_role_needs
 from guild_portal.templating import templates
 from sv_common.config_cache import is_guild_quotes_enabled
 from sv_common.db.models import (
@@ -29,14 +30,6 @@ router = APIRouter(tags=["public-pages"])
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-
-ROLE_TARGETS = {
-    "Tank": 2,
-    "Healer": 4,
-    "Melee DPS": 7,
-    "Ranged DPS": 7,
-}
-_DPS_TOTAL_TARGET = 14  # sum of Melee + Ranged targets
 
 CLASS_EMOJIS = {
     "Druid": "🌿",
@@ -111,42 +104,8 @@ async def _get_officers(db) -> list[dict[str, Any]]:
 
 
 async def _get_recruiting_needs(db) -> dict[str, int]:
-    """Count active roster players by main role vs targets; return roles where count < target."""
-    rows = await db.execute(
-        text(
-            """
-            SELECT r.name AS role_name, COUNT(p.id) AS cnt
-            FROM guild_identity.players p
-            JOIN guild_identity.wow_characters wc ON wc.id = p.main_character_id
-            JOIN ref.specializations s
-              ON s.id = COALESCE(p.main_spec_id, wc.active_spec_id)
-            JOIN guild_identity.roles r ON r.id = s.default_role_id
-            JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
-            WHERE p.is_active = TRUE
-              AND p.on_raid_hiatus IS NOT TRUE
-              AND gr.level > 1
-              AND wc.in_guild = TRUE
-            GROUP BY r.name
-            """
-        )
-    )
-    current_counts: dict[str, int] = {row.role_name: row.cnt for row in rows}
-
-    # Balancing: if one DPS type exceeds 7, the other's target shrinks to keep total = 14
-    effective_targets = dict(ROLE_TARGETS)
-    melee = current_counts.get("Melee DPS", 0)
-    ranged = current_counts.get("Ranged DPS", 0)
-    if melee > ROLE_TARGETS["Melee DPS"]:
-        effective_targets["Ranged DPS"] = max(0, _DPS_TOTAL_TARGET - melee)
-    elif ranged > ROLE_TARGETS["Ranged DPS"]:
-        effective_targets["Melee DPS"] = max(0, _DPS_TOTAL_TARGET - ranged)
-
-    needs = {}
-    for role, target in effective_targets.items():
-        current = current_counts.get(role, 0)
-        if current < target:
-            needs[role] = target - current
-    return needs
+    """Return established-roster role deficits for the landing page."""
+    return await get_open_role_needs(db)
 
 
 async def _get_event_days(db) -> list[RecurringEvent]:

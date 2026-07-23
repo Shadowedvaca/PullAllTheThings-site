@@ -1,0 +1,216 @@
+"""Unit coverage for the seasonal specialization wheel."""
+
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi import HTTPException
+
+from guild_portal.api.spec_wheel_routes import (
+    AssignCharacterRequest,
+    SpinRequest,
+    assign_rolled_character,
+    spin_spec_wheel,
+)
+from guild_portal.api.spec_wheel_routes import filter_eligible_specs
+from guild_portal.services.roster_needs_service import calculate_open_role_needs
+from sv_common.db.models import SpecWheelRoll
+
+
+SPECS = [
+    {"id": 1, "name": "Protection", "role": "Tank"},
+    {"id": 2, "name": "Holy", "role": "Healer"},
+    {"id": 3, "name": "Retribution", "role": "Melee DPS"},
+    {"id": 4, "name": "Balance", "role": "Ranged DPS"},
+]
+
+
+def test_no_filters_keep_every_spec_once():
+    eligible = filter_eligible_specs(
+        SPECS,
+        {"Tank"},
+        {1, 2},
+        only_open_roles=False,
+        only_unrepresented=False,
+    )
+    assert eligible == SPECS
+    assert len({spec["id"] for spec in eligible}) == len(eligible)
+
+
+def test_open_role_filter_keeps_all_specs_in_open_roles():
+    eligible = filter_eligible_specs(
+        SPECS,
+        {"Tank", "Healer"},
+        set(),
+        only_open_roles=True,
+        only_unrepresented=False,
+    )
+    assert [spec["id"] for spec in eligible] == [1, 2]
+
+
+def test_unrepresented_filter_removes_existing_main_specs():
+    eligible = filter_eligible_specs(
+        SPECS,
+        set(),
+        {1, 4},
+        only_open_roles=False,
+        only_unrepresented=True,
+    )
+    assert [spec["id"] for spec in eligible] == [2, 3]
+
+
+def test_filters_intersect():
+    eligible = filter_eligible_specs(
+        SPECS,
+        {"Tank", "Healer"},
+        {1},
+        only_open_roles=True,
+        only_unrepresented=True,
+    )
+    assert [spec["id"] for spec in eligible] == [2]
+
+
+def test_default_role_targets():
+    assert calculate_open_role_needs({}) == {
+        "Tank": 2,
+        "Healer": 4,
+        "Melee DPS": 7,
+        "Ranged DPS": 7,
+    }
+
+
+def test_melee_surplus_reduces_ranged_target():
+    needs = calculate_open_role_needs(
+        {"Tank": 2, "Healer": 4, "Melee DPS": 9, "Ranged DPS": 4}
+    )
+    assert needs == {"Ranged DPS": 1}
+
+
+def test_ranged_surplus_reduces_melee_target():
+    needs = calculate_open_role_needs(
+        {"Tank": 2, "Healer": 4, "Melee DPS": 3, "Ranged DPS": 10}
+    )
+    assert needs == {"Melee DPS": 1}
+
+
+def test_spec_wheel_model_has_summary_fields():
+    assert SpecWheelRoll.__table_args__[-1]["schema"] == "patt"
+    assert {column.name for column in SpecWheelRoll.__table__.columns} == {
+        "id",
+        "player_id",
+        "season_id",
+        "slot",
+        "first_spec_id",
+        "first_rolled_at",
+        "latest_spec_id",
+        "latest_rolled_at",
+        "roll_count",
+    }
+
+
+def test_migration_is_chained_and_bounded():
+    migration = (
+        Path(__file__).parents[2] / "alembic" / "versions" / "0181_spec_wheel.py"
+    ).read_text(encoding="utf-8")
+    assert 'down_revision = "0180"' in migration
+    assert "UNIQUE (player_id, season_id, slot)" in migration
+    assert "CHECK (roll_count >= 1)" in migration
+    assert "first_spec_id" in migration
+    assert "latest_spec_id" in migration
+
+
+def test_app_registers_spec_wheel_routes():
+    app_source = (
+        Path(__file__).parents[2] / "src" / "guild_portal" / "app.py"
+    ).read_text(encoding="utf-8")
+    assert "app.include_router(spec_wheel_router)" in app_source
+    assert "app.include_router(spec_wheel_page_router)" in app_source
+
+
+def query_result(*, mapping=None, scalar=None):
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = scalar
+    result.mappings.return_value.one_or_none.return_value = mapping
+    return result
+
+
+@pytest.mark.asyncio
+async def test_repeat_spin_requires_explicit_replacement():
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            query_result(
+                mapping={
+                    "id": 9,
+                    "expansion_name": "Midnight",
+                    "season_number": 1,
+                }
+            ),
+            query_result(scalar=44),
+        ]
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await spin_spec_wheel(
+            SpinRequest(slot="main"),
+            db=db,
+            player=SimpleNamespace(id=7),
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["code"] == "replacement_required"
+    assert db.execute.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_assignment_rejects_character_from_wrong_class():
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        side_effect=[
+            query_result(
+                mapping={
+                    "id": 9,
+                    "expansion_name": "Midnight",
+                    "season_number": 1,
+                }
+            ),
+            query_result(mapping={"latest_spec_id": 102, "class_id": 11}),
+            query_result(
+                mapping={
+                    "id": 55,
+                    "class_id": 2,
+                    "character_name": "Wrongclass",
+                    "realm": "Sen'jin",
+                    "level": 90,
+                }
+            ),
+        ]
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await assign_rolled_character(
+            AssignCharacterRequest(slot="offspec", character_id=55),
+            db=db,
+            player=SimpleNamespace(id=7),
+        )
+
+    assert exc.value.status_code == 400
+    assert "does not match" in exc.value.detail
+    assert db.execute.await_count == 3
+
+
+def test_character_query_uses_required_sort_order():
+    source = (
+        Path(__file__).parents[2]
+        / "src"
+        / "guild_portal"
+        / "api"
+        / "spec_wheel_routes.py"
+    ).read_text(encoding="utf-8")
+    order = (
+        "ORDER BY wc.level DESC NULLS LAST,\n"
+        "                     LOWER(wc.character_name),\n"
+        "                     LOWER(COALESCE(wc.realm_name, wc.realm_slug))"
+    )
+    assert order in source
