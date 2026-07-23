@@ -6,7 +6,7 @@
 <style>
   /* ── Page shell ───────────────────────────────────────────────── */
   .profile-page {
-    max-width: 770px;
+    max-width: 1040px;
     margin: 0 auto;
     padding: 2rem 1rem 3rem;
   }
@@ -111,7 +111,7 @@
   /* ── Character pair rows (label + 2 selects) ──────────────────── */
   .char-pair {
     display: grid;
-    grid-template-columns: 80px 1fr 1fr;
+    grid-template-columns: 80px minmax(0, 0.9fr) minmax(0, 0.5fr) minmax(230px, 1fr);
     gap: 0.75rem;
     align-items: end;
     margin-bottom: 0.75rem;
@@ -128,6 +128,34 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     padding-bottom: 0.65rem; /* align with input bottom */
+  }
+
+  .wheel-notes {
+    min-height: 40px;
+    display: grid;
+    gap: 0.25rem;
+    align-content: center;
+  }
+
+  .wheel-note {
+    padding: 0.18rem 0.45rem;
+    border-left: 3px solid var(--wheel-color, var(--color-accent));
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--wheel-color, var(--color-accent)) 9%, transparent);
+    color: var(--color-text-muted);
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+
+  .wheel-note strong {
+    color: var(--wheel-color, var(--color-accent));
+    font-weight: 700;
+  }
+
+  .wheel-note--empty {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    font-style: italic;
   }
 
   /* ── Availability table ───────────────────────────────────────── */
@@ -241,7 +269,7 @@
   /* Column headers above char pair selects */
   .char-col-headers {
     display: grid;
-    grid-template-columns: 80px 1fr 1fr;
+    grid-template-columns: 80px minmax(0, 0.9fr) minmax(0, 0.5fr) minmax(230px, 1fr);
     gap: 0.75rem;
     margin-bottom: 0.35rem;
   }
@@ -252,6 +280,17 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--color-text-muted);
+  }
+
+  @media (max-width: 800px) {
+    .char-col-headers { display: none; }
+    .char-pair {
+      grid-template-columns: 70px minmax(0, 1fr);
+      align-items: center;
+    }
+    .char-pair > .field-group,
+    .wheel-notes { grid-column: 2; }
+    .char-pair__role-label { grid-row: 1 / span 3; align-self: start; padding-top: 0.65rem; }
   }
 </style>
 {% endblock %}
@@ -378,6 +417,7 @@
           <span></span>
           <span>Character</span>
           <span>Specialization</span>
+          <span>Wheel History</span>
         </div>
 
         {# Main #}
@@ -407,6 +447,19 @@
               {% endfor %}
             </select>
           </div>
+          {% set main_wheel = wheel_history.get('main') %}
+          <div class="wheel-notes">
+            {% if main_wheel %}
+              <div class="wheel-note" style="--wheel-color:{{ main_wheel.first.color_hex or '#d4a84b' }}">
+                First: <strong>{{ main_wheel.first.class_name }} {{ main_wheel.first.name }}</strong>
+              </div>
+              <div class="wheel-note" style="--wheel-color:{{ main_wheel.latest.color_hex or '#d4a84b' }}">
+                Latest: <strong>{{ main_wheel.latest.class_name }} {{ main_wheel.latest.name }}</strong>
+              </div>
+            {% else %}
+              <span class="wheel-note--empty">No main spins this season.</span>
+            {% endif %}
+          </div>
         </div>
 
         {# Secondary Character #}
@@ -435,6 +488,19 @@
                 >{{ spec.name }}</option>
               {% endfor %}
             </select>
+          </div>
+          {% set offspec_wheel = wheel_history.get('offspec') %}
+          <div class="wheel-notes">
+            {% if offspec_wheel %}
+              <div class="wheel-note" style="--wheel-color:{{ offspec_wheel.first.color_hex or '#d4a84b' }}">
+                First: <strong>{{ offspec_wheel.first.class_name }} {{ offspec_wheel.first.name }}</strong>
+              </div>
+              <div class="wheel-note" style="--wheel-color:{{ offspec_wheel.latest.color_hex or '#d4a84b' }}">
+                Latest: <strong>{{ offspec_wheel.latest.class_name }} {{ offspec_wheel.latest.name }}</strong>
+              </div>
+            {% else %}
+              <span class="wheel-note--empty">No off-spec spins this season.</span>
+            {% endif %}
           </div>
         </div>
 

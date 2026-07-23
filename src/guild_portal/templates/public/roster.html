@@ -275,6 +275,74 @@
     font-weight: 700;
     vertical-align: middle;
 }
+
+/* Hit's Wheel of Fate */
+.fate-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.fate-header .comp-section-title { margin-bottom: 0.25rem; }
+.fate-subtitle { color: var(--color-text-muted); font-size: 0.86rem; margin: 0; }
+.fate-view-label {
+    display: grid;
+    gap: 0.25rem;
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.fate-view-label select {
+    min-width: 150px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--color-border-light);
+    border-radius: 5px;
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+.fate-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+.fate-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+}
+.fate-table th {
+    padding: 0.55rem 0.75rem;
+    background: #1a1a1f;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.07em;
+    text-align: left;
+    text-transform: uppercase;
+}
+.fate-table td {
+    padding: 0.65rem 0.75rem;
+    border-top: 1px solid var(--color-border);
+    vertical-align: middle;
+}
+.fate-table tbody tr:hover { background: rgba(212, 168, 75, 0.035); }
+.fate-player { font-weight: 700; }
+.fate-player small,
+.fate-result small,
+.fate-character small {
+    display: block;
+    color: var(--color-text-muted);
+    font-weight: 400;
+}
+.fate-result strong { font-weight: 700; }
+.fate-empty { color: var(--color-text-muted); padding: 1rem 0; }
+
+@media (max-width: 640px) {
+    .fate-header { align-items: stretch; flex-direction: column; }
+    .fate-view-label select { width: 100%; }
+}
 </style>
 {% endblock %}
 
@@ -354,6 +422,38 @@
         </section>
 
         {# ── Roster Needs ─────────────────────────────────────────────────── #}
+        <section class="comp-section">
+            <div class="fate-header">
+                <div>
+                    <h2 class="comp-section-title">Hit's Wheel of Fate</h2>
+                    <p class="fate-subtitle" id="fate-season">Current season results</p>
+                </div>
+                <label class="fate-view-label">
+                    Show
+                    <select id="fate-view">
+                        <option value="first">First spin</option>
+                        <option value="latest" selected>Latest spin</option>
+                    </select>
+                </label>
+            </div>
+            <p id="fate-loading" class="fate-empty">Loading wheel results&hellip;</p>
+            <p id="fate-empty" class="fate-empty" hidden>No one has spun the wheel this season.</p>
+            <div id="fate-table-wrap" class="fate-table-wrap" hidden>
+                <table class="fate-table">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Main Fate</th>
+                            <th>Main Character</th>
+                            <th>Off-spec Fate</th>
+                            <th>Off-spec Character</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fate-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+
         <section class="comp-section">
             <h2 class="comp-section-title">Roster Needs</h2>
             <p style="color:var(--color-text-muted); font-size:0.88rem; margin:0 0 1rem;">
@@ -464,6 +564,7 @@ const SPEC_CODES = {
 // State
 // ---------------------------------------------------------------------------
 let allPlayers = [];
+let fatePlayers = [];
 let sortCol = 'display_name';
 let sortDir = 1; // 1 = asc, -1 = desc
 
@@ -481,12 +582,76 @@ async function loadRoster() {
         document.getElementById('roster-table').style.display = '';
         renderComposition();
         renderRoster();
+        loadFateResults();
     } catch (err) {
         document.getElementById('roster-loading').style.display = 'none';
         const el = document.getElementById('roster-error');
         el.textContent = 'Could not load roster. Please try again later.';
         el.style.display = '';
     }
+}
+
+async function loadFateResults() {
+    const loading = document.getElementById('fate-loading');
+    try {
+        const res = await fetch('/api/v1/guild/spec-wheel-results');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { data } = await res.json();
+        fatePlayers = data.players || [];
+        loading.hidden = true;
+        if (data.season) {
+            document.getElementById('fate-season').textContent = `${data.season.name} results`;
+        }
+        renderFateResults();
+    } catch (err) {
+        loading.textContent = 'Could not load wheel results.';
+    }
+}
+
+function renderFateResults() {
+    const view = document.getElementById('fate-view').value;
+    const empty = document.getElementById('fate-empty');
+    const wrap = document.getElementById('fate-table-wrap');
+    const tbody = document.getElementById('fate-tbody');
+    empty.hidden = fatePlayers.length > 0;
+    wrap.hidden = fatePlayers.length === 0;
+
+    function slotCells(slot) {
+        if (!slot) {
+            return [
+                '<span class="fate-empty">&mdash;</span>',
+                '<span class="fate-empty">&mdash;</span>',
+            ];
+        }
+        const result = slot[view];
+        const color = /^#[0-9a-f]{6}$/i.test(result.color_hex || '')
+            ? result.color_hex
+            : '#d4a84b';
+        const resultHtml = `<div class="fate-result">
+            <strong style="color:${color}">${esc(result.class_name)} &mdash; ${esc(result.name)}</strong>
+            <small>${esc(result.role)}</small>
+        </div>`;
+        const character = slot.assigned_spec_id === result.id
+            ? slot.assigned_character
+            : null;
+        const characterHtml = character
+            ? `<div class="fate-character">${esc(character.name)}-${esc(character.realm)}
+                 <small>lvl ${character.level ?? '?'}</small></div>`
+            : '<span class="fate-empty">&mdash;</span>';
+        return [resultHtml, characterHtml];
+    }
+
+    tbody.innerHTML = fatePlayers.map(player => {
+        const [mainResult, mainCharacter] = slotCells(player.main);
+        const [offResult, offCharacter] = slotCells(player.offspec);
+        return `<tr>
+            <td class="fate-player">${esc(player.display_name)}<small>${esc(player.rank_name)}</small></td>
+            <td>${mainResult}</td>
+            <td>${mainCharacter}</td>
+            <td>${offResult}</td>
+            <td>${offCharacter}</td>
+        </tr>`;
+    }).join('');
 }
 
 // ---------------------------------------------------------------------------
@@ -846,6 +1011,7 @@ document.getElementById('show-initiates').addEventListener('change', renderRoste
 document.getElementById('show-secondary').addEventListener('change', renderRoster);
 document.getElementById('show-alts').addEventListener('change', renderRoster);
 document.getElementById('roster-search').addEventListener('input', renderRoster);
+document.getElementById('fate-view').addEventListener('change', renderFateResults);
 
 // ---------------------------------------------------------------------------
 // Helpers

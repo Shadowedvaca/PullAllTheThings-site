@@ -337,6 +337,123 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Hit's Wheel of Fate — public seasonal results
+# ---------------------------------------------------------------------------
+
+
+@router.get("/spec-wheel-results")
+async def get_spec_wheel_results(db: AsyncSession = Depends(get_db)):
+    """Return first/latest seasonal wheel results and matching roster assignments."""
+    result = await db.execute(
+        text(
+            """
+            WITH active_season AS (
+                SELECT id, expansion_name, season_number
+                FROM patt.raid_seasons
+                WHERE is_active = TRUE
+                ORDER BY start_date DESC
+                LIMIT 1
+            )
+            SELECT active_season.id AS season_id,
+                   active_season.expansion_name,
+                   active_season.season_number,
+                   p.id AS player_id, p.display_name,
+                   gr.name AS rank_name, sw.slot,
+                   fs.id AS first_id, fs.name AS first_name,
+                   fc.name AS first_class_name, fc.color_hex AS first_color_hex,
+                   fr.name AS first_role,
+                   ls.id AS latest_id, ls.name AS latest_name,
+                   lc.name AS latest_class_name, lc.color_hex AS latest_color_hex,
+                   lr.name AS latest_role,
+                   COALESCE(
+                       CASE WHEN sw.slot = 'main'
+                            THEN p.main_spec_id ELSE p.offspec_spec_id END,
+                       assigned_char.active_spec_id
+                   ) AS assigned_spec_id,
+                   assigned_char.id AS assigned_character_id,
+                   assigned_char.character_name AS assigned_character_name,
+                   COALESCE(
+                       assigned_char.realm_name,
+                       assigned_char.realm_slug
+                   ) AS assigned_realm,
+                   assigned_char.level AS assigned_level
+            FROM active_season
+            JOIN patt.spec_wheel_rolls sw ON sw.season_id = active_season.id
+            JOIN guild_identity.players p ON p.id = sw.player_id
+            LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
+            JOIN ref.specializations fs ON fs.id = sw.first_spec_id
+            JOIN ref.classes fc ON fc.id = fs.class_id
+            JOIN guild_identity.roles fr ON fr.id = fs.default_role_id
+            JOIN ref.specializations ls ON ls.id = sw.latest_spec_id
+            JOIN ref.classes lc ON lc.id = ls.class_id
+            JOIN guild_identity.roles lr ON lr.id = ls.default_role_id
+            LEFT JOIN guild_identity.wow_characters assigned_char
+              ON assigned_char.id = CASE
+                   WHEN sw.slot = 'main'
+                   THEN p.main_character_id
+                   ELSE p.offspec_character_id
+                 END
+            WHERE p.is_active = TRUE
+            ORDER BY LOWER(p.display_name), sw.slot
+            """
+        )
+    )
+    rows = list(result.mappings().all())
+    if not rows:
+        return {
+            "ok": True,
+            "data": {"season": None, "players": []},
+        }
+
+    def spec_payload(row, prefix: str) -> dict:
+        return {
+            "id": row[f"{prefix}_id"],
+            "name": row[f"{prefix}_name"],
+            "class_name": row[f"{prefix}_class_name"],
+            "color_hex": row[f"{prefix}_color_hex"],
+            "role": row[f"{prefix}_role"],
+        }
+
+    players_by_id: dict[int, dict] = {}
+    for row in rows:
+        player_data = players_by_id.setdefault(
+            row["player_id"],
+            {
+                "player_id": row["player_id"],
+                "display_name": row["display_name"],
+                "rank_name": row["rank_name"] or "Unknown",
+                "main": None,
+                "offspec": None,
+            },
+        )
+        assigned_character = None
+        if row["assigned_character_id"] is not None:
+            assigned_character = {
+                "id": row["assigned_character_id"],
+                "name": row["assigned_character_name"],
+                "realm": row["assigned_realm"],
+                "level": row["assigned_level"],
+            }
+        player_data[row["slot"]] = {
+            "first": spec_payload(row, "first"),
+            "latest": spec_payload(row, "latest"),
+            "assigned_spec_id": row["assigned_spec_id"],
+            "assigned_character": assigned_character,
+        }
+
+    season_name = rows[0]["expansion_name"] or "Current"
+    if rows[0]["season_number"] is not None:
+        season_name = f"{season_name} Season {rows[0]['season_number']}"
+    return {
+        "ok": True,
+        "data": {
+            "season": {"id": rows[0]["season_id"], "name": season_name},
+            "players": list(players_by_id.values()),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Progression endpoint
 # ---------------------------------------------------------------------------
 

@@ -83,6 +83,107 @@ a:hover {
     gap: 1rem;
 }
 
+.site-header__right {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-left: auto;
+}
+
+.site-header__identity {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.site-menu {
+    position: relative;
+}
+
+.site-menu__toggle {
+    width: 42px;
+    height: 38px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid rgba(212, 168, 75, 0.45);
+    border-radius: 6px;
+    background: rgba(212, 168, 75, 0.08);
+    color: var(--color-accent);
+    cursor: pointer;
+}
+
+.site-menu__toggle span {
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    transition: transform 0.15s, opacity 0.15s;
+}
+
+.site-menu__toggle:hover,
+.site-menu__toggle.is-open {
+    background: rgba(212, 168, 75, 0.18);
+    border-color: var(--color-accent);
+}
+
+.site-menu__toggle.is-open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.site-menu__toggle.is-open span:nth-child(2) {
+    opacity: 0;
+}
+
+.site-menu__toggle.is-open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+.site-menu__panel {
+    position: absolute;
+    z-index: 500;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 230px;
+    padding: 0.45rem;
+    border: 1px solid var(--color-border-light);
+    border-top: 2px solid var(--color-accent);
+    border-radius: 7px;
+    background: var(--color-bg-card);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.68);
+}
+
+.site-menu__panel[hidden] {
+    display: none;
+}
+
+.site-menu__panel a {
+    display: block;
+    padding: 0.58rem 0.7rem;
+    border-radius: 4px;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.site-menu__panel a:hover {
+    background: rgba(212, 168, 75, 0.12);
+    color: var(--color-accent);
+}
+
+.site-menu__panel .site-menu__admin-link {
+    color: var(--color-warning);
+}
+
+.site-menu__divider {
+    height: 1px;
+    margin: 0.35rem 0.45rem;
+    background: var(--color-border);
+}
+
 .site-title {
     font-family: var(--font-display);
     font-size: 1.4rem;
@@ -1397,6 +1498,8 @@ textarea.form-control {
     .site-main { padding: 1.25rem 1rem; }
     .site-nav { gap: 0.75rem; }
     .site-title { font-size: 1.1rem; }
+    .site-header__identity .nav-badge--rank { display: none; }
+    .site-header__identity .nav-badge { max-width: 115px; overflow: hidden; text-overflow: ellipsis; }
 
     .vote-grid {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

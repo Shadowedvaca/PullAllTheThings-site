@@ -336,7 +336,9 @@
             const payload = await response.json();
             if (!response.ok) throw new Error(errorMessage(payload));
             dialog.close();
-            message.textContent = `${characterLabel(payload.data)} is now set as your ${pendingAssignment.slot === "main" ? "main" : "off-spec"} character.`;
+            const assignedSlot = pendingAssignment.slot === "main" ? "main" : "off-spec";
+            await loadState(false);
+            message.textContent = `${characterLabel(payload.data)} is now set as your ${assignedSlot} character.`;
             pendingAssignment = null;
         } catch (error) {
             errorBox.textContent = error.message;

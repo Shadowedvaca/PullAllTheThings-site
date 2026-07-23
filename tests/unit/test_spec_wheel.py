@@ -14,6 +14,7 @@ from guild_portal.api.spec_wheel_routes import (
     spin_spec_wheel,
 )
 from guild_portal.api.spec_wheel_routes import filter_eligible_specs
+from guild_portal.api.guild_routes import get_spec_wheel_results
 from guild_portal.services.roster_needs_service import calculate_open_role_needs
 from sv_common.db.models import SpecWheelRoll
 
@@ -135,6 +136,12 @@ def query_result(*, mapping=None, scalar=None):
     return result
 
 
+def rows_result(rows):
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = rows
+    return result
+
+
 @pytest.mark.asyncio
 async def test_repeat_spin_requires_explicit_replacement():
     db = AsyncMock()
@@ -214,3 +221,95 @@ def test_character_query_uses_required_sort_order():
         "                     LOWER(COALESCE(wc.realm_name, wc.realm_slug))"
     )
     assert order in source
+
+
+@pytest.mark.asyncio
+async def test_public_wheel_results_match_character_to_assigned_spec():
+    db = AsyncMock()
+    db.execute = AsyncMock(
+        return_value=rows_result(
+            [
+                {
+                    "season_id": 9,
+                    "expansion_name": "Midnight",
+                    "season_number": 1,
+                    "player_id": 7,
+                    "display_name": "Trog",
+                    "rank_name": "Guild Leader",
+                    "slot": "main",
+                    "first_id": 101,
+                    "first_name": "Holy",
+                    "first_class_name": "Priest",
+                    "first_color_hex": "#FFFFFF",
+                    "first_role": "Healer",
+                    "latest_id": 202,
+                    "latest_name": "Balance",
+                    "latest_class_name": "Druid",
+                    "latest_color_hex": "#FF7C0A",
+                    "latest_role": "Ranged DPS",
+                    "assigned_spec_id": 202,
+                    "assigned_character_id": 55,
+                    "assigned_character_name": "Trogmoon",
+                    "assigned_realm": "Sen'jin",
+                    "assigned_level": 90,
+                }
+            ]
+        )
+    )
+
+    payload = await get_spec_wheel_results(db=db)
+    main = payload["data"]["players"][0]["main"]
+    assert payload["data"]["season"]["name"] == "Midnight Season 1"
+    assert main["first"]["name"] == "Holy"
+    assert main["latest"]["name"] == "Balance"
+    assert main["assigned_spec_id"] == main["latest"]["id"]
+    assert main["assigned_character"]["name"] == "Trogmoon"
+
+
+def test_ui_uses_hits_name_and_refreshes_after_assignment():
+    root = Path(__file__).parents[2]
+    wheel_template = (
+        root / "src" / "guild_portal" / "templates" / "member" / "spec_wheel.html"
+    ).read_text(encoding="utf-8")
+    wheel_script = (
+        root / "src" / "guild_portal" / "static" / "js" / "spec_wheel.js"
+    ).read_text(encoding="utf-8")
+    roster_template = (
+        root / "src" / "guild_portal" / "templates" / "public" / "roster.html"
+    ).read_text(encoding="utf-8")
+    assert "Hit's Wheel of Fate" in wheel_template
+    assert "Hit's Wheel of Fate" in roster_template
+    assert "await loadState(false);" in wheel_script
+
+
+def test_site_navigation_uses_shared_hamburger_menu():
+    root = Path(__file__).parents[2]
+    base = (
+        root / "src" / "guild_portal" / "templates" / "base.html"
+    ).read_text(encoding="utf-8")
+    base_admin = (
+        root / "src" / "guild_portal" / "templates" / "base_admin.html"
+    ).read_text(encoding="utf-8")
+    partial = (
+        root / "src" / "guild_portal" / "templates" / "partials" / "site_menu.html"
+    ).read_text(encoding="utf-8")
+    assert 'include "partials/site_menu.html"' in base
+    assert 'include "partials/site_menu.html"' in base_admin
+    assert 'aria-label="Open site menu"' in partial
+    assert "Hit's Wheel of Fate" in partial
+
+
+def test_profile_shows_first_and_latest_wheel_notes():
+    template = (
+        Path(__file__).parents[2]
+        / "src"
+        / "guild_portal"
+        / "templates"
+        / "profile"
+        / "settings.html"
+    ).read_text(encoding="utf-8")
+    assert "Wheel History" in template
+    assert "main_wheel.first" in template
+    assert "main_wheel.latest" in template
+    assert "offspec_wheel.first" in template
+    assert "offspec_wheel.latest" in template
