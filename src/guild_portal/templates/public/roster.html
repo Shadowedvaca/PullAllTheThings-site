@@ -423,38 +423,6 @@
 
         {# ── Roster Needs ─────────────────────────────────────────────────── #}
         <section class="comp-section">
-            <div class="fate-header">
-                <div>
-                    <h2 class="comp-section-title">Hit's Wheel of Fate</h2>
-                    <p class="fate-subtitle" id="fate-season">Current season results</p>
-                </div>
-                <label class="fate-view-label">
-                    Show
-                    <select id="fate-view">
-                        <option value="first">First spin</option>
-                        <option value="latest" selected>Latest spin</option>
-                    </select>
-                </label>
-            </div>
-            <p id="fate-loading" class="fate-empty">Loading wheel results&hellip;</p>
-            <p id="fate-empty" class="fate-empty" hidden>No one has spun the wheel this season.</p>
-            <div id="fate-table-wrap" class="fate-table-wrap" hidden>
-                <table class="fate-table">
-                    <thead>
-                        <tr>
-                            <th>Player</th>
-                            <th>Main Fate</th>
-                            <th>Main Character</th>
-                            <th>Off-spec Fate</th>
-                            <th>Off-spec Character</th>
-                        </tr>
-                    </thead>
-                    <tbody id="fate-tbody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="comp-section">
             <h2 class="comp-section-title">Roster Needs</h2>
             <p style="color:var(--color-text-muted); font-size:0.88rem; margin:0 0 1rem;">
                 Which bosses and dungeons should we prioritize for loot this week?
@@ -486,6 +454,39 @@
                         <p class="rn-loading"><span class="spinner"></span> Loading&hellip;</p>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        {# ── Hit's Wheel of Fate ──────────────────────────────────────────── #}
+        <section class="comp-section">
+            <div class="fate-header">
+                <div>
+                    <h2 class="comp-section-title">Hit's Wheel of Fate</h2>
+                    <p class="fate-subtitle" id="fate-season">Current season results</p>
+                </div>
+                <label class="fate-view-label">
+                    Show
+                    <select id="fate-view">
+                        <option value="first">First spin</option>
+                        <option value="latest" selected>Latest spin</option>
+                    </select>
+                </label>
+            </div>
+            <p id="fate-loading" class="fate-empty">Loading wheel results&hellip;</p>
+            <p id="fate-empty" class="fate-empty" hidden>No roster players are available for this season.</p>
+            <div id="fate-table-wrap" class="fate-table-wrap" hidden>
+                <table class="fate-table">
+                    <thead>
+                        <tr>
+                            <th>Player</th>
+                            <th>Main Fate</th>
+                            <th>Main Character</th>
+                            <th>Off-spec Fate</th>
+                            <th>Off-spec Character</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fate-tbody"></tbody>
+                </table>
             </div>
         </section>
 

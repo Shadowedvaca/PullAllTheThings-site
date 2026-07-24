@@ -343,7 +343,7 @@ async def get_roster(db: AsyncSession = Depends(get_db)):
 
 @router.get("/spec-wheel-results")
 async def get_spec_wheel_results(db: AsyncSession = Depends(get_db)):
-    """Return first/latest seasonal wheel results and matching roster assignments."""
+    """Return every current roster player with any first/latest wheel results."""
     result = await db.execute(
         text(
             """
@@ -378,22 +378,26 @@ async def get_spec_wheel_results(db: AsyncSession = Depends(get_db)):
                    ) AS assigned_realm,
                    assigned_char.level AS assigned_level
             FROM active_season
-            JOIN patt.spec_wheel_rolls sw ON sw.season_id = active_season.id
-            JOIN guild_identity.players p ON p.id = sw.player_id
+            JOIN guild_identity.players p
+              ON p.is_active = TRUE
+             AND p.on_raid_hiatus IS FALSE
+             AND p.main_character_id IS NOT NULL
+            LEFT JOIN patt.spec_wheel_rolls sw
+              ON sw.season_id = active_season.id
+             AND sw.player_id = p.id
             LEFT JOIN common.guild_ranks gr ON gr.id = p.guild_rank_id
-            JOIN ref.specializations fs ON fs.id = sw.first_spec_id
-            JOIN ref.classes fc ON fc.id = fs.class_id
-            JOIN guild_identity.roles fr ON fr.id = fs.default_role_id
-            JOIN ref.specializations ls ON ls.id = sw.latest_spec_id
-            JOIN ref.classes lc ON lc.id = ls.class_id
-            JOIN guild_identity.roles lr ON lr.id = ls.default_role_id
+            LEFT JOIN ref.specializations fs ON fs.id = sw.first_spec_id
+            LEFT JOIN ref.classes fc ON fc.id = fs.class_id
+            LEFT JOIN guild_identity.roles fr ON fr.id = fs.default_role_id
+            LEFT JOIN ref.specializations ls ON ls.id = sw.latest_spec_id
+            LEFT JOIN ref.classes lc ON lc.id = ls.class_id
+            LEFT JOIN guild_identity.roles lr ON lr.id = ls.default_role_id
             LEFT JOIN guild_identity.wow_characters assigned_char
               ON assigned_char.id = CASE
                    WHEN sw.slot = 'main'
                    THEN p.main_character_id
                    ELSE p.offspec_character_id
                  END
-            WHERE p.is_active = TRUE
             ORDER BY LOWER(p.display_name), sw.slot
             """
         )
@@ -426,6 +430,8 @@ async def get_spec_wheel_results(db: AsyncSession = Depends(get_db)):
                 "offspec": None,
             },
         )
+        if row["slot"] not in ("main", "offspec"):
+            continue
         assigned_character = None
         if row["assigned_character_id"] is not None:
             assigned_character = {

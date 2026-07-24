@@ -252,18 +252,47 @@ async def test_public_wheel_results_match_character_to_assigned_spec():
                     "assigned_character_name": "Trogmoon",
                     "assigned_realm": "Sen'jin",
                     "assigned_level": 90,
-                }
+                },
+                {
+                    "season_id": 9,
+                    "expansion_name": "Midnight",
+                    "season_number": 1,
+                    "player_id": 8,
+                    "display_name": "Hit",
+                    "rank_name": "Member",
+                    "slot": None,
+                    "first_id": None,
+                    "first_name": None,
+                    "first_class_name": None,
+                    "first_color_hex": None,
+                    "first_role": None,
+                    "latest_id": None,
+                    "latest_name": None,
+                    "latest_class_name": None,
+                    "latest_color_hex": None,
+                    "latest_role": None,
+                    "assigned_spec_id": None,
+                    "assigned_character_id": None,
+                    "assigned_character_name": None,
+                    "assigned_realm": None,
+                    "assigned_level": None,
+                },
             ]
         )
     )
 
     payload = await get_spec_wheel_results(db=db)
-    main = payload["data"]["players"][0]["main"]
+    players = {
+        player["display_name"]: player for player in payload["data"]["players"]
+    }
+    main = players["Trog"]["main"]
     assert payload["data"]["season"]["name"] == "Midnight Season 1"
     assert main["first"]["name"] == "Holy"
     assert main["latest"]["name"] == "Balance"
     assert main["assigned_spec_id"] == main["latest"]["id"]
     assert main["assigned_character"]["name"] == "Trogmoon"
+    assert players["Hit"]["main"] is None
+    assert players["Hit"]["offspec"] is None
 
 
 def test_ui_uses_hits_name_and_refreshes_after_assignment():
@@ -280,6 +309,21 @@ def test_ui_uses_hits_name_and_refreshes_after_assignment():
     assert "Hit's Wheel of Fate" in wheel_template
     assert "Hit's Wheel of Fate" in roster_template
     assert "await loadState(false);" in wheel_script
+    roster_needs = '<h2 class="comp-section-title">Roster Needs</h2>'
+    wheel_results = '<h2 class="comp-section-title">Hit\'s Wheel of Fate</h2>'
+    assert roster_template.index(roster_needs) < roster_template.index(wheel_results)
+
+
+def test_wheel_page_and_mutating_api_require_login():
+    root = Path(__file__).parents[2]
+    page_source = (
+        root / "src" / "guild_portal" / "pages" / "spec_wheel_pages.py"
+    ).read_text(encoding="utf-8")
+    api_source = (
+        root / "src" / "guild_portal" / "api" / "spec_wheel_routes.py"
+    ).read_text(encoding="utf-8")
+    assert 'RedirectResponse(url="/login?next=/spec-wheel"' in page_source
+    assert api_source.count("Depends(get_current_player)") == 3
 
 
 def test_site_navigation_uses_shared_hamburger_menu():

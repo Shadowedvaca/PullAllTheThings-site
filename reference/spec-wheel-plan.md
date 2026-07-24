@@ -35,6 +35,7 @@ specialization an equal chance of being selected for either a main or off-spec.
 3. Member API for state, spinning, and character assignment.
 4. Member page, canvas wheel, filters, history, count, confirmation, and
    assignment dialog.
-5. Shared hamburger navigation, a roster first/latest results table, and
-   first/latest result notes beside the My Profile character selectors.
+5. Shared hamburger navigation, a bottom-of-page first/latest results table
+   containing every current roster player, and first/latest result notes
+   beside the My Profile character selectors.
 6. Navigation, documentation, and targeted unit tests.
