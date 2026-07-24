@@ -281,18 +281,30 @@ class TestMemberRouterRegistered:
 
 
 class TestBaseNavLink:
-    def test_my_characters_link_in_base_html(self):
+    def test_my_characters_link_in_shared_site_menu(self):
         from pathlib import Path
-        base = Path(__file__).parents[2] / "src" / "guild_portal" / "templates" / "base.html"
-        content = base.read_text(encoding="utf-8")
+        template_dir = (
+            Path(__file__).parents[2] / "src" / "guild_portal" / "templates"
+        )
+        base = (template_dir / "base.html").read_text(encoding="utf-8")
+        content = (template_dir / "partials" / "site_menu.html").read_text(
+            encoding="utf-8"
+        )
+        assert 'include "partials/site_menu.html"' in base
         assert "/my-characters" in content
         assert "My Characters" in content
 
     def test_my_characters_link_is_auth_gated(self):
         """The link must appear inside the {% if current_member %} block."""
         from pathlib import Path
-        base = Path(__file__).parents[2] / "src" / "guild_portal" / "templates" / "base.html"
-        content = base.read_text(encoding="utf-8")
+        content = (
+            Path(__file__).parents[2]
+            / "src"
+            / "guild_portal"
+            / "templates"
+            / "partials"
+            / "site_menu.html"
+        ).read_text(encoding="utf-8")
         # Find the position of the nav link vs the if block
         if_pos = content.find("{% if current_member %}")
         link_pos = content.find("/my-characters")

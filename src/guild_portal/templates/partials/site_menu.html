@@ -1,0 +1,41 @@
+<div class="site-header__right">
+  {% if current_member %}
+    <div class="site-header__identity">
+      <span class="nav-badge nav-badge--char">{{ current_member.main_character.character_name if current_member.main_character else current_member.display_name }}</span>
+      {% if current_member.guild_rank %}
+        <span class="nav-badge nav-badge--rank">{{ current_member.guild_rank.name }}</span>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="site-menu">
+    <button class="site-menu__toggle"
+            type="button"
+            aria-label="Open site menu"
+            aria-expanded="false"
+            aria-controls="site-menu-panel">
+      <span></span><span></span><span></span>
+    </button>
+    <nav class="site-menu__panel" id="site-menu-panel" hidden>
+      <a href="/">Home</a>
+      <a href="/roster">Roster</a>
+      <a href="/crafting-corner">Crafting Corner</a>
+      {% if current_member %}
+        <a href="/my-characters">My Characters</a>
+        <a href="/spec-wheel">Hit's Wheel of Fate</a>
+        <a href="/recruiting-contest">Recruiting Contest</a>
+        <a href="/profile">My Profile</a>
+        {% if current_member.guild_rank and current_member.guild_rank.level >= 4 %}
+          <a href="/admin/players" class="site-menu__admin-link">Administration</a>
+        {% endif %}
+        <a href="/feedback">Feedback</a>
+        <div class="site-menu__divider"></div>
+        <a href="/logout">Log Out</a>
+      {% else %}
+        <a href="/feedback">Feedback</a>
+        <div class="site-menu__divider"></div>
+        <a href="/login">Login or Register</a>
+      {% endif %}
+    </nav>
+  </div>
+</div>

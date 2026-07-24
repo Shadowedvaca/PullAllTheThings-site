@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Hit's Wheel of Fate — {{ site().guild_name }}{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/spec_wheel.css?v=1.0.0">
+{% endblock %}
+
+{% block content %}
+<section class="sw-page">
+  <header class="sw-hero">
+    <p class="sw-eyebrow" id="sw-season">Current Season</p>
+    <h1>Hit's Wheel of Fate</h1>
+    <p>Every specialization on the wheel has one equal chance. Pick a main or off-spec, tune the roster filters, and let it spin.</p>
+    <div class="sw-total"><strong id="sw-total-rolls">0</strong> seasonal rolls</div>
+  </header>
+
+  <div id="sw-loading" class="sw-status" aria-live="polite">Preparing the wheel…</div>
+  <div id="sw-error" class="sw-status sw-status--error" hidden></div>
+
+  <div id="sw-app" class="sw-layout" hidden>
+    <aside class="sw-controls">
+      <section class="sw-card">
+        <h2>Roll for</h2>
+        <div class="sw-slot-toggle" role="group" aria-label="Roll type">
+          <button class="sw-slot active" type="button" data-slot="main">Main</button>
+          <button class="sw-slot" type="button" data-slot="offspec">Off-spec</button>
+        </div>
+      </section>
+
+      <section class="sw-card">
+        <h2>Wheel filters</h2>
+        <label class="sw-check">
+          <input id="sw-filter-open" type="checkbox">
+          <span>
+            <strong>Only open roster roles</strong>
+            <small id="sw-open-summary">Checking roster needs…</small>
+          </span>
+        </label>
+        <label class="sw-check">
+          <input id="sw-filter-new" type="checkbox">
+          <span>
+            <strong>Only unrepresented main specs</strong>
+            <small>Initiates do not count toward representation.</small>
+          </span>
+        </label>
+        <p class="sw-pool"><strong id="sw-pool-count">0</strong> equal entries on this wheel</p>
+      </section>
+
+      <section class="sw-card sw-history">
+        <h2>Your season history</h2>
+        <div id="sw-history"></div>
+      </section>
+    </aside>
+
+    <div class="sw-stage">
+      <div class="sw-wheel-wrap">
+        <div class="sw-pointer" aria-hidden="true"></div>
+        <canvas id="sw-wheel" width="760" height="760" aria-label="Specialization spinner wheel"></canvas>
+        <button id="sw-spin" class="sw-spin-button" type="button">SPIN</button>
+      </div>
+      <div id="sw-result" class="sw-result" aria-live="assertive" hidden>
+        <span id="sw-result-slot"></span>
+        <strong id="sw-result-name"></strong>
+        <span id="sw-result-role"></span>
+      </div>
+      <p id="sw-wheel-message" class="sw-wheel-message"></p>
+    </div>
+  </div>
+</section>
+
+<dialog id="sw-assign-dialog" class="sw-dialog">
+  <form method="dialog">
+    <p class="sw-eyebrow">Optional character update</p>
+    <h2 id="sw-assign-title">Set your character?</h2>
+    <p id="sw-assign-copy"></p>
+    <label for="sw-character-select">Character</label>
+    <select id="sw-character-select"></select>
+    <div id="sw-assign-error" class="sw-dialog-error" hidden></div>
+    <div class="sw-dialog-actions">
+      <button class="btn btn-secondary" value="cancel">Not now</button>
+      <button id="sw-assign-confirm" class="btn btn-primary" type="button">Set character</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/spec_wheel.js?v=1.0.0"></script>
+{% endblock %}

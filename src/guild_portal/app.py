@@ -469,6 +469,7 @@ def create_app() -> FastAPI:
     from guild_portal.api.gear_plan_routes import router as gear_plan_router
     from guild_portal.api.gear_plan_routes import items_router as items_router
     from guild_portal.api.gear_needs_routes import router as gear_needs_router
+    from guild_portal.api.spec_wheel_routes import router as spec_wheel_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router)
@@ -488,6 +489,7 @@ def create_app() -> FastAPI:
     app.include_router(gear_needs_router)
     app.include_router(gear_plan_router)
     app.include_router(items_router)
+    app.include_router(spec_wheel_router)
 
     # Register page routes (server-rendered HTML)
     from guild_portal.pages.auth_pages import router as auth_page_router
@@ -496,6 +498,7 @@ def create_app() -> FastAPI:
     from guild_portal.pages.public_pages import router as public_page_router
     from guild_portal.pages.profile_pages import router as profile_page_router
     from guild_portal.pages.gear_plan_pages import router as gear_plan_page_router
+    from guild_portal.pages.spec_wheel_pages import router as spec_wheel_page_router
 
     app.include_router(public_page_router)
     app.include_router(auth_page_router)
@@ -503,6 +506,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_page_router)
     app.include_router(profile_page_router)
     app.include_router(gear_plan_page_router)
+    app.include_router(spec_wheel_page_router)
 
     # Setup wizard routes (API + pages)
     from guild_portal.api.setup_routes import router as setup_api_router

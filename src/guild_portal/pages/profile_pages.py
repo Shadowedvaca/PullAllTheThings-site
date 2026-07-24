@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -148,6 +148,47 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         )
         bnet_char_count = len(list(bnet_count_result.scalars().all()))
 
+    wheel_result = await db.execute(
+        text(
+            """
+            SELECT sw.slot, sw.roll_count,
+                   fs.name AS first_name, fc.name AS first_class_name,
+                   fc.color_hex AS first_color_hex,
+                   ls.name AS latest_name, lc.name AS latest_class_name,
+                   lc.color_hex AS latest_color_hex
+            FROM patt.spec_wheel_rolls sw
+            JOIN ref.specializations fs ON fs.id = sw.first_spec_id
+            JOIN ref.classes fc ON fc.id = fs.class_id
+            JOIN ref.specializations ls ON ls.id = sw.latest_spec_id
+            JOIN ref.classes lc ON lc.id = ls.class_id
+            WHERE sw.player_id = :player_id
+              AND sw.season_id = (
+                  SELECT id
+                  FROM patt.raid_seasons
+                  WHERE is_active = TRUE
+                  ORDER BY start_date DESC
+                  LIMIT 1
+              )
+            """
+        ),
+        {"player_id": player.id},
+    )
+    wheel_history = {}
+    for row in wheel_result.mappings():
+        wheel_history[row["slot"]] = {
+            "roll_count": row["roll_count"],
+            "first": {
+                "name": row["first_name"],
+                "class_name": row["first_class_name"],
+                "color_hex": row["first_color_hex"],
+            },
+            "latest": {
+                "name": row["latest_name"],
+                "class_name": row["latest_class_name"],
+                "color_hex": row["latest_color_hex"],
+            },
+        }
+
     # Availability rows
     availability = await get_player_availability(db, player.id)
     avail_by_day = {row.day_of_week: row for row in availability}
@@ -164,6 +205,7 @@ async def _load_profile_data(player: Player, db: AsyncSession) -> dict:
         "rio_by_char": rio_by_char,
         "bnet_account": bnet_account,
         "bnet_char_count": bnet_char_count,
+        "wheel_history": wheel_history,
     }
 
 

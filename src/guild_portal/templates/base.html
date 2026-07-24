@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/main.css">
+    <script src="/static/js/site_menu.js?v=1.0.0" defer></script>
     <style>
       :root {
         --color-accent: {{ site().accent_color_hex or '#d4a84b' }};
@@ -19,27 +20,7 @@
     <header class="site-header">
         <div class="header-inner">
             <a href="/" class="site-title">{{ site().guild_name }}</a>
-            <a href="/feedback" class="btn-feedback">Feedback</a>
-            <nav class="site-nav">
-                {% if current_member %}
-                    <a href="/" class="nav-link">Home</a>
-                    <a href="/roster" class="nav-link">Roster</a>
-                    <a href="/crafting-corner" class="nav-link">Crafting</a>
-                    <a href="/my-characters" class="nav-link">My Characters</a>
-                    <a href="/recruiting-contest" class="nav-link">Contest</a>
-                    <a href="/profile" class="nav-link">Settings</a>
-                    <span class="nav-badge nav-badge--char">{{ current_member.main_character.character_name if current_member.main_character else current_member.display_name }}</span>
-                    {% if current_member.guild_rank %}
-                        <span class="nav-badge nav-badge--rank">{{ current_member.guild_rank.name }}</span>
-                    {% endif %}
-                    <a href="/logout" class="btn btn-secondary btn-sm">Log Out</a>
-                {% else %}
-                    <a href="/" class="nav-link">Home</a>
-                    <a href="/roster" class="nav-link">Roster</a>
-                    <a href="/crafting-corner" class="nav-link">Crafting</a>
-                    <a href="/login" class="btn btn-primary btn-sm">Login or Register</a>
-                {% endif %}
-            </nav>
+            {% include "partials/site_menu.html" %}
         </div>
     </header>
 

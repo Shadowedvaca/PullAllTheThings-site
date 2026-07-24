@@ -1,12 +1,12 @@
 # PATT Database Schema
 
-> **Canonical schema reference — current through migration 0177.**
+> **Canonical schema reference — current through migration 0181.**
 > Detailed DDL for the original core tables (migrations 0001–0044) is below.
 > Newer tables are documented in the schema overview section immediately below.
 
 ---
 
-## Schema Overview (current through migration 0177)
+## Schema Overview (current through migration 0181)
 
 Nine schemas in use. `enrichment`, `landing`, `viz`, `ref`, `config`, `log` were added during the Gear Plan Schema Overhaul (prod-v0.20.0+).
 
@@ -61,6 +61,8 @@ Nine schemas in use. `enrichment`, `landing`, `viz`, `ref`, `config`, `log` were
 `raid_events` — `+voice_channel_id`, `+voice_tracking_enabled`, `+attendance_processed_at`, `+is_deleted BOOLEAN` (0062), `+signup_snapshot_at` (0063)
 
 `raid_attendance` — `+minutes_present`, `+first_join_at`, `+last_leave_at`, `+joined_late`, `+left_early`, `+was_available BOOLEAN`, `+raid_helper_status VARCHAR(20)` (0063)
+
+`spec_wheel_rolls` — one row per player/season/slot (`main` or `offspec`); stores first and latest specialization results, timestamps, and cumulative seasonal roll count (0181)
 
 `attendance_rules` — `id, name, group_label, group_type CHECK('promotion'/'warning'/'info'), is_active, target_rank_ids INTEGER[], result_rank_id FK→guild_ranks ON DELETE SET NULL, conditions JSONB, sort_order` (0064)
 
@@ -808,6 +810,20 @@ CREATE TABLE patt.raid_seasons (
     blizzard_mplus_season_id INTEGER,      -- added 0035; Blizzard season ID for API calls
     created_at TIMESTAMPTZ DEFAULT NOW()
     -- display_name computed in code as "{expansion_name} Season {season_number}"
+);
+
+-- First/latest wheel results and cumulative count for each seasonal slot
+CREATE TABLE patt.spec_wheel_rolls (
+    id SERIAL PRIMARY KEY,
+    player_id INTEGER NOT NULL REFERENCES guild_identity.players(id) ON DELETE CASCADE,
+    season_id INTEGER NOT NULL REFERENCES patt.raid_seasons(id) ON DELETE CASCADE,
+    slot VARCHAR(10) NOT NULL CHECK (slot IN ('main', 'offspec')),
+    first_spec_id INTEGER NOT NULL REFERENCES ref.specializations(id),
+    first_rolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    latest_spec_id INTEGER NOT NULL REFERENCES ref.specializations(id),
+    latest_rolled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    roll_count INTEGER NOT NULL DEFAULT 1 CHECK (roll_count >= 1),
+    UNIQUE(player_id, season_id, slot)
 );
 
 -- Event-day config: drives schedule, raid tools, and auto-booking
