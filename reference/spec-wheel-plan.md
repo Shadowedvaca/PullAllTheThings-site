@@ -36,6 +36,6 @@ specialization an equal chance of being selected for either a main or off-spec.
 4. Member page, canvas wheel, filters, history, count, confirmation, and
    assignment dialog.
 5. Shared hamburger navigation, a bottom-of-page first/latest results table
-   containing every current roster player, and first/latest result notes
-   beside the My Profile character selectors.
+   containing every current roster player with match/mismatch indicators, and
+   first/latest result notes beside the My Profile character selectors.
 6. Navigation, documentation, and targeted unit tests.

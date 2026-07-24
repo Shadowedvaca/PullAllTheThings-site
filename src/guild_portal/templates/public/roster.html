@@ -336,7 +336,29 @@
     color: var(--color-text-muted);
     font-weight: 400;
 }
+.fate-result-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
 .fate-result strong { font-weight: 700; }
+.fate-match {
+    display: inline-grid;
+    place-items: center;
+    width: 1.8rem;
+    flex: 0 0 1.8rem;
+    font-size: 1.65rem;
+    font-weight: 900;
+    line-height: 1;
+}
+.fate-match--yes {
+    color: #4ade80;
+    text-shadow: 0 0 10px rgba(74, 222, 128, 0.35);
+}
+.fate-match--no {
+    color: #ef4444;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
 .fate-empty { color: var(--color-text-muted); padding: 1rem 0; }
 
 @media (max-width: 640px) {
@@ -628,11 +650,18 @@ function renderFateResults() {
         const color = /^#[0-9a-f]{6}$/i.test(result.color_hex || '')
             ? result.color_hex
             : '#d4a84b';
-        const resultHtml = `<div class="fate-result">
-            <strong style="color:${color}">${esc(result.class_name)} &mdash; ${esc(result.name)}</strong>
-            <small>${esc(result.role)}</small>
+        const matches = slot.assigned_spec_id === result.id;
+        const matchHtml = matches
+            ? '<span class="fate-match fate-match--yes" role="img" aria-label="Matches roster specialization" title="Matches roster specialization">&#10003;</span>'
+            : '<span class="fate-match fate-match--no" role="img" aria-label="Does not match roster specialization" title="Does not match roster specialization">&#10005;</span>';
+        const resultHtml = `<div class="fate-result-row">
+            ${matchHtml}
+            <div class="fate-result">
+                <strong style="color:${color}">${esc(result.class_name)} &mdash; ${esc(result.name)}</strong>
+                <small>${esc(result.role)}</small>
+            </div>
         </div>`;
-        const character = slot.assigned_spec_id === result.id
+        const character = matches
             ? slot.assigned_character
             : null;
         const characterHtml = character
