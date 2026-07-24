@@ -240,6 +240,12 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **prod-v0.24.0 — COMPLETE** (feature/spec-wheel, migration 0181). Hit's Wheel of Fate.
+  - Member-only `/spec-wheel` page with equal-chance main/off-spec rolls across every specialization, seasonal first/latest history, roll totals, replacement confirmation, and optional matching-class character assignment.
+  - Filters can restrict rolls to open roster roles or specializations unrepresented by a member-or-higher main; initiates are excluded from both calculations.
+  - Shared hamburger navigation replaces the crowded top navigation.
+  - Public roster adds a bottom-of-page first/latest Wheel results table for every current roster player, including assigned characters and green-match/red-mismatch indicators.
+  - My Profile shows color-coded first/latest Wheel history beside the main and secondary character selectors.
 - **prod-v0.23.1 — COMPLETE** (feature/seasonal-reset). Seasonal roster reset + always-tentative auto-booking. No migration.
   - `POST /admin/players/{player_id}/season-reset` and `POST /admin/players/season-reset-all` (`admin_pages.py`) — clear `main_character_id`/`offspec_character_id`/`main_spec_id`/`offspec_spec_id` and `on_raid_hiatus`; characters stay linked via `player_characters`, only the main/offspec designation is cleared. Gated by `player_manager` screen permission.
   - Player Manager UI: per-player `↺` reset button next to Delete; page-level "↺ Season Reset" button opens a type-`RESET`-to-confirm modal for the bulk action (`players.js`/`players.html`/`players.css`)
@@ -255,8 +261,8 @@ Key design gotchas (read before writing any DB query):
   - Routes: `src/guild_portal/api/recruiting_routes.py` (GL admin CRUD + pay-all); member display in `public_pages.py`
 - **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed gear plan 401s after 24h. Changed JWT default to 43200 (30 days). No migration.
 - **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Lowered raid event creation to require_rank(3). No migration.
-- **Last migration:** 0180 (`patt.recruiting_submissions` payout_type constraint + `first_recruit_bonus` column on contests)
-- **Last prod tag:** `prod-v0.23.1`
+- **Last migration:** 0181 (`patt.spec_wheel_rolls`)
+- **Last prod tag:** `prod-v0.24.0`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
