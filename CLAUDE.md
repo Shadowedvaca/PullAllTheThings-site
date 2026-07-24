@@ -240,6 +240,7 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **prod-v0.24.1 — COMPLETE** (fix/wheel-character-display). The public Wheel of Fate roster table now always shows the selected main/off-spec character; the green check or red X independently indicates whether the displayed fate matches the roster specialization. No migration.
 - **prod-v0.24.0 — COMPLETE** (feature/spec-wheel, migration 0181). Hit's Wheel of Fate.
   - Member-only `/spec-wheel` page with equal-chance main/off-spec rolls across every specialization, seasonal first/latest history, roll totals, replacement confirmation, and optional matching-class character assignment.
   - Filters can restrict rolls to open roster roles or specializations unrepresented by a member-or-higher main; initiates are excluded from both calculations.
@@ -262,7 +263,7 @@ Key design gotchas (read before writing any DB query):
 - **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed gear plan 401s after 24h. Changed JWT default to 43200 (30 days). No migration.
 - **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Lowered raid event creation to require_rank(3). No migration.
 - **Last migration:** 0181 (`patt.spec_wheel_rolls`)
-- **Last prod tag:** `prod-v0.24.0`
+- **Last prod tag:** `prod-v0.24.1`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
