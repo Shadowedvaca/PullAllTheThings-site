@@ -314,6 +314,8 @@ def test_ui_uses_hits_name_and_refreshes_after_assignment():
     assert 'fate-match fate-match--no' in roster_template
     assert "Matches roster specialization" in roster_template
     assert "Does not match roster specialization" in roster_template
+    assert "const character = slot.assigned_character;" in roster_template
+    assert "const character = matches" not in roster_template
     roster_needs = '<h2 class="comp-section-title">Roster Needs</h2>'
     wheel_results = '<h2 class="comp-section-title">Hit\'s Wheel of Fate</h2>'
     assert roster_template.index(roster_needs) < roster_template.index(wheel_results)

@@ -661,9 +661,7 @@ function renderFateResults() {
                 <small>${esc(result.role)}</small>
             </div>
         </div>`;
-        const character = matches
-            ? slot.assigned_character
-            : null;
+        const character = slot.assigned_character;
         const characterHtml = character
             ? `<div class="fate-character">${esc(character.name)}-${esc(character.realm)}
                  <small>lvl ${character.level ?? '?'}</small></div>`
