@@ -92,8 +92,8 @@ Prod Server
 └── Companion App (companion_app/guild_sync_watcher.py)
 ```
 
-> **Key paths:** `src/guild_portal/` (app), `src/sv_common/` (shared services)
-> See `reference/DIRECTORY.md` for the full annotated tree.
+> **Key paths:** `src/guild_portal/` (app), `src/sv_common/` (shared services).
+> See `docs/ARCHITECTURE.md` for the application and route inventory.
 
 ---
 
@@ -117,7 +117,7 @@ Prod Server
 
 ## Design Language
 
-> See `reference/DESIGN.md` for full color palette, typography, and layout patterns.
+> See `docs/DESIGN.md` for the full color palette, typography, and layout patterns.
 
 Dark fantasy / WoW tavern aesthetic. Gold accent (`#d4a84b`), dark backgrounds (`#0a0a0b`/`#141416`), Cinzel headers, Source Sans Pro body. Role colors: Tank=`#60a5fa`, Healer=`#4ade80`, Melee=`#f87171`, Ranged=`#fbbf24`. All colors use CSS custom properties; accent overridden at runtime from `config_cache`.
 
@@ -126,8 +126,6 @@ Admin pages extend `base_admin.html` (NOT `base.html`) — provides shared site-
 ---
 
 ## Directory Structure
-
-> See `reference/DIRECTORY.md` for the full annotated tree.
 
 Key paths:
 - `src/guild_portal/` — main application (app.py, api/, pages/, templates/, static/)
@@ -148,7 +146,7 @@ DATABASE_URL=postgresql+asyncpg://patt_user:PASSWORD@localhost:5432/patt_db
 # Auth
 JWT_SECRET_KEY=generate-a-strong-random-key   # must be 32+ bytes
 JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=1440
+JWT_EXPIRE_MINUTES=43200
 
 # Discord Bot
 DISCORD_BOT_TOKEN=your-bot-token-here         # also stored encrypted in DB
@@ -195,7 +193,7 @@ Key design gotchas (read before writing any DB query):
 
 ## Deployment & Operations
 
-> See `reference/DEPLOY.md` for Docker environments and server quirks.
+> See `docs/DEPLOY.md` for Docker environments and server quirks.
 > **Git & CI/CD workflow:** `reference/git-cicd-workflow.md` — canonical rules for branching, merging, and releasing.
 
 - **CRITICAL: Never touch prod without explicit permission from Mike.** No SSH against prod DB, no docker exec on prod containers, no prod tags. Dev and test are fair game.
@@ -234,7 +232,6 @@ Key design gotchas (read before writing any DB query):
 - Tag format: `prod-vMAJOR.MINOR.PATCH` (e.g. `prod-v0.2.1`) — prod deploys on this pattern only
 
 ### Testing
-- See `TESTING.md` for full strategy
 - Every phase includes tests; tests must pass before phase is complete
 - Run: `pytest tests/ -v` from project root
 
@@ -246,6 +243,7 @@ Key design gotchas (read before writing any DB query):
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`
 
 ### Current Phase
+- **prod-v0.24.2 — COMPLETE** (agent/standardize-ai-project-workflow). Standardized AI issue governance and delivery instructions. `AGENTS.md` and `CLAUDE.md` now share one entry point; canonical context, work-management, and development/release standards live under `reference/`; every AI-created issue must be added to and verified in the private Solo Development Project. No application or database changes.
 - **prod-v0.24.1 — COMPLETE** (fix/wheel-character-display). The public Wheel of Fate roster table now always shows the selected main/off-spec character; the green check or red X independently indicates whether the displayed fate matches the roster specialization. No migration.
 - **prod-v0.24.0 — COMPLETE** (feature/spec-wheel, migration 0181). Hit's Wheel of Fate.
   - Member-only `/spec-wheel` page with equal-chance main/off-spec rolls across every specialization, seasonal first/latest history, roll totals, replacement confirmation, and optional matching-class character assignment.
@@ -269,7 +267,7 @@ Key design gotchas (read before writing any DB query):
 - **prod-v0.22.9 — COMPLETE** (hotfix/jwt-expiry-alignment). Fixed gear plan 401s after 24h. Changed JWT default to 43200 (30 days). No migration.
 - **prod-v0.22.8 — COMPLETE** (hotfix/raid-event-rank-permission). Lowered raid event creation to require_rank(3). No migration.
 - **Last migration:** 0181 (`patt.spec_wheel_rolls`)
-- **Last prod tag:** `prod-v0.24.1`
+- **Last prod tag:** `prod-v0.24.2`
 - **Active branch:** `main`
 
 > Full phase-by-phase history: `reference/PHASE_HISTORY.md`

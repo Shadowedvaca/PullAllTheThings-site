@@ -1,7 +1,7 @@
 # Phase History
 
 > Full record of completed phases and recent changes.
-> Current status summary lives in `CLAUDE.md`.
+> Current status summary lives in `reference/ai-context.md`.
 
 ---
 
@@ -46,6 +46,13 @@
 ---
 
 ## Recent Changes
+
+### AI Issue Governance Standardization (2026-07-28, prod-v0.24.2)
+- Added byte-identical `AGENTS.md` and `CLAUDE.md` entry points that route both AI tools to the same canonical repository instructions.
+- Moved shared project context to `reference/ai-context.md`; added authoritative work-management and development/release standards.
+- Required every AI-created issue to be enrolled exactly once in the private Solo Development Project with Status `Inbox` unless another approved state applies.
+- Standardized native parent/sub-issue relationships, delivery slices, approval boundaries, completion evidence, merge gates, and production-release gates.
+- Documentation-only release; no application, infrastructure, secret, or database changes.
 
 ### Gear Plan Schema Overhaul — Phase C (2026-04-14, migration 0106, dev only)
 - **Migration 0106:** 4 views in the `viz` schema (schema created empty in 0104).
