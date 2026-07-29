@@ -1,7 +1,11 @@
 # Git & CI/CD Workflow — Personal Standard
 
-This document defines the canonical git and deployment workflow for all projects.
-Drop a reference to this file in each project's CLAUDE.md so the rules travel with you.
+This document provides operational environment and Git detail for this
+repository. `reference/work-management.md` and
+`reference/development-and-release.md` are authoritative for issue lifecycle,
+delivery slices, approval boundaries, review, integration, and release
+authorization. If this document conflicts with either standard, those standards
+win.
 
 ---
 
