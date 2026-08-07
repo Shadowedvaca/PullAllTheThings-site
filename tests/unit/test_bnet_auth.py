@@ -163,6 +163,9 @@ def test_app_includes_bnet_routes():
                 paths.add(route.path)
             if hasattr(route, "routes"):
                 paths.update(collect_paths(route.routes))
+            included_router = getattr(route, "router", None)
+            if included_router is not None and hasattr(included_router, "routes"):
+                paths.update(collect_paths(included_router.routes))
         return paths
 
     paths = collect_paths(app.routes)
