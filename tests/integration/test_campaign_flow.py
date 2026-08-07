@@ -72,6 +72,7 @@ async def _make_live_campaign(
     for i in range(1, 4):
         await campaign_service.add_entry(db, campaign.id, name=f"Entry {i}")
     campaign = await campaign_service.activate_campaign(db, campaign.id)
+    await db.refresh(campaign, attribute_names=["entries"])
     return campaign
 
 

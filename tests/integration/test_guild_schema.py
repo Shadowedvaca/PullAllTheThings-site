@@ -20,19 +20,23 @@ class TestSchemaExists:
         assert result == "guild_identity"
 
     async def test_all_expected_tables_exist(self, guild_sync_pool):
-        expected_tables = [
-            "players", "wow_characters", "discord_users",
-            "player_characters", "audit_issues", "sync_log",
-            "classes", "specializations", "roles",
-        ]
+        expected_tables = {
+            "guild_identity": [
+                "players", "wow_characters", "discord_users",
+                "player_characters", "audit_issues", "sync_log", "roles",
+            ],
+            "ref": ["classes", "specializations"],
+        }
         async with guild_sync_pool.acquire() as conn:
-            for table in expected_tables:
-                result = await conn.fetchval(
-                    "SELECT table_name FROM information_schema.tables "
-                    "WHERE table_schema = 'guild_identity' AND table_name = $1",
-                    table,
-                )
-                assert result == table, f"Table '{table}' not found in guild_identity schema"
+            for schema, tables in expected_tables.items():
+                for table in tables:
+                    result = await conn.fetchval(
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE table_schema = $1 AND table_name = $2",
+                        schema,
+                        table,
+                    )
+                    assert result == table, f"Table '{schema}.{table}' not found"
 
     async def test_old_tables_removed(self, guild_sync_pool):
         """Verify legacy tables no longer exist after Phase 2.7 migration."""

@@ -85,10 +85,10 @@ async def _create_invite(
     return inv
 
 
-def _auth_headers(player_id: int, rank_level: int) -> dict:
+def _auth_headers(user_id: int, player_id: int, rank_level: int) -> dict:
     """Generate Bearer auth headers for a player."""
     token = create_access_token(
-        user_id=0, member_id=player_id, rank_level=rank_level
+        user_id=user_id, member_id=player_id, rank_level=rank_level
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -156,6 +156,15 @@ async def test_full_platform_regression(
         display_name="Newbie",
         rank_id=rank_initiate.id,
     )
+    initiate_user = User(
+        email="reg_newbie@regtest.com",
+        password_hash=hash_password("initiatepw"),
+        is_active=True,
+    )
+    db_session.add(initiate_user)
+    await db_session.flush()
+    initiate.website_user_id = initiate_user.id
+    await db_session.flush()
 
     # Admin also gets a website account so they count as eligible in stats
     admin_user = User(
@@ -314,9 +323,11 @@ async def test_full_platform_regression(
                 {"entry_id": entries[2].id, "rank": 3},
             ]
         },
-        headers=_auth_headers(initiate.id, rank_level=1),
+        headers=_auth_headers(initiate_user.id, initiate.id, rank_level=1),
     )
-    assert resp.status_code in (403, 422), "Initiate should be denied voting"
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+    assert "minimum required rank" in resp.json()["error"]
 
     # ==================================================================
     # 7. PERMISSION: Non-voter cannot see live results
@@ -324,7 +335,7 @@ async def test_full_platform_regression(
 
     resp = await client.get(
         f"/api/v1/campaigns/{campaign.id}/results",
-        headers=_auth_headers(vet1.id, rank_level=3),
+        headers={"Authorization": f"Bearer {rocket_token}"},
     )
     assert resp.status_code == 403, "Non-voter should not see live results"
 
@@ -342,14 +353,14 @@ async def test_full_platform_regression(
                 {"entry_id": entries[2].id, "rank": 3},  # Mito
             ]
         },
-        headers=_auth_headers(vet1.id, rank_level=3),
+        headers={"Authorization": f"Bearer {rocket_token}"},
     )
     assert resp.status_code == 200, f"rocket vote failed: {resp.text}"
 
     # Verify rocket can now see live standings
     resp = await client.get(
         f"/api/v1/campaigns/{campaign.id}/results",
-        headers=_auth_headers(vet1.id, rank_level=3),
+        headers={"Authorization": f"Bearer {rocket_token}"},
     )
     assert resp.status_code == 200
     standings = resp.json()["data"]
@@ -368,9 +379,11 @@ async def test_full_platform_regression(
                 {"entry_id": entries[2].id, "rank": 3},
             ]
         },
-        headers=_auth_headers(vet1.id, rank_level=3),
+        headers={"Authorization": f"Bearer {rocket_token}"},
     )
-    assert resp.status_code == 400, "Duplicate vote should be rejected"
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+    assert "already voted" in resp.json()["error"]
 
     # mito votes: Rocket=1, Trog=2, Mito=3
     resp = await client.post(
@@ -382,7 +395,7 @@ async def test_full_platform_regression(
                 {"entry_id": entries[2].id, "rank": 3},  # Mito
             ]
         },
-        headers=_auth_headers(vet2.id, rank_level=3),
+        headers={"Authorization": f"Bearer {mito_token}"},
     )
     assert resp.status_code == 200, f"mito vote failed: {resp.text}"
 
@@ -390,7 +403,7 @@ async def test_full_platform_regression(
     # Trog: 3+2=5pts, Rocket: 2+3=5pts (tie), Mito: 1+1=2pts
     resp = await client.get(
         f"/api/v1/campaigns/{campaign.id}/results",
-        headers=_auth_headers(vet2.id, rank_level=3),
+        headers={"Authorization": f"Bearer {mito_token}"},
     )
     assert resp.status_code == 200
     standings = resp.json()["data"]
@@ -407,7 +420,7 @@ async def test_full_platform_regression(
                 {"entry_id": entries[1].id, "rank": 3},  # Rocket
             ]
         },
-        headers=_auth_headers(officer1.id, rank_level=4),
+        headers={"Authorization": f"Bearer {shodoom_token}"},
     )
     assert resp.status_code == 200, f"shodoom vote failed: {resp.text}"
 
@@ -646,7 +659,7 @@ async def test_voting_on_closed_campaign_rejected(db_session: AsyncSession):
     campaign = await campaign_service.close_campaign(db_session, campaign.id)
     assert campaign.status == "closed"
 
-    with pytest.raises(ValueError, match="not live"):
+    with pytest.raises(ValueError, match="closed|not live"):
         await vote_service.cast_vote(
             db_session,
             campaign_id=campaign.id,

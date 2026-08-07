@@ -69,10 +69,21 @@ async def _link_char_to_player(conn, player_id: int, char_id: int):
 
 
 async def _get_rank_id(conn, rank_name: str) -> int:
-    """Look up a guild_rank id by name (reference data seeded by migration)."""
+    """Create or return the minimum rank reference needed by a test."""
+    rank_levels = {
+        "Initiate": 1,
+        "Member": 2,
+        "Veteran": 3,
+        "Officer": 4,
+        "Guild Leader": 5,
+    }
     return await conn.fetchval(
-        "SELECT id FROM common.guild_ranks WHERE name = $1",
+        """INSERT INTO common.guild_ranks (name, level)
+           VALUES ($1, $2)
+           ON CONFLICT (name) DO UPDATE SET level = EXCLUDED.level
+           RETURNING id""",
         rank_name,
+        rank_levels[rank_name],
     )
 
 

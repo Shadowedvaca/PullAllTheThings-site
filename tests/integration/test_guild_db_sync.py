@@ -96,7 +96,7 @@ async def _seed_reference_data(conn):
     ]
     for class_id, spec_name, role_id in specs:
         await conn.execute(
-            "INSERT INTO guild_identity.specializations (class_id, name, default_role_id) "
+            "INSERT INTO ref.specializations (class_id, name, default_role_id) "
             "VALUES ($1, $2, $3) ON CONFLICT (class_id, name) DO NOTHING",
             class_id, spec_name, role_id,
         )

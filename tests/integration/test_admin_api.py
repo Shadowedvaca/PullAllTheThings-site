@@ -211,4 +211,4 @@ async def test_roster_endpoint_returns_ok(
 
     assert resp.status_code == 200
     assert body["ok"] is True
-    assert "members" in body["data"]
+    assert "players" in body["data"]

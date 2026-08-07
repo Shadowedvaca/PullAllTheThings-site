@@ -92,6 +92,14 @@ def _make_bot_with_members(discord_members: list) -> MagicMock:
     return bot
 
 
+def _make_session_factory(db_session: AsyncSession) -> MagicMock:
+    """Return a synchronous factory yielding the async test session context."""
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=db_session)
+    context.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=context)
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -118,9 +126,7 @@ class TestRoleSync:
         )
         bot = _make_bot_with_members([discord_member])
 
-        factory = AsyncMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        factory = _make_session_factory(db_session)
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
@@ -148,9 +154,7 @@ class TestRoleSync:
         )
         bot = _make_bot_with_members([discord_member])
 
-        factory = AsyncMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        factory = _make_session_factory(db_session)
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
@@ -173,9 +177,7 @@ class TestRoleSync:
         )
         bot = _make_bot_with_members([discord_member])
 
-        factory = AsyncMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        factory = _make_session_factory(db_session)
 
         stats = await sync_discord_roles(bot, factory, _GUILD_ID)
 
@@ -207,9 +209,7 @@ class TestRoleSync:
         )
         bot = _make_bot_with_members([discord_member])
 
-        factory = AsyncMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        factory = _make_session_factory(db_session)
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
@@ -235,9 +235,7 @@ class TestRoleSync:
         )
         bot = _make_bot_with_members([discord_member])
 
-        factory = AsyncMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        factory = _make_session_factory(db_session)
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 
@@ -261,9 +259,7 @@ class TestRoleSync:
 
         bot = _make_bot_with_members([bot_member])
 
-        factory = AsyncMock()
-        factory.return_value.__aenter__ = AsyncMock(return_value=db_session)
-        factory.return_value.__aexit__ = AsyncMock(return_value=False)
+        factory = _make_session_factory(db_session)
 
         await sync_discord_roles(bot, factory, _GUILD_ID)
 

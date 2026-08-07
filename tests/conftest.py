@@ -87,10 +87,13 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client with database session override."""
     from guild_portal.app import create_app
     from guild_portal.deps import get_db
+    from guild_portal.templating import templates
     from sv_common.config_cache import get_site_config, set_site_config
 
     previous_config = get_site_config()
     set_site_config({**previous_config, "setup_complete": True})
+    previous_site_global = templates.env.globals.get("site")
+    templates.env.globals["site"] = get_site_config
     app = create_app()
 
     async def override_get_db():
@@ -104,6 +107,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         ) as ac:
             yield ac
     finally:
+        if previous_site_global is None:
+            templates.env.globals.pop("site", None)
+        else:
+            templates.env.globals["site"] = previous_site_global
         set_site_config(previous_config)
 
 
