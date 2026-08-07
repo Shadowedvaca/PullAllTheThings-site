@@ -33,6 +33,7 @@ jobs:
       PYTHONPATH: src:.
       DATABASE_URL: postgresql+asyncpg://patt_ci:ci-only-database-placeholder@127.0.0.1:5432/guild_test_db
       TEST_DATABASE_URL: postgresql+asyncpg://patt_ci:ci-only-database-placeholder@127.0.0.1:5432/guild_test_db
+      MIGRATION_DATABASE_URL: postgresql+asyncpg://patt_ci:ci-only-database-placeholder@127.0.0.1:5432/guild_migration_db
       JWT_SECRET_KEY: ci-only-signing-placeholder-at-least-32-characters
       GUILD_SYNC_API_URL: http://127.0.0.1:9/api
       APP_ENV: testing
@@ -88,10 +89,19 @@ jobs:
 
 
           async def bootstrap_version_schema():
-              url = os.environ["DATABASE_URL"].replace(
+              test_url = os.environ["TEST_DATABASE_URL"].replace(
                   "postgresql+asyncpg://", "postgresql://", 1
               )
-              connection = await asyncpg.connect(url)
+              connection = await asyncpg.connect(test_url)
+              try:
+                  await connection.execute("CREATE DATABASE guild_migration_db")
+              finally:
+                  await connection.close()
+
+              migration_url = os.environ["MIGRATION_DATABASE_URL"].replace(
+                  "postgresql+asyncpg://", "postgresql://", 1
+              )
+              connection = await asyncpg.connect(migration_url)
               try:
                   await connection.execute("CREATE SCHEMA patt")
               finally:
@@ -100,8 +110,8 @@ jobs:
 
           asyncio.run(bootstrap_version_schema())
           PY
-          python -m alembic upgrade head
-          python -m alembic current --check-heads
+          DATABASE_URL="$MIGRATION_DATABASE_URL" python -m alembic upgrade head
+          DATABASE_URL="$MIGRATION_DATABASE_URL" python -m alembic current --check-heads
 
       - name: Run full test suite
         run: python -m pytest tests -q
