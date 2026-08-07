@@ -475,7 +475,7 @@ async def test_full_platform_regression(
     assert len(results) == 10, "All 10 entries should appear in results"
 
     # Point tally:
-    # Trog:   rocket(3) + mito(2) + shodoom(0) + admin(3) = 8 pts
+    # Trog:   rocket(3) + mito(2) + shodoom(2) + admin(3) = 10 pts
     # Rocket: rocket(2) + mito(3) + shodoom(1) + admin(0) = 6 pts
     # Mito:   rocket(1) + mito(1) + shodoom(3) + admin(0) = 5 pts
     # Shodoom: admin(2) = 2 pts
@@ -483,7 +483,7 @@ async def test_full_platform_regression(
     winner = results[0]
     assert winner["final_rank"] == 1
     assert winner["entry"]["name"] == "Trog"
-    assert winner["weighted_score"] == 8
+    assert winner["weighted_score"] == 10
 
     second = results[1]
     assert second["entry"]["name"] == "Rocket"
