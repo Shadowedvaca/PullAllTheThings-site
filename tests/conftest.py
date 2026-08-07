@@ -89,11 +89,18 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     from guild_portal.deps import get_db
     from guild_portal.templating import templates
     from sv_common.config_cache import get_site_config, set_site_config
+    from sv_common.guild_sync.ah_service import copper_to_gold_str
 
     previous_config = get_site_config()
     set_site_config({**previous_config, "setup_complete": True})
     previous_site_global = templates.env.globals.get("site")
+    previous_gold_filter = templates.env.filters.get("gold")
+    previous_format_gold_filter = templates.env.filters.get("format_gold")
     templates.env.globals["site"] = get_site_config
+    templates.env.filters["gold"] = copper_to_gold_str
+    templates.env.filters["format_gold"] = lambda value: (
+        "—" if value is None else f"{int(value):,}g"
+    )
     app = create_app()
 
     async def override_get_db():
@@ -111,6 +118,14 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
             templates.env.globals.pop("site", None)
         else:
             templates.env.globals["site"] = previous_site_global
+        if previous_gold_filter is None:
+            templates.env.filters.pop("gold", None)
+        else:
+            templates.env.filters["gold"] = previous_gold_filter
+        if previous_format_gold_filter is None:
+            templates.env.filters.pop("format_gold", None)
+        else:
+            templates.env.filters["format_gold"] = previous_format_gold_filter
         set_site_config(previous_config)
 
 

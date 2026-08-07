@@ -449,11 +449,22 @@ async def test_rank_gated_campaign_hidden_from_low_rank(db_session: AsyncSession
 
 async def test_early_close_when_all_eligible_voted(db_session: AsyncSession):
     """Campaign closes early once all eligible players have voted."""
+    from sv_common.auth.passwords import hash_password
+    from sv_common.db.models import User
+
     officer_rank = await _create_rank(db_session, name="Officer11", level=4)
     member_rank = await _create_rank(db_session, name="Member11", level=2)
 
     officer = await _create_player(db_session, display_name="off11", rank_id=officer_rank.id)
     await _create_player(db_session, display_name="voter11", rank_id=member_rank.id)
+    officer_user = User(
+        email="off11@test.com",
+        password_hash=hash_password("password123"),
+    )
+    db_session.add(officer_user)
+    await db_session.flush()
+    officer.website_user_id = officer_user.id
+    await db_session.flush()
 
     # Both officer (level 4) and voter (level 2) are eligible for min_rank_to_vote=2
     # But we use min_rank_to_vote=4 so only the officer can vote
