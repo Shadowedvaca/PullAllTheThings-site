@@ -112,13 +112,16 @@ production tag/version/main-ancestry checks, an exact-SHA successful-test-run
 preflight, post-deploy health/migration checks, and post-success GitHub Release
 publication.
 
-PR validation is fail closed and is not yet integration-ready: issue #57 tracks
-the pre-existing PostgreSQL-backed test baseline exposed by the new workflow.
-Until that child is complete, a failing full-suite result is a blocker, not a
-waiver and not permission to skip, remove, or mark the affected tests expected
-to fail. The dependency ranges are capped to the FastAPI, Starlette, pytest, and
-pytest-asyncio compatibility lines exercised by this repository; upgrades need
-their own successful validation evidence.
+Issue #57 reconciles the pre-existing PostgreSQL-backed test baseline exposed by
+the new workflow. Pull-request run `31226039583` passed the migration chain,
+2,099 tests, JavaScript syntax, Compose validation, and a clean image build at
+commit `fde6b46`. The changes correct test isolation and stale assertions to
+match existing runtime behavior; they do not newly approve product or security
+contracts. Future failures remain blockers, not waivers or permission to skip,
+remove, or mark affected tests expected to fail. Dependency ranges are capped
+to the FastAPI, Starlette, pytest, and pytest-asyncio compatibility lines
+exercised by this repository; upgrades need their own successful validation
+evidence.
 
 Production is intentionally fail closed. `.github/production-readiness.json`
 sets `production_enabled` to `false`, and `deploy-prod.yml` runs

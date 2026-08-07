@@ -17,6 +17,7 @@
 ## Validation
 
 - Release-contract tests, runtime identity tests, documentation checks, Python static checks, the application test suite, and container build validation are required before integration.
+- Pull-request validation at commit `fde6b46` completed successfully in run `31226039583`, including migration-to-head validation, 2,099 passing PostgreSQL-backed tests with 34 skips, browser JavaScript syntax checks, Compose validation, and a clean application-image build.
 
 ## Deployment/Migrations
 
@@ -32,4 +33,4 @@
 - Production remains deliberately unavailable until required foundation issues #54 and #55 implement and verify GitHub environment and branch protections, strict SSH trust and isolated credentials, migration/backup safety, downgrade/restore rehearsal, and bounded rollback. These are mandatory blockers, not optional follow-ups.
 - The repository exact-SHA test-provenance preflight is implemented but unexecuted in this slice. It must be safely evidenced before Production readiness can be enabled.
 - The existing 30-day JWT lifetime remains pending Mike's explicit product/security acceptance; this slice does not change the runtime value.
-- Full PostgreSQL-backed PR validation currently fails on 46 pre-existing stale integration contracts after 2,054 tests pass. Issue #57 is a mandatory integration blocker for this slice; the failures may not be skipped, xfailed, or treated as product/security approvals merely to make CI green.
+- Issue #57 reconciles the PostgreSQL test harness and stale assertions with pre-existing database schema, authentication, API-envelope, campaign-voting, Icy Veins, and Battle.net behavior. The reconciliation makes the baseline truthful; it does not newly approve those product or security contracts. The JWT decision above remains explicitly open.
