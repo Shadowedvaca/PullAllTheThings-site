@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_port: int = 8100
     app_host: str = "0.0.0.0"
+    commit_sha: str = "unknown"
 
     # Blizzard API (Phase 2.5)
     blizzard_client_id: str = ""

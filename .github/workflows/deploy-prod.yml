@@ -3,47 +3,135 @@ name: Deploy to Production
 on:
   push:
     tags:
-      - 'prod-*'
+      - "prod-v*"
+
+permissions: {}
+
+concurrency:
+  group: patt-production-deploy
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy to pullallthethings.com
+  preflight:
+    name: Enforce Production readiness and exact test provenance
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
+      release_tag: ${{ steps.release.outputs.tag }}
+      release_version: ${{ steps.release.outputs.version }}
+      test_run_id: ${{ steps.provenance.outputs.run_id }}
+      test_run_url: ${{ steps.provenance.outputs.run_url }}
 
     steps:
-      - name: Deploy via SSH
+      - name: Check out immutable production tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Enforce repository Production readiness
+        run: python scripts/validate_production_readiness.py
+
+      - name: Validate tag, main ancestry, and release contract
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = "tag"
+          python scripts/validate_release.py --tag "$GITHUB_REF_NAME" --github-output "$GITHUB_OUTPUT"
+          sha="$(git rev-parse HEAD)"
+          test "$sha" = "$GITHUB_SHA"
+          test "$sha" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$sha" refs/remotes/origin/main
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Require successful test deployment for exact tag SHA
+        id: provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-test.yml/runs" \
+            -f branch=main -f event=push -f status=success -f per_page=100 | \
+            python scripts/validate_test_provenance.py \
+              --sha "$RELEASE_SHA" --github-output "$GITHUB_OUTPUT"
+          run_url="$(grep '^run_url=' "$GITHUB_OUTPUT" | tail -n 1 | cut -d= -f2-)"
+          echo "Exact-SHA test evidence: $run_url" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy exact approved production tag
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+    outputs:
+      release_sha: ${{ needs.preflight.outputs.release_sha }}
+      release_tag: ${{ needs.preflight.outputs.release_tag }}
+
+    steps:
+      - name: Check out preflight-verified commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+          fetch-depth: 1
+
+      - name: Deploy exact tag commit via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_SHA: ${{ needs.preflight.outputs.release_sha }}
+          DEPLOY_TAG: ${{ needs.preflight.outputs.release_tag }}
+          DEPLOY_VERSION: ${{ needs.preflight.outputs.release_version }}
+          TEST_RUN_ID: ${{ needs.preflight.outputs.test_run_id }}
         with:
           host: ${{ secrets.PROD_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: DEPLOY_SHA,DEPLOY_TAG,DEPLOY_VERSION,TEST_RUN_ID
           script: |
             set -e
             cd /opt/guild-portal
+            printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
+            test "$DEPLOY_TAG" = "prod-v$DEPLOY_VERSION"
 
-            echo "==> Checking out tag: ${{ github.ref_name }}..."
-            git remote prune origin || true
-            git fetch --tags --force --prune origin
-            git checkout ${{ github.ref_name }}
+            git fetch --tags --no-force --prune origin "$DEPLOY_TAG"
+            test "$(git rev-list -n 1 "$DEPLOY_TAG")" = "$DEPLOY_SHA"
+            git checkout --detach "$DEPLOY_TAG"
+            test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
 
-            echo "==> Building prod image..."
-            docker compose -f docker-compose.guild.yml build app-prod
+            COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.guild.yml build app-prod
+            COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.guild.yml up -d app-prod
 
-            echo "==> Restarting prod app..."
-            docker compose -f docker-compose.guild.yml up -d app-prod
-
-            echo "==> Waiting for prod to be ready..."
             for i in 1 2 3 4 5 6 7 8 9 10; do
               sleep 3
-              if curl -sf http://localhost:8100/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ok') else 1)" 2>/dev/null; then
-                echo "==> Prod healthy after ${i}x3s"
+              if health="$(curl -sf http://localhost:8100/api/health)" && \
+                printf '%s' "$health" | python3 -c 'import json,sys; version,commit=sys.argv[1:3]; data=json.load(sys.stdin); assert data["ok"] is True; assert data["data"]["db"]=="connected"; assert data["data"]["environment"]=="production"; assert data["data"]["version"]==version; assert data["data"]["commit"]==commit' "$DEPLOY_VERSION" "$DEPLOY_SHA"; then
                 break
               fi
-              if [ $i -eq 10 ]; then
-                echo "ERROR: Prod did not become healthy"
-                docker compose -f docker-compose.guild.yml logs app-prod --tail 30
+              if [ "$i" -eq 10 ]; then
+                docker compose -f docker-compose.guild.yml logs app-prod --tail 50
                 exit 1
               fi
             done
 
-            echo "==> Production deploy complete! (${{ github.ref_name }}) https://pullallthethings.com"
+            COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.guild.yml exec -T app-prod alembic current --check-heads
+            echo "Production verified: tag=$DEPLOY_TAG version=$DEPLOY_VERSION commit=$DEPLOY_SHA test_run_id=$TEST_RUN_ID"
+
+  publish:
+    name: Publish verified production release
+    needs: deploy
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      release_sha: ${{ needs.deploy.outputs.release_sha }}
+      release_tag: ${{ needs.deploy.outputs.release_tag }}

@@ -309,9 +309,11 @@ def create_app() -> FastAPI:
         await engine.dispose()
         logger.info("Guild platform shutdown complete")
 
+    from guild_portal.version import APP_VERSION
+
     app = FastAPI(
         title="Pull All The Things Guild Platform",
-        version="0.1.0",
+        version=APP_VERSION,
         lifespan=lifespan,
     )
 

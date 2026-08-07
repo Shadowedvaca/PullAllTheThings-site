@@ -1,0 +1,114 @@
+name: Pull request validation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patt-pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality, migrations, tests, and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: guild_test_db
+          POSTGRES_USER: patt_ci
+          POSTGRES_PASSWORD: ci-only-database-placeholder
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U patt_ci -d guild_test_db"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    env:
+      PYTHONPATH: src:.
+      DATABASE_URL: postgresql+asyncpg://patt_ci:ci-only-database-placeholder@127.0.0.1:5432/guild_test_db
+      TEST_DATABASE_URL: postgresql+asyncpg://patt_ci:ci-only-database-placeholder@127.0.0.1:5432/guild_test_db
+      JWT_SECRET_KEY: ci-only-signing-placeholder-at-least-32-characters
+      APP_ENV: testing
+
+    steps:
+      - name: Check out proposed commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+      - name: Compile Python
+        run: python -m compileall -q src scripts tests
+
+      - name: Lint changed Python and format-check new Python
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.py')
+          if ((${#files[@]})); then
+            ruff check --select E9,F63,F7,F82 "${files[@]}"
+          fi
+          mapfile -t new_files < <(git diff --name-only --diff-filter=A "$BASE_SHA" HEAD -- '*.py')
+          if ((${#new_files[@]})); then
+            ruff format --check "${new_files[@]}"
+          fi
+
+      - name: Validate release contract
+        run: python scripts/validate_release.py
+
+      - name: Validate fail-closed Production readiness configuration
+        run: python scripts/validate_production_readiness.py --configuration-only
+
+      - name: Validate migration chain
+        run: |
+          python -m alembic upgrade head
+          python -m alembic current --check-heads
+
+      - name: Run full test suite
+        run: python -m pytest tests -q
+
+      - name: Check browser JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do node --check "$file"; done < <(find src/guild_portal/static/js companion_app -name '*.js' -print0 2>/dev/null || true)
+
+      - name: Create non-secret Compose validation inputs
+        shell: bash
+        run: |
+          printf '%s\n' \
+            'DB_PASSWORD=ci-only-compose-placeholder' \
+            'DATABASE_URL=postgresql+asyncpg://patt_ci:ci-only-compose-placeholder@db:5432/guild_db' \
+            'JWT_SECRET_KEY=ci-only-signing-placeholder-at-least-32-characters' \
+            'APP_ENV=testing' > .env
+          printf '%s\n' \
+            'PROD_DB_PASSWORD=ci-only-compose-placeholder' \
+            'DATABASE_URL=postgresql+asyncpg://patt_ci:ci-only-compose-placeholder@db-prod:5432/guild_db' \
+            'JWT_SECRET_KEY=ci-only-signing-placeholder-at-least-32-characters' \
+            'APP_ENV=production' > .env.prod
+
+      - name: Validate Compose definitions
+        run: |
+          docker compose -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.test.yml config --quiet
+          docker compose -f docker-compose.guild.yml config --quiet
+
+      - name: Build production image
+        run: docker build --pull --tag patt-ci:${{ github.event.pull_request.head.sha }} .

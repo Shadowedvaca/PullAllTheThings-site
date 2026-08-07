@@ -23,6 +23,8 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      COMMIT_SHA: ${COMMIT_SHA:-unknown}
     ports:
       - "8100:8100"
 

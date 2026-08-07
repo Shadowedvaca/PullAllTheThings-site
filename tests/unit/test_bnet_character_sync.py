@@ -613,8 +613,8 @@ def test_admin_players_data_response_includes_link_source():
 # ---------------------------------------------------------------------------
 
 
-def test_settings_template_shows_bnet_verified_badge():
-    """settings.html shows a Battle.net Verified badge for OAuth-linked characters."""
+def test_settings_template_identifies_bnet_linked_characters():
+    """settings.html identifies OAuth-linked characters without a stale badge."""
     from pathlib import Path
     template_path = (
         Path(__file__).parent.parent.parent
@@ -622,7 +622,7 @@ def test_settings_template_shows_bnet_verified_badge():
     )
     content = template_path.read_text(encoding="utf-8")
     assert "battlenet_oauth" in content
-    assert "Battle.net Verified" in content
+    assert 'title="Linked via Battle.net — unlink account to remove"' in content
 
 
 def test_settings_template_hides_unclaim_for_oauth():
@@ -635,7 +635,9 @@ def test_settings_template_hides_unclaim_for_oauth():
     content = template_path.read_text(encoding="utf-8")
     # The unclaim form should be inside an else block conditioned on is_bnet
     assert "is_bnet" in content
-    assert "Locked" in content
+    bnet_branch = content.split("{% if is_bnet %}", 1)[1].split("{% endif %}", 1)[0]
+    assert "Unclaim" not in bnet_branch.split("{% else %}", 1)[0]
+    assert "Unclaim" in bnet_branch.split("{% else %}", 1)[1]
 
 
 # ---------------------------------------------------------------------------

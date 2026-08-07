@@ -19,7 +19,9 @@ def test_settings_load():
     )
     assert settings.app_port == 8100
     assert settings.jwt_algorithm == "HS256"
-    assert settings.jwt_expire_minutes == 1440
+    # Baseline only: this matches shipped runtime behavior. Mike's explicit
+    # product/security acceptance of the 30-day lifetime remains pending.
+    assert settings.jwt_expire_minutes == 43200
 
 
 def test_models_importable():

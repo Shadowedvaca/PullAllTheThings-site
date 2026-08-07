@@ -577,34 +577,25 @@ All three share the same Python process, event loop, and database connection poo
 
 ### 5.3 Environments
 
-| Env | Server | Port | Deploy trigger | Purpose |
+| Env | Server | Port | Deployment source | Purpose |
 |-----|--------|------|---------------|---------|
-| prod | `hetzner` | 8100 | `git tag prod-vX.Y.Z` → GitHub Actions | Live site |
-| test | `my-web-apps-test` | 8100 | Merge to `main` → GitHub Actions | Post-merge validation |
-| dev | `my-web-apps-dev` | 8100 | Manual `gh workflow run deploy-dev.yml -f branch=X` | Feature work |
+| prod | `hetzner` | 8100 | Exact approved immutable production tag | Live site |
+| test | `my-web-apps-test` | 8100 | Exact approved `main` integration commit | Integration validation |
+| dev | `my-web-apps-dev` | 8100 | Exact commit resolved from an explicit branch | Feature feedback |
 
 Each environment has its own database. Migrations run automatically on container startup via `docker-entrypoint.sh` → `alembic upgrade head`.
 
 ### 5.4 CI/CD Pipeline
 
-```
-Developer
-  │
-  ├─ gh workflow run deploy-dev.yml -f branch=feature/X
-  │     └─ SSH to my-web-apps-dev → git pull + docker build + compose up → health check
-  │
-  ├─ PR merged to main
-  │     └─ GitHub Actions: auto-deploy to my-web-apps-test (~60s)
-  │
-  └─ git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z
-        └─ GitHub Actions: auto-deploy to hetzner/prod (~60s)
-```
-
-**Critical rules:**
-- Never SSH-deploy manually — always let CI handle it
-- `git push` before `gh workflow run` — workflow pulls from GitHub
-- Migrations auto-run on startup — no manual `alembic upgrade` needed
-- Never touch prod without explicit owner authorization
+Pull requests run release-contract, static, migration, test, Compose, and image
+validation. Development resolves an explicit branch to an immutable SHA. Test
+deploys the approved `main` integration SHA. Production validates the exact
+approved tag, version, SHA, `main` ancestry, repository readiness, and a
+successful test deployment for that exact SHA; a GitHub Release is published
+only after deployment succeeds. Production readiness currently defaults to
+blocked pending issues #54 and #55. See
+`reference/development-and-release.md` for the authoritative promotion and
+evidence contract.
 
 ### 5.5 Networking
 

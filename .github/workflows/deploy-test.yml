@@ -2,48 +2,73 @@ name: Deploy to Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patt-test-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to test.pullallthethings.com
+    name: Deploy approved main commit to test.pullallthethings.com
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: test
 
     steps:
-      - name: Deploy via SSH
+      - name: Check out immutable main commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Validate and record deployment identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python scripts/validate_release.py --github-output "$GITHUB_OUTPUT"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy exact main commit via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.sha }}
+          DEPLOY_VERSION: ${{ steps.release.outputs.version }}
         with:
           host: ${{ secrets.TEST_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: DEPLOY_SHA,DEPLOY_VERSION
           script: |
             set -e
             cd /opt/guild-portal
+            printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
 
-            echo "==> Pulling main..."
-            git checkout main
-            git pull origin main
+            git fetch --no-tags --prune origin main:refs/remotes/origin/main
+            test "$(git rev-parse refs/remotes/origin/main)" = "$DEPLOY_SHA"
+            git checkout --detach "$DEPLOY_SHA"
+            test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
 
-            echo "==> Building test image..."
-            docker compose -f docker-compose.test.yml build app
+            COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.test.yml build app
+            COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.test.yml up -d app
 
-            echo "==> Restarting test app..."
-            docker compose -f docker-compose.test.yml up -d app
-            docker image prune -f
-
-            echo "==> Waiting for test to be ready..."
             for i in 1 2 3 4 5 6 7 8 9 10; do
               sleep 3
-              if curl -sf http://localhost:8100/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ok') else 1)" 2>/dev/null; then
-                echo "==> Test healthy after ${i}x3s"
+              if health="$(curl -sf http://localhost:8100/api/health)" && \
+                printf '%s' "$health" | python3 -c 'import json,sys; version,commit=sys.argv[1:3]; data=json.load(sys.stdin); assert data["ok"] is True; assert data["data"]["db"]=="connected"; assert data["data"]["environment"]=="test"; assert data["data"]["version"]==version; assert data["data"]["commit"]==commit' "$DEPLOY_VERSION" "$DEPLOY_SHA"; then
                 break
               fi
-              if [ $i -eq 10 ]; then
-                echo "ERROR: Test did not become healthy"
-                docker compose -f docker-compose.test.yml logs app --tail 30
+              if [ "$i" -eq 10 ]; then
+                docker compose -f docker-compose.test.yml logs app --tail 50
                 exit 1
               fi
             done
 
-            echo "==> Test deploy complete! https://test.pullallthethings.com"
+            COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.test.yml exec -T app alembic current --check-heads
+            echo "Test verified: version=$DEPLOY_VERSION commit=$DEPLOY_SHA"

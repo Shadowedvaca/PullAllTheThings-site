@@ -249,15 +249,21 @@ docker ps | grep guild-portal-app-prod
 
 ## Deploying Updates
 
-Three environments, each with its own gate:
+`reference/development-and-release.md` owns promotion authorization and release
+procedure. This table is an operational trigger inventory only:
 
 | Environment | How it deploys |
 |-------------|---------------|
 | **dev** | Manual — `gh workflow run deploy-dev.yml -f branch=your-branch` |
-| **test** | Auto — every push to `main` (i.e. every merged PR) |
-| **prod** | Tag — `git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z` |
+| **test** | Exact approved `main` integration commit |
+| **prod** | Currently blocked; when enabled, exact approved immutable `prod-v*` tag matching `VERSION` and an exact-SHA successful test deployment |
 
 Watch runs at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
+
+Production cannot currently be promoted. The repository readiness interlock
+remains disabled until mandatory foundation issues #54 and #55 are implemented,
+verified, and explicitly enabled through review. A tag and `main` ancestry alone
+cannot bypass this block.
 
 To manually restart dev (SSH only — never SSH-deploy prod):
 ```bash

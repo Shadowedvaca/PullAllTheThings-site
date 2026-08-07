@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 
 from guild_portal.config import get_settings
+from guild_portal.version import APP_VERSION
 from sv_common.db.engine import get_session_factory
 
 router = APIRouter()
@@ -18,13 +19,15 @@ async def health_check():
         async with factory() as session:
             await session.execute(text("SELECT 1"))
         db_status = "connected"
-    except Exception as exc:
-        db_status = f"error: {exc}"
+    except Exception:
+        db_status = "error"
 
     return {
-        "ok": True,
+        "ok": db_status == "connected",
         "data": {
             "db": db_status,
-            "version": "0.1.0",
+            "environment": settings.app_env,
+            "version": APP_VERSION,
+            "commit": settings.commit_sha,
         },
     }
