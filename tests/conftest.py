@@ -8,6 +8,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.schema import CreateSchema
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Test database URL — separate from production
@@ -48,9 +49,11 @@ async def test_engine():
         pytest.skip(f"Test database not available ({TEST_DATABASE_URL}): {exc}")
 
     async with engine.begin() as conn:
-        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS common"))
-        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS patt"))
-        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS guild_identity"))
+        schemas = sorted(
+            {table.schema for table in Base.metadata.tables.values() if table.schema}
+        )
+        for schema in schemas:
+            await conn.execute(CreateSchema(schema, if_not_exists=True))
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine

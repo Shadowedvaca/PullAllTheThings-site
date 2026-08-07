@@ -154,7 +154,7 @@ def test_app_includes_bnet_routes():
     """create_app registers Battle.net auth routes."""
     from guild_portal.app import create_app
     app = create_app()
-    paths = {route.path for route in app.routes}
+    paths = {route.path for route in app.routes if hasattr(route, "path")}
     assert "/auth/battlenet" in paths
     assert "/auth/battlenet/callback" in paths
     assert "/api/v1/auth/battlenet" in paths
