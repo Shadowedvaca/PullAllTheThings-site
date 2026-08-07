@@ -77,7 +77,28 @@ jobs:
         run: python scripts/validate_production_readiness.py --configuration-only
 
       - name: Validate migration chain
+        shell: bash
         run: |
+          python - <<'PY'
+          import asyncio
+          import os
+
+          import asyncpg
+
+
+          async def bootstrap_version_schema():
+              url = os.environ["DATABASE_URL"].replace(
+                  "postgresql+asyncpg://", "postgresql://", 1
+              )
+              connection = await asyncpg.connect(url)
+              try:
+                  await connection.execute("CREATE SCHEMA patt")
+              finally:
+                  await connection.close()
+
+
+          asyncio.run(bootstrap_version_schema())
+          PY
           python -m alembic upgrade head
           python -m alembic current --check-heads
 
