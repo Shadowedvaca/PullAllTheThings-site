@@ -66,12 +66,20 @@ async def test_engine():
 
 @pytest_asyncio.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Per-test session that rolls back after each test."""
-    factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    async with factory() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+    """Per-test session isolated even when application code commits."""
+    async with test_engine.connect() as connection:
+        transaction = await connection.begin()
+        factory = async_sessionmaker(
+            bind=connection,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+                await transaction.rollback()
 
 
 @pytest_asyncio.fixture
@@ -79,7 +87,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client with database session override."""
     from guild_portal.app import create_app
     from guild_portal.deps import get_db
+    from sv_common.config_cache import get_site_config, set_site_config
 
+    previous_config = get_site_config()
+    set_site_config({**previous_config, "setup_complete": True})
     app = create_app()
 
     async def override_get_db():
@@ -87,10 +98,13 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_db] = override_get_db
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        yield ac
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
+            yield ac
+    finally:
+        set_site_config(previous_config)
 
 
 @pytest_asyncio.fixture
