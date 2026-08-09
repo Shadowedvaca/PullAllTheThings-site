@@ -5,9 +5,12 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
+.pytest-tmp/
 *.pyo
 dist/
 build/
 .coverage
 htmlcov/
+artifacts/
+coverage.xml
 *.log

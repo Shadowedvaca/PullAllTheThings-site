@@ -1,9 +1,11 @@
 # Development and Release Standard
 
-This document is authoritative for quality gates, environment roles,
+This document is authoritative for environment roles,
 deployment and promotion, version authority, release notes, migrations, health,
 rollback, and release evidence. `reference/work-management.md` owns issue and
-approval workflow.
+approval workflow. `reference/testing-and-validation.md` and
+`reference/testing-profile.md` own test definitions, applicability, coverage,
+browser/E2E, and the concrete quality commands.
 
 ## Development loop and quality gates
 
@@ -14,13 +16,12 @@ approval workflow.
    `In progress`.
 3. Implement behavior, tests, documentation, and `docs/releases/UNRELEASED.md`
    together. Do not wait until promotion to reconstruct evidence.
-4. Run focused checks while iterating, then the complete applicable local gate:
-   release validation, Python compilation and changed-code lint/format checks,
-   the full test suite, JavaScript syntax checks, Compose validation, and image
-   build. Database-dependent checks require an isolated non-production database.
-5. PR CI repeats release validation, migration-to-head validation, the full test
-   suite, static checks, Compose parsing, and a clean image build. A skipped,
-   unavailable, or failing required check is a recorded gap, not success.
+4. Consult the testing profile, run focused checks while iterating, then its
+   complete applicable local gate, including coverage and browser/E2E. Database-
+   dependent checks require an isolated non-production database.
+5. PR CI enforces the profile's release, migration, full-suite, overall and
+   changed-line coverage, browser/E2E, static, Compose, and clean-image gates. A
+   skipped, unavailable, or failing required check is a recorded gap, not success.
 6. If development deployment is useful, dispatch `deploy-dev.yml` with the
    explicit branch. The workflow resolves it to one SHA, deploys detached at
    that SHA, and verifies version, commit, environment, database connectivity,

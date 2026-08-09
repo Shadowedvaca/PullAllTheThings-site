@@ -54,6 +54,9 @@ jobs:
       - name: Install validation dependencies
         run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
 
+      - name: Install Chromium for automated UI journeys
+        run: python -m playwright install --with-deps chromium
+
       - name: Compile Python
         run: python -m compileall -q src scripts tests
 
@@ -113,8 +116,45 @@ jobs:
           DATABASE_URL="$MIGRATION_DATABASE_URL" python -m alembic upgrade head
           DATABASE_URL="$MIGRATION_DATABASE_URL" python -m alembic current --check-heads
 
-      - name: Run full test suite
-        run: python -m pytest tests -q
+      - name: Run full test suite with overall coverage gate
+        run: |
+          python -m pytest tests/unit tests/integration tests/regression -q \
+            --cov=src/guild_portal \
+            --cov=src/sv_common \
+            --cov=companion_app \
+            --cov-report=term-missing \
+            --cov-report=html:artifacts/coverage-html \
+            --cov-report=xml:artifacts/coverage.xml \
+            --cov-fail-under=37
+
+      - name: Enforce changed-line coverage gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          diff-cover artifacts/coverage.xml \
+            --compare-branch="$BASE_SHA" \
+            --fail-under=72 \
+            --format=html:artifacts/diff-cover.html
+
+      - name: Run Chromium critical journeys
+        run: |
+          python -m pytest tests/e2e -q \
+            --tracing=retain-on-failure \
+            --screenshot=only-on-failure \
+            --output=artifacts/playwright
+
+      - name: Retain coverage and browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: patt-validation-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/coverage.xml
+            artifacts/coverage-html
+            artifacts/diff-cover.html
+            artifacts/playwright
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Check browser JavaScript syntax
         shell: bash

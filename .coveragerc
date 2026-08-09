@@ -1,0 +1,14 @@
+[run]
+source =
+    src/guild_portal
+    src/sv_common
+    companion_app
+
+[report]
+fail_under = 37
+precision = 0
+show_missing = True
+skip_covered = False
+
+[xml]
+output = artifacts/coverage.xml

@@ -87,6 +87,10 @@ configuration, never source, logs, issues, evidence, or release notes.
 ## Canonical references
 
 - `reference/work-management.md`: Solo Development and delivery workflow.
+- `reference/testing-and-validation.md`: repository-wide test policy, layer
+  definitions, coverage governance, isolation, and evidence.
+- `reference/testing-profile.md`: PATT-specific test tools, commands, floors,
+  browser journeys, and deployed smoke profile.
 - `reference/development-and-release.md`: quality, environments, versions,
   releases, promotion, migrations, health, rollback, and evidence.
 - `docs/ARCHITECTURE.md`: detailed route and component inventory.

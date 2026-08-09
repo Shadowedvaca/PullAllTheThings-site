@@ -2,8 +2,9 @@
 
 This document is authoritative for Solo Development enrollment, issue hierarchy,
 delivery slices, branches and pull requests, approvals, evidence, and closure.
-`reference/development-and-release.md` owns quality, environments, promotion,
-versioning, and release operations.
+`reference/testing-and-validation.md` and `reference/testing-profile.md` own test
+definitions and project-specific gates. `reference/development-and-release.md`
+owns environments, promotion, versioning, and release operations.
 
 ## System of record and enrollment
 
@@ -108,9 +109,9 @@ User Validation Timing controls only UI behavior a person must validate:
   Promotion to production. Release-timed validation is not due before test and
   cannot be used to delay or condition the Promotion to test approval.
 
-Automated checks, API checks, database checks, and health checks are evidence,
-not human approval gates. A failed manual check stays with the same child until
-fixed and revalidated.
+Automated checks, including browser/E2E, API, database, and health checks, are
+evidence, not human approval gates. A failed manual check stays with the same
+child until fixed and revalidated.
 
 ## Branch and pull-request handling
 
