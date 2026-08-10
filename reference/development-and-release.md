@@ -146,8 +146,12 @@ the provenance preflight is validated safely, and Mike explicitly approves the
 readiness-file change. Do not claim any blocked control exists merely because a
 workflow or document describes its required future state.
 
-The shipped 43,200-minute (30-day) JWT lifetime is also awaiting Mike's explicit
-product/security acceptance. The test assertion in this slice records existing
-runtime behavior only; it does not approve or establish that lifetime as a new
-security contract. Do not change the runtime value as part of this foundation
-slice.
+Mike approved the authentication-session policy in issue #58: ordinary member
+sessions expire after 7 days, rank level 4 and above sessions expire after 12
+hours, neither renews automatically, and each database-backed session is
+independently revocable. Password changes/resets, account deactivation/deletion,
+rank changes, explicit officer revocation, and suspected compromise revoke the
+affected sessions. Requests must validate the active user and current database
+rank; privilege changes require a new login. Rotating `JWT_SECRET_KEY` remains a
+separately authorized incident operation because it invalidates all sessions and
+also affects credentials encrypted with the JWT-key-derived context.

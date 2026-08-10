@@ -21,7 +21,7 @@ from sv_common.db.models import (
     InviteCode,
 )
 from sv_common.auth.passwords import hash_password
-from sv_common.auth.jwt import create_access_token
+from sv_common.auth.sessions import issue_session_token
 from guild_portal.deps import COOKIE_NAME
 
 
@@ -30,12 +30,15 @@ from guild_portal.deps import COOKIE_NAME
 # ---------------------------------------------------------------------------
 
 
-def _make_token(player: Player, rank_level: int = 0) -> str:
-    return create_access_token(
+async def _make_token(
+    db: AsyncSession, player: Player, rank_level: int = 0
+) -> str:
+    return (await issue_session_token(
+        db,
         user_id=player.website_user_id or 0,
         member_id=player.id,
         rank_level=player.guild_rank.level if player.guild_rank else rank_level,
-    )
+    )).token
 
 
 def _auth_cookies(token: str) -> dict:
@@ -227,10 +230,10 @@ async def test_public_landing_page_shows_login_link_when_anonymous(client: Async
 
 
 async def test_public_landing_page_shows_username_when_logged_in(
-    client: AsyncClient, member_with_user: Player
+    client: AsyncClient, db_session: AsyncSession, member_with_user: Player
 ):
     """GET / with auth cookie → shows player's display name."""
-    token = _make_token(member_with_user)
+    token = await _make_token(db_session, member_with_user)
     response = await client.get("/", cookies=_auth_cookies(token))
     assert response.status_code == 200
     assert member_with_user.display_name in response.text
@@ -258,10 +261,10 @@ async def test_register_page_renders(client: AsyncClient):
 
 
 async def test_login_redirects_authenticated_user(
-    client: AsyncClient, member_with_user: Player
+    client: AsyncClient, db_session: AsyncSession, member_with_user: Player
 ):
     """GET /login when already logged in → redirects to home."""
-    token = _make_token(member_with_user)
+    token = await _make_token(db_session, member_with_user)
     response = await client.get("/login", cookies=_auth_cookies(token), follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/"
@@ -297,11 +300,11 @@ async def test_login_post_invalid_credentials(client: AsyncClient):
 
 
 async def test_logout_clears_cookie(
-    client: AsyncClient, member_with_user: Player
+    client: AsyncClient, db_session: AsyncSession, member_with_user: Player
 ):
-    """GET /logout → redirects to home, cookie cleared."""
-    token = _make_token(member_with_user)
-    response = await client.get(
+    """POST /logout redirects to home, revokes the session, and clears the cookie."""
+    token = await _make_token(db_session, member_with_user)
+    response = await client.post(
         "/logout",
         cookies=_auth_cookies(token),
         follow_redirects=False,
@@ -352,11 +355,12 @@ async def test_register_post_invalid_invite_code(client: AsyncClient):
 
 async def test_vote_page_renders_for_eligible_member(
     client: AsyncClient,
+    db_session: AsyncSession,
     member_with_user: Player,
     live_campaign_with_entries: Campaign,
 ):
     """GET /vote/{id} for eligible member → 200, contains vote form."""
-    token = _make_token(member_with_user)
+    token = await _make_token(db_session, member_with_user)
     response = await client.get(
         f"/vote/{live_campaign_with_entries.id}",
         cookies=_auth_cookies(token),
@@ -390,7 +394,7 @@ async def test_vote_page_shows_gallery_for_view_only_member(
     await db_session.flush()
     low_player.guild_rank = rank
 
-    token = _make_token(low_player)
+    token = await _make_token(db_session, low_player)
     response = await client.get(
         f"/vote/{live_campaign_with_entries.id}",
         cookies=_auth_cookies(token),
@@ -422,7 +426,7 @@ async def test_vote_page_shows_results_after_voting(
         db_session.add(vote)
     await db_session.flush()
 
-    token = _make_token(member_with_user)
+    token = await _make_token(db_session, member_with_user)
     response = await client.get(
         f"/vote/{live_campaign_with_entries.id}",
         cookies=_auth_cookies(token),
@@ -472,10 +476,11 @@ async def test_vote_page_anonymous_on_live_campaign(
 
 async def test_admin_campaigns_requires_officer_rank(
     client: AsyncClient,
+    db_session: AsyncSession,
     member_with_user: Player,
 ):
     """GET /admin/campaigns for Member-rank player → redirect to login (not officer)."""
-    token = _make_token(member_with_user)
+    token = await _make_token(db_session, member_with_user)
     response = await client.get(
         "/admin/campaigns",
         cookies=_auth_cookies(token),
@@ -494,10 +499,11 @@ async def test_admin_campaigns_requires_auth(client: AsyncClient):
 
 async def test_admin_campaigns_accessible_by_officer(
     client: AsyncClient,
+    db_session: AsyncSession,
     officer_member_with_user: Player,
 ):
     """GET /admin/campaigns for Officer → 200."""
-    token = _make_token(officer_member_with_user)
+    token = await _make_token(db_session, officer_member_with_user)
     response = await client.get(
         "/admin/campaigns",
         cookies=_auth_cookies(token),
@@ -508,10 +514,11 @@ async def test_admin_campaigns_accessible_by_officer(
 
 async def test_admin_roster_requires_officer_rank(
     client: AsyncClient,
+    db_session: AsyncSession,
     member_with_user: Player,
 ):
     """GET /admin/roster for Member-rank → redirect (not officer)."""
-    token = _make_token(member_with_user)
+    token = await _make_token(db_session, member_with_user)
     response = await client.get(
         "/admin/roster",
         cookies=_auth_cookies(token),
@@ -522,10 +529,11 @@ async def test_admin_roster_requires_officer_rank(
 
 async def test_admin_roster_accessible_by_officer(
     client: AsyncClient,
+    db_session: AsyncSession,
     officer_member_with_user: Player,
 ):
     """GET /admin/roster for Officer → 200."""
-    token = _make_token(officer_member_with_user)
+    token = await _make_token(db_session, officer_member_with_user)
     response = await client.get(
         "/admin/roster",
         cookies=_auth_cookies(token),
@@ -536,10 +544,11 @@ async def test_admin_roster_accessible_by_officer(
 
 async def test_admin_new_campaign_form_accessible_by_officer(
     client: AsyncClient,
+    db_session: AsyncSession,
     officer_member_with_user: Player,
 ):
     """GET /admin/campaigns/new for Officer → 200, contains form."""
-    token = _make_token(officer_member_with_user)
+    token = await _make_token(db_session, officer_member_with_user)
     response = await client.get(
         "/admin/campaigns/new",
         cookies=_auth_cookies(token),
@@ -551,11 +560,12 @@ async def test_admin_new_campaign_form_accessible_by_officer(
 
 async def test_admin_edit_campaign_accessible_by_officer(
     client: AsyncClient,
+    db_session: AsyncSession,
     officer_member_with_user: Player,
     live_campaign_with_entries: Campaign,
 ):
     """GET /admin/campaigns/{id}/edit for Officer → 200."""
-    token = _make_token(officer_member_with_user)
+    token = await _make_token(db_session, officer_member_with_user)
     response = await client.get(
         f"/admin/campaigns/{live_campaign_with_entries.id}/edit",
         cookies=_auth_cookies(token),

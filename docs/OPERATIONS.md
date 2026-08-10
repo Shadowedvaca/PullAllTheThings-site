@@ -334,6 +334,9 @@ These live in `/opt/guild-portal/.env` on the server. Never commit this file.
 ```bash
 DATABASE_URL=postgresql+asyncpg://patt_user:PASSWORD@localhost:5432/patt_db
 JWT_SECRET_KEY=your-secret-key
+JWT_MEMBER_EXPIRE_MINUTES=10080
+JWT_PRIVILEGED_EXPIRE_MINUTES=720
+JWT_PRIVILEGED_RANK_LEVEL=4
 DISCORD_BOT_TOKEN=your-bot-token
 DISCORD_GUILD_ID=your-server-id
 BLIZZARD_CLIENT_ID=your-blizzard-client-id
@@ -348,6 +351,23 @@ APP_PORT=8100
 
 > **Note:** Channel IDs (audit channel, crafters corner, raid channel) are configured
 > via the Admin UI and stored in `common.discord_config` — not in `.env`.
+
+## Authentication sessions and JWT key incidents
+
+Member sessions have a 7-day absolute lifetime. Rank level 4 and above sessions
+have a 12-hour absolute lifetime. Sessions do not renew automatically and are
+stored in `common.auth_sessions`, so logout and officer "Sign Out All" actions
+can revoke them independently. Password changes/resets, deactivation, deletion,
+and rank changes revoke all affected sessions and require login again.
+
+Do not rotate `JWT_SECRET_KEY` as routine session cleanup. Rotation immediately
+invalidates every session and also makes Discord, Raid-Helper, Blizzard, and WCL
+credentials encrypted with the JWT-key-derived context unreadable. Treat it as a
+separately authorized incident operation: coordinate user re-login, capture the
+required credential values through approved secret-handling channels, rotate the
+key, restore/re-enter affected credentials, redeploy, and verify authentication
+and each provider integration. Never place secret values in issues, logs, or the
+release record.
 
 ---
 

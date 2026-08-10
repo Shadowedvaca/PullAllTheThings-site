@@ -113,6 +113,7 @@ def _make_db(user, player):
     player_scalar.scalar_one_or_none = MagicMock(return_value=player)
 
     db = AsyncMock()
+    db.add = MagicMock()
     db.execute = AsyncMock(side_effect=[user_scalar, player_scalar])
     db.flush = AsyncMock()
     return db

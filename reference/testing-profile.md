@@ -66,9 +66,10 @@ Changes affecting these areas extend the suite in the same child:
 - member settings or character ownership: representative view and authorized write;
 - setup or onboarding: first-run redirect and a bounded synthetic setup path.
 
-Child #58 owns the next authentication-session change and therefore owns the
-authenticated Playwright journeys that prove its selected policy. Browser tests
-do not use live Discord, Blizzard, production identities, or production data.
+The authentication browser journey proves successful member login, the issued
+cookie contract, authenticated identity, logout revocation, and protected-route
+denial after logout. Browser tests do not use live Discord, Blizzard, production
+identities, or production data.
 
 ## Provider boundaries
 

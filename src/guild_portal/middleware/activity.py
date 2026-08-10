@@ -11,7 +11,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from sv_common.auth.jwt import decode_access_token
+from guild_portal.config import get_settings
+from sv_common.auth.sessions import authenticate_session
+from sv_common.db.engine import get_session_factory
 
 logger = logging.getLogger(__name__)
 
@@ -90,23 +92,32 @@ class ActivityMiddleware(BaseHTTPMiddleware):
         if pool is None:
             return response
 
-        try:
-            payload = decode_access_token(token)
-            user_id = payload.get("user_id")
-            if user_id:
-                task = BackgroundTask(_record_activity, pool, user_id, request.url.path)
-                if response.background is None:
-                    response.background = task
-                else:
-                    # Chain with any existing background task
-                    existing = response.background
-                    response.background = BackgroundTask(
-                        _chain_tasks, existing, task
-                    )
-        except Exception:
-            pass  # expired/invalid token — silently skip
+        task = BackgroundTask(
+            _record_authenticated_activity,
+            pool,
+            token,
+            request.url.path,
+        )
+        if response.background is None:
+            response.background = task
+        else:
+            existing = response.background
+            response.background = BackgroundTask(_chain_tasks, existing, task)
 
         return response
+
+
+async def _record_authenticated_activity(
+    pool: asyncpg.Pool, token: str, path: str
+) -> None:
+    """Revalidate session state immediately before recording activity."""
+    factory = get_session_factory(get_settings().database_url)
+    try:
+        async with factory() as db:
+            authenticated = await authenticate_session(token, db)
+            await _record_activity(pool, authenticated.user.id, path)
+    except Exception:
+        return
 
 
 async def _chain_tasks(first: BackgroundTask, second: BackgroundTask) -> None:

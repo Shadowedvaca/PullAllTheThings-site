@@ -15,7 +15,10 @@ from sv_common.db.models import (
     CampaignEntry,
     GuildRank,
     Player,
+    User,
 )
+from sv_common.auth.passwords import hash_password
+from sv_common.auth.sessions import issue_session_token
 from guild_portal.services import campaign_service, vote_service
 
 
@@ -37,9 +40,17 @@ async def _create_player(
     display_name: str,
     rank_id: int,
 ) -> Player:
+    user = User(
+        email=f"{display_name.lower()}@campaign.test",
+        password_hash=hash_password("test-password"),
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
     player = Player(
         display_name=display_name,
         guild_rank_id=rank_id,
+        website_user_id=user.id,
     )
     db.add(player)
     await db.flush()
@@ -76,20 +87,17 @@ async def _make_live_campaign(
     return campaign
 
 
-def _auth_headers(player: Player) -> dict:
-    """Generate auth headers for a player.
-
-    Uses member_id=player.id in JWT; campaign routes fall back to
-    member_id lookup when user_id resolves to no player.
-    """
-    from sv_common.auth.jwt import create_access_token
-    from sqlalchemy.orm import selectinload
-
+async def _auth_headers(db: AsyncSession, player: Player) -> dict:
+    """Generate database-backed auth headers for a player."""
+    await db.refresh(player, ["guild_rank"])
     rank_level = player.guild_rank.level if player.guild_rank else 0
-    token = create_access_token(
-        user_id=0, member_id=player.id, rank_level=rank_level
+    issued = await issue_session_token(
+        db,
+        user_id=player.website_user_id,
+        member_id=player.id,
+        rank_level=rank_level,
     )
-    return {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {issued.token}"}
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +341,7 @@ async def test_results_hidden_until_voted(db_session: AsyncSession, client: Asyn
 
     response = await client.get(
         f"/api/v1/campaigns/{campaign.id}/results",
-        headers=_auth_headers(non_voter),
+        headers=await _auth_headers(db_session, non_voter),
     )
     assert response.status_code == 403
 
@@ -372,7 +380,7 @@ async def test_results_visible_after_voting(db_session: AsyncSession, client: As
 
     response = await client.get(
         f"/api/v1/campaigns/{campaign.id}/results",
-        headers=_auth_headers(voter),
+        headers=await _auth_headers(db_session, voter),
     )
     assert response.status_code == 200
     data = response.json()
@@ -437,7 +445,7 @@ async def test_rank_gated_campaign_hidden_from_low_rank(db_session: AsyncSession
 
     response = await client.get(
         f"/api/v1/campaigns/{campaign.id}",
-        headers=_auth_headers(initiate),
+        headers=await _auth_headers(db_session, initiate),
     )
     assert response.status_code == 403
 

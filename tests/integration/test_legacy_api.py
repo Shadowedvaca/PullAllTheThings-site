@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def _make_quote_subject(db: AsyncSession, suffix: str):
-    from sv_common.auth.jwt import create_access_token
+    from sv_common.auth.sessions import issue_session_token
     from sv_common.auth.passwords import hash_password
     from sv_common.db.models import GuildRank, Player, QuoteSubject, User
 
@@ -40,11 +40,12 @@ async def _make_quote_subject(db: AsyncSession, suffix: str):
     )
     db.add(subject)
     await db.flush()
-    token = create_access_token(
+    token = (await issue_session_token(
+        db,
         user_id=user.id,
         member_id=player.id,
         rank_level=rank.level,
-    )
+    )).token
     return subject, {"Authorization": f"Bearer {token}"}
 
 

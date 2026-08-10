@@ -493,6 +493,14 @@ def register_onboarding_commands(
                 hash_password(temp_pw),
                 row["id"],
             )
+            await conn.execute(
+                """
+                UPDATE common.auth_sessions
+                   SET revoked_at = NOW(), revoked_reason = 'password_reset'
+                 WHERE user_id = $1 AND revoked_at IS NULL
+                """,
+                row["id"],
+            )
 
         site_url = get_app_url()
         try:

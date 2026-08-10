@@ -24,7 +24,6 @@ Public routes (rank-gated for visibility):
 import logging
 from datetime import datetime
 
-import jwt as _jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -32,8 +31,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from guild_portal.config import get_settings
 from guild_portal.deps import get_current_member, get_db, require_rank
+from sv_common.auth.sessions import authenticate_session
 from guild_portal.services import campaign_service, vote_service
 from sv_common.db.models import Campaign, Player
 
@@ -374,37 +373,12 @@ async def _get_optional_player(
 ) -> Player | None:
     """Try to extract the current player from JWT; return None if unauthenticated.
 
-    Tries user_id first (primary), then falls back to member_id (= player.id in JWT).
+    Validates the signed token and its database-backed session.
     """
     if credentials is None:
         return None
     try:
-        settings = get_settings()
-        payload = _jwt.decode(
-            credentials.credentials,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm],
-        )
-        # Primary: user_id → Player.website_user_id
-        user_id = payload.get("user_id")
-        if user_id:
-            result = await db.execute(
-                select(Player)
-                .options(selectinload(Player.guild_rank))
-                .where(Player.website_user_id == user_id)
-            )
-            player = result.scalar_one_or_none()
-            if player:
-                return player
-        # Fallback: member_id = player.id (JWT backward compat)
-        player_id = payload.get("member_id")
-        if player_id:
-            result = await db.execute(
-                select(Player)
-                .options(selectinload(Player.guild_rank))
-                .where(Player.id == player_id)
-            )
-            return result.scalar_one_or_none()
+        return (await authenticate_session(credentials.credentials, db)).player
     except Exception:
         return None
     return None

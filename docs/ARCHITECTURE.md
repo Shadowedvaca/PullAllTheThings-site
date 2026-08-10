@@ -729,7 +729,7 @@ voice_attendance_log
 | Mechanism | Used For | Storage |
 |-----------|----------|---------|
 | bcrypt password hash | Website login | `users.password_hash` |
-| JWT (HS256) | Session token | HTTP-only cookie `patt_token` (30-day max_age) |
+| JWT (HS256) + database session | Revocable session token | HTTP-only `patt_token` cookie or Bearer token; `common.auth_sessions` stores server-side state |
 | Invite codes | Registration gating | `invite_codes` (8-char, 72-hr, single-use) |
 | Battle.net OAuth2 | Character linking | `battlenet_accounts` (tokens Fernet-encrypted) |
 | API key | Addon upload endpoint | `.env` `GUILD_SYNC_API_KEY` |
@@ -738,13 +738,20 @@ voice_attendance_log
 
 Two Fernet encryption contexts:
 
-**JWT-key-derived context** (`crypto.py`): Used for Discord bot token, Raid-Helper API key, Blizzard client secret, WCL credentials. The JWT secret is the root — if it changes, all these secrets must be re-entered.
+**JWT-key-derived context** (`crypto.py`): Used for Discord bot token, Raid-Helper API key, Blizzard client secret, WCL credentials. The JWT secret is the root — if it changes, all sessions are invalidated and all these secrets must be re-entered.
 
 **Dedicated BNet context** (`BNET_TOKEN_ENCRYPTION_KEY`): Used exclusively for Battle.net OAuth tokens (access + refresh). Separate key so BNet tokens can be rotated without affecting Discord/Blizzard credentials.
 
 ### 7.3 Rank-Based Access Control
 
-Routes are gated by `rank_level` extracted from the JWT payload:
+Authentication verifies the signed JWT, its `jti` against an unrevoked and
+unexpired `common.auth_sessions` row, an active website user, and the player's
+current database rank. Ordinary member sessions have a 7-day absolute lifetime;
+rank level 4 and above sessions have a 12-hour absolute lifetime. Sessions do
+not renew automatically. A rank change revokes existing sessions and requires a
+new login.
+
+Routes are gated by the verified current database `rank_level`:
 
 ```
 Public         — No auth required (/, /roster, /crafting-corner, /guide, /feedback)
@@ -753,7 +760,7 @@ Officer        — rank_level >= officer threshold (/admin/*, most admin APIs)
 Guild Leader   — rank_level >= GL threshold (/admin/site-config, GL-only features)
 ```
 
-`screen_permissions` table in `common` schema allows DB-driven per-screen rank gates (managed via Admin UI). This is checked in `deps.py` against the JWT rank_level.
+`screen_permissions` table in `common` schema allows DB-driven per-screen rank gates (managed via Admin UI). This is checked in `deps.py` against the verified current database rank. Unsafe cookie-authenticated requests require a same-origin `Origin` or `Referer`, and logout is a POST that revokes the current session.
 
 ---
 

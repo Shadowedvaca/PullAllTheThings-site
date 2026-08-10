@@ -9,7 +9,9 @@ class Settings(BaseSettings):
     database_url: str
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 43200  # 30 days — matches COOKIE_MAX_AGE in auth_pages.py
+    jwt_member_expire_minutes: int = 10080  # 7 days
+    jwt_privileged_expire_minutes: int = 720  # 12 hours
+    jwt_privileged_rank_level: int = 4
     discord_bot_token: str = ""
     discord_guild_id: str = ""
     google_apps_script_url: str = ""

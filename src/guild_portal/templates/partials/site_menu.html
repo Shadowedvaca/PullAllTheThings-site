@@ -30,7 +30,9 @@
         {% endif %}
         <a href="/feedback">Feedback</a>
         <div class="site-menu__divider"></div>
-        <a href="/logout">Log Out</a>
+        <form method="post" action="/logout" class="site-menu__logout-form">
+          <button type="submit" class="site-menu__logout-button">Log Out</button>
+        </form>
       {% else %}
         <a href="/feedback">Feedback</a>
         <div class="site-menu__divider"></div>

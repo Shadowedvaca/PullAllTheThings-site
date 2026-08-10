@@ -37,7 +37,7 @@ from sv_common.db.models import (
     Player,
     User,
 )
-from sv_common.auth.jwt import create_access_token
+from sv_common.auth.sessions import issue_session_token
 from sv_common.auth.passwords import hash_password
 from guild_portal.services import campaign_service, vote_service
 from guild_portal.services.contest_agent import detect_milestone
@@ -85,11 +85,14 @@ async def _create_invite(
     return inv
 
 
-def _auth_headers(user_id: int, player_id: int, rank_level: int) -> dict:
+async def _auth_headers(
+    db: AsyncSession, user_id: int, player_id: int, rank_level: int
+) -> dict:
     """Generate Bearer auth headers for a player."""
-    token = create_access_token(
+    token = (await issue_session_token(
+        db,
         user_id=user_id, member_id=player_id, rank_level=rank_level
-    )
+    )).token
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -323,7 +326,9 @@ async def test_full_platform_regression(
                 {"entry_id": entries[2].id, "rank": 3},
             ]
         },
-        headers=_auth_headers(initiate_user.id, initiate.id, rank_level=1),
+        headers=await _auth_headers(
+            db_session, initiate_user.id, initiate.id, rank_level=1
+        ),
     )
     assert resp.status_code == 200
     assert resp.json()["ok"] is False

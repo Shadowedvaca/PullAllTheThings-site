@@ -2,15 +2,13 @@
 
 from collections.abc import AsyncGenerator
 
-import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from guild_portal.config import get_settings
 from sv_common.db.engine import get_session_factory
+from sv_common.auth.sessions import AuthenticatedSession, authenticate_session
 from sv_common.db.models import GuildRank, Player
 
 _bearer = HTTPBearer(auto_error=False)
@@ -31,16 +29,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
-def _decode_token(token: str) -> dict:
-    """Decode and validate a JWT string. Raises jwt exceptions on failure."""
-    settings = get_settings()
-    return jwt.decode(
-        token,
-        settings.jwt_secret_key,
-        algorithms=[settings.jwt_algorithm],
-    )
-
-
 async def get_current_player(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -52,8 +40,6 @@ async def get_current_player(
     browser fetch() calls from admin pages work without a separate token.
     Raises HTTP 401 if no valid token is found.
     """
-    from sv_common.auth.jwt import decode_access_token
-
     token_str: str | None = None
     if credentials is not None:
         token_str = credentials.credentials
@@ -64,29 +50,23 @@ async def get_current_player(
         raise HTTPException(status_code=401, detail="Not authenticated.")
 
     try:
-        payload = decode_access_token(token_str)
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired.")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token.")
+        return (await authenticate_session(token_str, db)).player
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.") from exc
 
-    user_id = payload.get("user_id")
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Invalid token payload.")
 
-    result = await db.execute(
-        select(Player)
-        .options(
-            selectinload(Player.guild_rank),
-            selectinload(Player.main_character),
-        )
-        .where(Player.website_user_id == user_id)
-    )
-    player = result.scalar_one_or_none()
-    if player is None:
-        raise HTTPException(status_code=401, detail="Player not found.")
-
-    return player
+async def get_authenticated_session(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
+) -> AuthenticatedSession:
+    token = credentials.credentials if credentials else request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated.")
+    try:
+        return await authenticate_session(token, db)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired session.") from exc
 
 
 # Alias for backward compatibility
@@ -122,19 +102,7 @@ async def get_page_member(
     if not token:
         return None
     try:
-        payload = _decode_token(token)
-        user_id = payload.get("user_id")
-        if user_id is None:
-            return None
-        result = await db.execute(
-            select(Player)
-            .options(
-                selectinload(Player.guild_rank),
-                selectinload(Player.main_character),
-            )
-            .where(Player.website_user_id == user_id)
-        )
-        return result.scalar_one_or_none()
+        return (await authenticate_session(token, db)).player
     except Exception:
         return None
 

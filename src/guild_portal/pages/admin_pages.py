@@ -2739,6 +2739,9 @@ async def admin_toggle_user_active(
         return JSONResponse({"ok": False, "error": "User not found"}, status_code=404)
 
     u.is_active = not u.is_active
+    if not u.is_active:
+        from sv_common.auth.sessions import revoke_all_sessions
+        await revoke_all_sessions(db, u.id, "account_deactivated")
     await db.commit()
     return JSONResponse({"ok": True, "data": {"user_id": user_id, "is_active": u.is_active}})
 
@@ -2788,10 +2791,32 @@ async def admin_reset_user_password(
         return JSONResponse({"ok": False, "error": "User not found"}, status_code=404)
 
     from sv_common.auth.passwords import generate_temp_password, hash_password
+    from sv_common.auth.sessions import revoke_all_sessions
     temp_pw = generate_temp_password()
     u.password_hash = hash_password(temp_pw)
+    await revoke_all_sessions(db, u.id, "password_reset")
     await db.commit()
     return JSONResponse({"ok": True, "data": {"temp_password": temp_pw}})
+
+
+@router.post("/users/{user_id}/revoke-sessions")
+async def admin_revoke_user_sessions(
+    request: Request,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    admin = await _require_admin(request, db)
+    if admin is None:
+        return JSONResponse({"ok": False, "error": "Not authorized"}, status_code=403)
+
+    result = await db.execute(select(User.id).where(User.id == user_id))
+    if result.scalar_one_or_none() is None:
+        return JSONResponse({"ok": False, "error": "User not found"}, status_code=404)
+
+    from sv_common.auth.sessions import revoke_all_sessions
+    await revoke_all_sessions(db, user_id, "officer_revoke_all")
+    await db.commit()
+    return JSONResponse({"ok": True, "data": {"user_id": user_id}})
 
 
 # ---------------------------------------------------------------------------

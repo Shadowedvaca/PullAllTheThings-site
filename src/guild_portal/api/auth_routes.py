@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from guild_portal.deps import get_current_player, get_db
 from sv_common.auth.invite_codes import consume_invite_code, validate_invite_code
-from sv_common.auth.jwt import create_access_token
 from sv_common.auth.passwords import hash_password, verify_password
+from sv_common.auth.sessions import issue_session_token, revoke_token
 from sv_common.db.models import Player, User
 
 logger = logging.getLogger(__name__)
@@ -105,12 +105,16 @@ async def register(body: RegisterBody, db: AsyncSession = Depends(get_db)):
 
     rank_level = player.guild_rank.level if player.guild_rank else 1
 
-    token = create_access_token(
+    issued = await issue_session_token(
+        db,
         user_id=user.id,
         member_id=player.id,  # kept for JWT compat; resolves via user_id
         rank_level=rank_level,
     )
-    return {"ok": True, "data": {"token": token}}
+    return {
+        "ok": True,
+        "data": {"token": issued.token, "expires_at": issued.expires_at.isoformat()},
+    }
 
 
 @router.post("/login")
@@ -145,12 +149,27 @@ async def login(body: LoginBody, db: AsyncSession = Depends(get_db)):
     user.login_count = (user.login_count or 0) + 1
     await db.flush()
 
-    token = create_access_token(
+    issued = await issue_session_token(
+        db,
         user_id=user.id,
         member_id=player.id,
         rank_level=rank_level,
     )
-    return {"ok": True, "data": {"token": token}}
+    return {
+        "ok": True,
+        "data": {"token": issued.token, "expires_at": issued.expires_at.isoformat()},
+    }
+
+
+@router.post("/logout")
+async def logout(request: Request, db: AsyncSession = Depends(get_db)):
+    """Revoke the current Bearer or cookie session."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+    token = token or request.cookies.get("patt_token")
+    if token:
+        await revoke_token(db, token)
+    return {"ok": True, "data": {"revoked": bool(token)}}
 
 
 @router.get("/me")

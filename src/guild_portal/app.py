@@ -320,6 +320,10 @@ def create_app() -> FastAPI:
     # Security headers on every response
     app.add_middleware(SecurityHeadersMiddleware)
 
+    # Same-origin protection for unsafe requests carrying the session cookie
+    from guild_portal.middleware.csrf import CookieSameOriginMiddleware
+    app.add_middleware(CookieSameOriginMiddleware)
+
     # Activity tracking — records page views per authenticated user (post-response, no latency)
     from guild_portal.middleware.activity import ActivityMiddleware
     app.add_middleware(ActivityMiddleware)
