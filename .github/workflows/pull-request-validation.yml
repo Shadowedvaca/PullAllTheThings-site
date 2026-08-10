@@ -153,20 +153,6 @@ jobs:
             --screenshot=only-on-failure \
             --output=artifacts/playwright
 
-      - name: Retain coverage and browser evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: patt-validation-${{ github.event.pull_request.head.sha }}
-          path: |
-            artifacts/coverage.xml
-            artifacts/coverage-html
-            artifacts/diff-cover.html
-            artifacts/playwright
-            artifacts/recovery
-          if-no-files-found: warn
-          retention-days: 14
-
       - name: Check browser JavaScript syntax
         shell: bash
         run: |
@@ -216,6 +202,14 @@ jobs:
             sleep 2
           done
           docker compose -f docker-compose.recovery.yml exec -T app alembic current --check-heads
+          bash deploy/patt-predeploy-backup.sh \
+            --compose-file docker-compose.recovery.yml \
+            --db-service db \
+            --database patt_recovery \
+            --user patt_recovery \
+            --backup-dir artifacts/predeploy \
+            --previous-sha "$RECOVERY_COMMIT_SHA" \
+            --deployment-sha "$RECOVERY_COMMIT_SHA"
 
       - name: Remove fresh-database recovery containers
         if: always()
@@ -223,3 +217,18 @@ jobs:
           PATT_IMAGE: patt-ci:${{ github.event.pull_request.head.sha }}
           RECOVERY_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: docker compose -f docker-compose.recovery.yml down --volumes --remove-orphans
+
+      - name: Retain validation and recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: patt-validation-${{ github.event.pull_request.head.sha }}
+          path: |
+            artifacts/coverage.xml
+            artifacts/coverage-html
+            artifacts/diff-cover.html
+            artifacts/playwright
+            artifacts/recovery
+            artifacts/predeploy
+          if-no-files-found: warn
+          retention-days: 14

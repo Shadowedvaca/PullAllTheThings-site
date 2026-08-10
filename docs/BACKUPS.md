@@ -84,7 +84,9 @@ database. `scripts/rehearse_database_recovery.py`:
 CI separately starts the production image against a fresh ephemeral PostgreSQL
 16 Compose service. It fails unless `/api/health` reports the expected version,
 exact commit, `recovery` environment, and connected database, followed by a
-successful Alembic head check.
+successful Alembic head check. It then executes the same
+`patt-predeploy-backup.sh` wrapper used on servers against that synthetic
+database and retains the resulting archive and manifest.
 
 This proves the exercised migration and synthetic archive path. It does not
 prove that every historical migration is safely reversible or that a particular
