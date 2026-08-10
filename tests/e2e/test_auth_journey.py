@@ -26,7 +26,9 @@ def test_login_to_registration_validation(page: Page, live_test_url: str) -> Non
     expect(page.locator(".flash-bar--error")).to_contain_text("Passwords do not match")
 
 
-def test_member_login_cookie_identity_and_logout(page: Page, live_test_url: str) -> None:
+def test_member_login_cookie_identity_and_logout(
+    page: Page, live_test_url: str
+) -> None:
     page.goto(f"{live_test_url}/login?next=/api/v1/auth/me")
     page.locator("#discord_username").fill("synthetic-member")
     page.locator("#password").fill("synthetic-password")
@@ -39,7 +41,11 @@ def test_member_login_cookie_identity_and_logout(page: Page, live_test_url: str)
     assert cookie["httpOnly"] is True
     assert cookie["sameSite"] == "Lax"
     assert cookie["secure"] is False
-    assert 6.9 * 24 * 60 * 60 <= cookie["expires"] - __import__("time").time() <= 7 * 24 * 60 * 60
+    assert (
+        6.9 * 24 * 60 * 60
+        <= cookie["expires"] - __import__("time").time()
+        <= 7 * 24 * 60 * 60
+    )
 
     response = page.request.post(
         f"{live_test_url}/logout",
