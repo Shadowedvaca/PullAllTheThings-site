@@ -12,6 +12,7 @@ from sv_common.auth.sessions import (
     SessionAuthenticationError,
     authenticate_session,
     issue_session_token,
+    revoke_all_sessions,
     revoke_token,
 )
 from sv_common.db.models import AuthSession, GuildRank, Player, User
@@ -80,7 +81,7 @@ async def test_inactive_user_is_denied_even_if_token_signature_is_valid(
 
 
 @pytest.mark.asyncio
-async def test_password_change_trigger_revokes_existing_sessions(
+async def test_password_change_revocation_service_revokes_existing_sessions(
     db_session: AsyncSession,
 ):
     user, player = await _identity(db_session)
@@ -92,6 +93,7 @@ async def test_password_change_trigger_revokes_existing_sessions(
     )
     user.password_hash = hash_password("different-synthetic-password")
     await db_session.flush()
+    await revoke_all_sessions(db_session, user.id, "password_change")
     db_session.expire_all()
 
     result = await db_session.execute(
@@ -103,7 +105,7 @@ async def test_password_change_trigger_revokes_existing_sessions(
 
 
 @pytest.mark.asyncio
-async def test_rank_change_trigger_revokes_and_requires_reauthentication(
+async def test_rank_change_is_detected_revoked_and_requires_reauthentication(
     db_session: AsyncSession,
 ):
     user, player = await _identity(db_session, rank_level=3)
@@ -118,6 +120,10 @@ async def test_rank_change_trigger_revokes_and_requires_reauthentication(
     await db_session.flush()
     player.guild_rank_id = officer.id
     await db_session.flush()
+    db_session.expire_all()
+
+    with pytest.raises(SessionAuthenticationError, match="Privilege changed"):
+        await authenticate_session(issued.token, db_session)
     db_session.expire_all()
 
     result = await db_session.execute(
