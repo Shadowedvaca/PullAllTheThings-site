@@ -110,8 +110,10 @@ Do not perform a deployment or restore merely to prove documentation.
 Implemented repository controls include PR validation, canonical version and
 release-note validation, exact-SHA checkout and runtime reporting, test-from-main,
 production tag/version/main-ancestry checks, an exact-SHA successful-test-run
-preflight, post-deploy health/migration checks, and post-success GitHub Release
-publication.
+preflight, post-deploy health/migration checks, post-success GitHub Release
+publication, isolated custom-archive restore/fingerprint and representative
+downgrade/re-upgrade rehearsal, fresh-database image identity validation, and
+environment-specific atomic pre-deployment archives with rollback manifests.
 
 Issue #57 reconciles the pre-existing PostgreSQL-backed test baseline exposed by
 the new workflow. Pull-request run `31226039583` passed the migration chain,
@@ -130,12 +132,15 @@ sets `production_enabled` to `false`, and `deploy-prod.yml` runs
 SSH, or deployment. A tag that matches `VERSION` and points into `main` therefore
 cannot currently reach Production. Enabling requires a reviewed repository
 change that sets every required control to `implemented_and_verified` and then
-explicitly sets `production_enabled` to `true`; this slice does neither.
+explicitly sets `production_enabled` to `true`. Child #54 sets only
+`migration_backup_rollback` to `implemented_and_verified`; it leaves Production
+disabled and does not assert the remaining controls.
 
 The following are mandatory Production blockers, not optional follow-ups:
 
-- issue #54: implement and evidence migration safety, environment-specific
-  backup verification, bounded rollback, and downgrade/restore rehearsal;
+- issue #54: the repository controls and synthetic evidence are implemented and
+  verified by PR run `31352712431` at `81d1453`; Child development complete
+  approval and parent reconciliation are still required;
 - issue #55: implement and evidence strict SSH host trust, isolated environment
   credentials, GitHub environment protections, and required branch/PR checks.
 

@@ -3,7 +3,7 @@
   "production_enabled": false,
   "required_foundation_issues": [54, 55],
   "required_controls": {
-    "migration_backup_rollback": "blocked",
+    "migration_backup_rollback": "implemented_and_verified",
     "ssh_trust_credential_isolation": "blocked",
     "github_environment_branch_protection": "blocked",
     "exact_sha_test_provenance": "implemented_unverified"
