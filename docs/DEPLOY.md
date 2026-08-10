@@ -21,9 +21,11 @@ an operational inventory of implemented workflows:
 
 - SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (authorized on all three servers)
 - Host secrets: `DEV_HOST`, `TEST_HOST`, `PROD_HOST` in GitHub repo secrets
-- Deployment resolves and checks out an exact commit, builds, starts, verifies
-  runtime version/environment/commit and database health, then verifies the
-  Alembic head.
+- Deployment resolves and checks out an exact commit and builds the image. Before
+  the migration-running container can start, it creates and inspects an atomic
+  environment-specific custom-format database backup plus rollback manifest.
+  It then starts the image, verifies runtime version/environment/commit and
+  database health, and verifies the Alembic head.
 - Never push a production tag outside the Promotion to production gate.
 - Production is not currently available: `.github/production-readiness.json`
   defaults to blocked until issues #54 and #55 are complete and their controls
@@ -38,6 +40,11 @@ Branch, PR, test, and production flow is defined only in
 `reference/work-management.md` and `reference/development-and-release.md`.
 This runbook does not authorize merge, tags, deployment, environment changes,
 or rollback.
+
+Database backup, restore-rehearsal, and rollback decision boundaries are in
+`docs/BACKUPS.md`. A failed verified-backup step blocks deployment before the
+new container can run migrations. Live restore remains separately authorized
+destructive work.
 
 ---
 

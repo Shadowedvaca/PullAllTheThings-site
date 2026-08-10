@@ -583,12 +583,18 @@ All three share the same Python process, event loop, and database connection poo
 | test | `my-web-apps-test` | 8100 | Exact approved `main` integration commit | Integration validation |
 | dev | `my-web-apps-dev` | 8100 | Exact commit resolved from an explicit branch | Feature feedback |
 
-Each environment has its own database. Migrations run automatically on container startup via `docker-entrypoint.sh` → `alembic upgrade head`.
+Each environment has its own database. Before deployment starts a new container,
+the workflow requires an atomic, inspectable custom-format backup and rollback
+manifest for that environment. Migrations then run automatically on container
+startup via `docker-entrypoint.sh` → `alembic upgrade head`. CI rehearses a
+synthetic custom archive restore, stable fingerprint, representative one-step
+downgrade/re-upgrade, and a fresh-database container health/head check.
 
 ### 5.4 CI/CD Pipeline
 
-Pull requests run release-contract, static, migration, test, Compose, and image
-validation. Development resolves an explicit branch to an immutable SHA. Test
+Pull requests run release-contract, static, migration/recovery, test, Compose,
+image, and fresh-container identity validation. Development resolves an explicit
+branch to an immutable SHA. Test
 deploys the approved `main` integration SHA. Production validates the exact
 approved tag, version, SHA, `main` ancestry, repository readiness, and a
 successful test deployment for that exact SHA; a GitHub Release is published

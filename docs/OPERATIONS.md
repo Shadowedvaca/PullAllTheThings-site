@@ -277,10 +277,12 @@ docker compose -f /opt/guild-portal/docker-compose.dev.yml restart app
 
 See `docs/BACKUPS.md` for full backup and restore procedures.
 
-**Quick version:**
-- Automatic nightly backup at 3:00 AM UTC → `/opt/backups/patt-db/` on the server
-- Manual backup: `ssh hetzner` then `patt-backup.sh`
-- Restore: `ssh hetzner` then `patt-restore.sh`
+**Quick version:** every repository deployment now fails closed unless it creates,
+inspects, checksums, and atomically records an environment-specific
+custom-format pre-deployment backup and rollback manifest before the new
+migration-running container starts. The repository does not automatically
+delete these archives. A live restore is destructive and always requires Mike's
+exact authorization and the compatibility/evidence plan in `docs/BACKUPS.md`.
 
 ---
 

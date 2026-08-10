@@ -14,17 +14,22 @@ that runtime.
 | Unit/provider boundary | `python -m pytest tests/unit -q` | Local iteration and PR CI | Implementer |
 | Integration | `python -m pytest tests/integration -q` with `TEST_DATABASE_URL` | PR CI PostgreSQL service; local only with an isolated database | Implementer |
 | Regression | `python -m pytest tests/regression -q` with `TEST_DATABASE_URL` | PR CI and for affected local work | Implementer |
-| Migration/database | `python -m alembic upgrade head` and `python -m alembic current --check-heads` against the isolated migration database | PR CI; deployed head check in each environment | Implementer; deployment workflow enforces |
+| Migration/database and recovery | Fresh upgrade/head plus `python scripts/rehearse_database_recovery.py` against isolated PostgreSQL: custom archive inspection, isolated restore/fingerprint, one-revision downgrade/re-upgrade, and returned head | PR CI; deployed head check in each environment | Implementer; deployment workflow enforces |
 | Overall coverage | Full unit, integration, and regression command below | PR CI | PR workflow enforces |
 | Changed-line coverage | `diff-cover artifacts/coverage.xml --compare-branch=<base-sha> --fail-under=72` | PR CI against the actual PR base SHA | PR workflow enforces |
 | Automated UI/E2E | `python -m pytest tests/e2e -q --tracing=retain-on-failure --screenshot=only-on-failure --output=artifacts/playwright` | PR CI Chromium; locally when browser runtime is installed | Implementer; PR workflow enforces |
-| Compose/image | All three `docker compose ... config --quiet` commands and clean production image build | PR CI | PR workflow enforces |
+| Compose/image | All four Compose definitions, clean production image build, and that image booted against a fresh ephemeral PostgreSQL 16 database with exact version/environment/commit/DB/heads checks | PR CI | PR workflow enforces |
 | Deployed smoke | Environment-specific checks below | Exact-SHA development/test/production workflow | Deployment workflow enforces; implementer records |
 
 The test tree currently contains unit tests for services and provider boundaries,
 PostgreSQL-backed integration tests, a platform regression suite, and a Playwright
 browser suite. Tests that explicitly require PostgreSQL may skip locally when no
 isolated database is available; they must execute in PR CI.
+
+Recovery rehearsal uses only synthetic CI data. Restore targets must use the
+bounded `patt_recovery_` database namespace. The retained custom archive and
+stable fingerprint prove only the exact migration and restore path exercised by
+that run; they do not authorize or simulate a live restore.
 
 ## Coverage baselines and ratchet
 

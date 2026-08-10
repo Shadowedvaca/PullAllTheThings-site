@@ -48,7 +48,14 @@ jobs:
           script: |
             set -e
             cd /opt/guild-portal
+            mkdir -p .deployment
+            if [ -s .deployment/active-sha ]; then
+              previous_sha="$(cat .deployment/active-sha)"
+            else
+              previous_sha="$(git rev-parse HEAD)"
+            fi
             printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
+            printf '%s\n' "$previous_sha" | grep -Eq '^[0-9a-f]{40}$'
 
             git fetch --no-tags --prune origin main:refs/remotes/origin/main
             test "$(git rev-parse refs/remotes/origin/main)" = "$DEPLOY_SHA"
@@ -56,6 +63,15 @@ jobs:
             test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
 
             COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.test.yml build app
+            backup_evidence="$(bash deploy/patt-predeploy-backup.sh \
+              --compose-file docker-compose.test.yml \
+              --db-service db \
+              --database guild_db \
+              --user guild_user \
+              --backup-dir /opt/backups/patt-db/test \
+              --previous-sha "$previous_sha" \
+              --deployment-sha "$DEPLOY_SHA")"
+            printf '%s\n' "$backup_evidence"
             COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.test.yml up -d app
 
             for i in 1 2 3 4 5 6 7 8 9 10; do
@@ -71,4 +87,6 @@ jobs:
             done
 
             COMMIT_SHA="$DEPLOY_SHA" docker compose -f docker-compose.test.yml exec -T app alembic current --check-heads
+            printf '%s\n' "$DEPLOY_SHA" > .deployment/active-sha.tmp
+            mv .deployment/active-sha.tmp .deployment/active-sha
             echo "Test verified: version=$DEPLOY_VERSION commit=$DEPLOY_SHA"
