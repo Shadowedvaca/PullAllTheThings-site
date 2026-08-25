@@ -75,8 +75,12 @@ jobs:
             ruff format --check "${new_files[@]}"
           fi
 
-      - name: Validate recovery shell syntax
-        run: bash -n deploy/patt-predeploy-backup.sh
+      - name: Validate deployment shell syntax and trust controls
+        run: |
+          bash -n deploy/patt-predeploy-backup.sh
+          bash -n deploy/configure-deployment-ssh.sh
+          bash -n deploy/run-strict-ssh.sh
+          python scripts/validate_deployment_controls.py
 
       - name: Validate release contract
         run: python scripts/validate_release.py

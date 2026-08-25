@@ -85,19 +85,33 @@ jobs:
           ref: ${{ needs.preflight.outputs.release_sha }}
           fetch-depth: 1
 
-      - name: Deploy exact tag commit via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Configure strict environment-scoped SSH trust
+        id: ssh
+        shell: bash
         env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash deploy/configure-deployment-ssh.sh
+
+      - name: Deploy exact tag commit via strict SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_PRIVATE_KEY_PATH: ${{ steps.ssh.outputs.private_key }}
+          DEPLOY_SSH_KNOWN_HOSTS_PATH: ${{ steps.ssh.outputs.known_hosts }}
           DEPLOY_SHA: ${{ needs.preflight.outputs.release_sha }}
           DEPLOY_TAG: ${{ needs.preflight.outputs.release_tag }}
           DEPLOY_VERSION: ${{ needs.preflight.outputs.release_version }}
           TEST_RUN_ID: ${{ needs.preflight.outputs.test_run_id }}
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: root
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: DEPLOY_SHA,DEPLOY_TAG,DEPLOY_VERSION,TEST_RUN_ID
-          script: |
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s\n' "$DEPLOY_TAG" | grep -Eq '^prod-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          printf '%s\n' "$DEPLOY_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          printf '%s\n' "$TEST_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          bash deploy/run-strict-ssh.sh \
+            "DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_TAG='$DEPLOY_TAG' DEPLOY_VERSION='$DEPLOY_VERSION' TEST_RUN_ID='$TEST_RUN_ID' bash -s" <<'REMOTE'
             set -e
             cd /opt/guild-portal
             mkdir -p .deployment
@@ -143,6 +157,7 @@ jobs:
             printf '%s\n' "$DEPLOY_SHA" > .deployment/active-sha.tmp
             mv .deployment/active-sha.tmp .deployment/active-sha
             echo "Production verified: tag=$DEPLOY_TAG version=$DEPLOY_VERSION commit=$DEPLOY_SHA test_run_id=$TEST_RUN_ID"
+          REMOTE
 
   publish:
     name: Publish verified production release

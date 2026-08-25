@@ -10,7 +10,7 @@ that runtime.
 | Layer | Location or command | Required placement | Evidence owner |
 |---|---|---|---|
 | Static | `python -m compileall -q src scripts tests`; changed-file `ruff check --select E9,F63,F7,F82`; `ruff format --check` for new Python; `node --check` for browser and companion JavaScript | Local complete gate and PR CI | Implementer; PR workflow enforces |
-| Release/readiness contracts | `python scripts/validate_release.py`; `python scripts/validate_production_readiness.py --configuration-only` | Every PR | Implementer; PR workflow enforces |
+| Release/readiness/deployment contracts | `python scripts/validate_release.py`; `python scripts/validate_production_readiness.py --configuration-only`; `python scripts/validate_deployment_controls.py`; Bash syntax for deployment helpers | Every PR | Implementer; PR workflow enforces |
 | Unit/provider boundary | `python -m pytest tests/unit -q` | Local iteration and PR CI | Implementer |
 | Integration | `python -m pytest tests/integration -q` with `TEST_DATABASE_URL` | PR CI PostgreSQL service; local only with an isolated database | Implementer |
 | Regression | `python -m pytest tests/regression -q` with `TEST_DATABASE_URL` | PR CI and for affected local work | Implementer |
@@ -108,6 +108,7 @@ Run the applicable focused tests while iterating, then before child completion:
 ```text
 python scripts/validate_release.py
 python scripts/validate_production_readiness.py --configuration-only
+python scripts/validate_deployment_controls.py
 python -m compileall -q src scripts tests
 python -m pytest tests/unit tests/integration tests/regression -q --cov=src/guild_portal --cov=src/sv_common --cov=companion_app --cov-report=term-missing --cov-report=xml:artifacts/coverage.xml --cov-fail-under=37
 diff-cover artifacts/coverage.xml --compare-branch=<integration-base> --fail-under=72

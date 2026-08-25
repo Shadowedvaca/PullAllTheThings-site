@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "actions": {
+    "enabled": true,
+    "allowed_actions": "all",
+    "sha_pinning_required": true
+  },
+  "main_branch": {
+    "require_pull_request": true,
+    "required_approving_review_count": 0,
+    "required_status_checks": ["Quality, migrations, tests, and build"],
+    "strict_status_checks": true,
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "required_conversation_resolution": true
+  },
+  "environments": {
+    "development": {
+      "deployment_policy": "all",
+      "required_reviewers": 0,
+      "wait_timer_minutes": 0
+    },
+    "test": {
+      "deployment_policy": "protected_branches",
+      "required_reviewers": 0,
+      "wait_timer_minutes": 0
+    },
+    "production": {
+      "deployment_policy": "custom",
+      "deployment_branch_policies": [
+        {"type": "tag", "name": "prod-v*"}
+      ],
+      "required_reviewers": 0,
+      "wait_timer_minutes": 0
+    }
+  },
+  "environment_secret_names": [
+    "DEPLOY_HOST",
+    "DEPLOY_KNOWN_HOSTS",
+    "DEPLOY_SSH_KEY"
+  ],
+  "environment_variable_names": ["DEPLOY_USER"]
+}

@@ -19,14 +19,19 @@ an operational inventory of implemented workflows:
 | `deploy-prod.yml` | Exact `prod-v*` tag, currently blocked by repository readiness interlock | `pullallthethings.com` | `hetzner` |
 | `publish-release.yml` | Successful production deployment | GitHub Release | GitHub-hosted |
 
-- SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (authorized on all three servers)
-- Host secrets: `DEV_HOST`, `TEST_HOST`, `PROD_HOST` in GitHub repo secrets
+- Each `development`, `test`, and `production` GitHub environment supplies its
+  own `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, and `DEPLOY_SSH_KEY` secrets plus a
+  `DEPLOY_USER` variable. Keys are unique per environment and authorized only on
+  the matching host. See `docs/DEPLOYMENT-CONTROLS.md` for the exact non-secret
+  GitHub and SSH enforcement contract.
 - Deployment resolves and checks out an exact commit and builds the image. Before
   the migration-running container can start, it creates and inspects an atomic
   environment-specific custom-format database backup plus rollback manifest.
   It then starts the image, verifies runtime version/environment/commit and
   database health, and verifies the Alembic head.
 - Never push a production tag outside the Promotion to production gate.
+- Deployment uses native OpenSSH with strict supplied known-host verification;
+  it never accepts a newly scanned host key during a deployment.
 - Production is not currently available: `.github/production-readiness.json`
   defaults to blocked until issues #54 and #55 are complete and their controls
   are explicitly verified and enabled in a reviewed repository change.

@@ -35,17 +35,29 @@ jobs:
           python scripts/validate_release.py --github-output "$GITHUB_OUTPUT"
           echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy exact main commit via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Configure strict environment-scoped SSH trust
+        id: ssh
+        shell: bash
         env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash deploy/configure-deployment-ssh.sh
+
+      - name: Deploy exact main commit via strict SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_PRIVATE_KEY_PATH: ${{ steps.ssh.outputs.private_key }}
+          DEPLOY_SSH_KNOWN_HOSTS_PATH: ${{ steps.ssh.outputs.known_hosts }}
           DEPLOY_SHA: ${{ steps.release.outputs.sha }}
           DEPLOY_VERSION: ${{ steps.release.outputs.version }}
-        with:
-          host: ${{ secrets.TEST_HOST }}
-          username: root
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: DEPLOY_SHA,DEPLOY_VERSION
-          script: |
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s\n' "$DEPLOY_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          bash deploy/run-strict-ssh.sh \
+            "DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_VERSION='$DEPLOY_VERSION' bash -s" <<'REMOTE'
             set -e
             cd /opt/guild-portal
             mkdir -p .deployment
@@ -90,3 +102,4 @@ jobs:
             printf '%s\n' "$DEPLOY_SHA" > .deployment/active-sha.tmp
             mv .deployment/active-sha.tmp .deployment/active-sha
             echo "Test verified: version=$DEPLOY_VERSION commit=$DEPLOY_SHA"
+          REMOTE

@@ -139,8 +139,8 @@ disabled and does not assert the remaining controls.
 The following are mandatory Production blockers, not optional follow-ups:
 
 - issue #54: the repository controls and synthetic evidence are implemented and
-  verified by PR run `31352712431` at `81d1453`; Child development complete
-  approval and parent reconciliation are still required;
+  verified; Mike approved Child development complete on 2026-08-25 after final
+  PR run `32890458292` passed at `17674dd`;
 - issue #55: implement and evidence strict SSH host trust, isolated environment
   credentials, GitHub environment protections, and required branch/PR checks.
 
