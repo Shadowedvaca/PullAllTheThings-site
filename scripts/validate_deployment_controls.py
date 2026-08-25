@@ -139,9 +139,7 @@ def validate_deployment_controls(repository_root: Path) -> dict:
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     validate_deployment_controls(root)
-    print(
-        "Repository deployment controls valid: live GitHub verification still required"
-    )
+    print("Repository deployment controls valid")
     return 0
 
 

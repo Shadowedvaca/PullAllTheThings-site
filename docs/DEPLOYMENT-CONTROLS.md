@@ -44,7 +44,7 @@ Requiring another GitHub review would invent an extra happy-path approval. Branc
 status, environment, exact-SHA provenance, and repository-readiness gates remain
 technical blockers.
 
-## Live audit and cutover boundary
+## Live audit and verified cutover
 
 Read-only audit on 2026-08-25 found:
 
@@ -55,14 +55,40 @@ Read-only audit on 2026-08-25 found:
   repository scope;
 - no Development, Test, or Production environment secrets or variables existed.
 
-That state does **not** satisfy issue #55. Applying the desired GitHub settings,
-creating three independently authorized host keys, obtaining known-host records
-through a separately trusted channel, installing each public key on only its
-matching host, populating the environment-scoped values, and deleting the legacy
-repository secrets are externally visible security/infrastructure changes. They
-require Mike's explicit authority and verified evidence. Secret values and public
-key material are not recorded here.
+Mike explicitly approved the live GitHub, SSH-host, key, secret, and legacy-secret
+cutover on 2026-08-25. Verification after the approved change established:
 
-Production remains repository-disabled until live configuration is verified,
-exact-SHA Test provenance is safely exercised, the readiness record is reconciled
-in review, and Mike provides the later promotion approvals.
+- `main` requires a pull request, the strict `Quality, migrations, tests, and
+  build` check, resolved conversations, and admin enforcement; it requires zero
+  additional GitHub approving reviews and disallows force pushes and deletion;
+- Actions remain enabled with the existing allow-all policy and now require full
+  commit-SHA action pins;
+- Development allows explicitly dispatched refs, Test allows protected branches
+  only, and Production allows only tags matching `prod-v*`; none adds a reviewer
+  or wait timer;
+- every environment has only the expected deployment secret names and
+  `DEPLOY_USER=root`; values were neither read back nor recorded;
+- three newly generated ED25519 deployment keys connected successfully with
+  strict trusted-host verification and are authorized only on their matching
+  hosts;
+- the shared `github-actions-deploy` key fingerprint was removed from all three
+  active `authorized_keys` files without affecting Mike's administrative or SATT
+  keys;
+- the repository-level `DEV_HOST`, `TEST_HOST`, `PROD_HOST`, and shared
+  `DEPLOY_SSH_KEY` secrets were deleted;
+- mode-`600` recovery copies named
+  `/root/.ssh/authorized_keys.pre-patt-55-20260825` remain on each host. They are
+  not active authorization files and provide bounded rollback evidence.
+
+Exact secret values, private keys, host-key material, and administrative keys are
+not present in repository, issue, PR, or release records.
+
+The production-preflight lookup was safely exercised without deployment against
+successful Test run `30419325704` for exact SHA
+`d35786b9910707109395abad24ddd06d64bcc08c`; the validator selected that run and
+did not infer evidence from main ancestry alone.
+
+Production remains repository-disabled. Live controls and provenance are now
+verified, but #55 still requires Child development complete approval, all selected
+children then require Parent-timed human validation and integration preflight,
+and the separate Test and Production promotion approvals remain mandatory.

@@ -81,6 +81,10 @@ def validate_production_readiness(
             + ", ".join(readiness.blockers)
         )
     if not configuration_only and not readiness.enabled:
+        if not readiness.blockers:
+            raise ProductionReadinessError(
+                "Production is repository-disabled pending explicit readiness approval"
+            )
         raise ProductionReadinessError(
             "Production is repository-blocked pending issues #54 and #55: "
             + ", ".join(readiness.blockers)

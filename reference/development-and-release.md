@@ -127,29 +127,29 @@ exercised by this repository; upgrades need their own successful validation
 evidence.
 
 Production is intentionally fail closed. `.github/production-readiness.json`
-sets `production_enabled` to `false`, and `deploy-prod.yml` runs
+still sets `production_enabled` to `false`, and `deploy-prod.yml` runs
 `scripts/validate_production_readiness.py` before test-provenance lookup, secrets,
 SSH, or deployment. A tag that matches `VERSION` and points into `main` therefore
-cannot currently reach Production. Enabling requires a reviewed repository
-change that sets every required control to `implemented_and_verified` and then
-explicitly sets `production_enabled` to `true`. Child #54 sets only
-`migration_backup_rollback` to `implemented_and_verified`; it leaves Production
-disabled and does not assert the remaining controls.
+cannot currently reach Production. All required controls now have
+`implemented_and_verified` evidence from #54 and #55, including the safely
+exercised exact-SHA Test lookup. Enabling still requires a later reviewed change
+that explicitly sets `production_enabled` to `true` after Child development
+complete approval, Parent-timed human validation, integration/release preflight,
+and the documented promotion gates.
 
 The following are mandatory Production blockers, not optional follow-ups:
 
 - issue #54: the repository controls and synthetic evidence are implemented and
   verified; Mike approved Child development complete on 2026-08-25 after final
   PR run `32890458292` passed at `17674dd`;
-- issue #55: implement and evidence strict SSH host trust, isolated environment
-  credentials, GitHub environment protections, and required branch/PR checks.
+- issue #55: repository and live controls are implemented and verified; Child
+  development complete approval remains pending.
 
-The exact-SHA test provenance lookup is implemented in the repository workflow,
-but has not been executed by this slice. Production must remain disabled until
-#54 and #55 are complete, the remote protections and host controls are verified,
-the provenance preflight is validated safely, and Mike explicitly approves the
-readiness-file change. Do not claim any blocked control exists merely because a
-workflow or document describes its required future state.
+The exact-SHA test provenance lookup was exercised read-only against successful
+Test run `30419325704` for exact SHA `d35786b9910707109395abad24ddd06d64bcc08c`.
+This proves lookup and selection behavior without authorizing or performing a
+deployment. Production remains disabled until the remaining child, parent,
+manual-validation, integration, and promotion gates are satisfied.
 
 Mike approved the authentication-session policy in issue #58: ordinary member
 sessions expire after 7 days, rank level 4 and above sessions expire after 12

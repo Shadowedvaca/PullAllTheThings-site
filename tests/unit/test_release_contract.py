@@ -140,8 +140,8 @@ def test_repository_production_readiness_is_valid_and_blocked():
     readiness = validate_production_readiness(root, configuration_only=True)
     assert readiness.enabled is False
     assert readiness.controls["migration_backup_rollback"] == "implemented_and_verified"
-    assert "ssh_trust_credential_isolation" in readiness.blockers
-    with pytest.raises(ProductionReadinessError, match="repository-blocked"):
+    assert readiness.blockers == ()
+    with pytest.raises(ProductionReadinessError, match="repository-disabled"):
         validate_production_readiness(root)
 
 
