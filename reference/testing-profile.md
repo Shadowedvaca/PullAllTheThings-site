@@ -101,6 +101,13 @@ Feature-specific API or UI smoke checks are added when the changed behavior need
 deployed infrastructure. Production smoke never mutates real data merely to prove
 a release.
 
+For Child- or Parent-timed manual UI validation, run the Development workflow
+for the exact due-validation branch head before issuing the checklist. Record the
+successful workflow URL and confirm `/api/health` reports Development, the exact
+`VERSION`, exact commit, connected database, and current Alembic head. The human
+validator receives an already prepared URL; asking them to discover that
+Development is stale is a process failure, not manual-validation evidence.
+
 ## Complete local gate
 
 Run the applicable focused tests while iterating, then before child completion:

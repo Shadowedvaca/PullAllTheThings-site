@@ -22,16 +22,21 @@ browser/E2E, and the concrete quality commands.
 5. PR CI enforces the profile's release, migration, full-suite, overall and
    changed-line coverage, browser/E2E, static, Compose, and clean-image gates. A
    skipped, unavailable, or failing required check is a recorded gap, not success.
-6. If development deployment is useful, dispatch `deploy-dev.yml` with the
-   explicit branch. The workflow resolves it to one SHA, deploys detached at
-   that SHA, and verifies version, commit, environment, database connectivity,
-   health, and migration heads.
+6. When User Validation Timing is `Child` or `Parent`, dispatch `deploy-dev.yml`
+   with the explicit branch before handing a checklist to the human validator.
+   The workflow must resolve and deploy the exact due-validation SHA detached,
+   then verify version, commit, environment, database connectivity, health, and
+   migration heads. Record that evidence and independently confirm the public
+   Development health identity. Development deployment remains optional only
+   when no Child/Parent human validation is due or timing is `Release`.
 7. Record evidence defined in `reference/work-management.md` and stop at the
    Child development complete gate. If User Validation Timing is `Child`, its
-   human UI check occurs only after that approval on the prepared development
-   artifact. Parent-timed UI checks occur after all selected child approvals on
-   the cumulative development artifact. Release-timed UI checks occur only after
-   Promotion to test on the exact test candidate.
+   human UI check occurs only after that approval on the already deployed and
+   identity-verified development artifact. Parent-timed UI checks occur after all
+   selected child approvals on the already deployed and identity-verified
+   cumulative development artifact. A checklist must not precede that deployment
+   evidence. Release-timed UI checks occur only after Promotion to test on the
+   exact test candidate.
 
 ## Environment roles and promotion
 

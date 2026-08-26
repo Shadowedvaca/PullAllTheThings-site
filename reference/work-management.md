@@ -113,6 +113,17 @@ Automated checks, including browser/E2E, API, database, and health checks, are
 evidence, not human approval gates. A failed manual check stays with the same
 child until fixed and revalidated.
 
+For `Child`- or `Parent`-timed validation, preparing the Development artifact is
+part of the implementer's work before the human handoff. Deploy the exact child
+or cumulative branch head to Development, wait for the deployment workflow to
+pass, and independently record the workflow URL, resolved SHA, selected version,
+`environment`, database health, and migration head. Only then provide the manual
+UI checklist against that verified URL and identity. Never ask a person to
+validate an undeployed branch, a stale environment, or an environment whose
+identity has not been proven. If Development deployment or identity verification
+fails, report that blocker and keep the manual-validation gate pending; do not
+hand off the checklist.
+
 ## Branch and pull-request handling
 
 - A delivery slice is the explicit ordered set of children being delivered
@@ -130,7 +141,8 @@ child until fixed and revalidated.
 Routine in-scope work proceeds without repeated permission: inspection, coding,
 tests, lint/format/static checks, builds, API/database/health checks,
 documentation, cumulative release-note maintenance, branch updates, evidence,
-and draft PR preparation.
+draft PR preparation, and Development deployment/identity verification when it
+is required to prepare a due Child- or Parent-timed manual-validation artifact.
 
 The happy-path approval gates are only:
 

@@ -67,3 +67,23 @@ def test_pr_workflow_runs_browser_suite_and_retains_failure_artifacts():
     assert "python -m pytest tests/e2e" in workflow
     assert "--tracing=retain-on-failure" in workflow
     assert "actions/upload-artifact@" in workflow
+
+
+def test_parent_manual_validation_requires_predeployed_exact_dev_artifact():
+    work_management = (ROOT / "reference" / "work-management.md").read_text(
+        encoding="utf-8"
+    )
+    release = (ROOT / "reference" / "development-and-release.md").read_text(
+        encoding="utf-8"
+    )
+    testing = (ROOT / "reference" / "testing-and-validation.md").read_text(
+        encoding="utf-8"
+    )
+    profile = (ROOT / "reference" / "testing-profile.md").read_text(encoding="utf-8")
+
+    assert "Never ask a person to\nvalidate an undeployed branch" in work_management
+    assert "before handing a checklist to the human validator" in release
+    assert (
+        "Evidence from a stale or\nidentity-unknown environment is invalid" in testing
+    )
+    assert "The human\nvalidator receives an already prepared URL" in profile

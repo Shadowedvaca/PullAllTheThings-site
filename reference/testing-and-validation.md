@@ -28,6 +28,11 @@ a pass.
 
 Automated UI/E2E is automated evidence. It is never a substitute for required
 manual human UI validation and never creates an extra human approval gate.
+For Child- or Parent-timed human UI validation, the implementer must first deploy
+the exact due-validation SHA to Development and prove its version, commit,
+environment, database health, and migration head. The checklist names that SHA,
+Development URL, and successful deployment run. Evidence from a stale or
+identity-unknown environment is invalid and the human gate remains pending.
 
 ## Applicability and test design
 
@@ -90,4 +95,7 @@ either floor is missed.
 The child evidence records applicable layers, exact commands, result counts,
 coverage percentages, CI run and SHA, artifacts, database/migration context,
 deployed smoke identity when used, manual-validation timing, and all deviations.
+Before a Child- or Parent-timed manual handoff, the corresponding evidence must
+also include the successful Development deployment run and exact public runtime
+identity; this preparation cannot be deferred to the human validator.
 Only executed checks may be described as passing.
