@@ -392,6 +392,7 @@ def create_app() -> FastAPI:
             exempt = (
                 path.startswith("/setup")
                 or path.startswith("/static")
+                or path == "/favicon.ico"
                 or path.startswith("/api/v1/setup")
                 or path.startswith("/api/health")
             )
@@ -401,6 +402,13 @@ def create_app() -> FastAPI:
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        async def favicon():
+            return FileResponse(
+                STATIC_DIR / "img" / "favicon.svg",
+                media_type="image/svg+xml",
+            )
 
     # Serve legacy HTML files at their original URL paths (Phase 5)
     # These were previously at repo root served by Nginx; now served by FastAPI.
