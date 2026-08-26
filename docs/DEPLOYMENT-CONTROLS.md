@@ -17,6 +17,13 @@ GitHub configuration.
 - `deploy/run-strict-ssh.sh` uses an empty SSH configuration plus batch mode,
   `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, and the supplied known-hosts
   file. A missing or mismatched host key fails before remote commands run.
+- `deploy/patt-remote-deploy.sh` is fetched with and executed from the exact
+  deployment commit. Deployment source must not be streamed through SSH stdin.
+  Its Docker and backup subprocesses detach stdin, and it emits the exact
+  `PATT_DEPLOYMENT_COMPLETE` sentinel only after every remote gate succeeds.
+  The calling workflow captures the remote output under `pipefail` and requires
+  that exact sentinel, so checkout or image-build output alone cannot produce a
+  successful deployment result.
 - Development, Test, and Production use the same secret names in separate GitHub
   environment scopes: `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, and `DEPLOY_SSH_KEY`.
   `DEPLOY_USER` is an environment-scoped variable. Values must never be copied
@@ -87,6 +94,13 @@ The production-preflight lookup was safely exercised without deployment against
 successful Test run `30419325704` for exact SHA
 `d35786b9910707109395abad24ddd06d64bcc08c`; the validator selected that run and
 did not infer evidence from main ancestry alone.
+
+Development runs `32916220968` and `32916720856` exposed a former false-green
+path: the workflows streamed a multi-step Bash program through SSH stdin, and
+Docker Buildx consumed the remainder after checkout/build. The remote shell then
+reached end-of-file with status zero before backup, container replacement,
+health, migration, and active-SHA gates. Issue #61 replaces that mechanism with
+the checked-in remote program and exact completion sentinel described above.
 
 Production remains repository-disabled. Live controls and provenance are now
 verified, but #55 still requires Child development complete approval, all selected

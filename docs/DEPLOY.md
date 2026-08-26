@@ -32,6 +32,14 @@ an operational inventory of implemented workflows:
 - Never push a production tag outside the Promotion to production gate.
 - Deployment uses native OpenSSH with strict supplied known-host verification;
   it never accepts a newly scanned host key during a deployment.
+- The remote deployment program is the checked-in
+  `deploy/patt-remote-deploy.sh` file. Workflows must not stream that program on
+  SSH standard input: Docker Buildx can consume the remaining stream and allow
+  the remote shell to reach end-of-file before later gates execute. Docker and
+  backup subprocesses run with stdin detached, and the runner requires the exact
+  `PATT_DEPLOYMENT_COMPLETE` sentinel emitted only after backup evidence,
+  runtime identity, database health, migration head, and the atomic active-SHA
+  marker are verified.
 - Production is not currently available: `.github/production-readiness.json`
   defaults to blocked until issues #54 and #55 are complete and their controls
   are explicitly verified and enabled in a reviewed repository change.

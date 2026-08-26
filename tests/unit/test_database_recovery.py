@@ -75,22 +75,25 @@ def test_predeploy_backup_is_atomic_verified_and_non_destructive():
 
 
 @pytest.mark.parametrize(
-    ("workflow_name", "start_command"),
+    "workflow_name",
     [
-        ("deploy-dev.yml", "up -d app"),
-        ("deploy-test.yml", "up -d app"),
-        ("deploy-prod.yml", "up -d app-prod"),
+        "deploy-dev.yml",
+        "deploy-test.yml",
+        "deploy-prod.yml",
     ],
 )
 def test_deployment_requires_verified_backup_before_container_start(
-    workflow_name: str, start_command: str
+    workflow_name: str,
 ):
-    source = (ROOT / ".github" / "workflows" / workflow_name).read_text(
+    workflow = (ROOT / ".github" / "workflows" / workflow_name).read_text(
         encoding="utf-8"
     )
-    assert source.index("patt-predeploy-backup.sh") < source.index(start_command)
-    assert ".deployment/active-sha" in source
-    assert source.index("alembic current --check-heads") < source.index(
+    remote = (ROOT / "deploy" / "patt-remote-deploy.sh").read_text(encoding="utf-8")
+    assert "deploy/patt-remote-deploy.sh" in workflow
+    assert "PATT_DEPLOYMENT_COMPLETE" in workflow
+    assert remote.index("patt-predeploy-backup.sh") < remote.index(" up -d ")
+    assert ".deployment/active-sha" in remote
+    assert remote.index("alembic current --check-heads") < remote.index(
         ".deployment/active-sha.tmp"
     )
 

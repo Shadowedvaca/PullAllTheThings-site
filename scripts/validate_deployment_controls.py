@@ -102,6 +102,10 @@ def validate_deployment_controls(repository_root: Path) -> dict:
                 errors.append(
                     f"{workflow_name} retains forbidden shared SSH token {token}"
                 )
+        if "<<'REMOTE'" in source or '<<"REMOTE"' in source:
+            errors.append(
+                f"{workflow_name} must not stream deployment source over SSH stdin"
+            )
         for token in (
             "secrets.DEPLOY_HOST",
             "secrets.DEPLOY_KNOWN_HOSTS",
@@ -109,6 +113,8 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "vars.DEPLOY_USER",
             "deploy/configure-deployment-ssh.sh",
             "deploy/run-strict-ssh.sh",
+            "deploy/patt-remote-deploy.sh",
+            "PATT_DEPLOYMENT_COMPLETE",
         ):
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")

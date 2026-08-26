@@ -96,6 +96,11 @@ Every deployed check proves the candidate identity before product assertions:
 5. Test checks only the approved `main` integration SHA.
 6. Production additionally proves the immutable tag matches `VERSION`, belongs to
    `main`, and has a successful exact-SHA Test deployment before smoke checks.
+7. The remote deployment runs from the checked-in script with child-process stdin
+   detached. The workflow uses `pipefail` and requires the exact
+   `PATT_DEPLOYMENT_COMPLETE` line emitted only after backup, health identity,
+   migration-head, and atomic active-SHA verification; checkout/build output or
+   remote end-of-file is not completion evidence.
 
 Feature-specific API or UI smoke checks are added when the changed behavior needs
 deployed infrastructure. Production smoke never mutates real data merely to prove
