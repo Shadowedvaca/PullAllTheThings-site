@@ -24,26 +24,37 @@ def test_deployment_program_is_not_streamed_on_child_process_stdin():
         assert "grep -Fqx" in source
 
 
-def test_remote_git_operations_ignore_host_configuration_and_cannot_prompt():
+def test_deployment_bundle_transport_is_strict_and_exact():
     for name in WORKFLOWS:
         source = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
         remote = source[source.index("set -eu; export GIT_CONFIG_GLOBAL") :]
         assert "GIT_CONFIG_GLOBAL=/dev/null" in remote
         assert "GIT_CONFIG_SYSTEM=/dev/null" in remote
         assert "GIT_TERMINAL_PROMPT=0" in remote
-        assert "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" in remote
-        assert "mktemp -d /tmp/patt-fetch.XXXXXX" in remote
-        assert "init --bare" in remote
-        assert "env -i PATH=/usr/bin:/bin HOME=/tmp" in remote
+        assert "git bundle create" in source
+        assert "git bundle verify" in source
+        assert "deploy/run-strict-scp.sh" in source
+        assert "patt-deployment-$DEPLOY_SHA.bundle" in source
+        assert (
+            "git fetch --no-tags '/tmp/patt-deployment-$DEPLOY_SHA.bundle' HEAD"
+            in remote
+        )
+        assert "$GITHUB_SERVER_URL" not in remote
+        assert "git cat-file -e '$DEPLOY_SHA^{commit}'" in remote
+        assert "git checkout --detach '$DEPLOY_SHA'" in remote
         assert remote.index("GIT_CONFIG_GLOBAL=/dev/null") < remote.index("git ")
         assert remote.index("GIT_CONFIG_SYSTEM=/dev/null") < remote.index("git ")
         assert remote.index("GIT_TERMINAL_PROMPT=0") < remote.index("git ")
 
-    development = (ROOT / ".github" / "workflows" / "deploy-dev.yml").read_text(
-        encoding="utf-8"
-    )
-    assert "git check-ref-format --branch" in development
-    assert "refs/heads/$DEPLOY_REF:refs/heads/patt-deploy" in development
+
+def test_strict_bundle_copier_rejects_unbounded_destinations():
+    source = (ROOT / "deploy" / "run-strict-scp.sh").read_text(encoding="utf-8")
+    assert "usage:" in source
+    assert "^/tmp/patt-deployment-[0-9a-f]{40}" in source
+    assert "StrictHostKeyChecking=yes" in source
+    assert "BatchMode=yes" in source
+    assert "IdentitiesOnly=yes" in source
+    assert "-F /dev/null" in source
 
 
 def test_remote_program_detaches_child_stdin_and_orders_every_gate():

@@ -17,16 +17,17 @@ GitHub configuration.
 - `deploy/run-strict-ssh.sh` uses an empty SSH configuration plus batch mode,
   `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, and the supplied known-hosts
   file. A missing or mismatched host key fails before remote commands run.
-- Each remote deployment command exports `GIT_CONFIG_GLOBAL=/dev/null`,
-  `GIT_CONFIG_SYSTEM=/dev/null`, and `GIT_TERMINAL_PROMPT=0` before its first
-  Git operation. Unattended deployment therefore ignores host-level Git
-  configuration and cannot fall back to an interactive credential prompt. Fetches use
-  the workflow canonical repository URL directly and do not mutate or trust the
-  server checkout's local `origin` URL. The network fetch runs in a fresh
-  temporary bare repository before its verified object is imported locally, so
-  repository-local configuration is excluded from the network boundary. The
-  network-fetch subprocess also receives only an allowlisted environment.
-- `deploy/patt-remote-deploy.sh` is fetched with and executed from the exact
+- Each deployment workflow creates and verifies a Git bundle from its exact
+  checked-out commit, then transfers it with `deploy/run-strict-scp.sh`. The
+  copier uses the same empty SSH configuration, environment-scoped key, batch
+  mode, identity isolation, and strict supplied known-host verification as the
+  command runner.
+- The server imports the transferred bundle through a local filesystem fetch
+  with global and system Git configuration disabled and terminal prompts
+  prohibited. It removes the bounded temporary bundle on success or failure,
+  verifies the expected commit object, checks out the exact SHA, and never
+  depends on outbound GitHub access or the server checkout's configured remote.
+- `deploy/patt-remote-deploy.sh` is provided by and executed from the exact
   deployment commit. Deployment source must not be streamed through SSH stdin.
   Its Docker and backup subprocesses detach stdin, and it emits the exact
   `PATT_DEPLOYMENT_COMPLETE` sentinel only after every remote gate succeeds.

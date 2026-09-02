@@ -118,10 +118,10 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "GIT_CONFIG_GLOBAL=/dev/null",
             "GIT_CONFIG_SYSTEM=/dev/null",
             "GIT_TERMINAL_PROMPT=0",
-            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git",
-            "mktemp -d /tmp/patt-fetch.XXXXXX",
-            "init --bare",
-            "env -i PATH=/usr/bin:/bin HOME=/tmp",
+            "deploy/run-strict-scp.sh",
+            "git bundle create",
+            "git bundle verify",
+            "patt-deployment-$DEPLOY_SHA.bundle",
         ):
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")
@@ -135,19 +135,21 @@ def validate_deployment_controls(repository_root: Path) -> dict:
         encoding="utf-8"
     )
     runner = (root / "deploy" / "run-strict-ssh.sh").read_text(encoding="utf-8")
+    copier = (root / "deploy" / "run-strict-scp.sh").read_text(encoding="utf-8")
     if "ssh-keyscan" in configure:
         errors.append(
             "known-host trust must not be learned from the deployment connection"
         )
-    for token in (
-        "StrictHostKeyChecking=yes",
-        "UserKnownHostsFile=",
-        "BatchMode=yes",
-        "IdentitiesOnly=yes",
-        "-F /dev/null",
-    ):
-        if token not in runner:
-            errors.append(f"strict SSH runner is missing {token}")
+    for source_name, transport in (("SSH runner", runner), ("SCP runner", copier)):
+        for token in (
+            "StrictHostKeyChecking=yes",
+            "UserKnownHostsFile=",
+            "BatchMode=yes",
+            "IdentitiesOnly=yes",
+            "-F /dev/null",
+        ):
+            if token not in transport:
+                errors.append(f"strict {source_name} is missing {token}")
 
     if errors:
         raise DeploymentControlError("; ".join(errors))

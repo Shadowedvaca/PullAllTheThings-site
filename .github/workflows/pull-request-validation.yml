@@ -80,6 +80,7 @@ jobs:
           bash -n deploy/patt-predeploy-backup.sh
           bash -n deploy/configure-deployment-ssh.sh
           bash -n deploy/run-strict-ssh.sh
+          bash -n deploy/run-strict-scp.sh
           bash -n deploy/patt-remote-deploy.sh
           python scripts/validate_deployment_controls.py
 

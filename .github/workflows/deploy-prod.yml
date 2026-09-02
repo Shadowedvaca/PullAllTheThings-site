@@ -83,7 +83,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.preflight.outputs.release_sha }}
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Configure strict environment-scoped SSH trust
         id: ssh
@@ -110,9 +110,14 @@ jobs:
           printf '%s\n' "$DEPLOY_TAG" | grep -Eq '^prod-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           printf '%s\n' "$DEPLOY_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           printf '%s\n' "$TEST_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          bundle_file="$RUNNER_TEMP/patt-deployment-$DEPLOY_SHA.bundle"
+          remote_bundle="/tmp/patt-deployment-$DEPLOY_SHA.bundle"
+          git bundle create "$bundle_file" HEAD
+          git bundle verify "$bundle_file"
+          bash deploy/run-strict-scp.sh "$bundle_file" "$remote_bundle"
           evidence_file="$RUNNER_TEMP/patt-production-deployment.txt"
           bash deploy/run-strict-ssh.sh \
-            "set -eu; export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0; cd /opt/guild-portal; previous_sha=\$(if [ -s .deployment/active-sha ]; then cat .deployment/active-sha; else git rev-parse HEAD; fi); fetch_repository=\$(mktemp -d /tmp/patt-fetch.XXXXXX); trap 'rm -rf \$fetch_repository' EXIT; git -C \$fetch_repository init --bare; env -i PATH=/usr/bin:/bin HOME=/tmp GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0 git -C \$fetch_repository fetch --no-tags '$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git' '$DEPLOY_TAG:refs/tags/$DEPLOY_TAG'; git fetch --no-tags \$fetch_repository 'refs/tags/$DEPLOY_TAG:refs/tags/$DEPLOY_TAG'; rm -rf \$fetch_repository; trap - EXIT; test \"\$(git rev-list -n 1 '$DEPLOY_TAG')\" = '$DEPLOY_SHA'; git checkout --detach '$DEPLOY_TAG'; test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA'; exec bash deploy/patt-remote-deploy.sh production '$DEPLOY_SHA' '$DEPLOY_VERSION' \"\$previous_sha\" '$DEPLOY_TAG' '$TEST_RUN_ID'" \
+            "set -eu; export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0; cd /opt/guild-portal; previous_sha=\$(if [ -s .deployment/active-sha ]; then cat .deployment/active-sha; else git rev-parse HEAD; fi); trap 'rm -f /tmp/patt-deployment-$DEPLOY_SHA.bundle' EXIT; git fetch --no-tags '/tmp/patt-deployment-$DEPLOY_SHA.bundle' HEAD; rm -f '/tmp/patt-deployment-$DEPLOY_SHA.bundle'; trap - EXIT; git cat-file -e '$DEPLOY_SHA^{commit}'; git checkout --detach '$DEPLOY_SHA'; test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA'; exec bash deploy/patt-remote-deploy.sh production '$DEPLOY_SHA' '$DEPLOY_VERSION' \"\$previous_sha\" '$DEPLOY_TAG' '$TEST_RUN_ID'" \
             | tee "$evidence_file"
           grep -Fqx \
             "PATT_DEPLOYMENT_COMPLETE environment=production version=$DEPLOY_VERSION commit=$DEPLOY_SHA" \
