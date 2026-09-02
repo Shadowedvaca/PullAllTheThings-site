@@ -26,6 +26,7 @@ def test_unpinned_action_is_rejected(tmp_path):
         ".github/deployment-controls.json",
         "deploy/configure-deployment-ssh.sh",
         "deploy/run-strict-ssh.sh",
+        "deploy/run-strict-scp.sh",
     ):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -54,6 +55,9 @@ def test_known_host_trust_is_supplied_not_scanned():
         encoding="utf-8"
     )
     runner = (ROOT / "deploy" / "run-strict-ssh.sh").read_text(encoding="utf-8")
+    copier = (ROOT / "deploy" / "run-strict-scp.sh").read_text(encoding="utf-8")
     assert "ssh-keyscan" not in configure
     assert "StrictHostKeyChecking=yes" in runner
     assert "UserKnownHostsFile=" in runner
+    assert "StrictHostKeyChecking=yes" in copier
+    assert "UserKnownHostsFile=" in copier
