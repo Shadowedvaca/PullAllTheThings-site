@@ -22,7 +22,9 @@ GitHub configuration.
   Git operation. Unattended deployment therefore ignores host-level Git
   configuration and cannot fall back to an interactive credential prompt. Fetches use
   the workflow canonical repository URL directly and do not mutate or trust the
-  server checkout's local `origin` URL.
+  server checkout's local `origin` URL. The network fetch runs in a fresh
+  temporary bare repository before its verified object is imported locally, so
+  repository-local configuration is excluded from the network boundary.
 - `deploy/patt-remote-deploy.sh` is fetched with and executed from the exact
   deployment commit. Deployment source must not be streamed through SSH stdin.
   Its Docker and backup subprocesses detach stdin, and it emits the exact
