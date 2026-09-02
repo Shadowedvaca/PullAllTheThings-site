@@ -121,6 +121,7 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git",
             "mktemp -d /tmp/patt-fetch.XXXXXX",
             "init --bare",
+            "env -i PATH=/usr/bin:/bin HOME=/tmp",
         ):
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")

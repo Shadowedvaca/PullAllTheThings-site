@@ -34,6 +34,7 @@ def test_remote_git_operations_ignore_host_configuration_and_cannot_prompt():
         assert "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" in remote
         assert "mktemp -d /tmp/patt-fetch.XXXXXX" in remote
         assert "init --bare" in remote
+        assert "env -i PATH=/usr/bin:/bin HOME=/tmp" in remote
         assert remote.index("GIT_CONFIG_GLOBAL=/dev/null") < remote.index("git ")
         assert remote.index("GIT_CONFIG_SYSTEM=/dev/null") < remote.index("git ")
         assert remote.index("GIT_TERMINAL_PROMPT=0") < remote.index("git ")
