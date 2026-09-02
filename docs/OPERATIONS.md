@@ -260,10 +260,10 @@ procedure. This table is an operational trigger inventory only:
 
 Watch runs at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
 
-Production cannot currently be promoted. The repository readiness interlock
-remains disabled until mandatory foundation issues #54 and #55 are implemented,
-verified, and explicitly enabled through review. A tag and `main` ancestry alone
-cannot bypass this block.
+Production cannot currently be promoted. The #54/#55 controls are implemented
+and verified, but the repository readiness interlock remains disabled pending
+exact-SHA Test evidence and separately authorized review. A tag and `main`
+ancestry alone cannot bypass this block.
 
 To manually restart dev (SSH only — never SSH-deploy prod):
 ```bash

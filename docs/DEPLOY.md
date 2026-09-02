@@ -40,9 +40,9 @@ an operational inventory of implemented workflows:
   `PATT_DEPLOYMENT_COMPLETE` sentinel emitted only after backup evidence,
   runtime identity, database health, migration head, and the atomic active-SHA
   marker are verified.
-- Production is not currently available: `.github/production-readiness.json`
-  defaults to blocked until issues #54 and #55 are complete and their controls
-  are explicitly verified and enabled in a reviewed repository change.
+- Production is not currently available: #54/#55 controls are complete and
+  verified, but `.github/production-readiness.json` remains blocked pending
+  exact-SHA Test evidence and a separately authorized reviewed readiness change.
 - Even after readiness is enabled, Production preflight must find a successful
   `Deploy to Test` run for the exact tag-target SHA. Containment in `main` is not
   sufficient evidence.

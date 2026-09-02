@@ -64,8 +64,9 @@ evidence cannot be produced, stop and document the blocker and risk.
 - After Mike supplies a value, apply that exact value to `VERSION`, reconcile
   `docs/releases/UNRELEASED.md` into `docs/releases/X.Y.Z.md`, reset cumulative
   notes for later work, and verify every version surface agrees.
-- The current `0.24.2` authority is reconciled from the existing immutable tag
-  and application history; it is not a newly selected release for this slice.
+- Mike selected exact version `0.24.3` for this cumulative release slice. The
+  existing immutable `prod-v0.24.2` tag remains historical and is not moved or
+  reused.
 
 ## Cumulative release-note lifecycle
 
@@ -137,10 +138,9 @@ still sets `production_enabled` to `false`, and `deploy-prod.yml` runs
 SSH, or deployment. A tag that matches `VERSION` and points into `main` therefore
 cannot currently reach Production. All required controls now have
 `implemented_and_verified` evidence from #54 and #55, including the safely
-exercised exact-SHA Test lookup. Enabling still requires a later reviewed change
-that explicitly sets `production_enabled` to `true` after Child development
-complete approval, Parent-timed human validation, integration/release preflight,
-and the documented promotion gates.
+exercised exact-SHA Test lookup. Enabling requires a separately explicit reviewed change during production
+preflight after successful exact-SHA Test evidence and before the separately
+approved production tag is pushed.
 
 The following are mandatory Production blockers, not optional follow-ups:
 
@@ -148,13 +148,14 @@ The following are mandatory Production blockers, not optional follow-ups:
   verified; Mike approved Child development complete on 2026-08-25 after final
   PR run `32890458292` passed at `17674dd`;
 - issue #55: repository and live controls are implemented and verified; Child
-  development complete approval remains pending.
+  development complete was approved by Mike on 2026-08-25.
 
 The exact-SHA test provenance lookup was exercised read-only against successful
 Test run `30419325704` for exact SHA `d35786b9910707109395abad24ddd06d64bcc08c`.
 This proves lookup and selection behavior without authorizing or performing a
-deployment. Production remains disabled until the remaining child, parent,
-manual-validation, integration, and promotion gates are satisfied.
+deployment. Production remains disabled pending successful exact-SHA Test
+evidence, release reconciliation, explicit readiness authorization, and the
+separate Promotion to production approval.
 
 Mike approved the authentication-session policy in issue #58: ordinary member
 sessions expire after 7 days, rank level 4 and above sessions expire after 12

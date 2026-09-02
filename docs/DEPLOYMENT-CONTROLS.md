@@ -102,7 +102,7 @@ reached end-of-file with status zero before backup, container replacement,
 health, migration, and active-SHA gates. Issue #61 replaces that mechanism with
 the checked-in remote program and exact completion sentinel described above.
 
-Production remains repository-disabled. Live controls and provenance are now
-verified, but #55 still requires Child development complete approval, all selected
-children then require Parent-timed human validation and integration preflight,
-and the separate Test and Production promotion approvals remain mandatory.
+Production remains repository-disabled. Live controls, all child approvals, and
+Parent-timed manual validation are complete. Promotion to test, successful
+exact-SHA Test evidence, explicit reviewed readiness authorization, and the
+separate Promotion to production approval remain mandatory.
