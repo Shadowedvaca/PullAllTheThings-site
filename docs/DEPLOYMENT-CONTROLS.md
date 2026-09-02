@@ -20,7 +20,9 @@ GitHub configuration.
 - Each remote deployment command exports `GIT_CONFIG_GLOBAL=/dev/null`,
   `GIT_CONFIG_SYSTEM=/dev/null`, and `GIT_TERMINAL_PROMPT=0` before its first
   Git operation. Unattended deployment therefore ignores host-level Git
-  configuration and cannot fall back to an interactive credential prompt.
+  configuration and cannot fall back to an interactive credential prompt. Fetches use
+  the workflow canonical repository URL directly and do not mutate or trust the
+  server checkout's local `origin` URL.
 - `deploy/patt-remote-deploy.sh` is fetched with and executed from the exact
   deployment commit. Deployment source must not be streamed through SSH stdin.
   Its Docker and backup subprocesses detach stdin, and it emits the exact

@@ -31,6 +31,7 @@ def test_remote_git_operations_ignore_host_configuration_and_cannot_prompt():
         assert "GIT_CONFIG_GLOBAL=/dev/null" in remote
         assert "GIT_CONFIG_SYSTEM=/dev/null" in remote
         assert "GIT_TERMINAL_PROMPT=0" in remote
+        assert "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" in remote
         assert remote.index("GIT_CONFIG_GLOBAL=/dev/null") < remote.index("git ")
         assert remote.index("GIT_CONFIG_SYSTEM=/dev/null") < remote.index("git ")
         assert remote.index("GIT_TERMINAL_PROMPT=0") < remote.index("git ")
