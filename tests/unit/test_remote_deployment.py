@@ -24,6 +24,18 @@ def test_deployment_program_is_not_streamed_on_child_process_stdin():
         assert "grep -Fqx" in source
 
 
+def test_remote_git_operations_ignore_host_configuration_and_cannot_prompt():
+    for name in WORKFLOWS:
+        source = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        remote = source[source.index("set -eu; export GIT_CONFIG_GLOBAL") :]
+        assert "GIT_CONFIG_GLOBAL=/dev/null" in remote
+        assert "GIT_CONFIG_SYSTEM=/dev/null" in remote
+        assert "GIT_TERMINAL_PROMPT=0" in remote
+        assert remote.index("GIT_CONFIG_GLOBAL=/dev/null") < remote.index("git ")
+        assert remote.index("GIT_CONFIG_SYSTEM=/dev/null") < remote.index("git ")
+        assert remote.index("GIT_TERMINAL_PROMPT=0") < remote.index("git ")
+
+
 def test_remote_program_detaches_child_stdin_and_orders_every_gate():
     source = REMOTE_SCRIPT.read_text(encoding="utf-8")
     build = source.index('build "$app_service" </dev/null')

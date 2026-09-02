@@ -17,6 +17,10 @@ GitHub configuration.
 - `deploy/run-strict-ssh.sh` uses an empty SSH configuration plus batch mode,
   `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, and the supplied known-hosts
   file. A missing or mismatched host key fails before remote commands run.
+- Each remote deployment command exports `GIT_CONFIG_GLOBAL=/dev/null`,
+  `GIT_CONFIG_SYSTEM=/dev/null`, and `GIT_TERMINAL_PROMPT=0` before its first
+  Git operation. Unattended deployment therefore ignores host-level Git
+  configuration and cannot fall back to an interactive credential prompt.
 - `deploy/patt-remote-deploy.sh` is fetched with and executed from the exact
   deployment commit. Deployment source must not be streamed through SSH stdin.
   Its Docker and backup subprocesses detach stdin, and it emits the exact

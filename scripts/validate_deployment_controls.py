@@ -115,6 +115,9 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "deploy/run-strict-ssh.sh",
             "deploy/patt-remote-deploy.sh",
             "PATT_DEPLOYMENT_COMPLETE",
+            "GIT_CONFIG_GLOBAL=/dev/null",
+            "GIT_CONFIG_SYSTEM=/dev/null",
+            "GIT_TERMINAL_PROMPT=0",
         ):
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")
