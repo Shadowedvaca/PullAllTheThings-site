@@ -38,6 +38,12 @@ def test_remote_git_operations_ignore_host_configuration_and_cannot_prompt():
         assert remote.index("GIT_CONFIG_SYSTEM=/dev/null") < remote.index("git ")
         assert remote.index("GIT_TERMINAL_PROMPT=0") < remote.index("git ")
 
+    development = (ROOT / ".github" / "workflows" / "deploy-dev.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "git check-ref-format --branch" in development
+    assert "refs/heads/$DEPLOY_REF:refs/heads/patt-deploy" in development
+
 
 def test_remote_program_detaches_child_stdin_and_orders_every_gate():
     source = REMOTE_SCRIPT.read_text(encoding="utf-8")

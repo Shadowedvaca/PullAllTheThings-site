@@ -125,6 +125,11 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")
 
+    development_source = (workflows / "deploy-dev.yml").read_text(encoding="utf-8")
+    for token in ("DEPLOY_REF", "git check-ref-format --branch"):
+        if token not in development_source:
+            errors.append(f"deploy-dev.yml is missing {token}")
+
     configure = (root / "deploy" / "configure-deployment-ssh.sh").read_text(
         encoding="utf-8"
     )
