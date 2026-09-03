@@ -3,6 +3,8 @@
 import pytest
 from httpx import AsyncClient
 
+from guild_portal.version import APP_VERSION
+
 
 @pytest.mark.asyncio
 async def test_health_endpoint(client: AsyncClient):
@@ -12,7 +14,9 @@ async def test_health_endpoint(client: AsyncClient):
     assert data["ok"] is True
     assert "db" in data["data"]
     assert "version" in data["data"]
-    assert data["data"]["version"] == "0.1.0"
+    assert data["data"]["version"] == APP_VERSION
+    assert data["data"]["environment"] == "testing"
+    assert data["data"]["commit"] == "unknown"
 
 
 @pytest.mark.asyncio

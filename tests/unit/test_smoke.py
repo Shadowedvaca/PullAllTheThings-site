@@ -19,7 +19,9 @@ def test_settings_load():
     )
     assert settings.app_port == 8100
     assert settings.jwt_algorithm == "HS256"
-    assert settings.jwt_expire_minutes == 1440
+    assert settings.jwt_member_expire_minutes == 10080
+    assert settings.jwt_privileged_expire_minutes == 720
+    assert settings.jwt_privileged_rank_level == 4
 
 
 def test_models_importable():

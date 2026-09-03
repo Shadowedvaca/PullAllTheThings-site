@@ -153,8 +153,22 @@ def test_settings_has_bnet_token_encryption_key():
 def test_app_includes_bnet_routes():
     """create_app registers Battle.net auth routes."""
     from guild_portal.app import create_app
+
     app = create_app()
-    paths = {route.path for route in app.routes}
+
+    def collect_paths(routes):
+        paths = set()
+        for route in routes:
+            if hasattr(route, "path"):
+                paths.add(route.path)
+            if hasattr(route, "routes"):
+                paths.update(collect_paths(route.routes))
+            included_router = getattr(route, "router", None)
+            if included_router is not None and hasattr(included_router, "routes"):
+                paths.update(collect_paths(included_router.routes))
+        return paths
+
+    paths = collect_paths(app.routes)
     assert "/auth/battlenet" in paths
     assert "/auth/battlenet/callback" in paths
     assert "/api/v1/auth/battlenet" in paths

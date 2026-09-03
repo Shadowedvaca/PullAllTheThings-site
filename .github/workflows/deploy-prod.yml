@@ -3,47 +3,132 @@ name: Deploy to Production
 on:
   push:
     tags:
-      - 'prod-*'
+      - "prod-v*"
+
+permissions: {}
+
+concurrency:
+  group: patt-production-deploy
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy to pullallthethings.com
+  preflight:
+    name: Enforce Production readiness and exact test provenance
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      release_sha: ${{ steps.release.outputs.sha }}
+      release_tag: ${{ steps.release.outputs.tag }}
+      release_version: ${{ steps.release.outputs.version }}
+      test_run_id: ${{ steps.provenance.outputs.run_id }}
+      test_run_url: ${{ steps.provenance.outputs.run_url }}
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Check out immutable production tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          host: ${{ secrets.PROD_HOST }}
-          username: root
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/guild-portal
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
-            echo "==> Checking out tag: ${{ github.ref_name }}..."
-            git remote prune origin || true
-            git fetch --tags --force --prune origin
-            git checkout ${{ github.ref_name }}
+      - name: Enforce repository Production readiness
+        run: python scripts/validate_production_readiness.py
 
-            echo "==> Building prod image..."
-            docker compose -f docker-compose.guild.yml build app-prod
+      - name: Validate tag, main ancestry, and release contract
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = "tag"
+          python scripts/validate_release.py --tag "$GITHUB_REF_NAME" --github-output "$GITHUB_OUTPUT"
+          sha="$(git rev-parse HEAD)"
+          test "$sha" = "$GITHUB_SHA"
+          test "$sha" = "$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$sha" refs/remotes/origin/main
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-            echo "==> Restarting prod app..."
-            docker compose -f docker-compose.guild.yml up -d app-prod
+      - name: Require successful test deployment for exact tag SHA
+        id: provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-test.yml/runs" \
+            -f branch=main -f event=push -f status=success -f per_page=100 | \
+            python scripts/validate_test_provenance.py \
+              --sha "$RELEASE_SHA" --github-output "$GITHUB_OUTPUT"
+          run_url="$(grep '^run_url=' "$GITHUB_OUTPUT" | tail -n 1 | cut -d= -f2-)"
+          echo "Exact-SHA test evidence: $run_url" >> "$GITHUB_STEP_SUMMARY"
 
-            echo "==> Waiting for prod to be ready..."
-            for i in 1 2 3 4 5 6 7 8 9 10; do
-              sleep 3
-              if curl -sf http://localhost:8100/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ok') else 1)" 2>/dev/null; then
-                echo "==> Prod healthy after ${i}x3s"
-                break
-              fi
-              if [ $i -eq 10 ]; then
-                echo "ERROR: Prod did not become healthy"
-                docker compose -f docker-compose.guild.yml logs app-prod --tail 30
-                exit 1
-              fi
-            done
+  deploy:
+    name: Deploy exact approved production tag
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+    outputs:
+      release_sha: ${{ needs.preflight.outputs.release_sha }}
+      release_tag: ${{ needs.preflight.outputs.release_tag }}
 
-            echo "==> Production deploy complete! (${{ github.ref_name }}) https://pullallthethings.com"
+    steps:
+      - name: Check out preflight-verified commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Configure strict environment-scoped SSH trust
+        id: ssh
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash deploy/configure-deployment-ssh.sh
+
+      - name: Deploy exact tag commit via strict SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_PRIVATE_KEY_PATH: ${{ steps.ssh.outputs.private_key }}
+          DEPLOY_SSH_KNOWN_HOSTS_PATH: ${{ steps.ssh.outputs.known_hosts }}
+          DEPLOY_SHA: ${{ needs.preflight.outputs.release_sha }}
+          DEPLOY_TAG: ${{ needs.preflight.outputs.release_tag }}
+          DEPLOY_VERSION: ${{ needs.preflight.outputs.release_version }}
+          TEST_RUN_ID: ${{ needs.preflight.outputs.test_run_id }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s\n' "$DEPLOY_TAG" | grep -Eq '^prod-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          printf '%s\n' "$DEPLOY_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          printf '%s\n' "$TEST_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          bundle_file="$RUNNER_TEMP/patt-deployment-$DEPLOY_SHA.bundle"
+          remote_bundle="/tmp/patt-deployment-$DEPLOY_SHA.bundle"
+          git bundle create "$bundle_file" HEAD
+          git bundle verify "$bundle_file"
+          bash deploy/run-strict-scp.sh "$bundle_file" "$remote_bundle"
+          evidence_file="$RUNNER_TEMP/patt-production-deployment.txt"
+          bash deploy/run-strict-ssh.sh \
+            "set -eu; export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0; cd /opt/guild-portal; previous_sha=\$(if [ -s .deployment/active-sha ]; then cat .deployment/active-sha; else git rev-parse HEAD; fi); trap 'rm -f /tmp/patt-deployment-$DEPLOY_SHA.bundle' EXIT; git fetch --no-tags '/tmp/patt-deployment-$DEPLOY_SHA.bundle' HEAD; rm -f '/tmp/patt-deployment-$DEPLOY_SHA.bundle'; trap - EXIT; git cat-file -e '$DEPLOY_SHA^{commit}'; git checkout --detach '$DEPLOY_SHA'; test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA'; exec bash deploy/patt-remote-deploy.sh production '$DEPLOY_SHA' '$DEPLOY_VERSION' \"\$previous_sha\" '$DEPLOY_TAG' '$TEST_RUN_ID'" \
+            | tee "$evidence_file"
+          grep -Fqx \
+            "PATT_DEPLOYMENT_COMPLETE environment=production version=$DEPLOY_VERSION commit=$DEPLOY_SHA" \
+            "$evidence_file"
+
+  publish:
+    name: Publish verified production release
+    needs: deploy
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-release.yml
+    with:
+      release_sha: ${{ needs.deploy.outputs.release_sha }}
+      release_tag: ${{ needs.deploy.outputs.release_tag }}

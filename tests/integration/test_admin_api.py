@@ -30,7 +30,7 @@ async def _make_player(
 
 async def _make_admin_headers(db: AsyncSession, rank_level: int = 5) -> dict:
     """Create an officer/admin player with a User and return auth headers."""
-    from sv_common.auth.jwt import create_access_token
+    from sv_common.auth.sessions import issue_session_token
 
     rank = GuildRank(name=f"AdminRank_{rank_level}", level=rank_level)
     db.add(rank)
@@ -48,12 +48,13 @@ async def _make_admin_headers(db: AsyncSession, rank_level: int = 5) -> dict:
     db.add(player)
     await db.flush()
 
-    token = create_access_token(
+    issued = await issue_session_token(
+        db,
         user_id=user.id,
         member_id=player.id,
         rank_level=rank_level,
     )
-    return {"Authorization": f"Bearer {token}"}
+    return {"Authorization": f"Bearer {issued.token}"}
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +173,7 @@ async def test_admin_route_blocked_for_low_rank(
     client: AsyncClient, db_session: AsyncSession
 ):
     """A player with rank 2 (Member) cannot access admin routes."""
-    from sv_common.auth.jwt import create_access_token
+    from sv_common.auth.sessions import issue_session_token
 
     rank = GuildRank(name="Member_arblr", level=2)
     db_session.add(rank)
@@ -190,7 +191,9 @@ async def test_admin_route_blocked_for_low_rank(
     db_session.add(player)
     await db_session.flush()
 
-    token = create_access_token(user_id=user.id, member_id=player.id, rank_level=2)
+    token = (await issue_session_token(
+        db_session, user_id=user.id, member_id=player.id, rank_level=2
+    )).token
     resp = await client.get(
         "/api/v1/admin/ranks", headers={"Authorization": f"Bearer {token}"}
     )
@@ -211,4 +214,4 @@ async def test_roster_endpoint_returns_ok(
 
     assert resp.status_code == 200
     assert body["ok"] is True
-    assert "members" in body["data"]
+    assert "players" in body["data"]

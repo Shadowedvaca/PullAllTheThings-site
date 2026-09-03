@@ -45,10 +45,10 @@ class TestIvBisRole:
         assert _iv_bis_role("tank") == "tank"
 
     def test_healer(self):
-        assert _iv_bis_role("Healer") == "healer"
+        assert _iv_bis_role("Healer") == "healing"
 
     def test_healer_mixed_case(self):
-        assert _iv_bis_role("Restoration Healer") == "healer"
+        assert _iv_bis_role("Restoration Healer") == "healing"
 
     def test_melee_dps(self):
         assert _iv_bis_role("Melee DPS") == "dps"
@@ -98,12 +98,12 @@ class TestIvBaseUrl:
 
     def test_holy_paladin_healer(self):
         assert _iv_base_url("Paladin", "Holy", "Healer") == (
-            "https://www.icy-veins.com/wow/holy-paladin-pve-healer-gear-best-in-slot"
+            "https://www.icy-veins.com/wow/holy-paladin-pve-healing-gear-best-in-slot"
         )
 
     def test_restoration_shaman_healer(self):
         assert _iv_base_url("Shaman", "Restoration", "Healer") == (
-            "https://www.icy-veins.com/wow/restoration-shaman-pve-healer-gear-best-in-slot"
+            "https://www.icy-veins.com/wow/restoration-shaman-pve-healing-gear-best-in-slot"
         )
 
     def test_fury_warrior_melee_dps(self):

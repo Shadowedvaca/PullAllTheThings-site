@@ -8,6 +8,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.schema import CreateSchema
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Test database URL — separate from production
@@ -48,9 +49,11 @@ async def test_engine():
         pytest.skip(f"Test database not available ({TEST_DATABASE_URL}): {exc}")
 
     async with engine.begin() as conn:
-        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS common"))
-        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS patt"))
-        await conn.execute(sa_text("CREATE SCHEMA IF NOT EXISTS guild_identity"))
+        schemas = sorted(
+            {table.schema for table in Base.metadata.tables.values() if table.schema}
+        )
+        for schema in schemas:
+            await conn.execute(CreateSchema(schema, if_not_exists=True))
         await conn.run_sync(Base.metadata.create_all)
 
     yield engine
@@ -63,12 +66,20 @@ async def test_engine():
 
 @pytest_asyncio.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Per-test session that rolls back after each test."""
-    factory = async_sessionmaker(test_engine, expire_on_commit=False)
-    async with factory() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+    """Per-test session isolated even when application code commits."""
+    async with test_engine.connect() as connection:
+        transaction = await connection.begin()
+        factory = async_sessionmaker(
+            bind=connection,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+                await transaction.rollback()
 
 
 @pytest_asyncio.fixture
@@ -76,7 +87,20 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client with database session override."""
     from guild_portal.app import create_app
     from guild_portal.deps import get_db
+    from guild_portal.templating import templates
+    from sv_common.config_cache import get_site_config, set_site_config
+    from sv_common.guild_sync.ah_service import copper_to_gold_str
 
+    previous_config = get_site_config()
+    set_site_config({**previous_config, "setup_complete": True})
+    previous_site_global = templates.env.globals.get("site")
+    previous_gold_filter = templates.env.filters.get("gold")
+    previous_format_gold_filter = templates.env.filters.get("format_gold")
+    templates.env.globals["site"] = get_site_config
+    templates.env.filters["gold"] = copper_to_gold_str
+    templates.env.filters["format_gold"] = lambda value: (
+        "—" if value is None else f"{int(value):,}g"
+    )
     app = create_app()
 
     async def override_get_db():
@@ -84,10 +108,27 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_db] = override_get_db
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        yield ac
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Origin": "http://test"},
+        ) as ac:
+            yield ac
+    finally:
+        if previous_site_global is None:
+            templates.env.globals.pop("site", None)
+        else:
+            templates.env.globals["site"] = previous_site_global
+        if previous_gold_filter is None:
+            templates.env.filters.pop("gold", None)
+        else:
+            templates.env.filters["gold"] = previous_gold_filter
+        if previous_format_gold_filter is None:
+            templates.env.filters.pop("format_gold", None)
+        else:
+            templates.env.filters["format_gold"] = previous_format_gold_filter
+        set_site_config(previous_config)
 
 
 @pytest_asyncio.fixture

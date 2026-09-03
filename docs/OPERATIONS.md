@@ -249,15 +249,21 @@ docker ps | grep guild-portal-app-prod
 
 ## Deploying Updates
 
-Three environments, each with its own gate:
+`reference/development-and-release.md` owns promotion authorization and release
+procedure. This table is an operational trigger inventory only:
 
 | Environment | How it deploys |
 |-------------|---------------|
 | **dev** | Manual — `gh workflow run deploy-dev.yml -f branch=your-branch` |
-| **test** | Auto — every push to `main` (i.e. every merged PR) |
-| **prod** | Tag — `git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z` |
+| **test** | Exact approved `main` integration commit |
+| **prod** | Currently blocked; when enabled, exact approved immutable `prod-v*` tag matching `VERSION` and an exact-SHA successful test deployment |
 
 Watch runs at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
+
+Production cannot currently be promoted. The #54/#55 controls are implemented
+and verified, but the repository readiness interlock remains disabled pending
+exact-SHA Test evidence and separately authorized review. A tag and `main`
+ancestry alone cannot bypass this block.
 
 To manually restart dev (SSH only — never SSH-deploy prod):
 ```bash
@@ -271,10 +277,12 @@ docker compose -f /opt/guild-portal/docker-compose.dev.yml restart app
 
 See `docs/BACKUPS.md` for full backup and restore procedures.
 
-**Quick version:**
-- Automatic nightly backup at 3:00 AM UTC → `/opt/backups/patt-db/` on the server
-- Manual backup: `ssh hetzner` then `patt-backup.sh`
-- Restore: `ssh hetzner` then `patt-restore.sh`
+**Quick version:** every repository deployment now fails closed unless it creates,
+inspects, checksums, and atomically records an environment-specific
+custom-format pre-deployment backup and rollback manifest before the new
+migration-running container starts. The repository does not automatically
+delete these archives. A live restore is destructive and always requires Mike's
+exact authorization and the compatibility/evidence plan in `docs/BACKUPS.md`.
 
 ---
 
@@ -328,6 +336,9 @@ These live in `/opt/guild-portal/.env` on the server. Never commit this file.
 ```bash
 DATABASE_URL=postgresql+asyncpg://patt_user:PASSWORD@localhost:5432/patt_db
 JWT_SECRET_KEY=your-secret-key
+JWT_MEMBER_EXPIRE_MINUTES=10080
+JWT_PRIVILEGED_EXPIRE_MINUTES=720
+JWT_PRIVILEGED_RANK_LEVEL=4
 DISCORD_BOT_TOKEN=your-bot-token
 DISCORD_GUILD_ID=your-server-id
 BLIZZARD_CLIENT_ID=your-blizzard-client-id
@@ -342,6 +353,23 @@ APP_PORT=8100
 
 > **Note:** Channel IDs (audit channel, crafters corner, raid channel) are configured
 > via the Admin UI and stored in `common.discord_config` — not in `.env`.
+
+## Authentication sessions and JWT key incidents
+
+Member sessions have a 7-day absolute lifetime. Rank level 4 and above sessions
+have a 12-hour absolute lifetime. Sessions do not renew automatically and are
+stored in `common.auth_sessions`, so logout and officer "Sign Out All" actions
+can revoke them independently. Password changes/resets, deactivation, deletion,
+and rank changes revoke all affected sessions and require login again.
+
+Do not rotate `JWT_SECRET_KEY` as routine session cleanup. Rotation immediately
+invalidates every session and also makes Discord, Raid-Helper, Blizzard, and WCL
+credentials encrypted with the JWT-key-derived context unreadable. Treat it as a
+separately authorized incident operation: coordinate user re-login, capture the
+required credential values through approved secret-handling channels, rotate the
+key, restore/re-enter affected credentials, redeploy, and verify authentication
+and each provider integration. Never place secret values in issues, logs, or the
+release record.
 
 ---
 

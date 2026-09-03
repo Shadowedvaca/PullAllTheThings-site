@@ -453,6 +453,8 @@ async def profile_update_password(
         return RedirectResponse(url="/profile?error=Current+password+is+incorrect", status_code=302)
 
     user.password_hash = hash_password(new_password)
+    from sv_common.auth.sessions import revoke_all_sessions
+    await revoke_all_sessions(db, user.id, "password_change")
     try:
         await db.flush()
     except Exception as exc:

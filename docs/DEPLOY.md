@@ -7,25 +7,57 @@
 
 ## CI/CD — GitHub Actions
 
-Three workflows, each with its own trigger:
+`reference/development-and-release.md` is authoritative for authorization,
+promotion, versioning, release notes, evidence, and rollback. This section is
+an operational inventory of implemented workflows:
 
 | Workflow | Trigger | Target | Server |
 |----------|---------|--------|--------|
 | `deploy-dev.yml` | **Manual** (`gh workflow run deploy-dev.yml -f branch=X`) | `dev.pullallthethings.com` | `my-web-apps-dev` |
-| `deploy-test.yml` | Push to **main** (PR merge) | `test.pullallthethings.com` | `my-web-apps-test` |
-| `deploy-prod.yml` | **Version tag** (`prod-v*`) | `pullallthethings.com` | `hetzner` |
+| `pull-request-validation.yml` | Pull request | Isolated GitHub runner/PostgreSQL | GitHub-hosted |
+| `deploy-test.yml` | Approved push to **main** | `test.pullallthethings.com` | `my-web-apps-test` |
+| `deploy-prod.yml` | Exact `prod-v*` tag, currently blocked by repository readiness interlock | `pullallthethings.com` | `hetzner` |
+| `publish-release.yml` | Successful production deployment | GitHub Release | GitHub-hosted |
 
-- SSH key: `DEPLOY_SSH_KEY` secret in GitHub repo (authorized on all three servers)
-- Host secrets: `DEV_HOST`, `TEST_HOST`, `PROD_HOST` in GitHub repo secrets
-- Deploy steps: git fetch/checkout → docker build → `docker compose up -d` → health check loop
-- **CRITICAL: Never push a version tag without explicit permission from Mike.**
+- Each `development`, `test`, and `production` GitHub environment supplies its
+  own `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, and `DEPLOY_SSH_KEY` secrets plus a
+  `DEPLOY_USER` variable. Keys are unique per environment and authorized only on
+  the matching host. See `docs/DEPLOYMENT-CONTROLS.md` for the exact non-secret
+  GitHub and SSH enforcement contract.
+- Deployment resolves and checks out an exact commit and builds the image. Before
+  the migration-running container can start, it creates and inspects an atomic
+  environment-specific custom-format database backup plus rollback manifest.
+  It then starts the image, verifies runtime version/environment/commit and
+  database health, and verifies the Alembic head.
+- Never push a production tag outside the Promotion to production gate.
+- Deployment uses native OpenSSH with strict supplied known-host verification;
+  it never accepts a newly scanned host key during a deployment.
+- The remote deployment program is the checked-in
+  `deploy/patt-remote-deploy.sh` file. Workflows must not stream that program on
+  SSH standard input: Docker Buildx can consume the remaining stream and allow
+  the remote shell to reach end-of-file before later gates execute. Docker and
+  backup subprocesses run with stdin detached, and the runner requires the exact
+  `PATT_DEPLOYMENT_COMPLETE` sentinel emitted only after backup evidence,
+  runtime identity, database health, migration head, and the atomic active-SHA
+  marker are verified.
+- Production is not currently available: #54/#55 controls are complete and
+  verified, but `.github/production-readiness.json` remains blocked pending
+  exact-SHA Test evidence and a separately authorized reviewed readiness change.
+- Even after readiness is enabled, Production preflight must find a successful
+  `Deploy to Test` run for the exact tag-target SHA. Containment in `main` is not
+  sufficient evidence.
 
-## Branch Strategy
+## Delivery authority
 
-- Feature branches → push → manually deploy to dev for verification
-- Merge to main → test auto-deploys
-- Tag release (`git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z`) → prod deploys
-- See `reference/git-cicd-workflow.md` for full branch and release workflow
+Branch, PR, test, and production flow is defined only in
+`reference/work-management.md` and `reference/development-and-release.md`.
+This runbook does not authorize merge, tags, deployment, environment changes,
+or rollback.
+
+Database backup, restore-rehearsal, and rollback decision boundaries are in
+`docs/BACKUPS.md`. A failed verified-backup step blocks deployment before the
+new container can run migrations. Live restore remains separately authorized
+destructive work.
 
 ---
 

@@ -543,6 +543,12 @@
                         onclick="resetPassword(this)">
                     Reset PW
                 </button>
+                <button class="ua-btn ua-btn--reset"
+                        data-uid="{{ u.id }}"
+                        data-label="{{ u.email or u.display_name or 'this user' }}"
+                        onclick="revokeSessions(this)">
+                    Sign Out All
+                </button>
                 <button class="ua-btn ua-btn--delete"
                         data-uid="{{ u.id }}"
                         data-label="{{ u.email or u.display_name or 'this user' }}"
@@ -748,6 +754,22 @@ async function doReset() {
     } finally {
         okBtn.disabled = false;
         okBtn.textContent = 'Reset Password';
+    }
+}
+
+async function revokeSessions(btn) {
+    const userId = btn.dataset.uid;
+    const label = btn.dataset.label;
+    if (!confirm(`Sign out every active session for "${label}"?`)) return;
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/admin/users/${userId}/revoke-sessions`, { method: 'POST' });
+        const data = await res.json();
+        showToast(data.ok ? 'All sessions revoked' : `Error: ${data.error || '?'}`, data.ok ? 'success' : 'error');
+    } catch (e) {
+        showToast('Network error', 'error');
+    } finally {
+        btn.disabled = false;
     }
 }
 

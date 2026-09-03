@@ -91,8 +91,8 @@ class TestSubmitNoAuthStillWorks:
             new=AsyncMock(return_value=mock_result),
         ) as mock_submit:
             with patch(
-                "guild_portal.api.feedback_routes._decode_token",
-                side_effect=Exception("auth failure"),
+                "guild_portal.api.feedback_routes.authenticate_session",
+                new=AsyncMock(side_effect=Exception("auth failure")),
             ):
                 from guild_portal.api.feedback_routes import submit_feedback_endpoint, FeedbackBody
 
@@ -102,7 +102,9 @@ class TestSubmitNoAuthStillWorks:
                 mock_request.headers = {}
 
                 body = FeedbackBody(score=5, feedback="Works anonymously")
-                result = await submit_feedback_endpoint(body=body, request=mock_request)
+                result = await submit_feedback_endpoint(
+                    body=body, request=mock_request, db=AsyncMock()
+                )
 
                 assert result == {"ok": True}
                 call_kwargs = mock_submit.call_args.kwargs

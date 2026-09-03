@@ -287,10 +287,10 @@ class TestProtectedRoutes:
             rank_id=rank.id,
             password="pw",
         )
-        from sv_common.auth.jwt import create_access_token
-        token = create_access_token(
-            user_id=user.id, member_id=player.id, rank_level=2
-        )
+        from sv_common.auth.sessions import issue_session_token
+        token = (await issue_session_token(
+            db_session, user_id=user.id, member_id=player.id, rank_level=2
+        )).token
         resp = await client.get(
             "/api/v1/admin/ranks", headers={"Authorization": f"Bearer {token}"}
         )
@@ -307,10 +307,10 @@ class TestProtectedRoutes:
             rank_id=rank.id,
             password="pw",
         )
-        from sv_common.auth.jwt import create_access_token
-        token = create_access_token(
-            user_id=user.id, member_id=player.id, rank_level=4
-        )
+        from sv_common.auth.sessions import issue_session_token
+        token = (await issue_session_token(
+            db_session, user_id=user.id, member_id=player.id, rank_level=4
+        )).token
         resp = await client.get(
             "/api/v1/admin/ranks", headers={"Authorization": f"Bearer {token}"}
         )

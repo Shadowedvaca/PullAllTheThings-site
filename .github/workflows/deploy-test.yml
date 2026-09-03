@@ -2,48 +2,69 @@ name: Deploy to Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patt-test-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to test.pullallthethings.com
+    name: Deploy approved main commit to test.pullallthethings.com
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: test
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Check out immutable main commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          host: ${{ secrets.TEST_HOST }}
-          username: root
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/guild-portal
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
-            echo "==> Pulling main..."
-            git checkout main
-            git pull origin main
+      - name: Validate and record deployment identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python scripts/validate_release.py --github-output "$GITHUB_OUTPUT"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
-            echo "==> Building test image..."
-            docker compose -f docker-compose.test.yml build app
+      - name: Configure strict environment-scoped SSH trust
+        id: ssh
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: bash deploy/configure-deployment-ssh.sh
 
-            echo "==> Restarting test app..."
-            docker compose -f docker-compose.test.yml up -d app
-            docker image prune -f
-
-            echo "==> Waiting for test to be ready..."
-            for i in 1 2 3 4 5 6 7 8 9 10; do
-              sleep 3
-              if curl -sf http://localhost:8100/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d.get('ok') else 1)" 2>/dev/null; then
-                echo "==> Test healthy after ${i}x3s"
-                break
-              fi
-              if [ $i -eq 10 ]; then
-                echo "ERROR: Test did not become healthy"
-                docker compose -f docker-compose.test.yml logs app --tail 30
-                exit 1
-              fi
-            done
-
-            echo "==> Test deploy complete! https://test.pullallthethings.com"
+      - name: Deploy exact main commit via strict SSH
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_PRIVATE_KEY_PATH: ${{ steps.ssh.outputs.private_key }}
+          DEPLOY_SSH_KNOWN_HOSTS_PATH: ${{ steps.ssh.outputs.known_hosts }}
+          DEPLOY_SHA: ${{ steps.release.outputs.sha }}
+          DEPLOY_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$DEPLOY_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s\n' "$DEPLOY_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          bundle_file="$RUNNER_TEMP/patt-deployment-$DEPLOY_SHA.bundle"
+          remote_bundle="/tmp/patt-deployment-$DEPLOY_SHA.bundle"
+          git bundle create "$bundle_file" HEAD
+          git bundle verify "$bundle_file"
+          bash deploy/run-strict-scp.sh "$bundle_file" "$remote_bundle"
+          evidence_file="$RUNNER_TEMP/patt-test-deployment.txt"
+          bash deploy/run-strict-ssh.sh \
+            "set -eu; export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TERMINAL_PROMPT=0; cd /opt/guild-portal; previous_sha=\$(if [ -s .deployment/active-sha ]; then cat .deployment/active-sha; else git rev-parse HEAD; fi); trap 'rm -f /tmp/patt-deployment-$DEPLOY_SHA.bundle' EXIT; git fetch --no-tags '/tmp/patt-deployment-$DEPLOY_SHA.bundle' HEAD; rm -f '/tmp/patt-deployment-$DEPLOY_SHA.bundle'; trap - EXIT; git cat-file -e '$DEPLOY_SHA^{commit}'; git checkout --detach '$DEPLOY_SHA'; test \"\$(git rev-parse HEAD)\" = '$DEPLOY_SHA'; exec bash deploy/patt-remote-deploy.sh test '$DEPLOY_SHA' '$DEPLOY_VERSION' \"\$previous_sha\"" \
+            | tee "$evidence_file"
+          grep -Fqx \
+            "PATT_DEPLOYMENT_COMPLETE environment=test version=$DEPLOY_VERSION commit=$DEPLOY_SHA" \
+            "$evidence_file"

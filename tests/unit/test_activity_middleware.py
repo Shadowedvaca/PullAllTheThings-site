@@ -238,9 +238,18 @@ class TestActivityMiddlewareDispatch:
         mock_response.background = None
 
         call_next = AsyncMock(return_value=mock_response)
-        response = await middleware.dispatch(request, call_next)
+        with patch(
+            "guild_portal.middleware.activity.authenticate_session",
+            new=AsyncMock(side_effect=Exception("expired")),
+        ), patch(
+            "guild_portal.middleware.activity._record_activity",
+            new=AsyncMock(),
+        ) as record_activity:
+            response = await middleware.dispatch(request, call_next)
+            assert response.background is not None
+            await response.background()
 
-        assert response.background is None
+        record_activity.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_no_pool_skips_tracking(self):

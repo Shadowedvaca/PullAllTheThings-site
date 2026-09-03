@@ -1,17 +1,23 @@
 # PATT Database Schema
 
-> **Canonical schema reference — current through migration 0181.**
+> **Canonical schema reference — current through migration 0182.**
 > Detailed DDL for the original core tables (migrations 0001–0044) is below.
 > Newer tables are documented in the schema overview section immediately below.
 
 ---
 
-## Schema Overview (current through migration 0181)
+## Schema Overview (current through migration 0182)
 
 Nine schemas in use. `enrichment`, `landing`, `viz`, `ref`, `config`, `log` were added during the Gear Plan Schema Overhaul (prod-v0.20.0+).
 
 ### `common` — shared infrastructure
-`guild_ranks`, `users`, `invite_codes`, `screen_permissions`, `rank_wow_mapping`, `error_log`, `error_routing`, `feedback_submissions`, `guide_sites`
+`guild_ranks`, `users`, `auth_sessions`, `invite_codes`, `screen_permissions`, `rank_wow_mapping`, `error_log`, `error_routing`, `feedback_submissions`, `guide_sites`
+
+`auth_sessions` — independently revocable website/API login sessions; UUID
+`id` is the JWT `jti`, with `user_id`, `rank_level_at_issue`, absolute issue and
+expiry timestamps, and paired revocation timestamp/reason. Migration 0182 also
+adds database triggers that revoke active sessions after password, account-active,
+or player-rank changes.
 
 `discord_config` — single-row bot config; columns include `bot_token_encrypted`, 7 attendance toggle columns, `attendance_excuse_if_unavailable BOOL`, `attendance_excuse_if_discord_absent BOOL`, `landing_zone_channel_id`
 

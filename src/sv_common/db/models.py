@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models for the guild platform.
 
-common schema: guild_ranks, users, discord_config, invite_codes,
+common schema: guild_ranks, users, auth_sessions, discord_config, invite_codes,
                site_config, rank_wow_mapping, error_log, guide_sites
 patt schema: campaigns, campaign_entries, votes, campaign_results,
              contest_agent_log, guild_quotes, guild_quote_titles, quote_subjects,
@@ -88,6 +88,38 @@ class User(Base):
     )
 
     player: Mapped[Optional["Player"]] = relationship(back_populates="website_user")
+    auth_sessions: Mapped[list["AuthSession"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class AuthSession(Base):
+    """One independently revocable PATT website/API login session."""
+
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        CheckConstraint("expires_at > issued_at", name="ck_auth_sessions_expiry"),
+        CheckConstraint(
+            "(revoked_at IS NULL) = (revoked_reason IS NULL)",
+            name="ck_auth_sessions_revocation_pair",
+        ),
+        {"schema": "common"},
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("common.users.id", ondelete="CASCADE"), nullable=False
+    )
+    rank_level_at_issue: Mapped[int] = mapped_column(Integer, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    revoked_reason: Mapped[Optional[str]] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+
+    user: Mapped["User"] = relationship(back_populates="auth_sessions")
 
 
 class ScreenPermission(Base):

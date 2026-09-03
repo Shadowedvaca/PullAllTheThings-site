@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: patt_recovery
+      POSTGRES_USER: patt_recovery
+      POSTGRES_PASSWORD: ci-only-recovery-placeholder
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patt_recovery -d patt_recovery"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  app:
+    image: ${PATT_IMAGE:-patt-recovery:local}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://patt_recovery:ci-only-recovery-placeholder@db:5432/patt_recovery
+      JWT_SECRET_KEY: ci-only-recovery-signing-placeholder-32-characters
+      APP_ENV: recovery
+      COMMIT_SHA: ${RECOVERY_COMMIT_SHA:-unknown}
+    ports:
+      - "127.0.0.1:${RECOVERY_PORT:-18100}:8100"

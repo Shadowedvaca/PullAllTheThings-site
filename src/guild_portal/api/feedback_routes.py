@@ -6,10 +6,12 @@ Calls sv_common.feedback.submit_feedback() which handles local storage + Hub syn
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 
-from guild_portal.deps import COOKIE_NAME, _decode_token
+from guild_portal.deps import COOKIE_NAME, get_db
+from sv_common.auth.sessions import authenticate_session
 from sv_common.feedback import submit_feedback
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,11 @@ class FeedbackBody(BaseModel):
 
 
 @router.post("")
-async def submit_feedback_endpoint(body: FeedbackBody, request: Request):
+async def submit_feedback_endpoint(
+    body: FeedbackBody,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     pool = request.app.state.guild_sync_pool
 
     # Best-effort: determine if user is logged in; never block anonymous
@@ -36,7 +42,7 @@ async def submit_feedback_endpoint(body: FeedbackBody, request: Request):
             if auth_header.startswith("Bearer "):
                 token_str = auth_header[7:]
         if token_str:
-            _decode_token(token_str)
+            await authenticate_session(token_str, db)
             is_authenticated = True
     except Exception:
         pass

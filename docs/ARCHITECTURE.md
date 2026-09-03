@@ -577,34 +577,31 @@ All three share the same Python process, event loop, and database connection poo
 
 ### 5.3 Environments
 
-| Env | Server | Port | Deploy trigger | Purpose |
+| Env | Server | Port | Deployment source | Purpose |
 |-----|--------|------|---------------|---------|
-| prod | `hetzner` | 8100 | `git tag prod-vX.Y.Z` → GitHub Actions | Live site |
-| test | `my-web-apps-test` | 8100 | Merge to `main` → GitHub Actions | Post-merge validation |
-| dev | `my-web-apps-dev` | 8100 | Manual `gh workflow run deploy-dev.yml -f branch=X` | Feature work |
+| prod | `hetzner` | 8100 | Exact approved immutable production tag | Live site |
+| test | `my-web-apps-test` | 8100 | Exact approved `main` integration commit | Integration validation |
+| dev | `my-web-apps-dev` | 8100 | Exact commit resolved from an explicit branch | Feature feedback |
 
-Each environment has its own database. Migrations run automatically on container startup via `docker-entrypoint.sh` → `alembic upgrade head`.
+Each environment has its own database. Before deployment starts a new container,
+the workflow requires an atomic, inspectable custom-format backup and rollback
+manifest for that environment. Migrations then run automatically on container
+startup via `docker-entrypoint.sh` → `alembic upgrade head`. CI rehearses a
+synthetic custom archive restore, stable fingerprint, representative one-step
+downgrade/re-upgrade, and a fresh-database container health/head check.
 
 ### 5.4 CI/CD Pipeline
 
-```
-Developer
-  │
-  ├─ gh workflow run deploy-dev.yml -f branch=feature/X
-  │     └─ SSH to my-web-apps-dev → git pull + docker build + compose up → health check
-  │
-  ├─ PR merged to main
-  │     └─ GitHub Actions: auto-deploy to my-web-apps-test (~60s)
-  │
-  └─ git tag prod-vX.Y.Z && git push origin prod-vX.Y.Z
-        └─ GitHub Actions: auto-deploy to hetzner/prod (~60s)
-```
-
-**Critical rules:**
-- Never SSH-deploy manually — always let CI handle it
-- `git push` before `gh workflow run` — workflow pulls from GitHub
-- Migrations auto-run on startup — no manual `alembic upgrade` needed
-- Never touch prod without explicit owner authorization
+Pull requests run release-contract, static, migration/recovery, test, Compose,
+image, and fresh-container identity validation. Development resolves an explicit
+branch to an immutable SHA. Test
+deploys the approved `main` integration SHA. Production validates the exact
+approved tag, version, SHA, `main` ancestry, repository readiness, and a
+successful test deployment for that exact SHA; a GitHub Release is published
+only after deployment succeeds. Production readiness currently defaults to
+blocked pending issues #54 and #55. See
+`reference/development-and-release.md` for the authoritative promotion and
+evidence contract.
 
 ### 5.5 Networking
 
@@ -738,7 +735,7 @@ voice_attendance_log
 | Mechanism | Used For | Storage |
 |-----------|----------|---------|
 | bcrypt password hash | Website login | `users.password_hash` |
-| JWT (HS256) | Session token | HTTP-only cookie `patt_token` (30-day max_age) |
+| JWT (HS256) + database session | Revocable session token | HTTP-only `patt_token` cookie or Bearer token; `common.auth_sessions` stores server-side state |
 | Invite codes | Registration gating | `invite_codes` (8-char, 72-hr, single-use) |
 | Battle.net OAuth2 | Character linking | `battlenet_accounts` (tokens Fernet-encrypted) |
 | API key | Addon upload endpoint | `.env` `GUILD_SYNC_API_KEY` |
@@ -747,13 +744,20 @@ voice_attendance_log
 
 Two Fernet encryption contexts:
 
-**JWT-key-derived context** (`crypto.py`): Used for Discord bot token, Raid-Helper API key, Blizzard client secret, WCL credentials. The JWT secret is the root — if it changes, all these secrets must be re-entered.
+**JWT-key-derived context** (`crypto.py`): Used for Discord bot token, Raid-Helper API key, Blizzard client secret, WCL credentials. The JWT secret is the root — if it changes, all sessions are invalidated and all these secrets must be re-entered.
 
 **Dedicated BNet context** (`BNET_TOKEN_ENCRYPTION_KEY`): Used exclusively for Battle.net OAuth tokens (access + refresh). Separate key so BNet tokens can be rotated without affecting Discord/Blizzard credentials.
 
 ### 7.3 Rank-Based Access Control
 
-Routes are gated by `rank_level` extracted from the JWT payload:
+Authentication verifies the signed JWT, its `jti` against an unrevoked and
+unexpired `common.auth_sessions` row, an active website user, and the player's
+current database rank. Ordinary member sessions have a 7-day absolute lifetime;
+rank level 4 and above sessions have a 12-hour absolute lifetime. Sessions do
+not renew automatically. A rank change revokes existing sessions and requires a
+new login.
+
+Routes are gated by the verified current database `rank_level`:
 
 ```
 Public         — No auth required (/, /roster, /crafting-corner, /guide, /feedback)
@@ -762,7 +766,7 @@ Officer        — rank_level >= officer threshold (/admin/*, most admin APIs)
 Guild Leader   — rank_level >= GL threshold (/admin/site-config, GL-only features)
 ```
 
-`screen_permissions` table in `common` schema allows DB-driven per-screen rank gates (managed via Admin UI). This is checked in `deps.py` against the JWT rank_level.
+`screen_permissions` table in `common` schema allows DB-driven per-screen rank gates (managed via Admin UI). This is checked in `deps.py` against the verified current database rank. Unsafe cookie-authenticated requests require a same-origin `Origin` or `Referer`, and logout is a POST that revokes the current session.
 
 ---
 
