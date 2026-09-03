@@ -135,14 +135,13 @@ def _production_readiness_data(*, enabled: bool = False) -> dict:
     }
 
 
-def test_repository_production_readiness_is_valid_and_blocked():
+def test_repository_production_readiness_is_valid_and_enabled():
     root = Path(__file__).resolve().parents[2]
     readiness = validate_production_readiness(root, configuration_only=True)
-    assert readiness.enabled is False
+    assert readiness.enabled is True
     assert readiness.controls["migration_backup_rollback"] == "implemented_and_verified"
     assert readiness.blockers == ()
-    with pytest.raises(ProductionReadinessError, match="repository-disabled"):
-        validate_production_readiness(root)
+    assert validate_production_readiness(root).enabled is True
 
 
 def test_production_cannot_be_enabled_with_unverified_controls(tmp_path):
