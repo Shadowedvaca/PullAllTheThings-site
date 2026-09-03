@@ -126,6 +126,16 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")
 
+    compose_environments = {
+        "docker-compose.dev.yml": "APP_ENV: development",
+        "docker-compose.test.yml": "APP_ENV: test",
+        "docker-compose.guild.yml": "APP_ENV: production",
+    }
+    for compose_name, expected_environment in compose_environments.items():
+        source = (root / compose_name).read_text(encoding="utf-8")
+        if expected_environment not in source:
+            errors.append(f"{compose_name} is missing {expected_environment}")
+
     development_source = (workflows / "deploy-dev.yml").read_text(encoding="utf-8")
     for token in ("DEPLOY_REF", "git check-ref-format --branch"):
         if token not in development_source:

@@ -25,6 +25,7 @@ services:
       - .env
     environment:
       COMMIT_SHA: ${COMMIT_SHA:-unknown}
+      APP_ENV: test
     ports:
       - "8100:8100"
 
