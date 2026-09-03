@@ -63,8 +63,8 @@ backup_evidence="$(
   bash deploy/patt-predeploy-backup.sh \
     --compose-file "$compose_file" \
     --db-service "$db_service" \
-    --database guild_db \
-    --user guild_user \
+    --database-env POSTGRES_DB \
+    --user-env POSTGRES_USER \
     --backup-dir "$backup_dir" \
     --previous-sha "$previous_sha" \
     --deployment-sha "$deployment_sha" </dev/null

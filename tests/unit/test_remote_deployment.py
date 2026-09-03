@@ -67,6 +67,10 @@ def test_remote_program_detaches_child_stdin_and_orders_every_gate():
     marker = source.index(".deployment/active-sha.tmp")
     sentinel = source.index("PATT_DEPLOYMENT_COMPLETE")
     assert build < backup < start < health < migration < marker < sentinel
+    assert "--database-env POSTGRES_DB" in source
+    assert "--user-env POSTGRES_USER" in source
+    assert "--database guild_db" not in source
+    assert "--user guild_user" not in source
 
 
 def test_completion_requires_backup_and_rollback_evidence():
