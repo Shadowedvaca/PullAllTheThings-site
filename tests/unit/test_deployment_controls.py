@@ -21,9 +21,24 @@ def test_repository_deployment_controls_are_valid():
     ]
 
 
+def test_compose_files_pin_their_deployment_environment_identity():
+    expected = {
+        "docker-compose.dev.yml": "APP_ENV: development",
+        "docker-compose.test.yml": "APP_ENV: test",
+        "docker-compose.guild.yml": "APP_ENV: production",
+    }
+    for name, identity in expected.items():
+        source = (ROOT / name).read_text(encoding="utf-8")
+        assert source.count(identity) == 1
+
+
+
 def test_unpinned_action_is_rejected(tmp_path):
     for relative in (
         ".github/deployment-controls.json",
+        "docker-compose.dev.yml",
+        "docker-compose.test.yml",
+        "docker-compose.guild.yml",
         "deploy/configure-deployment-ssh.sh",
         "deploy/run-strict-ssh.sh",
         "deploy/run-strict-scp.sh",

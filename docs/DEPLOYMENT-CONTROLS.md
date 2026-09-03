@@ -22,6 +22,9 @@ GitHub configuration.
   copier uses the same empty SSH configuration, environment-scoped key, batch
   mode, identity isolation, and strict supplied known-host verification as the
   command runner.
+- Each environment-specific Compose app service explicitly declares its runtime
+  identity: `development`, `test`, or `production`. Host `.env` files cannot
+  silently substitute another environment identity.
 - The server imports the transferred bundle through a local filesystem fetch
   with global and system Git configuration disabled and terminal prompts
   prohibited. It removes the bounded temporary bundle on success or failure,
