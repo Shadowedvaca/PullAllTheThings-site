@@ -211,8 +211,8 @@ jobs:
           bash deploy/patt-predeploy-backup.sh \
             --compose-file docker-compose.recovery.yml \
             --db-service db \
-            --database patt_recovery \
-            --user patt_recovery \
+            --database-env POSTGRES_DB \
+            --user-env POSTGRES_USER \
             --backup-dir artifacts/predeploy \
             --previous-sha "$RECOVERY_COMMIT_SHA" \
             --deployment-sha "$RECOVERY_COMMIT_SHA"

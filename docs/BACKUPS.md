@@ -30,6 +30,13 @@ start or migrate the database, the workflow invokes:
 deploy/patt-predeploy-backup.sh
 ```
 
+The script resolves the database name and role from the running database
+container's `POSTGRES_DB` and `POSTGRES_USER` values for deployments, then
+validates both as simple PostgreSQL identifiers. This preserves compatibility
+with existing volumes initialized under legacy identities without logging a
+password or connection URL. Explicit `--database` and `--user` values remain
+available for bounded recovery tooling.
+
 The script fails closed unless all of these checks succeed:
 
 1. The previous and target identities are exact 40-character commit SHAs.

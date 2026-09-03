@@ -4,7 +4,8 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: patt-predeploy-backup.sh \
-  --compose-file PATH --db-service NAME --database NAME --user NAME \
+  --compose-file PATH --db-service NAME \
+  (--database NAME --user NAME | --database-env NAME --user-env NAME) \
   --backup-dir PATH --previous-sha SHA --deployment-sha SHA
 
 Creates an atomic PostgreSQL custom-format backup, verifies that pg_restore can
@@ -17,6 +18,8 @@ compose_file=""
 db_service=""
 database_name=""
 database_user=""
+database_env=""
+user_env=""
 backup_dir=""
 previous_sha=""
 deployment_sha=""
@@ -27,6 +30,8 @@ while (($#)); do
     --db-service) db_service="${2:-}"; shift 2 ;;
     --database) database_name="${2:-}"; shift 2 ;;
     --user) database_user="${2:-}"; shift 2 ;;
+    --database-env) database_env="${2:-}"; shift 2 ;;
+    --user-env) user_env="${2:-}"; shift 2 ;;
     --backup-dir) backup_dir="${2:-}"; shift 2 ;;
     --previous-sha) previous_sha="${2:-}"; shift 2 ;;
     --deployment-sha) deployment_sha="${2:-}"; shift 2 ;;
@@ -35,7 +40,7 @@ while (($#)); do
   esac
 done
 
-for value in compose_file db_service database_name database_user backup_dir previous_sha deployment_sha; do
+for value in compose_file db_service backup_dir previous_sha deployment_sha; do
   if [[ -z "${!value}" ]]; then
     echo "Missing required value: $value" >&2
     exit 2
@@ -45,6 +50,19 @@ done
 if [[ ! "$previous_sha" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$deployment_sha" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Previous and deployment identities must be exact 40-character commits" >&2
   exit 2
+fi
+if [[ -n "$database_name" && -n "$database_env" ]] || [[ -z "$database_name" && -z "$database_env" ]] ||
+   [[ -n "$database_user" && -n "$user_env" ]] || [[ -z "$database_user" && -z "$user_env" ]]; then
+  echo "Provide exactly one database identity source for each of database and user" >&2
+  exit 2
+fi
+if [[ -n "$database_env" ]]; then
+  [[ "$database_env" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { echo "Invalid database environment variable name" >&2; exit 2; }
+  database_name="$(docker compose -f "$compose_file" exec -T "$db_service" printenv "$database_env")"
+fi
+if [[ -n "$user_env" ]]; then
+  [[ "$user_env" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { echo "Invalid user environment variable name" >&2; exit 2; }
+  database_user="$(docker compose -f "$compose_file" exec -T "$db_service" printenv "$user_env")"
 fi
 if [[ ! "$database_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || [[ ! "$database_user" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
   echo "Database and user names must be simple PostgreSQL identifiers" >&2

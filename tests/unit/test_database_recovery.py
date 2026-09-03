@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -72,6 +74,67 @@ def test_predeploy_backup_is_atomic_verified_and_non_destructive():
     assert "Refusing to overwrite existing backup evidence" in source
     assert "pg_restore --dbname" not in source
     assert "DROP DATABASE" not in source
+
+
+def test_predeploy_backup_uses_running_container_database_identity(tmp_path):
+    compose = tmp_path / "compose.yml"
+    compose.write_text("services: {}\n", encoding="utf-8")
+    docker_log = tmp_path / "docker.log"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker = fake_bin / "docker"
+    docker.write_text(
+        """#!/bin/sh
+printf '%s\\n' "$*" >> "$PATT_DOCKER_LOG"
+case "$*" in
+  *" printenv POSTGRES_DB") printf legacy_db ;;
+  *" printenv POSTGRES_USER") printf legacy_owner ;;
+  *" pg_dump --username legacy_owner --dbname legacy_db "*) printf alembic_version ;;
+  *" pg_restore --list") cat >/dev/null; printf 'TABLE patt alembic_version\\n' ;;
+  *" psql --username legacy_owner --dbname legacy_db "*) printf '0182\\n' ;;
+  *) exit 9 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    sha = "a" * 40
+    environment = os.environ.copy()
+    environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+    environment["PATT_DOCKER_LOG"] = str(docker_log)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(BACKUP_SCRIPT),
+            "--compose-file",
+            str(compose),
+            "--db-service",
+            "db-prod",
+            "--database-env",
+            "POSTGRES_DB",
+            "--user-env",
+            "POSTGRES_USER",
+            "--backup-dir",
+            str(tmp_path / "backups"),
+            "--previous-sha",
+            sha,
+            "--deployment-sha",
+            sha,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+    commands = docker_log.read_text(encoding="utf-8")
+    assert "printenv POSTGRES_DB" in commands
+    assert "printenv POSTGRES_USER" in commands
+    assert "pg_dump --username legacy_owner --dbname legacy_db" in commands
+    assert "psql --username legacy_owner --dbname legacy_db" in commands
+    assert "Verified pre-deployment backup:" in result.stdout
+    assert "Rollback manifest:" in result.stdout
 
 
 @pytest.mark.parametrize(
