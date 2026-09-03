@@ -167,6 +167,7 @@ def test_pr_workflow_requires_restore_and_fresh_container_identity():
     assert "docker-compose.recovery.yml" in source
     assert 'data["data"]["environment"] == "recovery"' in source
     assert "alembic current --check-heads" in source
-    assert "--database patt_recovery" in source
+    assert "--database-env POSTGRES_DB" in source
+    assert "--user-env POSTGRES_USER" in source
     assert "--backup-dir artifacts/predeploy" in source
     assert "artifacts/predeploy" in source
