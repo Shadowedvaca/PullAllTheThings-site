@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "production_enabled": false,
+  "production_enabled": true,
   "required_foundation_issues": [54, 55],
   "required_controls": {
     "migration_backup_rollback": "implemented_and_verified",
