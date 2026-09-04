@@ -21,11 +21,18 @@ Required controls:
 6. Verify all non-review accounts are disabled and direct identifiers, provider
    tokens, free-form member text, auth sessions, and social submissions are gone.
 7. Deploy the seasonal branch so Alembic upgrades the sanitized clone, then run
-   the normal seasonal source pipeline: landing API fill, enrichment/classification,
-   item-source/legacy-dungeon/crafted links as applicable, BIS refresh, and health
-   checks. Roster reset is a separate operation and is not implied.
+   the seasonal source pipeline in dependency order: current-expansion loot-table
+   sync, legacy-dungeon sync, crafted-item discovery, landing API catch-up,
+   enrichment/classification, tier-token processing, BIS refresh, and health
+   checks. Source discovery must precede landing catch-up so newly discovered item
+   IDs receive raw payloads before enrichment is rebuilt. Roster reset is a
+   separate operation and is not implied.
 8. Capture before/after table counts and distinct Blizzard-ID coverage. Report
    provider errors, new IDs, stale IDs, unclassified rows, and recommendation gaps.
+
+Do not rebuild enrichment between source discovery and landing catch-up. The
+rebuild is landing-authoritative and will otherwise discard source items that have
+not yet been copied into `landing.blizzard_items`.
 
 The sanitizer deliberately retains stable internal keys and character equipment,
 gear-plan, progression, item, source, recipe, raid, dungeon, and landing/enrichment

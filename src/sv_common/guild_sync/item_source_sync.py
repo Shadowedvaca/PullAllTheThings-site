@@ -258,6 +258,10 @@ async def _sync_encounter(
             INSERT INTO landing.blizzard_journal_encounters
                 (encounter_id, instance_id, payload)
             VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (encounter_id) DO UPDATE SET
+                instance_id = EXCLUDED.instance_id,
+                payload = EXCLUDED.payload,
+                fetched_at = NOW()
             """,
             encounter_id, instance_id, json.dumps(enc_data),
         )
