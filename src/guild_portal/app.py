@@ -117,6 +117,23 @@ async def _auto_book_loop(pool: asyncpg.Pool) -> None:
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
+async def _start_optional_guild_scheduler(scheduler):
+    """Start guild sync without making external API availability a web prerequisite."""
+    try:
+        await scheduler.start()
+    except Exception as exc:
+        logger.warning(
+            "Guild sync scheduler unavailable during startup; web application will continue: %s",
+            exc,
+        )
+        try:
+            await scheduler.stop()
+        except Exception as cleanup_exc:
+            logger.warning("Guild sync scheduler cleanup failed: %s", cleanup_exc)
+        return None
+    return scheduler
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
 
@@ -260,14 +277,17 @@ def create_app() -> FastAPI:
             from sv_common.guild_sync.scheduler import GuildSyncScheduler
             from sv_common.discord.bot import get_bot
             discord_bot = get_bot()
-            guild_scheduler = GuildSyncScheduler(
+            scheduler_candidate = GuildSyncScheduler(
                 db_pool=guild_sync_pool,
                 discord_bot=discord_bot,
                 audit_channel_id=audit_channel_id_int,
             )
-            await guild_scheduler.start()
+            guild_scheduler = await _start_optional_guild_scheduler(
+                scheduler_candidate
+            )
             app.state.guild_sync_scheduler = guild_scheduler
-            logger.info("Guild sync scheduler started")
+            if guild_scheduler is not None:
+                logger.info("Guild sync scheduler started")
         else:
             app.state.guild_sync_scheduler = None
             logger.info("Guild sync scheduler skipped (missing credentials or audit channel not configured)")
