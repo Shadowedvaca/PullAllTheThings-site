@@ -13,6 +13,8 @@ exec ssh \
   -F /dev/null \
   -i "$DEPLOY_SSH_PRIVATE_KEY_PATH" \
   -o BatchMode=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=20 \
   -o IdentitiesOnly=yes \
   -o ServerAliveInterval=15 \
   -o ServerAliveCountMax=4 \
