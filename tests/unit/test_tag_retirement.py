@@ -14,7 +14,9 @@ from scripts.validate_failed_tag_retirement import (
 TAG = "prod-v0.24.3"
 TAG_OBJECT = "e" * 40
 COMMIT = "a" * 40
+OLD_COMMIT = "b" * 40
 RUN_ID = 33806491061
+OLD_RUN_ID = RUN_ID - 1
 
 
 def _evidence() -> dict:
@@ -53,12 +55,15 @@ def _evidence() -> dict:
     }
 
 
-def _validate(evidence: dict):
+def _validate(
+    evidence: dict,
+    expected_failed_attempts: tuple[tuple[int, str], ...] = ((RUN_ID, COMMIT),),
+):
     return validate_failed_tag_retirement(
         tag=TAG,
         expected_tag_object=TAG_OBJECT,
         expected_commit=COMMIT,
-        expected_failed_run_id=RUN_ID,
+        expected_failed_attempts=expected_failed_attempts,
         **evidence,
     )
 
@@ -104,21 +109,61 @@ def test_missing_expected_failed_run_fails_closed():
     evidence = _evidence()
     evidence["workflow_runs"][0]["id"] = RUN_ID + 1
     evidence["jobs_by_run"] = {RUN_ID + 1: evidence["jobs_by_run"].pop(RUN_ID)}
-    with pytest.raises(TagRetirementValidationError, match="expected failed"):
+    with pytest.raises(TagRetirementValidationError, match="declared Production run"):
         _validate(evidence)
 
 
-def test_prior_run_for_same_tag_on_another_commit_fails_closed():
+def test_all_explicitly_declared_failed_attempts_across_commits_are_eligible():
     evidence = _evidence()
     evidence["workflow_runs"].append(
         {
-            "id": RUN_ID - 1,
+            "id": OLD_RUN_ID,
             "head_branch": TAG,
-            "head_sha": "b" * 40,
+            "head_sha": OLD_COMMIT,
             "event": "push",
             "status": "completed",
             "conclusion": "failure",
         }
     )
-    with pytest.raises(TagRetirementValidationError, match="another commit"):
+    evidence["jobs_by_run"][OLD_RUN_ID] = {
+        "jobs": [{"name": DEPLOY_JOB, "conclusion": "failure"}]
+    }
+
+    result = _validate(
+        evidence,
+        expected_failed_attempts=((OLD_RUN_ID, OLD_COMMIT), (RUN_ID, COMMIT)),
+    )
+
+    assert result.failed_run_ids == (OLD_RUN_ID, RUN_ID)
+
+
+def test_undeclared_historical_attempt_fails_closed():
+    evidence = _evidence()
+    evidence["workflow_runs"].append(
+        {
+            "id": OLD_RUN_ID,
+            "head_branch": TAG,
+            "head_sha": OLD_COMMIT,
+            "event": "push",
+            "status": "completed",
+            "conclusion": "failure",
+        }
+    )
+    evidence["jobs_by_run"][OLD_RUN_ID] = {
+        "jobs": [{"name": DEPLOY_JOB, "conclusion": "failure"}]
+    }
+
+    with pytest.raises(TagRetirementValidationError, match="not explicitly declared"):
         _validate(evidence)
+
+
+def test_declared_attempt_commit_mismatch_fails_closed():
+    evidence = _evidence()
+    with pytest.raises(TagRetirementValidationError, match="commit does not match"):
+        _validate(evidence, expected_failed_attempts=((RUN_ID, OLD_COMMIT),))
+
+
+def test_declared_attempt_must_include_current_tag_commit():
+    evidence = _evidence()
+    with pytest.raises(TagRetirementValidationError, match="current tag commit"):
+        _validate(evidence, expected_failed_attempts=((OLD_RUN_ID, OLD_COMMIT),))
