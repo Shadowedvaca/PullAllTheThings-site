@@ -44,7 +44,7 @@ browser/E2E, and the concrete quality commands.
 |---|---|---|---|
 | Development | Isolated feedback for the active branch. | Manual workflow dispatch for an explicit branch; routine once in slice scope. | Resolved SHA, version, environment, DB/health, migration head, workflow result, and applicable UI/API checks. |
 | Test | Integration and release-candidate validation. | Exact approved `main` commit produced by the Promotion to test approval after any Child- or Parent-timed UI validation. Release-timed validation is not due yet. | PR/CI result, deployed SHA, version, environment, DB/health, migration head, validation due before test, and deviations. |
-| Production | Live users and data. Currently repository-blocked by required foundation work. | Exact approved immutable `prod-vX.Y.Z` tag after successful test deployment of the same SHA, any Release-timed UI validation, and Promotion to production approval. | Tag and SHA, exact-SHA successful test workflow record, main ancestry, selected version, curated note, workflow result, migration/health evidence, production smoke checks, rollback readiness, and GitHub Release URL. |
+| Production | Live users and data. | Exact approved `prod-vX.Y.Z` attempt tag after successful test deployment of the same SHA, any Release-timed UI validation, and Promotion to production approval; the tag becomes permanently immutable when Production deployment completes successfully or a GitHub Release exists. | Tag and SHA, exact-SHA successful test workflow record, main ancestry, selected version, curated note, workflow result, migration/health evidence, production smoke checks, rollback readiness, and GitHub Release URL. |
 
 The test workflow may deploy only the approved `main` integration commit. The
 production workflow may deploy only the tag target, must prove the tag equals
@@ -53,6 +53,33 @@ find a successful `Deploy to Test` push run whose `head_sha` is exactly the tag
 target. Main ancestry alone is insufficient.
 Hotfix urgency does not bypass tests or either promotion approval. If required
 evidence cannot be produced, stop and document the blocker and risk.
+
+## Production tag lifecycle
+
+Creating an approved `prod-vX.Y.Z` tag begins a Production attempt; creation is
+not by itself evidence that the version deployed or released. The attempt tag
+becomes permanently immutable as soon as either of these facts exists:
+
+- the Production deploy job completed successfully, including its exact
+  `PATT_DEPLOYMENT_COMPLETE` evidence; or
+- a GitHub Release exists for the tag.
+
+If the attempt fails before both facts, the failed tag does not consume Mike's
+selected version. Retirement is an exceptional manual operation, never an
+automatic workflow response. Before deletion, preserve the annotated tag object,
+dereferenced commit, every matching Production run and deploy-job conclusion,
+and Release lookup. Run `scripts/validate_failed_tag_retirement.py` against those
+exact expected identities. The validator is read-only and must fail closed if
+any matching deploy job succeeded, any Release exists, evidence is incomplete,
+or the remote ref changes during validation. Deleting the exact failed ref still
+requires Mike's explicit authority.
+
+Correction then follows the complete branch, pull-request, Child development
+complete, Promotion to test, and exact-SHA Test path. Only a new Promotion to
+production approval permits recreating the same owner-selected tag on that exact
+corrected Test-proven `main` commit. Tag deletion and recreation are separate
+manual actions. If Production completed but Release publication failed, keep the
+tag immutable and repair publication without moving or recreating it.
 
 ## Version authority
 
@@ -83,10 +110,10 @@ malformed versions, missing/mismatched headings and sections, placeholders,
 and credential-shaped content. Do not put secrets or internal connection
 details in release notes.
 
-No GitHub Release currently exists for historical tags. For future production
+No GitHub Release currently exists for historical tags. For production
 promotions, `deploy-prod.yml` calls the isolated `publish-release.yml` only after
 the exact tag deploy and health/migration verification succeed. The publisher
-creates or updates the Release for that immutable tag using only the matching
+creates or updates the Release for the now-immutable tag using only the matching
 versioned curated note. A failed deployment must not publish a Release.
 
 ## Migrations, health, and rollback
@@ -101,7 +128,9 @@ For every environment with a database change:
 - record the starting and ending revision and any data or manual checks.
 
 Rollback is a decision, not a blind command. For code-only compatible changes,
-redeploy the prior immutable validated tag/SHA. Never move or reuse a tag. For
+redeploy the prior successfully deployed immutable tag/SHA. Never move, delete,
+or reuse a successfully deployed or released tag. The failed-attempt retirement
+exception above is not a rollback mechanism. For
 non-backward-compatible migrations, stop writes as required, use the documented
 and verified backup/restore path in `docs/BACKUPS.md`, and reconcile code and DB
 to a compatible state. If recovery needs changed code or migrations, Mike
@@ -133,14 +162,12 @@ exercised by this repository; upgrades need their own successful validation
 evidence.
 
 Production is intentionally fail closed. `.github/production-readiness.json`
-still sets `production_enabled` to `false`, and `deploy-prod.yml` runs
+sets `production_enabled` to `true` after the separately reviewed readiness
+change, and `deploy-prod.yml` still runs
 `scripts/validate_production_readiness.py` before test-provenance lookup, secrets,
-SSH, or deployment. A tag that matches `VERSION` and points into `main` therefore
-cannot currently reach Production. All required controls now have
-`implemented_and_verified` evidence from #54 and #55, including the safely
-exercised exact-SHA Test lookup. Enabling requires a separately explicit reviewed change during production
-preflight after successful exact-SHA Test evidence and before the separately
-approved production tag is pushed.
+SSH, or deployment. Readiness does not authorize a tag or deployment: the
+exact-SHA Test prerequisite and Promotion to production approval remain
+mandatory.
 
 The following are mandatory Production blockers, not optional follow-ups:
 
@@ -153,9 +180,10 @@ The following are mandatory Production blockers, not optional follow-ups:
 The exact-SHA test provenance lookup was exercised read-only against successful
 Test run `30419325704` for exact SHA `d35786b9910707109395abad24ddd06d64bcc08c`.
 This proves lookup and selection behavior without authorizing or performing a
-deployment. Production remains disabled pending successful exact-SHA Test
-evidence, release reconciliation, explicit readiness authorization, and the
-separate Promotion to production approval.
+deployment. The first authorized `0.24.3` Production attempt later failed before
+backup or deployment completion. Corrective issue #69 owns its
+evidence-preserving tag lifecycle and retry; enabled readiness does not bypass
+either promotion gate or prove a release.
 
 Mike approved the authentication-session policy in issue #58: ordinary member
 sessions expire after 7 days, rank level 4 and above sessions expire after 12

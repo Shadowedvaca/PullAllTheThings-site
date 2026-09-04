@@ -15,6 +15,7 @@ ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts" / "rehearse_database_recovery.py"
 BACKUP_SCRIPT = ROOT / "deploy" / "patt-predeploy-backup.sh"
 PR_WORKFLOW = ROOT / ".github" / "workflows" / "pull-request-validation.yml"
+LEGACY_IDENTITY_SCRIPT = ROOT / "scripts" / "reproduce_legacy_database_identity.sh"
 
 
 def _load_module():
@@ -167,7 +168,23 @@ def test_pr_workflow_requires_restore_and_fresh_container_identity():
     assert "docker-compose.recovery.yml" in source
     assert 'data["data"]["environment"] == "recovery"' in source
     assert "alembic current --check-heads" in source
+    assert "scripts/reproduce_legacy_database_identity.sh" in source
+    assert "artifacts/predeploy" in source
+
+
+def test_legacy_identity_regression_uses_real_compose_backup_wrapper():
+    source = LEGACY_IDENTITY_SCRIPT.read_text(encoding="utf-8")
+    workflow = PR_WORKFLOW.read_text(encoding="utf-8")
+    assert "patt-predeploy-backup.sh" in source
+    assert "--database guild_db" in source
+    assert "--user guild_user" in source
+    assert "SELECT count(*) FROM pg_roles WHERE rolname = 'guild_user'" in source
+    assert "SELECT count(*) FROM pg_database WHERE datname = 'guild_db'" in source
+    assert "hard_coded_status" in source
     assert "--database-env POSTGRES_DB" in source
     assert "--user-env POSTGRES_USER" in source
-    assert "--backup-dir artifacts/predeploy" in source
-    assert "artifacts/predeploy" in source
+    assert "database=patt_recovery" in source
+    assert "alembic_revision=0182" in source
+    assert workflow.index("docker-compose.recovery.yml up -d") < workflow.index(
+        "scripts/reproduce_legacy_database_identity.sh"
+    )

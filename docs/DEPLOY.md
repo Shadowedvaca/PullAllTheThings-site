@@ -16,7 +16,7 @@ an operational inventory of implemented workflows:
 | `deploy-dev.yml` | **Manual** (`gh workflow run deploy-dev.yml -f branch=X`) | `dev.pullallthethings.com` | `my-web-apps-dev` |
 | `pull-request-validation.yml` | Pull request | Isolated GitHub runner/PostgreSQL | GitHub-hosted |
 | `deploy-test.yml` | Approved push to **main** | `test.pullallthethings.com` | `my-web-apps-test` |
-| `deploy-prod.yml` | Exact `prod-v*` tag, currently blocked by repository readiness interlock | `pullallthethings.com` | `hetzner` |
+| `deploy-prod.yml` | Exact approved `prod-v*` attempt tag with enabled readiness and exact-SHA Test evidence | `pullallthethings.com` | `hetzner` |
 | `publish-release.yml` | Successful production deployment | GitHub Release | GitHub-hosted |
 
 - Each `development`, `test`, and `production` GitHub environment supplies its
@@ -29,7 +29,10 @@ an operational inventory of implemented workflows:
   environment-specific custom-format database backup plus rollback manifest.
   It then starts the image, verifies runtime version/environment/commit and
   database health, and verifies the Alembic head.
-- Never push a production tag outside the Promotion to production gate.
+- Never create or recreate a production tag outside the Promotion to production
+  gate. A successfully deployed or released tag is permanently immutable. A
+  failed, unpublished attempt tag may be retired only by the separate manual,
+  evidence-preserving process in `reference/development-and-release.md`.
 - Deployment uses native OpenSSH with strict supplied known-host verification;
   it never accepts a newly scanned host key during a deployment.
 - The remote deployment program is the checked-in
@@ -40,10 +43,9 @@ an operational inventory of implemented workflows:
   `PATT_DEPLOYMENT_COMPLETE` sentinel emitted only after backup evidence,
   runtime identity, database health, migration head, and the atomic active-SHA
   marker are verified.
-- Production is not currently available: #54/#55 controls are complete and
-  verified, but `.github/production-readiness.json` remains blocked pending
-  exact-SHA Test evidence and a separately authorized reviewed readiness change.
-- Even after readiness is enabled, Production preflight must find a successful
+- Production readiness is enabled after the reviewed #54/#55 foundation and
+  readiness change. This setting is not promotion authority.
+- Production preflight must still find a successful
   `Deploy to Test` run for the exact tag-target SHA. Containment in `main` is not
   sufficient evidence.
 
@@ -58,6 +60,29 @@ Database backup, restore-rehearsal, and rollback decision boundaries are in
 `docs/BACKUPS.md`. A failed verified-backup step blocks deployment before the
 new container can run migrations. Live restore remains separately authorized
 destructive work.
+
+### Failed unpublished attempt tag
+
+This is an exceptional release-control operation, not rollback. First preserve
+the issue, exact annotated object, dereferenced commit, and failed run. Then use
+the authenticated Windows GitHub CLI context for this read-only check:
+
+```text
+python3 scripts/validate_failed_tag_retirement.py \
+  --gh-command gh.exe \
+  --repository Shadowedvaca/PullAllTheThings-site \
+  --tag prod-vX.Y.Z \
+  --expected-tag-object EXACT_ANNOTATED_OBJECT_SHA \
+  --expected-commit EXACT_DEREFERENCED_COMMIT_SHA \
+  --failed-run-id EXACT_FAILED_RUN_ID
+```
+
+The check scans all Production runs for that tag and all Releases, rejects any
+successful deploy completion, incomplete evidence, prior tag/commit mismatch,
+or Release, and rechecks externally mutable state. It never changes GitHub.
+Only Mike's explicit authority permits deletion of the exact validated ref.
+Correction must then complete PR and exact-SHA Test promotion; recreation still
+waits for a new Promotion to production approval and remains manual.
 
 ---
 
