@@ -63,8 +63,8 @@ backup_evidence="$(
   bash deploy/patt-predeploy-backup.sh \
     --compose-file "$compose_file" \
     --db-service "$db_service" \
-    --database-env POSTGRES_DB \
-    --user-env POSTGRES_USER \
+    --database-url-service "$app_service" \
+    --database-url-env DATABASE_URL \
     --backup-dir "$backup_dir" \
     --previous-sha "$previous_sha" \
     --deployment-sha "$deployment_sha" </dev/null
@@ -102,6 +102,7 @@ COMMIT_SHA="$deployment_sha" docker compose -f "$compose_file" exec -T "$app_ser
 printf '%s\n' "$deployment_sha" > .deployment/active-sha.tmp
 mv .deployment/active-sha.tmp .deployment/active-sha
 test "$(cat .deployment/active-sha)" = "$deployment_sha"
+rm -f .deployment/pending-previous-sha
 
 printf 'PATT_DEPLOYMENT_COMPLETE environment=%s version=%s commit=%s\n' \
   "$environment" "$version" "$deployment_sha"

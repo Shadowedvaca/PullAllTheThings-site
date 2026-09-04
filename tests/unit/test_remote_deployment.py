@@ -22,6 +22,7 @@ def test_deployment_program_is_not_streamed_on_child_process_stdin():
         assert "deploy/patt-remote-deploy.sh" in source
         assert "PATT_DEPLOYMENT_COMPLETE" in source
         assert "grep -Fqx" in source
+        assert ".deployment/pending-previous-sha" in source
 
 
 def test_deployment_bundle_transport_is_strict_and_exact():
@@ -67,8 +68,8 @@ def test_remote_program_detaches_child_stdin_and_orders_every_gate():
     marker = source.index(".deployment/active-sha.tmp")
     sentinel = source.index("PATT_DEPLOYMENT_COMPLETE")
     assert build < backup < start < health < migration < marker < sentinel
-    assert "--database-env POSTGRES_DB" in source
-    assert "--user-env POSTGRES_USER" in source
+    assert '--database-url-env DATABASE_URL' in source
+    assert '--database-url-service "$app_service"' in source
     assert "--database guild_db" not in source
     assert "--user guild_user" not in source
 
@@ -78,3 +79,4 @@ def test_completion_requires_backup_and_rollback_evidence():
     assert 'grep -Fq "Verified pre-deployment backup:"' in source
     assert 'grep -Fq "Rollback manifest:"' in source
     assert 'test "$(cat .deployment/active-sha)" = "$deployment_sha"' in source
+    assert 'rm -f .deployment/pending-previous-sha' in source

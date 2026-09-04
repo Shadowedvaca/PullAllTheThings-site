@@ -314,7 +314,8 @@ class GuildSyncScheduler:
 
     async def stop(self):
         """Shut down scheduler and clients."""
-        self.scheduler.shutdown()
+        if self.scheduler.running:
+            self.scheduler.shutdown()
         await self.blizzard_client.close()
 
     def _get_audit_channel(self) -> discord.TextChannel:

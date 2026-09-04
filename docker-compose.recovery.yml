@@ -2,15 +2,14 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: patt_recovery
-      POSTGRES_USER: patt_recovery
+      POSTGRES_DB: ${RECOVERY_POSTGRES_DB:-patt_recovery}
+      POSTGRES_USER: ${RECOVERY_POSTGRES_USER:-patt_recovery}
       POSTGRES_PASSWORD: ci-only-recovery-placeholder
-    tmpfs:
-      - /var/lib/postgresql/data
     volumes:
+      - patt_recovery_data:/var/lib/postgresql/data
       - ./deploy/setup_postgres.sql:/docker-entrypoint-initdb.d/01-setup.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U patt_recovery -d patt_recovery"]
+      test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
       timeout: 2s
       retries: 20
@@ -27,3 +26,6 @@ services:
       COMMIT_SHA: ${RECOVERY_COMMIT_SHA:-unknown}
     ports:
       - "127.0.0.1:${RECOVERY_PORT:-18100}:8100"
+
+volumes:
+  patt_recovery_data:

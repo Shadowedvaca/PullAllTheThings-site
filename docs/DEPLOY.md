@@ -112,7 +112,9 @@ docker logs guild-portal-app-prod-1 -f
 docker exec guild-portal-app-prod-1 alembic upgrade head
 
 # Access prod DB (only with explicit permission)
-docker exec guild-portal-db-prod-1 psql -U guild_user guild_db
+# The legacy Production volume currently contains patt_user / patt_db.
+# Do not infer a non-empty volume's identity from POSTGRES_* container values.
+docker exec guild-portal-db-prod-1 psql -U patt_user patt_db
 
 # Restart prod app
 docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod

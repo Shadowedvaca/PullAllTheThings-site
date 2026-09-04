@@ -212,6 +212,7 @@ jobs:
           bash scripts/reproduce_legacy_database_identity.sh \
             docker-compose.recovery.yml \
             db \
+            app \
             artifacts/predeploy \
             "$RECOVERY_COMMIT_SHA" \
             "$RECOVERY_COMMIT_SHA"

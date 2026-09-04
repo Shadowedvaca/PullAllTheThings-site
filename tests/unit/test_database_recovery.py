@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +18,16 @@ SCRIPT = ROOT / "scripts" / "rehearse_database_recovery.py"
 BACKUP_SCRIPT = ROOT / "deploy" / "patt-predeploy-backup.sh"
 PR_WORKFLOW = ROOT / ".github" / "workflows" / "pull-request-validation.yml"
 LEGACY_IDENTITY_SCRIPT = ROOT / "scripts" / "reproduce_legacy_database_identity.sh"
+
+
+def _bash_path(path: Path) -> str:
+    """Return a path Bash can consume when Windows Python runs from WSL UNC."""
+    value = path.as_posix()
+    if value.lower().startswith("//wsl.localhost/"):
+        parts = value.split("/", 4)
+        if len(parts) == 5:
+            return f"/{parts[4]}"
+    return value
 
 
 def _load_module():
@@ -77,52 +89,60 @@ def test_predeploy_backup_is_atomic_verified_and_non_destructive():
     assert "DROP DATABASE" not in source
 
 
-def test_predeploy_backup_uses_running_container_database_identity(tmp_path):
+def test_predeploy_backup_uses_composed_application_database_identity(tmp_path):
     compose = tmp_path / "compose.yml"
     compose.write_text("services: {}\n", encoding="utf-8")
     docker_log = tmp_path / "docker.log"
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     docker = fake_bin / "docker"
-    docker.write_text(
-        """#!/bin/sh
+    docker.write_bytes(
+        b"""#!/bin/sh
 printf '%s\\n' "$*" >> "$PATT_DOCKER_LOG"
 case "$*" in
-  *" printenv POSTGRES_DB") printf legacy_db ;;
-  *" printenv POSTGRES_USER") printf legacy_owner ;;
+  *" config --format json") printf '%s' '{"services":{"app-prod":{"environment":{"DATABASE_URL":"postgresql+asyncpg://legacy_owner:synthetic-password@db-prod:5432/legacy_db"}}}}' ;;
   *" pg_dump --username legacy_owner --dbname legacy_db "*) printf alembic_version ;;
   *" pg_restore --list") cat >/dev/null; printf 'TABLE patt alembic_version\\n' ;;
   *" psql --username legacy_owner --dbname legacy_db "*) printf '0182\\n' ;;
   *) exit 9 ;;
 esac
 """,
-        encoding="utf-8",
     )
     docker.chmod(0o755)
     sha = "a" * 40
     environment = os.environ.copy()
-    environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    environment["PATT_DOCKER_LOG"] = str(docker_log)
+    bash = shutil.which("bash") or "bash"
+    script_args = [
+        _bash_path(BACKUP_SCRIPT),
+        "--compose-file",
+        _bash_path(compose),
+        "--db-service",
+        "db-prod",
+        "--database-url-service",
+        "app-prod",
+        "--database-url-env",
+        "DATABASE_URL",
+        "--backup-dir",
+        _bash_path(tmp_path / "backups"),
+        "--previous-sha",
+        sha,
+        "--deployment-sha",
+        sha,
+    ]
 
+    shell_command = (
+        f"chmod 700 {shlex.quote(_bash_path(docker))}; "
+        f"export PATH={shlex.quote(_bash_path(fake_bin))}:\"$PATH\"; "
+        f"export PATT_DOCKER_LOG={shlex.quote(_bash_path(docker_log))}; "
+        "exec bash " + " ".join(shlex.quote(value) for value in script_args)
+    )
+    command = [bash, "-c", shell_command]
+    if BACKUP_SCRIPT.as_posix().lower().startswith("//wsl.localhost/"):
+        wsl = shutil.which("wsl")
+        assert wsl is not None
+        command = [wsl, "--", "bash", "-c", shell_command]
     result = subprocess.run(
-        [
-            "bash",
-            str(BACKUP_SCRIPT),
-            "--compose-file",
-            str(compose),
-            "--db-service",
-            "db-prod",
-            "--database-env",
-            "POSTGRES_DB",
-            "--user-env",
-            "POSTGRES_USER",
-            "--backup-dir",
-            str(tmp_path / "backups"),
-            "--previous-sha",
-            sha,
-            "--deployment-sha",
-            sha,
-        ],
+        command,
         check=True,
         capture_output=True,
         text=True,
@@ -130,8 +150,11 @@ esac
     )
 
     commands = docker_log.read_text(encoding="utf-8")
-    assert "printenv POSTGRES_DB" in commands
-    assert "printenv POSTGRES_USER" in commands
+    assert "config --format json" in commands
+    assert "printenv POSTGRES_DB" not in commands
+    assert "printenv POSTGRES_USER" not in commands
+    assert "synthetic-password" not in commands
+    assert "synthetic-password" not in result.stdout
     assert "pg_dump --username legacy_owner --dbname legacy_db" in commands
     assert "psql --username legacy_owner --dbname legacy_db" in commands
     assert "Verified pre-deployment backup:" in result.stdout
@@ -155,6 +178,7 @@ def test_deployment_requires_verified_backup_before_container_start(
     remote = (ROOT / "deploy" / "patt-remote-deploy.sh").read_text(encoding="utf-8")
     assert "deploy/patt-remote-deploy.sh" in workflow
     assert "PATT_DEPLOYMENT_COMPLETE" in workflow
+    assert ".deployment/pending-previous-sha" in workflow
     assert remote.index("patt-predeploy-backup.sh") < remote.index(" up -d ")
     assert ".deployment/active-sha" in remote
     assert remote.index("alembic current --check-heads") < remote.index(
@@ -181,8 +205,10 @@ def test_legacy_identity_regression_uses_real_compose_backup_wrapper():
     assert "SELECT count(*) FROM pg_roles WHERE rolname = 'guild_user'" in source
     assert "SELECT count(*) FROM pg_database WHERE datname = 'guild_db'" in source
     assert "hard_coded_status" in source
-    assert "--database-env POSTGRES_DB" in source
-    assert "--user-env POSTGRES_USER" in source
+    assert "RECOVERY_POSTGRES_DB=guild_db" in source
+    assert "RECOVERY_POSTGRES_USER=guild_user" in source
+    assert '--database-url-env DATABASE_URL' in source
+    assert '--database-url-service "$app_service"' in source
     assert "database=patt_recovery" in source
     assert "alembic_revision=0182" in source
     assert workflow.index("docker-compose.recovery.yml up -d") < workflow.rindex(
