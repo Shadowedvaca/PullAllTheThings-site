@@ -185,6 +185,6 @@ def test_legacy_identity_regression_uses_real_compose_backup_wrapper():
     assert "--user-env POSTGRES_USER" in source
     assert "database=patt_recovery" in source
     assert "alembic_revision=0182" in source
-    assert workflow.index("docker-compose.recovery.yml up -d") < workflow.index(
+    assert workflow.index("docker-compose.recovery.yml up -d") < workflow.rindex(
         "scripts/reproduce_legacy_database_identity.sh"
     )
