@@ -77,7 +77,7 @@ def test_predeploy_backup_is_atomic_verified_and_non_destructive():
     assert "DROP DATABASE" not in source
 
 
-def test_predeploy_backup_uses_running_container_database_identity(tmp_path):
+def test_predeploy_backup_uses_composed_application_database_identity(tmp_path):
     compose = tmp_path / "compose.yml"
     compose.write_text("services: {}\n", encoding="utf-8")
     docker_log = tmp_path / "docker.log"
@@ -88,8 +88,7 @@ def test_predeploy_backup_uses_running_container_database_identity(tmp_path):
         """#!/bin/sh
 printf '%s\\n' "$*" >> "$PATT_DOCKER_LOG"
 case "$*" in
-  *" printenv POSTGRES_DB") printf legacy_db ;;
-  *" printenv POSTGRES_USER") printf legacy_owner ;;
+  *" config --format json") printf '%s' '{"services":{"app-prod":{"environment":{"DATABASE_URL":"postgresql+asyncpg://legacy_owner:synthetic-password@db-prod:5432/legacy_db"}}}}' ;;
   *" pg_dump --username legacy_owner --dbname legacy_db "*) printf alembic_version ;;
   *" pg_restore --list") cat >/dev/null; printf 'TABLE patt alembic_version\\n' ;;
   *" psql --username legacy_owner --dbname legacy_db "*) printf '0182\\n' ;;
@@ -112,10 +111,10 @@ esac
             str(compose),
             "--db-service",
             "db-prod",
-            "--database-env",
-            "POSTGRES_DB",
-            "--user-env",
-            "POSTGRES_USER",
+            "--database-url-service",
+            "app-prod",
+            "--database-url-env",
+            "DATABASE_URL",
             "--backup-dir",
             str(tmp_path / "backups"),
             "--previous-sha",
@@ -130,8 +129,11 @@ esac
     )
 
     commands = docker_log.read_text(encoding="utf-8")
-    assert "printenv POSTGRES_DB" in commands
-    assert "printenv POSTGRES_USER" in commands
+    assert "config --format json" in commands
+    assert "printenv POSTGRES_DB" not in commands
+    assert "printenv POSTGRES_USER" not in commands
+    assert "synthetic-password" not in commands
+    assert "synthetic-password" not in result.stdout
     assert "pg_dump --username legacy_owner --dbname legacy_db" in commands
     assert "psql --username legacy_owner --dbname legacy_db" in commands
     assert "Verified pre-deployment backup:" in result.stdout
@@ -155,6 +157,7 @@ def test_deployment_requires_verified_backup_before_container_start(
     remote = (ROOT / "deploy" / "patt-remote-deploy.sh").read_text(encoding="utf-8")
     assert "deploy/patt-remote-deploy.sh" in workflow
     assert "PATT_DEPLOYMENT_COMPLETE" in workflow
+    assert ".deployment/pending-previous-sha" in workflow
     assert remote.index("patt-predeploy-backup.sh") < remote.index(" up -d ")
     assert ".deployment/active-sha" in remote
     assert remote.index("alembic current --check-heads") < remote.index(
@@ -181,8 +184,10 @@ def test_legacy_identity_regression_uses_real_compose_backup_wrapper():
     assert "SELECT count(*) FROM pg_roles WHERE rolname = 'guild_user'" in source
     assert "SELECT count(*) FROM pg_database WHERE datname = 'guild_db'" in source
     assert "hard_coded_status" in source
-    assert "--database-env POSTGRES_DB" in source
-    assert "--user-env POSTGRES_USER" in source
+    assert "RECOVERY_POSTGRES_DB=guild_db" in source
+    assert "RECOVERY_POSTGRES_USER=guild_user" in source
+    assert '--database-url-env DATABASE_URL' in source
+    assert '--database-url-service "$app_service"' in source
     assert "database=patt_recovery" in source
     assert "alembic_revision=0182" in source
     assert workflow.index("docker-compose.recovery.yml up -d") < workflow.rindex(

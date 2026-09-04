@@ -5,7 +5,8 @@ usage() {
   cat <<'EOF'
 Usage: patt-predeploy-backup.sh \
   --compose-file PATH --db-service NAME \
-  (--database NAME --user NAME | --database-env NAME --user-env NAME) \
+  (--database NAME --user NAME | --database-env NAME --user-env NAME | \
+   --database-url-service NAME --database-url-env NAME) \
   --backup-dir PATH --previous-sha SHA --deployment-sha SHA
 
 Creates an atomic PostgreSQL custom-format backup, verifies that pg_restore can
@@ -20,6 +21,8 @@ database_name=""
 database_user=""
 database_env=""
 user_env=""
+database_url_service=""
+database_url_env=""
 backup_dir=""
 previous_sha=""
 deployment_sha=""
@@ -32,6 +35,8 @@ while (($#)); do
     --user) database_user="${2:-}"; shift 2 ;;
     --database-env) database_env="${2:-}"; shift 2 ;;
     --user-env) user_env="${2:-}"; shift 2 ;;
+    --database-url-service) database_url_service="${2:-}"; shift 2 ;;
+    --database-url-env) database_url_env="${2:-}"; shift 2 ;;
     --backup-dir) backup_dir="${2:-}"; shift 2 ;;
     --previous-sha) previous_sha="${2:-}"; shift 2 ;;
     --deployment-sha) deployment_sha="${2:-}"; shift 2 ;;
@@ -51,9 +56,23 @@ if [[ ! "$previous_sha" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$deployment_sha" =~ ^[0-9a
   echo "Previous and deployment identities must be exact 40-character commits" >&2
   exit 2
 fi
-if [[ -n "$database_name" && -n "$database_env" ]] || [[ -z "$database_name" && -z "$database_env" ]] ||
-   [[ -n "$database_user" && -n "$user_env" ]] || [[ -z "$database_user" && -z "$user_env" ]]; then
-  echo "Provide exactly one database identity source for each of database and user" >&2
+direct_identity=0
+container_env_identity=0
+database_url_identity=0
+if [[ -n "$database_name" || -n "$database_user" ]]; then
+  [[ -n "$database_name" && -n "$database_user" ]] || { echo "Direct database identity requires both database and user" >&2; exit 2; }
+  direct_identity=1
+fi
+if [[ -n "$database_env" || -n "$user_env" ]]; then
+  [[ -n "$database_env" && -n "$user_env" ]] || { echo "Container environment identity requires both database and user variables" >&2; exit 2; }
+  container_env_identity=1
+fi
+if [[ -n "$database_url_service" || -n "$database_url_env" ]]; then
+  [[ -n "$database_url_service" && -n "$database_url_env" ]] || { echo "Database URL identity requires both service and variable names" >&2; exit 2; }
+  database_url_identity=1
+fi
+if ((direct_identity + container_env_identity + database_url_identity != 1)); then
+  echo "Provide exactly one complete database identity source" >&2
   exit 2
 fi
 if [[ -n "$database_env" ]]; then
@@ -63,6 +82,41 @@ fi
 if [[ -n "$user_env" ]]; then
   [[ "$user_env" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { echo "Invalid user environment variable name" >&2; exit 2; }
   database_user="$(docker compose -f "$compose_file" exec -T "$db_service" printenv "$user_env")"
+fi
+if [[ -n "$database_url_service" ]]; then
+  [[ "$database_url_service" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]] || { echo "Invalid database URL service name" >&2; exit 2; }
+  [[ "$database_url_env" =~ ^[A-Z_][A-Z0-9_]*$ ]] || { echo "Invalid database URL environment variable name" >&2; exit 2; }
+  database_identity="$({
+    docker compose -f "$compose_file" config --format json |
+      python3 -c '
+import json
+import re
+import sys
+from urllib.parse import unquote, urlparse
+
+service_name, variable_name = sys.argv[1:3]
+configuration = json.load(sys.stdin)
+try:
+    value = configuration["services"][service_name]["environment"][variable_name]
+except (KeyError, TypeError):
+    raise SystemExit("Configured application database URL was not found")
+parsed = urlparse(value)
+database_user = unquote(parsed.username or "")
+database_name = unquote(parsed.path.lstrip("/"))
+identifier = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+if parsed.scheme not in {"postgresql", "postgresql+asyncpg"}:
+    raise SystemExit("Configured application database URL is not PostgreSQL")
+if not identifier.fullmatch(database_user) or not identifier.fullmatch(database_name):
+    raise SystemExit("Configured application database identity is invalid")
+print(database_user)
+print(database_name)
+' "$database_url_service" "$database_url_env"
+  })" || exit 1
+  mapfile -t database_identity_lines <<<"$database_identity"
+  [[ "${#database_identity_lines[@]}" -eq 2 ]] || { echo "Configured application database identity is incomplete" >&2; exit 1; }
+  database_user="${database_identity_lines[0]}"
+  database_name="${database_identity_lines[1]}"
+  unset database_identity database_identity_lines
 fi
 if [[ ! "$database_name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || [[ ! "$database_user" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
   echo "Database and user names must be simple PostgreSQL identifiers" >&2
