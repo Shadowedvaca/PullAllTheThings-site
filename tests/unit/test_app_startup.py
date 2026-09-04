@@ -107,6 +107,33 @@ async def test_pending_optional_start_is_cancelled_and_cleaned_up_on_shutdown():
 
 
 @pytest.mark.asyncio
+async def test_missing_optional_start_task_requires_no_cleanup():
+    scheduler = Mock()
+    scheduler.stop = AsyncMock()
+
+    result = await _finish_optional_guild_scheduler_start(None, scheduler)
+
+    assert result is None
+    scheduler.stop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_failed_optional_start_task_is_cleaned_up_on_shutdown():
+    async def fail():
+        raise RuntimeError("synthetic task failure")
+
+    scheduler = Mock()
+    scheduler.stop = AsyncMock()
+    task = asyncio.create_task(fail())
+    await asyncio.sleep(0)
+
+    result = await _finish_optional_guild_scheduler_start(task, scheduler)
+
+    assert result is None
+    scheduler.stop.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
 async def test_guild_scheduler_stop_shuts_down_running_scheduler_and_client():
     guild_scheduler = GuildSyncScheduler.__new__(GuildSyncScheduler)
     guild_scheduler.scheduler = Mock(running=True)
