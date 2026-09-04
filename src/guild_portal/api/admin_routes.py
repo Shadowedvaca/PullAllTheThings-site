@@ -66,16 +66,24 @@ class SeasonCreate(BaseModel):
     start_date: date
     is_new_expansion: bool = False
     is_active: bool = True
+    blizzard_mplus_season_id: int | None = None
+    current_raid_ids: list[int] | None = None
+    current_instance_ids: list[int] | None = None
+    tier_set_ids: list[int] | None = None
+    quality_ilvl_map: dict | None = None
+    crafted_ilvl_map: dict | None = None
 
 
 class SeasonUpdate(BaseModel):
     expansion_name: str | None = None
     season_number: int | None = None
+    start_date: date | None = None
     is_new_expansion: bool | None = None
     is_active: bool | None = None
     blizzard_mplus_season_id: int | None = None
     current_raid_ids: list[int] | None = None
     current_instance_ids: list[int] | None = None
+    tier_set_ids: list[int] | None = None
     quality_ilvl_map: dict | None = None
     crafted_ilvl_map: dict | None = None
 
@@ -295,6 +303,7 @@ async def list_seasons(db: AsyncSession = Depends(get_db)):
                 "blizzard_mplus_season_id": s.blizzard_mplus_season_id,
                 "current_raid_ids": s.current_raid_ids or [],
                 "current_instance_ids": s.current_instance_ids or [],
+                "tier_set_ids": s.tier_set_ids or [],
                 "created_at": s.created_at.isoformat(),
             }
             for s in seasons
@@ -311,48 +320,13 @@ async def create_season(body: SeasonCreate, db: AsyncSession = Depends(get_db)):
         start_date=body.start_date,
         is_new_expansion=body.is_new_expansion,
         is_active=body.is_active,
+        blizzard_mplus_season_id=body.blizzard_mplus_season_id,
+        current_raid_ids=body.current_raid_ids or None,
+        current_instance_ids=body.current_instance_ids or None,
+        tier_set_ids=body.tier_set_ids or [],
+        quality_ilvl_map=body.quality_ilvl_map or None,
+        crafted_ilvl_map=body.crafted_ilvl_map or None,
     )
-    await db.commit()
-    return {
-        "ok": True,
-        "data": {
-            "id": season.id,
-            "expansion_name": season.expansion_name,
-            "season_number": season.season_number,
-            "display_name": season.display_name,
-            "start_date": season.start_date.isoformat(),
-            "is_new_expansion": season.is_new_expansion,
-            "is_active": season.is_active,
-        },
-    }
-
-
-@router.patch("/seasons/{season_id}")
-async def update_season(
-    season_id: int, body: SeasonUpdate, db: AsyncSession = Depends(get_db)
-):
-    result = await db.execute(select(RaidSeason).where(RaidSeason.id == season_id))
-    season = result.scalar_one_or_none()
-    if not season:
-        raise HTTPException(status_code=404, detail=f"Season {season_id} not found")
-    if body.expansion_name is not None:
-        season.expansion_name = body.expansion_name
-    if body.season_number is not None:
-        season.season_number = body.season_number
-    if body.is_new_expansion is not None:
-        season.is_new_expansion = body.is_new_expansion
-    if body.is_active is not None:
-        season.is_active = body.is_active
-    if "blizzard_mplus_season_id" in body.model_fields_set:
-        season.blizzard_mplus_season_id = body.blizzard_mplus_season_id
-    if "current_raid_ids" in body.model_fields_set:
-        season.current_raid_ids = body.current_raid_ids or None
-    if "current_instance_ids" in body.model_fields_set:
-        season.current_instance_ids = body.current_instance_ids or None
-    if "quality_ilvl_map" in body.model_fields_set:
-        season.quality_ilvl_map = body.quality_ilvl_map or None
-    if "crafted_ilvl_map" in body.model_fields_set:
-        season.crafted_ilvl_map = body.crafted_ilvl_map or None
     await db.commit()
     return {
         "ok": True,
@@ -367,6 +341,39 @@ async def update_season(
             "blizzard_mplus_season_id": season.blizzard_mplus_season_id,
             "current_raid_ids": season.current_raid_ids or [],
             "current_instance_ids": season.current_instance_ids or [],
+            "tier_set_ids": season.tier_set_ids or [],
+            "quality_ilvl_map": season.quality_ilvl_map or {},
+            "crafted_ilvl_map": season.crafted_ilvl_map or {},
+        },
+    }
+
+
+@router.patch("/seasons/{season_id}")
+async def update_season(
+    season_id: int, body: SeasonUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(RaidSeason).where(RaidSeason.id == season_id))
+    season = result.scalar_one_or_none()
+    if not season:
+        raise HTTPException(status_code=404, detail=f"Season {season_id} not found")
+    await season_service.update_season(
+        db, season, body.model_dump(exclude_unset=True)
+    )
+    await db.commit()
+    return {
+        "ok": True,
+        "data": {
+            "id": season.id,
+            "expansion_name": season.expansion_name,
+            "season_number": season.season_number,
+            "display_name": season.display_name,
+            "start_date": season.start_date.isoformat(),
+            "is_new_expansion": season.is_new_expansion,
+            "is_active": season.is_active,
+            "blizzard_mplus_season_id": season.blizzard_mplus_season_id,
+            "current_raid_ids": season.current_raid_ids or [],
+            "current_instance_ids": season.current_instance_ids or [],
+            "tier_set_ids": season.tier_set_ids or [],
             "quality_ilvl_map": season.quality_ilvl_map or {},
             "crafted_ilvl_map": season.crafted_ilvl_map or {},
         },

@@ -13,6 +13,8 @@ exec ssh \
   -F /dev/null \
   -i "$DEPLOY_SSH_PRIVATE_KEY_PATH" \
   -o BatchMode=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=20 \
   -o IdentitiesOnly=yes \
   -o StrictHostKeyChecking=yes \
   -o "UserKnownHostsFile=$DEPLOY_SSH_KNOWN_HOSTS_PATH" \
