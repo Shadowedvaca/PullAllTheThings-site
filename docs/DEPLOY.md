@@ -45,8 +45,11 @@ an operational inventory of implemented workflows:
   verified backup but cannot start or migrate the application; it emits periodic
   non-secret backup progress and a `PATT_DEPLOYMENT_PREPARED` sentinel. A new
   session revalidates the sealed preparation record before activation. The
-  runner then requires `PATT_DEPLOYMENT_COMPLETE` after runtime identity,
-  database health, migration head, and the atomic active-SHA marker are verified.
+  runner allows at most 90 seconds for readiness, reports non-secret progress
+  every 15 seconds, and requires `PATT_DEPLOYMENT_COMPLETE` after runtime
+  identity, database health, migration head, and the atomic active-SHA marker
+  are verified. Optional external-integration initialization is separately
+  bounded and cannot block core web readiness.
 - Production readiness is enabled after the reviewed #54/#55 foundation and
   readiness change. This setting is not promotion authority.
 - Production preflight must still find a successful

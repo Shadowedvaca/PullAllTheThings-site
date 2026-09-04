@@ -82,6 +82,7 @@ jobs:
           bash -n deploy/run-strict-ssh.sh
           bash -n deploy/run-strict-scp.sh
           bash -n deploy/patt-remote-deploy.sh
+          bash -n deploy/patt-wait-for-health.sh
           bash -n scripts/reproduce_legacy_database_identity.sh
           python scripts/validate_deployment_controls.py
 

@@ -44,7 +44,12 @@ GitHub configuration.
   activate the candidate. The activation session emits
   `PATT_DEPLOYMENT_COMPLETE` only after every remote gate succeeds. Both
   sessions use bounded SSH keepalives, and the backup emits periodic non-secret
-  progress while it runs.
+  progress while it runs. Activation allows a bounded 90-second readiness
+  window, reports non-secret progress every 15 seconds, and retains exact
+  runtime identity checks throughout.
+- Optional guild-integration initialization runs as a bounded background task
+  during application startup. A slow external provider cannot block core web
+  readiness; initialization failure remains logged and cleaned up.
 - Development, Test, and Production use the same secret names in separate GitHub
   environment scopes: `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, and `DEPLOY_SSH_KEY`.
   `DEPLOY_USER` is an environment-scoped variable. Values must never be copied

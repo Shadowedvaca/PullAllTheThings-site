@@ -70,7 +70,7 @@ def test_remote_program_has_a_hard_boundary_before_every_mutating_gate():
     prepared = source.index("PATT_DEPLOYMENT_PREPARED")
     activation = source.index("# Activation revalidates")
     start = source.index('up -d "$app_service" </dev/null')
-    health = source.index("/api/health")
+    health = source.index("patt-wait-for-health.sh")
     migration = source.index("alembic current --check-heads")
     marker = source.index(".deployment/active-sha.tmp")
     sentinel = source.index("PATT_DEPLOYMENT_COMPLETE")
@@ -82,6 +82,7 @@ def test_remote_program_has_a_hard_boundary_before_every_mutating_gate():
     assert 'prepared_record=".deployment/prepared-$deployment_sha"' in source
     assert 'test -s "$prepared_record"' in source
     assert 'sha256sum "$archive"' in source
+    assert 'bash deploy/patt-wait-for-health.sh' in source
     assert '--database-url-env DATABASE_URL' in source
     assert '--database-url-service "$app_service"' in source
     assert "--database guild_db" not in source
@@ -102,3 +103,15 @@ def test_strict_transport_uses_bounded_keepalives():
         assert "ServerAliveInterval=15" in source
         assert "ServerAliveCountMax=4" in source
         assert "TCPKeepAlive=yes" in source
+
+
+def test_health_gate_is_bounded_observable_and_identity_strict():
+    source = (ROOT / "deploy" / "patt-wait-for-health.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "for attempt in {1..30}" in source
+    assert "sleep 3" in source
+    assert "Deployment readiness still pending" in source
+    assert "Deployment readiness failed after 90s" in source
+    for field in ("db", "environment", "version", "commit"):
+        assert f'data["data"]["{field}"]' in source
