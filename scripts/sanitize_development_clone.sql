@@ -67,7 +67,7 @@ UPDATE guild_identity.raiderio_profiles SET profile_url = NULL;
 UPDATE guild_identity.sync_log SET error_message = NULL;
 UPDATE guild_identity.audit_issues SET details = NULL;
 
-UPDATE patt.raid_attendance SET noted_absence = NULL;
+UPDATE patt.raid_attendance SET noted_absence = FALSE;
 UPDATE patt.raid_events
    SET discord_channel_id = NULL,
        log_url = NULL,
