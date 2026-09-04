@@ -30,6 +30,11 @@ GitHub configuration.
   prohibited. It removes the bounded temporary bundle on success or failure,
   verifies the expected commit object, checks out the exact SHA, and never
   depends on outbound GitHub access or the server checkout's configured remote.
+- Before checkout, the server persists the previous deployed commit in
+  `.deployment/pending-previous-sha` whenever no verified `active-sha` exists.
+  Failed attempts reuse that marker instead of mistaking an already-advanced
+  checkout for the rollback baseline. Only successful completion commits the
+  new `active-sha` and removes the pending marker.
 - `deploy/patt-remote-deploy.sh` is provided by and executed from the exact
   deployment commit. Deployment source must not be streamed through SSH stdin.
   Its Docker and backup subprocesses detach stdin, and it emits the exact

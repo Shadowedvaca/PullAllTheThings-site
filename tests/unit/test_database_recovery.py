@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +18,16 @@ SCRIPT = ROOT / "scripts" / "rehearse_database_recovery.py"
 BACKUP_SCRIPT = ROOT / "deploy" / "patt-predeploy-backup.sh"
 PR_WORKFLOW = ROOT / ".github" / "workflows" / "pull-request-validation.yml"
 LEGACY_IDENTITY_SCRIPT = ROOT / "scripts" / "reproduce_legacy_database_identity.sh"
+
+
+def _bash_path(path: Path) -> str:
+    """Return a path Bash can consume when Windows Python runs from WSL UNC."""
+    value = path.as_posix()
+    if value.lower().startswith("//wsl.localhost/"):
+        parts = value.split("/", 4)
+        if len(parts) == 5:
+            return f"/{parts[4]}"
+    return value
 
 
 def _load_module():
@@ -84,8 +96,8 @@ def test_predeploy_backup_uses_composed_application_database_identity(tmp_path):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     docker = fake_bin / "docker"
-    docker.write_text(
-        """#!/bin/sh
+    docker.write_bytes(
+        b"""#!/bin/sh
 printf '%s\\n' "$*" >> "$PATT_DOCKER_LOG"
 case "$*" in
   *" config --format json") printf '%s' '{"services":{"app-prod":{"environment":{"DATABASE_URL":"postgresql+asyncpg://legacy_owner:synthetic-password@db-prod:5432/legacy_db"}}}}' ;;
@@ -95,33 +107,42 @@ case "$*" in
   *) exit 9 ;;
 esac
 """,
-        encoding="utf-8",
     )
     docker.chmod(0o755)
     sha = "a" * 40
     environment = os.environ.copy()
-    environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
-    environment["PATT_DOCKER_LOG"] = str(docker_log)
+    bash = shutil.which("bash") or "bash"
+    script_args = [
+        _bash_path(BACKUP_SCRIPT),
+        "--compose-file",
+        _bash_path(compose),
+        "--db-service",
+        "db-prod",
+        "--database-url-service",
+        "app-prod",
+        "--database-url-env",
+        "DATABASE_URL",
+        "--backup-dir",
+        _bash_path(tmp_path / "backups"),
+        "--previous-sha",
+        sha,
+        "--deployment-sha",
+        sha,
+    ]
 
+    shell_command = (
+        f"chmod 700 {shlex.quote(_bash_path(docker))}; "
+        f"export PATH={shlex.quote(_bash_path(fake_bin))}:\"$PATH\"; "
+        f"export PATT_DOCKER_LOG={shlex.quote(_bash_path(docker_log))}; "
+        "exec bash " + " ".join(shlex.quote(value) for value in script_args)
+    )
+    command = [bash, "-c", shell_command]
+    if BACKUP_SCRIPT.as_posix().lower().startswith("//wsl.localhost/"):
+        wsl = shutil.which("wsl")
+        assert wsl is not None
+        command = [wsl, "--", "bash", "-c", shell_command]
     result = subprocess.run(
-        [
-            "bash",
-            str(BACKUP_SCRIPT),
-            "--compose-file",
-            str(compose),
-            "--db-service",
-            "db-prod",
-            "--database-url-service",
-            "app-prod",
-            "--database-url-env",
-            "DATABASE_URL",
-            "--backup-dir",
-            str(tmp_path / "backups"),
-            "--previous-sha",
-            sha,
-            "--deployment-sha",
-            sha,
-        ],
+        command,
         check=True,
         capture_output=True,
         text=True,

@@ -22,20 +22,26 @@ backup must complete before `docker compose up` is allowed to start that image.
 Each deployment workflow resolves an exact target commit and records the last
 successfully verified deployed commit in `.deployment/active-sha`. The state
 file is updated atomically only after health, runtime identity, database, and
-Alembic head checks pass; the first reconciled deployment falls back to the
-server checkout's exact commit. After the new image builds, but before it can
-start or migrate the database, the workflow invokes:
+Alembic head checks pass. When no active marker exists, the workflow atomically
+records the server checkout in `.deployment/pending-previous-sha` before
+checkout and reuses it across failed attempts. A successful deployment removes
+that pending marker only after committing the new active SHA. After the new
+image builds, but before it can start or migrate the database, the workflow
+invokes:
 
 ```text
 deploy/patt-predeploy-backup.sh
 ```
 
-The script resolves the database name and role from the running database
-container's `POSTGRES_DB` and `POSTGRES_USER` values for deployments, then
-validates both as simple PostgreSQL identifiers. This preserves compatibility
-with existing volumes initialized under legacy identities without logging a
-password or connection URL. Explicit `--database` and `--user` values remain
-available for bounded recovery tooling.
+The script resolves the database name and role from the application service's
+fully composed `DATABASE_URL`, then validates both as simple PostgreSQL
+identifiers. The URL is parsed internally and is never printed, placed in a
+process argument, or written to the manifest. Deployment must not infer a
+non-empty volume's stored identity from the database container's
+`POSTGRES_USER` and `POSTGRES_DB`: PostgreSQL's image consumes those values only
+when initializing an empty data directory, so later Compose defaults can be
+stale. Explicit `--database` and `--user` values remain available for bounded
+recovery tooling.
 
 The script fails closed unless all of these checks succeed:
 
@@ -94,6 +100,12 @@ exact commit, `recovery` environment, and connected database, followed by a
 successful Alembic head check. It then executes the same
 `patt-predeploy-backup.sh` wrapper used on servers against that synthetic
 database and retains the resulting archive and manifest.
+
+The regression then preserves that initialized database volume while recreating
+the database container with deliberately conflicting `POSTGRES_USER` and
+`POSTGRES_DB` values. The stale container-derived identity must fail, while the
+application URL-derived working identity must still produce verified backup
+evidence. This models legacy-volume behavior rather than only a fresh container.
 
 This proves the exercised migration and synthetic archive path. It does not
 prove that every historical migration is safely reversible or that a particular
