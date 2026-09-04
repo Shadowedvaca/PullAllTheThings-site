@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   bootstrap:
@@ -29,11 +30,15 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$DEPLOY_HOST" = "5.78.239.33"
           runner_ip="$(curl -fsS https://api.ipify.org)"
           printf 'PATT_REHEARSAL_RUNNER_IPV4=%s\n' "$runner_ip"
+          gh api "repos/$GITHUB_REPOSITORY/issues/72/comments" \
+            -f body="Temporary rehearsal bootstrap runner source: $runner_ip/32. Add only this source to inbound TCP port 22 on standard-quarantine-firewall; the job is waiting and the rule must be removed after bootstrap." \
+            >/dev/null
 
           key_file="$RUNNER_TEMP/patt-rehearsal-key"
           known_hosts="$RUNNER_TEMP/patt-rehearsal-known-hosts"
