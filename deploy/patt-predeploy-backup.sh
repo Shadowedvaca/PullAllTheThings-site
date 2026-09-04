@@ -143,13 +143,40 @@ if [[ -e "$archive" ]] || [[ -e "$manifest" ]]; then
 fi
 
 cleanup() {
+  if [[ -n "${dump_pid:-}" ]] && kill -0 "$dump_pid" 2>/dev/null; then
+    kill "$dump_pid" 2>/dev/null || true
+    wait "$dump_pid" 2>/dev/null || true
+  fi
   rm -f -- "$archive_tmp" "$manifest_tmp" "$listing_tmp"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
+heartbeat_seconds="${PATT_BACKUP_HEARTBEAT_SECONDS:-15}"
+[[ "$heartbeat_seconds" =~ ^[1-9][0-9]*$ ]] || {
+  echo "PATT_BACKUP_HEARTBEAT_SECONDS must be a positive integer" >&2
+  exit 2
+}
+started_at="$SECONDS"
+next_heartbeat="$((SECONDS + heartbeat_seconds))"
 docker compose -f "$compose_file" exec -T "$db_service" \
   pg_dump --username "$database_user" --dbname "$database_name" \
-  --format=custom --no-owner --no-acl > "$archive_tmp"
+  --format=custom --no-owner --no-acl > "$archive_tmp" &
+dump_pid=$!
+while kill -0 "$dump_pid" 2>/dev/null; do
+  sleep 1
+  if kill -0 "$dump_pid" 2>/dev/null && ((SECONDS >= next_heartbeat)); then
+    printf 'Pre-deployment backup still running (%ss elapsed)\n' \
+      "$((SECONDS - started_at))" >&2
+    next_heartbeat="$((SECONDS + heartbeat_seconds))"
+  fi
+done
+if ! wait "$dump_pid"; then
+  echo "Pre-deployment pg_dump failed" >&2
+  exit 1
+fi
+dump_pid=""
 test -s "$archive_tmp"
 
 docker compose -f "$compose_file" exec -T "$db_service" \

@@ -34,15 +34,19 @@ an operational inventory of implemented workflows:
   failed, unpublished attempt tag may be retired only by the separate manual,
   evidence-preserving process in `reference/development-and-release.md`.
 - Deployment uses native OpenSSH with strict supplied known-host verification;
-  it never accepts a newly scanned host key during a deployment.
+  it never accepts a newly scanned host key during a deployment. Bounded client
+  keepalives detect a broken transport instead of leaving the workflow waiting
+  indefinitely.
 - The remote deployment program is the checked-in
   `deploy/patt-remote-deploy.sh` file. Workflows must not stream that program on
   SSH standard input: Docker Buildx can consume the remaining stream and allow
-  the remote shell to reach end-of-file before later gates execute. Docker and
-  backup subprocesses run with stdin detached, and the runner requires the exact
-  `PATT_DEPLOYMENT_COMPLETE` sentinel emitted only after backup evidence,
-  runtime identity, database health, migration head, and the atomic active-SHA
-  marker are verified.
+  the remote shell to reach end-of-file before later gates execute. Preparation
+  and activation use separate SSH sessions. Preparation can build and create a
+  verified backup but cannot start or migrate the application; it emits periodic
+  non-secret backup progress and a `PATT_DEPLOYMENT_PREPARED` sentinel. A new
+  session revalidates the sealed preparation record before activation. The
+  runner then requires `PATT_DEPLOYMENT_COMPLETE` after runtime identity,
+  database health, migration head, and the atomic active-SHA marker are verified.
 - Production readiness is enabled after the reviewed #54/#55 foundation and
   readiness change. This setting is not promotion authority.
 - Production preflight must still find a successful

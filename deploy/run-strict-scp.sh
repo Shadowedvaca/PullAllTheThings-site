@@ -21,6 +21,9 @@ exec scp \
   -i "$DEPLOY_SSH_PRIVATE_KEY_PATH" \
   -o BatchMode=yes \
   -o IdentitiesOnly=yes \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=4 \
+  -o TCPKeepAlive=yes \
   -o StrictHostKeyChecking=yes \
   -o "UserKnownHostsFile=$DEPLOY_SSH_KNOWN_HOSTS_PATH" \
   -o LogLevel=ERROR \

@@ -86,5 +86,9 @@ def test_known_host_trust_is_supplied_not_scanned():
     assert "ssh-keyscan" not in configure
     assert "StrictHostKeyChecking=yes" in runner
     assert "UserKnownHostsFile=" in runner
+    assert "ServerAliveInterval=15" in runner
+    assert "ServerAliveCountMax=4" in runner
     assert "StrictHostKeyChecking=yes" in copier
     assert "UserKnownHostsFile=" in copier
+    assert "ServerAliveInterval=15" in copier
+    assert "ServerAliveCountMax=4" in copier
