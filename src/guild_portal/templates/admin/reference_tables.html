@@ -331,8 +331,9 @@
                 <th>New Expansion</th>
                 <th>Active</th>
                 <th title="Blizzard API integer ID for M+ keystone season. Find at: us.api.blizzard.com/data/wow/mythic-keystone/season/index">M+ Season ID</th>
-                <th title="Raid tiers active this season. Check all that apply. Populated from synced character data.">Current Raids</th>
-                <th title="M+ dungeons in this season's pool. Select all that apply.">M+ Dungeons</th>
+                <th title="Comma-separated Blizzard journal raid IDs.">Current Raid IDs</th>
+                <th title="Comma-separated Blizzard journal IDs for the M+ pool.">M+ Dungeon IDs</th>
+                <th title="Comma-separated Blizzard item-set IDs for class tier sets.">Tier Set IDs</th>
                 <th></th>
             </tr>
         </thead>
@@ -348,7 +349,8 @@
                 <input class="rt-editable rt-field rt-editable--number" type="number" name="season_number"
                        value="{{ season.season_number or '' }}" data-orig="{{ season.season_number or '' }}">
             </td>
-            <td style="color:var(--color-text-muted);">{{ season.start_date }}</td>
+            <td><input class="rt-editable rt-field" type="date" name="start_date"
+                       value="{{ season.start_date }}" data-orig="{{ season.start_date }}"></td>
             <td>
                 <select class="rt-editable rt-field" name="is_new_expansion" data-orig="{{ season.is_new_expansion | lower }}">
                     <option value="false" {% if not season.is_new_expansion %}selected{% endif %}>No</option>
@@ -367,36 +369,12 @@
                        data-orig="{{ season.blizzard_mplus_season_id or '' }}"
                        placeholder="e.g. 13" style="width:70px;">
             </td>
-            <td>
-                {% set season_raid_ids = season.current_raid_ids or [] %}
-                <select multiple name="current_raid_ids" class="rt-field rt-multi-select"
-                        size="5"
-                        data-orig="{{ season_raid_ids | tojson }}">
-                    {% for raid in known_raids %}
-                        {% if raid.id in season_raid_ids or raid.id not in all_assigned_raid_ids %}
-                        <option value="{{ raid.id }}"
-                                {% if raid.id in season_raid_ids %}selected{% endif %}>
-                            {{ raid.name }}
-                        </option>
-                        {% endif %}
-                    {% endfor %}
-                </select>
-            </td>
-            <td>
-                {% set season_instance_ids = season.current_instance_ids or [] %}
-                {% set instance_name_counts = {} %}
-                {% for inst in known_instances %}{% if inst.name in instance_name_counts %}{% set _ = instance_name_counts.update({inst.name: instance_name_counts[inst.name] + 1}) %}{% else %}{% set _ = instance_name_counts.update({inst.name: 1}) %}{% endif %}{% endfor %}
-                <select multiple name="current_instance_ids" class="rt-field rt-multi-select"
-                        size="5"
-                        data-orig="{{ season_instance_ids | tojson }}">
-                    {% for inst in known_instances %}
-                    <option value="{{ inst.id }}"
-                            {% if inst.id in season_instance_ids %}selected{% endif %}>
-                        {{ inst.name }}{% if instance_name_counts[inst.name] > 1 %} (ID: {{ inst.id }}){% endif %}
-                    </option>
-                    {% endfor %}
-                </select>
-            </td>
+            <td><input class="rt-editable rt-field" name="current_raid_ids" data-id-list="true"
+                       value="{{ (season.current_raid_ids or []) | join(',') }}" placeholder="1317,1320"></td>
+            <td><input class="rt-editable rt-field" name="current_instance_ids" data-id-list="true"
+                       value="{{ (season.current_instance_ids or []) | join(',') }}" placeholder="1322,1304,..."></td>
+            <td><input class="rt-editable rt-field" name="tier_set_ids" data-id-list="true"
+                       value="{{ (season.tier_set_ids or []) | join(',') }}" placeholder="2055,2056,..."></td>
             <td>
                 <button class="rt-save-btn" onclick="saveRow(this)">Save</button>
                 <span class="rt-status"></span>
@@ -818,6 +796,10 @@ function getRowPayload(row) {
             payload[f.name] = Array.from(f.selectedOptions).map(o => parseInt(o.value, 10));
             return;
         }
+        if (f.dataset.idList === 'true') {
+            payload[f.name] = f.value.split(',').map(v => v.trim()).filter(Boolean).map(Number);
+            return;
+        }
         let val = f.value.trim();
         if (f.type === 'number') val = val === '' ? null : Number(val);
         if (f.tagName === 'SELECT' && (val === 'true' || val === 'false')) val = val === 'true';
@@ -903,32 +885,6 @@ document.querySelectorAll('.gs-field').forEach(f => {
     });
 });
 
-const _knownRaids = {{ known_raids | tojson }};
-const _allAssignedRaidIds = {{ all_assigned_raid_ids | list | tojson }};
-const _knownInstances = {{ known_instances | tojson }};
-
-function _buildRaidMultiSelect(selectedIds) {
-    const opts = _knownRaids
-        .filter(r => selectedIds.includes(r.id) || !_allAssignedRaidIds.includes(r.id))
-        .map(r => {
-            const sel = selectedIds.includes(r.id) ? ' selected' : '';
-            return `<option value="${r.id}"${sel}>${r.name}</option>`;
-        }).join('');
-    return `<select multiple name="current_raid_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
-}
-
-const _instanceNameCounts = {};
-_knownInstances.forEach(inst => { _instanceNameCounts[inst.name] = (_instanceNameCounts[inst.name] || 0) + 1; });
-
-function _buildInstanceMultiSelect(selectedIds) {
-    const opts = _knownInstances.map(inst => {
-        const sel = selectedIds.includes(inst.id) ? ' selected' : '';
-        const label = _instanceNameCounts[inst.name] > 1 ? `${inst.name} (ID: ${inst.id})` : inst.name;
-        return `<option value="${inst.id}"${sel}>${label}</option>`;
-    }).join('');
-    return `<select multiple name="current_instance_ids" class="rt-field rt-multi-select" size="5" data-orig="${JSON.stringify(selectedIds).replace(/"/g, '&quot;')}">${opts}</select>`;
-}
-
 async function createSeason() {
     const expansion_name = document.getElementById('new-season-expansion').value.trim();
     const season_number = parseInt(document.getElementById('new-season-number').value, 10);
@@ -949,46 +905,8 @@ async function createSeason() {
         const data = await res.json();
         if (data.ok) {
             showToast('Season created!');
-            const s = data.data;
-            const tbody = document.getElementById('seasons-tbody');
-            const tr = document.createElement('tr');
-            tr.className = 'rt-row';
-            tr.dataset.id = s.id;
-            tr.dataset.type = 'seasons';
-            tr.innerHTML = `
-                <td style="color:var(--color-text-muted);">${s.id}</td>
-                <td><input class="rt-editable rt-field" name="expansion_name" value="${s.expansion_name}" data-orig="${s.expansion_name}"></td>
-                <td><input class="rt-editable rt-field rt-editable--number" type="number" name="season_number" value="${s.season_number}" data-orig="${s.season_number}"></td>
-                <td style="color:var(--color-text-muted);">${s.start_date}</td>
-                <td>
-                    <select class="rt-editable rt-field" name="is_new_expansion" data-orig="${s.is_new_expansion}">
-                        <option value="false" ${!s.is_new_expansion ? 'selected' : ''}>No</option>
-                        <option value="true" ${s.is_new_expansion ? 'selected' : ''}>Yes</option>
-                    </select>
-                </td>
-                <td>
-                    <select class="rt-editable rt-field" name="is_active" data-orig="true">
-                        <option value="true" selected>Active</option>
-                        <option value="false">Inactive</option>
-                    </select>
-                </td>
-                <td>
-                    <input class="rt-editable rt-field rt-editable--number" type="number" name="blizzard_mplus_season_id"
-                           value="" data-orig="" placeholder="e.g. 13" style="width:70px;">
-                </td>
-                <td>${_buildRaidMultiSelect([])}</td>
-                <td>${_buildInstanceMultiSelect([])}</td>
-                <td><button class="rt-save-btn" onclick="saveRow(this)">Save</button><span class="rt-status"></span></td>
-            `;
-            tbody.prepend(tr);
-            tr.querySelectorAll('.rt-field').forEach(f => {
-                const evt = f.multiple ? 'change' : 'input';
-                f.addEventListener(evt, () => f.closest('.rt-row').classList.add('rt-row--dirty'));
-            });
-            document.getElementById('new-season-expansion').value = '';
-            document.getElementById('new-season-number').value = '';
-            document.getElementById('new-season-date').value = '';
-            document.getElementById('new-season-new-expansion').checked = false;
+            window.location.reload();
+            return;
         } else {
             showToast('Error: ' + (data.error || 'unknown'), true);
         }

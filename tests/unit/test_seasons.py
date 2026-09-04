@@ -70,7 +70,9 @@ async def test_get_current_season_ignores_inactive(db_session: AsyncSession):
     assert current.display_name == "Midnight Season 1"
 
 
-async def test_get_current_season_returns_none_when_no_seasons(db_session: AsyncSession):
+async def test_get_current_season_returns_none_when_no_seasons(
+    db_session: AsyncSession,
+):
     current = await season_service.get_current_season(db_session)
     # No seasons in DB (fresh transaction) — should be None
     assert current is None
@@ -93,3 +95,35 @@ async def test_create_season(db_session: AsyncSession):
     assert season.display_name == "Midnight Season 1"
     assert season.start_date == today
     assert season.is_active is True
+
+
+async def test_activating_new_season_deactivates_previous(db_session: AsyncSession):
+    today = datetime.now(timezone.utc).date()
+    old = await _create_season(db_session, "Midnight", 1, today - timedelta(days=90))
+    new = await _create_season(db_session, "Midnight", 2, today)
+    await db_session.refresh(old)
+
+    assert old.is_active is False
+    assert new.is_active is True
+
+
+async def test_create_season_persists_complete_configuration(db_session: AsyncSession):
+    today = datetime.now(timezone.utc).date()
+    season = await season_service.create_season(
+        db_session,
+        expansion_name="Midnight",
+        season_number=2,
+        start_date=today,
+        blizzard_mplus_season_id=18,
+        current_raid_ids=[1317, 1320],
+        current_instance_ids=[1322, 1304],
+        tier_set_ids=[2055, 2056],
+        quality_ilvl_map={"M": {"min": 318, "max": 334}},
+        crafted_ilvl_map={"M": {"min": 318, "max": 331}},
+    )
+
+    assert season.blizzard_mplus_season_id == 18
+    assert season.current_raid_ids == [1317, 1320]
+    assert season.current_instance_ids == [1322, 1304]
+    assert season.tier_set_ids == [2055, 2056]
+    assert season.quality_ilvl_map["M"]["max"] == 334
