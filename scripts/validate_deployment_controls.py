@@ -169,6 +169,11 @@ def validate_deployment_controls(repository_root: Path) -> dict:
     )
     runner = (root / "deploy" / "run-strict-ssh.sh").read_text(encoding="utf-8")
     copier = (root / "deploy" / "run-strict-scp.sh").read_text(encoding="utf-8")
+    remote_deploy = (root / "deploy" / "patt-remote-deploy.sh").read_text(
+        encoding="utf-8"
+    )
+    if "deploy/patt-wait-for-health.sh" not in remote_deploy:
+        errors.append("remote deployment must use the bounded readiness gate")
     if "ssh-keyscan" in configure:
         errors.append(
             "known-host trust must not be learned from the deployment connection"

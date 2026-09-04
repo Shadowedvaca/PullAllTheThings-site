@@ -100,8 +100,11 @@ Every deployed check proves the candidate identity before product assertions:
    detached. A preparation-only SSH session must emit the exact
    `PATT_DEPLOYMENT_PREPARED` line after build and verified backup; only then may
    a separate SSH session revalidate the sealed evidence and activate. The
-   workflow uses `pipefail` and requires `PATT_DEPLOYMENT_COMPLETE` only after
-   health identity, migration-head, and atomic active-SHA verification.
+   workflow uses `pipefail`, a bounded observable 90-second readiness window,
+   and requires `PATT_DEPLOYMENT_COMPLETE` only after health identity,
+   migration-head, and atomic active-SHA verification. Optional external
+   integration startup must be bounded independently and cannot delay core web
+   readiness.
 
 Feature-specific API or UI smoke checks are added when the changed behavior needs
 deployed infrastructure. Production smoke never mutates real data merely to prove

@@ -117,10 +117,17 @@ async def _auto_book_loop(pool: asyncpg.Pool) -> None:
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
-async def _start_optional_guild_scheduler(scheduler):
+OPTIONAL_GUILD_SCHEDULER_START_TIMEOUT_SECONDS = 35.0
+
+
+async def _start_optional_guild_scheduler(
+    scheduler,
+    *,
+    timeout_seconds: float = OPTIONAL_GUILD_SCHEDULER_START_TIMEOUT_SECONDS,
+):
     """Start guild sync without making external API availability a web prerequisite."""
     try:
-        await scheduler.start()
+        await asyncio.wait_for(scheduler.start(), timeout=timeout_seconds)
     except Exception as exc:
         logger.warning(
             "Guild sync scheduler unavailable during startup; web application will continue: %s",
@@ -132,6 +139,38 @@ async def _start_optional_guild_scheduler(scheduler):
             logger.warning("Guild sync scheduler cleanup failed: %s", cleanup_exc)
         return None
     return scheduler
+
+
+def _schedule_optional_guild_scheduler(app, scheduler):
+    """Schedule optional integration startup without delaying core readiness."""
+    app.state.guild_sync_scheduler = None
+
+    async def initialize():
+        initialized = await _start_optional_guild_scheduler(scheduler)
+        app.state.guild_sync_scheduler = initialized
+        if initialized is not None:
+            logger.info("Guild sync scheduler started")
+        return initialized
+
+    task = asyncio.create_task(initialize())
+    logger.info("Guild sync scheduler initialization scheduled")
+    return task
+
+
+async def _finish_optional_guild_scheduler_start(task, scheduler):
+    """Resolve or safely cancel optional startup during application shutdown."""
+    if task is None:
+        return None
+    if not task.done():
+        task.cancel()
+    try:
+        return await task
+    except asyncio.CancelledError:
+        await scheduler.stop()
+    except Exception as exc:
+        logger.warning("Guild sync scheduler task cleanup failed: %s", exc)
+        await scheduler.stop()
+    return None
 
 
 def create_app() -> FastAPI:
@@ -255,6 +294,8 @@ def create_app() -> FastAPI:
 
         # Start guild sync scheduler (skipped if Blizzard creds or Discord bot missing)
         guild_scheduler = None
+        guild_scheduler_start_task = None
+        scheduler_candidate = None
         audit_channel_id_str = None
         audit_channel_id_int = None
         if guild_sync_pool:
@@ -282,12 +323,10 @@ def create_app() -> FastAPI:
                 discord_bot=discord_bot,
                 audit_channel_id=audit_channel_id_int,
             )
-            guild_scheduler = await _start_optional_guild_scheduler(
-                scheduler_candidate
+            guild_scheduler_start_task = _schedule_optional_guild_scheduler(
+                app,
+                scheduler_candidate,
             )
-            app.state.guild_sync_scheduler = guild_scheduler
-            if guild_scheduler is not None:
-                logger.info("Guild sync scheduler started")
         else:
             app.state.guild_sync_scheduler = None
             logger.info("Guild sync scheduler skipped (missing credentials or audit channel not configured)")
@@ -313,6 +352,12 @@ def create_app() -> FastAPI:
             await contest_agent_task
         except asyncio.CancelledError:
             pass
+
+        if scheduler_candidate is not None:
+            guild_scheduler = await _finish_optional_guild_scheduler_start(
+                guild_scheduler_start_task,
+                scheduler_candidate,
+            )
 
         if guild_scheduler is not None:
             await guild_scheduler.stop()

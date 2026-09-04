@@ -138,28 +138,11 @@ grep -Fqx "archive_sha256=$archive_sha256" "$manifest"
 
 COMMIT_SHA="$deployment_sha" docker compose -f "$compose_file" up -d "$app_service" </dev/null
 
-for attempt in 1 2 3 4 5 6 7 8 9 10; do
-  sleep 3
-  if health="$(curl -sf http://localhost:8100/api/health)" && \
-    printf '%s' "$health" | python3 -c '
-import json
-import sys
-
-environment, version, commit = sys.argv[1:4]
-data = json.load(sys.stdin)
-assert data["ok"] is True
-assert data["data"]["db"] == "connected"
-assert data["data"]["environment"] == environment
-assert data["data"]["version"] == version
-assert data["data"]["commit"] == commit
-' "$environment" "$version" "$deployment_sha"; then
-    break
-  fi
-  if [[ "$attempt" -eq 10 ]]; then
-    docker compose -f "$compose_file" logs "$app_service" --tail 50
-    exit 1
-  fi
-done
+if ! bash deploy/patt-wait-for-health.sh \
+  "$environment" "$version" "$deployment_sha" </dev/null; then
+  docker compose -f "$compose_file" logs "$app_service" --tail 50
+  exit 1
+fi
 
 COMMIT_SHA="$deployment_sha" docker compose -f "$compose_file" exec -T "$app_service" alembic current --check-heads </dev/null
 printf '%s\n' "$deployment_sha" > .deployment/active-sha.tmp
