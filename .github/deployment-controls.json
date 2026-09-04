@@ -40,5 +40,11 @@
     "DEPLOY_KNOWN_HOSTS",
     "DEPLOY_SSH_KEY"
   ],
-  "environment_variable_names": ["DEPLOY_USER"]
+  "environment_variable_names": ["DEPLOY_USER"],
+  "production_tag_lifecycle": {
+    "successful_deployment_or_release": "permanently_immutable",
+    "failed_unpublished_attempt": "manual_evidence_gated_retirement",
+    "retirement_validator": "scripts/validate_failed_tag_retirement.py",
+    "automatic_deletion_or_recreation": false
+  }
 }

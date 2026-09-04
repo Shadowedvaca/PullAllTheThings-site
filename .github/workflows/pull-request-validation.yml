@@ -82,6 +82,7 @@ jobs:
           bash -n deploy/run-strict-ssh.sh
           bash -n deploy/run-strict-scp.sh
           bash -n deploy/patt-remote-deploy.sh
+          bash -n scripts/reproduce_legacy_database_identity.sh
           python scripts/validate_deployment_controls.py
 
       - name: Validate release contract
@@ -208,14 +209,12 @@ jobs:
             sleep 2
           done
           docker compose -f docker-compose.recovery.yml exec -T app alembic current --check-heads
-          bash deploy/patt-predeploy-backup.sh \
-            --compose-file docker-compose.recovery.yml \
-            --db-service db \
-            --database-env POSTGRES_DB \
-            --user-env POSTGRES_USER \
-            --backup-dir artifacts/predeploy \
-            --previous-sha "$RECOVERY_COMMIT_SHA" \
-            --deployment-sha "$RECOVERY_COMMIT_SHA"
+          bash scripts/reproduce_legacy_database_identity.sh \
+            docker-compose.recovery.yml \
+            db \
+            artifacts/predeploy \
+            "$RECOVERY_COMMIT_SHA" \
+            "$RECOVERY_COMMIT_SHA"
 
       - name: Remove fresh-database recovery containers
         if: always()

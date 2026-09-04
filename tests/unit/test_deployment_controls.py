@@ -19,6 +19,12 @@ def test_repository_deployment_controls_are_valid():
     assert controls["environments"]["production"]["deployment_branch_policies"] == [
         {"type": "tag", "name": "prod-v*"}
     ]
+    assert controls["production_tag_lifecycle"] == {
+        "successful_deployment_or_release": "permanently_immutable",
+        "failed_unpublished_attempt": "manual_evidence_gated_retirement",
+        "retirement_validator": "scripts/validate_failed_tag_retirement.py",
+        "automatic_deletion_or_recreation": False,
+    }
 
 
 def test_compose_files_pin_their_deployment_environment_identity():
@@ -61,6 +67,12 @@ def test_unpinned_action_is_rejected(tmp_path):
         if workflow_name == "deploy-dev.yml":
             source += "\n      uses: example/unsafe@v1\n"
         (workflows / workflow_name).write_text(source, encoding="utf-8")
+    (workflows / "pull-request-validation.yml").write_text(
+        (ROOT / ".github" / "workflows" / "pull-request-validation.yml").read_text(
+            encoding="utf-8"
+        ),
+        encoding="utf-8",
+    )
     with pytest.raises(DeploymentControlError, match="not pinned to a full SHA"):
         validate_deployment_controls(tmp_path)
 

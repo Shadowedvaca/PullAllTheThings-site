@@ -120,12 +120,18 @@ Rollback is selected from the exact failure point and compatibility evidence:
 | Situation | Bounded response |
 |---|---|
 | Failure before the new app starts | The running app/database are unchanged. Preserve the failed run and backup evidence before retrying. |
-| Code-only failure with a database known to remain backward-compatible | With explicit rollback authority, deploy the exact prior immutable validated tag/SHA recorded in the manifest. Never move or reuse a tag. Re-run identity, health, DB, and Alembic checks. |
+| Code-only failure with a database known to remain backward-compatible | With explicit rollback authority, deploy the exact prior successfully deployed immutable tag/SHA recorded in the manifest. Never move, delete, or reuse a successfully deployed or released tag. Re-run identity, health, DB, and Alembic checks. |
 | Migration may be incompatible with prior code | Do not automatically check out old code or run `alembic downgrade`. Stop and choose a compatible code/database pair using the migration review and the verified backup. |
 | Data loss, incompatible migration, or failed downgrade | A database restore is destructive live-data work. It requires Mike's exact authorization, stopped/bounded writes, a new safety backup of current state, isolated verification of the chosen archive, and an explicit compatible target tag/SHA. |
 
 The one-revision CI downgrade is evidence only for the revision exercised in
 that run. It is never blanket authorization to downgrade Production.
+
+A Production attempt that fails before deployment completion and before any
+GitHub Release is a release-lifecycle case, not rollback. Its tag may be retired
+only through the evidence-preserving, fail-closed, explicitly authorized process
+in `reference/development-and-release.md`. Backup or recovery tooling never
+deletes or recreates tags.
 
 ## Required restore plan and evidence
 

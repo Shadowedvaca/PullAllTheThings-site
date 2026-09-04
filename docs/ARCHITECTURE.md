@@ -579,7 +579,7 @@ All three share the same Python process, event loop, and database connection poo
 
 | Env | Server | Port | Deployment source | Purpose |
 |-----|--------|------|---------------|---------|
-| prod | `hetzner` | 8100 | Exact approved immutable production tag | Live site |
+| prod | `hetzner` | 8100 | Exact approved production attempt tag; immutable after successful deployment or Release | Live site |
 | test | `my-web-apps-test` | 8100 | Exact approved `main` integration commit | Integration validation |
 | dev | `my-web-apps-dev` | 8100 | Exact commit resolved from an explicit branch | Feature feedback |
 
@@ -598,8 +598,10 @@ branch to an immutable SHA. Test
 deploys the approved `main` integration SHA. Production validates the exact
 approved tag, version, SHA, `main` ancestry, repository readiness, and a
 successful test deployment for that exact SHA; a GitHub Release is published
-only after deployment succeeds. Production readiness currently defaults to
-blocked pending issues #54 and #55. See
+only after deployment succeeds. Production readiness is enabled after the
+reviewed #54/#55 foundation, but this does not replace either promotion approval.
+Failed unpublished attempt-tag retirement is a separate fail-closed manual
+process; successful deployment or Release makes the tag permanently immutable. See
 `reference/development-and-release.md` for the authoritative promotion and
 evidence contract.
 

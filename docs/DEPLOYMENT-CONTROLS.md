@@ -58,6 +58,11 @@ workflow approvals:
 | `production` | Environment exists; custom tag policy `prod-v*` only; zero reviewers and zero wait timer |
 | Actions | Enabled; current allow-list policy retained; full-SHA pinning required |
 
+The same machine-validated file records the Production tag lifecycle: successful
+deployment or any Release makes the tag permanently immutable; a failed
+unpublished attempt is eligible only for manual evidence-gated retirement; and
+automatic deletion or recreation is forbidden.
+
 The zero-reviewer rule is intentional: the Solo Development handoff and promotion
 approvals are already recorded outside GitHub's pull-request review primitive.
 Requiring another GitHub review would invent an extra happy-path approval. Branch,
@@ -108,6 +113,15 @@ successful Test run `30419325704` for exact SHA
 `d35786b9910707109395abad24ddd06d64bcc08c`; the validator selected that run and
 did not infer evidence from main ancestry alone.
 
+The later reviewed readiness change enabled the repository interlock. Production
+still requires Mike's separate Promotion to production approval, an exact
+owner-selected attempt tag, and an exact-SHA successful Test run. A tag becomes
+permanently immutable after successful Production completion or Release
+publication. A failed unpublished attempt can be retired only after the read-only
+`scripts/validate_failed_tag_retirement.py` check proves the exact annotated
+object, commit, failed deploy jobs, absence of a Release, and stable remote ref;
+deletion and recreation remain separately authorized manual actions.
+
 Development runs `32916220968` and `32916720856` exposed a former false-green
 path: the workflows streamed a multi-step Bash program through SSH stdin, and
 Docker Buildx consumed the remainder after checkout/build. The remote shell then
@@ -115,7 +129,6 @@ reached end-of-file with status zero before backup, container replacement,
 health, migration, and active-SHA gates. Issue #61 replaces that mechanism with
 the checked-in remote program and exact completion sentinel described above.
 
-Production remains repository-disabled. Live controls, all child approvals, and
-Parent-timed manual validation are complete. Promotion to test, successful
-exact-SHA Test evidence, explicit reviewed readiness authorization, and the
-separate Promotion to production approval remain mandatory.
+Production readiness is repository-enabled, but that is only a technical
+prerequisite. Successful exact-SHA Test evidence and the separate Promotion to
+production approval remain mandatory for each attempt.

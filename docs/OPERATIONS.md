@@ -256,14 +256,17 @@ procedure. This table is an operational trigger inventory only:
 |-------------|---------------|
 | **dev** | Manual — `gh workflow run deploy-dev.yml -f branch=your-branch` |
 | **test** | Exact approved `main` integration commit |
-| **prod** | Currently blocked; when enabled, exact approved immutable `prod-v*` tag matching `VERSION` and an exact-SHA successful test deployment |
+| **prod** | Exact approved `prod-v*` attempt tag matching `VERSION`, enabled readiness, and an exact-SHA successful test deployment |
 
 Watch runs at: https://github.com/Shadowedvaca/PullAllTheThings-site/actions
 
-Production cannot currently be promoted. The #54/#55 controls are implemented
-and verified, but the repository readiness interlock remains disabled pending
-exact-SHA Test evidence and separately authorized review. A tag and `main`
-ancestry alone cannot bypass this block.
+Production readiness is enabled after the reviewed #54/#55 foundation. This is
+not deployment authority: exact-SHA Test evidence and Mike's separate Promotion
+to production approval remain mandatory, and a tag plus `main` ancestry alone
+cannot bypass them. A successfully deployed or released tag is permanently
+immutable. See `reference/development-and-release.md` before any exceptional
+retirement of a failed unpublished attempt tag; deletion and recreation are
+manual and separately gated.
 
 To manually restart dev (SSH only — never SSH-deploy prod):
 ```bash

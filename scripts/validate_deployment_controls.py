@@ -79,6 +79,13 @@ def validate_deployment_controls(repository_root: Path) -> dict:
         errors.append("environment secret-name contract is incomplete")
     if controls.get("environment_variable_names") != ["DEPLOY_USER"]:
         errors.append("environment variable-name contract is incomplete")
+    if controls.get("production_tag_lifecycle") != {
+        "successful_deployment_or_release": "permanently_immutable",
+        "failed_unpublished_attempt": "manual_evidence_gated_retirement",
+        "retirement_validator": "scripts/validate_failed_tag_retirement.py",
+        "automatic_deletion_or_recreation": False,
+    }:
+        errors.append("Production tag lifecycle must remain fail-closed and manual")
 
     workflows = root / ".github" / "workflows"
     for path in workflows.glob("*.yml"):
@@ -140,6 +147,17 @@ def validate_deployment_controls(repository_root: Path) -> dict:
     for token in ("DEPLOY_REF", "git check-ref-format --branch"):
         if token not in development_source:
             errors.append(f"deploy-dev.yml is missing {token}")
+
+    pull_request_source = (workflows / "pull-request-validation.yml").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        "scripts/reproduce_legacy_database_identity.sh",
+        "docker-compose.recovery.yml",
+        "artifacts/predeploy",
+    ):
+        if token not in pull_request_source:
+            errors.append(f"pull-request-validation.yml is missing {token}")
 
     configure = (root / "deploy" / "configure-deployment-ssh.sh").read_text(
         encoding="utf-8"
