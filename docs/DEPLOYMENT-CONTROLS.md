@@ -125,7 +125,8 @@ permanently immutable after successful Production completion or Release
 publication. A failed unpublished attempt can be retired only after the read-only
 `scripts/validate_failed_tag_retirement.py` check proves the exact annotated
 object, commit, failed deploy jobs, absence of a Release, and stable remote ref;
-deletion and recreation remain separately authorized manual actions.
+every historical run ID and commit for a reused attempt tag must be declared
+exactly. Deletion and recreation remain separately authorized manual actions.
 
 Development runs `32916220968` and `32916720856` exposed a former false-green
 path: the workflows streamed a multi-step Bash program through SSH stdin, and

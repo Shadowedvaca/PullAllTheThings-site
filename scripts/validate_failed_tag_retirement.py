@@ -31,19 +31,33 @@ class TagRetirementEvidence:
     failed_run_ids: tuple[int, ...]
 
 
+def parse_failed_attempt(value: str) -> tuple[int, str]:
+    """Parse one explicitly preserved RUN_ID:COMMIT_SHA attempt identity."""
+    run_id_text, separator, commit_sha = value.partition(":")
+    if not separator or not run_id_text.isdecimal() or int(run_id_text) < 1:
+        raise argparse.ArgumentTypeError(
+            "failed attempt must use positive RUN_ID:COMMIT_SHA form"
+        )
+    if not SHA_PATTERN.fullmatch(commit_sha):
+        raise argparse.ArgumentTypeError(
+            "failed attempt must use positive RUN_ID:COMMIT_SHA form"
+        )
+    return int(run_id_text), commit_sha
+
+
 def validate_failed_tag_retirement(
     *,
     tag: str,
     expected_tag_object: str,
     expected_commit: str,
-    expected_failed_run_id: int,
+    expected_failed_attempts: tuple[tuple[int, str], ...],
     tag_ref: object,
     tag_object: object,
     releases: object,
     workflow_runs: object,
     jobs_by_run: dict[int, object],
 ) -> TagRetirementEvidence:
-    """Validate preserved evidence for one failed Production attempt tag."""
+    """Validate every preserved failed Production attempt for a reused tag."""
 
     errors: list[str] = []
     if not TAG_PATTERN.fullmatch(tag):
@@ -52,8 +66,27 @@ def validate_failed_tag_retirement(
         errors.append("expected tag object must be an exact lowercase SHA")
     if not SHA_PATTERN.fullmatch(expected_commit):
         errors.append("expected commit must be an exact lowercase SHA")
-    if expected_failed_run_id < 1:
-        errors.append("expected failed run ID must be positive")
+    expected_attempts_by_run: dict[int, str] = {}
+    if not expected_failed_attempts:
+        errors.append("at least one expected failed attempt is required")
+    for attempt in expected_failed_attempts:
+        if (
+            not isinstance(attempt, tuple)
+            or len(attempt) != 2
+            or not isinstance(attempt[0], int)
+            or attempt[0] < 1
+            or not isinstance(attempt[1], str)
+            or not SHA_PATTERN.fullmatch(attempt[1])
+        ):
+            errors.append("each failed attempt must contain an exact run ID and commit")
+            continue
+        run_id, commit_sha = attempt
+        if run_id in expected_attempts_by_run:
+            errors.append(f"failed attempt run {run_id} was declared more than once")
+            continue
+        expected_attempts_by_run[run_id] = commit_sha
+    if expected_commit not in expected_attempts_by_run.values():
+        errors.append("one failed attempt must match the current tag commit")
 
     if not isinstance(tag_ref, dict):
         errors.append("tag ref response must be an object")
@@ -102,26 +135,24 @@ def validate_failed_tag_retirement(
             and run.get("head_branch") == tag
             and run.get("event") == "push"
         ]
-        if any(run.get("head_sha") != expected_commit for run in tag_runs):
-            errors.append(
-                "Production history shows the tag associated with another commit"
-            )
-        matching_runs = [
-            run for run in tag_runs if run.get("head_sha") == expected_commit
-        ]
+        matching_runs = tag_runs
 
     if not matching_runs:
-        errors.append("no Production push run matches the exact tag and commit")
+        errors.append("no Production push run matches the exact tag")
 
     failed_run_ids: list[int] = []
-    expected_run_found = False
+    observed_run_ids: set[int] = set()
     for run in matching_runs:
         run_id = run.get("id")
         if not isinstance(run_id, int):
             errors.append("matching Production run is missing an integer ID")
             continue
-        if run_id == expected_failed_run_id:
-            expected_run_found = True
+        observed_run_ids.add(run_id)
+        expected_run_commit = expected_attempts_by_run.get(run_id)
+        if expected_run_commit is None:
+            errors.append(f"Production run {run_id} was not explicitly declared")
+        elif run.get("head_sha") != expected_run_commit:
+            errors.append(f"Production run {run_id} commit does not match evidence")
         if run.get("status") != "completed":
             errors.append(f"Production run {run_id} is not completed")
 
@@ -151,10 +182,12 @@ def validate_failed_tag_retirement(
         else:
             failed_run_ids.append(run_id)
 
-    if not expected_run_found:
-        errors.append("expected failed Production run is not exact tag/commit evidence")
-    if expected_failed_run_id not in failed_run_ids:
-        errors.append("expected Production run does not prove a failed deployment")
+    for run_id in sorted(set(expected_attempts_by_run) - observed_run_ids):
+        errors.append(f"declared Production run {run_id} is missing from tag history")
+    for run_id in sorted(set(expected_attempts_by_run) - set(failed_run_ids)):
+        errors.append(
+            f"declared Production run {run_id} does not prove a failed deployment"
+        )
 
     if errors:
         raise TagRetirementValidationError("; ".join(errors))
@@ -235,7 +268,7 @@ def collect_and_validate(
     tag: str,
     expected_tag_object: str,
     expected_commit: str,
-    expected_failed_run_id: int,
+    expected_failed_attempts: tuple[tuple[int, str], ...],
 ) -> TagRetirementEvidence:
     encoded_tag = quote(tag, safe="")
     tag_ref = reader.get(f"repos/{reader.repository}/git/ref/tags/{encoded_tag}")
@@ -261,7 +294,7 @@ def collect_and_validate(
         tag=tag,
         expected_tag_object=expected_tag_object,
         expected_commit=expected_commit,
-        expected_failed_run_id=expected_failed_run_id,
+        expected_failed_attempts=expected_failed_attempts,
         tag_ref=tag_ref,
         tag_object=tag_object,
         releases=releases,
@@ -285,7 +318,14 @@ def main() -> int:
     parser.add_argument("--tag", required=True)
     parser.add_argument("--expected-tag-object", required=True)
     parser.add_argument("--expected-commit", required=True)
-    parser.add_argument("--failed-run-id", required=True, type=int)
+    parser.add_argument(
+        "--failed-attempt",
+        required=True,
+        action="append",
+        type=parse_failed_attempt,
+        metavar="RUN_ID:COMMIT_SHA",
+        help="repeat for every Production push attempt associated with the tag",
+    )
     parser.add_argument("--gh-command", default="gh")
     args = parser.parse_args()
     try:
@@ -294,7 +334,7 @@ def main() -> int:
             tag=args.tag,
             expected_tag_object=args.expected_tag_object,
             expected_commit=args.expected_commit,
-            expected_failed_run_id=args.failed_run_id,
+            expected_failed_attempts=tuple(args.failed_attempt),
         )
     except TagRetirementValidationError as error:
         raise SystemExit(f"Tag retirement validation failed: {error}") from error

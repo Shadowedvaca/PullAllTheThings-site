@@ -69,10 +69,11 @@ selected version. Retirement is an exceptional manual operation, never an
 automatic workflow response. Before deletion, preserve the annotated tag object,
 dereferenced commit, every matching Production run and deploy-job conclusion,
 and Release lookup. Run `scripts/validate_failed_tag_retirement.py` against those
-exact expected identities. The validator is read-only and must fail closed if
-any matching deploy job succeeded, any Release exists, evidence is incomplete,
-or the remote ref changes during validation. Deleting the exact failed ref still
-requires Mike's explicit authority.
+exact expected identities, including every historical run ID and commit when an
+attempt tag has been retired and reused. The validator is read-only and must fail
+closed if any run is undeclared, any matching deploy job succeeded, any Release
+exists, evidence is incomplete, or the remote ref changes during validation.
+Deleting the exact failed ref still requires Mike's explicit authority.
 
 Correction then follows the complete branch, pull-request, Child development
 complete, Promotion to test, and exact-SHA Test path. Only a new Promotion to

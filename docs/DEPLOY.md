@@ -74,8 +74,13 @@ python3 scripts/validate_failed_tag_retirement.py \
   --tag prod-vX.Y.Z \
   --expected-tag-object EXACT_ANNOTATED_OBJECT_SHA \
   --expected-commit EXACT_DEREFERENCED_COMMIT_SHA \
-  --failed-run-id EXACT_FAILED_RUN_ID
+  --failed-attempt EXACT_FAILED_RUN_ID:EXACT_FAILED_RUN_COMMIT_SHA
 ```
+
+Repeat `--failed-attempt RUN_ID:COMMIT_SHA` for every Production push run ever
+associated with a reused attempt tag. The validator rejects undeclared runs,
+declared runs missing from GitHub history, commit mismatches, and any deploy job
+that did not terminate unsuccessfully.
 
 The check scans all Production runs for that tag and all Releases, rejects any
 successful deploy completion, incomplete evidence, prior tag/commit mismatch,
