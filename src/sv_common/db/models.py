@@ -29,9 +29,11 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Index,
     Numeric,
     String,
     Text,
+    text,
     Time,
     UniqueConstraint,
     func,
@@ -610,7 +612,15 @@ class RaidSeason(Base):
     """A WoW content season (e.g. Midnight Season 1)."""
 
     __tablename__ = "raid_seasons"
-    __table_args__ = {"schema": "patt"}
+    __table_args__ = (
+        Index(
+            "uq_raid_seasons_one_active",
+            "is_active",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+        {"schema": "patt"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     expansion_name: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
@@ -621,6 +631,9 @@ class RaidSeason(Base):
     blizzard_mplus_season_id: Mapped[Optional[int]] = mapped_column(Integer)
     current_raid_ids: Mapped[Optional[list[int]]] = mapped_column(ARRAY(Integer), nullable=True)
     current_instance_ids: Mapped[Optional[list[int]]] = mapped_column(ARRAY(Integer), nullable=True)
+    tier_set_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default="{}"
+    )
     quality_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     crafted_ilvl_map: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -35,7 +35,7 @@ _DISPLAY_MAP_BARE = {
 
 # SimC bonus ID → quality track.
 # TWW Season 2 IDs kept for backward compat; Midnight IDs appended.
-# Admin can override via site_config key "simc_track_bonus_ids".
+# Update this verified mapping when a season introduces new SimC bonus IDs.
 #
 # Crafted-quality IDs (13621, 13622) are included here because they ARE
 # quality-discriminating bonus IDs, just sourced from crests rather than
@@ -74,8 +74,7 @@ def track_from_bonus_ids(
 ) -> Optional[str]:
     """Derive V/C/H/M from a list of SimC bonus IDs.
 
-    Uses the built-in TWW S2 mapping by default.  Pass a custom_map from
-    site_config.simc_track_bonus_ids to override for a new season.
+    Uses the built-in verified mapping by default. Callers may pass a custom map.
     """
     mapping = custom_map if custom_map is not None else _DEFAULT_SIMC_BONUS_IDS
     bonus_set = set(bonus_ids)
@@ -95,7 +94,7 @@ def detect_quality_track(
     Args:
         display_string: Blizzard name_description.display_string value.
         bonus_ids: List of bonus IDs from the item (SimC or Blizzard).
-        custom_bonus_map: Season-specific override from site_config.
+        custom_bonus_map: Optional caller-provided override.
     """
     track = track_from_display_string(display_string)
     if track:

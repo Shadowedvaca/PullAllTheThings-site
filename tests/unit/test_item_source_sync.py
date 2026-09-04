@@ -18,6 +18,7 @@ from sv_common.guild_sync.item_source_sync import (
 from sv_common.guild_sync.source_config import (
     get_display_name,
     get_track_label,
+    track_to_label,
     get_tracks,
 )
 
@@ -96,6 +97,11 @@ class TestSourceConfig:
     def test_dungeon_label_is_zero_plus(self):
         # Dungeon minimum is C (Champion 0+) → 0+
         assert get_track_label("dungeon") == "0+"
+
+    def test_midnight_s2_dungeon_threshold_labels(self):
+        assert track_to_label("C", "dungeon") == "0+"
+        assert track_to_label("H", "dungeon") == "6+"
+        assert track_to_label("M", "dungeon") == "10+"
 
     def test_unknown_type_falls_back_to_n_plus(self):
         # get_tracks("unknown") returns ["C","H","M"] fallback → minimum C → N+
