@@ -326,6 +326,14 @@ class TestSyncEncounter:
         import re as _re
         assert not _re.search(r'(?<!blizzard_)item_id', sql)
 
+        landing_calls = [
+            c for c in conn.execute.call_args_list
+            if "landing.blizzard_journal_encounters" in str(c)
+        ]
+        assert len(landing_calls) == 1
+        landing_sql = landing_calls[0].args[0]
+        assert "ON CONFLICT (encounter_id) DO UPDATE" in landing_sql
+
     @pytest.mark.asyncio
     async def test_world_boss_stored_as_world_boss_type(self):
         pool, conn = _make_pool()

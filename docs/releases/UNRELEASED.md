@@ -15,6 +15,8 @@
 ## Validation
 
 - Focused unit tests cover complete season configuration, active-season rollover, and M+ threshold labels.
+- Make loot-table synchronization idempotent with a pre-populated landing schema;
+  existing journal encounters are refreshed instead of aborting their item-source pass.
 - Focused season/source tests: 71 passed against isolated PostgreSQL 16. Full unit + integration + regression: 2,150 passed, 34 skipped; one Windows/WSL path-translation-only failure in the backup-script test (the same test is CI-authoritative on Linux). Playwright Chromium: 2 passed.
 - Fresh Alembic upgrade to 0183, seeded-row assertions, one-revision downgrade/re-upgrade, and `current --check-heads` passed on isolated PostgreSQL 16.
 - Release, production-readiness configuration, deployment-control, compile, and changed-file critical Ruff checks passed.
