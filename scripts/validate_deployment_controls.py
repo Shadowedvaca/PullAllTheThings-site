@@ -121,6 +121,7 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "deploy/configure-deployment-ssh.sh",
             "deploy/run-strict-ssh.sh",
             "deploy/patt-remote-deploy.sh",
+            "PATT_DEPLOYMENT_PREPARED",
             "PATT_DEPLOYMENT_COMPLETE",
             "GIT_CONFIG_GLOBAL=/dev/null",
             "GIT_CONFIG_SYSTEM=/dev/null",
@@ -132,6 +133,10 @@ def validate_deployment_controls(repository_root: Path) -> dict:
         ):
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")
+        if source.count("bash deploy/run-strict-ssh.sh") != 2:
+            errors.append(
+                f"{workflow_name} must use separate preparation and activation SSH sessions"
+            )
 
     compose_environments = {
         "docker-compose.dev.yml": "APP_ENV: development",
@@ -174,6 +179,9 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "UserKnownHostsFile=",
             "BatchMode=yes",
             "IdentitiesOnly=yes",
+            "ServerAliveInterval=15",
+            "ServerAliveCountMax=4",
+            "TCPKeepAlive=yes",
             "-F /dev/null",
         ):
             if token not in transport:

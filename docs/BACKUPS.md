@@ -33,6 +33,14 @@ invokes:
 deploy/patt-predeploy-backup.sh
 ```
 
+The backup reports a non-secret progress heartbeat every 15 seconds. After it
+is verified, preparation atomically seals the archive path, manifest path,
+digest, and exact deployment identities in `.deployment/prepared-<sha>` and
+returns. Activation occurs over a new SSH session and revalidates that record,
+the manifest, and the archive checksum before `docker compose up` is allowed.
+If preparation loses its SSH connection, the workflow cannot cross that
+activation boundary.
+
 The script resolves the database name and role from the application service's
 fully composed `DATABASE_URL`, then validates both as simple PostgreSQL
 identifiers. The URL is parsed internally and is never printed, placed in a

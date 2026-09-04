@@ -85,6 +85,8 @@ def test_predeploy_backup_is_atomic_verified_and_non_destructive():
     assert "restore_authority=explicit_required" in source
     assert "automatic_database_downgrade=false" in source
     assert "Refusing to overwrite existing backup evidence" in source
+    assert "Pre-deployment backup still running" in source
+    assert "PATT_BACKUP_HEARTBEAT_SECONDS" in source
     assert "pg_restore --dbname" not in source
     assert "DROP DATABASE" not in source
 
@@ -101,7 +103,7 @@ def test_predeploy_backup_uses_composed_application_database_identity(tmp_path):
 printf '%s\\n' "$*" >> "$PATT_DOCKER_LOG"
 case "$*" in
   *" config --format json") printf '%s' '{"services":{"app-prod":{"environment":{"DATABASE_URL":"postgresql+asyncpg://legacy_owner:synthetic-password@db-prod:5432/legacy_db"}}}}' ;;
-  *" pg_dump --username legacy_owner --dbname legacy_db "*) printf alembic_version ;;
+  *" pg_dump --username legacy_owner --dbname legacy_db "*) sleep "${PATT_FAKE_DUMP_DELAY:-0}"; printf alembic_version ;;
   *" pg_restore --list") cat >/dev/null; printf 'TABLE patt alembic_version\\n' ;;
   *" psql --username legacy_owner --dbname legacy_db "*) printf '0182\\n' ;;
   *) exit 9 ;;
@@ -111,6 +113,8 @@ esac
     docker.chmod(0o755)
     sha = "a" * 40
     environment = os.environ.copy()
+    environment["PATT_BACKUP_HEARTBEAT_SECONDS"] = "1"
+    environment["PATT_FAKE_DUMP_DELAY"] = "2"
     bash = shutil.which("bash") or "bash"
     script_args = [
         _bash_path(BACKUP_SCRIPT),
@@ -134,6 +138,8 @@ esac
         f"chmod 700 {shlex.quote(_bash_path(docker))}; "
         f"export PATH={shlex.quote(_bash_path(fake_bin))}:\"$PATH\"; "
         f"export PATT_DOCKER_LOG={shlex.quote(_bash_path(docker_log))}; "
+        "export PATT_BACKUP_HEARTBEAT_SECONDS=1; "
+        "export PATT_FAKE_DUMP_DELAY=2; "
         "exec bash " + " ".join(shlex.quote(value) for value in script_args)
     )
     command = [bash, "-c", shell_command]
@@ -159,6 +165,7 @@ esac
     assert "psql --username legacy_owner --dbname legacy_db" in commands
     assert "Verified pre-deployment backup:" in result.stdout
     assert "Rollback manifest:" in result.stdout
+    assert "Pre-deployment backup still running" in result.stderr
 
 
 @pytest.mark.parametrize(
@@ -178,8 +185,13 @@ def test_deployment_requires_verified_backup_before_container_start(
     remote = (ROOT / "deploy" / "patt-remote-deploy.sh").read_text(encoding="utf-8")
     assert "deploy/patt-remote-deploy.sh" in workflow
     assert "PATT_DEPLOYMENT_COMPLETE" in workflow
+    assert "PATT_DEPLOYMENT_PREPARED" in workflow
     assert ".deployment/pending-previous-sha" in workflow
-    assert remote.index("patt-predeploy-backup.sh") < remote.index(" up -d ")
+    assert workflow.count("deploy/run-strict-ssh.sh") == 2
+    assert remote.index("patt-predeploy-backup.sh") < remote.index(
+        "PATT_DEPLOYMENT_PREPARED"
+    )
+    assert remote.index("# Activation revalidates") < remote.index(" up -d ")
     assert ".deployment/active-sha" in remote
     assert remote.index("alembic current --check-heads") < remote.index(
         ".deployment/active-sha.tmp"

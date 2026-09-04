@@ -37,11 +37,14 @@ GitHub configuration.
   new `active-sha` and removes the pending marker.
 - `deploy/patt-remote-deploy.sh` is provided by and executed from the exact
   deployment commit. Deployment source must not be streamed through SSH stdin.
-  Its Docker and backup subprocesses detach stdin, and it emits the exact
-  `PATT_DEPLOYMENT_COMPLETE` sentinel only after every remote gate succeeds.
-  The calling workflow captures the remote output under `pipefail` and requires
-  that exact sentinel, so checkout or image-build output alone cannot produce a
-  successful deployment result.
+  A preparation-only SSH session builds the image, creates and verifies the
+  backup, seals its evidence, and emits `PATT_DEPLOYMENT_PREPARED`. It cannot
+  start the application or run migrations. Only after the workflow verifies
+  that sentinel does a new SSH session revalidate the sealed evidence and
+  activate the candidate. The activation session emits
+  `PATT_DEPLOYMENT_COMPLETE` only after every remote gate succeeds. Both
+  sessions use bounded SSH keepalives, and the backup emits periodic non-secret
+  progress while it runs.
 - Development, Test, and Production use the same secret names in separate GitHub
   environment scopes: `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`, and `DEPLOY_SSH_KEY`.
   `DEPLOY_USER` is an environment-scoped variable. Values must never be copied
