@@ -103,9 +103,7 @@ def test_changed_remote_tag_object_fails_closed():
 def test_missing_expected_failed_run_fails_closed():
     evidence = _evidence()
     evidence["workflow_runs"][0]["id"] = RUN_ID + 1
-    evidence["jobs_by_run"] = {
-        RUN_ID + 1: evidence["jobs_by_run"].pop(RUN_ID)
-    }
+    evidence["jobs_by_run"] = {RUN_ID + 1: evidence["jobs_by_run"].pop(RUN_ID)}
     with pytest.raises(TagRetirementValidationError, match="expected failed"):
         _validate(evidence)
 

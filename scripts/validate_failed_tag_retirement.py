@@ -15,9 +15,7 @@ from urllib.parse import quote
 
 
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
-TAG_PATTERN = re.compile(
-    r"^prod-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
-)
+TAG_PATTERN = re.compile(r"^prod-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 DEPLOY_JOB = "Deploy exact approved production tag"
 
 
@@ -144,9 +142,7 @@ def validate_failed_tag_retirement(
             continue
         deploy_conclusion = deploy_jobs[0].get("conclusion")
         if deploy_conclusion == "success":
-            errors.append(
-                f"Production run {run_id} completed deployment successfully"
-            )
+            errors.append(f"Production run {run_id} completed deployment successfully")
         elif deploy_conclusion not in {"failure", "cancelled", "timed_out"}:
             errors.append(
                 f"Production run {run_id} has non-terminal deploy conclusion "
@@ -243,9 +239,7 @@ def collect_and_validate(
 ) -> TagRetirementEvidence:
     encoded_tag = quote(tag, safe="")
     tag_ref = reader.get(f"repos/{reader.repository}/git/ref/tags/{encoded_tag}")
-    tag_object = reader.get(
-        f"repos/{reader.repository}/git/tags/{expected_tag_object}"
-    )
+    tag_object = reader.get(f"repos/{reader.repository}/git/tags/{expected_tag_object}")
     releases = reader.releases()
     workflow_runs = reader.paged(
         f"repos/{reader.repository}/actions/workflows/deploy-prod.yml/runs"
