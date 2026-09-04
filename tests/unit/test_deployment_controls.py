@@ -73,6 +73,8 @@ def test_known_host_trust_is_supplied_not_scanned():
     copier = (ROOT / "deploy" / "run-strict-scp.sh").read_text(encoding="utf-8")
     assert "ssh-keyscan" not in configure
     assert "StrictHostKeyChecking=yes" in runner
+    assert "ServerAliveInterval=30" in runner
+    assert "ServerAliveCountMax=20" in runner
     assert "UserKnownHostsFile=" in runner
     assert "StrictHostKeyChecking=yes" in copier
     assert "UserKnownHostsFile=" in copier

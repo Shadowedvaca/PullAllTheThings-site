@@ -52,6 +52,8 @@ def test_strict_bundle_copier_rejects_unbounded_destinations():
     assert "usage:" in source
     assert "^/tmp/patt-deployment-[0-9a-f]{40}" in source
     assert "StrictHostKeyChecking=yes" in source
+    assert "ServerAliveInterval=30" in source
+    assert "ServerAliveCountMax=20" in source
     assert "BatchMode=yes" in source
     assert "IdentitiesOnly=yes" in source
     assert "-F /dev/null" in source
