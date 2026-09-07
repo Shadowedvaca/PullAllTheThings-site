@@ -1,12 +1,12 @@
 # PATT Database Schema
 
-> **Canonical schema reference — current through migration 0182.**
+> **Canonical schema reference — current through migration 0187.**
 > Detailed DDL for the original core tables (migrations 0001–0044) is below.
 > Newer tables are documented in the schema overview section immediately below.
 
 ---
 
-## Schema Overview (current through migration 0182)
+## Schema Overview (current through migration 0187)
 
 Nine schemas in use. `enrichment`, `landing`, `viz`, `ref`, `config`, `log` were added during the Gear Plan Schema Overhaul (prod-v0.20.0+).
 
@@ -97,7 +97,7 @@ or player-rank changes.
 - `item_seasons` — ~970 rows
 - `item_set_members` — ~4,900 rows; **used by stored procs only, no Python refs**
 - `tier_tokens` — 21 rows
-- `bis_entries` — ~6,500 rows; `guide_order SMALLINT NOT NULL DEFAULT 1`; `bis_note VARCHAR(100)` nullable; weapon slots are `main_hand_2h` or `main_hand_1h`
+- `bis_entries` — ~6,500 rows; `guide_order SMALLINT NOT NULL DEFAULT 1`; `bis_note VARCHAR(100)` nullable; `recommendation_type` is `direct` or `catalyst`; Catalyst rows keep the farmable base in `blizzard_item_id` and the explicit provider-supplied result in `catalyst_tier_item_id`; weapon slots are `main_hand_2h` or `main_hand_1h`
 - `trinket_ratings` — ~1,200 rows
 - `item_popularity`
 

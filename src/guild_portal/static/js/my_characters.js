@@ -2558,6 +2558,20 @@ function _gpPopularityVal(pop) {
   return pop.overall ?? null;  // Overall: true weighted combined %
 }
 
+function _gpCatalystAction(item) {
+  if (item?.recommendation_type !== 'catalyst' || !item.catalyst_tier_item_id) return '';
+  const tierId = item.catalyst_tier_item_id;
+  const tierName = item.catalyst_tier_item_name || item.catalyst_tier_set_suffix || 'Tier piece';
+  const directNote = item.catalyst_tier_direct_available
+    ? '<span class="mcn-catalyst-action__note">May also be obtained directly</span>'
+    : '';
+  return `<div class="mcn-catalyst-action">
+    <span class="mcn-catalyst-action__label">Catalyze &rarr;</span>
+    <a href="https://www.wowhead.com/item=${tierId}" target="_blank" rel="noopener noreferrer">${_gpEsc(tierName)}</a>
+    ${directNote}
+  </div>`;
+}
+
 // Merge BIS items + all rated trinkets into one synthesis-sorted flat list.
 function _gpMergeTrinketBis(bis, trinketItems) {
   const itemMap = new Map();
@@ -2570,6 +2584,16 @@ function _gpMergeTrinketBis(bis, trinketItems) {
       if (r.bis_note && itemMap.has(bid) && !itemMap.get(bid).bis_note) {
         itemMap.get(bid).bis_note = r.bis_note;
         itemMap.get(bid).bis_note_origin = r.origin || null;
+      }
+      if (r.recommendation_type === 'catalyst' && itemMap.has(bid)) {
+        Object.assign(itemMap.get(bid), {
+          recommendation_type: r.recommendation_type,
+          catalyst_tier_item_id: r.catalyst_tier_item_id,
+          catalyst_tier_item_name: r.catalyst_tier_item_name,
+          catalyst_tier_icon_url: r.catalyst_tier_icon_url,
+          catalyst_tier_set_suffix: r.catalyst_tier_set_suffix,
+          catalyst_tier_direct_available: r.catalyst_tier_direct_available,
+        });
       }
       continue;
     }
@@ -2588,6 +2612,13 @@ function _gpMergeTrinketBis(bis, trinketItems) {
         is_equipped: r.is_equipped || false, is_bis: r.is_bis || false,
         target_ilvl: r.target_ilvl || null, popularity: r.popularity || null,
         bis_note: r.bis_note || null, bis_note_origin: r.origin || null,
+        primary_stats: r.primary_stats || [],
+        recommendation_type: r.recommendation_type || 'direct',
+        catalyst_tier_item_id: r.catalyst_tier_item_id || null,
+        catalyst_tier_item_name: r.catalyst_tier_item_name || null,
+        catalyst_tier_icon_url: r.catalyst_tier_icon_url || null,
+        catalyst_tier_set_suffix: r.catalyst_tier_set_suffix || null,
+        catalyst_tier_direct_available: !!r.catalyst_tier_direct_available,
       });
     }
   }
@@ -2643,6 +2674,9 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
     const srcSub   = _gpRenderSourceSub(item.sources || []);
+    const statsSub = (item.primary_stats || []).length
+      ? `<div class="mcn-bis-grid__stats">${(item.primary_stats || []).map(_gpEsc).join(' · ')}</div>` : '';
+    const catalystAction = _gpCatalystAction(item);
     const popVal   = _gpPopularityVal(item.popularity || null);
     const popCell  = popVal != null
       ? `<td class="mcn-ut__pop-col">${popVal.toFixed(1)}%</td>`
@@ -2672,7 +2706,7 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
         onclick="mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid},'${nameEsc}')">&times;</button>`;
     return `<tr class="mcn-ut__item-row"${startOpen ? '' : ' hidden'} data-group="${_gpEsc(groupKey)}">
       <td class="mcn-ut__item-cell">
-        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${srcSub}
+        <div class="mcn-bis-grid__name-inner">${icon}${_gpEsc(name)}${badges}</div>${statsSub}${srcSub}${catalystAction}
       </td>
       ${guideCells}
       ${popCell}
@@ -2724,6 +2758,16 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
       if (seenMap.has(bid)) {
         const ex = seenMap.get(bid);
         if (r.bis_note && !ex.bis_note) { ex.bis_note = r.bis_note; ex.bis_note_origin = r.origin || null; }
+        if (r.recommendation_type === 'catalyst') {
+          Object.assign(ex, {
+            recommendation_type: r.recommendation_type,
+            catalyst_tier_item_id: r.catalyst_tier_item_id,
+            catalyst_tier_item_name: r.catalyst_tier_item_name,
+            catalyst_tier_icon_url: r.catalyst_tier_icon_url,
+            catalyst_tier_set_suffix: r.catalyst_tier_set_suffix,
+            catalyst_tier_direct_available: r.catalyst_tier_direct_available,
+          });
+        }
         continue;
       }
       // Guide mode filter: keep if at least one guide recommends this item in current mode
@@ -2736,6 +2780,13 @@ function _gpRenderUnifiedTable(dbSlot, sd, tc, availState, trinketState, bisSour
         target_ilvl: r.target_ilvl || null, ratings: {},
         popularity: r.popularity || null, bis_note: r.bis_note || null,
         bis_note_origin: r.origin || null,
+        primary_stats: r.primary_stats || [],
+        recommendation_type: r.recommendation_type || 'direct',
+        catalyst_tier_item_id: r.catalyst_tier_item_id || null,
+        catalyst_tier_item_name: r.catalyst_tier_item_name || null,
+        catalyst_tier_icon_url: r.catalyst_tier_icon_url || null,
+        catalyst_tier_set_suffix: r.catalyst_tier_set_suffix || null,
+        catalyst_tier_direct_available: !!r.catalyst_tier_direct_available,
       };
       seenMap.set(bid, entry);
       bisItems.push(entry);

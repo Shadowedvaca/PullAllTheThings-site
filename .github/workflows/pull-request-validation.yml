@@ -166,6 +166,7 @@ jobs:
         run: |
           set -euo pipefail
           while IFS= read -r -d '' file; do node --check "$file"; done < <(find src/guild_portal/static/js companion_app -name '*.js' -print0 2>/dev/null || true)
+          node --test tests/js/test_gear_plan_catalyst_ui.js
 
       - name: Create non-secret Compose validation inputs
         shell: bash

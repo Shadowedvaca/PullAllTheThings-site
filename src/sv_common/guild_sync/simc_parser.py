@@ -37,6 +37,8 @@ class SimcSlot:
     enchant_id: Optional[int] = None
     gem_ids: list[int] = field(default_factory=list)
     quality_track: Optional[str] = None   # V/C/H/M — derived from bonus_ids if absent
+    recommendation_type: str = "direct"  # direct | catalyst
+    catalyst_tier_item_id: Optional[int] = None  # explicit provider-supplied result
 
 
 @dataclass

@@ -1335,7 +1335,11 @@ async def get_plan_detail(
                        vbr.blizzard_item_id, vbr.name AS item_name, vbr.icon_url,
                        vbr.source_name, vbr.source_short_label AS short_label,
                        vbr.source_origin AS origin, vbr.content_type, vbr.bis_note,
-                       vbr.item_category
+                       vbr.item_category, vbr.primary_stats,
+                       vbr.recommendation_type, vbr.catalyst_tier_item_id,
+                       vbr.catalyst_tier_item_name, vbr.catalyst_tier_icon_url,
+                       vbr.catalyst_tier_set_suffix,
+                       vbr.catalyst_tier_direct_available
                   FROM viz.bis_recommendations vbr
                   JOIN ref.bis_list_sources bls ON bls.id = vbr.source_id
                  WHERE vbr.spec_id = $1

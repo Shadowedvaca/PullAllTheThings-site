@@ -5,6 +5,8 @@ _iv_extract_regular_rows, _iv_extract_trinket_rows, and _iv_is_outlier.
 All item IDs are synthetic.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from sv_common.guild_sync.bis_sync import (
@@ -12,7 +14,9 @@ from sv_common.guild_sync.bis_sync import (
     _iv_classify_section,
     _iv_classify_tab_label,
     _iv_extract_regular_rows,
+    _iv_extract_bis_cards,
     _iv_extract_trinket_rows,
+    _extract_icy_veins,
     _iv_is_outlier,
     _iv_parse_bis_from_raw,
     _iv_parse_sections,
@@ -21,6 +25,7 @@ from sv_common.guild_sync.bis_sync import (
 
 # Mirrors config.slot_labels seed data (relevant subset for IV)
 _TEST_SLOT_MAP: dict[str, str | None] = {
+    "helm": "head",
     "head": "head",
     "neck": "neck",
     "shoulders": "shoulder",
@@ -29,6 +34,7 @@ _TEST_SLOT_MAP: dict[str, str | None] = {
     "cloak": "back",
     "chest": "chest",
     "wrists": "wrist",
+    "bracers": "wrist",
     "wrist": "wrist",
     "hands": "hands",
     "gloves": "hands",
@@ -44,6 +50,38 @@ _TEST_SLOT_MAP: dict[str, str | None] = {
     "off-hand": "off_hand",
     "weapon": "main_hand",
 }
+
+
+def _make_iv_card(slot: str, item_id: int | None, *, original_item_id: int | None = None) -> str:
+    wowhead = f"item={item_id}&amp;bonus=12854" if item_id else ""
+    if original_item_id:
+        wowhead += f"&amp;original-item={original_item_id}"
+    primary = (
+        f'<span class="spell_icon_span" data-wowhead="{wowhead}">'
+        f'<span data-wowhead="{wowhead}" class="q4">Result {item_id}</span></span>'
+        if item_id else '<span class="spell_icon_span"></span>'
+    )
+    return (
+        f'<div class="bis_item">{primary}<span class="bis_item_slot">{slot}</span>'
+        '<div class="bis_item_extras"><span data-wowhead="item=999001">Gem</span></div>'
+        '<div class="bis_item_footer"><span data-wowhead="item=999002">Enchant</span></div>'
+        '</div>'
+    )
+
+
+def _make_iv_card_page(content_type: str, cards: list[str]) -> str:
+    label = {
+        "overall": "Overall",
+        "mythic_plus": "Mythic+",
+        "raid": "Raid",
+    }[content_type]
+    return (
+        '<div class="image_block best_in_slot">'
+        f'<div class="image_block_header_buttons"><span id="bis_0_0_button">{label}</span></div>'
+        '<div class="image_block_content" id="bis_0_0">'
+        f'<div class="bis_items_grid">{"".join(cards)}</div>'
+        '</div></div>'
+    )
 
 
 def _make_iv_table(*rows: tuple[str, int]) -> str:
@@ -307,6 +345,86 @@ class TestIvExtractRegularRows:
         assert "trinket_1" in slot_keys
         assert "trinket_2" in slot_keys
         assert len(slots) == 16
+
+
+class TestIvExtractBisCards:
+    def _parse(self, cards: list[str]):
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            pytest.skip("BeautifulSoup not available")
+        soup = BeautifulSoup(
+            f'<div class="bis_items_grid">{"".join(cards)}</div>', "html.parser"
+        )
+        return _iv_extract_bis_cards(soup, _TEST_SLOT_MAP)
+
+    def test_catalyst_card_keeps_explicit_base_as_actionable_item(self):
+        slots = self._parse([
+            _make_iv_card("Helm", 271456, original_item_id=268229),
+        ])
+        assert len(slots) == 1
+        assert slots[0].slot == "head"
+        assert slots[0].blizzard_item_id == 268229
+        assert slots[0].recommendation_type == "catalyst"
+        assert slots[0].catalyst_tier_item_id == 271456
+
+    def test_card_without_explicit_base_stays_direct(self):
+        slots = self._parse([_make_iv_card("Chest", 268222)])
+        assert slots[0].blizzard_item_id == 268222
+        assert slots[0].recommendation_type == "direct"
+        assert slots[0].catalyst_tier_item_id is None
+
+    def test_ignores_nested_gems_enchants_shirt_and_tabard(self):
+        slots = self._parse([
+            _make_iv_card("Neck", 268265),
+            _make_iv_card("Shirt", None),
+            _make_iv_card("Tabard", None),
+        ])
+        assert [slot.blizzard_item_id for slot in slots] == [268265]
+
+    def test_assigns_paired_ring_and_trinket_slots(self):
+        slots = self._parse([
+            _make_iv_card("Ring", 100001),
+            _make_iv_card("Ring", 100002),
+            _make_iv_card("Trinket", 200001),
+            _make_iv_card("Trinket", 200002),
+        ])
+        assert [(slot.slot, slot.blizzard_item_id) for slot in slots] == [
+            ("ring_1", 100001),
+            ("ring_2", 100002),
+            ("trinket_1", 200001),
+            ("trinket_2", 200002),
+        ]
+
+    def test_redesigned_page_yields_sixteen_usable_recommendations(self):
+        cards = [
+            _make_iv_card("Helm", 271456, original_item_id=268229),
+            _make_iv_card("Hands", 2),
+            _make_iv_card("Neck", 3),
+            _make_iv_card("Waist", 4),
+            _make_iv_card("Shoulders", 5),
+            _make_iv_card("Legs", 6),
+            _make_iv_card("Cloak", 7),
+            _make_iv_card("Feet", 8),
+            _make_iv_card("Chest", 9),
+            _make_iv_card("Ring", 10),
+            _make_iv_card("Shirt", None),
+            _make_iv_card("Ring", 11),
+            _make_iv_card("Tabard", None),
+            _make_iv_card("Trinket", 12),
+            _make_iv_card("Bracers", 13),
+            _make_iv_card("Trinket", 14),
+            _make_iv_card("Main Hand", 15),
+            _make_iv_card("Off Hand", 16),
+        ]
+        page = _make_iv_card_page("overall", cards)
+        slots = _iv_parse_bis_from_raw(page, "overall", _TEST_SLOT_MAP)
+        assert len(slots) == 16
+        assert {slot.slot for slot in slots} == {
+            "head", "hands", "neck", "waist", "shoulder", "legs", "back",
+            "feet", "chest", "ring_1", "ring_2", "trinket_1", "wrist",
+            "trinket_2", "main_hand", "off_hand",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -755,3 +873,29 @@ class TestIvParseTrinketsFromRaw:
         rows = _iv_parse_trinkets_from_raw(page)
         s_rows = [r for r in rows if r["tier"] == "S"]
         assert [r["sort_order"] for r in s_rows] == [0, 1, 2]
+
+
+class TestIvFetchRetry:
+    @pytest.mark.asyncio
+    async def test_transient_404_retries_with_backoff(self):
+        responses = []
+        for status, text in ((404, "missing"), (404, "missing"), (200, "<html></html>")):
+            response = MagicMock(status_code=status, text=text)
+            response.raise_for_status = MagicMock()
+            responses.append(response)
+
+        client = MagicMock()
+        client.get = AsyncMock(side_effect=responses)
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("sv_common.guild_sync.bis_sync.httpx.AsyncClient", return_value=client),
+            patch("sv_common.guild_sync.bis_sync.asyncio.sleep", new_callable=AsyncMock) as sleep,
+        ):
+            slots, raw = await _extract_icy_veins("https://example.invalid/iv")
+
+        assert slots == []
+        assert raw == "<html></html>"
+        assert client.get.await_count == 3
+        assert [call.args[0] for call in sleep.await_args_list] == [1, 2]

@@ -12,6 +12,8 @@
   tooltips or a removed Gear Plan button.
 - Display tier-token names from the dedicated Blizzard-derived token catalog;
   non-equippable tokens are intentionally absent from `enrichment.items`.
+- Make Icy Veins Catalyst recommendations actionable by centering Gear Plan rows
+  on the farmable base item and showing the resulting tier item as a Catalyst action.
 
 ## Fixes/Changes
 
@@ -20,6 +22,10 @@
 - Make season creation and activation deactivate the previous season atomically; a partial unique index also enforces one active row in PostgreSQL.
 - Allow admins to enter raid, dungeon, and tier-set IDs before those sources have been synchronized, and to edit season start dates.
 - Update Midnight Season 2 M+ labels so Hero begins at +6. Remove the inaccurate claim that a persisted Site Config SimC bonus-ID override exists; the verified built-in mapping and empirical fallback remain in use.
+- Parse Icy Veins' redesigned Best-in-Slot card grids, ignoring nested gems,
+  enchants, embellishments, Shirt, and Tabard cards. Only an explicit
+  `original-item` attribute creates a Catalyst relationship; all other provider
+  recommendations remain direct.
 
 ## Validation
 
@@ -29,10 +35,15 @@
 - Focused season/source tests: 71 passed against isolated PostgreSQL 16. Full unit + integration + regression: 2,150 passed, 34 skipped; one Windows/WSL path-translation-only failure in the backup-script test (the same test is CI-authoritative on Linux). Playwright Chromium: 2 passed.
 - Fresh Alembic upgrade to 0183, seeded-row assertions, one-revision downgrade/re-upgrade, and `current --check-heads` passed on isolated PostgreSQL 16.
 - Release, production-readiness configuration, deployment-control, compile, and changed-file critical Ruff checks passed.
+- Focused card-parser, Catalyst persistence, and Gear Plan rendering tests cover
+  the explicit 268229 base to 271456 tier-result relationship and 16-slot output.
 
 ## Deployment/Migrations
 
 - Alembic 0183 performs an idempotent upsert of Midnight Season 2, deactivates prior seasons without deleting them, and installs the single-active-season index.
+- Alembic 0187 adds the BiS recommendation type and explicit Catalyst tier-result
+  item, with constraints that prevent incomplete or inferred relationships, and
+  exposes base/result metadata through `viz.bis_recommendations`.
 - Before production promotion, confirm old-event attendance processing is complete. The 2026-09-03 read-only inventory found 0 unprocessed past attendance events but 54 old events without signup snapshots; those histories remain attached to Season 1.
 - After deployment, run the normal Blizzard item-source, item-set, enrichment/classification, and BIS refresh sequence for the new IDs. Roster reset remains a separate explicit operation.
 

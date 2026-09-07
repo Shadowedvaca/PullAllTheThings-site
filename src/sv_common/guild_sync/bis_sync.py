@@ -99,6 +99,8 @@ _TECHNIQUE_ORDER: dict[str, list[str]] = {
 
 # HTTP timeouts for scraping
 _HTTP_TIMEOUT = 20.0
+_ICY_VEINS_FETCH_ATTEMPTS = 4
+_ICY_VEINS_RETRYABLE_STATUS = frozenset({404, 429, 500, 502, 503, 504})
 _UGG_STATS_BASE = "https://stats2.u.gg/wow/builds/v29/all"
 _WOWHEAD_TOOLTIP_BASE = "https://nether.wowhead.com/tooltip/item"
 
@@ -1783,11 +1785,13 @@ async def insert_bis_items(
                 await conn.execute(
                     """
                     INSERT INTO enrichment.bis_entries
-                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order, bis_note)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id,
+                         guide_order, bis_note, recommendation_type, catalyst_tier_item_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                     """,
                     ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
                     actual_slot, slot_data.blizzard_item_id, guide_order, note,
+                    slot_data.recommendation_type, slot_data.catalyst_tier_item_id,
                 )
                 inserted += 1
             except Exception:
@@ -2827,6 +2831,64 @@ def _iv_extract_regular_rows(
     return results
 
 
+def _iv_extract_bis_cards(
+    container_el,
+    slot_map: dict[str, str | None],
+) -> list[SimcSlot]:
+    """Parse the redesigned Icy Veins ``.bis_item`` card grid.
+
+    The card's direct-child ``data-wowhead`` span is the recommendation. Nested
+    spans under extras and footer elements are gems, enchants, or embellishments
+    and must not become gear recommendations. When Icy Veins explicitly emits
+    ``item=RESULT&original-item=BASE``, BASE is the farmable item and RESULT is
+    the tier item produced by the Catalyst.
+    """
+    results: list[SimcSlot] = []
+    ring_count = 0
+    trinket_count = 0
+
+    for card in container_el.select(".bis_items_grid .bis_item"):
+        slot_el = card.select_one(".bis_item_slot")
+        if slot_el is None:
+            continue
+        raw_slot = slot_el.get_text(" ", strip=True).lower()
+        if raw_slot in {"shirt", "tabard"}:
+            continue
+
+        primary = card.find("span", attrs={"data-wowhead": True}, recursive=False)
+        if primary is None:
+            continue
+        wowhead_data = primary.get("data-wowhead", "")
+        item_match = re.search(r"(?:^|[&;])item=(\d+)", wowhead_data)
+        if not item_match:
+            continue
+        result_item_id = int(item_match.group(1))
+        if result_item_id == 0:
+            continue
+
+        base_match = re.search(r"(?:^|[&;])original-item=(\d+)", wowhead_data)
+        base_item_id = int(base_match.group(1)) if base_match else result_item_id
+        if base_item_id == 0:
+            continue
+
+        slot_key, ring_count, trinket_count = _resolve_text_slot(
+            raw_slot, slot_map, ring_count, trinket_count
+        )
+        if slot_key is None:
+            logger.debug("_iv_extract_bis_cards: unrecognised slot %r, skipping", raw_slot)
+            continue
+
+        is_catalyst = base_match is not None and base_item_id != result_item_id
+        results.append(SimcSlot(
+            slot=slot_key,
+            blizzard_item_id=base_item_id,
+            recommendation_type="catalyst" if is_catalyst else "direct",
+            catalyst_tier_item_id=result_item_id if is_catalyst else None,
+        ))
+
+    return results
+
+
 def _iv_extract_trinket_rows(details_el) -> list[dict]:
     """Parse an IV trinket-dropdown <details> element.
 
@@ -2926,7 +2988,11 @@ def _iv_parse_from_image_blocks(
     """
     sections: list[IVSection] = []
 
-    for image_block in soup.find_all("div", class_="image_block"):
+    image_blocks = soup.select("div.image_block.best_in_slot")
+    if not image_blocks:
+        image_blocks = soup.find_all("div", class_="image_block")
+
+    for image_block in image_blocks:
         buttons_div = image_block.find("div", class_="image_block_header_buttons")
         if not buttons_div:
             continue
@@ -2962,10 +3028,16 @@ def _iv_parse_from_image_blocks(
             h3_id = h3.get("id", "") if h3 else area_id
             section_title = h3.get_text(strip=True) if h3 else label
 
+            has_bis_cards = content_div.select_one(".bis_items_grid .bis_item") is not None
             table = content_div.find("table")
             details = content_div.find("details", class_="trinket-dropdown")
 
-            if details:
+            if has_bis_cards:
+                is_trinket = False
+                slots = _iv_extract_bis_cards(content_div, slot_map)
+                trinket_rows = []
+                row_count = len(slots)
+            elif details:
                 is_trinket = True
                 trinket_rows = _iv_extract_trinket_rows(details)
                 row_count = len(trinket_rows)
@@ -3423,17 +3495,42 @@ async def _extract_icy_veins(
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
-        response = await client.get(url)
+        response = None
+        for attempt in range(_ICY_VEINS_FETCH_ATTEMPTS):
+            response = await client.get(url)
+            if response.status_code not in _ICY_VEINS_RETRYABLE_STATUS:
+                break
+            if attempt + 1 < _ICY_VEINS_FETCH_ATTEMPTS:
+                delay = 2 ** attempt
+                logger.info(
+                    "Icy Veins returned HTTP %d for %s; retrying in %ds (%d/%d)",
+                    response.status_code, url, delay, attempt + 1,
+                    _ICY_VEINS_FETCH_ATTEMPTS,
+                )
+                await asyncio.sleep(delay)
+        assert response is not None
         response.raise_for_status()
         html = response.text
 
-    if pool and spec_id and source_id:
+    if pool:
         async with pool.acquire() as conn:
             slot_map = await _load_slot_labels(conn)
             raid_instance_names = await _load_raid_instance_names(conn)
             sections = _iv_parse_sections(html, slot_map, raid_instance_names)
-            await _upsert_iv_sections(conn, spec_id, source_id, url, sections)
-        return await _resolve_iv_section(pool, sections, spec_id, source_id, content_type), html
+            if spec_id and source_id:
+                await _upsert_iv_sections(conn, spec_id, source_id, url, sections)
+        if spec_id and source_id:
+            return await _resolve_iv_section(
+                pool, sections, spec_id, source_id, content_type
+            ), html
+        for section in sections:
+            if (
+                section.content_type == content_type
+                and not section.is_trinket_section
+                and not section.is_outlier
+            ):
+                return section.slots, html
+        return [], html
 
     slot_map: dict[str, str | None] = {}
     sections = _iv_parse_sections(html, slot_map)
