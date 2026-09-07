@@ -107,6 +107,11 @@ def upgrade():
     conn.execute(
         sa.text("UPDATE guild_identity.tracked_items SET is_active = FALSE")
     )
+    conn.execute(
+        sa.text(
+            "DELETE FROM guild_identity.tracked_items WHERE item_id = 213746"
+        )
+    )
 
     for display_order, (item_id, item_name, category) in enumerate(MIDNIGHT_ITEMS, 1):
         conn.execute(
@@ -144,6 +149,6 @@ def downgrade():
             UPDATE guild_identity.tracked_items
                SET is_active = TRUE
              WHERE item_id IN (212241, 212248, 212246, 222732,
-                               222509, 222510, 222524, 213746)
+                               222509, 222510, 222524)
         """)
     )
