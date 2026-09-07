@@ -1365,6 +1365,98 @@ async def process_tier_tokens(pool: asyncpg.Pool) -> dict:
     }
 
 
+_CLASS_IDS_BY_ARMOR_TYPE = {
+    "cloth": [5, 8, 9],
+    "leather": [4, 10, 11, 12],
+    "mail": [3, 7, 13],
+    "plate": [1, 2, 6],
+    "any": [],
+}
+
+
+async def sync_current_season_tier_token_attrs(pool: asyncpg.Pool) -> dict:
+    """Publish Blizzard-derived active-season tokens to the editable attrs table.
+
+    ``sp_rebuild_all`` derives ``enrichment.tier_tokens`` directly from Blizzard
+    item and journal payloads.  This bridge replaces the former requirement for
+    a separately fetched Wowhead tooltip.  Manual overrides are retained, while
+    stale auto-detected rows from prior seasons are removed.
+    """
+    now = datetime.now(tz=timezone.utc)
+    async with pool.acquire() as conn:
+        tokens = await conn.fetch(
+            """
+            SELECT DISTINCT tt.blizzard_item_id, tt.target_slot, tt.armor_type
+              FROM enrichment.tier_tokens tt
+             WHERE EXISTS (
+                    SELECT 1
+                      FROM patt.raid_seasons rs
+                      JOIN landing.blizzard_journal_encounters e
+                        ON e.instance_id = ANY(rs.current_raid_ids)
+                     WHERE rs.is_active = TRUE
+                       AND EXISTS (
+                            SELECT 1
+                              FROM jsonb_array_elements(
+                                   COALESCE(e.payload -> 'items', '[]'::jsonb)
+                              ) item_entry
+                             WHERE (item_entry -> 'item' ->> 'id')::int
+                                   = tt.blizzard_item_id
+                       )
+             )
+             ORDER BY tt.blizzard_item_id
+            """
+        )
+        token_ids = [row["blizzard_item_id"] for row in tokens]
+        processed = 0
+        skipped_override = 0
+        for row in tokens:
+            armor_type = row["armor_type"] or "any"
+            class_ids = _CLASS_IDS_BY_ARMOR_TYPE.get(armor_type, [])
+            result = await conn.execute(
+                """
+                INSERT INTO guild_identity.tier_token_attrs
+                       (blizzard_item_id, target_slot, armor_type,
+                        eligible_class_ids, is_auto_detected,
+                        is_manual_override, last_processed)
+                VALUES ($1, $2, $3, $4, TRUE, FALSE, $5)
+                ON CONFLICT (blizzard_item_id) DO UPDATE SET
+                    target_slot        = EXCLUDED.target_slot,
+                    armor_type         = EXCLUDED.armor_type,
+                    eligible_class_ids = EXCLUDED.eligible_class_ids,
+                    is_auto_detected   = TRUE,
+                    last_processed     = EXCLUDED.last_processed
+                WHERE NOT guild_identity.tier_token_attrs.is_manual_override
+                """,
+                row["blizzard_item_id"], row["target_slot"], armor_type,
+                class_ids, now,
+            )
+            if result == "INSERT 0 0":
+                skipped_override += 1
+            else:
+                processed += 1
+
+        stale_deleted = await conn.fetchval(
+            """
+            WITH deleted AS (
+                DELETE FROM guild_identity.tier_token_attrs
+                 WHERE is_auto_detected = TRUE
+                   AND is_manual_override = FALSE
+                   AND NOT (blizzard_item_id = ANY($1::INTEGER[]))
+                RETURNING 1
+            )
+            SELECT count(*) FROM deleted
+            """,
+            token_ids,
+        )
+
+    return {
+        "tokens_found": len(tokens),
+        "tokens_processed": processed,
+        "tokens_skipped_override": skipped_override,
+        "stale_tokens_deleted": stale_deleted or 0,
+    }
+
+
 async def get_item_sources(
     pool: asyncpg.Pool,
     instance_name: Optional[str] = None,

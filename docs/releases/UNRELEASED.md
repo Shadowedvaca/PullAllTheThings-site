@@ -7,6 +7,9 @@
   Midnight Season 1 without changing the active season.
 - Remove Champion from the Midnight Season 2 crafted item-level map because
   Blizzard does not provide a Champion-crest crafted track.
+- Make active-season tier-token publication an automatic part of Enrich &
+  Classify, using Blizzard-derived token data instead of requiring Wowhead
+  tooltips or a removed Gear Plan button.
 
 ## Fixes/Changes
 

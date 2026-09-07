@@ -1891,7 +1891,7 @@ class TierTokenAttrs(Base):
     """Parsed attributes for tier token items.
 
     Each row records the slot and armor type a token grants, derived from
-    its Wowhead tooltip HTML.  process_tier_tokens() auto-populates this table;
+    Blizzard landing and enrichment data during enrichment/classification;
     rows with is_manual_override=TRUE are skipped by the processor so admin
     corrections are never clobbered.
     """

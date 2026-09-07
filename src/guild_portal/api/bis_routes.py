@@ -1838,6 +1838,14 @@ async def enrich_and_classify(
                 item_counts["items"], item_counts["sources"],
             )
 
+            # Publish active-season Blizzard-derived token attributes.  This is
+            # deliberately part of enrichment so a removed UI button cannot
+            # leave the editable reference table on the previous season.
+            from sv_common.guild_sync.item_source_sync import (
+                sync_current_season_tier_token_attrs,
+            )
+            token_result = await sync_current_season_tier_token_attrs(pool)
+
             # ── Step 2: rebuild BIS entries from landing HTML ──────────────────
             _enrich_classify_status.update(
                 step=2,
@@ -1940,6 +1948,7 @@ async def enrich_and_classify(
 
             detail = (
                 f"{item_counts['items']} items, {item_counts['sources']} sources, "
+                f"{token_result.get('tokens_found', 0)} active tier tokens, "
                 f"{bis_result.get('bis_entries_inserted', 0)} BIS entries, "
                 f"{trinket_result.get('trinket_ratings_inserted', 0)} trinket ratings, "
                 f"{popularity_result.get('rows_inserted', 0)} popularity rows. "
