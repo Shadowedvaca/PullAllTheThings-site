@@ -2674,8 +2674,11 @@ function _gpRenderUtGroup(groupKey, label, items, dbSlot, guideCols, itemOriginC
     const nameEsc  = _gpEsc(name).replace(/'/g, "&#39;");
     const badges   = _gpRenderItemBadges(item.is_equipped, item.is_bis);
     const srcSub   = _gpRenderSourceSub(item.sources || []);
+    const primaryStatLabels = { str: 'Strength', agi: 'Agility', int: 'Intellect' };
     const statsSub = (item.primary_stats || []).length
-      ? `<div class="mcn-bis-grid__stats">${(item.primary_stats || []).map(_gpEsc).join(' · ')}</div>` : '';
+      ? `<div class="mcn-bis-grid__stats">${(item.primary_stats || []).map(stat =>
+          _gpEsc(primaryStatLabels[String(stat).toLowerCase()] || stat)
+        ).join(' · ')}</div>` : '';
     const catalystAction = _gpCatalystAction(item);
     const popVal   = _gpPopularityVal(item.popularity || null);
     const popCell  = popVal != null

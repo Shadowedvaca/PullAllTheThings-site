@@ -61,6 +61,7 @@ def test_row_actions_and_metadata_remain_keyed_to_base_item() -> None:
     assert "mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid}" in source
     assert "_gpRenderSourceSub(item.sources || [])" in source
     assert "item.primary_stats" in source
+    assert "str: 'Strength'" in source
 
 
 def test_catalyst_action_has_compact_row_styles() -> None:
