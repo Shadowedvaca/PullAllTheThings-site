@@ -10,6 +10,8 @@
 - Make active-season tier-token publication an automatic part of Enrich &
   Classify, using Blizzard-derived token data instead of requiring Wowhead
   tooltips or a removed Gear Plan button.
+- Display tier-token names from the dedicated Blizzard-derived token catalog;
+  non-equippable tokens are intentionally absent from `enrichment.items`.
 
 ## Fixes/Changes
 
