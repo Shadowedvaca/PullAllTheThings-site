@@ -5,6 +5,8 @@
 - Activate Midnight Season 2 as the sole active season, effective 2026-08-18.
 - Add the later-released Sporefall raid (Blizzard journal instance 1305) to
   Midnight Season 1 without changing the active season.
+- Remove Champion from the Midnight Season 2 crafted item-level map because
+  Blizzard does not provide a Champion-crest crafted track.
 
 ## Fixes/Changes
 
