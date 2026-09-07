@@ -3,6 +3,8 @@
 ## Highlights
 
 - Activate Midnight Season 2 as the sole active season, effective 2026-08-18.
+- Add the later-released Sporefall raid (Blizzard journal instance 1305) to
+  Midnight Season 1 without changing the active season.
 
 ## Fixes/Changes
 
