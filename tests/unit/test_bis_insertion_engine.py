@@ -35,6 +35,7 @@ def _make_pool(fetchval_side_effect=None, execute_side_effect=None):
     """
     conn = MagicMock()
     conn.fetchval = AsyncMock(side_effect=fetchval_side_effect)
+    conn.fetch = AsyncMock()
     conn.execute = AsyncMock(side_effect=execute_side_effect)
     pool = MagicMock()
     pool.acquire = MagicMock()
@@ -123,6 +124,21 @@ class TestInsertBisItemsBasic:
         assert args[5] == 268229
         assert args[8] == "catalyst"
         assert args[9] == 271456
+
+    @pytest.mark.asyncio
+    async def test_resolves_worded_catalyst_to_active_tier_piece(self):
+        pool, conn = _make_pool(fetchval_side_effect=[1])
+        conn.fetch.return_value = [{"blizzard_item_id": 271457}]
+        catalyst = SimcSlot(
+            slot="hands",
+            blizzard_item_id=251214,
+            recommendation_type="catalyst",
+        )
+
+        result = await insert_bis_items(_ctx(pool), [catalyst])
+
+        assert result == {"inserted": 1, "skipped": 0}
+        assert conn.execute.call_args[0][9] == 271457
 
     @pytest.mark.asyncio
     async def test_two_items_different_slots_get_guide_order_1(self):

@@ -23,8 +23,10 @@ _DISPLAY_MAP = {
     "mythic": "M",
 }
 
-# Midnight expansion bare-word display_string format (no upgrade counter).
-# "Heroic" and "Mythic+" are both Hero-tier quality; "Mythic" alone = Mythic raid.
+# Bare Blizzard display strings describe acquisition difficulty on ordinary
+# equipment, not a V/C/H/M upgrade track. They are accepted only for the
+# crafted-item preview path, where the caller has already proved the item is
+# crafted and Blizzard uses Heroic/Mythic as the crest-quality result.
 _DISPLAY_MAP_BARE = {
     "veteran": "V",
     "champion": "C",
@@ -49,12 +51,14 @@ _DEFAULT_SIMC_BONUS_IDS: dict[str, list[int]] = {
 }
 
 
-def track_from_display_string(display_string: Optional[str]) -> Optional[str]:
+def track_from_display_string(
+    display_string: Optional[str], *, allow_bare: bool = False
+) -> Optional[str]:
     """Parse V/C/H/M from Blizzard name_description.display_string.
 
     Handles two formats:
     - TWW legacy: "Champion 4/8" → "C", "Hero 2/8" → "H"
-    - Midnight bare: "Heroic" → "H", "Mythic+" → "H", "Champion" → "C"
+    - Crafted preview only (``allow_bare=True``): "Heroic" → "H"
     Returns None if not an upgrade-track item.
     """
     if not display_string:
@@ -64,8 +68,9 @@ def track_from_display_string(display_string: Optional[str]) -> Optional[str]:
     m = _DISPLAY_PATTERN.match(s)
     if m:
         return _DISPLAY_MAP.get(m.group(1).lower())
-    # Midnight bare-word format: "Heroic", "Mythic+", "Champion", etc.
-    return _DISPLAY_MAP_BARE.get(s.lower())
+    if allow_bare:
+        return _DISPLAY_MAP_BARE.get(s.lower())
+    return None
 
 
 def track_from_bonus_ids(

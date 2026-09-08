@@ -1,12 +1,12 @@
 # PATT Database Schema
 
-> **Canonical schema reference — current through migration 0187.**
+> **Canonical schema reference — current through migration 0188.**
 > Detailed DDL for the original core tables (migrations 0001–0044) is below.
 > Newer tables are documented in the schema overview section immediately below.
 
 ---
 
-## Schema Overview (current through migration 0187)
+## Schema Overview (current through migration 0188)
 
 Nine schemas in use. `enrichment`, `landing`, `viz`, `ref`, `config`, `log` were added during the Gear Plan Schema Overhaul (prod-v0.20.0+).
 
@@ -36,7 +36,7 @@ or player-rank changes.
 
 **Gear plan:**
 - `gear_plans` — `+simc_imported_at TIMESTAMPTZ`, `+equipped_source VARCHAR(10) DEFAULT 'blizzard'` (0094)
-- `gear_plan_slots` — `blizzard_item_id` (no item_id FK — dropped Phase E); slot values use `main_hand_2h`/`main_hand_1h`, never `main_hand`; `excluded_item_ids INTEGER[]`
+- `gear_plan_slots` — `blizzard_item_id` (no item_id FK — dropped Phase E); slot values use `main_hand_2h`/`main_hand_1h`, never `main_hand`; `excluded_item_ids INTEGER[]`; `recommendation_type` distinguishes direct goals from Catalyst routes, whose final tier item remains in `blizzard_item_id` and whose farmable input is recorded in `catalyst_base_item_id`/`catalyst_base_item_name`
 - `character_equipment` — `blizzard_item_id NOT NULL` (no item_id FK)
 - `item_sources` — `blizzard_item_id NOT NULL`, `UNIQUE(blizzard_item_id, instance_type, encounter_name)`; no item_id FK
 - `item_recipe_links` — `blizzard_item_id NOT NULL`, `recipe_id FK→recipes`, `UNIQUE(blizzard_item_id, recipe_id)`; no item_id FK
@@ -102,7 +102,7 @@ or player-rank changes.
 - `item_popularity`
 
 ### `viz` — read-only views over enrichment
-`slot_items` (`+primary_stats TEXT[]`, `+weapon_plan_slot`), `tier_piece_sources`, `crafters_by_item`, `bis_recommendations`, `item_popularity`
+`slot_items` (`+primary_stats TEXT[]`, `+weapon_plan_slot`), `tier_piece_sources` (active-season tier pieces and raid-token sources only), `crafters_by_item`, `bis_recommendations`, `item_popularity`
 
 ### `log` — operational logs
 `bis_scrape_log` — status CHECK includes `'unchanged'` (added 0177)

@@ -14,6 +14,8 @@
   non-equippable tokens are intentionally absent from `enrichment.items`.
 - Make Icy Veins Catalyst recommendations actionable by centering Gear Plan rows
   on the farmable base item and showing the resulting tier item as a Catalyst action.
+- Keep direct tier goals and Catalyst acquisition routes distinct, including a
+  clear "base equipped, ready to catalyze" state instead of a false BIS star.
 
 ## Fixes/Changes
 
@@ -23,9 +25,17 @@
 - Allow admins to enter raid, dungeon, and tier-set IDs before those sources have been synchronized, and to edit season start dates.
 - Update Midnight Season 2 M+ labels so Hero begins at +6. Remove the inaccurate claim that a persisted Site Config SimC bonus-ID override exists; the verified built-in mapping and empirical fallback remain in use.
 - Parse Icy Veins' redesigned Best-in-Slot card grids, ignoring nested gems,
-  enchants, embellishments, Shirt, and Tabard cards. Only an explicit
-  `original-item` attribute creates a Catalyst relationship; all other provider
-  recommendations remain direct.
+  enchants, embellishments, Shirt, and Tabard cards. Explicit `original-item`
+  attributes retain their provider result; cards explicitly worded as Catalyst
+  routes resolve to the one active-season class tier result for that slot.
+- Scope Gear Plan recommendations and item sources to the active season, and
+  season-align tier-token raid sources so Season 1 tier and raid locations do
+  not leak into Season 2 recommendations.
+- Select weapon layout from the configured guide source and clear stale unlocked
+  opposite-hand goals during Fill BIS, restoring Protection Warrior shields and
+  the matching one-hand drill-down.
+- Treat bare Blizzard "Heroic"/"Mythic" labels as acquisition difficulty, not
+  upgrade tracks, and include equipped bonus IDs in Wowhead tooltip links.
 
 ## Validation
 
@@ -44,6 +54,8 @@
 - Alembic 0187 adds the BiS recommendation type and explicit Catalyst tier-result
   item, with constraints that prevent incomplete or inferred relationships, and
   exposes base/result metadata through `viz.bis_recommendations`.
+- Alembic 0188 persists the selected Catalyst route on player goals and rebuilds
+  `viz.tier_piece_sources` with active-season alignment.
 - Before production promotion, confirm old-event attendance processing is complete. The 2026-09-03 read-only inventory found 0 unprocessed past attendance events but 54 old events without signup snapshots; those histories remain attached to Season 1.
 - After deployment, run the normal Blizzard item-source, item-set, enrichment/classification, and BIS refresh sequence for the new IDs. Roster reset remains a separate explicit operation.
 

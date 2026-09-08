@@ -13,7 +13,7 @@ CSS_PATH = ROOT / "src/guild_portal/static/css/my_characters.css"
 def _render_catalyst_action(item: dict) -> str:
     source = JS_PATH.read_text(encoding="utf-8")
     start = source.index("function _gpCatalystAction(item)")
-    end = source.index("\n}\n\n// Merge BIS items", start) + 2
+    end = source.index("\n}\n\nfunction _gpUseAction", start) + 2
     function_source = source[start:end]
     script = f"""
 const _gpEsc = value => String(value)
@@ -54,14 +54,21 @@ def test_direct_recommendation_has_no_catalyst_action() -> None:
     }) == ""
 
 
-def test_row_actions_and_metadata_remain_keyed_to_base_item() -> None:
+def test_row_exclusion_and_metadata_remain_keyed_to_base_item() -> None:
     source = JS_PATH.read_text(encoding="utf-8")
     assert "const bid      = item.blizzard_item_id;" in source
-    assert "mcnGpSetDesiredItem('${_gpEsc(dbSlot)}',${bid})" in source
+    assert "_gpUseAction(dbSlot, item)" in source
     assert "mcnGpExcludeItem('${_gpEsc(dbSlot)}',${bid}" in source
     assert "_gpRenderSourceSub(item.sources || [])" in source
     assert "item.primary_stats" in source
     assert "str: 'Strength'" in source
+
+
+def test_catalyst_use_persists_result_and_base_route() -> None:
+    source = JS_PATH.read_text(encoding="utf-8")
+    assert "item.catalyst_tier_item_id},'catalyst',${bid}" in source
+    assert "catalyst_base_item_id: catalystBaseItemId" in source
+    assert "Base equipped, ready to catalyze" in source
 
 
 def test_catalyst_action_has_compact_row_styles() -> None:

@@ -52,7 +52,13 @@ _TEST_SLOT_MAP: dict[str, str | None] = {
 }
 
 
-def _make_iv_card(slot: str, item_id: int | None, *, original_item_id: int | None = None) -> str:
+def _make_iv_card(
+    slot: str,
+    item_id: int | None,
+    *,
+    original_item_id: int | None = None,
+    note: str = "",
+) -> str:
     wowhead = f"item={item_id}&amp;bonus=12854" if item_id else ""
     if original_item_id:
         wowhead += f"&amp;original-item={original_item_id}"
@@ -62,7 +68,7 @@ def _make_iv_card(slot: str, item_id: int | None, *, original_item_id: int | Non
         if item_id else '<span class="spell_icon_span"></span>'
     )
     return (
-        f'<div class="bis_item">{primary}<span class="bis_item_slot">{slot}</span>'
+        f'<div class="bis_item">{primary}<span class="bis_item_slot">{slot}</span>{note}'
         '<div class="bis_item_extras"><span data-wowhead="item=999001">Gem</span></div>'
         '<div class="bis_item_footer"><span data-wowhead="item=999002">Enchant</span></div>'
         '</div>'
@@ -372,6 +378,14 @@ class TestIvExtractBisCards:
         slots = self._parse([_make_iv_card("Chest", 268222)])
         assert slots[0].blizzard_item_id == 268222
         assert slots[0].recommendation_type == "direct"
+        assert slots[0].catalyst_tier_item_id is None
+
+    def test_worded_catalyst_card_is_resolved_during_insertion(self):
+        slots = self._parse([
+            _make_iv_card("Hands", 251214, note="Catalyse this dungeon item"),
+        ])
+        assert slots[0].blizzard_item_id == 251214
+        assert slots[0].recommendation_type == "catalyst"
         assert slots[0].catalyst_tier_item_id is None
 
     def test_ignores_nested_gems_enchants_shirt_and_tabard(self):

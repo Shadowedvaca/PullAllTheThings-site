@@ -1821,6 +1821,11 @@ class GearPlanSlot(Base):
     slot: Mapped[str] = mapped_column(String(20), nullable=False)
     blizzard_item_id: Mapped[Optional[int]] = mapped_column(Integer)
     item_name: Mapped[Optional[str]] = mapped_column(String(200))
+    recommendation_type: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="direct"
+    )
+    catalyst_base_item_id: Mapped[Optional[int]] = mapped_column(Integer)
+    catalyst_base_item_name: Mapped[Optional[str]] = mapped_column(String(200))
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     notes: Mapped[Optional[str]] = mapped_column(Text)
 

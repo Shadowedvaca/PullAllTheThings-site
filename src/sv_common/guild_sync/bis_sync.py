@@ -1734,6 +1734,40 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
     return {"specs_processed": specs_processed, "sections_upserted": sections_upserted}
 
 
+async def _resolve_active_tier_result(
+    conn: asyncpg.Connection,
+    spec_id: int,
+    slot: str,
+) -> Optional[int]:
+    """Resolve one active-season tier result for a spec and armor slot."""
+    rows = await conn.fetch(
+        """
+        SELECT DISTINCT i.blizzard_item_id
+          FROM ref.specializations sp
+          JOIN ref.classes c ON c.id = sp.class_id
+          JOIN enrichment.items i
+            ON i.slot_type = $2
+           AND i.item_category = 'tier'
+           AND (i.playable_class_ids IS NULL
+                OR c.blizzard_class_id = ANY(i.playable_class_ids))
+          JOIN enrichment.item_seasons ise
+            ON ise.blizzard_item_id = i.blizzard_item_id
+          JOIN patt.raid_seasons rs
+            ON rs.id = ise.season_id
+           AND rs.is_active = TRUE
+         WHERE sp.id = $1
+        """,
+        spec_id, slot,
+    )
+    if len(rows) != 1:
+        logger.warning(
+            "Could not uniquely resolve active tier result for spec=%d slot=%s; candidates=%s",
+            spec_id, slot, [r["blizzard_item_id"] for r in rows],
+        )
+        return None
+    return rows[0]["blizzard_item_id"]
+
+
 async def insert_bis_items(
     ctx: BisInsertionContext,
     items: list[SimcSlot],
@@ -1771,6 +1805,15 @@ async def insert_bis_items(
                 slot_counters[actual_slot] = slot_counters.get(actual_slot, guide_order_start - 1) + 1
                 guide_order = slot_counters[actual_slot]
 
+            catalyst_tier_item_id = slot_data.catalyst_tier_item_id
+            if slot_data.recommendation_type == "catalyst" and catalyst_tier_item_id is None:
+                catalyst_tier_item_id = await _resolve_active_tier_result(
+                    conn, ctx.spec_id, actual_slot
+                )
+                if catalyst_tier_item_id is None:
+                    skipped += 1
+                    continue
+
             # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
             # skip items not yet in the enrichment layer.
             exists = await conn.fetchval(
@@ -1791,7 +1834,7 @@ async def insert_bis_items(
                     """,
                     ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
                     actual_slot, slot_data.blizzard_item_id, guide_order, note,
-                    slot_data.recommendation_type, slot_data.catalyst_tier_item_id,
+                    slot_data.recommendation_type, catalyst_tier_item_id,
                 )
                 inserted += 1
             except Exception:
@@ -2841,7 +2884,9 @@ def _iv_extract_bis_cards(
     spans under extras and footer elements are gems, enchants, or embellishments
     and must not become gear recommendations. When Icy Veins explicitly emits
     ``item=RESULT&original-item=BASE``, BASE is the farmable item and RESULT is
-    the tier item produced by the Catalyst.
+    the tier item produced by the Catalyst. Some cards instead say "Catalyse"
+    while linking only the base item; those are marked for deterministic
+    active-season tier resolution during insertion.
     """
     results: list[SimcSlot] = []
     ring_count = 0
@@ -2878,12 +2923,20 @@ def _iv_extract_bis_cards(
             logger.debug("_iv_extract_bis_cards: unrecognised slot %r, skipping", raw_slot)
             continue
 
-        is_catalyst = base_match is not None and base_item_id != result_item_id
+        catalyst_worded = "catalys" in card.get_text(" ", strip=True).lower()
+        is_catalyst = (
+            (base_match is not None and base_item_id != result_item_id)
+            or catalyst_worded
+        )
         results.append(SimcSlot(
             slot=slot_key,
             blizzard_item_id=base_item_id,
             recommendation_type="catalyst" if is_catalyst else "direct",
-            catalyst_tier_item_id=result_item_id if is_catalyst else None,
+            catalyst_tier_item_id=(
+                result_item_id
+                if base_match is not None and base_item_id != result_item_id
+                else None
+            ),
         ))
 
     return results

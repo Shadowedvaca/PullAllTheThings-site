@@ -38,7 +38,9 @@ class SimcSlot:
     gem_ids: list[int] = field(default_factory=list)
     quality_track: Optional[str] = None   # V/C/H/M — derived from bonus_ids if absent
     recommendation_type: str = "direct"  # direct | catalyst
-    catalyst_tier_item_id: Optional[int] = None  # explicit provider-supplied result
+    # Explicit result when present; Icy worded Catalyst cards are resolved from
+    # active-season class/slot data at the persistence boundary.
+    catalyst_tier_item_id: Optional[int] = None
 
 
 @dataclass

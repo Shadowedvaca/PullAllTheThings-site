@@ -7,6 +7,8 @@ from guild_portal.services.gear_plan_service import (
     TRACK_ORDER,
     _apply_off_hand_rule,
     _compute_weapon_display,
+    _normalize_legacy_catalyst_goals,
+    _recommendation_matches_goal,
     _upgrade_tracks,
 )
 from sv_common.guild_sync.quality_track import is_crafted_item
@@ -172,6 +174,56 @@ class TestComputeWeaponDisplay:
         desired = {"main_hand_1h": {"blizzard_item_id": 666}}
         build, show_oh = _compute_weapon_display({}, {}, desired)
         assert build == "1h"
+
+    def test_selected_source_1h_beats_stale_other_provider_2h(self):
+        bis = {
+            "main_hand_2h": [{**_make_bis("main_hand_2h", 1), "source_id": 1}],
+            "main_hand_1h": [{**_make_bis("main_hand_1h", 1), "source_id": 9}],
+        }
+        build, _ = _compute_weapon_display(bis, {}, {}, bis_source_id=9)
+        assert build == "1h"
+
+
+class TestCatalystGoals:
+    def test_base_item_is_not_the_completed_goal(self):
+        goal = {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": 251214,
+        }
+        rec = {
+            "blizzard_item_id": 251214,
+            "recommendation_type": "catalyst",
+            "catalyst_tier_item_id": 271457,
+        }
+        assert _recommendation_matches_goal(rec, goal) is True
+        assert goal["blizzard_item_id"] != rec["blizzard_item_id"]
+
+    def test_direct_tier_and_catalyst_route_are_distinct(self):
+        catalyst_goal = {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": 251214,
+        }
+        direct_rec = {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "direct",
+        }
+        assert _recommendation_matches_goal(direct_rec, catalyst_goal) is False
+
+    def test_legacy_base_goal_is_normalized_to_tier_result(self):
+        desired = {"hands": {"blizzard_item_id": 251214, "recommendation_type": "direct"}}
+        bis = {"hands": [{
+            "source_id": 9,
+            "blizzard_item_id": 251214,
+            "item_name": "Bonds of the Hash'ura",
+            "recommendation_type": "catalyst",
+            "catalyst_tier_item_id": 271457,
+            "catalyst_tier_item_name": "Tier Hands",
+        }]}
+        _normalize_legacy_catalyst_goals(desired, bis, 9)
+        assert desired["hands"]["blizzard_item_id"] == 271457
+        assert desired["hands"]["catalyst_base_item_id"] == 251214
 
 
 # ---------------------------------------------------------------------------

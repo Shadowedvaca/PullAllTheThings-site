@@ -4,7 +4,7 @@ const test = require('node:test');
 
 const source = fs.readFileSync('src/guild_portal/static/js/my_characters.js', 'utf8');
 const start = source.indexOf('function _gpCatalystAction(item)');
-const end = source.indexOf('\n}\n\n// Merge BIS items', start) + 2;
+const end = source.indexOf('\n}\n\nfunction _gpUseAction', start) + 2;
 const functionSource = source.slice(start, end);
 const escapeHtml = value => String(value)
   .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
