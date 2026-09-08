@@ -27,7 +27,9 @@
 - Parse Icy Veins' redesigned Best-in-Slot card grids, ignoring nested gems,
   enchants, embellishments, Shirt, and Tabard cards. Explicit `original-item`
   attributes retain their provider result; cards explicitly worded as Catalyst
-  routes resolve to the one active-season class tier result for that slot.
+  routes resolve to the one active-season class tier result for that slot. Apply
+  an exact Protection Warrior hands-route correction where Icy Veins omits both
+  markers for Bonds of the Hash'ura (251214) to Jade Warlord tier hands (271457).
 - Scope Gear Plan recommendations and item sources to the active season, and
   season-align tier-token raid sources so Season 1 tier and raid locations do
   not leak into Season 2 recommendations.
@@ -47,6 +49,8 @@
 - Release, production-readiness configuration, deployment-control, compile, and changed-file critical Ruff checks passed.
 - Focused card-parser, Catalyst persistence, and Gear Plan rendering tests cover
   the explicit 268229 base to 271456 tier-result relationship and 16-slot output.
+- Focused Icy Veins parser/insertion tests cover the missing-metadata Protection
+  Warrior glove route and its spec isolation: 105 passed.
 
 ## Deployment/Migrations
 

@@ -15,6 +15,7 @@ from sv_common.guild_sync.bis_sync import (
     _iv_classify_tab_label,
     _iv_extract_regular_rows,
     _iv_extract_bis_cards,
+    _apply_iv_catalyst_route_overrides,
     _iv_extract_trinket_rows,
     _extract_icy_veins,
     _iv_is_outlier,
@@ -387,6 +388,23 @@ class TestIvExtractBisCards:
         assert slots[0].blizzard_item_id == 251214
         assert slots[0].recommendation_type == "catalyst"
         assert slots[0].catalyst_tier_item_id is None
+
+    def test_protection_warrior_glove_metadata_omission_is_corrected(self):
+        slots = self._parse([_make_iv_card("Hands", 251214)])
+
+        resolved = _apply_iv_catalyst_route_overrides(slots, spec_id=1)
+
+        assert resolved[0].blizzard_item_id == 251214
+        assert resolved[0].recommendation_type == "catalyst"
+        assert resolved[0].catalyst_tier_item_id == 271457
+
+    def test_catalyst_route_override_is_scoped_to_protection_warrior(self):
+        slots = self._parse([_make_iv_card("Hands", 251214)])
+
+        resolved = _apply_iv_catalyst_route_overrides(slots, spec_id=2)
+
+        assert resolved[0].recommendation_type == "direct"
+        assert resolved[0].catalyst_tier_item_id is None
 
     def test_ignores_nested_gems_enchants_shirt_and_tabard(self):
         slots = self._parse([

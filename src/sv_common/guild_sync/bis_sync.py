@@ -2942,6 +2942,29 @@ def _iv_extract_bis_cards(
     return results
 
 
+# Icy Veins occasionally omits both ``original-item`` and Catalyst wording from
+# a known conversion card. Keep these corrections exact (spec, slot, base item)
+# so an upstream metadata omission cannot turn the acquisition item into the
+# saved BIS result. The entry naturally becomes inert when the source stops
+# recommending that base item.
+_IV_CATALYST_ROUTE_OVERRIDES: dict[tuple[int, str, int], int] = {
+    (1, "hands", 251214): 271457,  # Protection Warrior: Bonds -> Jade Warlord hands
+}
+
+
+def _apply_iv_catalyst_route_overrides(
+    slots: list[SimcSlot], spec_id: int,
+) -> list[SimcSlot]:
+    for slot in slots:
+        tier_item_id = _IV_CATALYST_ROUTE_OVERRIDES.get(
+            (spec_id, slot.slot, slot.blizzard_item_id)
+        )
+        if tier_item_id is not None:
+            slot.recommendation_type = "catalyst"
+            slot.catalyst_tier_item_id = tier_item_id
+    return slots
+
+
 def _iv_extract_trinket_rows(details_el) -> list[dict]:
     """Parse an IV trinket-dropdown <details> element.
 
@@ -3306,7 +3329,7 @@ async def _resolve_iv_section(
         target_key = row["section_key"]
         for s in sections:
             if s.h3_id == target_key and not s.is_trinket_section:
-                return s.slots
+                return _apply_iv_catalyst_route_overrides(s.slots, spec_id)
         logger.warning(
             "_resolve_iv_section: override key %r not found in sections for spec %d source %d / %s",
             target_key, spec_id, source_id, content_type,
@@ -3314,7 +3337,7 @@ async def _resolve_iv_section(
         return []
     for section in sections:
         if section.content_type == content_type and not section.is_trinket_section and not section.is_outlier:
-            return section.slots
+            return _apply_iv_catalyst_route_overrides(section.slots, spec_id)
     return []
 
 
