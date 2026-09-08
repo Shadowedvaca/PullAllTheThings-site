@@ -42,9 +42,9 @@
   state, and refill unlocked guide goals when the specialization changes.
 - When Blizzard omits an equipped item's upgrade track, retain useful track
   recommendations whose active-season ceiling exceeds the equipped item level.
-- Display a selected Catalyst goal as the farmable base item and its tier
-  conversion result. A generic tier result no longer proves or receives the BIS
-  state for a specific Catalyst route.
+- Display a selected Catalyst goal as the converted tier result while retaining
+  its farmable base route in the label and Wowhead tooltip. A generic tier result
+  no longer proves or receives the BIS state for a specific Catalyst route.
 
 ## Validation
 

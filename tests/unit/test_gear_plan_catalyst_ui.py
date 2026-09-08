@@ -30,7 +30,7 @@ process.stdout.write(_gpCatalystAction({json.dumps(item)}));
     return result.stdout
 
 
-def test_catalyst_action_renders_result_but_not_as_primary_item() -> None:
+def test_catalyst_action_renders_result_with_base_aware_tooltip() -> None:
     html = _render_catalyst_action({
         "recommendation_type": "catalyst",
         "blizzard_item_id": 268229,
@@ -43,7 +43,7 @@ def test_catalyst_action_renders_result_but_not_as_primary_item() -> None:
     assert "item=271456" in html
     assert "Tempered Horns of the Jade Warlord" in html
     assert "May also be obtained directly" in html
-    assert "item=268229" not in html
+    assert "original-item=268229" in html
 
 
 def test_direct_recommendation_has_no_catalyst_action() -> None:
@@ -71,13 +71,16 @@ def test_catalyst_use_persists_result_and_base_route() -> None:
     assert "Base equipped, ready to catalyze" in source
 
 
-def test_selected_catalyst_goal_displays_farmable_base_item() -> None:
+def test_selected_catalyst_goal_displays_result_with_base_aware_tooltip() -> None:
     source = JS_PATH.read_text(encoding="utf-8")
     assert "function _gpGoalPresentation(item)" in source
-    assert "blizzard_item_id: item.catalyst_base_item_id" in source
-    assert "icon_url: item.catalyst_base_icon_url" in source
-    assert "Catalyze into ${_gpEsc(displayedGoal" not in source
-    assert "Catalyze into ${_gpEsc(desired.item_name" in source
+    assert "blizzard_item_id: item.blizzard_item_id" in source
+    assert "icon_url: item.icon_url || ''" in source
+    assert "function _gpGoalWowheadAttrs(item)" in source
+    assert "original-item=${Number(item.catalyst_base_item_id)}" in source
+    assert "Catalyzed from ${_gpEsc(desired.catalyst_base_item_name" in source
+    assert "goalItem.recommendation_type === 'catalyst'" in source
+    assert "<a ${_gpGoalWowheadAttrs(goalItem)}" in source
 
 
 def test_gear_plan_exposes_and_persists_spec_selection() -> None:

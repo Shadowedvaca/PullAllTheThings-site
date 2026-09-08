@@ -1325,16 +1325,36 @@ function _gpWowheadItemUrl(itemId, item = {}) {
 function _gpGoalPresentation(item) {
   if (item?.recommendation_type === 'catalyst' && item.catalyst_base_item_id) {
     return {
-      blizzard_item_id: item.catalyst_base_item_id,
-      item_name: item.catalyst_base_item_name || 'Catalyst base item',
-      icon_url: item.catalyst_base_icon_url || '',
-      result_item_id: item.blizzard_item_id,
-      result_item_name: item.item_name || item.name || 'tier result',
+      ...item,
+      blizzard_item_id: item.blizzard_item_id,
+      item_name: item.item_name || item.name || 'Tier result',
+      icon_url: item.icon_url || '',
       recommendation_type: 'catalyst',
-      target_ilvl: item.target_ilvl || null,
+    };
+  }
+  if (item?.recommendation_type === 'catalyst' && item.catalyst_tier_item_id) {
+    return {
+      ...item,
+      blizzard_item_id: item.catalyst_tier_item_id,
+      item_name: item.catalyst_tier_item_name || 'Tier result',
+      icon_url: item.catalyst_tier_icon_url || '',
+      catalyst_base_item_id: item.blizzard_item_id,
+      catalyst_base_item_name: item.item_name || item.name || 'base item',
+      catalyst_base_icon_url: item.icon_url || '',
+      recommendation_type: 'catalyst',
     };
   }
   return item;
+}
+
+function _gpGoalWowheadAttrs(item) {
+  const href = _gpWowheadItemUrl(item.blizzard_item_id, item);
+  if (item?.recommendation_type === 'catalyst' && item.catalyst_base_item_id) {
+    const ilvl = item.target_ilvl ? `&ilvl=${Number(item.target_ilvl)}` : '';
+    const tooltip = `item=${Number(item.blizzard_item_id)}&original-item=${Number(item.catalyst_base_item_id)}${ilvl}`;
+    return `href="${_gpEsc(href)}" data-wowhead="${_gpEsc(tooltip)}"`;
+  }
+  return `href="${_gpEsc(href)}"`;
 }
 
 function _gpTimeAgo(dateVal) {
@@ -1444,7 +1464,11 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
   // Goal: explicit desired first, then first BIS rec
   const primaryBis = bisRecs[0] || null;
   const goalItem   = !isInactive ? _gpGoalPresentation(desired || primaryBis) : null;
-  const showGoal   = goalItem && (!eq || goalItem.blizzard_item_id !== eq?.blizzard_item_id);
+  const showGoal   = goalItem && (
+    goalItem.recommendation_type === 'catalyst'
+    || !eq
+    || goalItem.blizzard_item_id !== eq?.blizzard_item_id
+  );
 
   const card = document.createElement('div');
   card.className  = 'mcn-slot-card' + (isInactive ? ' is-inactive' : '');
@@ -1505,8 +1529,7 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
     const qc = goalItem.quality_track ? _gpColor(goalItem.quality_track, tc)
       : (upgrades[0] ? _gpColor(upgrades[0], tc) : null);
     const bs = qc && qc !== '#888' ? ` style="border-color:${qc};box-shadow:0 0 4px ${qc}55"` : '';
-    const goalIlvlParam = goalItem.target_ilvl ? `?ilvl=${goalItem.target_ilvl}` : '';
-    uBox.innerHTML = `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}${goalIlvlParam}" target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
+    uBox.innerHTML = `<a ${_gpGoalWowheadAttrs(goalItem)} target="_blank" rel="noopener noreferrer" class="mcn-slot-icon-link">
       <img class="mcn-slot-icon" src="${_gpEsc(goalItem.icon_url)}" alt="" title="${_gpEsc(goalItem.item_name || goalItem.name || '')}"${bs} loading="lazy">
     </a>`;
     if (upgrades.length) {
@@ -1694,13 +1717,13 @@ function _gpRenderGearTable(data) {
       const goalItem = _gpGoalPresentation(desired || (bisRecs.length ? bisRecs[0] : null));
       if (goalItem && goalItem.blizzard_item_id) {
         const icon = goalItem.icon_url
-          ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
+          ? `<a ${_gpGoalWowheadAttrs(goalItem)} class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
                <img class="mcn-gt__icon" src="${_gpEsc(goalItem.icon_url)}" alt="" loading="lazy">
              </a>`
           : '';
         goalHtml = `<div class="mcn-gt__item">
           ${icon}
-          <span class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}${goalItem.recommendation_type === 'catalyst' ? `<small class="mcn-catalyst-action__note">Catalyze into ${_gpEsc(goalItem.result_item_name)}</small>` : ''}</span>
+          <span class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}${goalItem.recommendation_type === 'catalyst' ? `<small class="mcn-catalyst-action__note">Catalyzed from ${_gpEsc(goalItem.catalyst_base_item_name || 'base item')}</small>` : ''}</span>
         </div>`;
       } else {
         goalHtml = '<span class="mcn-gt__empty">&mdash;</span>';
@@ -2407,14 +2430,13 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   if (desired && desired.blizzard_item_id) {
     const locked = desired.is_locked;
     const displayedGoal = _gpGoalPresentation(desired);
-    const desiredIlvlParam = displayedGoal.target_ilvl ? `?ilvl=${displayedGoal.target_ilvl}` : '';
     goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
-      ${displayedGoal.icon_url ? `<a href="https://www.wowhead.com/item=${displayedGoal.blizzard_item_id}${desiredIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(displayedGoal.icon_url)}" alt="" loading="lazy"></a>` : ''}
+      ${displayedGoal.icon_url ? `<a ${_gpGoalWowheadAttrs(displayedGoal)} class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(displayedGoal.icon_url)}" alt="" loading="lazy"></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name">
           ${_gpEsc(displayedGoal.item_name || 'Unknown')}
         </div>
-        ${desired.recommendation_type === 'catalyst' ? `<div class="mcn-catalyst-action__note">Catalyze into ${_gpEsc(desired.item_name || 'tier result')}${sd.is_catalyst_base_equipped ? ' · Base equipped, ready to catalyze' : ''}${sd.is_catalyst_result_equipped ? ' · A tier result is equipped, but its source route cannot be verified' : ''}</div>` : ''}
+        ${desired.recommendation_type === 'catalyst' ? `<div class="mcn-catalyst-action__note">Catalyzed from ${_gpEsc(desired.catalyst_base_item_name || 'base item')}${sd.is_catalyst_base_equipped ? ' · Base equipped, ready to catalyze' : ''}${sd.is_catalyst_result_equipped ? ' · A tier result is equipped, but its source route cannot be verified' : ''}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">
@@ -2610,7 +2632,7 @@ function _gpCatalystAction(item) {
     : '';
   return `<div class="mcn-catalyst-action">
     <span class="mcn-catalyst-action__label">Catalyze &rarr;</span>
-    <a href="https://www.wowhead.com/item=${tierId}" target="_blank" rel="noopener noreferrer">${_gpEsc(tierName)}</a>
+    <a href="https://www.wowhead.com/item=${tierId}" data-wowhead="item=${tierId}&amp;original-item=${Number(item.blizzard_item_id)}" target="_blank" rel="noopener noreferrer">${_gpEsc(tierName)}</a>
     ${directNote}
   </div>`;
 }

@@ -17,6 +17,12 @@ const goalFunctionSource = source.slice(goalStart, goalEnd);
 const presentGoal = new Function(
   `${goalFunctionSource}; return _gpGoalPresentation;`,
 )();
+const attrsStart = source.indexOf('function _gpGoalWowheadAttrs(item)');
+const attrsEnd = source.indexOf('\n}\n\nfunction _gpTimeAgo', attrsStart) + 2;
+const attrsFunctionSource = source.slice(attrsStart, attrsEnd);
+const goalWowheadAttrs = new Function(
+  '_gpWowheadItemUrl', '_gpEsc', `${attrsFunctionSource}; return _gpGoalWowheadAttrs;`,
+)((itemId, item) => `https://www.wowhead.com/item=${itemId}${item.target_ilvl ? `?ilvl=${item.target_ilvl}` : ''}`, escapeHtml);
 
 test('renders explicit Catalyst result as an inline action', () => {
   const html = renderCatalystAction({
@@ -31,7 +37,7 @@ test('renders explicit Catalyst result as an inline action', () => {
   assert.match(html, /item=271456/);
   assert.match(html, /Tempered Horns of the Jade Warlord/);
   assert.match(html, /May also be obtained directly/);
-  assert.doesNotMatch(html, /item=268229/);
+  assert.match(html, /original-item=268229/);
 });
 
 test('does not render Catalyst UI for direct recommendations', () => {
@@ -42,7 +48,7 @@ test('does not render Catalyst UI for direct recommendations', () => {
   }), '');
 });
 
-test('presents a selected Catalyst goal as its farmable base item', () => {
+test('presents a selected Catalyst goal as its converted tier result', () => {
   assert.deepEqual(presentGoal({
     recommendation_type: 'catalyst',
     blizzard_item_id: 271457,
@@ -50,14 +56,45 @@ test('presents a selected Catalyst goal as its farmable base item', () => {
     catalyst_base_item_id: 251214,
     catalyst_base_item_name: "Bonds of the Hash'ura",
     catalyst_base_icon_url: '/bonds.jpg',
+    icon_url: '/tier-hands.jpg',
     target_ilvl: 321,
   }), {
+    recommendation_type: 'catalyst',
+    blizzard_item_id: 271457,
+    item_name: 'Jeweled Gauntlets of the Jade Warlord',
+    catalyst_base_item_id: 251214,
+    catalyst_base_item_name: "Bonds of the Hash'ura",
+    catalyst_base_icon_url: '/bonds.jpg',
+    icon_url: '/tier-hands.jpg',
+    target_ilvl: 321,
+  });
+});
+
+test('presents an unselected Catalyst recommendation as its converted tier result', () => {
+  const displayed = presentGoal({
     recommendation_type: 'catalyst',
     blizzard_item_id: 251214,
     item_name: "Bonds of the Hash'ura",
     icon_url: '/bonds.jpg',
-    result_item_id: 271457,
-    result_item_name: 'Jeweled Gauntlets of the Jade Warlord',
+    catalyst_tier_item_id: 271457,
+    catalyst_tier_item_name: 'Jeweled Gauntlets of the Jade Warlord',
+    catalyst_tier_icon_url: '/tier-hands.jpg',
+  });
+
+  assert.equal(displayed.blizzard_item_id, 271457);
+  assert.equal(displayed.item_name, 'Jeweled Gauntlets of the Jade Warlord');
+  assert.equal(displayed.icon_url, '/tier-hands.jpg');
+  assert.equal(displayed.catalyst_base_item_id, 251214);
+});
+
+test('binds the planned tier tooltip to its Catalyst base item', () => {
+  const attrs = goalWowheadAttrs({
+    recommendation_type: 'catalyst',
+    blizzard_item_id: 271457,
+    catalyst_base_item_id: 251214,
     target_ilvl: 321,
   });
+
+  assert.match(attrs, /href="https:\/\/www\.wowhead\.com\/item=271457\?ilvl=321"/);
+  assert.match(attrs, /data-wowhead="item=271457&amp;original-item=251214&amp;ilvl=321"/);
 });
