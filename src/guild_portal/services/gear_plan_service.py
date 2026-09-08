@@ -53,7 +53,7 @@ def _noncrafted_target_ilvl(
 
     BIS slot: show at the next quality track's max ilvl (V→C, C→H, H→M, M→M).
     Not BIS:  show at the player's actual equipped ilvl.
-              If below Veteran track or slot empty, show Veteran max instead.
+              If the slot is empty, show Veteran max instead.
     """
     if not quality_ilvl_map:
         return None
@@ -62,11 +62,9 @@ def _noncrafted_target_ilvl(
             return quality_ilvl_map.get("V", {}).get("max")
         return quality_ilvl_map.get(NEXT_TRACK[equipped_track], {}).get("max")
     else:
-        eq_rank = TRACK_ORDER.get(equipped_track or "", -1)
-        v_rank  = TRACK_ORDER.get("V", 0)
-        if not equipped_ilvl or eq_rank < v_rank:
-            return quality_ilvl_map.get("V", {}).get("max")
-        return equipped_ilvl
+        if equipped_ilvl:
+            return equipped_ilvl
+        return quality_ilvl_map.get("V", {}).get("max")
 
 
 def _crafted_target_ilvl(
@@ -222,6 +220,21 @@ def _recommendation_matches_goal(rec: dict, desired: Optional[dict]) -> bool:
     return goal_type == "direct" and desired["blizzard_item_id"] == rec.get("blizzard_item_id")
 
 
+def _equipped_matches_goal(equipped_bid: Optional[int], desired: Optional[dict]) -> bool:
+    """Return True only when equipped identity proves the selected goal.
+
+    Catalyst results reuse the generic tier item ID while inheriting the base
+    item's secondary stats. Blizzard equipment does not expose the base item's
+    identity, so a result-ID match alone cannot prove that acquisition route.
+    """
+    if not equipped_bid or not desired or not desired.get("blizzard_item_id"):
+        return False
+    return (
+        (desired.get("recommendation_type") or "direct") == "direct"
+        and equipped_bid == desired["blizzard_item_id"]
+    )
+
+
 def _normalize_legacy_catalyst_goals(
     desired_by_slot: dict[str, dict],
     bis_by_slot: dict[str, list[dict]],
@@ -288,23 +301,30 @@ def _upgrade_tracks(
     equipped_item_id: Optional[int],
     desired_item_id: Optional[int],
     available_tracks: list[str],
+    equipped_item_level: Optional[int] = None,
+    quality_ilvl_map: Optional[dict] = None,
 ) -> list[str]:
     """Return which available tracks would be upgrades over the equipped item.
 
     Rules:
     - Empty slot → anything is an upgrade
-    - Item equipped, track unknown → cannot determine upgrades (return [])
+    - Item equipped, track unknown → use the equipped ilvl and each track's
+      ceiling; any track that can finish above the current item is useful
     - Same item, lower track → need strictly higher track
     - Different item → same track and above (never recommends a lower track)
     """
     if not available_tracks:
         return []
     if equipped_track is None:
-        # Empty slot: anything is an upgrade.
-        # Item equipped but track undetected: cannot recommend upgrades safely —
-        # returning all tracks would incorrectly include Veteran as an upgrade
-        # for someone wearing a non-LFR item whose display_string wasn't detected.
-        return available_tracks if equipped_item_id is None else []
+        if equipped_item_id is None:
+            return available_tracks
+        if equipped_item_level and quality_ilvl_map:
+            return [
+                track
+                for track in available_tracks
+                if (quality_ilvl_map.get(track, {}).get("max") or 0) > equipped_item_level
+            ]
+        return []
 
     eq_idx = TRACK_ORDER.get(equipped_track, -1)
 
@@ -1208,6 +1228,7 @@ async def get_plan_detail(
                    ht.name AS hero_talent_name,
                    bls.name AS bis_source_name,
                    wc.last_equipment_sync AS blizzard_synced_at,
+                   wc.class_id, wc.active_spec_id,
                    c.name AS class_name,
                    s.name AS spec_name_for_stat
               FROM guild_identity.gear_plans gp
@@ -1711,6 +1732,18 @@ async def get_plan_detail(
             )
             ht_list = [dict(r) for r in ht_rows]
 
+        # The plan can intentionally target a different spec than the
+        # character's last active Blizzard spec. Expose the class's specs so
+        # that choice is visible and editable instead of becoming stale hidden
+        # state when the character changes specialization.
+        spec_list = []
+        if plan_row["class_id"]:
+            spec_rows = await conn.fetch(
+                "SELECT id, name FROM ref.specializations WHERE class_id=$1 ORDER BY id",
+                plan_row["class_id"],
+            )
+            spec_list = [dict(r) for r in spec_rows]
+
         # Crafter lookup for craftable desired items.
         # Joins item_recipe_links → recipes → professions → character_recipes →
         # wow_characters → player_characters → players → guild_ranks.
@@ -1850,10 +1883,25 @@ async def get_plan_detail(
         )
         upgrade_comparison_bid = catalyst_base_bid if equipped_is_catalyst_base else desired_bid
         upgrade_tracks = _upgrade_tracks(
-            equipped_track, equipped_bid, upgrade_comparison_bid, available_tracks
+            equipped_track,
+            equipped_bid,
+            upgrade_comparison_bid,
+            available_tracks,
+            equipped_ilvl_for_slot,
+            plan_quality_ilvl_map,
         )
 
-        is_bis = bool(desired_bid and equipped_bid and equipped_bid == desired_bid)
+        # A Catalyst result shares the tier item's Blizzard ID, but Midnight
+        # Catalyst pieces inherit the acquisition item's secondary stats. The
+        # equipment API does not expose that base-item provenance, so matching
+        # only the result ID would falsely mark a directly obtained tier piece
+        # as the selected Catalyst route.
+        is_bis = _equipped_matches_goal(equipped_bid, desired)
+        catalyst_result_equipped = bool(
+            goal_type == "catalyst"
+            and desired_bid
+            and equipped_bid == desired_bid
+        )
 
         # Phase 2C: compute slot-level target ilvls (same rules as available-items endpoint).
         slot_noncrafted_ilvl = _noncrafted_target_ilvl(
@@ -1979,6 +2027,7 @@ async def get_plan_detail(
             "upgrade_tracks": upgrade_tracks,
             "is_bis": is_bis,
             "is_catalyst_base_equipped": equipped_is_catalyst_base,
+            "is_catalyst_result_equipped": catalyst_result_equipped,
             "needs_upgrade": needs_upgrade,
             "crafted_source": crafted_source,
             "excluded_item_ids": excluded_ids,
@@ -1996,6 +2045,7 @@ async def get_plan_detail(
         "plan": plan_dict,
         "slots": slots_data,
         "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
+        "available_specs": spec_list,
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
         "weapon_build": weapon_build,
@@ -2112,28 +2162,36 @@ async def get_available_items(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
         )
-        desired_bid_for_slot: Optional[int] = None
-        all_desired_bids: set[int] = set()
+        all_desired_acquisition_bids: set[int] = set()
+        desired_goals: list[dict] = []
         if plan_row:
             _av_paired = _SLOT_META[slot]["paired_slot"]
             _av_slots = [slot] + ([_av_paired] if _av_paired else [])
             slot_rows = await conn.fetch(
                 """
-                SELECT slot, excluded_item_ids, blizzard_item_id
+                SELECT slot, excluded_item_ids, blizzard_item_id,
+                       recommendation_type, catalyst_base_item_id
                   FROM guild_identity.gear_plan_slots
                  WHERE plan_id = $1 AND slot = ANY($2::text[])
                 """,
                 plan_row["id"], _av_slots,
             )
             for sr in slot_rows:
+                goal = dict(sr)
+                desired_goals.append(goal)
                 if sr["slot"] == slot:
                     excluded_ids = list(sr["excluded_item_ids"] or [])
-                    desired_bid_for_slot = sr["blizzard_item_id"]
                 if sr["blizzard_item_id"]:
-                    all_desired_bids.add(sr["blizzard_item_id"])
+                    acquisition_bid = (
+                        sr["catalyst_base_item_id"]
+                        if (sr["recommendation_type"] or "direct") == "catalyst"
+                        else sr["blizzard_item_id"]
+                    )
+                    if acquisition_bid:
+                        all_desired_acquisition_bids.add(acquisition_bid)
 
-        # BIS = wearing any desired item from this slot's paired pool.
-        is_bis: bool = bool(equipped_bid and all_desired_bids and equipped_bid in all_desired_bids)
+        # Catalyst result IDs cannot prove the selected base-item route.
+        is_bis = any(_equipped_matches_goal(equipped_bid, goal) for goal in desired_goals)
 
         # Normalize paired slots to canonical enrichment.items slot_type
         slot_type = _SLOT_META[slot]["enrichment_slot_type"]
@@ -2402,7 +2460,7 @@ async def get_available_items(
     for item in raid_items + dungeon_items + crafted_items + (tier_items or []):
         bid = item.get("blizzard_item_id")
         item["is_equipped"] = bool(bid and bid == equipped_bid)
-        item["is_bis"]      = bool(bid and bid in all_desired_bids)
+        item["is_bis"]      = bool(bid and bid in all_desired_acquisition_bids)
         if trinket_ratings_by_bid:
             item["source_ratings"] = trinket_ratings_by_bid.get(bid, [])
 

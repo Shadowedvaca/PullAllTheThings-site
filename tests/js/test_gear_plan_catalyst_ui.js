@@ -11,6 +11,12 @@ const escapeHtml = value => String(value)
 const renderCatalystAction = new Function(
   '_gpEsc', `${functionSource}; return _gpCatalystAction;`,
 )(escapeHtml);
+const goalStart = source.indexOf('function _gpGoalPresentation(item)');
+const goalEnd = source.indexOf('\n}\n\nfunction _gpTimeAgo', goalStart) + 2;
+const goalFunctionSource = source.slice(goalStart, goalEnd);
+const presentGoal = new Function(
+  `${goalFunctionSource}; return _gpGoalPresentation;`,
+)();
 
 test('renders explicit Catalyst result as an inline action', () => {
   const html = renderCatalystAction({
@@ -34,4 +40,24 @@ test('does not render Catalyst UI for direct recommendations', () => {
     blizzard_item_id: 268229,
     catalyst_tier_item_id: null,
   }), '');
+});
+
+test('presents a selected Catalyst goal as its farmable base item', () => {
+  assert.deepEqual(presentGoal({
+    recommendation_type: 'catalyst',
+    blizzard_item_id: 271457,
+    item_name: 'Jeweled Gauntlets of the Jade Warlord',
+    catalyst_base_item_id: 251214,
+    catalyst_base_item_name: "Bonds of the Hash'ura",
+    catalyst_base_icon_url: '/bonds.jpg',
+    target_ilvl: 321,
+  }), {
+    recommendation_type: 'catalyst',
+    blizzard_item_id: 251214,
+    item_name: "Bonds of the Hash'ura",
+    icon_url: '/bonds.jpg',
+    result_item_id: 271457,
+    result_item_name: 'Jeweled Gauntlets of the Jade Warlord',
+    target_ilvl: 321,
+  });
 });

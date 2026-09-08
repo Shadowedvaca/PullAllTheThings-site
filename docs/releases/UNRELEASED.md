@@ -38,6 +38,13 @@
   the matching one-hand drill-down.
 - Treat bare Blizzard "Heroic"/"Mythic" labels as acquisition difficulty, not
   upgrade tracks, and include equipped bonus IDs in Wowhead tooltip links.
+- Expose the Gear Plan specialization instead of leaving stale hidden spec
+  state, and refill unlocked guide goals when the specialization changes.
+- When Blizzard omits an equipped item's upgrade track, retain useful track
+  recommendations whose active-season ceiling exceeds the equipped item level.
+- Display a selected Catalyst goal as the farmable base item and its tier
+  conversion result. A generic tier result no longer proves or receives the BIS
+  state for a specific Catalyst route.
 
 ## Validation
 
@@ -51,6 +58,8 @@
   the explicit 268229 base to 271456 tier-result relationship and 16-slot output.
 - Focused Icy Veins parser/insertion tests cover the missing-metadata Protection
   Warrior glove route and its spec isolation: 105 passed.
+- Focused Gear Plan service and JavaScript contract tests cover unknown-track
+  upgrade advice, explicit spec selection, and Catalyst base/result display.
 
 ## Deployment/Migrations
 

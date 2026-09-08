@@ -1322,6 +1322,21 @@ function _gpWowheadItemUrl(itemId, item = {}) {
   return `https://www.wowhead.com/item=${Number(itemId)}${params.length ? `?${params.join('&')}` : ''}`;
 }
 
+function _gpGoalPresentation(item) {
+  if (item?.recommendation_type === 'catalyst' && item.catalyst_base_item_id) {
+    return {
+      blizzard_item_id: item.catalyst_base_item_id,
+      item_name: item.catalyst_base_item_name || 'Catalyst base item',
+      icon_url: item.catalyst_base_icon_url || '',
+      result_item_id: item.blizzard_item_id,
+      result_item_name: item.item_name || item.name || 'tier result',
+      recommendation_type: 'catalyst',
+      target_ilvl: item.target_ilvl || null,
+    };
+  }
+  return item;
+}
+
 function _gpTimeAgo(dateVal) {
   if (!dateVal) return null;
   const diff = Date.now() - new Date(dateVal).getTime();
@@ -1428,7 +1443,7 @@ function _gpBuildSlotCard(slotKey, sd, tc) {
 
   // Goal: explicit desired first, then first BIS rec
   const primaryBis = bisRecs[0] || null;
-  const goalItem   = !isInactive ? (desired || primaryBis) : null;
+  const goalItem   = !isInactive ? _gpGoalPresentation(desired || primaryBis) : null;
   const showGoal   = goalItem && (!eq || goalItem.blizzard_item_id !== eq?.blizzard_item_id);
 
   const card = document.createElement('div');
@@ -1676,7 +1691,7 @@ function _gpRenderGearTable(data) {
         BIS
       </span>`;
     } else {
-      const goalItem = desired || (bisRecs.length ? bisRecs[0] : null);
+      const goalItem = _gpGoalPresentation(desired || (bisRecs.length ? bisRecs[0] : null));
       if (goalItem && goalItem.blizzard_item_id) {
         const icon = goalItem.icon_url
           ? `<a href="https://www.wowhead.com/item=${goalItem.blizzard_item_id}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer">
@@ -1685,7 +1700,7 @@ function _gpRenderGearTable(data) {
           : '';
         goalHtml = `<div class="mcn-gt__item">
           ${icon}
-          <span class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}${goalItem.recommendation_type === 'catalyst' ? `<small class="mcn-catalyst-action__note">Catalyst route</small>` : ''}</span>
+          <span class="mcn-gt__name">${_gpEsc(goalItem.item_name || goalItem.name || 'Unknown')}${goalItem.recommendation_type === 'catalyst' ? `<small class="mcn-catalyst-action__note">Catalyze into ${_gpEsc(goalItem.result_item_name)}</small>` : ''}</span>
         </div>`;
       } else {
         goalHtml = '<span class="mcn-gt__empty">&mdash;</span>';
@@ -1747,9 +1762,10 @@ function _gpRenderCenterPanel(data) {
   const area = document.getElementById('mcn-detail-area');
   if (!area) return;
 
-  const plan        = data.plan;
-  const bisSources  = data.bis_sources  || [];
-  const heroTalents = data.hero_talents || [];
+  const plan           = data.plan;
+  const bisSources     = data.bis_sources     || [];
+  const heroTalents    = data.hero_talents    || [];
+  const availableSpecs = data.available_specs || [];
 
   // ── Equipped Gear Source section ────────────────────────────────────────
   const serverSrc      = plan?.equipped_source || 'blizzard';
@@ -1833,6 +1849,11 @@ function _gpRenderCenterPanel(data) {
       `<option value="${ht.id}"${plan?.hero_talent_id === ht.id ? ' selected' : ''}>${_gpEsc(ht.name)}</option>`
     )).join('');
 
+  const specOpts = availableSpecs.map(spec => {
+    const activeSuffix = spec.id === plan?.active_spec_id ? ' (active)' : '';
+    return `<option value="${spec.id}"${plan?.spec_id === spec.id ? ' selected' : ''}>${_gpEsc(spec.name + activeSuffix)}</option>`;
+  }).join('');
+
   const ORIGIN_LABEL       = { archon: 'Archon', wowhead: 'Wowhead', icy_veins: 'Icy Veins' };
   const CONTENT_TYPE_LABEL = { raid: 'Raid', mythic_plus: 'M+', overall: 'All' };
   const CONTENT_TYPE_ORDER = { overall: 0, raid: 1, mythic_plus: 2 };
@@ -1864,6 +1885,8 @@ function _gpRenderCenterPanel(data) {
   const bisGuidePanel = `
     <div class="mcn-gp-panel" id="mcn-gp-panel-bis-guide"${bisTab === 'guide' ? '' : ' hidden'}>
       <div class="mcn-gear-ctrl-row">
+        <label class="mcn-gear-label">Spec</label>
+        <select id="mcn-gp-spec-sel" class="mcn-gear-select">${specOpts}</select>
         <label class="mcn-gear-label">BIS List</label>
         <select id="mcn-gp-src-sel" class="mcn-gear-select">${srcOpts}</select>
         ${showHtDropdown ? `
@@ -1940,6 +1963,7 @@ function _gpRenderCenterPanel(data) {
 
   // Wire BIS section
   document.getElementById('mcn-gp-btn-set-from-eq') ?.addEventListener('click',  _gpOnSetGoalsFromEquipped);
+  document.getElementById('mcn-gp-spec-sel')        ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-ht-sel')          ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-src-sel')          ?.addEventListener('change', _gpOnConfigChange);
   document.getElementById('mcn-gp-btn-fill')         ?.addEventListener('click',  _gpOnPopulate);
@@ -2071,13 +2095,25 @@ async function _gpOnConfigChange() {
   if (!charId) return;
   const htSel  = document.getElementById('mcn-gp-ht-sel');
   const srcSel = document.getElementById('mcn-gp-src-sel');
+  const specSel = document.getElementById('mcn-gp-spec-sel');
   const htId   = htSel?.value  ? parseInt(htSel.value,  10) : null;
   const srcId  = srcSel?.value ? parseInt(srcSel.value, 10) : null;
+  const specId = specSel?.value ? parseInt(specSel.value, 10) : null;
+  const specChanged = specId != null && specId !== _gpCache[charId]?.plan?.spec_id;
   const resp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/config`, {
     method: 'PATCH',
-    body: JSON.stringify({ hero_talent_id: htId, bis_source_id: srcId }),
+    body: JSON.stringify({ spec_id: specId, hero_talent_id: htId, bis_source_id: srcId }),
   });
-  if (resp.ok) { await _gpReload(); }
+  if (resp.ok && specChanged) {
+    const fillResp = await _gpFetch(`/api/v1/me/gear-plan/${charId}/populate`, {
+      method: 'POST',
+      body: JSON.stringify({ source_id: srcId, hero_talent_id: null }),
+    });
+    await _gpReload();
+    if (!fillResp.ok) {
+      _gpShowStatus(fillResp.error || 'Spec changed, but BIS goals could not be filled', 'err');
+    }
+  } else if (resp.ok) { await _gpReload(); }
   else _gpShowStatus(resp.error || 'Config update failed', 'err');
 }
 
@@ -2370,14 +2406,15 @@ function _gpRenderDrawerBody(slotKey, sd, tc) {
   let goalHtml;
   if (desired && desired.blizzard_item_id) {
     const locked = desired.is_locked;
-    const desiredIlvlParam = desired.target_ilvl ? `?ilvl=${desired.target_ilvl}` : '';
+    const displayedGoal = _gpGoalPresentation(desired);
+    const desiredIlvlParam = displayedGoal.target_ilvl ? `?ilvl=${displayedGoal.target_ilvl}` : '';
     goalHtml = `<div class="mcn-drawer-item" style="margin-bottom:0.5rem">
-      ${desired.icon_url ? `<a href="https://www.wowhead.com/item=${desired.blizzard_item_id}${desiredIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(desired.icon_url)}" alt="" loading="lazy"></a>` : ''}
+      ${displayedGoal.icon_url ? `<a href="https://www.wowhead.com/item=${displayedGoal.blizzard_item_id}${desiredIlvlParam}" class="mcn-wh-link" target="_blank" rel="noopener noreferrer"><img class="mcn-drawer-item__icon" src="${_gpEsc(displayedGoal.icon_url)}" alt="" loading="lazy"></a>` : ''}
       <div class="mcn-drawer-item__info">
         <div class="mcn-drawer-item__name">
-          ${_gpEsc(desired.item_name || 'Unknown')}
+          ${_gpEsc(displayedGoal.item_name || 'Unknown')}
         </div>
-        ${desired.recommendation_type === 'catalyst' ? `<div class="mcn-catalyst-action__note">Catalyst route from ${_gpEsc(desired.catalyst_base_item_name || 'base item')}${sd.is_catalyst_base_equipped ? ' · Base equipped, ready to catalyze' : ''}</div>` : ''}
+        ${desired.recommendation_type === 'catalyst' ? `<div class="mcn-catalyst-action__note">Catalyze into ${_gpEsc(desired.item_name || 'tier result')}${sd.is_catalyst_base_equipped ? ' · Base equipped, ready to catalyze' : ''}${sd.is_catalyst_result_equipped ? ' · A tier result is equipped, but its source route cannot be verified' : ''}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.4rem">

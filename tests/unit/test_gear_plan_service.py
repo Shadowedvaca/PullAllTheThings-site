@@ -7,6 +7,8 @@ from guild_portal.services.gear_plan_service import (
     TRACK_ORDER,
     _apply_off_hand_rule,
     _compute_weapon_display,
+    _equipped_matches_goal,
+    _noncrafted_target_ilvl,
     _normalize_legacy_catalyst_goals,
     _recommendation_matches_goal,
     _upgrade_tracks,
@@ -35,6 +37,37 @@ class TestUpgradeTracks:
         # (avoids incorrectly recommending Veteran as an upgrade)
         result = _upgrade_tracks(None, 999, 100, ["V", "C", "H", "M"])
         assert result == []
+
+    def test_item_equipped_unknown_track_uses_ilvl_ceiling(self):
+        result = _upgrade_tracks(
+            None,
+            999,
+            100,
+            ["V", "C", "H", "M"],
+            equipped_item_level=308,
+            quality_ilvl_map={
+                "V": {"max": 295},
+                "C": {"max": 308},
+                "H": {"max": 321},
+                "M": {"max": 334},
+            },
+        )
+        assert result == ["H", "M"]
+
+    def test_unknown_track_never_hides_mythic_when_it_can_upgrade(self):
+        result = _upgrade_tracks(
+            None,
+            999,
+            100,
+            ["C", "H", "M"],
+            equipped_item_level=292,
+            quality_ilvl_map={
+                "C": {"max": 308},
+                "H": {"max": 321},
+                "M": {"max": 334},
+            },
+        )
+        assert result == ["C", "H", "M"]
 
     def test_same_item_strictly_higher_only(self):
         # Equipped: same item, Champion track — need Hero or Mythic
@@ -79,6 +112,33 @@ class TestUpgradeTracks:
         assert TRACK_ORDER["V"] < TRACK_ORDER["C"]
         assert TRACK_ORDER["C"] < TRACK_ORDER["H"]
         assert TRACK_ORDER["H"] < TRACK_ORDER["M"]
+
+
+def test_noncrafted_target_uses_equipped_ilvl_when_track_is_unknown():
+    assert _noncrafted_target_ilvl(
+        False,
+        308,
+        None,
+        {"V": {"max": 295}},
+    ) == 308
+
+
+def test_direct_goal_matches_equipped_item_id():
+    assert _equipped_matches_goal(
+        271457,
+        {"blizzard_item_id": 271457, "recommendation_type": "direct"},
+    )
+
+
+def test_catalyst_result_id_does_not_claim_route_is_equipped():
+    assert not _equipped_matches_goal(
+        271457,
+        {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": 251214,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

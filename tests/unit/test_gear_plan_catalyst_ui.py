@@ -71,6 +71,22 @@ def test_catalyst_use_persists_result_and_base_route() -> None:
     assert "Base equipped, ready to catalyze" in source
 
 
+def test_selected_catalyst_goal_displays_farmable_base_item() -> None:
+    source = JS_PATH.read_text(encoding="utf-8")
+    assert "function _gpGoalPresentation(item)" in source
+    assert "blizzard_item_id: item.catalyst_base_item_id" in source
+    assert "icon_url: item.catalyst_base_icon_url" in source
+    assert "Catalyze into ${_gpEsc(displayedGoal" not in source
+    assert "Catalyze into ${_gpEsc(desired.item_name" in source
+
+
+def test_gear_plan_exposes_and_persists_spec_selection() -> None:
+    source = JS_PATH.read_text(encoding="utf-8")
+    assert 'id="mcn-gp-spec-sel"' in source
+    assert "spec_id: specId" in source
+    assert "specChanged" in source
+
+
 def test_catalyst_action_has_compact_row_styles() -> None:
     css = CSS_PATH.read_text(encoding="utf-8")
     assert ".mcn-catalyst-action" in css
