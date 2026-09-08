@@ -44,7 +44,8 @@
   recommendations whose active-season ceiling exceeds the equipped item level.
 - Display a selected Catalyst goal as the converted tier result while retaining
   its farmable base route in the label and Wowhead tooltip. A generic tier result
-  no longer proves or receives the BIS state for a specific Catalyst route.
+  no longer proves or receives the BIS state for a specific Catalyst route, nor
+  marks that route's base-item recommendation as equipped.
 
 ## Validation
 

@@ -10,6 +10,7 @@ from guild_portal.services.gear_plan_service import (
     _equipped_matches_goal,
     _noncrafted_target_ilvl,
     _normalize_legacy_catalyst_goals,
+    _recommendation_item_is_equipped,
     _recommendation_matches_goal,
     _upgrade_tracks,
 )
@@ -139,6 +140,29 @@ def test_catalyst_result_id_does_not_claim_route_is_equipped():
             "catalyst_base_item_id": 251214,
         },
     )
+
+
+def test_catalyst_base_row_is_not_equipped_when_generic_tier_result_is_worn():
+    rec = {
+        "blizzard_item_id": 251214,
+        "recommendation_type": "catalyst",
+        "catalyst_tier_item_id": 271457,
+    }
+    assert not _recommendation_item_is_equipped(rec, {271457})
+
+
+def test_catalyst_base_row_is_equipped_when_base_item_is_worn():
+    rec = {
+        "blizzard_item_id": 251214,
+        "recommendation_type": "catalyst",
+        "catalyst_tier_item_id": 271457,
+    }
+    assert _recommendation_item_is_equipped(rec, {251214})
+
+
+def test_direct_tier_row_is_equipped_when_tier_item_is_worn():
+    rec = {"blizzard_item_id": 271457, "recommendation_type": "direct"}
+    assert _recommendation_item_is_equipped(rec, {271457})
 
 
 # ---------------------------------------------------------------------------

@@ -235,6 +235,17 @@ def _equipped_matches_goal(equipped_bid: Optional[int], desired: Optional[dict])
     )
 
 
+def _recommendation_item_is_equipped(rec: dict, equipped_bids: set[int]) -> bool:
+    """Return whether the farmable item represented by a recommendation is worn.
+
+    A Catalyst recommendation row represents its base item and links separately
+    to the tier result. Wearing that generic tier result must not mark the base
+    row as equipped because Blizzard cannot prove the result's Catalyst route.
+    """
+    bid = rec.get("blizzard_item_id")
+    return bool(bid and bid in equipped_bids)
+
+
 def _normalize_legacy_catalyst_goals(
     desired_by_slot: dict[str, dict],
     bis_by_slot: dict[str, list[dict]],
@@ -1937,10 +1948,8 @@ async def get_plan_detail(
             else:
                 rec["target_ilvl"] = slot_noncrafted_ilvl
             # Phase 1F: EQUIPPED / BIS badges on BIS recommendations
-            rec["is_equipped"] = (
-                rec.get("catalyst_tier_item_id") in _all_equipped_bids
-                if rec.get("recommendation_type") == "catalyst"
-                else bid in _all_equipped_bids
+            rec["is_equipped"] = _recommendation_item_is_equipped(
+                rec, _all_equipped_bids
             )
             rec["is_catalyst_base_equipped"] = bool(
                 rec.get("recommendation_type") == "catalyst"
