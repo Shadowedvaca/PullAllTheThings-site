@@ -1821,14 +1821,28 @@ async def insert_bis_items(
                 slot_counters[actual_slot] = slot_counters.get(actual_slot, guide_order_start - 1) + 1
                 guide_order = slot_counters[actual_slot]
 
+            recommendation_type = slot_data.recommendation_type
             catalyst_tier_item_id = slot_data.catalyst_tier_item_id
-            if slot_data.recommendation_type == "catalyst" and catalyst_tier_item_id is None:
+            if recommendation_type == "catalyst" and catalyst_tier_item_id is None:
                 catalyst_tier_item_id = await _resolve_active_tier_result(
                     conn, ctx.spec_id, actual_slot
                 )
                 if catalyst_tier_item_id is None:
                     skipped += 1
                     continue
+
+            # Some Icy Veins cards label an already-converted tier item as a
+            # Catalyst recommendation without exposing an ``original-item``.
+            # The resolved result then equals the displayed/base item.  That is
+            # a direct tier recommendation, not a base -> result relationship;
+            # persisting it as Catalyst violates the relationship constraint
+            # and previously made the entire slot disappear during rebuild.
+            if (
+                recommendation_type == "catalyst"
+                and catalyst_tier_item_id == slot_data.blizzard_item_id
+            ):
+                recommendation_type = "direct"
+                catalyst_tier_item_id = None
 
             # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
             # skip items not yet in the enrichment layer.
@@ -1850,7 +1864,7 @@ async def insert_bis_items(
                     """,
                     ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
                     actual_slot, slot_data.blizzard_item_id, guide_order, note,
-                    slot_data.recommendation_type, catalyst_tier_item_id,
+                    recommendation_type, catalyst_tier_item_id,
                 )
                 inserted += 1
             except Exception:
@@ -2632,6 +2646,18 @@ def _resolve_method_section_local(
     for s in sections:
         if s.inferred_content_type == content_type and not s.is_outlier:
             return s.slots
+
+    # Some Method guides publish one complete "Overall Best Gear" table and no
+    # separate Raid/Mythic+ tables.  The configured content-specific sources
+    # should use that sole complete table instead of becoming entirely blank.
+    if content_type in {"raid", "mythic_plus"}:
+        overall = [
+            s
+            for s in sections
+            if s.inferred_content_type == "overall" and not s.is_outlier
+        ]
+        if len(overall) == 1:
+            return overall[0].slots
     return []
 
 
@@ -3476,7 +3502,9 @@ async def _resolve_iv_section(
             "_resolve_iv_section: override key %r not found in sections for spec %d source %d / %s",
             target_key, spec_id, source_id, content_type,
         )
-        return []
+        # Guide redesigns routinely replace area_N identifiers with semantic
+        # heading ids.  A stale override must not suppress a section that the
+        # current classifier can resolve safely.
     for section in sections:
         if section.content_type == content_type and not section.is_trinket_section and not section.is_outlier:
             return _apply_iv_catalyst_route_overrides(section.slots, spec_id)

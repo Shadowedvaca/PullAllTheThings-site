@@ -53,6 +53,11 @@
 - Require every body slot and at least one main-hand weapon for successful BIS
   coverage. Off-hand remains optional for valid two-hand builds, while one-hand,
   off-hand, and alternative two-hand recommendations may coexist.
+- Preserve tier rows that a guide loosely labels as Catalyst when the displayed
+  item is already the converted tier result. Fall back from stale Icy Veins
+  section overrides to current page classification, and reuse Method's sole
+  complete Overall table for Raid/M+ sources when no content-specific table is
+  published.
 
 ## Validation
 
@@ -69,6 +74,7 @@
 - Focused Gear Plan service and JavaScript contract tests cover unknown-track
   upgrade advice, explicit spec selection, and Catalyst base/result display.
 - Focused BIS coverage and metadata-staging regression tests: 64 passed.
+- Focused BIS parser, insertion, and metadata regression tests: 244 passed.
 
 ## Deployment/Migrations
 

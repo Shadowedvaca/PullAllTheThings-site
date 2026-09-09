@@ -22,7 +22,9 @@ from sv_common.guild_sync.bis_sync import (
     _iv_parse_bis_from_raw,
     _iv_parse_sections,
     _iv_parse_trinkets_from_raw,
+    _resolve_iv_section,
 )
+from sv_common.guild_sync.simc_parser import SimcSlot
 
 # Mirrors config.slot_labels seed data (relevant subset for IV)
 _TEST_SLOT_MAP: dict[str, str | None] = {
@@ -852,6 +854,34 @@ class TestIvParseBisFromRaw:
 
     def test_empty_html_returns_empty(self):
         assert _iv_parse_bis_from_raw("", "overall", _TEST_SLOT_MAP) == []
+
+
+class TestResolveIvSection:
+    @pytest.mark.asyncio
+    async def test_stale_override_falls_back_to_current_classification(self):
+        conn = MagicMock()
+        conn.fetchrow = AsyncMock(return_value={"section_key": "area_1"})
+        pool = MagicMock()
+        pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+        expected = [SimcSlot(slot="head", blizzard_item_id=271456)]
+        sections = [
+            IVSection(
+                h3_id="overall-best-in-slot",
+                section_title="Overall Best in Slot",
+                content_type="overall",
+                is_trinket_section=False,
+                row_count=1,
+                slots=expected,
+                trinket_rows=[],
+                is_outlier=False,
+                outlier_reason=None,
+            )
+        ]
+
+        result = await _resolve_iv_section(pool, sections, 6, 9, "overall")
+
+        assert result == expected
 
 
 # ---------------------------------------------------------------------------

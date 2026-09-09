@@ -141,6 +141,23 @@ class TestInsertBisItemsBasic:
         assert conn.execute.call_args[0][9] == 271457
 
     @pytest.mark.asyncio
+    async def test_tier_item_labeled_catalyst_is_saved_as_direct(self):
+        pool, conn = _make_pool(fetchval_side_effect=[1])
+        conn.fetch.return_value = [{"blizzard_item_id": 271454}]
+        catalyst = SimcSlot(
+            slot="shoulder",
+            blizzard_item_id=271454,
+            recommendation_type="catalyst",
+        )
+
+        result = await insert_bis_items(_ctx(pool), [catalyst])
+
+        assert result == {"inserted": 1, "skipped": 0}
+        args = conn.execute.call_args[0]
+        assert args[8] == "direct"
+        assert args[9] is None
+
+    @pytest.mark.asyncio
     async def test_two_items_different_slots_get_guide_order_1(self):
         pool, conn = _make_pool(fetchval_side_effect=[1, 1])
         result = await insert_bis_items(_ctx(pool), [_slot("head", 100), _slot("neck", 200)])
