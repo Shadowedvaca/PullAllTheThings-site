@@ -2141,7 +2141,8 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
 
         async with pool.acquire() as conn:
             primary_items = await _fetch_section_items(
-                conn, spec_id, source_id, origin, mo["section_key"], slot_map, raid_instance_names,
+                conn, spec_id, source_id, origin, mo["section_key"], slot_map,
+                raid_instance_names, content_type,
             )
             secondary_items = await _fetch_section_items(
                 conn, spec_id, source_id, origin, mo["secondary_section_key"], slot_map, raid_instance_names,
@@ -2791,7 +2792,8 @@ async def _resolve_method_bis_from_db(
             "_resolve_method_bis_from_db: override heading %r not found for spec %d source %d / %s",
             target_heading, spec_id, source_id, content_type,
         )
-        return []
+        # Preserve current guide data when a heading rename makes an override
+        # stale; auto-classification remains constrained to non-outlier tables.
 
     return _resolve_method_section_local(sections, content_type)
 
@@ -3519,6 +3521,7 @@ async def _fetch_section_items(
     section_key: str,
     slot_map: dict,
     raid_instance_names: frozenset[str] = frozenset(),
+    fallback_content_type: str | None = None,
 ) -> list[SimcSlot]:
     """Return SimcSlot list for a named section, fetching raw HTML from landing.
 
@@ -3554,6 +3557,14 @@ async def _fetch_section_items(
         for s in sections:
             if s.h3_id == section_key and not s.is_trinket_section:
                 return s.slots
+        if fallback_content_type:
+            for s in sections:
+                if (
+                    s.content_type == fallback_content_type
+                    and not s.is_trinket_section
+                    and not s.is_outlier
+                ):
+                    return s.slots
 
     elif origin == "method":
         raw_row = await conn.fetchrow(
@@ -3579,6 +3590,8 @@ async def _fetch_section_items(
         for s in sections:
             if s.heading == section_key:
                 return s.slots
+        if fallback_content_type:
+            return _resolve_method_section_local(sections, fallback_content_type)
 
     logger.warning(
         "_fetch_section_items: section_key %r not found for spec %d source %d origin %s",

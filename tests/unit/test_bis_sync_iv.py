@@ -18,6 +18,7 @@ from sv_common.guild_sync.bis_sync import (
     _apply_iv_catalyst_route_overrides,
     _iv_extract_trinket_rows,
     _extract_icy_veins,
+    _fetch_section_items,
     _iv_is_outlier,
     _iv_parse_bis_from_raw,
     _iv_parse_sections,
@@ -882,6 +883,28 @@ class TestResolveIvSection:
         result = await _resolve_iv_section(pool, sections, 6, 9, "overall")
 
         assert result == expected
+
+    @pytest.mark.asyncio
+    async def test_stale_merge_key_falls_back_to_current_content_section(self):
+        table = _make_iv_table(*[("Head", item_id) for item_id in range(1, 17)])
+        page = _make_iv_image_block(
+            ("Overall Best in Slot", "overall-best-in-slot", table),
+        )
+        conn = MagicMock()
+        conn.fetchrow = AsyncMock(return_value={"content": page})
+
+        result = await _fetch_section_items(
+            conn,
+            6,
+            9,
+            "icy_veins",
+            "area_1",
+            _TEST_SLOT_MAP,
+            fallback_content_type="overall",
+        )
+
+        assert len(result) == 16
+        assert all(slot.slot == "head" for slot in result)
 
 
 # ---------------------------------------------------------------------------
