@@ -31,13 +31,15 @@ process.stdout.write(_gpCatalystAction({json.dumps(item)}));
 
 
 def test_catalyst_action_renders_result_with_base_aware_tooltip() -> None:
-    html = _render_catalyst_action({
-        "recommendation_type": "catalyst",
-        "blizzard_item_id": 268229,
-        "catalyst_tier_item_id": 271456,
-        "catalyst_tier_item_name": "Tempered Horns of the Jade Warlord",
-        "catalyst_tier_direct_available": True,
-    })
+    html = _render_catalyst_action(
+        {
+            "recommendation_type": "catalyst",
+            "blizzard_item_id": 268229,
+            "catalyst_tier_item_id": 271456,
+            "catalyst_tier_item_name": "Tempered Horns of the Jade Warlord",
+            "catalyst_tier_direct_available": True,
+        }
+    )
 
     assert "Catalyze &rarr;" in html
     assert "item=271456" in html
@@ -47,11 +49,16 @@ def test_catalyst_action_renders_result_with_base_aware_tooltip() -> None:
 
 
 def test_direct_recommendation_has_no_catalyst_action() -> None:
-    assert _render_catalyst_action({
-        "recommendation_type": "direct",
-        "blizzard_item_id": 268229,
-        "catalyst_tier_item_id": None,
-    }) == ""
+    assert (
+        _render_catalyst_action(
+            {
+                "recommendation_type": "direct",
+                "blizzard_item_id": 268229,
+                "catalyst_tier_item_id": None,
+            }
+        )
+        == ""
+    )
 
 
 def test_row_exclusion_and_metadata_remain_keyed_to_base_item() -> None:

@@ -104,13 +104,9 @@ def upgrade():
 
     # Keep historical snapshots intact while removing stale items from displays
     # and hourly fetches.
+    conn.execute(sa.text("UPDATE guild_identity.tracked_items SET is_active = FALSE"))
     conn.execute(
-        sa.text("UPDATE guild_identity.tracked_items SET is_active = FALSE")
-    )
-    conn.execute(
-        sa.text(
-            "DELETE FROM guild_identity.tracked_items WHERE item_id = 213746"
-        )
+        sa.text("DELETE FROM guild_identity.tracked_items WHERE item_id = 213746")
     )
 
     for display_order, (item_id, item_name, category) in enumerate(MIDNIGHT_ITEMS, 1):

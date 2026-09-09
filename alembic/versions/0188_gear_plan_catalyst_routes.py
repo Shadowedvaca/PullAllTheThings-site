@@ -15,19 +15,24 @@ depends_on = None
 
 
 def _create_tier_piece_sources_view(*, season_aligned: bool) -> None:
-    season_joins = """
+    season_joins = (
+        """
         JOIN enrichment.item_seasons tier_season
             ON tier_season.blizzard_item_id = ei.blizzard_item_id
         JOIN patt.raid_seasons tier_rs
             ON tier_rs.id = tier_season.season_id
            AND tier_rs.is_active = TRUE
-    """ if season_aligned else ""
+    """
+        if season_aligned
+        else ""
+    )
     season_source_filter = (
         """JOIN enrichment.item_seasons token_season
             ON token_season.blizzard_item_id = tt.blizzard_item_id
            AND token_season.season_id = tier_season.season_id
         WHERE es.blizzard_instance_id = ANY(tier_rs.current_raid_ids)"""
-        if season_aligned else ""
+        if season_aligned
+        else ""
     )
     op.execute(f"""
         CREATE VIEW viz.tier_piece_sources AS
