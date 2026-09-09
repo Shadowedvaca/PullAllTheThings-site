@@ -46,6 +46,13 @@
   its farmable base route in the label and Wowhead tooltip. A generic tier result
   no longer proves or receives the BIS state for a specific Catalyst route, nor
   marks that route's base-item recommendation as equipped.
+- Stage metadata for concrete items referenced by active BIS guides before the
+  enrichment rebuild, so newly published and Catalyst-only items are not silently
+  dropped. Exclude inactive scrape targets from synchronization, recommendation
+  rebuilds, section resolution, trinket ratings, and popularity data.
+- Require every body slot and at least one main-hand weapon for successful BIS
+  coverage. Off-hand remains optional for valid two-hand builds, while one-hand,
+  off-hand, and alternative two-hand recommendations may coexist.
 
 ## Validation
 
@@ -61,6 +68,7 @@
   Warrior glove route and its spec isolation: 105 passed.
 - Focused Gear Plan service and JavaScript contract tests cover unknown-track
   upgrade advice, explicit spec selection, and Catalyst base/result display.
+- Focused BIS coverage and metadata-staging regression tests: 64 passed.
 
 ## Deployment/Migrations
 

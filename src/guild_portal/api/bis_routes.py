@@ -1782,7 +1782,8 @@ async def enrich_and_classify(
 ):
     """New pipeline: rebuild enrichment schema from landing tables (GL only).
 
-    Step 1 — sp_rebuild_all(): reads from landing.blizzard_items + journal tables.
+    Step 1 — stage active guide item metadata, then sp_rebuild_all(): reads from
+              landing.blizzard_items + journal tables.
               Populates enrichment.items, item_sources, item_recipes, item_seasons.
               Runs classification (item_category, flag_junk_sources).
     Step 2 — rebuild_bis_from_landing(): re-parses landing.bis_scrape_raw HTML →
@@ -1821,8 +1822,18 @@ async def enrich_and_classify(
             # ── Step 1: rebuild enrichment schema (items, sources, categories) ──
             _enrich_classify_status.update(
                 step=1,
-                phase_label="Rebuilding enrichment schema from landing tables",
+                phase_label="Staging guide items and rebuilding enrichment",
                 detail="",
+            )
+            from sv_common.guild_sync.bis_sync import stage_active_bis_item_metadata
+            staged_bis = await stage_active_bis_item_metadata(pool, blizzard_client)
+            staging_failures = len(staged_bis.get("errors", []))
+            _enrich_classify_status.update(
+                detail=(
+                    f"Staged {staged_bis.get('staged', 0)} of "
+                    f"{staged_bis.get('missing', 0)} missing guide items"
+                    + (f"; {staging_failures} unavailable" if staging_failures else "")
+                )
             )
             async with pool.acquire() as conn:
                 await conn.execute("CALL enrichment.sp_rebuild_all()")
@@ -1948,6 +1959,8 @@ async def enrich_and_classify(
 
             detail = (
                 f"{item_counts['items']} items, {item_counts['sources']} sources, "
+                f"{staged_bis.get('staged', 0)} guide items staged, "
+                f"{staging_failures} guide items unavailable, "
                 f"{token_result.get('tokens_found', 0)} active tier tokens, "
                 f"{bis_result.get('bis_entries_inserted', 0)} BIS entries, "
                 f"{trinket_result.get('trinket_ratings_inserted', 0)} trinket ratings, "
