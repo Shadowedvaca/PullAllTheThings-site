@@ -7,6 +7,7 @@ All URLs that are "known good" were manually verified against the live sites.
 import pytest
 
 from sv_common.guild_sync.bis_sync import (
+    _bis_slot_coverage_status,
     _build_url,
     _iv_base_url,
     _iv_bis_role,
@@ -18,6 +19,7 @@ from sv_common.guild_sync.bis_sync import (
     _ugg_url_to_section,
     _ugg_url_to_spec_key,
 )
+from sv_common.guild_sync.simc_parser import SimcSlot
 
 # Slot maps for unit tests — mirrors the seed data in migration 0159
 _UGG_TEST_MAP: dict[str, str | None] = {
@@ -30,6 +32,47 @@ _UGG_TEST_MAP: dict[str, str | None] = {
     "weapon1": "main_hand", "weapon2": "off_hand",
     "main_hand": "main_hand", "off_hand": "off_hand",
 }
+
+
+def _complete_body_slots() -> list[SimcSlot]:
+    return [
+        SimcSlot(slot=slot, blizzard_item_id=index)
+        for index, slot in enumerate((
+            "head", "neck", "shoulder", "back", "chest", "wrist", "hands",
+            "waist", "legs", "feet", "ring_1", "ring_2", "trinket_1", "trinket_2",
+        ), start=1)
+    ]
+
+
+class TestBisSlotCoverageStatus:
+    def test_two_hand_build_does_not_require_off_hand(self):
+        slots = _complete_body_slots() + [SimcSlot("main_hand_2h", 100)]
+        assert _bis_slot_coverage_status(slots) == "success"
+
+    def test_one_hand_build_with_off_hand_is_complete(self):
+        slots = _complete_body_slots() + [
+            SimcSlot("main_hand_1h", 100),
+            SimcSlot("off_hand", 101),
+        ]
+        assert _bis_slot_coverage_status(slots) == "success"
+
+    def test_multiple_weapon_build_options_are_complete(self):
+        slots = _complete_body_slots() + [
+            SimcSlot("main_hand_2h", 100),
+            SimcSlot("main_hand_1h", 101),
+            SimcSlot("off_hand", 102),
+        ]
+        assert _bis_slot_coverage_status(slots) == "success"
+
+    def test_body_slots_without_a_weapon_are_partial(self):
+        assert _bis_slot_coverage_status(_complete_body_slots()) == "partial"
+
+    def test_missing_body_slot_is_partial_even_with_weapon(self):
+        slots = _complete_body_slots()[1:] + [SimcSlot("main_hand_2h", 100)]
+        assert _bis_slot_coverage_status(slots) == "partial"
+
+    def test_no_items_is_failed(self):
+        assert _bis_slot_coverage_status([]) == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -495,4 +538,3 @@ class TestParseUggPopularity:
     def test_no_ssr_marker_returns_empty(self):
         result = _parse_ugg_popularity("<html>no SSR data here</html>", "https://u.gg/wow/blood/death_knight/gear/raid")
         assert result == []
-

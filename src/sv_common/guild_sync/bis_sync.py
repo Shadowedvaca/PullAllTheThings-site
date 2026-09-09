@@ -86,6 +86,28 @@ def _slug(name: str, sep: str = "-") -> str:
     """Convert a display name to a lowercase URL slug."""
     return name.lower().replace(" ", sep)
 
+
+_MAIN_HAND_SLOTS = frozenset({"main_hand", "main_hand_1h", "main_hand_2h"})
+_BODY_SLOTS = frozenset(SLOT_ORDER) - frozenset(
+    {"main_hand_1h", "main_hand_2h", "off_hand"}
+)
+
+
+def _bis_slot_coverage_status(slots: list[SimcSlot]) -> str:
+    """Classify coverage using the slots a complete gear plan requires.
+
+    Every body slot and at least one main-hand weapon are required. Off-hand is
+    optional because a complete two-hand recommendation legitimately has none;
+    one-hand guides may also provide multiple weapon/off-hand alternatives.
+    """
+    if not slots:
+        return "failed"
+
+    extracted_slots = {slot.slot for slot in slots}
+    has_main_hand = bool(extracted_slots & _MAIN_HAND_SLOTS)
+    missing_body = _BODY_SLOTS - extracted_slots
+    return "success" if has_main_hand and not missing_body else "partial"
+
 # u.gg slot names → our normalised internal keys
 # Technique priority order for each BIS source origin
 _TECHNIQUE_ORDER: dict[str, list[str]] = {
@@ -99,6 +121,8 @@ _TECHNIQUE_ORDER: dict[str, list[str]] = {
 
 # HTTP timeouts for scraping
 _HTTP_TIMEOUT = 20.0
+_ICY_VEINS_FETCH_ATTEMPTS = 4
+_ICY_VEINS_RETRYABLE_STATUS = frozenset({404, 429, 500, 502, 503, 504})
 _UGG_STATS_BASE = "https://stats2.u.gg/wow/builds/v29/all"
 _WOWHEAD_TOOLTIP_BASE = "https://nether.wowhead.com/tooltip/item"
 
@@ -422,6 +446,7 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
               JOIN ref.specializations sp ON sp.id = t.spec_id
               JOIN ref.classes c ON c.id = sp.class_id
              WHERE s.is_active = TRUE
+               AND t.is_active = TRUE
                AND s.origin != 'icy_veins'
                AND t.url IS NOT NULL
              ORDER BY c.name, sp.name, t.hero_talent_id, s.sort_order
@@ -470,6 +495,7 @@ async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
               JOIN ref.bis_list_sources s ON s.id = t.source_id
              WHERE t.spec_id = $1
                AND s.is_active = TRUE
+               AND t.is_active = TRUE
                AND s.origin != 'icy_veins'
                AND t.url IS NOT NULL
             """,
@@ -506,8 +532,9 @@ async def sync_source(
         query = """
             SELECT t.id, t.source_id, t.url, t.preferred_technique,
                    t.spec_id, t.hero_talent_id, t.content_type
-              FROM config.bis_scrape_targets t
+             FROM config.bis_scrape_targets t
              WHERE t.source_id = $1
+               AND t.is_active = TRUE
                AND t.url IS NOT NULL
         """
         args: list = [source_id]
@@ -569,6 +596,7 @@ async def sync_gaps(
                    GROUP BY target_id
               ) latest ON latest.target_id = t.id
              WHERE s.is_active = TRUE
+               AND t.is_active = TRUE
                AND t.url IS NOT NULL
                AND (latest.latest_at IS NULL OR latest.latest_at < $1)
              ORDER BY latest.latest_at ASC NULLS FIRST
@@ -734,19 +762,7 @@ async def sync_target(
         status = "unchanged" if _content_unchanged else "skipped"
     elif slots:
         items_found = len(slots)
-        extracted_slots = {s.slot for s in slots}
-        # Normalize: any weapon slot (main_hand intermediate or resolved variant)
-        # counts as covering both main_hand_1h and main_hand_2h for coverage purposes.
-        if extracted_slots & {"main_hand", "main_hand_1h", "main_hand_2h"}:
-            extracted_slots = (extracted_slots - {"main_hand"}) | {"main_hand_1h", "main_hand_2h"}
-        missing = set(SLOT_ORDER) - extracted_slots
-        # A spec using a 2H weapon never has off_hand; both main_hand variants may
-        # legitimately be absent (spec uses only one build).  off_hand + either
-        # weapon variant absent is expected and not a partial failure.
-        if not missing or missing <= {"off_hand", "main_hand_1h", "main_hand_2h"}:
-            status = "success"
-        else:
-            status = "partial"
+        status = _bis_slot_coverage_status(slots)
     else:
         items_found = 0
         status = "failed"
@@ -1477,6 +1493,7 @@ async def rebuild_item_popularity_from_landing(pool: asyncpg.Pool) -> dict:
                   FROM landing.bis_scrape_raw bsr
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                  WHERE bsr.target_id IS NOT NULL
+                   AND t.is_active = TRUE
                    AND bsr.source IN ('ugg', 'archon')
             )
             SELECT content, url, source, source_id, spec_id
@@ -1708,6 +1725,7 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                   JOIN ref.bis_list_sources s ON s.id = t.source_id
                  WHERE s.origin = 'method'
+                   AND t.is_active = TRUE
                    AND bsr.content IS NOT NULL
             )
             SELECT content, spec_id, source_id, page_url FROM latest WHERE rn = 1
@@ -1730,6 +1748,40 @@ async def reparse_method_sections(pool: asyncpg.Pool) -> dict:
         specs_processed, sections_upserted,
     )
     return {"specs_processed": specs_processed, "sections_upserted": sections_upserted}
+
+
+async def _resolve_active_tier_result(
+    conn: asyncpg.Connection,
+    spec_id: int,
+    slot: str,
+) -> Optional[int]:
+    """Resolve one active-season tier result for a spec and armor slot."""
+    rows = await conn.fetch(
+        """
+        SELECT DISTINCT i.blizzard_item_id
+          FROM ref.specializations sp
+          JOIN ref.classes c ON c.id = sp.class_id
+          JOIN enrichment.items i
+            ON i.slot_type = $2
+           AND i.item_category = 'tier'
+           AND (i.playable_class_ids IS NULL
+                OR c.blizzard_class_id = ANY(i.playable_class_ids))
+          JOIN enrichment.item_seasons ise
+            ON ise.blizzard_item_id = i.blizzard_item_id
+          JOIN patt.raid_seasons rs
+            ON rs.id = ise.season_id
+           AND rs.is_active = TRUE
+         WHERE sp.id = $1
+        """,
+        spec_id, slot,
+    )
+    if len(rows) != 1:
+        logger.warning(
+            "Could not uniquely resolve active tier result for spec=%d slot=%s; candidates=%s",
+            spec_id, slot, [r["blizzard_item_id"] for r in rows],
+        )
+        return None
+    return rows[0]["blizzard_item_id"]
 
 
 async def insert_bis_items(
@@ -1769,6 +1821,29 @@ async def insert_bis_items(
                 slot_counters[actual_slot] = slot_counters.get(actual_slot, guide_order_start - 1) + 1
                 guide_order = slot_counters[actual_slot]
 
+            recommendation_type = slot_data.recommendation_type
+            catalyst_tier_item_id = slot_data.catalyst_tier_item_id
+            if recommendation_type == "catalyst" and catalyst_tier_item_id is None:
+                catalyst_tier_item_id = await _resolve_active_tier_result(
+                    conn, ctx.spec_id, actual_slot
+                )
+                if catalyst_tier_item_id is None:
+                    skipped += 1
+                    continue
+
+            # Some Icy Veins cards label an already-converted tier item as a
+            # Catalyst recommendation without exposing an ``original-item``.
+            # The resolved result then equals the displayed/base item.  That is
+            # a direct tier recommendation, not a base -> result relationship;
+            # persisting it as Catalyst violates the relationship constraint
+            # and previously made the entire slot disappear during rebuild.
+            if (
+                recommendation_type == "catalyst"
+                and catalyst_tier_item_id == slot_data.blizzard_item_id
+            ):
+                recommendation_type = "direct"
+                catalyst_tier_item_id = None
+
             # enrichment.bis_entries.blizzard_item_id FKs to enrichment.items —
             # skip items not yet in the enrichment layer.
             exists = await conn.fetchval(
@@ -1783,17 +1858,152 @@ async def insert_bis_items(
                 await conn.execute(
                     """
                     INSERT INTO enrichment.bis_entries
-                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id, guide_order, bis_note)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        (source_id, spec_id, hero_talent_id, slot, blizzard_item_id,
+                         guide_order, bis_note, recommendation_type, catalyst_tier_item_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                     """,
                     ctx.source_id, ctx.spec_id, ctx.hero_talent_id,
                     actual_slot, slot_data.blizzard_item_id, guide_order, note,
+                    recommendation_type, catalyst_tier_item_id,
                 )
                 inserted += 1
             except Exception:
                 skipped += 1  # duplicate within rebuild — silently skip
 
     return {"inserted": inserted, "skipped": skipped}
+
+
+async def stage_active_bis_item_metadata(
+    pool: asyncpg.Pool,
+    blizzard_client,
+) -> dict:
+    """Stage Blizzard metadata for items referenced by active BIS targets.
+
+    Guide pages can begin recommending an item before the Journal/source sync
+    discovers it. The enrichment rebuild used to silently skip those item IDs,
+    producing blank body slots even though the parser found a valid guide row.
+    Parse the latest active raw pages first and persist missing Blizzard item
+    payloads to landing so the immediately following ``sp_rebuild_all()`` can
+    create their enrichment rows.
+    """
+    async with pool.acquire() as conn:
+        slot_map = await _load_slot_labels(conn)
+        wh_invtype_map = await _load_wowhead_invtypes(conn)
+        raid_instance_names = await _load_raid_instance_names(conn)
+        rows = await conn.fetch("""
+            WITH latest AS (
+                SELECT
+                    bsr.content, bsr.url, bsr.source,
+                    t.source_id, t.spec_id, t.content_type,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY bsr.target_id
+                        ORDER BY bsr.fetched_at DESC
+                    ) AS rn
+                  FROM landing.bis_scrape_raw bsr
+                  JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
+                 WHERE bsr.target_id IS NOT NULL
+                   AND t.is_active = TRUE
+            )
+            SELECT content, url, source, source_id, spec_id, content_type
+              FROM latest
+             WHERE rn = 1
+        """)
+
+    referenced_ids: set[int] = set()
+    parse_errors: list[str] = []
+    for row in rows:
+        try:
+            source = row["source"]
+            content_type = row["content_type"] or "overall"
+            if source == "ugg":
+                slots = _parse_ugg_html(row["content"], row["url"], slot_map)
+            elif source == "wowhead":
+                slots, _ = _parse_wowhead_html(
+                    row["content"], row["url"], content_type, wh_invtype_map
+                )
+            elif source == "method":
+                slots = await _resolve_method_bis_from_db(
+                    pool, row["spec_id"], row["source_id"], content_type
+                )
+            elif source == "icy_veins":
+                sections = _iv_parse_sections(
+                    row["content"], slot_map, raid_instance_names
+                )
+                slots = await _resolve_iv_section(
+                    pool, sections, row["spec_id"], row["source_id"], content_type
+                )
+            elif source == "archon":
+                page = json.loads(row["content"])
+                slots, _ = _parse_archon_page(
+                    page, slot_map, page.get("totalParses", 0)
+                )
+            else:
+                continue
+
+            for slot in slots or []:
+                if slot.blizzard_item_id:
+                    referenced_ids.add(slot.blizzard_item_id)
+                if slot.catalyst_tier_item_id:
+                    referenced_ids.add(slot.catalyst_tier_item_id)
+        except Exception as exc:
+            message = (
+                f"Could not parse staged BIS metadata for source={row['source']} "
+                f"spec={row['spec_id']} content={row['content_type']}: {exc}"
+            )
+            logger.warning(message)
+            parse_errors.append(message)
+
+    if not referenced_ids:
+        return {"referenced": 0, "staged": 0, "errors": parse_errors}
+
+    async with pool.acquire() as conn:
+        existing_rows = await conn.fetch(
+            """
+            SELECT DISTINCT blizzard_item_id
+              FROM landing.blizzard_items
+             WHERE blizzard_item_id = ANY($1::int[])
+            """,
+            sorted(referenced_ids),
+        )
+    existing_ids = {row["blizzard_item_id"] for row in existing_rows}
+    missing_ids = sorted(referenced_ids - existing_ids)
+
+    staged = 0
+    fetch_errors: list[str] = []
+    lock = asyncio.Lock()
+    semaphore = asyncio.Semaphore(5)
+
+    async def _stage_one(item_id: int) -> None:
+        nonlocal staged
+        async with semaphore:
+            try:
+                payload = await blizzard_client.get_item(item_id)
+                if not payload:
+                    raise ValueError("Blizzard item API returned no payload")
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        """
+                        INSERT INTO landing.blizzard_items
+                            (blizzard_item_id, payload)
+                        VALUES ($1, $2::jsonb)
+                        """,
+                        item_id, json.dumps(payload),
+                    )
+                async with lock:
+                    staged += 1
+            except Exception as exc:
+                message = f"Could not stage BIS item {item_id}: {exc}"
+                logger.warning(message)
+                async with lock:
+                    fetch_errors.append(message)
+
+    await asyncio.gather(*[_stage_one(item_id) for item_id in missing_ids])
+    return {
+        "referenced": len(referenced_ids),
+        "missing": len(missing_ids),
+        "staged": staged,
+        "errors": parse_errors + fetch_errors,
+    }
 
 
 async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
@@ -1830,6 +2040,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                   FROM landing.bis_scrape_raw bsr
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                  WHERE bsr.target_id IS NOT NULL
+                   AND t.is_active = TRUE
             )
             SELECT content, url, source, target_id, source_id, spec_id, hero_talent_id, content_type
               FROM latest
@@ -1850,6 +2061,7 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
                      ON t.spec_id = o.spec_id
                     AND t.source_id = o.source_id
                     AND COALESCE(t.content_type, 'overall') = o.content_type
+                    AND t.is_active = TRUE
              WHERE o.secondary_section_key IS NOT NULL
         """)
         # TRUNCATE first — clean-slate rebuild.  enrichment.bis_entries has no
@@ -1906,15 +2118,9 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         total_inserted += target_inserted
 
         # Determine status from coverage and stamp back onto scrape target
-        if target_inserted == 0:
-            rebuild_status = "failed"
-        else:
-            extracted_slots = {s.slot for s in slots} if slots else set()
-            # Normalize weapon slots for coverage check
-            if extracted_slots & {"main_hand", "main_hand_1h", "main_hand_2h"}:
-                extracted_slots = (extracted_slots - {"main_hand"}) | {"main_hand_1h", "main_hand_2h"}
-            missing = set(SLOT_ORDER) - extracted_slots
-            rebuild_status = "success" if missing <= {"off_hand", "main_hand_1h", "main_hand_2h"} else "partial"
+        rebuild_status = (
+            "failed" if target_inserted == 0 else _bis_slot_coverage_status(slots or [])
+        )
 
         async with pool.acquire() as conn:
             await conn.execute(
@@ -1935,7 +2141,8 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
 
         async with pool.acquire() as conn:
             primary_items = await _fetch_section_items(
-                conn, spec_id, source_id, origin, mo["section_key"], slot_map, raid_instance_names,
+                conn, spec_id, source_id, origin, mo["section_key"], slot_map,
+                raid_instance_names, content_type,
             )
             secondary_items = await _fetch_section_items(
                 conn, spec_id, source_id, origin, mo["secondary_section_key"], slot_map, raid_instance_names,
@@ -1955,15 +2162,10 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         target_id = mo["target_id"]
         if target_id:
             target_inserted = result["inserted"]
-            if target_inserted == 0:
-                rebuild_status = "failed"
-            else:
-                all_items = list(primary_items) + list(secondary_items)
-                extracted_slots = {s.slot for s in all_items}
-                if extracted_slots & {"main_hand", "main_hand_1h", "main_hand_2h"}:
-                    extracted_slots = (extracted_slots - {"main_hand"}) | {"main_hand_1h", "main_hand_2h"}
-                missing = set(SLOT_ORDER) - extracted_slots
-                rebuild_status = "success" if missing <= {"off_hand", "main_hand_1h", "main_hand_2h"} else "partial"
+            all_items = list(primary_items) + list(secondary_items)
+            rebuild_status = (
+                "failed" if target_inserted == 0 else _bis_slot_coverage_status(all_items)
+            )
 
             async with pool.acquire() as conn:
                 await conn.execute(
@@ -2027,6 +2229,7 @@ async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:
                   JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
                   JOIN ref.bis_list_sources sc ON sc.id = t.source_id
                  WHERE bsr.target_id IS NOT NULL
+                   AND t.is_active = TRUE
                    AND bsr.source IN ('wowhead', 'icy_veins')
             )
             SELECT content, url, bsr_source, source_id, spec_id, hero_talent_id
@@ -2444,6 +2647,18 @@ def _resolve_method_section_local(
     for s in sections:
         if s.inferred_content_type == content_type and not s.is_outlier:
             return s.slots
+
+    # Some Method guides publish one complete "Overall Best Gear" table and no
+    # separate Raid/Mythic+ tables.  The configured content-specific sources
+    # should use that sole complete table instead of becoming entirely blank.
+    if content_type in {"raid", "mythic_plus"}:
+        overall = [
+            s
+            for s in sections
+            if s.inferred_content_type == "overall" and not s.is_outlier
+        ]
+        if len(overall) == 1:
+            return overall[0].slots
     return []
 
 
@@ -2544,6 +2759,7 @@ async def _resolve_method_bis_from_db(
               JOIN ref.bis_list_sources s        ON s.id = t.source_id
              WHERE s.origin = 'method'
                AND t.spec_id = $1
+               AND t.is_active = TRUE
                AND bsr.content IS NOT NULL
              ORDER BY bsr.fetched_at DESC
              LIMIT 1
@@ -2576,7 +2792,8 @@ async def _resolve_method_bis_from_db(
             "_resolve_method_bis_from_db: override heading %r not found for spec %d source %d / %s",
             target_heading, spec_id, source_id, content_type,
         )
-        return []
+        # Preserve current guide data when a heading rename makes an override
+        # stale; auto-classification remains constrained to non-outlier tables.
 
     return _resolve_method_section_local(sections, content_type)
 
@@ -2827,6 +3044,97 @@ def _iv_extract_regular_rows(
     return results
 
 
+def _iv_extract_bis_cards(
+    container_el,
+    slot_map: dict[str, str | None],
+) -> list[SimcSlot]:
+    """Parse the redesigned Icy Veins ``.bis_item`` card grid.
+
+    The card's direct-child ``data-wowhead`` span is the recommendation. Nested
+    spans under extras and footer elements are gems, enchants, or embellishments
+    and must not become gear recommendations. When Icy Veins explicitly emits
+    ``item=RESULT&original-item=BASE``, BASE is the farmable item and RESULT is
+    the tier item produced by the Catalyst. Some cards instead say "Catalyse"
+    while linking only the base item; those are marked for deterministic
+    active-season tier resolution during insertion.
+    """
+    results: list[SimcSlot] = []
+    ring_count = 0
+    trinket_count = 0
+
+    for card in container_el.select(".bis_items_grid .bis_item"):
+        slot_el = card.select_one(".bis_item_slot")
+        if slot_el is None:
+            continue
+        raw_slot = slot_el.get_text(" ", strip=True).lower()
+        if raw_slot in {"shirt", "tabard"}:
+            continue
+
+        primary = card.find("span", attrs={"data-wowhead": True}, recursive=False)
+        if primary is None:
+            continue
+        wowhead_data = primary.get("data-wowhead", "")
+        item_match = re.search(r"(?:^|[&;])item=(\d+)", wowhead_data)
+        if not item_match:
+            continue
+        result_item_id = int(item_match.group(1))
+        if result_item_id == 0:
+            continue
+
+        base_match = re.search(r"(?:^|[&;])original-item=(\d+)", wowhead_data)
+        base_item_id = int(base_match.group(1)) if base_match else result_item_id
+        if base_item_id == 0:
+            continue
+
+        slot_key, ring_count, trinket_count = _resolve_text_slot(
+            raw_slot, slot_map, ring_count, trinket_count
+        )
+        if slot_key is None:
+            logger.debug("_iv_extract_bis_cards: unrecognised slot %r, skipping", raw_slot)
+            continue
+
+        catalyst_worded = "catalys" in card.get_text(" ", strip=True).lower()
+        is_catalyst = (
+            (base_match is not None and base_item_id != result_item_id)
+            or catalyst_worded
+        )
+        results.append(SimcSlot(
+            slot=slot_key,
+            blizzard_item_id=base_item_id,
+            recommendation_type="catalyst" if is_catalyst else "direct",
+            catalyst_tier_item_id=(
+                result_item_id
+                if base_match is not None and base_item_id != result_item_id
+                else None
+            ),
+        ))
+
+    return results
+
+
+# Icy Veins occasionally omits both ``original-item`` and Catalyst wording from
+# a known conversion card. Keep these corrections exact (spec, slot, base item)
+# so an upstream metadata omission cannot turn the acquisition item into the
+# saved BIS result. The entry naturally becomes inert when the source stops
+# recommending that base item.
+_IV_CATALYST_ROUTE_OVERRIDES: dict[tuple[int, str, int], int] = {
+    (1, "hands", 251214): 271457,  # Protection Warrior: Bonds -> Jade Warlord hands
+}
+
+
+def _apply_iv_catalyst_route_overrides(
+    slots: list[SimcSlot], spec_id: int,
+) -> list[SimcSlot]:
+    for slot in slots:
+        tier_item_id = _IV_CATALYST_ROUTE_OVERRIDES.get(
+            (spec_id, slot.slot, slot.blizzard_item_id)
+        )
+        if tier_item_id is not None:
+            slot.recommendation_type = "catalyst"
+            slot.catalyst_tier_item_id = tier_item_id
+    return slots
+
+
 def _iv_extract_trinket_rows(details_el) -> list[dict]:
     """Parse an IV trinket-dropdown <details> element.
 
@@ -2926,7 +3234,11 @@ def _iv_parse_from_image_blocks(
     """
     sections: list[IVSection] = []
 
-    for image_block in soup.find_all("div", class_="image_block"):
+    image_blocks = soup.select("div.image_block.best_in_slot")
+    if not image_blocks:
+        image_blocks = soup.find_all("div", class_="image_block")
+
+    for image_block in image_blocks:
         buttons_div = image_block.find("div", class_="image_block_header_buttons")
         if not buttons_div:
             continue
@@ -2962,10 +3274,16 @@ def _iv_parse_from_image_blocks(
             h3_id = h3.get("id", "") if h3 else area_id
             section_title = h3.get_text(strip=True) if h3 else label
 
+            has_bis_cards = content_div.select_one(".bis_items_grid .bis_item") is not None
             table = content_div.find("table")
             details = content_div.find("details", class_="trinket-dropdown")
 
-            if details:
+            if has_bis_cards:
+                is_trinket = False
+                slots = _iv_extract_bis_cards(content_div, slot_map)
+                trinket_rows = []
+                row_count = len(slots)
+            elif details:
                 is_trinket = True
                 trinket_rows = _iv_extract_trinket_rows(details)
                 row_count = len(trinket_rows)
@@ -3181,15 +3499,17 @@ async def _resolve_iv_section(
         target_key = row["section_key"]
         for s in sections:
             if s.h3_id == target_key and not s.is_trinket_section:
-                return s.slots
+                return _apply_iv_catalyst_route_overrides(s.slots, spec_id)
         logger.warning(
             "_resolve_iv_section: override key %r not found in sections for spec %d source %d / %s",
             target_key, spec_id, source_id, content_type,
         )
-        return []
+        # Guide redesigns routinely replace area_N identifiers with semantic
+        # heading ids.  A stale override must not suppress a section that the
+        # current classifier can resolve safely.
     for section in sections:
         if section.content_type == content_type and not section.is_trinket_section and not section.is_outlier:
-            return section.slots
+            return _apply_iv_catalyst_route_overrides(section.slots, spec_id)
     return []
 
 
@@ -3201,6 +3521,7 @@ async def _fetch_section_items(
     section_key: str,
     slot_map: dict,
     raid_instance_names: frozenset[str] = frozenset(),
+    fallback_content_type: str | None = None,
 ) -> list[SimcSlot]:
     """Return SimcSlot list for a named section, fetching raw HTML from landing.
 
@@ -3219,6 +3540,7 @@ async def _fetch_section_items(
               FROM landing.bis_scrape_raw bsr
               JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
              WHERE t.spec_id = $1 AND t.source_id = $2
+               AND t.is_active = TRUE
                AND bsr.content IS NOT NULL
              ORDER BY bsr.fetched_at DESC
              LIMIT 1
@@ -3235,6 +3557,14 @@ async def _fetch_section_items(
         for s in sections:
             if s.h3_id == section_key and not s.is_trinket_section:
                 return s.slots
+        if fallback_content_type:
+            for s in sections:
+                if (
+                    s.content_type == fallback_content_type
+                    and not s.is_trinket_section
+                    and not s.is_outlier
+                ):
+                    return s.slots
 
     elif origin == "method":
         raw_row = await conn.fetchrow(
@@ -3244,6 +3574,7 @@ async def _fetch_section_items(
               JOIN config.bis_scrape_targets t ON t.id = bsr.target_id
               JOIN ref.bis_list_sources s ON s.id = t.source_id
              WHERE s.origin = 'method' AND t.spec_id = $1
+               AND t.is_active = TRUE
                AND bsr.content IS NOT NULL
              ORDER BY bsr.fetched_at DESC
              LIMIT 1
@@ -3259,6 +3590,8 @@ async def _fetch_section_items(
         for s in sections:
             if s.heading == section_key:
                 return s.slots
+        if fallback_content_type:
+            return _resolve_method_section_local(sections, fallback_content_type)
 
     logger.warning(
         "_fetch_section_items: section_key %r not found for spec %d source %d origin %s",
@@ -3423,17 +3756,42 @@ async def _extract_icy_veins(
     async with httpx.AsyncClient(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
-        response = await client.get(url)
+        response = None
+        for attempt in range(_ICY_VEINS_FETCH_ATTEMPTS):
+            response = await client.get(url)
+            if response.status_code not in _ICY_VEINS_RETRYABLE_STATUS:
+                break
+            if attempt + 1 < _ICY_VEINS_FETCH_ATTEMPTS:
+                delay = 2 ** attempt
+                logger.info(
+                    "Icy Veins returned HTTP %d for %s; retrying in %ds (%d/%d)",
+                    response.status_code, url, delay, attempt + 1,
+                    _ICY_VEINS_FETCH_ATTEMPTS,
+                )
+                await asyncio.sleep(delay)
+        assert response is not None
         response.raise_for_status()
         html = response.text
 
-    if pool and spec_id and source_id:
+    if pool:
         async with pool.acquire() as conn:
             slot_map = await _load_slot_labels(conn)
             raid_instance_names = await _load_raid_instance_names(conn)
             sections = _iv_parse_sections(html, slot_map, raid_instance_names)
-            await _upsert_iv_sections(conn, spec_id, source_id, url, sections)
-        return await _resolve_iv_section(pool, sections, spec_id, source_id, content_type), html
+            if spec_id and source_id:
+                await _upsert_iv_sections(conn, spec_id, source_id, url, sections)
+        if spec_id and source_id:
+            return await _resolve_iv_section(
+                pool, sections, spec_id, source_id, content_type
+            ), html
+        for section in sections:
+            if (
+                section.content_type == content_type
+                and not section.is_trinket_section
+                and not section.is_outlier
+            ):
+                return section.slots, html
+        return [], html
 
     slot_map: dict[str, str | None] = {}
     sections = _iv_parse_sections(html, slot_map)

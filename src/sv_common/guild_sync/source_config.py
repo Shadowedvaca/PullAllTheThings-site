@@ -58,7 +58,7 @@ def get_track_label(instance_type: str) -> str:
 
     Raid:       V→RF+  C→N+  H→H+  M→M    (shows lowest available)
     World boss: C→N+   (no RF tier)
-    Dungeon:    C→0+   H→4+  M→10+
+    Dungeon:    C→0+   H→6+  M→10+
     """
     tracks = get_tracks(instance_type)
     if not tracks:
@@ -75,8 +75,8 @@ def track_to_label(track: str, instance_type: str) -> str:
     Used when the label must reflect the player's actual upgrade need rather than
     the lowest track the instance offers.
     Raid/world boss: V→RF+  C→N+  H→H+  M→M
-    Dungeon:         C→0+   H→4+  M→10+
+    Dungeon:         C→0+   H→6+  M→10+
     """
     if instance_type == "dungeon":
-        return {"C": "0+", "H": "4+", "M": "10+"}.get(track, "")
+        return {"C": "0+", "H": "6+", "M": "10+"}.get(track, "")
     return {"V": "RF+", "C": "N+", "H": "H+", "M": "M"}.get(track, "")

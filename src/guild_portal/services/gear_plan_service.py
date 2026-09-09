@@ -53,7 +53,7 @@ def _noncrafted_target_ilvl(
 
     BIS slot: show at the next quality track's max ilvl (V→C, C→H, H→M, M→M).
     Not BIS:  show at the player's actual equipped ilvl.
-              If below Veteran track or slot empty, show Veteran max instead.
+              If the slot is empty, show Veteran max instead.
     """
     if not quality_ilvl_map:
         return None
@@ -62,11 +62,9 @@ def _noncrafted_target_ilvl(
             return quality_ilvl_map.get("V", {}).get("max")
         return quality_ilvl_map.get(NEXT_TRACK[equipped_track], {}).get("max")
     else:
-        eq_rank = TRACK_ORDER.get(equipped_track or "", -1)
-        v_rank  = TRACK_ORDER.get("V", 0)
-        if not equipped_ilvl or eq_rank < v_rank:
-            return quality_ilvl_map.get("V", {}).get("max")
-        return equipped_ilvl
+        if equipped_ilvl:
+            return equipped_ilvl
+        return quality_ilvl_map.get("V", {}).get("max")
 
 
 def _crafted_target_ilvl(
@@ -169,6 +167,7 @@ def _compute_weapon_display(
     bis_by_slot: dict,
     equipped_by_slot: dict,
     desired_by_slot: dict,
+    bis_source_id: Optional[int] = None,
 ) -> tuple[Optional[str], bool]:
     """Determine weapon build and off-hand visibility.
 
@@ -180,6 +179,11 @@ def _compute_weapon_display(
     """
     mh2h = bis_by_slot.get("main_hand_2h", [])
     mh1h = bis_by_slot.get("main_hand_1h", [])
+    if bis_source_id:
+        selected_2h = [r for r in mh2h if r.get("source_id") == bis_source_id]
+        selected_1h = [r for r in mh1h if r.get("source_id") == bis_source_id]
+        if selected_2h or selected_1h:
+            mh2h, mh1h = selected_2h, selected_1h
 
     if mh2h or mh1h:
         min_2h = min((r.get("guide_order", 1) for r in mh2h), default=99)
@@ -199,6 +203,83 @@ def _compute_weapon_display(
     show_off_hand = True
 
     return weapon_build, show_off_hand
+
+
+def _recommendation_matches_goal(rec: dict, desired: Optional[dict]) -> bool:
+    """Match both final item identity and the chosen acquisition route."""
+    if not desired or not desired.get("blizzard_item_id"):
+        return False
+    rec_type = rec.get("recommendation_type") or "direct"
+    goal_type = desired.get("recommendation_type") or "direct"
+    if rec_type == "catalyst":
+        return (
+            goal_type == "catalyst"
+            and desired["blizzard_item_id"] == rec.get("catalyst_tier_item_id")
+            and desired.get("catalyst_base_item_id") == rec.get("blizzard_item_id")
+        )
+    return goal_type == "direct" and desired["blizzard_item_id"] == rec.get("blizzard_item_id")
+
+
+def _equipped_matches_goal(equipped_bid: Optional[int], desired: Optional[dict]) -> bool:
+    """Return True only when equipped identity proves the selected goal.
+
+    Catalyst results reuse the generic tier item ID while inheriting the base
+    item's secondary stats. Blizzard equipment does not expose the base item's
+    identity, so a result-ID match alone cannot prove that acquisition route.
+    """
+    if not equipped_bid or not desired or not desired.get("blizzard_item_id"):
+        return False
+    return (
+        (desired.get("recommendation_type") or "direct") == "direct"
+        and equipped_bid == desired["blizzard_item_id"]
+    )
+
+
+def _recommendation_item_is_equipped(rec: dict, equipped_bids: set[int]) -> bool:
+    """Return whether the farmable item represented by a recommendation is worn.
+
+    A Catalyst recommendation row represents its base item and links separately
+    to the tier result. Wearing that generic tier result must not mark the base
+    row as equipped because Blizzard cannot prove the result's Catalyst route.
+    """
+    bid = rec.get("blizzard_item_id")
+    return bool(bid and bid in equipped_bids)
+
+
+def _normalize_legacy_catalyst_goals(
+    desired_by_slot: dict[str, dict],
+    bis_by_slot: dict[str, list[dict]],
+    bis_source_id: Optional[int],
+) -> None:
+    """Interpret pre-0188 base-item goals as their selected Catalyst route."""
+    if not bis_source_id:
+        return
+    for slot, desired in desired_by_slot.items():
+        if (desired.get("recommendation_type") or "direct") != "direct":
+            continue
+        old_bid = desired.get("blizzard_item_id")
+        if not old_bid:
+            continue
+        matches = [
+            rec for rec in bis_by_slot.get(slot, [])
+            if rec.get("source_id") == bis_source_id
+            and rec.get("recommendation_type") == "catalyst"
+            and rec.get("blizzard_item_id") == old_bid
+            and rec.get("catalyst_tier_item_id")
+        ]
+        if len(matches) != 1:
+            continue
+        rec = matches[0]
+        desired.update({
+            "blizzard_item_id": rec["catalyst_tier_item_id"],
+            "item_name": rec.get("catalyst_tier_item_name"),
+            "icon_url": rec.get("catalyst_tier_icon_url"),
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": old_bid,
+            "catalyst_base_item_name": rec.get("item_name"),
+            "catalyst_base_icon_url": rec.get("icon_url"),
+            "is_legacy_catalyst_route": True,
+        })
 
 
 def _apply_off_hand_rule(
@@ -231,23 +312,30 @@ def _upgrade_tracks(
     equipped_item_id: Optional[int],
     desired_item_id: Optional[int],
     available_tracks: list[str],
+    equipped_item_level: Optional[int] = None,
+    quality_ilvl_map: Optional[dict] = None,
 ) -> list[str]:
     """Return which available tracks would be upgrades over the equipped item.
 
     Rules:
     - Empty slot → anything is an upgrade
-    - Item equipped, track unknown → cannot determine upgrades (return [])
+    - Item equipped, track unknown → use the equipped ilvl and each track's
+      ceiling; any track that can finish above the current item is useful
     - Same item, lower track → need strictly higher track
     - Different item → same track and above (never recommends a lower track)
     """
     if not available_tracks:
         return []
     if equipped_track is None:
-        # Empty slot: anything is an upgrade.
-        # Item equipped but track undetected: cannot recommend upgrades safely —
-        # returning all tracks would incorrectly include Veteran as an upgrade
-        # for someone wearing a non-LFR item whose display_string wasn't detected.
-        return available_tracks if equipped_item_id is None else []
+        if equipped_item_id is None:
+            return available_tracks
+        if equipped_item_level and quality_ilvl_map:
+            return [
+                track
+                for track in available_tracks
+                if (quality_ilvl_map.get(track, {}).get("max") or 0) > equipped_item_level
+            ]
+        return []
 
     eq_idx = TRACK_ORDER.get(equipped_track, -1)
 
@@ -275,6 +363,9 @@ def _contextual_sources(sources: list[dict], upgrade_tracks: list[str]) -> list[
     result = []
     for src in sources:
         inst_type = src["instance_type"]
+        if inst_type == "catalyst":
+            result.append(src)
+            continue
         instance_tracks = _get_tracks(inst_type)
 
         # World boss only drops C. Skip if player doesn't need C.
@@ -512,6 +603,9 @@ async def update_slot(
     blizzard_item_id: Optional[int],
     item_name: Optional[str] = None,
     is_locked: Optional[bool] = None,
+    recommendation_type: str = "direct",
+    catalyst_base_item_id: Optional[int] = None,
+    catalyst_base_item_name: Optional[str] = None,
 ) -> bool:
     """Upsert a gear_plan_slot row.  Pass blizzard_item_id=None to clear the slot."""
     async with pool.acquire() as conn:
@@ -539,7 +633,15 @@ async def update_slot(
             )
             return True
 
-        # Resolve name from enrichment.items if not provided by caller
+        if recommendation_type not in {"direct", "catalyst"}:
+            raise ValueError("recommendation_type must be direct or catalyst")
+        if recommendation_type == "direct":
+            catalyst_base_item_id = None
+            catalyst_base_item_name = None
+        elif not catalyst_base_item_id or catalyst_base_item_id == blizzard_item_id:
+            raise ValueError("Catalyst goals require a distinct base item")
+
+        # Resolve names from enrichment.items if not provided by caller
         if not item_name:
             name_row = await conn.fetchrow(
                 "SELECT name FROM enrichment.items WHERE blizzard_item_id=$1",
@@ -547,6 +649,12 @@ async def update_slot(
             )
             item_name = name_row["name"] if name_row else None
         resolved_name = item_name
+        if catalyst_base_item_id and not catalyst_base_item_name:
+            base_name_row = await conn.fetchrow(
+                "SELECT name FROM enrichment.items WHERE blizzard_item_id=$1",
+                catalyst_base_item_id,
+            )
+            catalyst_base_item_name = base_name_row["name"] if base_name_row else None
 
         # Determine is_locked
         locked_val: bool
@@ -563,14 +671,19 @@ async def update_slot(
         await conn.execute(
             """
             INSERT INTO guild_identity.gear_plan_slots
-                (plan_id, slot, blizzard_item_id, item_name, is_locked)
-            VALUES ($1, $2, $3, $4, $5)
+                (plan_id, slot, blizzard_item_id, item_name, is_locked,
+                 recommendation_type, catalyst_base_item_id, catalyst_base_item_name)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (plan_id, slot) DO UPDATE
                 SET blizzard_item_id = EXCLUDED.blizzard_item_id,
                     item_name        = EXCLUDED.item_name,
-                    is_locked        = EXCLUDED.is_locked
+                    is_locked        = EXCLUDED.is_locked,
+                    recommendation_type = EXCLUDED.recommendation_type,
+                    catalyst_base_item_id = EXCLUDED.catalyst_base_item_id,
+                    catalyst_base_item_name = EXCLUDED.catalyst_base_item_name
             """,
             plan_id, slot, blizzard_item_id, resolved_name, locked_val,
+            recommendation_type, catalyst_base_item_id, catalyst_base_item_name,
         )
         return True
 
@@ -628,12 +741,23 @@ async def populate_from_bis(
         bis_rows = await conn.fetch(
             """
             SELECT be.slot, be.guide_order,
-                   be.blizzard_item_id, i.name AS item_name, i.slot_type
+                   be.blizzard_item_id, i.name AS item_name, i.slot_type,
+                   be.recommendation_type, be.catalyst_tier_item_id,
+                   catalyst_item.name AS catalyst_tier_item_name
               FROM enrichment.bis_entries be
               LEFT JOIN enrichment.items i ON i.blizzard_item_id = be.blizzard_item_id
+              LEFT JOIN enrichment.items catalyst_item
+                ON catalyst_item.blizzard_item_id = be.catalyst_tier_item_id
              WHERE be.source_id = $1
                AND be.spec_id = $2
                AND (be.hero_talent_id = $3 OR be.hero_talent_id IS NULL)
+               AND EXISTS (
+                   SELECT 1
+                     FROM enrichment.item_seasons ise
+                     JOIN patt.raid_seasons rs
+                       ON rs.id = ise.season_id AND rs.is_active = TRUE
+                    WHERE ise.blizzard_item_id = be.blizzard_item_id
+               )
              ORDER BY be.slot, be.guide_order
             """,
             use_source, spec_id, use_ht,
@@ -659,6 +783,13 @@ async def populate_from_bis(
         # Off-hand suppression for 2H builds.
         # Determine preferred main hand after build selection.
         preferred_mh = next((s for s in ("main_hand_2h", "main_hand_1h") if s in by_slot), None)
+        if preferred_mh:
+            stale_mh = "main_hand_1h" if preferred_mh == "main_hand_2h" else "main_hand_2h"
+            if stale_mh not in locked_slots:
+                await conn.execute(
+                    "DELETE FROM guild_identity.gear_plan_slots WHERE plan_id=$1 AND slot=$2",
+                    plan_id, stale_mh,
+                )
         by_slot, clear_off_hand = _apply_off_hand_rule(by_slot, preferred_mh)
         if clear_off_hand and "off_hand" not in locked_slots:
             await conn.execute(
@@ -678,17 +809,35 @@ async def populate_from_bis(
             if not chosen:
                 continue
 
+            rec_type = chosen.get("recommendation_type") or "direct"
+            if rec_type == "catalyst" and chosen.get("catalyst_tier_item_id"):
+                goal_bid = chosen["catalyst_tier_item_id"]
+                goal_name = chosen.get("catalyst_tier_item_name")
+                catalyst_base_bid = chosen["blizzard_item_id"]
+                catalyst_base_name = chosen.get("item_name")
+            else:
+                rec_type = "direct"
+                goal_bid = chosen["blizzard_item_id"]
+                goal_name = chosen.get("item_name")
+                catalyst_base_bid = None
+                catalyst_base_name = None
+
             await conn.execute(
                 """
                 INSERT INTO guild_identity.gear_plan_slots
-                    (plan_id, slot, blizzard_item_id, item_name, is_locked)
-                VALUES ($1, $2, $3, $4, FALSE)
+                    (plan_id, slot, blizzard_item_id, item_name, is_locked,
+                     recommendation_type, catalyst_base_item_id, catalyst_base_item_name)
+                VALUES ($1, $2, $3, $4, FALSE, $5, $6, $7)
                 ON CONFLICT (plan_id, slot) DO UPDATE
                     SET blizzard_item_id = EXCLUDED.blizzard_item_id,
-                        item_name        = EXCLUDED.item_name
+                        item_name        = EXCLUDED.item_name,
+                        recommendation_type = EXCLUDED.recommendation_type,
+                        catalyst_base_item_id = EXCLUDED.catalyst_base_item_id,
+                        catalyst_base_item_name = EXCLUDED.catalyst_base_item_name
                     WHERE gear_plan_slots.is_locked = FALSE
                 """,
-                plan_id, slot, chosen["blizzard_item_id"], chosen["item_name"],
+                plan_id, slot, goal_bid, goal_name, rec_type,
+                catalyst_base_bid, catalyst_base_name,
             )
             populated += 1
 
@@ -1090,6 +1239,7 @@ async def get_plan_detail(
                    ht.name AS hero_talent_name,
                    bls.name AS bis_source_name,
                    wc.last_equipment_sync AS blizzard_synced_at,
+                   wc.class_id, wc.active_spec_id,
                    c.name AS class_name,
                    s.name AS spec_name_for_stat
               FROM guild_identity.gear_plans gp
@@ -1283,9 +1433,16 @@ async def get_plan_detail(
                    COALESCE(ei.name, gps.item_name) AS item_name,
                    gps.is_locked,
                    gps.excluded_item_ids,
-                   ei.icon_url
+                   ei.icon_url,
+                   gps.recommendation_type,
+                   gps.catalyst_base_item_id,
+                   COALESCE(base_item.name, gps.catalyst_base_item_name)
+                       AS catalyst_base_item_name,
+                   base_item.icon_url AS catalyst_base_icon_url
               FROM guild_identity.gear_plan_slots gps
               LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = gps.blizzard_item_id
+              LEFT JOIN enrichment.items base_item
+                ON base_item.blizzard_item_id = gps.catalyst_base_item_id
              WHERE gps.plan_id = $1
             """,
             plan_id,
@@ -1335,18 +1492,33 @@ async def get_plan_detail(
                        vbr.blizzard_item_id, vbr.name AS item_name, vbr.icon_url,
                        vbr.source_name, vbr.source_short_label AS short_label,
                        vbr.source_origin AS origin, vbr.content_type, vbr.bis_note,
-                       vbr.item_category
+                       vbr.item_category, vbr.primary_stats,
+                       vbr.recommendation_type, vbr.catalyst_tier_item_id,
+                       vbr.catalyst_tier_item_name, vbr.catalyst_tier_icon_url,
+                       vbr.catalyst_tier_set_suffix,
+                       vbr.catalyst_tier_direct_available
                   FROM viz.bis_recommendations vbr
                   JOIN ref.bis_list_sources bls ON bls.id = vbr.source_id
                  WHERE vbr.spec_id = $1
-                   AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
+                  AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
+                   AND EXISTS (
+                       SELECT 1
+                         FROM enrichment.item_seasons ise
+                         JOIN patt.raid_seasons rs
+                           ON rs.id = ise.season_id AND rs.is_active = TRUE
+                        WHERE ise.blizzard_item_id = vbr.blizzard_item_id
+                   )
                  ORDER BY bls.sort_order, vbr.slot, vbr.guide_order
                 """,
                 spec_id, hero_talent_id,
             )
             for r in bis_rows:
                 bis_by_slot.setdefault(r["slot"], []).append(dict(r))
+
+        _normalize_legacy_catalyst_goals(
+            desired_by_slot, bis_by_slot, bis_source_id
+        )
 
         # Fetch item sources (instance/boss) for BIS items — shown in drawer list rows
         bis_sources_by_bid: dict[int, list[dict]] = {}
@@ -1356,9 +1528,20 @@ async def get_plan_detail(
                 """
                 SELECT es.blizzard_item_id, es.instance_type,
                        es.instance_name, es.encounter_name
-                  FROM enrichment.item_sources es
-                 WHERE es.blizzard_item_id = ANY($1::int[])
+              FROM enrichment.item_sources es
+              JOIN enrichment.item_seasons ise
+                ON ise.blizzard_item_id = es.blizzard_item_id
+              JOIN patt.raid_seasons rs
+                ON rs.id = ise.season_id AND rs.is_active = TRUE
+             WHERE es.blizzard_item_id = ANY($1::int[])
                    AND NOT es.is_junk
+                   AND (
+                       es.instance_type = 'world_boss'
+                       OR (es.instance_type = 'dungeon'
+                           AND es.blizzard_instance_id = ANY(rs.current_instance_ids))
+                       OR (es.instance_type = 'raid'
+                           AND es.blizzard_instance_id = ANY(rs.current_raid_ids))
+                   )
                 """,
                 all_bis_bids,
             )
@@ -1422,6 +1605,8 @@ async def get_plan_detail(
         for d in desired_by_slot.values():
             if d.get("blizzard_item_id"):
                 all_bids.add(d["blizzard_item_id"])
+            if d.get("catalyst_base_item_id"):
+                all_bids.add(d["catalyst_base_item_id"])
 
         # Augment craftable/tier detection via DB for items where Wowhead has no
         # tooltip data (new expansion items).  These run only when desired_by_slot
@@ -1452,11 +1637,22 @@ async def get_plan_detail(
         if all_bids:
             src_rows = await conn.fetch(
                 """
-                SELECT blizzard_item_id, instance_type, encounter_name,
-                       instance_name, quality_tracks
-                  FROM enrichment.item_sources
-                 WHERE blizzard_item_id = ANY($1::int[])
-                   AND NOT is_junk
+                SELECT es.blizzard_item_id, es.instance_type, es.encounter_name,
+                       es.instance_name, es.quality_tracks
+              FROM enrichment.item_sources es
+              JOIN enrichment.item_seasons ise
+                ON ise.blizzard_item_id = es.blizzard_item_id
+              JOIN patt.raid_seasons rs
+                ON rs.id = ise.season_id AND rs.is_active = TRUE
+                 WHERE es.blizzard_item_id = ANY($1::int[])
+                   AND NOT es.is_junk
+                   AND (
+                       es.instance_type = 'world_boss'
+                       OR (es.instance_type = 'dungeon'
+                           AND es.blizzard_instance_id = ANY(rs.current_instance_ids))
+                       OR (es.instance_type = 'raid'
+                           AND es.blizzard_instance_id = ANY(rs.current_raid_ids))
+                   )
                 """,
                 list(all_bids),
             )
@@ -1547,6 +1743,18 @@ async def get_plan_detail(
             )
             ht_list = [dict(r) for r in ht_rows]
 
+        # The plan can intentionally target a different spec than the
+        # character's last active Blizzard spec. Expose the class's specs so
+        # that choice is visible and editable instead of becoming stale hidden
+        # state when the character changes specialization.
+        spec_list = []
+        if plan_row["class_id"]:
+            spec_rows = await conn.fetch(
+                "SELECT id, name FROM ref.specializations WHERE class_id=$1 ORDER BY id",
+                plan_row["class_id"],
+            )
+            spec_list = [dict(r) for r in spec_rows]
+
         # Crafter lookup for craftable desired items.
         # Joins item_recipe_links → recipes → professions → character_recipes →
         # wow_characters → player_characters → players → guild_ranks.
@@ -1599,15 +1807,12 @@ async def get_plan_detail(
     _merge_paired_bis(bis_by_slot, "ring_1", "ring_2")
     _merge_paired_bis(bis_by_slot, "trinket_1", "trinket_2")
 
-    # Weapon build display rules: must run BEFORE the weapon BIS merge so that
-    # guide_order comparison sees the raw per-type data (not the merged pool).
+    # Keep 1H and 2H recommendation pools separate. Merging them makes the
+    # visible slot's drawer offer incompatible weapons and can write a 2H item
+    # into the 1H goal key (or vice versa).
     weapon_build, show_off_hand = _compute_weapon_display(
-        bis_by_slot, equipped_by_slot, desired_by_slot
+        bis_by_slot, equipped_by_slot, desired_by_slot, bis_source_id
     )
-
-    # Merge both weapon pools so the active main-hand slot shows BIS for BOTH
-    # 1H and 2H builds.  Done AFTER weapon build detection.
-    _merge_paired_bis(bis_by_slot, "main_hand_2h", "main_hand_1h")
 
     # Build per-slot data
     slots_data: dict[str, dict] = {}
@@ -1634,8 +1839,19 @@ async def get_plan_detail(
         # slots and produce bogus is_bis / needs_upgrade flags.
         desired_bid: Optional[int] = desired["blizzard_item_id"] if desired else None
 
-        available_tracks = tracks_by_item.get(desired_bid, []) if desired_bid else []
-        item_sources = sources_by_item.get(desired_bid, []) if desired_bid else []
+        goal_type = (desired.get("recommendation_type") or "direct") if desired else "direct"
+        catalyst_base_bid = desired.get("catalyst_base_item_id") if desired else None
+        acquisition_bid = catalyst_base_bid if goal_type == "catalyst" else desired_bid
+        available_tracks = tracks_by_item.get(acquisition_bid, []) if acquisition_bid else []
+        item_sources = list(sources_by_item.get(acquisition_bid, [])) if acquisition_bid else []
+        if goal_type == "catalyst" and acquisition_bid:
+            item_sources.append({
+                "instance_type": "catalyst",
+                "encounter_name": None,
+                "instance_name": "Revival Catalyst",
+                "display_name": "Revival Catalyst",
+                "track_label": "",
+            })
 
         # Craftable items have no item_sources rows (they're not drops), so
         # available_tracks is normally empty.  Override to ["H", "M"] — crafted
@@ -1645,6 +1861,19 @@ async def get_plan_detail(
 
         equipped_track = equipped["quality_track"] if equipped else None
         equipped_ilvl_for_slot: Optional[int] = equipped.get("item_level") if equipped else None
+
+        # Rows synced before the strict display-string fix can contain raid
+        # difficulty ("Mythic") misclassified as an upgrade track. Reject a
+        # stored track when the equipped ilvl is outside that active track's
+        # configured range; a future gear sync will also repair the DB value.
+        if equipped_track and equipped_ilvl_for_slot and not equipped.get("is_crafted"):
+            track_range = plan_quality_ilvl_map.get(equipped_track, {})
+            track_min = track_range.get("min")
+            track_max = track_range.get("max")
+            if ((track_min and equipped_ilvl_for_slot < track_min)
+                    or (track_max and equipped_ilvl_for_slot > track_max)):
+                equipped_track = None
+                equipped["quality_track"] = None
 
         # For equipped crafted items whose quality_track wasn't detected during sync
         # (e.g. pre-fix rows with quality_track=NULL), compute it now from bonus_ids.
@@ -1660,9 +1889,30 @@ async def get_plan_detail(
                 equipped["quality_track"] = equipped_track
 
         equipped_bid = equipped["blizzard_item_id"] if equipped else None
-        upgrade_tracks = _upgrade_tracks(equipped_track, equipped_bid, desired_bid, available_tracks)
+        equipped_is_catalyst_base = bool(
+            goal_type == "catalyst" and equipped_bid and equipped_bid == catalyst_base_bid
+        )
+        upgrade_comparison_bid = catalyst_base_bid if equipped_is_catalyst_base else desired_bid
+        upgrade_tracks = _upgrade_tracks(
+            equipped_track,
+            equipped_bid,
+            upgrade_comparison_bid,
+            available_tracks,
+            equipped_ilvl_for_slot,
+            plan_quality_ilvl_map,
+        )
 
-        is_bis = bool(desired_bid and equipped_bid and equipped_bid == desired_bid)
+        # A Catalyst result shares the tier item's Blizzard ID, but Midnight
+        # Catalyst pieces inherit the acquisition item's secondary stats. The
+        # equipment API does not expose that base-item provenance, so matching
+        # only the result ID would falsely mark a directly obtained tier piece
+        # as the selected Catalyst route.
+        is_bis = _equipped_matches_goal(equipped_bid, desired)
+        catalyst_result_equipped = bool(
+            goal_type == "catalyst"
+            and desired_bid
+            and equipped_bid == desired_bid
+        )
 
         # Phase 2C: compute slot-level target ilvls (same rules as available-items endpoint).
         slot_noncrafted_ilvl = _noncrafted_target_ilvl(
@@ -1672,20 +1922,16 @@ async def get_plan_detail(
             is_bis, equipped_track, plan_crafted_ilvl_map
         )
 
-        # Paired-slot BIS: rings and trinkets share desired items — mark both as BIS.
-        # Weapon slots: both main_hand_2h and main_hand_1h desired items count so the
-        # merged BIS pool shows checkmarks for whichever build the player has set.
+        # Paired slots share goals. Route identity remains part of the match so a
+        # Catalyst base and a directly obtained tier piece are not conflated.
         _paired_slot = _SLOT_META[slot]["paired_slot"]
-        _paired_desired_bid: Optional[int] = None
-        if _paired_slot:
-            _pd = desired_by_slot.get(_paired_slot)
-            _paired_desired_bid = _pd["blizzard_item_id"] if _pd else None
-        _all_desired_bids: set[int] = {b for b in (desired_bid, _paired_desired_bid) if b}
+        paired_desired = desired_by_slot.get(_paired_slot) if _paired_slot else None
+        _all_desired: list[dict] = [d for d in (desired, paired_desired) if d]
         if slot in _WEAPON_MH_SLOTS:
             _other_mh = "main_hand_1h" if slot == "main_hand_2h" else "main_hand_2h"
             _other_mh_d = desired_by_slot.get(_other_mh)
             if _other_mh_d and _other_mh_d.get("blizzard_item_id"):
-                _all_desired_bids.add(_other_mh_d["blizzard_item_id"])
+                _all_desired.append(_other_mh_d)
 
         # For weapon slots, also check the other typed slot's equipped item.
         _all_equipped_bids: set[int] = {equipped_bid} if equipped_bid else set()
@@ -1702,8 +1948,16 @@ async def get_plan_detail(
             else:
                 rec["target_ilvl"] = slot_noncrafted_ilvl
             # Phase 1F: EQUIPPED / BIS badges on BIS recommendations
-            rec["is_equipped"] = bid in _all_equipped_bids
-            rec["is_bis"]      = bool(_all_desired_bids and bid in _all_desired_bids)
+            rec["is_equipped"] = _recommendation_item_is_equipped(
+                rec, _all_equipped_bids
+            )
+            rec["is_catalyst_base_equipped"] = bool(
+                rec.get("recommendation_type") == "catalyst"
+                and bid in _all_equipped_bids
+            )
+            rec["is_bis"] = any(
+                _recommendation_matches_goal(rec, goal) for goal in _all_desired
+            )
             # Phase 1F: trinket tier badge on BIS recs (full-spec map fetched above)
             if slot in _TRINKET_SLOTS:
                 rec["source_ratings"] = _tb_map.get(bid, [])
@@ -1781,6 +2035,8 @@ async def get_plan_detail(
             "available_tracks": available_tracks,
             "upgrade_tracks": upgrade_tracks,
             "is_bis": is_bis,
+            "is_catalyst_base_equipped": equipped_is_catalyst_base,
+            "is_catalyst_result_equipped": catalyst_result_equipped,
             "needs_upgrade": needs_upgrade,
             "crafted_source": crafted_source,
             "excluded_item_ids": excluded_ids,
@@ -1798,6 +2054,7 @@ async def get_plan_detail(
         "plan": plan_dict,
         "slots": slots_data,
         "bis_sources": [{**dict(r), "has_hero_talent_variants": r["id"] in ht_source_ids} for r in source_list],
+        "available_specs": spec_list,
         "hero_talents": ht_list,
         "track_colors": TRACK_COLORS,
         "weapon_build": weapon_build,
@@ -1914,28 +2171,36 @@ async def get_available_items(
             "SELECT id FROM guild_identity.gear_plans WHERE player_id=$1 AND character_id=$2",
             player_id, character_id,
         )
-        desired_bid_for_slot: Optional[int] = None
-        all_desired_bids: set[int] = set()
+        all_desired_acquisition_bids: set[int] = set()
+        desired_goals: list[dict] = []
         if plan_row:
             _av_paired = _SLOT_META[slot]["paired_slot"]
             _av_slots = [slot] + ([_av_paired] if _av_paired else [])
             slot_rows = await conn.fetch(
                 """
-                SELECT slot, excluded_item_ids, blizzard_item_id
+                SELECT slot, excluded_item_ids, blizzard_item_id,
+                       recommendation_type, catalyst_base_item_id
                   FROM guild_identity.gear_plan_slots
                  WHERE plan_id = $1 AND slot = ANY($2::text[])
                 """,
                 plan_row["id"], _av_slots,
             )
             for sr in slot_rows:
+                goal = dict(sr)
+                desired_goals.append(goal)
                 if sr["slot"] == slot:
                     excluded_ids = list(sr["excluded_item_ids"] or [])
-                    desired_bid_for_slot = sr["blizzard_item_id"]
                 if sr["blizzard_item_id"]:
-                    all_desired_bids.add(sr["blizzard_item_id"])
+                    acquisition_bid = (
+                        sr["catalyst_base_item_id"]
+                        if (sr["recommendation_type"] or "direct") == "catalyst"
+                        else sr["blizzard_item_id"]
+                    )
+                    if acquisition_bid:
+                        all_desired_acquisition_bids.add(acquisition_bid)
 
-        # BIS = wearing any desired item from this slot's paired pool.
-        is_bis: bool = bool(equipped_bid and all_desired_bids and equipped_bid in all_desired_bids)
+        # Catalyst result IDs cannot prove the selected base-item route.
+        is_bis = any(_equipped_matches_goal(equipped_bid, goal) for goal in desired_goals)
 
         # Normalize paired slots to canonical enrichment.items slot_type
         slot_type = _SLOT_META[slot]["enrichment_slot_type"]
@@ -2204,7 +2469,7 @@ async def get_available_items(
     for item in raid_items + dungeon_items + crafted_items + (tier_items or []):
         bid = item.get("blizzard_item_id")
         item["is_equipped"] = bool(bid and bid == equipped_bid)
-        item["is_bis"]      = bool(bid and bid in all_desired_bids)
+        item["is_bis"]      = bool(bid and bid in all_desired_acquisition_bids)
         if trinket_ratings_by_bid:
             item["source_ratings"] = trinket_ratings_by_bid.get(bid, [])
 

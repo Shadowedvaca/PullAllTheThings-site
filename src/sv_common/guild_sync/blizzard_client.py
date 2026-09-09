@@ -416,7 +416,7 @@ class BlizzardClient:
             if quality_track is None and is_crafted_item(bonus_ids):
                 crafted_ds = await self.get_item_preview(blizzard_item_id, bonus_ids)
                 if crafted_ds:
-                    quality_track = track_from_display_string(crafted_ds)
+                    quality_track = track_from_display_string(crafted_ds, allow_bare=True)
 
             # Enchant
             enchant_id = None
