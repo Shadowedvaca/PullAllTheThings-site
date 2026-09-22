@@ -48,7 +48,10 @@ an operational inventory of implemented workflows:
   runner allows at most 90 seconds for readiness, reports non-secret progress
   every 15 seconds, and requires `PATT_DEPLOYMENT_COMPLETE` after runtime
   identity, database health, migration head, and the atomic active-SHA marker
-  are verified. Optional external-integration initialization is separately
+  are verified. Only after those gates, Development retains three and Test
+  retains seven complete pre-deployment archive/manifest pairs. Retention
+  fails closed on incomplete evidence; Production is never automatically
+  pruned. Optional external-integration initialization is separately
   bounded and cannot block core web readiness.
 - Production readiness is enabled after the reviewed #54/#55 foundation and
   readiness change. This setting is not promotion authority.
