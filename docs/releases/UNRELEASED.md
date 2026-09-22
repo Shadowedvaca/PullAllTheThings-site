@@ -16,6 +16,8 @@
   on the farmable base item and showing the resulting tier item as a Catalyst action.
 - Keep direct tier goals and Catalyst acquisition routes distinct, including a
   clear "base equipped, ready to catalyze" state instead of a false BIS star.
+- Development and Test deployments now apply bounded, fail-closed backup
+  retention only after all deployment success gates pass.
 
 ## Fixes/Changes
 
@@ -58,6 +60,10 @@
   section overrides to current page classification, and reuse Method's sole
   complete Overall table for Raid/M+ sources when no content-specific table is
   published.
+- Retain the newest three complete backup pairs in Development and seven in
+  Test; Production backups are never automatically pruned.
+- Refuse pruning when backup evidence is orphaned, temporary, malformed, empty,
+  or does not match its manifest identity, and report exact selected paths.
 
 ## Validation
 
@@ -75,6 +81,8 @@
   upgrade advice, explicit spec selection, and Catalyst base/result display.
 - Focused BIS coverage and metadata-staging regression tests: 64 passed.
 - Focused BIS parser, insertion, and metadata regression tests: 244 passed.
+- Added unit coverage for retention selection, dry-run reporting, deletion
+  boundaries, orphan/incomplete evidence, and deployment ordering.
 
 ## Deployment/Migrations
 
@@ -86,12 +94,18 @@
   `viz.tier_piece_sources` with active-season alignment.
 - Before production promotion, confirm old-event attendance processing is complete. The 2026-09-03 read-only inventory found 0 unprocessed past attendance events but 54 old events without signup snapshots; those histories remain attached to Season 1.
 - After deployment, run the normal Blizzard item-source, item-set, enrichment/classification, and BIS refresh sequence for the new IDs. Roster reset remains a separate explicit operation.
+- No retention migration is included. The retention helper runs only after
+  health, identity, migration-head, and active-SHA verification.
 
 ## Rollback
 
 - A one-revision downgrade removes the active-row index, deactivates Midnight Season 2, and reactivates the latest prior season without deleting either season or related history. Re-upgrade reconciles and reactivates the S2 row.
+- If retention refuses to run, preserve all backup evidence and investigate the
+  exact directory; do not bypass the check with broad cleanup.
 
 ## Known Limitations
 
 - Season 2 SimC bonus IDs were not added because no authoritative mapping was available. Display-string detection, the existing verified map, exact-item matching, and empirical bonus learning continue to provide fallback coverage.
 - Manual visual validation of the admin season editor is Release-timed per issue #60.
+- Existing pre-deployment backups outside the exact Development or Test PATT
+  directories are not managed by this policy.
