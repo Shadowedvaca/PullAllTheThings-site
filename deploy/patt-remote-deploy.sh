@@ -33,18 +33,21 @@ case "$environment" in
     app_service="app"
     db_service="db"
     backup_dir="/opt/backups/patt-db/development"
+    retention_count=3
     ;;
   test)
     compose_file="docker-compose.test.yml"
     app_service="app"
     db_service="db"
     backup_dir="/opt/backups/patt-db/test"
+    retention_count=7
     ;;
   production)
     compose_file="docker-compose.guild.yml"
     app_service="app-prod"
     db_service="db-prod"
     backup_dir="/opt/backups/patt-db/production"
+    retention_count=0
     [[ "$release_tag" =~ $tag_pattern ]]
     test "$release_tag" = "prod-v$version"
     [[ "$test_run_id" =~ ^[1-9][0-9]*$ ]]
@@ -148,6 +151,14 @@ COMMIT_SHA="$deployment_sha" docker compose -f "$compose_file" exec -T "$app_ser
 printf '%s\n' "$deployment_sha" > .deployment/active-sha.tmp
 mv .deployment/active-sha.tmp .deployment/active-sha
 test "$(cat .deployment/active-sha)" = "$deployment_sha"
+
+# Retention is post-deployment only. The verified archive must still be the
+# newest complete pair, and production is intentionally never auto-pruned.
+if ((retention_count > 0)); then
+  python3 deploy/patt-prune-backups.py \
+    --environment "$environment" \
+    --verified-archive "$archive" </dev/null
+fi
 rm -f .deployment/pending-previous-sha "$prepared_record"
 
 printf 'PATT_DEPLOYMENT_COMPLETE environment=%s version=%s commit=%s\n' \
