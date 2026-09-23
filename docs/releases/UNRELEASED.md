@@ -58,6 +58,10 @@
   section overrides to current page classification, and reuse Method's sole
   complete Overall table for Raid/M+ sources when no content-specific table is
   published.
+- Detect Cloudflare challenge pages even when a provider returns HTTP 200, use
+  the first due target as a provider canary, and open a per-run circuit that
+  preserves cached recommendations and last-success timestamps instead of
+  issuing hundreds of requests after a provider-wide access block.
 
 ## Validation
 
@@ -75,6 +79,8 @@
   upgrade advice, explicit spec selection, and Catalyst base/result display.
 - Focused BIS coverage and metadata-staging regression tests: 64 passed.
 - Focused BIS parser, insertion, and metadata regression tests: 244 passed.
+- Provider challenge detection, truthful circuit-skip persistence, daily sync
+  circuit breaking, and affected BIS provider parser regressions: 314 passed.
 
 ## Deployment/Migrations
 
@@ -95,3 +101,7 @@
 
 - Season 2 SimC bonus IDs were not added because no authoritative mapping was available. Display-string detection, the existing verified map, exact-item matching, and empirical bonus learning continue to provide fallback coverage.
 - Manual visual validation of the admin season editor is Release-timed per issue #60.
+- Development currently receives Cloudflare verification pages from Archon,
+  Icy Veins, and u.gg. Their cached recommendations remain available with honest
+  freshness state; automated refresh requires a supported provider data path or
+  a separately accepted browser-worker design.

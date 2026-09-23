@@ -145,6 +145,50 @@ _HEADERS = {
     "Sec-Fetch-Site": "none",
 }
 
+_PROVIDER_ACCESS_BLOCK_PREFIX = "provider access blocked"
+_CLOUDFLARE_CHALLENGE_MARKERS = (
+    "<title>just a moment...</title>",
+    "<title>human verification</title>",
+    "__cf$cv$params",
+    "cf-chl-",
+)
+
+
+class ProviderAccessBlockedError(RuntimeError):
+    """The provider returned an access challenge instead of guide content."""
+
+
+def _provider_access_block_reason(response: httpx.Response) -> Optional[str]:
+    """Describe a Cloudflare-style access challenge, or return ``None``.
+
+    Some providers return a conventional HTTP 403 challenge while Archon has
+    returned the same challenge with HTTP 200. Content validation is therefore
+    required in addition to status validation.
+    """
+    body = response.text[:20_000].lower()
+    challenge_marker = next(
+        (marker for marker in _CLOUDFLARE_CHALLENGE_MARKERS if marker in body),
+        None,
+    )
+    server = response.headers.get("server", "").lower()
+    if challenge_marker or (response.status_code == 403 and "cloudflare" in server):
+        provider = response.url.host or "provider"
+        return (
+            f"{_PROVIDER_ACCESS_BLOCK_PREFIX}: {provider} returned "
+            f"HTTP {response.status_code} Cloudflare challenge"
+        )
+    return None
+
+
+def _raise_for_provider_access(response: httpx.Response) -> None:
+    reason = _provider_access_block_reason(response)
+    if reason:
+        raise ProviderAccessBlockedError(reason)
+
+
+def _is_provider_access_block(error: Optional[str]) -> bool:
+    return bool(error and error.startswith(_PROVIDER_ACCESS_BLOCK_PREFIX))
+
 
 # ---------------------------------------------------------------------------
 # URL discovery
@@ -435,12 +479,16 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
       - requests to each site are naturally spaced across all specs
       - per-spec data is complete before moving on
       - Icy Veins targets are skipped (extraction not yet implemented)
+
+    A provider access challenge opens a circuit for that origin for the rest of
+    this run; cached target state is retained and the remaining targets are
+    recorded as skipped failures without more provider requests.
     """
     async with pool.acquire() as conn:
         targets = await conn.fetch(
             """
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
-                   t.url, t.preferred_technique, s.origin
+                   t.url, t.preferred_technique, t.items_found, s.origin
               FROM config.bis_scrape_targets t
               JOIN ref.bis_list_sources s ON s.id = t.source_id
               JOIN ref.specializations sp ON sp.id = t.spec_id
@@ -458,16 +506,30 @@ async def sync_all(pool: asyncpg.Pool) -> dict:
     for t in targets:
         spec_targets.setdefault(t["spec_id"], []).append(dict(t))
 
-    total_stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0}
+    total_stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0, "skipped": 0}
+    blocked_origins: dict[str, str] = {}
 
     for spec_id, spec_target_list in spec_targets.items():
         for target in spec_target_list:
+            origin = target.get("origin", "")
+            if origin in blocked_origins:
+                await record_provider_circuit_skip(
+                    pool,
+                    target["id"],
+                    target.get("preferred_technique") or "unknown",
+                    target.get("items_found", 0),
+                    blocked_origins[origin],
+                )
+                total_stats["skipped"] += 1
+                continue
             try:
                 result = await sync_target(pool, target["id"], _target_row=target)
                 total_stats["targets_run"] += 1
                 total_stats["items_found"] += result.get("items_found", 0)
                 if result.get("status") == "failed":
                     total_stats["errors"] += 1
+                if result.get("provider_access_blocked"):
+                    blocked_origins[origin] = result.get("error") or "provider access blocked"
             except Exception as exc:
                 logger.error("Error syncing target %d: %s", target["id"], exc, exc_info=True)
                 total_stats["errors"] += 1
@@ -490,7 +552,7 @@ async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
         targets = await conn.fetch(
             """
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id, t.content_type,
-                   t.url, t.preferred_technique, s.origin
+                   t.url, t.preferred_technique, t.items_found, s.origin
               FROM config.bis_scrape_targets t
               JOIN ref.bis_list_sources s ON s.id = t.source_id
              WHERE t.spec_id = $1
@@ -502,15 +564,29 @@ async def sync_spec(pool: asyncpg.Pool, spec_id: int) -> dict:
             spec_id,
         )
 
-    stats = {"targets_run": 0, "items_found": 0, "errors": 0}
+    stats = {"targets_run": 0, "items_found": 0, "errors": 0, "skipped": 0}
+    blocked_origins: dict[str, str] = {}
     for target in targets:
         target_dict = dict(target)
+        origin = target_dict.get("origin", "")
+        if origin in blocked_origins:
+            await record_provider_circuit_skip(
+                pool,
+                target_dict["id"],
+                target_dict.get("preferred_technique") or "unknown",
+                target_dict.get("items_found", 0),
+                blocked_origins[origin],
+            )
+            stats["skipped"] += 1
+            continue
         try:
             result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
             stats["targets_run"] += 1
             stats["items_found"] += result.get("items_found", 0)
             if result.get("status") == "failed":
                 stats["errors"] += 1
+            if result.get("provider_access_blocked"):
+                blocked_origins[origin] = result.get("error") or "provider access blocked"
         except Exception as exc:
             logger.error("Error syncing target %d: %s", target_dict["id"], exc, exc_info=True)
             stats["errors"] += 1
@@ -526,13 +602,15 @@ async def sync_source(
 ) -> dict:
     """Run extraction for one BIS source, optionally filtered to specific specs.
 
-    Returns a stats dict: {targets_run, items_upserted, errors}.
+    Returns a stats dict: {targets_run, items_found, errors, skipped}.
     """
     async with pool.acquire() as conn:
         query = """
             SELECT t.id, t.source_id, t.url, t.preferred_technique,
-                   t.spec_id, t.hero_talent_id, t.content_type
+                   t.spec_id, t.hero_talent_id, t.content_type, t.items_found,
+                   s.origin
              FROM config.bis_scrape_targets t
+             JOIN ref.bis_list_sources s ON s.id = t.source_id
              WHERE t.source_id = $1
                AND t.is_active = TRUE
                AND t.url IS NOT NULL
@@ -544,14 +622,29 @@ async def sync_source(
 
         targets = await conn.fetch(query, *args)
 
-    stats = {"targets_run": 0, "items_found": 0, "errors": 0}
+    stats = {"targets_run": 0, "items_found": 0, "errors": 0, "skipped": 0}
+    blocked_error: Optional[str] = None
 
     for target in targets:
         target_dict = dict(target)
+        if blocked_error:
+            await record_provider_circuit_skip(
+                pool,
+                target_dict["id"],
+                target_dict.get("preferred_technique") or "unknown",
+                target_dict.get("items_found", 0),
+                blocked_error,
+            )
+            stats["skipped"] += 1
+            continue
         try:
             result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
             stats["targets_run"] += 1
             stats["items_found"] += result.get("items_found", 0)
+            if result.get("status") == "failed":
+                stats["errors"] += 1
+            if result.get("provider_access_blocked"):
+                blocked_error = result.get("error") or "provider access blocked"
         except Exception as exc:
             logger.error("Error syncing target %d: %s", target_dict["id"], exc, exc_info=True)
             stats["errors"] += 1
@@ -575,7 +668,7 @@ async def sync_gaps(
     Targets are processed oldest-first (missing first, then by fetched_at ASC)
     so the biggest gaps are filled first.
 
-    Returns {targets_run, items_found, errors}.
+    Returns {targets_run, items_found, errors, skipped}.
     """
     from datetime import timedelta
 
@@ -585,7 +678,8 @@ async def sync_gaps(
         targets = await conn.fetch(
             """
             SELECT t.id, t.source_id, t.spec_id, t.hero_talent_id,
-                   t.content_type, t.url, t.preferred_technique, s.origin,
+                   t.content_type, t.url, t.preferred_technique, t.items_found,
+                   s.origin,
                    latest.latest_at
               FROM config.bis_scrape_targets t
               JOIN ref.bis_list_sources s ON s.id = t.source_id
@@ -604,16 +698,30 @@ async def sync_gaps(
             stale_cutoff,
         )
 
-    stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0}
+    stats: dict = {"targets_run": 0, "items_found": 0, "errors": 0, "skipped": 0}
+    blocked_origins: dict[str, str] = {}
 
     for target in targets:
         target_dict = dict(target)
+        origin = target_dict.get("origin", "")
+        if origin in blocked_origins:
+            await record_provider_circuit_skip(
+                pool,
+                target_dict["id"],
+                target_dict.get("preferred_technique") or "unknown",
+                target_dict.get("items_found", 0),
+                blocked_origins[origin],
+            )
+            stats["skipped"] += 1
+            continue
         try:
             result = await sync_target(pool, target_dict["id"], _target_row=target_dict)
             stats["targets_run"] += 1
             stats["items_found"] += result.get("items_found", 0)
             if result.get("status") == "failed":
                 stats["errors"] += 1
+            if result.get("provider_access_blocked"):
+                blocked_origins[origin] = result.get("error") or "provider access blocked"
         except Exception as exc:
             logger.error("sync_gaps: error on target %d: %s", target_dict["id"], exc, exc_info=True)
             stats["errors"] += 1
@@ -807,7 +915,46 @@ async def sync_target(
         "items_found": items_found,
         "technique": technique,
         "status": status,
+        "error": error,
+        "provider_access_blocked": _is_provider_access_block(error),
     }
+
+
+async def record_provider_circuit_skip(
+    pool: asyncpg.Pool,
+    target_id: int,
+    technique: str,
+    items_found: int,
+    error: str,
+) -> None:
+    """Record a target skipped after its provider canary was blocked.
+
+    Cached item counts and the last successful fetch timestamp are preserved.
+    The failed status makes the provider outage visible without another request.
+    """
+    now = datetime.now(timezone.utc)
+    message = f"provider circuit open: {error}"
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO log.bis_scrape_log
+                (target_id, technique, status, items_found, error_message, created_at)
+            VALUES ($1, $2, 'failed', $3, $4, $5)
+            """,
+            target_id,
+            technique,
+            items_found,
+            message,
+            now,
+        )
+        await conn.execute(
+            """
+            UPDATE config.bis_scrape_targets
+               SET status = 'failed'
+             WHERE id = $1
+            """,
+            target_id,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -849,6 +996,8 @@ async def _extract(
             return [], [], "manual technique — use the API to enter items", None
         else:
             return [], [], f"unknown technique: {technique}", None
+    except ProviderAccessBlockedError as exc:
+        return [], [], str(exc), None
     except httpx.TimeoutException:
         return [], [], "request timed out", None
     except httpx.HTTPStatusError as exc:
@@ -912,6 +1061,7 @@ async def _extract_ugg(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
         response = await client.get(url)
+        _raise_for_provider_access(response)
         response.raise_for_status()
         html = response.text
 
@@ -1059,6 +1209,7 @@ async def _extract_archon(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
         response = await client.get(url)
+        _raise_for_provider_access(response)
         response.raise_for_status()
         html = response.text
 
@@ -2373,6 +2524,7 @@ async def _extract_wowhead(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
         response = await client.get(url)
+        _raise_for_provider_access(response)
         response.raise_for_status()
         html = response.text
 
@@ -2813,6 +2965,7 @@ async def _extract_method(
         follow_redirects=True, timeout=_HTTP_TIMEOUT, headers=_HEADERS
     ) as client:
         response = await client.get(url)
+        _raise_for_provider_access(response)
         response.raise_for_status()
         html = response.text
 
@@ -3755,6 +3908,7 @@ async def _extract_icy_veins(
         response = None
         for attempt in range(_ICY_VEINS_FETCH_ATTEMPTS):
             response = await client.get(url)
+            _raise_for_provider_access(response)
             if response.status_code not in _ICY_VEINS_RETRYABLE_STATUS:
                 break
             if attempt + 1 < _ICY_VEINS_FETCH_ATTEMPTS:

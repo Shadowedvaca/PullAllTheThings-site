@@ -60,6 +60,7 @@ from .bis_sync import (
     discover_targets as _bis_discover_targets,
     sync_source as _bis_sync_source,
     sync_target as _bis_sync_target,
+    record_provider_circuit_skip as _record_provider_circuit_skip,
     rebuild_bis_from_landing as _rebuild_bis_from_landing,
     rebuild_trinket_ratings_from_landing as _rebuild_trinket_ratings_from_landing,
     rebuild_item_popularity_from_landing as _rebuild_item_popularity_from_landing,
@@ -1307,14 +1308,16 @@ class GuildSyncScheduler:
 
             total_targets = 0
             total_errors = 0
+            total_skipped = 0
             for source_id in archon_source_ids:
                 stats = await _bis_sync_source(self.db_pool, source_id)
                 total_targets += stats.get("targets_run", 0)
                 total_errors  += stats.get("errors", 0)
+                total_skipped += stats.get("skipped", 0)
 
             logger.info(
-                "Archon BIS sync: scrape complete — %d targets, %d errors",
-                total_targets, total_errors,
+                "Archon BIS sync: scrape complete — %d targets, %d errors, %d skipped",
+                total_targets, total_errors, total_skipped,
             )
 
             bis_result = await _rebuild_bis_from_landing(self.db_pool)
@@ -1428,7 +1431,21 @@ class GuildSyncScheduler:
                     counts["skipped"] += 1
 
             prev_source_id = None
+            blocked_origins: dict[str, str] = {}
+            circuit_skip_counts: dict[str, int] = {}
             for target in due_targets:
+                origin = target.get("origin", "")
+                if origin in blocked_origins:
+                    await _record_provider_circuit_skip(
+                        self.db_pool,
+                        target["id"],
+                        target.get("preferred_technique") or "unknown",
+                        target.get("items_found", 0),
+                        blocked_origins[origin],
+                    )
+                    counts["skipped"] += 1
+                    circuit_skip_counts[origin] = circuit_skip_counts.get(origin, 0) + 1
+                    continue
                 try:
                     if prev_source_id is not None and target["source_id"] == prev_source_id:
                         await asyncio.sleep(2.0)
@@ -1443,6 +1460,8 @@ class GuildSyncScheduler:
                         counts["unchanged"] += 1
                     else:
                         counts["failed"] += 1
+                    if result.get("provider_access_blocked"):
+                        blocked_origins[origin] = result.get("error") or "provider access blocked"
                 except Exception as exc:
                     logger.error(
                         "BIS daily sync: error on target %d: %s",
@@ -1451,6 +1470,12 @@ class GuildSyncScheduler:
                     counts["checked"] += 1
                     counts["failed"] += 1
                 prev_source_id = target["source_id"]
+
+            for origin, skipped_count in sorted(circuit_skip_counts.items()):
+                notes_parts.append(
+                    f"{origin} provider circuit opened after access challenge; "
+                    f"{skipped_count} remaining target(s) skipped"
+                )
 
             # --- Phase 1.7-D: enrichment rebuild + delta capture ---
             before_snapshot: dict = {}
