@@ -183,10 +183,18 @@ def test_deployment_requires_verified_backup_before_container_start(
         encoding="utf-8"
     )
     remote = (ROOT / "deploy" / "patt-remote-deploy.sh").read_text(encoding="utf-8")
-    assert "deploy/patt-remote-deploy.sh" in workflow
+    entrypoint = workflow
+    if workflow_name == "deploy-prod.yml":
+        assert "deploy/patt-remote-deploy.sh" in workflow
+    else:
+        assert "deploy/patt-shared-host-deploy.sh" in workflow
+        entrypoint = (ROOT / "deploy" / "patt-shared-host-deploy.sh").read_text(
+            encoding="utf-8"
+        )
+        assert "deploy/patt-remote-deploy.sh" in entrypoint
     assert "PATT_DEPLOYMENT_COMPLETE" in workflow
     assert "PATT_DEPLOYMENT_PREPARED" in workflow
-    assert ".deployment/pending-previous-sha" in workflow
+    assert ".deployment/pending-previous-sha" in entrypoint
     assert workflow.count("deploy/run-strict-ssh.sh") == 2
     assert remote.index("patt-predeploy-backup.sh") < remote.index(
         "PATT_DEPLOYMENT_PREPARED"
