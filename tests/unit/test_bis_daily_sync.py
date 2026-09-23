@@ -532,7 +532,12 @@ class TestSyncTargetHashDedup:
 
         assert result["status"] == "failed"
         assert len(target_updates) == 1
-        assert "CASE WHEN $1 = 'failed' THEN last_fetched ELSE $3 END" in target_updates[0][0]
+        sql, status, items_found, _now, preserve_last_fetched, target_id = target_updates[0]
+        assert "last_fetched = CASE WHEN $4 THEN last_fetched ELSE $3 END" in sql
+        assert status == "failed"
+        assert items_found == 0
+        assert preserve_last_fetched is True
+        assert target_id == 42
 
 
 class TestRebuildTargetFreshness:

@@ -783,10 +783,10 @@ async def sync_target(
             UPDATE config.bis_scrape_targets
                SET status = $1,
                    items_found = $2,
-                   last_fetched = CASE WHEN $1 = 'failed' THEN last_fetched ELSE $3 END
-             WHERE id = $4
+                   last_fetched = CASE WHEN $4 THEN last_fetched ELSE $3 END
+             WHERE id = $5
             """,
-            status, items_found, now, target_id,
+            status, items_found, now, status == "failed", target_id,
         )
         if raw_content and not _skip_insert:
             try:
