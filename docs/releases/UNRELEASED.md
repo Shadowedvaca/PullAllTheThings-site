@@ -95,7 +95,7 @@
 - Provider challenge detection, truthful circuit-skip persistence, daily sync
   circuit breaking, and affected BIS provider parser regressions: 314 passed.
 - Provider-visibility, stale-plan fallback, scheduler, Gear Plan, admin, and
-  email regressions: 138 passed. The full Python unit suite passed 2,068 tests
+  email regressions: 138 passed. The full Python unit suite passed 2,078 tests
   with 71 environment-dependent skips; all 7 Node-backed Catalyst UI contracts
   passed separately. Two PostgreSQL 16 provider-policy integration tests passed.
 - Changed-file critical Ruff, compile, release-contract, production-readiness
