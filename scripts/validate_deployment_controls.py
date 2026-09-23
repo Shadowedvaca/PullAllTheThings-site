@@ -120,12 +120,8 @@ def validate_deployment_controls(repository_root: Path) -> dict:
             "vars.DEPLOY_USER",
             "deploy/configure-deployment-ssh.sh",
             "deploy/run-strict-ssh.sh",
-            "deploy/patt-remote-deploy.sh",
             "PATT_DEPLOYMENT_PREPARED",
             "PATT_DEPLOYMENT_COMPLETE",
-            "GIT_CONFIG_GLOBAL=/dev/null",
-            "GIT_CONFIG_SYSTEM=/dev/null",
-            "GIT_TERMINAL_PROMPT=0",
             "deploy/run-strict-scp.sh",
             "git bundle create",
             "git bundle verify",
@@ -133,6 +129,23 @@ def validate_deployment_controls(repository_root: Path) -> dict:
         ):
             if token not in source:
                 errors.append(f"{workflow_name} is missing {token}")
+        if environment == "production":
+            for token in (
+                "deploy/patt-remote-deploy.sh",
+                "GIT_CONFIG_GLOBAL=/dev/null",
+                "GIT_CONFIG_SYSTEM=/dev/null",
+                "GIT_TERMINAL_PROMPT=0",
+            ):
+                if token not in source:
+                    errors.append(f"{workflow_name} is missing {token}")
+        else:
+            for token in (
+                "deploy/patt-shared-host-deploy.sh",
+                "patt-shared-host-deploy-$DEPLOY_SHA.sh",
+                "timeout-minutes: 75",
+            ):
+                if token not in source:
+                    errors.append(f"{workflow_name} is missing {token}")
         if source.count("bash deploy/run-strict-ssh.sh") != 2:
             errors.append(
                 f"{workflow_name} must use separate preparation and activation SSH sessions"
@@ -172,8 +185,33 @@ def validate_deployment_controls(repository_root: Path) -> dict:
     remote_deploy = (root / "deploy" / "patt-remote-deploy.sh").read_text(
         encoding="utf-8"
     )
+    shared_deploy = (root / "deploy" / "patt-shared-host-deploy.sh").read_text(
+        encoding="utf-8"
+    )
     if "deploy/patt-wait-for-health.sh" not in remote_deploy:
         errors.append("remote deployment must use the bounded readiness gate")
+    for token in (
+        "/run/lock/shared-platform-deployment.lock",
+        "lock_wait_seconds=2700",
+        "minimum_root_kib=$((12 * 1024 * 1024))",
+        "minimum_swap_kib=$((1 * 1024 * 1024))",
+        "minimum_headroom_kib=$((2 * 1024 * 1024))",
+        "flock -w \"$lock_wait_seconds\" 9",
+        "SHARED_DEPLOYMENT_LOCK_WAIT",
+        "SHARED_DEPLOYMENT_LOCK_ACQUIRED",
+        "SHARED_DEPLOYMENT_ADMITTED",
+        "SHARED_DEPLOYMENT_LOCK_RELEASE",
+    ):
+        if token not in shared_deploy:
+            errors.append(f"shared-host deployment is missing {token}")
+    for token in (
+        "docker system prune",
+        "docker builder prune",
+        "docker image prune",
+        "docker volume prune",
+    ):
+        if token in shared_deploy or token in remote_deploy:
+            errors.append(f"deployment retains prohibited host-global cleanup {token}")
     if "ssh-keyscan" in configure:
         errors.append(
             "known-host trust must not be learned from the deployment connection"
