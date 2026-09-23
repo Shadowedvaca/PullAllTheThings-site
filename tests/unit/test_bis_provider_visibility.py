@@ -8,7 +8,10 @@ from guild_portal.services.gear_plan_service import (
     _resolve_member_bis_source,
     get_or_create_plan,
 )
-from guild_portal.services.guide_links_service import get_enabled_sites, invalidate_cache
+from guild_portal.services.guide_links_service import (
+    get_enabled_sites,
+    invalidate_cache,
+)
 from sv_common.bis_provider_policy import (
     HIDDEN_BIS_SOURCE_ORIGINS,
     HIDDEN_GUIDE_SITE_NAMES,
@@ -81,9 +84,7 @@ async def test_member_source_resolver_rejects_admin_only_source_without_fallback
     conn = MagicMock()
     conn.fetchrow = AsyncMock(return_value=None)
 
-    source = await _resolve_member_bis_source(
-        conn, 30, allow_fallback=False
-    )
+    source = await _resolve_member_bis_source(conn, 30, allow_fallback=False)
 
     assert source is None
     conn.fetchrow.assert_awaited_once()

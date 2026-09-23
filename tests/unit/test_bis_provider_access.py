@@ -123,16 +123,20 @@ async def test_source_sync_stops_requesting_after_blocked_canary():
         "error": "provider access blocked: www.archon.gg returned HTTP 200 Cloudflare challenge",
         "provider_access_blocked": True,
     }
-    with patch(
-        "sv_common.guild_sync.bis_sync.sync_target",
-        new_callable=AsyncMock,
-        return_value=blocked,
-    ) as sync_target, patch(
-        "sv_common.guild_sync.bis_sync.record_provider_circuit_skip",
-        new_callable=AsyncMock,
-    ) as record_skip, patch(
-        "sv_common.guild_sync.bis_sync.asyncio.sleep",
-        new_callable=AsyncMock,
+    with (
+        patch(
+            "sv_common.guild_sync.bis_sync.sync_target",
+            new_callable=AsyncMock,
+            return_value=blocked,
+        ) as sync_target,
+        patch(
+            "sv_common.guild_sync.bis_sync.record_provider_circuit_skip",
+            new_callable=AsyncMock,
+        ) as record_skip,
+        patch(
+            "sv_common.guild_sync.bis_sync.asyncio.sleep",
+            new_callable=AsyncMock,
+        ),
     ):
         stats = await sync_source(pool, source_id=13)
 

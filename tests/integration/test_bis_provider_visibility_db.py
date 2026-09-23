@@ -3,7 +3,10 @@
 import pytest
 
 from guild_portal.services.gear_plan_service import _resolve_member_bis_source
-from guild_portal.services.guide_links_service import get_enabled_sites, invalidate_cache
+from guild_portal.services.guide_links_service import (
+    get_enabled_sites,
+    invalidate_cache,
+)
 from sv_common.db.models import GuideSite
 
 
@@ -35,9 +38,10 @@ async def test_member_source_resolution_excludes_hidden_origins(guild_sync_pool)
             assert source is not None
             assert source["id"] == visible_id
 
-            assert await _resolve_member_bis_source(
-                conn, hidden_id, allow_fallback=False
-            ) is None
+            assert (
+                await _resolve_member_bis_source(conn, hidden_id, allow_fallback=False)
+                is None
+            )
         finally:
             await conn.execute(
                 "DELETE FROM ref.bis_list_sources WHERE id = ANY($1::int[])",
