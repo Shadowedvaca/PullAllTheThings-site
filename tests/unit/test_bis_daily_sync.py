@@ -634,6 +634,7 @@ class TestSyncTargetHashDedup:
         assert result["provider_access_blocked"] is True
         assert len(target_updates) == 1
         sql, status, items_found, _now, preserve_last_fetched, target_id = target_updates[0]
+        assert "items_found = CASE WHEN $4 THEN items_found ELSE $2 END" in sql
         assert "last_fetched = CASE WHEN $4 THEN last_fetched ELSE $3 END" in sql
         assert status == "failed"
         assert items_found == 0

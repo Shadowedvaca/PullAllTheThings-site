@@ -890,7 +890,7 @@ async def sync_target(
             """
             UPDATE config.bis_scrape_targets
                SET status = $1,
-                   items_found = $2,
+                   items_found = CASE WHEN $4 THEN items_found ELSE $2 END,
                    last_fetched = CASE WHEN $4 THEN last_fetched ELSE $3 END
              WHERE id = $5
             """,
