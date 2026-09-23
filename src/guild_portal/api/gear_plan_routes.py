@@ -67,7 +67,9 @@ async def get_gear_plan(
         return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
 
     # Ensure plan exists
-    await svc.get_or_create_plan(pool, current_player.id, character_id)
+    plan = await svc.get_or_create_plan(pool, current_player.id, character_id)
+    if plan.pop("_member_source_fallback_applied", False):
+        await svc.populate_from_bis(pool, current_player.id, character_id)
 
     detail = await svc.get_plan_detail(pool, current_player.id, character_id)
     if not detail:
@@ -115,6 +117,8 @@ async def create_gear_plan(
         hero_talent_id=hero_talent_id,
         bis_source_id=bis_source_id,
     )
+    if plan.pop("_member_source_fallback_applied", False):
+        await svc.populate_from_bis(pool, current_player.id, character_id)
     return JSONResponse({"ok": True, "data": {"plan": plan}})
 
 
@@ -151,12 +155,15 @@ async def update_plan_config(
     hero_talent_id: Optional[int] = body.get("hero_talent_id")  # can be None to clear
     bis_source_id: Optional[int] = body.get("bis_source_id")
 
-    ok = await svc.update_plan_config(
-        pool, current_player.id, character_id,
-        spec_id=spec_id,
-        hero_talent_id=hero_talent_id,
-        bis_source_id=bis_source_id,
-    )
+    try:
+        ok = await svc.update_plan_config(
+            pool, current_player.id, character_id,
+            spec_id=spec_id,
+            hero_talent_id=hero_talent_id,
+            bis_source_id=bis_source_id,
+        )
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     if not ok:
         return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
 

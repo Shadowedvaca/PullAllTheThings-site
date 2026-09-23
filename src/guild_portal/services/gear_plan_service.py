@@ -13,6 +13,7 @@ from typing import Optional
 
 import asyncpg
 
+from sv_common.bis_provider_policy import HIDDEN_BIS_SOURCE_ORIGINS
 from sv_common.guild_sync.quality_track import detect_crafted_track, is_crafted_item
 from sv_common.guild_sync.simc_parser import (
     SimcSlot,
@@ -161,6 +162,49 @@ _ARMOR_TYPE_MARKER: dict[str, str] = {
 
 # The two weapon main-hand plan slot keys — used throughout weapon display logic.
 _WEAPON_MH_SLOTS: frozenset[str] = frozenset({"main_hand_2h", "main_hand_1h"})
+
+
+async def _resolve_member_bis_source(
+    conn: asyncpg.Connection,
+    requested_source_id: Optional[int],
+    *,
+    allow_fallback: bool = True,
+) -> Optional[dict]:
+    """Resolve an active member-visible BIS source.
+
+    Gear Plan Admin intentionally retains every source. Member-facing paths use
+    this resolver so stale plans cannot continue selecting an admin-only source.
+    """
+    hidden_origins = list(HIDDEN_BIS_SOURCE_ORIGINS)
+    if requested_source_id is not None:
+        row = await conn.fetchrow(
+            """
+            SELECT id, name, short_label, content_type, origin, is_default, sort_order
+              FROM ref.bis_list_sources
+             WHERE id = $1
+               AND is_active = TRUE
+               AND NOT (COALESCE(origin, '') = ANY($2::text[]))
+            """,
+            requested_source_id,
+            hidden_origins,
+        )
+        if row:
+            return dict(row)
+        if not allow_fallback:
+            return None
+
+    row = await conn.fetchrow(
+        """
+        SELECT id, name, short_label, content_type, origin, is_default, sort_order
+          FROM ref.bis_list_sources
+         WHERE is_active = TRUE
+           AND NOT (COALESCE(origin, '') = ANY($1::text[]))
+         ORDER BY is_default DESC, sort_order, id
+         LIMIT 1
+        """,
+        hidden_origins,
+    )
+    return dict(row) if row else None
 
 
 def _compute_weapon_display(
@@ -533,7 +577,24 @@ async def get_or_create_plan(
             player_id, character_id,
         )
         if row:
-            return dict(row)
+            plan = dict(row)
+            resolved_source = await _resolve_member_bis_source(
+                conn, plan.get("bis_source_id")
+            )
+            resolved_source_id = resolved_source["id"] if resolved_source else None
+            if resolved_source_id != plan.get("bis_source_id"):
+                await conn.execute(
+                    """
+                    UPDATE guild_identity.gear_plans
+                       SET bis_source_id = $1, updated_at = NOW()
+                     WHERE id = $2
+                    """,
+                    resolved_source_id,
+                    plan["id"],
+                )
+                plan["bis_source_id"] = resolved_source_id
+                plan["_member_source_fallback_applied"] = True
+            return plan
 
         # If no spec provided, try to pull from the character's active spec
         if spec_id is None:
@@ -544,18 +605,9 @@ async def get_or_create_plan(
             if char_row:
                 spec_id = char_row["active_spec_id"]
 
-        # Pick default BIS source (first active is_default, or first active)
-        if bis_source_id is None:
-            src_row = await conn.fetchrow(
-                """
-                SELECT id FROM ref.bis_list_sources
-                 WHERE is_active = TRUE
-                 ORDER BY is_default DESC, sort_order
-                 LIMIT 1
-                """
-            )
-            if src_row:
-                bis_source_id = src_row["id"]
+        # Resolve a requested source or choose the first member-visible default.
+        src_row = await _resolve_member_bis_source(conn, bis_source_id)
+        bis_source_id = src_row["id"] if src_row else None
 
         row = await conn.fetchrow(
             """
@@ -581,6 +633,12 @@ async def update_plan_config(
 ) -> bool:
     """Update plan spec/hero_talent/source configuration.  Returns True on success."""
     async with pool.acquire() as conn:
+        if bis_source_id is not None:
+            source = await _resolve_member_bis_source(
+                conn, bis_source_id, allow_fallback=False
+            )
+            if source is None:
+                raise ValueError("BIS source is not available")
         result = await conn.execute(
             """
             UPDATE guild_identity.gear_plans
@@ -718,6 +776,9 @@ async def populate_from_bis(
         spec_id = plan_row["spec_id"]
         use_source = source_id or plan_row["bis_source_id"]
         use_ht = hero_talent_id if hero_talent_id is not None else plan_row["hero_talent_id"]
+
+        source = await _resolve_member_bis_source(conn, use_source)
+        use_source = source["id"] if source else None
 
         if not spec_id or not use_source:
             return 0
@@ -1245,15 +1306,29 @@ async def get_plan_detail(
               FROM guild_identity.gear_plans gp
               LEFT JOIN ref.specializations s ON s.id = gp.spec_id
               LEFT JOIN ref.hero_talents ht ON ht.id = gp.hero_talent_id
-              LEFT JOIN ref.bis_list_sources bls ON bls.id = gp.bis_source_id
+              LEFT JOIN ref.bis_list_sources bls
+                     ON bls.id = gp.bis_source_id
+                    AND bls.is_active = TRUE
+                    AND NOT (COALESCE(bls.origin, '') = ANY($3::text[]))
               LEFT JOIN guild_identity.wow_characters wc ON wc.id = gp.character_id
               LEFT JOIN ref.classes c ON c.id = wc.class_id
              WHERE gp.player_id = $1 AND gp.character_id = $2
             """,
-            player_id, character_id,
+            player_id, character_id, list(HIDDEN_BIS_SOURCE_ORIGINS),
         )
         if not plan_row:
             return None
+
+        plan_row = dict(plan_row)
+        resolved_source = await _resolve_member_bis_source(
+            conn, plan_row.get("bis_source_id")
+        )
+        if resolved_source:
+            plan_row["bis_source_id"] = resolved_source["id"]
+            plan_row["bis_source_name"] = resolved_source["name"]
+        else:
+            plan_row["bis_source_id"] = None
+            plan_row["bis_source_name"] = None
 
         plan_id = plan_row["id"]
         spec_id = plan_row["spec_id"]
@@ -1390,9 +1465,10 @@ async def get_plan_detail(
                  WHERE tr.spec_id = $1
                    AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
+                   AND NOT (COALESCE(bls.origin, '') = ANY($3::text[]))
                  ORDER BY tr.sort_order
                 """,
-                spec_id, hero_talent_id,
+                spec_id, hero_talent_id, list(HIDDEN_BIS_SOURCE_ORIGINS),
             )
             _tb_seen: set = set()
             for r in _tb_rows:
@@ -1502,6 +1578,7 @@ async def get_plan_detail(
                  WHERE vbr.spec_id = $1
                   AND ($2::int IS NULL OR vbr.hero_talent_id = $2 OR vbr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
+                   AND NOT (COALESCE(bls.origin, '') = ANY($3::text[]))
                    AND EXISTS (
                        SELECT 1
                          FROM enrichment.item_seasons ise
@@ -1511,7 +1588,7 @@ async def get_plan_detail(
                    )
                  ORDER BY bls.sort_order, vbr.slot, vbr.guide_order
                 """,
-                spec_id, hero_talent_id,
+                spec_id, hero_talent_id, list(HIDDEN_BIS_SOURCE_ORIGINS),
             )
             for r in bis_rows:
                 bis_by_slot.setdefault(r["slot"], []).append(dict(r))
@@ -1581,17 +1658,23 @@ async def get_plan_detail(
                  WHERE ip.spec_id = $1
                    AND ip.blizzard_item_id = ANY($2::int[])
                    AND ip.slot = ANY($3::text[])
+                   AND src.is_active = TRUE
+                   AND NOT (COALESCE(src.origin, '') = ANY($4::text[]))
                  GROUP BY blizzard_item_id, content_type
                 UNION ALL
-                SELECT blizzard_item_id, 'overall',
+                SELECT ip.blizzard_item_id, 'overall',
                        ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2)
-                  FROM enrichment.item_popularity
-                 WHERE spec_id = $1
-                   AND blizzard_item_id = ANY($2::int[])
-                   AND slot = ANY($3::text[])
-                 GROUP BY blizzard_item_id
+                  FROM enrichment.item_popularity ip
+                  JOIN ref.bis_list_sources src ON src.id = ip.source_id
+                 WHERE ip.spec_id = $1
+                   AND ip.blizzard_item_id = ANY($2::int[])
+                   AND ip.slot = ANY($3::text[])
+                   AND src.is_active = TRUE
+                   AND NOT (COALESCE(src.origin, '') = ANY($4::text[]))
+                 GROUP BY ip.blizzard_item_id
                 """,
                 spec_id, list(all_bis_bids), _bis_slots_list,
+                list(HIDDEN_BIS_SOURCE_ORIGINS),
             )
             for pr in pop_rows:
                 if pr["popularity_pct"] is not None:
@@ -1725,13 +1808,23 @@ async def get_plan_detail(
             SELECT id, name, short_label, content_type, origin, is_default, sort_order
               FROM ref.bis_list_sources
              WHERE is_active = TRUE
+               AND NOT (COALESCE(origin, '') = ANY($1::text[]))
              ORDER BY sort_order
-            """
+            """,
+            list(HIDDEN_BIS_SOURCE_ORIGINS),
         )
 
         # Which sources have hero-talent-specific BIS entries
         ht_source_ids = await conn.fetchval(
-            "SELECT array_agg(DISTINCT source_id) FROM enrichment.bis_entries WHERE hero_talent_id IS NOT NULL"
+            """
+            SELECT array_agg(DISTINCT be.source_id)
+              FROM enrichment.bis_entries be
+              JOIN ref.bis_list_sources bls ON bls.id = be.source_id
+             WHERE be.hero_talent_id IS NOT NULL
+               AND bls.is_active = TRUE
+               AND NOT (COALESCE(bls.origin, '') = ANY($1::text[]))
+            """,
+            list(HIDDEN_BIS_SOURCE_ORIGINS),
         ) or []
 
         # Hero talents for the plan's spec (for UI dropdown)
@@ -2279,9 +2372,10 @@ async def get_available_items(
                  WHERE tr.spec_id = $1
                    AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                    AND bls.is_active = TRUE
+                   AND NOT (COALESCE(bls.origin, '') = ANY($3::text[]))
                  ORDER BY tr.sort_order
                 """,
-                avail_spec_id, avail_ht_id,
+                avail_spec_id, avail_ht_id, list(HIDDEN_BIS_SOURCE_ORIGINS),
             )
             _seen_tr: set = set()
             for r in t_rows:
@@ -2312,15 +2406,20 @@ async def get_available_items(
                   FROM enrichment.item_popularity ip
                   JOIN ref.bis_list_sources src ON src.id = ip.source_id
                  WHERE ip.spec_id = $1 AND ip.slot = ANY($2::text[])
+                   AND src.is_active = TRUE
+                   AND NOT (COALESCE(src.origin, '') = ANY($3::text[]))
                  GROUP BY blizzard_item_id, content_type
                 UNION ALL
-                SELECT blizzard_item_id, 'overall',
+                SELECT ip.blizzard_item_id, 'overall',
                        ROUND(SUM(count)::NUMERIC / NULLIF(SUM(total), 0) * 100, 2)
-                  FROM enrichment.item_popularity
-                 WHERE spec_id = $1 AND slot = ANY($2::text[])
-                 GROUP BY blizzard_item_id
+                  FROM enrichment.item_popularity ip
+                  JOIN ref.bis_list_sources src ON src.id = ip.source_id
+                 WHERE ip.spec_id = $1 AND ip.slot = ANY($2::text[])
+                   AND src.is_active = TRUE
+                   AND NOT (COALESCE(src.origin, '') = ANY($3::text[]))
+                 GROUP BY ip.blizzard_item_id
                 """,
-                avail_spec_id, _pop_slots,
+                avail_spec_id, _pop_slots, list(HIDDEN_BIS_SOURCE_ORIGINS),
             )
             for pr in pop_rows:
                 if pr["popularity_pct"] is not None:
@@ -2675,9 +2774,10 @@ async def get_trinket_ratings(
              WHERE tr.spec_id = $1
                AND (tr.hero_talent_id = $2 OR tr.hero_talent_id IS NULL)
                AND bls.is_active = TRUE
+               AND NOT (COALESCE(bls.origin, '') = ANY($3::text[]))
              ORDER BY tr.sort_order, tr.id
             """,
-            spec_id, hero_talent_id,
+            spec_id, hero_talent_id, list(HIDDEN_BIS_SOURCE_ORIGINS),
         )
 
         # Available items: have a source in the current season's instances

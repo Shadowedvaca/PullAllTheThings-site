@@ -62,6 +62,13 @@
   the first due target as a provider canary, and open a per-run circuit that
   preserves cached recommendations and last-success timestamps instead of
   issuing hundreds of requests after a provider-wide access block.
+- Make Archon, Icy Veins, and U.GG admin-only while their supported ingestion
+  paths are unresolved. Preserve their parsers, targets, and cached data in Gear
+  Plan Admin, but exclude them from member Gear Plans, guide links, trinket and
+  popularity data, general reference-table UI, scheduled fetches, and reports.
+  Existing plans that selected one of these sources fall back to the first
+  active member-visible source and refill their unlocked goals from it; locked
+  user choices remain untouched.
 
 ## Validation
 
@@ -81,6 +88,12 @@
 - Focused BIS parser, insertion, and metadata regression tests: 244 passed.
 - Provider challenge detection, truthful circuit-skip persistence, daily sync
   circuit breaking, and affected BIS provider parser regressions: 314 passed.
+- Provider-visibility, stale-plan fallback, scheduler, Gear Plan, admin, and
+  email regressions: 138 passed. The full Python unit suite passed 2,060 tests
+  with 71 environment-dependent skips; all 7 Node-backed Catalyst UI contracts
+  passed separately. Two PostgreSQL 16 provider-policy integration tests passed.
+- Changed-file critical Ruff, compile, release-contract, production-readiness
+  configuration, and deployment-control validation passed.
 
 ## Deployment/Migrations
 
@@ -102,6 +115,6 @@
 - Season 2 SimC bonus IDs were not added because no authoritative mapping was available. Display-string detection, the existing verified map, exact-item matching, and empirical bonus learning continue to provide fallback coverage.
 - Manual visual validation of the admin season editor is Release-timed per issue #60.
 - Development currently receives Cloudflare verification pages from Archon,
-  Icy Veins, and u.gg. Their cached recommendations remain available with honest
-  freshness state; automated refresh requires a supported provider data path or
-  a separately accepted browser-worker design.
+  Icy Veins, and U.GG. Their code and cached recommendations remain available
+  only in Gear Plan Admin; member-facing restoration requires a supported
+  provider data path.

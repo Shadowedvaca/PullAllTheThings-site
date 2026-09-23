@@ -4305,20 +4305,37 @@ async def get_matrix(pool: asyncpg.Pool) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def _snapshot_bis_entries(conn) -> dict:
+async def _snapshot_bis_entries(
+    conn,
+    excluded_origins: tuple[str, ...] | None = None,
+) -> dict:
     """Snapshot current enrichment.bis_entries as a keyed dict.
 
     Returns {(spec_id, source_id, slot, blizzard_item_id): item_name}.
     Called before rebuild (TRUNCATE) so delta can be computed afterwards.
     """
-    rows = await conn.fetch(
-        """
+    if excluded_origins:
+        rows = await conn.fetch(
+            """
+            SELECT be.blizzard_item_id, be.spec_id, be.source_id, be.slot,
+                   COALESCE(ei.name, be.blizzard_item_id::text) AS name
+              FROM enrichment.bis_entries be
+              JOIN ref.bis_list_sources bls ON bls.id = be.source_id
+              LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = be.blizzard_item_id
+             WHERE bls.is_active = TRUE
+               AND NOT (COALESCE(bls.origin, '') = ANY($1::text[]))
+            """,
+            list(excluded_origins),
+        )
+    else:
+        rows = await conn.fetch(
+            """
         SELECT be.blizzard_item_id, be.spec_id, be.source_id, be.slot,
                COALESCE(ei.name, be.blizzard_item_id::text) AS name
           FROM enrichment.bis_entries be
           LEFT JOIN enrichment.items ei ON ei.blizzard_item_id = be.blizzard_item_id
-        """
-    )
+            """
+        )
     return {
         (row["spec_id"], row["source_id"], row["slot"], row["blizzard_item_id"]): row["name"]
         for row in rows

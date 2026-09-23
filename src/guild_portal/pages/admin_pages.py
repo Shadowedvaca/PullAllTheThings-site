@@ -1356,8 +1356,12 @@ async def admin_reference_tables(
     )
     screen_permissions = list(screen_perms_result.scalars().all())
 
+    from sv_common.bis_provider_policy import HIDDEN_GUIDE_SITE_NAMES
+
     guide_sites_result = await db.execute(
-        select(GuideSite).order_by(GuideSite.sort_order, GuideSite.id)
+        select(GuideSite)
+        .where(GuideSite.name.not_in(HIDDEN_GUIDE_SITE_NAMES))
+        .order_by(GuideSite.sort_order, GuideSite.id)
     )
     guide_sites = list(guide_sites_result.scalars().all())
 

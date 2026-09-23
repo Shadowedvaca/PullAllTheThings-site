@@ -1257,9 +1257,15 @@ async def update_guide_site(
     db: AsyncSession = Depends(get_db),
 ):
     from sv_common.db.models import GuideSite
+    from sv_common.bis_provider_policy import HIDDEN_GUIDE_SITE_NAMES
     from guild_portal.services.guide_links_service import invalidate_cache
 
-    result = await db.execute(select(GuideSite).where(GuideSite.id == site_id))
+    result = await db.execute(
+        select(GuideSite).where(
+            GuideSite.id == site_id,
+            GuideSite.name.not_in(HIDDEN_GUIDE_SITE_NAMES),
+        )
+    )
     site = result.scalar_one_or_none()
     if not site:
         return {"ok": False, "error": "Guide site not found"}

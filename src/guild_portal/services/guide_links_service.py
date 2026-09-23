@@ -9,6 +9,7 @@ import time
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sv_common.bis_provider_policy import HIDDEN_GUIDE_SITE_NAMES
 from sv_common.db.models import GuideSite
 from sv_common.guide_links import build_link_for_site
 
@@ -30,7 +31,10 @@ async def get_enabled_sites(db: AsyncSession) -> list[dict]:
         return _cache
     result = await db.execute(
         select(GuideSite)
-        .where(GuideSite.enabled == True)  # noqa: E712
+        .where(
+            GuideSite.enabled == True,  # noqa: E712
+            GuideSite.name.not_in(HIDDEN_GUIDE_SITE_NAMES),
+        )
         .order_by(GuideSite.sort_order, GuideSite.id)
     )
     rows = result.scalars().all()
