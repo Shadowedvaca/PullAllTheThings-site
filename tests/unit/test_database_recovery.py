@@ -222,7 +222,7 @@ def test_legacy_identity_regression_uses_real_compose_backup_wrapper():
     assert '--database-url-env DATABASE_URL' in source
     assert '--database-url-service "$app_service"' in source
     assert "database=patt_recovery" in source
-    assert "alembic_revision=0182" in source
+    assert "alembic_revision=0188" in source
     assert workflow.index("docker-compose.recovery.yml up -d") < workflow.rindex(
         "scripts/reproduce_legacy_database_identity.sh"
     )
