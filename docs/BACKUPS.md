@@ -80,11 +80,24 @@ name, Alembic revision, archive path and checksum, plus explicit markers that
 restore authority is required and automatic database downgrade is disabled. It
 contains no database password or connection URL.
 
-The repository script does not delete old backups. Retention is an explicit
-host-storage policy and must not remove the only usable recovery point for an
-active release. Any separately installed nightly backup or retention job is
-supplemental; do not treat it as verified merely because an older runbook said
-it existed.
+After a deployment has passed runtime health and identity, database,
+Alembic-head, and atomic active-SHA checks, the repository applies bounded
+retention with `deploy/patt-prune-backups.py`. Development retains the newest
+three complete archive/manifest pairs and Test retains the newest seven.
+Production is never pruned automatically.
+
+Retention requires the current deployment's already verified archive to be the
+newest complete pair. It preflights the entire exact environment directory
+before deleting anything and refuses deletion if it finds an orphaned archive
+or manifest, an empty or malformed pair, a temporary backup artifact, a
+symlink, or mismatched manifest identity. Every expired archive and manifest
+path is logged before deletion, followed by the retained and deleted counts.
+`--dry-run` produces the same selection evidence without deleting files. An
+operator must investigate failed retention; broad or manual cleanup is not an
+automatic recovery step.
+
+Any separately installed nightly backup is supplemental; do not treat it as
+verified merely because an older runbook said it existed.
 
 ## CI recovery rehearsal
 

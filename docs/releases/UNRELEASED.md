@@ -16,6 +16,8 @@
   on the farmable base item and showing the resulting tier item as a Catalyst action.
 - Keep direct tier goals and Catalyst acquisition routes distinct, including a
   clear "base equipped, ready to catalyze" state instead of a false BIS star.
+- Development and Test deployments now apply bounded, fail-closed backup
+  retention only after all deployment success gates pass.
 
 ## Fixes/Changes
 
@@ -69,6 +71,10 @@
   Existing plans that selected one of these sources fall back to the first
   active member-visible source and refill their unlocked goals from it; locked
   user choices remain untouched.
+- Retain the newest three complete backup pairs in Development and seven in
+  Test; Production backups are never automatically pruned.
+- Refuse pruning when backup evidence is orphaned, temporary, malformed, empty,
+  or does not match its manifest identity, and report exact selected paths.
 
 ## Validation
 
@@ -89,11 +95,13 @@
 - Provider challenge detection, truthful circuit-skip persistence, daily sync
   circuit breaking, and affected BIS provider parser regressions: 314 passed.
 - Provider-visibility, stale-plan fallback, scheduler, Gear Plan, admin, and
-  email regressions: 138 passed. The full Python unit suite passed 2,060 tests
+  email regressions: 138 passed. The full Python unit suite passed 2,068 tests
   with 71 environment-dependent skips; all 7 Node-backed Catalyst UI contracts
   passed separately. Two PostgreSQL 16 provider-policy integration tests passed.
 - Changed-file critical Ruff, compile, release-contract, production-readiness
   configuration, and deployment-control validation passed.
+- Added unit coverage for retention selection, dry-run reporting, deletion
+  boundaries, orphan/incomplete evidence, and deployment ordering.
 
 ## Deployment/Migrations
 
@@ -105,10 +113,14 @@
   `viz.tier_piece_sources` with active-season alignment.
 - Before production promotion, confirm old-event attendance processing is complete. The 2026-09-03 read-only inventory found 0 unprocessed past attendance events but 54 old events without signup snapshots; those histories remain attached to Season 1.
 - After deployment, run the normal Blizzard item-source, item-set, enrichment/classification, and BIS refresh sequence for the new IDs. Roster reset remains a separate explicit operation.
+- No migration is included for backup retention. The retention helper runs only
+  after health, identity, migration-head, and active-SHA verification.
 
 ## Rollback
 
 - A one-revision downgrade removes the active-row index, deactivates Midnight Season 2, and reactivates the latest prior season without deleting either season or related history. Re-upgrade reconciles and reactivates the S2 row.
+- If retention refuses to run, preserve all backup evidence and investigate the
+  exact directory; do not bypass the check with broad cleanup.
 
 ## Known Limitations
 
@@ -118,3 +130,5 @@
   Icy Veins, and U.GG. Their code and cached recommendations remain available
   only in Gear Plan Admin; member-facing restoration requires a supported
   provider data path.
+- Existing pre-deployment backups outside the exact Development or Test PATT
+  directories are not managed by this policy.
