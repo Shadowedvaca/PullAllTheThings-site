@@ -781,7 +781,9 @@ async def sync_target(
         await conn.execute(
             """
             UPDATE config.bis_scrape_targets
-               SET status = $1, items_found = $2, last_fetched = $3
+               SET status = $1,
+                   items_found = $2,
+                   last_fetched = CASE WHEN $1 = 'failed' THEN last_fetched ELSE $3 END
              WHERE id = $4
             """,
             status, items_found, now, target_id,
@@ -2074,7 +2076,6 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
     }
 
     total_inserted = 0
-    now = datetime.now(timezone.utc)
 
     # Pass 1: normal targets
     for row in rows:
@@ -2117,20 +2118,10 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         target_inserted = result["inserted"]
         total_inserted += target_inserted
 
-        # Determine status from coverage and stamp back onto scrape target
-        rebuild_status = (
-            "failed" if target_inserted == 0 else _bis_slot_coverage_status(slots or [])
-        )
-
-        async with pool.acquire() as conn:
-            await conn.execute(
-                """
-                UPDATE config.bis_scrape_targets
-                   SET items_found = $1, status = $2, last_fetched = $3
-                 WHERE id = $4
-                """,
-                target_inserted, rebuild_status, now, target_id,
-            )
+        # A rebuild may be using an older cached landing snapshot after the
+        # latest network fetch failed. Keep fetch status/freshness owned by
+        # sync_target(); only refresh the number of usable cached entries here.
+        await _update_rebuilt_target_items(pool, target_id, target_inserted)
 
     # Pass 2: merge targets
     for mo in merge_override_rows:
@@ -2158,24 +2149,11 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
         result = await merge_bis_sections(ctx, primary_items, secondary_items, dict(mo))
         total_inserted += result["inserted"]
 
-        # Status update for the corresponding scrape target
+        # Cached entry count update for the corresponding scrape target.
         target_id = mo["target_id"]
         if target_id:
             target_inserted = result["inserted"]
-            all_items = list(primary_items) + list(secondary_items)
-            rebuild_status = (
-                "failed" if target_inserted == 0 else _bis_slot_coverage_status(all_items)
-            )
-
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    UPDATE config.bis_scrape_targets
-                       SET items_found = $1, status = $2, last_fetched = $3
-                     WHERE id = $4
-                    """,
-                    target_inserted, rebuild_status, now, target_id,
-                )
+            await _update_rebuilt_target_items(pool, target_id, target_inserted)
         logger.info(
             "rebuild_bis_from_landing merge: spec %d source %d %s → %d inserted",
             spec_id, source_id, content_type, result["inserted"],
@@ -2183,6 +2161,24 @@ async def rebuild_bis_from_landing(pool: asyncpg.Pool) -> dict:
 
     logger.info("rebuild_bis_from_landing: %d bis_entries inserted", total_inserted)
     return {"bis_entries_inserted": total_inserted}
+
+
+async def _update_rebuilt_target_items(
+    pool: asyncpg.Pool,
+    target_id: int,
+    items_found: int,
+) -> None:
+    """Update cached coverage without falsifying the latest fetch outcome."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE config.bis_scrape_targets
+               SET items_found = $1
+             WHERE id = $2
+            """,
+            items_found,
+            target_id,
+        )
 
 
 async def rebuild_trinket_ratings_from_landing(pool: asyncpg.Pool) -> dict:

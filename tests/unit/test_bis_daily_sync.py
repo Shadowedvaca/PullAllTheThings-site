@@ -501,6 +501,61 @@ class TestSyncTargetHashDedup:
         # content_hash should be the 6th parameter in the INSERT VALUES ($1..$6)
         assert "content_hash" in insert_sqls[0]
 
+    @pytest.mark.asyncio
+    async def test_failed_fetch_does_not_advance_last_fetched(self):
+        """A failed extraction records the attempt without making stale data look fresh."""
+        from sv_common.guild_sync.bis_sync import sync_target
+
+        target_updates = []
+        conn = AsyncMock()
+        conn.fetchrow = AsyncMock(return_value={"origin": "icy_veins"})
+
+        async def execute_side(*args, **kwargs):
+            if "UPDATE config.bis_scrape_targets" in args[0] and "last_fetched" in args[0]:
+                target_updates.append(args)
+
+        conn.execute = AsyncMock(side_effect=execute_side)
+
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+
+        target_row = self._make_target_row()
+        with patch(
+            "sv_common.guild_sync.bis_sync._extract",
+            new_callable=AsyncMock,
+            return_value=([], [], "HTTP 403", None),
+        ):
+            result = await sync_target(pool, 42, _target_row=target_row)
+
+        assert result["status"] == "failed"
+        assert len(target_updates) == 1
+        assert "CASE WHEN $1 = 'failed' THEN last_fetched ELSE $3 END" in target_updates[0][0]
+
+
+class TestRebuildTargetFreshness:
+    @pytest.mark.asyncio
+    async def test_rebuild_updates_item_count_without_rewriting_fetch_state(self):
+        from sv_common.guild_sync.bis_sync import _update_rebuilt_target_items
+
+        conn = AsyncMock()
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+
+        await _update_rebuilt_target_items(pool, target_id=42, items_found=17)
+
+        sql, items_found, target_id = conn.execute.await_args.args
+        assert "items_found" in sql
+        assert "status" not in sql
+        assert "last_fetched" not in sql
+        assert items_found == 17
+        assert target_id == 42
+
 
 # ---------------------------------------------------------------------------
 # Phase 1.7-D — _snapshot_bis_entries + _compute_delta
