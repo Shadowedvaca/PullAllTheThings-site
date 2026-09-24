@@ -621,11 +621,11 @@ class TestEdgeCases:
         assert slots[0].slot == "main_hand"
         assert slots[0].blizzard_item_id == 700001
 
-    def test_mythic_plus_missing_returns_empty(self):
+    def test_mythic_plus_missing_falls_back_to_sole_overall_table(self):
         page = _make_method_page([("Overall Best Gear", [("Head", 500001, "Boss")])])
         sections = _extract_method_sections(page, _TEST_SLOT_MAP)
         slots = _resolve_method_section_local(sections, "mythic_plus")
-        assert slots == []
+        assert [slot.blizzard_item_id for slot in slots] == [500001]
 
 
 # ---------------------------------------------------------------------------

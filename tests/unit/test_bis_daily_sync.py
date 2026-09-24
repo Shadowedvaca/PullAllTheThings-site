@@ -24,7 +24,7 @@ Tests:
 
 import os
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +269,101 @@ class TestBisDailySyncLoop:
         await scheduler.run_bis_daily_sync(triggered_by="manual")
 
     @pytest.mark.asyncio
+    async def test_provider_challenge_opens_circuit_for_remaining_origin_targets(self):
+        """One blocked canary skips later targets for that provider, not other providers."""
+        scheduler = _make_scheduler()
+        targets = [
+            {
+                "id": 1, "source_id": 1, "spec_id": 1, "hero_talent_id": None,
+                "content_type": "raid", "url": "https://u.gg/one",
+                "preferred_technique": "json_embed", "check_interval_days": 1,
+                "items_found": 16, "next_check_at": None, "origin": "ugg",
+            },
+            {
+                "id": 2, "source_id": 2, "spec_id": 2, "hero_talent_id": None,
+                "content_type": "mythic_plus", "url": "https://u.gg/two",
+                "preferred_technique": "json_embed", "check_interval_days": 1,
+                "items_found": 16, "next_check_at": None, "origin": "ugg",
+            },
+            {
+                "id": 3, "source_id": 3, "spec_id": 1, "hero_talent_id": None,
+                "content_type": "overall", "url": "https://wowhead.example/three",
+                "preferred_technique": "wh_gatherer", "check_interval_days": 1,
+                "items_found": 16, "next_check_at": None, "origin": "wowhead",
+            },
+        ]
+        fetchval_calls = []
+        conn = AsyncMock()
+        conn.fetch = AsyncMock(return_value=targets)
+
+        async def capture_fetchval(*args):
+            fetchval_calls.append(args)
+            return 1
+
+        conn.fetchval = AsyncMock(side_effect=capture_fetchval)
+        pool = MagicMock()
+        acquire = AsyncMock()
+        acquire.__aenter__ = AsyncMock(return_value=conn)
+        acquire.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=acquire)
+        scheduler.db_pool = pool
+
+        blocked = {
+            "items_found": 0,
+            "status": "failed",
+            "error": "provider access blocked: u.gg returned HTTP 403 Cloudflare challenge",
+            "provider_access_blocked": True,
+        }
+        success = {
+            "items_found": 16,
+            "status": "success",
+            "error": None,
+            "provider_access_blocked": False,
+        }
+
+        with patch(
+            "sv_common.guild_sync.scheduler._bis_sync_target",
+            new_callable=AsyncMock,
+            side_effect=[blocked, success],
+        ) as sync_target, patch(
+            "sv_common.guild_sync.scheduler._record_provider_circuit_skip",
+            new_callable=AsyncMock,
+        ) as record_skip, patch(
+            "sv_common.guild_sync.scheduler._snapshot_bis_entries",
+            new_callable=AsyncMock,
+            return_value={},
+        ), patch(
+            "sv_common.guild_sync.scheduler._rebuild_bis_from_landing",
+            new_callable=AsyncMock,
+        ), patch(
+            "sv_common.guild_sync.scheduler._rebuild_trinket_ratings_from_landing",
+            new_callable=AsyncMock,
+        ), patch(
+            "sv_common.guild_sync.scheduler._rebuild_item_popularity_from_landing",
+            new_callable=AsyncMock,
+        ), patch(
+            "sv_common.guild_sync.scheduler.asyncio.sleep",
+            new_callable=AsyncMock,
+        ):
+            await scheduler.run_bis_daily_sync(triggered_by="manual")
+
+        assert [sync_call.args[1] for sync_call in sync_target.await_args_list] == [1, 3]
+        record_skip.assert_awaited_once()
+        assert record_skip.await_args.args[1:5] == (
+            2,
+            "json_embed",
+            16,
+            blocked["error"],
+        )
+        insert = next(
+            fetchval_call
+            for fetchval_call in fetchval_calls
+            if "bis_daily_runs" in fetchval_call[0]
+        )
+        assert insert[2:7] == (2, 1, 0, 1, 1)
+        assert "ugg provider circuit opened" in insert[14]
+
+    @pytest.mark.asyncio
     async def test_skipped_targets_counted(self):
         """Targets whose next_check_at is in the future are counted as skipped, not fetched."""
         from datetime import datetime, timezone, timedelta
@@ -500,6 +595,73 @@ class TestSyncTargetHashDedup:
         assert len(insert_sqls) == 1, "Expected one bis_scrape_raw insert"
         # content_hash should be the 6th parameter in the INSERT VALUES ($1..$6)
         assert "content_hash" in insert_sqls[0]
+
+    @pytest.mark.asyncio
+    async def test_failed_fetch_does_not_advance_last_fetched(self):
+        """A failed extraction records the attempt without making stale data look fresh."""
+        from sv_common.guild_sync.bis_sync import sync_target
+
+        target_updates = []
+        conn = AsyncMock()
+        conn.fetchrow = AsyncMock(return_value={"origin": "icy_veins"})
+
+        async def execute_side(*args, **kwargs):
+            if "UPDATE config.bis_scrape_targets" in args[0] and "last_fetched" in args[0]:
+                target_updates.append(args)
+
+        conn.execute = AsyncMock(side_effect=execute_side)
+
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+
+        target_row = self._make_target_row()
+        with patch(
+            "sv_common.guild_sync.bis_sync._extract",
+            new_callable=AsyncMock,
+            return_value=(
+                [],
+                [],
+                "provider access blocked: icy-veins.com returned HTTP 403 Cloudflare challenge",
+                None,
+            ),
+        ):
+            result = await sync_target(pool, 42, _target_row=target_row)
+
+        assert result["status"] == "failed"
+        assert result["provider_access_blocked"] is True
+        assert len(target_updates) == 1
+        sql, status, items_found, _now, preserve_last_fetched, target_id = target_updates[0]
+        assert "items_found = CASE WHEN $4 THEN items_found ELSE $2 END" in sql
+        assert "last_fetched = CASE WHEN $4 THEN last_fetched ELSE $3 END" in sql
+        assert status == "failed"
+        assert items_found == 0
+        assert preserve_last_fetched is True
+        assert target_id == 42
+
+
+class TestRebuildTargetFreshness:
+    @pytest.mark.asyncio
+    async def test_rebuild_updates_item_count_without_rewriting_fetch_state(self):
+        from sv_common.guild_sync.bis_sync import _update_rebuilt_target_items
+
+        conn = AsyncMock()
+        pool = MagicMock()
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=conn)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        pool.acquire = MagicMock(return_value=cm)
+
+        await _update_rebuilt_target_items(pool, target_id=42, items_found=17)
+
+        sql, items_found, target_id = conn.execute.await_args.args
+        assert "items_found" in sql
+        assert "status" not in sql
+        assert "last_fetched" not in sql
+        assert items_found == 17
+        assert target_id == 42
 
 
 # ---------------------------------------------------------------------------

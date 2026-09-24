@@ -27,6 +27,7 @@ from apscheduler.triggers.cron import CronTrigger
 import asyncpg
 import discord
 
+from sv_common.bis_provider_policy import HIDDEN_BIS_SOURCE_ORIGINS
 from sv_common.config_cache import (
     get_site_config,
     get_bis_encounter_baseline,
@@ -57,9 +58,8 @@ from .raiderio_client import RaiderIOClient
 from .reporter import send_new_issues_report, send_sync_summary, send_error
 from .sync_logger import SyncLogEntry
 from .bis_sync import (
-    discover_targets as _bis_discover_targets,
-    sync_source as _bis_sync_source,
     sync_target as _bis_sync_target,
+    record_provider_circuit_skip as _record_provider_circuit_skip,
     rebuild_bis_from_landing as _rebuild_bis_from_landing,
     rebuild_trinket_ratings_from_landing as _rebuild_trinket_ratings_from_landing,
     rebuild_item_popularity_from_landing as _rebuild_item_popularity_from_landing,
@@ -1281,59 +1281,16 @@ class GuildSyncScheduler:
             logger.error("Weekly error digest: failed to post to Discord: %s", exc)
 
     async def run_archon_sync(self):
-        """Weekly Archon.gg BIS sync pipeline.
-
-        Runs Monday 6:00 AM UTC (after the Sunday weekly reset).
-        Syncs all active Archon scrape targets, then rebuilds BIS entries and
-        item popularity from the updated landing data.
-
-        Change detection in _extract_archon() short-circuits fetches when the
-        source page hasn't updated since the last scrape.
-        """
-        logger.info("Archon BIS sync: starting weekly scrape")
-        try:
-            async with self.db_pool.acquire() as conn:
-                source_rows = await conn.fetch(
-                    """
-                    SELECT id FROM ref.bis_list_sources
-                     WHERE origin = 'archon' AND is_active = TRUE
-                    """
-                )
-            archon_source_ids = [r["id"] for r in source_rows]
-
-            if not archon_source_ids:
-                logger.info("Archon BIS sync: no active archon sources — skipping")
-                return
-
-            total_targets = 0
-            total_errors = 0
-            for source_id in archon_source_ids:
-                stats = await _bis_sync_source(self.db_pool, source_id)
-                total_targets += stats.get("targets_run", 0)
-                total_errors  += stats.get("errors", 0)
-
-            logger.info(
-                "Archon BIS sync: scrape complete — %d targets, %d errors",
-                total_targets, total_errors,
-            )
-
-            bis_result = await _rebuild_bis_from_landing(self.db_pool)
-            pop_result = await _rebuild_item_popularity_from_landing(self.db_pool)
-            logger.info(
-                "Archon BIS sync: rebuild complete — %d bis_entries, %d popularity rows",
-                bis_result.get("bis_entries_inserted", 0),
-                pop_result.get("rows_inserted", 0),
-            )
-        except Exception as exc:
-            logger.error("Archon BIS sync: pipeline failed: %s", exc, exc_info=True)
+        """Retain the legacy job entry point without fetching an admin-only source."""
+        logger.info("Archon BIS sync: provider is admin-only; scheduled sync skipped")
 
     async def run_encounter_probe(self):
         """Hourly patch-signal probe. Runs at :05 past each hour.
 
         Counts raid encounters in landing.blizzard_journal_encounters and compares
-        to the cached baseline in site_config.bis_encounter_count.  When the count
-        rises, all non-u.gg is_active scrape targets are reset to 1-day backoff so
-        the daily sync picks them up immediately after a patch.
+        to the cached baseline in site_config.bis_encounter_count. When the count
+        rises, member-visible active targets are reset to 1-day backoff so the
+        daily sync picks them up immediately after a patch.
         """
         try:
             async with self.db_pool.acquire() as conn:
@@ -1361,7 +1318,7 @@ class GuildSyncScheduler:
             new_encounters = count - baseline
             logger.info(
                 "Patch signal: %d new raid encounter(s) detected (was %d, now %d)"
-                " — resetting non-u.gg scrape targets to daily",
+                " — resetting member-visible scrape targets to daily",
                 new_encounters, baseline, count,
             )
 
@@ -1372,10 +1329,14 @@ class GuildSyncScheduler:
                        SET check_interval_days = 1,
                            next_check_at       = NOW()
                      WHERE is_active = TRUE
-                       AND source_id NOT IN (
-                               SELECT id FROM ref.bis_list_sources WHERE origin = 'ugg'
+                       AND source_id IN (
+                               SELECT id
+                                 FROM ref.bis_list_sources
+                                WHERE is_active = TRUE
+                                  AND NOT (COALESCE(origin, '') = ANY($1::text[]))
                            )
-                    """
+                    """,
+                    list(HIDDEN_BIS_SOURCE_ORIGINS),
                 )
                 await conn.execute(
                     "UPDATE common.site_config SET bis_encounter_count = $1",
@@ -1411,11 +1372,14 @@ class GuildSyncScheduler:
                            t.content_type, t.url, t.preferred_technique,
                            t.check_interval_days, t.items_found,
                            t.next_check_at, s.origin
-                      FROM config.bis_scrape_targets t
+                     FROM config.bis_scrape_targets t
                       JOIN ref.bis_list_sources s ON s.id = t.source_id
                      WHERE t.is_active = TRUE
+                       AND s.is_active = TRUE
+                       AND NOT (COALESCE(s.origin, '') = ANY($1::text[]))
                      ORDER BY t.source_id, t.spec_id
-                    """
+                    """,
+                    list(HIDDEN_BIS_SOURCE_ORIGINS),
                 )
 
             now = datetime.now(timezone.utc)
@@ -1428,7 +1392,21 @@ class GuildSyncScheduler:
                     counts["skipped"] += 1
 
             prev_source_id = None
+            blocked_origins: dict[str, str] = {}
+            circuit_skip_counts: dict[str, int] = {}
             for target in due_targets:
+                origin = target.get("origin", "")
+                if origin in blocked_origins:
+                    await _record_provider_circuit_skip(
+                        self.db_pool,
+                        target["id"],
+                        target.get("preferred_technique") or "unknown",
+                        target.get("items_found", 0),
+                        blocked_origins[origin],
+                    )
+                    counts["skipped"] += 1
+                    circuit_skip_counts[origin] = circuit_skip_counts.get(origin, 0) + 1
+                    continue
                 try:
                     if prev_source_id is not None and target["source_id"] == prev_source_id:
                         await asyncio.sleep(2.0)
@@ -1443,6 +1421,8 @@ class GuildSyncScheduler:
                         counts["unchanged"] += 1
                     else:
                         counts["failed"] += 1
+                    if result.get("provider_access_blocked"):
+                        blocked_origins[origin] = result.get("error") or "provider access blocked"
                 except Exception as exc:
                     logger.error(
                         "BIS daily sync: error on target %d: %s",
@@ -1451,6 +1431,12 @@ class GuildSyncScheduler:
                     counts["checked"] += 1
                     counts["failed"] += 1
                 prev_source_id = target["source_id"]
+
+            for origin, skipped_count in sorted(circuit_skip_counts.items()):
+                notes_parts.append(
+                    f"{origin} provider circuit opened after access challenge; "
+                    f"{skipped_count} remaining target(s) skipped"
+                )
 
             # --- Phase 1.7-D: enrichment rebuild + delta capture ---
             before_snapshot: dict = {}
@@ -1463,9 +1449,18 @@ class GuildSyncScheduler:
 
             try:
                 async with self.db_pool.acquire() as conn:
-                    before_snapshot = await _snapshot_bis_entries(conn)
+                    before_snapshot = await _snapshot_bis_entries(
+                        conn, HIDDEN_BIS_SOURCE_ORIGINS
+                    )
                     before_trinket_count = await conn.fetchval(
-                        "SELECT COUNT(*) FROM enrichment.trinket_ratings"
+                        """
+                        SELECT COUNT(*)
+                          FROM enrichment.trinket_ratings tr
+                          JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
+                         WHERE bls.is_active = TRUE
+                           AND NOT (COALESCE(bls.origin, '') = ANY($1::text[]))
+                        """,
+                        list(HIDDEN_BIS_SOURCE_ORIGINS),
                     ) or 0
 
                 await _rebuild_bis_from_landing(self.db_pool)
@@ -1473,12 +1468,28 @@ class GuildSyncScheduler:
                 await _rebuild_item_popularity_from_landing(self.db_pool)
 
                 async with self.db_pool.acquire() as conn:
-                    after_snapshot = await _snapshot_bis_entries(conn)
+                    after_snapshot = await _snapshot_bis_entries(
+                        conn, HIDDEN_BIS_SOURCE_ORIGINS
+                    )
                     after_bis_count = await conn.fetchval(
-                        "SELECT COUNT(*) FROM enrichment.bis_entries"
+                        """
+                        SELECT COUNT(*)
+                          FROM enrichment.bis_entries be
+                          JOIN ref.bis_list_sources bls ON bls.id = be.source_id
+                         WHERE bls.is_active = TRUE
+                           AND NOT (COALESCE(bls.origin, '') = ANY($1::text[]))
+                        """,
+                        list(HIDDEN_BIS_SOURCE_ORIGINS),
                     ) or 0
                     after_trinket_count = await conn.fetchval(
-                        "SELECT COUNT(*) FROM enrichment.trinket_ratings"
+                        """
+                        SELECT COUNT(*)
+                          FROM enrichment.trinket_ratings tr
+                          JOIN ref.bis_list_sources bls ON bls.id = tr.source_id
+                         WHERE bls.is_active = TRUE
+                           AND NOT (COALESCE(bls.origin, '') = ANY($1::text[]))
+                        """,
+                        list(HIDDEN_BIS_SOURCE_ORIGINS),
                     ) or 0
 
                 delta_added, delta_removed = _compute_delta(before_snapshot, after_snapshot)
@@ -1611,7 +1622,15 @@ class GuildSyncScheduler:
                     "SELECT s.id, s.name AS spec_name, c.name AS class_name"
                     " FROM ref.specializations s JOIN ref.classes c ON c.id = s.class_id"
                 )
-                source_rows = await _lconn.fetch("SELECT id, name FROM ref.bis_list_sources")
+                source_rows = await _lconn.fetch(
+                    """
+                    SELECT id, name
+                      FROM ref.bis_list_sources
+                     WHERE is_active = TRUE
+                       AND NOT (COALESCE(origin, '') = ANY($1::text[]))
+                    """,
+                    list(HIDDEN_BIS_SOURCE_ORIGINS),
+                )
             spec_map = {r["id"]: {"spec_name": r["spec_name"], "class_name": r["class_name"]} for r in spec_rows}
             source_map = {r["id"]: r["name"] for r in source_rows}
 

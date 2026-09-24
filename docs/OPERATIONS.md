@@ -65,10 +65,9 @@ Always run these steps in order. Each step depends on the previous.
    items that lack a Wowhead tooltip).
    Run this after every Sync Loot Tables.
 
-3. Process Tier Tokens
-   Classifies tier pieces and catalyst items.
-   Links tier tokens → boss encounters → tier slot items.
-   Run this after every Enrich Items.
+3. Enrich & Classify automatically processes Tier Tokens
+   Classifies tier pieces and catalyst items, then publishes active-season
+   token attributes while preserving inline manual overrides.
 
 4. Sync BIS Lists
    Scrapes Archon, Wowhead, and Icy Veins for per-spec BIS recommendations.

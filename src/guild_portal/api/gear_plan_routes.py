@@ -67,7 +67,9 @@ async def get_gear_plan(
         return JSONResponse({"ok": False, "error": "Database pool unavailable"}, status_code=503)
 
     # Ensure plan exists
-    await svc.get_or_create_plan(pool, current_player.id, character_id)
+    plan = await svc.get_or_create_plan(pool, current_player.id, character_id)
+    if plan.pop("_member_source_fallback_applied", False):
+        await svc.populate_from_bis(pool, current_player.id, character_id)
 
     detail = await svc.get_plan_detail(pool, current_player.id, character_id)
     if not detail:
@@ -115,6 +117,8 @@ async def create_gear_plan(
         hero_talent_id=hero_talent_id,
         bis_source_id=bis_source_id,
     )
+    if plan.pop("_member_source_fallback_applied", False):
+        await svc.populate_from_bis(pool, current_player.id, character_id)
     return JSONResponse({"ok": True, "data": {"plan": plan}})
 
 
@@ -151,12 +155,15 @@ async def update_plan_config(
     hero_talent_id: Optional[int] = body.get("hero_talent_id")  # can be None to clear
     bis_source_id: Optional[int] = body.get("bis_source_id")
 
-    ok = await svc.update_plan_config(
-        pool, current_player.id, character_id,
-        spec_id=spec_id,
-        hero_talent_id=hero_talent_id,
-        bis_source_id=bis_source_id,
-    )
+    try:
+        ok = await svc.update_plan_config(
+            pool, current_player.id, character_id,
+            spec_id=spec_id,
+            hero_talent_id=hero_talent_id,
+            bis_source_id=bis_source_id,
+        )
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     if not ok:
         return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
 
@@ -182,6 +189,8 @@ async def update_slot(
         blizzard_item_id (int or null to clear)
         item_name        (optional string)
         is_locked        (optional bool)
+        recommendation_type (optional: direct or catalyst)
+        catalyst_base_item_id / catalyst_base_item_name (Catalyst route only)
     """
     if slot not in svc.WOW_SLOTS:
         return JSONResponse({"ok": False, "error": f"Unknown slot: {slot}"}, status_code=400)
@@ -201,13 +210,22 @@ async def update_slot(
     blizzard_item_id: Optional[int] = body.get("blizzard_item_id")
     item_name: Optional[str] = body.get("item_name")
     is_locked: Optional[bool] = body.get("is_locked")
+    recommendation_type: str = body.get("recommendation_type") or "direct"
+    catalyst_base_item_id: Optional[int] = body.get("catalyst_base_item_id")
+    catalyst_base_item_name: Optional[str] = body.get("catalyst_base_item_name")
 
-    ok = await svc.update_slot(
-        pool, current_player.id, character_id, slot,
-        blizzard_item_id=blizzard_item_id,
-        item_name=item_name,
-        is_locked=is_locked,
-    )
+    try:
+        ok = await svc.update_slot(
+            pool, current_player.id, character_id, slot,
+            blizzard_item_id=blizzard_item_id,
+            item_name=item_name,
+            is_locked=is_locked,
+            recommendation_type=recommendation_type,
+            catalyst_base_item_id=catalyst_base_item_id,
+            catalyst_base_item_name=catalyst_base_item_name,
+        )
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     if not ok:
         return JSONResponse({"ok": False, "error": "Plan not found"}, status_code=404)
 

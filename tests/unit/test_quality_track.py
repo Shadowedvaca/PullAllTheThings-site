@@ -42,6 +42,14 @@ class TestTrackFromDisplayString:
     def test_whitespace_stripped(self):
         assert track_from_display_string("  Hero 3/8  ") == "H"
 
+    def test_bare_raid_difficulty_is_not_an_upgrade_track(self):
+        assert track_from_display_string("Heroic") is None
+        assert track_from_display_string("Mythic") is None
+
+    def test_bare_track_is_allowed_only_for_crafted_preview(self):
+        assert track_from_display_string("Heroic", allow_bare=True) == "H"
+        assert track_from_display_string("Mythic", allow_bare=True) == "M"
+
 
 class TestTrackFromBonusIds:
     def test_champion_track(self):
@@ -98,6 +106,9 @@ class TestDetectQualityTrack:
     def test_both_none(self):
         assert detect_quality_track(None) is None
         assert detect_quality_track("", bonus_ids=[]) is None
+
+    def test_unverified_midnight_difficulty_bonus_does_not_invent_track(self):
+        assert detect_quality_track("Mythic", bonus_ids=[13439, 6652, 12838]) is None
 
 
 class TestNormalizeSlot:

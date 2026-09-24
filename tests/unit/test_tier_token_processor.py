@@ -14,6 +14,7 @@ from sv_common.guild_sync.item_source_sync import (
     _parse_token_class_ids,
     _parse_token_slot,
     process_tier_tokens,
+    sync_current_season_tier_token_attrs,
 )
 
 
@@ -22,7 +23,12 @@ from sv_common.guild_sync.item_source_sync import (
 # ---------------------------------------------------------------------------
 
 
-def _make_pool(fetch_side_effect=None, fetchrow_returns=None, execute_return="UPDATE 0"):
+def _make_pool(
+    fetch_side_effect=None,
+    fetchrow_returns=None,
+    execute_return="UPDATE 0",
+    fetchval_return=0,
+):
     """Build a minimal asyncpg pool mock.
 
     fetch_side_effect: list of return values for successive conn.fetch calls.
@@ -34,6 +40,7 @@ def _make_pool(fetch_side_effect=None, fetchrow_returns=None, execute_return="UP
     conn = AsyncMock()
     conn.execute = AsyncMock(return_value=execute_return)
     conn.fetch = AsyncMock(side_effect=fetch_side_effect or [[]])
+    conn.fetchval = AsyncMock(return_value=fetchval_return)
     if fetchrow_returns is not None:
         conn.fetchrow = AsyncMock(side_effect=fetchrow_returns)
     else:
@@ -44,6 +51,51 @@ def _make_pool(fetch_side_effect=None, fetchrow_returns=None, execute_return="UP
     pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
     pool.acquire.return_value.__aexit__ = AsyncMock(return_value=None)
     return pool, conn
+
+
+class TestSyncCurrentSeasonTierTokenAttrs:
+    @pytest.mark.asyncio
+    async def test_publishes_blizzard_derived_tokens(self):
+        pool, conn = _make_pool(
+            fetch_side_effect=[[{
+                "blizzard_item_id": 270913,
+                "target_slot": "hands",
+                "armor_type": "plate",
+            }]],
+            execute_return="INSERT 0 1",
+            fetchval_return=21,
+        )
+
+        result = await sync_current_season_tier_token_attrs(pool)
+
+        assert result == {
+            "tokens_found": 1,
+            "tokens_processed": 1,
+            "tokens_skipped_override": 0,
+            "stale_tokens_deleted": 21,
+        }
+        upsert = conn.execute.call_args.args
+        assert upsert[1:5] == (270913, "hands", "plate", [1, 2, 6])
+        fetch_sql = conn.fetch.call_args.args[0]
+        assert "enrichment.tier_tokens" in fetch_sql
+        assert "rs.is_active = TRUE" in fetch_sql
+        assert "current_raid_ids" in fetch_sql
+
+    @pytest.mark.asyncio
+    async def test_preserves_manual_override(self):
+        pool, _ = _make_pool(
+            fetch_side_effect=[[{
+                "blizzard_item_id": 270909,
+                "target_slot": "any",
+                "armor_type": "any",
+            }]],
+            execute_return="INSERT 0 0",
+        )
+
+        result = await sync_current_season_tier_token_attrs(pool)
+
+        assert result["tokens_processed"] == 0
+        assert result["tokens_skipped_override"] == 1
 
 
 # ---------------------------------------------------------------------------

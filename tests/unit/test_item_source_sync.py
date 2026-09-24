@@ -18,6 +18,7 @@ from sv_common.guild_sync.item_source_sync import (
 from sv_common.guild_sync.source_config import (
     get_display_name,
     get_track_label,
+    track_to_label,
     get_tracks,
 )
 
@@ -96,6 +97,11 @@ class TestSourceConfig:
     def test_dungeon_label_is_zero_plus(self):
         # Dungeon minimum is C (Champion 0+) → 0+
         assert get_track_label("dungeon") == "0+"
+
+    def test_midnight_s2_dungeon_threshold_labels(self):
+        assert track_to_label("C", "dungeon") == "0+"
+        assert track_to_label("H", "dungeon") == "6+"
+        assert track_to_label("M", "dungeon") == "10+"
 
     def test_unknown_type_falls_back_to_n_plus(self):
         # get_tracks("unknown") returns ["C","H","M"] fallback → minimum C → N+
@@ -319,6 +325,14 @@ class TestSyncEncounter:
         # No longer uses wow_items integer id — check no bare "item_id" column (not blizzard_item_id)
         import re as _re
         assert not _re.search(r'(?<!blizzard_)item_id', sql)
+
+        landing_calls = [
+            c for c in conn.execute.call_args_list
+            if "landing.blizzard_journal_encounters" in str(c)
+        ]
+        assert len(landing_calls) == 1
+        landing_sql = landing_calls[0].args[0]
+        assert "ON CONFLICT (encounter_id) DO UPDATE" in landing_sql
 
     @pytest.mark.asyncio
     async def test_world_boss_stored_as_world_boss_type(self):

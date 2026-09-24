@@ -7,6 +7,11 @@ from guild_portal.services.gear_plan_service import (
     TRACK_ORDER,
     _apply_off_hand_rule,
     _compute_weapon_display,
+    _equipped_matches_goal,
+    _noncrafted_target_ilvl,
+    _normalize_legacy_catalyst_goals,
+    _recommendation_item_is_equipped,
+    _recommendation_matches_goal,
     _upgrade_tracks,
 )
 from sv_common.guild_sync.quality_track import is_crafted_item
@@ -33,6 +38,37 @@ class TestUpgradeTracks:
         # (avoids incorrectly recommending Veteran as an upgrade)
         result = _upgrade_tracks(None, 999, 100, ["V", "C", "H", "M"])
         assert result == []
+
+    def test_item_equipped_unknown_track_uses_ilvl_ceiling(self):
+        result = _upgrade_tracks(
+            None,
+            999,
+            100,
+            ["V", "C", "H", "M"],
+            equipped_item_level=308,
+            quality_ilvl_map={
+                "V": {"max": 295},
+                "C": {"max": 308},
+                "H": {"max": 321},
+                "M": {"max": 334},
+            },
+        )
+        assert result == ["H", "M"]
+
+    def test_unknown_track_never_hides_mythic_when_it_can_upgrade(self):
+        result = _upgrade_tracks(
+            None,
+            999,
+            100,
+            ["C", "H", "M"],
+            equipped_item_level=292,
+            quality_ilvl_map={
+                "C": {"max": 308},
+                "H": {"max": 321},
+                "M": {"max": 334},
+            },
+        )
+        assert result == ["C", "H", "M"]
 
     def test_same_item_strictly_higher_only(self):
         # Equipped: same item, Champion track — need Hero or Mythic
@@ -77,6 +113,56 @@ class TestUpgradeTracks:
         assert TRACK_ORDER["V"] < TRACK_ORDER["C"]
         assert TRACK_ORDER["C"] < TRACK_ORDER["H"]
         assert TRACK_ORDER["H"] < TRACK_ORDER["M"]
+
+
+def test_noncrafted_target_uses_equipped_ilvl_when_track_is_unknown():
+    assert _noncrafted_target_ilvl(
+        False,
+        308,
+        None,
+        {"V": {"max": 295}},
+    ) == 308
+
+
+def test_direct_goal_matches_equipped_item_id():
+    assert _equipped_matches_goal(
+        271457,
+        {"blizzard_item_id": 271457, "recommendation_type": "direct"},
+    )
+
+
+def test_catalyst_result_id_does_not_claim_route_is_equipped():
+    assert not _equipped_matches_goal(
+        271457,
+        {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": 251214,
+        },
+    )
+
+
+def test_catalyst_base_row_is_not_equipped_when_generic_tier_result_is_worn():
+    rec = {
+        "blizzard_item_id": 251214,
+        "recommendation_type": "catalyst",
+        "catalyst_tier_item_id": 271457,
+    }
+    assert not _recommendation_item_is_equipped(rec, {271457})
+
+
+def test_catalyst_base_row_is_equipped_when_base_item_is_worn():
+    rec = {
+        "blizzard_item_id": 251214,
+        "recommendation_type": "catalyst",
+        "catalyst_tier_item_id": 271457,
+    }
+    assert _recommendation_item_is_equipped(rec, {251214})
+
+
+def test_direct_tier_row_is_equipped_when_tier_item_is_worn():
+    rec = {"blizzard_item_id": 271457, "recommendation_type": "direct"}
+    assert _recommendation_item_is_equipped(rec, {271457})
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +258,56 @@ class TestComputeWeaponDisplay:
         desired = {"main_hand_1h": {"blizzard_item_id": 666}}
         build, show_oh = _compute_weapon_display({}, {}, desired)
         assert build == "1h"
+
+    def test_selected_source_1h_beats_stale_other_provider_2h(self):
+        bis = {
+            "main_hand_2h": [{**_make_bis("main_hand_2h", 1), "source_id": 1}],
+            "main_hand_1h": [{**_make_bis("main_hand_1h", 1), "source_id": 9}],
+        }
+        build, _ = _compute_weapon_display(bis, {}, {}, bis_source_id=9)
+        assert build == "1h"
+
+
+class TestCatalystGoals:
+    def test_base_item_is_not_the_completed_goal(self):
+        goal = {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": 251214,
+        }
+        rec = {
+            "blizzard_item_id": 251214,
+            "recommendation_type": "catalyst",
+            "catalyst_tier_item_id": 271457,
+        }
+        assert _recommendation_matches_goal(rec, goal) is True
+        assert goal["blizzard_item_id"] != rec["blizzard_item_id"]
+
+    def test_direct_tier_and_catalyst_route_are_distinct(self):
+        catalyst_goal = {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "catalyst",
+            "catalyst_base_item_id": 251214,
+        }
+        direct_rec = {
+            "blizzard_item_id": 271457,
+            "recommendation_type": "direct",
+        }
+        assert _recommendation_matches_goal(direct_rec, catalyst_goal) is False
+
+    def test_legacy_base_goal_is_normalized_to_tier_result(self):
+        desired = {"hands": {"blizzard_item_id": 251214, "recommendation_type": "direct"}}
+        bis = {"hands": [{
+            "source_id": 9,
+            "blizzard_item_id": 251214,
+            "item_name": "Bonds of the Hash'ura",
+            "recommendation_type": "catalyst",
+            "catalyst_tier_item_id": 271457,
+            "catalyst_tier_item_name": "Tier Hands",
+        }]}
+        _normalize_legacy_catalyst_goals(desired, bis, 9)
+        assert desired["hands"]["blizzard_item_id"] == 271457
+        assert desired["hands"]["catalyst_base_item_id"] == 251214
 
 
 # ---------------------------------------------------------------------------

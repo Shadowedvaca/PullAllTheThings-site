@@ -1356,8 +1356,12 @@ async def admin_reference_tables(
     )
     screen_permissions = list(screen_perms_result.scalars().all())
 
+    from sv_common.bis_provider_policy import HIDDEN_GUIDE_SITE_NAMES
+
     guide_sites_result = await db.execute(
-        select(GuideSite).order_by(GuideSite.sort_order, GuideSite.id)
+        select(GuideSite)
+        .where(GuideSite.name.not_in(HIDDEN_GUIDE_SITE_NAMES))
+        .order_by(GuideSite.sort_order, GuideSite.id)
     )
     guide_sites = list(guide_sites_result.scalars().all())
 
@@ -1397,12 +1401,18 @@ async def admin_reference_tables(
     )
     tier_tokens = list(tier_tokens_result.scalars().all())
 
-    # Fetch item names from enrichment.items for display in the table
+    # Tier tokens are non-equippable and therefore intentionally absent from
+    # enrichment.items.  Read their Blizzard-derived names from the dedicated
+    # token catalog populated by sp_rebuild_tier_tokens().
     if tier_tokens:
         _bids = [tok.blizzard_item_id for tok in tier_tokens]
         _bid_csv = ", ".join(str(b) for b in _bids)
         _name_result = await db.execute(
-            text(f"SELECT blizzard_item_id, name FROM enrichment.items WHERE blizzard_item_id IN ({_bid_csv})")
+            text(
+                "SELECT blizzard_item_id, token_name "
+                "FROM enrichment.tier_tokens "
+                f"WHERE blizzard_item_id IN ({_bid_csv})"
+            )
         )
         tier_token_names: dict[int, str] = {row[0]: row[1] for row in _name_result}
     else:

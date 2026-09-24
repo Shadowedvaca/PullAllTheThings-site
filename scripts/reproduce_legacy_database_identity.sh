@@ -95,7 +95,7 @@ test -n "$archive"
 test -s "$archive"
 test -s "$manifest"
 grep -Fqx "database=patt_recovery" "$manifest"
-grep -Fqx "alembic_revision=0182" "$manifest"
+grep -Fqx "alembic_revision=0188" "$manifest"
 grep -Fqx "restore_authority=explicit_required" "$manifest"
 grep -Fqx "automatic_database_downgrade=false" "$manifest"
 
