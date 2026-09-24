@@ -2,23 +2,31 @@
 
 ## Highlights
 
-- No work has accumulated after selection of the 0.24.4 release candidate.
+- Development and Test deployments now coordinate with other applications on
+  their shared hosts through one bounded host lock.
 
 ## Fixes/Changes
 
-- Later changes will be recorded here before release reconciliation.
+- Add repository-owned shared-host admission around both preparation and
+  activation, including disk, swap, and memory headroom checks before mutation.
+- Keep Production dedicated and unchanged; no custom host helper or centralized
+  deployment service is introduced.
 
 ## Validation
 
-- No later validation evidence has been recorded.
+- Add deployment-contract coverage for lock identity, phase boundaries,
+  resource admission, exact-SHA wrapper transfer, and prohibited global cleanup.
 
 ## Deployment/Migrations
 
-- No later deployment or migration impact has been recorded.
+- No migration is included. Development and Test need the standard `flock`
+  utility and the existing 2 GiB swap configuration; the repository installs no
+  host component.
 
 ## Rollback
 
-- Reconcile the rollback plan when later work is added.
+- Reverting the workflow and repository-owned admission script removes PATT's
+  participation in the shared lock; no server-side helper needs removal.
 
 ## Known Limitations
 

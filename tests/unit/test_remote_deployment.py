@@ -10,6 +10,7 @@ WORKFLOWS = (
     "deploy-prod.yml",
 )
 REMOTE_SCRIPT = ROOT / "deploy" / "patt-remote-deploy.sh"
+SHARED_SCRIPT = ROOT / "deploy" / "patt-shared-host-deploy.sh"
 
 
 def test_deployment_program_is_not_streamed_on_child_process_stdin():
@@ -19,11 +20,21 @@ def test_deployment_program_is_not_streamed_on_child_process_stdin():
         source = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
         assert "<<'REMOTE'" not in source
         assert '<<"REMOTE"' not in source
-        assert "deploy/patt-remote-deploy.sh" in source
+        expected_program = (
+            "deploy/patt-remote-deploy.sh"
+            if name == "deploy-prod.yml"
+            else "deploy/patt-shared-host-deploy.sh"
+        )
+        assert expected_program in source
         assert "PATT_DEPLOYMENT_PREPARED" in source
         assert "PATT_DEPLOYMENT_COMPLETE" in source
         assert "grep -Fqx" in source
-        assert ".deployment/pending-previous-sha" in source
+        if name == "deploy-prod.yml":
+            assert ".deployment/pending-previous-sha" in source
+        else:
+            assert ".deployment/pending-previous-sha" in SHARED_SCRIPT.read_text(
+                encoding="utf-8"
+            )
         assert source.count("bash deploy/run-strict-ssh.sh") == 2
         assert source.index("PATT_DEPLOYMENT_PREPARED") < source.rindex(
             "bash deploy/run-strict-ssh.sh"
@@ -31,7 +42,16 @@ def test_deployment_program_is_not_streamed_on_child_process_stdin():
 
 
 def test_deployment_bundle_transport_is_strict_and_exact():
-    for name in WORKFLOWS:
+    for name in ("deploy-dev.yml", "deploy-test.yml"):
+        source = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+        assert "git bundle create" in source
+        assert "git bundle verify" in source
+        assert "deploy/run-strict-scp.sh" in source
+        assert "patt-deployment-$DEPLOY_SHA.bundle" in source
+        assert "patt-shared-host-deploy-$DEPLOY_SHA.sh" in source
+        assert source.count("bash deploy/run-strict-scp.sh") == 2
+
+    for name in ("deploy-prod.yml",):
         source = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
         remote = source[source.index("set -eu; export GIT_CONFIG_GLOBAL") :]
         assert "GIT_CONFIG_GLOBAL=/dev/null" in remote
@@ -56,7 +76,8 @@ def test_deployment_bundle_transport_is_strict_and_exact():
 def test_strict_bundle_copier_rejects_unbounded_destinations():
     source = (ROOT / "deploy" / "run-strict-scp.sh").read_text(encoding="utf-8")
     assert "usage:" in source
-    assert "^/tmp/patt-deployment-[0-9a-f]{40}" in source
+    assert "^/tmp/patt-(deployment-[0-9a-f]{40}" in source
+    assert "shared-host-deploy-[0-9a-f]{40}" in source
     assert "StrictHostKeyChecking=yes" in source
     assert "BatchMode=yes" in source
     assert "IdentitiesOnly=yes" in source
@@ -95,6 +116,37 @@ def test_completion_requires_backup_and_rollback_evidence():
     assert 'grep -Fq "Rollback manifest:"' in source
     assert 'test "$(cat .deployment/active-sha)" = "$deployment_sha"' in source
     assert 'rm -f .deployment/pending-previous-sha "$prepared_record"' in source
+
+
+def test_shared_environment_admission_wraps_both_nonproduction_phases():
+    source = SHARED_SCRIPT.read_text(encoding="utf-8")
+    for token in (
+        "/run/lock/shared-platform-deployment.lock",
+        "lock_wait_seconds=2700",
+        "minimum_root_kib=$((12 * 1024 * 1024))",
+        "minimum_swap_kib=$((1 * 1024 * 1024))",
+        "minimum_headroom_kib=$((2 * 1024 * 1024))",
+        'flock -w "$lock_wait_seconds" 9',
+        "SHARED_DEPLOYMENT_LOCK_WAIT",
+        "SHARED_DEPLOYMENT_LOCK_ACQUIRED",
+        "SHARED_DEPLOYMENT_ADMITTED",
+        "SHARED_DEPLOYMENT_LOCK_RELEASE",
+    ):
+        assert token in source
+    assert source.index('flock -w "$lock_wait_seconds" 9') < source.index(
+        "git checkout --detach"
+    )
+    assert source.index("SHARED_DEPLOYMENT_ADMITTED") < source.index(
+        "git checkout --detach"
+    )
+    assert source.count("patt-remote-deploy.sh") == 2
+    for token in (
+        "docker system prune",
+        "docker builder prune",
+        "docker image prune",
+        "docker volume prune",
+    ):
+        assert token not in source
 
 
 def test_strict_transport_uses_bounded_keepalives():

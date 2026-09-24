@@ -49,6 +49,7 @@ def test_unpinned_action_is_rejected(tmp_path):
         "deploy/run-strict-ssh.sh",
         "deploy/run-strict-scp.sh",
         "deploy/patt-remote-deploy.sh",
+        "deploy/patt-shared-host-deploy.sh",
     ):
         target = tmp_path / relative
         target.parent.mkdir(parents=True, exist_ok=True)

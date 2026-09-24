@@ -5,6 +5,28 @@ This document records the non-secret deployment enforcement contract for PATT.
 promotion. `.github/deployment-controls.json` is the machine-validated desired
 GitHub configuration.
 
+## Shared non-production hosts
+
+Development and Test are shared environments. Production is dedicated. PATT
+implements the common repository contract without an installed host helper.
+Both shared environments coordinate through
+`/run/lock/shared-platform-deployment.lock` using the host's `flock` command.
+
+`deploy/patt-shared-host-deploy.sh` is transferred from the exact candidate for
+the preparation entry point and then executed from the exact checked-out commit
+for activation. Each of PATT's mandatory SSH phases independently waits up to
+45 minutes, acquires the same host lock, checks disk/swap/memory headroom before
+mutation, and releases the lock when the phase exits. Preparation holds it
+across exact checkout, image build, and verified backup. Activation reacquires
+it across container replacement, health, migration verification, active-SHA
+recording, and PATT-scoped backup retention. The sealed preparation record is
+the immutable handoff between those critical sections.
+
+PATT deployment code may remove only its exact SHA-specific bundle/wrapper,
+`.deployment` temporary evidence, and environment-specific backup evidence
+selected by its validated retention policy. Host-global Docker pruning and
+broad shared-path cleanup are prohibited.
+
 ## Repository controls
 
 - Every external GitHub Action is pinned to a full commit SHA. Repository Actions
