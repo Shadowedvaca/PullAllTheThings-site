@@ -173,6 +173,26 @@ class TestMitigationFunctions:
 # ---------------------------------------------------------------------------
 
 class TestSchedulerPipeline:
+    def test_scheduled_syncs_do_not_reconcile_ranks(self):
+        """Neither scheduled source may change player ranks or Discord roles."""
+        import ast
+        import pathlib
+
+        source = pathlib.Path("src/sv_common/guild_sync/scheduler.py").read_text(encoding="utf-8")
+        scheduler = ast.parse(source)
+        for name in ("run_blizzard_sync", "run_discord_sync"):
+            method = next(
+                node for node in ast.walk(scheduler)
+                if isinstance(node, ast.AsyncFunctionDef) and node.name == name
+            )
+            calls = {
+                node.func.id
+                for node in ast.walk(method)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            }
+            assert "reconcile_player_ranks" not in calls, name
+            assert "run_integrity_check" in calls, name
+
     def test_scheduler_does_not_import_relink(self):
         """run_addon_sync should not call relink_note_changed_characters."""
         import ast

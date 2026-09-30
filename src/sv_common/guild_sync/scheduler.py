@@ -40,7 +40,7 @@ from sv_common.config_cache import (
 )
 from .blizzard_client import BlizzardClient, get_rank_name_map
 from .db_sync import sync_blizzard_roster, sync_addon_data
-from .discord_sync import sync_discord_members, reconcile_player_ranks, prune_roleless_members, purge_fully_departed_players
+from .discord_sync import sync_discord_members, prune_roleless_members, purge_fully_departed_players
 from .drift_scanner import run_drift_scan
 from .integrity_checker import run_integrity_check
 from .progression_sync import (
@@ -329,15 +329,16 @@ class GuildSyncScheduler:
           1. sync_blizzard_roster()     — update characters from Blizzard API
           2. run_integrity_check()      — detect orphans, role mismatches, stale chars
           3. run_drift_scan()           — detect note mismatches + link contradictions + auto-fix
-          4. reconcile_player_ranks()   — fix DB ranks + Discord roles (chars-first, discord fallback)
-          5. purge_fully_departed_players() — remove ghosts with no chars + no Discord
-          6. [NEW] sync_raid_progress() — boss kill counts (last-login filtered)
-          7. [NEW] sync_mythic_plus()   — M+ ratings (last-login filtered)
-          8. [NEW] sync_equipment()     — per-slot gear + quality tracks (last-login filtered)
-          9. send_sync_summary()        — Discord report if notable
+          4. purge_fully_departed_players() — remove ghosts with no chars + no Discord
+          5. sync_raid_progress()       — boss kill counts (last-login filtered)
+          6. sync_mythic_plus()         — M+ ratings (last-login filtered)
+          7. sync_equipment()           — per-slot gear + quality tracks (last-login filtered)
+          8. send_sync_summary()        — Discord report if notable
+
+        Automatic rank reconciliation is paused while guild rank source accuracy
+        is investigated (issue #51). Integrity checks still report mismatches.
         """
         channel = self._get_audit_channel()
-        guild = channel.guild if channel else None
 
         try:
             async with SyncLogEntry(self.db_pool, "blizzard_api") as log:
@@ -355,18 +356,9 @@ class GuildSyncScheduler:
                 # Step 3: Drift scan + auto-mitigations
                 drift_stats = await run_drift_scan(self.db_pool)
 
-                # Step 4: Reconcile player ranks (character ranks may have changed)
-                reconcile_stats = await reconcile_player_ranks(self.db_pool, guild)
-                if channel and reconcile_stats.get("errors", 0) > 0:
-                    await send_error(
-                        channel,
-                        "Rank Reconciliation Errors (Blizzard Sync)",
-                        f"{reconcile_stats['errors']} Discord role update(s) failed.\n"
-                        "Check that the bot has **Manage Roles** permission and its role "
-                        "is above all guild rank roles in the server role list.",
-                    )
+                # Automatic rank changes are paused pending issue #51.
 
-                # Step 5: Purge fully-departed players (no chars + no Discord presence)
+                # Step 4: Purge fully-departed players (no chars + no Discord presence)
                 purge_stats = await purge_fully_departed_players(self.db_pool)
                 if channel and purge_stats.get("purged", 0) > 0:
                     names = ", ".join(purge_stats["names"])
@@ -506,7 +498,7 @@ class GuildSyncScheduler:
                 if channel:
                     combined_stats = {
                         **sync_stats, **integrity_stats,
-                        "drift": drift_stats, "rank_reconcile": reconcile_stats,
+                        "drift": drift_stats,
                     }
                     await send_sync_summary(channel, "Blizzard API", combined_stats, duration)
 
@@ -536,7 +528,8 @@ class GuildSyncScheduler:
           1. sync_discord_members()     — update discord_users table
           2. run_integrity_check()      — detect new issues (especially role_mismatch)
           3. run_drift_scan()           — detect note mismatches + stale links + auto-fix
-          4. reconcile_player_ranks()   — fix DB ranks + Discord roles (chars-first, discord fallback)
+        Automatic rank reconciliation is paused while guild rank source accuracy
+        is investigated (issue #51). Integrity checks still report mismatches.
         """
         audit_channel = self.discord_bot.get_channel(self.audit_channel_id)
         guild = audit_channel.guild if audit_channel else None
@@ -553,15 +546,7 @@ class GuildSyncScheduler:
                 await run_integrity_check(self.db_pool)
                 await run_drift_scan(self.db_pool)
 
-                reconcile_stats = await reconcile_player_ranks(self.db_pool, guild)
-                if audit_channel and reconcile_stats.get("errors", 0) > 0:
-                    await send_error(
-                        audit_channel,
-                        "Rank Reconciliation Errors (Discord Sync)",
-                        f"{reconcile_stats['errors']} Discord role update(s) failed.\n"
-                        "Check that the bot has **Manage Roles** permission and its role "
-                        "is above all guild rank roles in the server role list.",
-                    )
+                # Automatic rank changes are paused pending issue #51.
 
                 purge_stats = await purge_fully_departed_players(self.db_pool)
                 if audit_channel and purge_stats.get("purged", 0) > 0:
