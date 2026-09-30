@@ -182,12 +182,13 @@ Invite codes expire in 7 days. If it expires, click ✉ again.
 
 ## Managing the Roster
 
-**Rank changes:** Discord is the source of truth. Change their Discord role,
-and the bot syncs it automatically on the next sync cycle (default: every 24 hours).
-To force an immediate sync, restart the app:
-```bash
-docker compose -f /opt/guild-portal/docker-compose.guild.yml restart app-prod
-```
+**Rank changes:** Automatic player-rank and Discord guild-role reconciliation is
+temporarily paused while issue #51 investigates stale rank data. Scheduled
+Blizzard and Discord member syncs continue to report mismatches, but they do not
+change player ranks or guild rank roles. Officers should review the underlying
+WoW rank and each mismatch before making a manual correction. Restarting the
+app does not run rank reconciliation. Re-enable it only after issue #51 verifies
+the authoritative rank source and both promotion and demotion paths.
 
 **Putting someone on raid hiatus:** In **Admin → Player Manager**, find their card
 and check the **Hiatus** checkbox. This hides them from the public roster and the

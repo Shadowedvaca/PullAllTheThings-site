@@ -25,7 +25,8 @@
 **🤖 The Bot**
 
 - **Invite codes** — DM the bot and ask for a guild website invite; it'll send you a registration link automatically
-- **Role sync** — Keeps your Discord rank in sync with your guild rank automatically
+- **Guild ranks** — Automatic rank changes are temporarily paused while rank
+  syncing is investigated. Officers review mismatches and adjust roles manually.
 - **Crafting orders** — When someone requests a guild craft on the website, the bot posts an embed in #crafters-corner tagging everyone who can make it
 - **Campaign announcements** — Posts updates in the designated channel when voting milestones are hit
 - **Registration** — Sends your invite code via DM when an officer generates one for you
